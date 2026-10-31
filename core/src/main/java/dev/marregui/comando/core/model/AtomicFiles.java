@@ -28,19 +28,19 @@ public final class AtomicFiles {
     }
 
     /** Writes {@code bytes} to {@code target}, replacing it; the target's folder must exist. */
-    public static void write(Path target, byte[] bytes) throws IOException {
+    public static void write(final Path target, final byte[] bytes) throws IOException {
         write(target, bytes, Files::move);
     }
 
     /** Writes {@code text} to {@code target} in UTF-8, replacing it; the target's folder must exist. */
-    public static void writeString(Path target, String text) throws IOException {
+    public static void writeString(final Path target, final String text) throws IOException {
         write(target, text.getBytes(StandardCharsets.UTF_8));
     }
 
     /** As {@link #write(Path, byte[])}, the temporary file moved into place by {@code mover}. */
-    public static void write(Path target, byte[] bytes, Mover mover) throws IOException {
-        Path dir = target.toAbsolutePath().getParent();
-        Path tmp = Files.createTempFile(dir, "." + target.getFileName() + ".", ".tmp");
+    public static void write(final Path target, final byte[] bytes, final Mover mover) throws IOException {
+        final Path dir = target.toAbsolutePath().getParent();
+        final Path tmp = Files.createTempFile(dir, "." + target.getFileName() + ".", ".tmp");
         try {
             keepMode(target, tmp);
             Files.write(tmp, bytes);
@@ -54,7 +54,7 @@ public final class AtomicFiles {
      * Moves {@code source} over {@code target}, atomically where the file system can, else by a plain replacing move;
      * for a file another program wrote in the target's folder. {@code source} stays where it was on failure.
      */
-    public static void move(Path source, Path target) throws IOException {
+    public static void move(final Path source, final Path target) throws IOException {
         move(source, target, Files::move);
     }
 
@@ -63,16 +63,16 @@ public final class AtomicFiles {
      * owner alone, and the move would carry that onto a file another program or person reads (a listing in the user's
      * folder). A new target keeps the temporary file's.
      */
-    private static void keepMode(Path target, Path tmp) throws IOException {
+    private static void keepMode(final Path target, final Path tmp) throws IOException {
         if (Files.exists(target) && Files.getFileStore(tmp).supportsFileAttributeView(PosixFileAttributeView.class)) {
             Files.setPosixFilePermissions(tmp, Files.getPosixFilePermissions(target));
         }
     }
 
-    private static void move(Path source, Path target, Mover mover) throws IOException {
+    private static void move(final Path source, final Path target, final Mover mover) throws IOException {
         try {
             mover.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException e) {
+        } catch (final AtomicMoveNotSupportedException e) {
             mover.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }

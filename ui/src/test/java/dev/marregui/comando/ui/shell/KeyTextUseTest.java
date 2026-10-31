@@ -1,9 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,18 +50,18 @@ class KeyTextUseTest {
     /// except the constants declared in the allow list.
     @Test
     void everyKeyNamedInAStringGoesThroughKeyText() throws IOException {
-        List<String> untranslated = new ArrayList<>();
+        final List<String> untranslated = new ArrayList<>();
         try (Stream<Path> files = Files.walk(SOURCES)) {
-            for (Path f : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
-                String rel = SOURCES.relativize(f).toString().replace('\\', '/');
-                Source src = Source.of(Files.readString(f));
-                for (int[] lit : src.literals) {
-                    String text = src.text.substring(lit[0], lit[1]);
+            for (final Path f : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+                final String rel = SOURCES.relativize(f).toString().replace('\\', '/');
+                final Source src = Source.of(Files.readString(f));
+                for (final int[] lit : src.literals) {
+                    final String text = src.text.substring(lit[0], lit[1]);
                     if (text.chars().noneMatch(c -> c == '⌘' || c == '⌃' || c == '⌥')) {
                         continue;
                     }
-                    String statement = src.statementAround(lit[0], lit[1]);
-                    boolean declared = TRANSLATED_WHERE_READ.getOrDefault(rel, List.of()).stream().anyMatch(statement::contains);
+                    final String statement = src.statementAround(lit[0], lit[1]);
+                    final boolean declared = TRANSLATED_WHERE_READ.getOrDefault(rel, List.of()).stream().anyMatch(statement::contains);
                     if (!statement.contains("KeyText.of(") && !declared) {
                         untranslated.add(rel + ":" + src.lineOf(lit[0]) + " " + text.strip().lines().findFirst().orElse(""));
                     }
@@ -74,7 +75,7 @@ class KeyTextUseTest {
     @Test
     void theConstantsTranslatedWhereReadAreTranslatedThere() {
         System.setProperty(Platform.KEYS_PROPERTY, "linux");
-        for (String id : Menus.TIPS.keySet()) {
+        for (final String id : Menus.TIPS.keySet()) {
             assertThat(Menus.tip(id)).as(id).doesNotContain("⌘", "⌃", "⌥");
         }
         assertThat(Keys.markdown(List.of())).doesNotContain("⌘", "⌃", "⌥").contains("Ctrl+Enter in the note");
@@ -84,7 +85,7 @@ class KeyTextUseTest {
     /// `KeyText.of` argument and a text block, and gives each its surrounding statement.
     @Test
     void theScannerFindsLiteralsAndSkipsComments() {
-        Source s = Source.of("""
+        final Source s = Source.of("""
                 // a "⌘T" in a comment
                 /* and "⌘W" here */
                 String a = "New (⌘T)"; String b = KeyText.of("Close (⌘W)");
@@ -105,13 +106,13 @@ class KeyTextUseTest {
      */
     private record Source(String text, String code, List<int[]> literals) {
 
-        static Source of(String java) {
-            StringBuilder code = new StringBuilder(java);
-            List<int[]> literals = new ArrayList<>();
+        static Source of(final String java) {
+            final StringBuilder code = new StringBuilder(java);
+            final List<int[]> literals = new ArrayList<>();
             int i = 0;
-            int n = java.length();
+            final int n = java.length();
             while (i < n) {
-                char c = java.charAt(i);
+                final char c = java.charAt(i);
                 if (java.startsWith("//", i)) {
                     int end = java.indexOf('\n', i);
                     end = end < 0 ? n : end;
@@ -144,13 +145,13 @@ class KeyTextUseTest {
                     i++;
                 }
             }
-            for (int[] lit : literals) {
+            for (final int[] lit : literals) {
                 blank(code, lit[0], lit[1]);
             }
             return new Source(java, code.toString(), literals);
         }
 
-        private static void blank(StringBuilder code, int from, int to) {
+        private static void blank(final StringBuilder code, final int from, final int to) {
             for (int k = from; k < to; k++) {
                 if (code.charAt(k) != '\n') {
                     code.setCharAt(k, ' ');
@@ -162,16 +163,16 @@ class KeyTextUseTest {
          * The code of the statement around a literal: from the last {@code ; { }} before it to the first {@code ;}
          * after it.
          */
-        String statementAround(int from, int to) {
+        String statementAround(final int from, final int to) {
             int start = from;
             while (start > 0 && ";{}".indexOf(code.charAt(start - 1)) < 0) {
                 start--;
             }
-            int end = code.indexOf(';', to);
+            final int end = code.indexOf(';', to);
             return code.substring(start, end < 0 ? code.length() : end);
         }
 
-        int lineOf(int at) {
+        int lineOf(final int at) {
             int line = 1;
             for (int k = 0; k < at; k++) {
                 if (text.charAt(k) == '\n') {

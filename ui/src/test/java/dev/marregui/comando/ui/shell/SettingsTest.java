@@ -1,13 +1,14 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.testkit.MemoryPreferences;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.prefs.Preferences;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.testkit.MemoryPreferences;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,15 +25,15 @@ class SettingsTest {
     /// Strings, negative integers and booleans from the earlier preferences arrive typed, are written as JSON numbers
     /// and booleans in key order, the node is left unchanged, and a later change to it is not read again.
     @Test
-    void theFirstOpenCopiesTheEarlierPreferencesTypedAndLeavesThemAsTheyWere(@TempDir Path home) throws Exception {
+    void theFirstOpenCopiesTheEarlierPreferencesTypedAndLeavesThemAsTheyWere(@TempDir final Path home) throws Exception {
         legacy.put("theme.ground", "MIDNIGHT");
         legacy.put("theme.tint", "ELECTRIC_BLUE");
         legacy.putInt("window.width", 1728);
         legacy.putInt("window.y", -1044);
         legacy.putBoolean("sidebar.visible", false);
-        Path file = home.resolve("settings.json");
+        final Path file = home.resolve("settings.json");
 
-        Settings s = Settings.open(file, legacy);
+        final Settings s = Settings.open(file, legacy);
         assertThat(new WindowLayout(s).theme()).isEqualTo(NamedTheme.MIDNIGHT_BLUE);
         assertThat(s.getInt("window.y", 0)).isEqualTo(-1044);
         assertThat(s.getBoolean("sidebar.visible", true)).isFalse();
@@ -49,11 +50,11 @@ class SettingsTest {
     /// With nothing to migrate no file is written; a theme and Gradle tasks set through [WindowLayout] are read by a
     /// fresh open, and no temporary file is left.
     @Test
-    void aChangeIsWrittenAtFlushAndReadByTheNextWindow(@TempDir Path home) throws Exception {
-        Path file = home.resolve("settings.json");
-        Settings s = Settings.open(file, legacy);
+    void aChangeIsWrittenAtFlushAndReadByTheNextWindow(@TempDir final Path home) throws Exception {
+        final Path file = home.resolve("settings.json");
+        final Settings s = Settings.open(file, legacy);
         assertThat(file).as("nothing to copy, nothing written").doesNotExist();
-        WindowLayout layout = new WindowLayout(s);
+        final WindowLayout layout = new WindowLayout(s);
         layout.gradleTasks(":app:run");
         layout.theme(NamedTheme.EVERGREEN_FOREST);
         assertThat(new WindowLayout(Settings.open(file, legacy)).theme()).isEqualTo(NamedTheme.EVERGREEN_FOREST);
@@ -63,10 +64,10 @@ class SettingsTest {
 
     /// Malformed JSON gives empty settings, and the bytes are kept in `settings.json.unreadable`.
     @Test
-    void anUnreadableFileIsKeptAsideAndTheSettingsStartEmpty(@TempDir Path home) throws Exception {
-        Path file = home.resolve("settings.json");
+    void anUnreadableFileIsKeptAsideAndTheSettingsStartEmpty(@TempDir final Path home) throws Exception {
+        final Path file = home.resolve("settings.json");
         Files.writeString(file, "{ not json");
-        Settings s = Settings.open(file, legacy);
+        final Settings s = Settings.open(file, legacy);
         assertThat(s.values()).isEmpty();
         assertThat(home.resolve("settings.json.unreadable")).hasContent("{ not json");
     }

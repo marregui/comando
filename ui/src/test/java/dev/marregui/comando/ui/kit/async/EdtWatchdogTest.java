@@ -1,14 +1,14 @@
 package dev.marregui.comando.ui.kit.async;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,9 +25,9 @@ class EdtWatchdogTest {
     /// limit, kind [EdtWatchdog.Kind#COMANDO] and the holding method in its stack; its end is reported too.
     @Test
     void aHangIsReportedOnceAtItsLimitWithItsStack() throws Exception {
-        List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
-        CountDownLatch done = new CountDownLatch(1);
-        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), EdtWatchdog::drawingOnly, 400, 2_000);
+        final List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
+        final CountDownLatch done = new CountDownLatch(1);
+        final EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), EdtWatchdog::drawingOnly, 400, 2_000);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
             assertThat(reported).isEmpty();
@@ -49,10 +49,10 @@ class EdtWatchdogTest {
     /// lasts until the probe has waited 600 ms, three times the threshold, so late watchdog checks still see it.
     @Test
     void aShortStallIsToldOnlyWhenItEndsWithItsKindAndWhere() throws Exception {
-        List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
-        List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
-        CountDownLatch done = new CountDownLatch(1);
-        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> {
+        final List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
+        final List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
+        final CountDownLatch done = new CountDownLatch(1);
+        final EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> {
             ended.add(stall);
             done.countDown();
         }, EdtWatchdog::drawingOnly, 2_000, 2_000);
@@ -76,8 +76,8 @@ class EdtWatchdogTest {
     /// at least the 1 s the EDT was held.
     @Test
     void theEndOfAReportedStallCarriesItsWholeLength() throws Exception {
-        List<Long> ended = new CopyOnWriteArrayList<>();
-        EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> ended.add(millis));
+        final List<Long> ended = new CopyOnWriteArrayList<>();
+        final EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> ended.add(millis));
         try {
             Thread.sleep(300);
             SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> w.probeWaitMillis() >= 1_100));
@@ -92,11 +92,11 @@ class EdtWatchdogTest {
     /// is reported; five rounds guard against a lucky schedule.
     @Test
     void aWaitBelowTheThresholdIsNotReported() throws Exception {
-        List<String> stacks = new CopyOnWriteArrayList<>();
+        final List<String> stacks = new CopyOnWriteArrayList<>();
         SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
         for (int round = 0; round < 5; round++) {
             SwingUtilities.invokeLater(() -> sleep(130));
-            EdtWatchdog w = new EdtWatchdog(stall -> stacks.add(stall.millis() + " " + stall.stack()));
+            final EdtWatchdog w = new EdtWatchdog(stall -> stacks.add(stall.millis() + " " + stall.stack()));
             try {
                 Thread.sleep(400);
             } finally {
@@ -110,13 +110,13 @@ class EdtWatchdogTest {
     /// place.
     @Test
     void aStallBeforeTheFirstProbeIsStartup() throws Exception {
-        List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
-        CountDownLatch done = new CountDownLatch(1);
+        final List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
+        final CountDownLatch done = new CountDownLatch(1);
         SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
-        AtomicReference<EdtWatchdog> watching = new AtomicReference<>();
+        final AtomicReference<EdtWatchdog> watching = new AtomicReference<>();
         // the window's build, before the first probe, held until the probe has waited well past the threshold
         SwingUtilities.invokeLater(() -> holdEdtUntil(() -> watching.get() != null && watching.get().probeWaitMillis() >= 600));
-        EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> {
+        final EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> {
             ended.add(stall);
             done.countDown();
         });
@@ -137,10 +137,10 @@ class EdtWatchdogTest {
     /// drawing.
     @Test
     void aStallInTheJdksDrawingIsReportedOnlyWhenItEndsMarkedAsDrawing() throws Exception {
-        List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
-        List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
-        CountDownLatch done = new CountDownLatch(1);
-        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> {
+        final List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
+        final List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
+        final CountDownLatch done = new CountDownLatch(1);
+        final EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> {
             ended.add(stall);
             done.countDown();
         }, frames -> true, 400, 2_000);
@@ -161,9 +161,9 @@ class EdtWatchdogTest {
     /// A drawing stall past its own 500 ms limit is reported with its stack, marked as drawing and reported.
     @Test
     void aDrawingStallPastItsLimitIsReportedLikeAHang() throws Exception {
-        List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
-        CountDownLatch done = new CountDownLatch(1);
-        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), frames -> true, 300, 500);
+        final List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
+        final CountDownLatch done = new CountDownLatch(1);
+        final EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), frames -> true, 300, 500);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
             SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> !reported.isEmpty()));
@@ -216,8 +216,8 @@ class EdtWatchdogTest {
     private static final StackTraceElement REPAINT = frame("java.desktop", "javax.swing.RepaintManager", "paint", 1279);
     private static final StackTraceElement OURS = frame(null, "dev.marregui.comando.ui.widgets.transcript.render.Items", "fillRound", 77);
 
-    private static StackTraceElement frame(String module, String type, String method, int line) {
-        String file = type.substring(type.lastIndexOf('.') + 1).replaceAll("\\$.*", "") + ".java";
+    private static StackTraceElement frame(final String module, final String type, final String method, final int line) {
+        final String file = type.substring(type.lastIndexOf('.') + 1).replaceAll("\\$.*", "") + ".java";
         return new StackTraceElement(null, module, null, type, method, file, line);
     }
 
@@ -225,17 +225,17 @@ class EdtWatchdogTest {
      * Holds the EDT until {@code seen}, at most 10 s: a fixed sleep assumes the watchdog's thread runs on time, which a
      * loaded CI runner does not promise.
      */
-    private static void holdEdtUntil(BooleanSupplier seen) {
-        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    private static void holdEdtUntil(final BooleanSupplier seen) {
+        final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (!seen.getAsBoolean() && System.nanoTime() < end) {
             sleep(10);
         }
     }
 
-    private static void sleep(long millis) {
+    private static void sleep(final long millis) {
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }

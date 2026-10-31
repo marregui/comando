@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.theme.FocusRing;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
+import java.nio.file.Path;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JScrollPane;
-import java.nio.file.Path;
+
+import dev.marregui.comando.ui.kit.theme.FocusRing;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Markdown rendered as comando shows it wherever a text is read rather than edited: an {@link HtmlPane} on the editors'
@@ -36,12 +36,12 @@ public final class RenderedMarkdown {
     }
 
     /** Renders {@code markdown} from its top, its relative images read from {@code folder} (null: none are). */
-    public void show(String markdown, Path folder) {
+    public void show(final String markdown, final Path folder) {
         show(markdown, folder, MarkdownHtml.Marks.NONE);
     }
 
     /** As {@link #show(String, Path)}, what {@code marks} names shaded as changed. */
-    public void show(String markdown, Path folder, MarkdownHtml.Marks marks) {
+    public void show(final String markdown, final Path folder, final MarkdownHtml.Marks marks) {
         pane.setMarkdown(markdown, folder, marks);
         pane.setCaretPosition(0);
     }

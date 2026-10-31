@@ -1,19 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.port.McpGateway;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.core.transcript.TranscriptRegistry;
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.testkit.RecordingSink;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -24,6 +10,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,9 +54,9 @@ class SubagentFollowTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        Path projects = tmp.resolve("projects");
+        final Path projects = tmp.resolve("projects");
         subagents = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
-        Path exe = tmp.resolve("fake-claude-agents.sh");
+        final Path exe = tmp.resolve("fake-claude-agents.sh");
         try (InputStream in = getClass().getResourceAsStream("/fake-claude-agents.sh")) {
             Files.write(exe, in.readAllBytes());
         }
@@ -73,35 +74,35 @@ class SubagentFollowTest {
     }
 
     /** Sends {@code command} to the fake CLI and waits for its turn to end, so its events were mapped. */
-    private void stream(String command) {
-        int turns = sink.of(Intent.SessionTurnEnded.class).size();
+    private void stream(final String command) {
+        final int turns = sink.of(Intent.SessionTurnEnded.class).size();
         adapter.send("work", command, "test");
         sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() > turns, WAIT);
     }
 
-    private void agent(String id, String firstLine) throws IOException {
+    private void agent(final String id, final String firstLine) throws IOException {
         Files.writeString(subagents.resolve("agent-" + id + ".meta.json"),
                 "{\"agentType\":\"general-purpose\",\"description\":\"" + id + "\",\"toolUseId\":\"" + id + "\"}");
         Files.writeString(subagents.resolve("agent-" + id + ".jsonl"), text(firstLine) + "\n");
     }
 
-    private void grow(String id, String line) throws IOException {
+    private void grow(final String id, final String line) throws IOException {
         Files.writeString(subagents.resolve("agent-" + id + ".jsonl"), text(line) + "\n", StandardOpenOption.APPEND);
     }
 
-    private static String text(String t) {
+    private static String text(final String t) {
         return "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"" + t + "\"}]}}";
     }
 
     /** What the sub-agent's tab says of its following (record 109). */
-    private static String state(Intent i) {
+    private static String state(final Intent i) {
         return ((ViewSpec.Agent) (i instanceof Intent.ShowView v ? v.spec() : ((Intent.RefreshView) i).spec())).state();
     }
 
     /** The texts in sub-agent {@code id}'s transcript, a paragraph each. */
-    private String said(String id) {
-        Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", id));
-        List<String> out = new ArrayList<>();
+    private String said(final String id) {
+        final Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", id));
+        final List<String> out = new ArrayList<>();
         for (int i = 0; i < t.size(); i++) {
             if (t.get(i) instanceof Block.AssistantText a) {
                 out.add(a.text());
@@ -111,11 +112,11 @@ class SubagentFollowTest {
     }
 
     /** Waits until sub-agent {@code id}'s transcript holds {@code text}. */
-    private void awaitSaid(String id, String text) {
+    private void awaitSaid(final String id, final String text) {
         Awaitility.await("the tab shows " + text).atMost(WAIT).until(() -> said(id).contains(text));
     }
 
-    private Intent.RefreshView refreshEndingWith(String footer) {
+    private Intent.RefreshView refreshEndingWith(final String footer) {
         return sink.await(Intent.RefreshView.class, r -> state(r).equals(footer), WAIT);
     }
 
@@ -125,10 +126,10 @@ class SubagentFollowTest {
                 .as("a stop during a quiet spell").isEmpty();
     }
 
-    private <T extends Intent> Optional<T> within(Class<T> type, Predicate<T> match, Duration d) {
+    private <T extends Intent> Optional<T> within(final Class<T> type, final Predicate<T> match, final Duration d) {
         try {
             return Optional.of(sink.await(type, match, d));
-        } catch (AssertionError e) {
+        } catch (final AssertionError e) {
             return Optional.empty();
         }
     }
@@ -142,7 +143,7 @@ class SubagentFollowTest {
         agent("fg", "first step");
 
         adapter.showSubagent("work", "conv-1", "fg");
-        Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
+        final Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
         assertThat(state(shown)).isEqualTo(ClaudeAdapter.FOLLOWING);
         assertThat(((ViewSpec.Agent) shown.spec()).session()).as("a tab of the session that started it").isEqualTo("work");
         assertThat(said("fg")).as("its conversation, as a transcript").startsWith("first step");
@@ -207,7 +208,7 @@ class SubagentFollowTest {
 
         adapter.showSubagent("work", "conv-1", "early");
 
-        Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
+        final Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
         assertThat(state(shown)).isEqualTo(ClaudeAdapter.ENDED);
         assertThat(said("early")).contains("all of it");
         assertThat(adapter.followedSubagents()).isZero();

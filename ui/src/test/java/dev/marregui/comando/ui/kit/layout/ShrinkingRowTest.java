@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.layout;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JComponent;
-import javax.swing.JPanel;
 import java.awt.Dimension;
 import java.util.Set;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - No chip shrinks below the minimum.
 class ShrinkingRowTest {
 
-    private static JComponent box(int width) {
-        JPanel p = new JPanel();
+    private static JComponent box(final int width) {
+        final JPanel p = new JPanel();
         p.setPreferredSize(new Dimension(width, 20));
         return p;
     }
@@ -25,11 +25,11 @@ class ShrinkingRowTest {
     /// plugs keep 20 px inside the row; at 100 px the chips stop at the 50 px minimum.
     @Test
     void chipsGiveWayInProportionAndTheRestKeepsItsWidth() {
-        JComponent chipA = box(200);
-        JComponent plugA = box(20);
-        JComponent chipB = box(100);
-        JComponent plugB = box(20);
-        JPanel row = new JPanel(new ShrinkingRow(0, 50, Set.of(chipA, chipB)));
+        final JComponent chipA = box(200);
+        final JComponent plugA = box(20);
+        final JComponent chipB = box(100);
+        final JComponent plugB = box(20);
+        final JPanel row = new JPanel(new ShrinkingRow(0, 50, Set.of(chipA, chipB)));
         row.add(chipA);
         row.add(plugA);
         row.add(chipB);

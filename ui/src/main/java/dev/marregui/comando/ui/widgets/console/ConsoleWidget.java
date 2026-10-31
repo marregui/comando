@@ -1,5 +1,22 @@
 package dev.marregui.comando.ui.widgets.console;
 
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.util.Locale;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
+import javax.swing.JSplitPane;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextScrollPane;
+
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.dispatch.Target;
@@ -18,22 +35,6 @@ import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rtextarea.RTextScrollPane;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JScrollBar;
-import javax.swing.JSplitPane;
-import java.awt.BorderLayout;
-import java.awt.FlowLayout;
-import java.util.Locale;
-import java.util.Map;
 
 /**
  * A command run: its output as it arrives, a header with the state and a stop button, and, after a
@@ -60,14 +61,14 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
     private Console console;
     private int shown;
 
-    public ConsoleWidget(WidgetContext context, ConsoleRegistry consoles) {
+    public ConsoleWidget(final WidgetContext context, final ConsoleRegistry consoles) {
         this.context = context;
         this.consoles = consoles;
         area.setLineWrap(false);
-        JPanel header = new JPanel(new BorderLayout(Theme.GAP, 0));
+        final JPanel header = new JPanel(new BorderLayout(Theme.GAP, 0));
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.PAD, 4, Theme.PAD));
         command.setFont(Theme.mono());
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
+        final JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         right.add(status);
         right.add(sendFailures);
         right.add(stop);
@@ -86,10 +87,10 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
             }
         });
         tests.onMenu((n, e) -> {
-            String key = failureKey(n);
+            final String key = failureKey(n);
             if (key != null) {
-                JPopupMenu menu = new JPopupMenu();
-                JMenuItem send = new JMenuItem("Send this failure to Claude", Icons.get("claude"));
+                final JPopupMenu menu = new JPopupMenu();
+                final JMenuItem send = new JMenuItem("Send this failure to Claude", Icons.get("claude"));
                 send.addActionListener(a -> send(Map.of(key, spec.failures().get(key))));
                 menu.add(send);
                 menu.show(e.getComponent(), e.getX(), e.getY());
@@ -108,7 +109,7 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
     }
 
     @Override
-    public void render(ViewSpec.Console view) {
+    public void render(final ViewSpec.Console view) {
         if (spec == null || spec.runId() != view.runId()) {
             if (console != null) {
                 console.removeListener(listener);
@@ -122,7 +123,7 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
         command.setText(view.command());
         stop.setEnabled(view.state() == ViewSpec.RunState.RUNNING);
         stop.setVisible(view.state() == ViewSpec.RunState.RUNNING);
-        String seconds = String.format(Locale.ROOT, "%.1f s", view.millis() / 1000.0);
+        final String seconds = String.format(Locale.ROOT, "%.1f s", view.millis() / 1000.0);
         switch (view.state()) {
             case RUNNING -> {
                 status.setText("running");
@@ -142,7 +143,7 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
             }
         }
         sendFailures.setVisible(!view.failures().isEmpty());
-        boolean hasTests = !view.tests().label().isEmpty();
+        final boolean hasTests = !view.tests().label().isEmpty();
         if (hasTests) {
             tests.setRoot(view.tests(), 2);
             if (split.getParent() == null) {
@@ -174,12 +175,12 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
         if (console == null) {
             return;
         }
-        String more = console.text(shown);
+        final String more = console.text(shown);
         if (more.isEmpty()) {
             return;
         }
-        JScrollBar bar = scroll.getVerticalScrollBar();
-        boolean follow = bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 30;
+        final JScrollBar bar = scroll.getVerticalScrollBar();
+        final boolean follow = bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 30;
         area.append(more);
         shown += more.length();
         if (follow) {
@@ -188,12 +189,12 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
     }
 
     /** {@code Class.method} for a failed test node, null for any other node. */
-    private String failureKey(ViewSpec.TreeNode n) {
+    private String failureKey(final ViewSpec.TreeNode n) {
         if (spec == null || !n.label().startsWith("✗ ")) {
             return null;
         }
-        ViewSpec.TreeNode parent = tests.parentOf(n);
-        String key = parent == null ? null : parent.label() + "." + n.label().substring(2);
+        final ViewSpec.TreeNode parent = tests.parentOf(n);
+        final String key = parent == null ? null : parent.label() + "." + n.label().substring(2);
         return key != null && spec.failures().containsKey(key) ? key : null;
     }
 
@@ -203,20 +204,20 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
         }
     }
 
-    private void send(Map<String, String> failures) {
-        StringBuilder sb = new StringBuilder();
+    private void send(final Map<String, String> failures) {
+        final StringBuilder sb = new StringBuilder();
         sb.append(failures.size() == 1 ? "This test failed" : failures.size() + " tests failed").append(" in `").append(spec.command())
                 .append("`:\n");
         failures.forEach((k, v) -> sb.append("\n").append(k).append("\n```\n").append(v).append("\n```\n"));
         // to the session of the panel the build was started from, not whichever panel has the focus now
-        PanelId panel = spec.panel().isEmpty() ? null : new PanelId(spec.panel());
+        final PanelId panel = spec.panel().isEmpty() ? null : new PanelId(spec.panel());
         context.intents().dispatch(new Intent.RunText(panel, sb.toString(), Target.CLAUDE));
     }
 
     // ---- capabilities
 
     @Override
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return search.find(text, forward);
     }
 
@@ -232,7 +233,7 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
 
     @Override
     public String copyText() {
-        String s = area.getSelectedText();
+        final String s = area.getSelectedText();
         return s != null ? s : area.getText();
     }
 

@@ -1,7 +1,19 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
-import dev.marregui.comando.core.model.Approval;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.JLabel;
+import javax.swing.JViewport;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
@@ -13,17 +25,6 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JLabel;
-import javax.swing.JViewport;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,8 +44,8 @@ class TranscriptWidgetTest {
 
     private final TranscriptWidget widget = new TranscriptWidget(new WidgetContext(intent -> { }, new ActionRegistry()));
 
-    private static void fill(Transcript t, int from, int to) {
-        var steps = SyntheticSession.steps(24);
+    private static void fill(final Transcript t, final int from, final int to) {
+        final var steps = SyntheticSession.steps(24);
         for (int i = from; i < to && i < steps.size(); i++) {
             if (steps.get(i).index() < 0) {
                 t.append(steps.get(i).block());
@@ -55,13 +56,13 @@ class TranscriptWidgetTest {
     /// The canvas is not opaque, so a corner no block reaches shows [Theme#ground].
     @Test
     void theTranscriptIsDrawnOnItsOwnGround() {
-        Transcript t = new Transcript();
+        final Transcript t = new Transcript();
         fill(t, 0, 10);
         widget.render(new TranscriptView("s", t));
-        JViewport viewport = (JViewport) widget.canvas().getParent();
+        final JViewport viewport = (JViewport) widget.canvas().getParent();
         viewport.setSize(400, 300);
-        BufferedImage image = new BufferedImage(400, 300, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = image.createGraphics();
+        final BufferedImage image = new BufferedImage(400, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = image.createGraphics();
         try {
             viewport.paint(g);
         } finally {
@@ -76,7 +77,7 @@ class TranscriptWidgetTest {
     @Test
     void aTranscriptLoadedWhileHiddenKeepsFollowingTheEnd() {
         // a restored session: the transcript is loaded while the Session tab is hidden, then a new turn arrives
-        Transcript t = new Transcript();
+        final Transcript t = new Transcript();
         fill(t, 0, 40);
         widget.render(new TranscriptView("s", t));
         assertThat(widget.component().isShowing()).isFalse();
@@ -90,13 +91,13 @@ class TranscriptWidgetTest {
     /// After the user scrolled away from one transcript, rendering another starts following again.
     @Test
     void anotherTranscriptStartsFollowingAgain() {
-        Transcript first = new Transcript();
+        final Transcript first = new Transcript();
         fill(first, 0, 40);
         widget.render(new TranscriptView("a", first));
         widget.scrolledAway();
         assertThat(widget.following()).isFalse();
 
-        Transcript second = new Transcript();
+        final Transcript second = new Transcript();
         fill(second, 0, 10);
         widget.render(new TranscriptView("b", second));
         assertThat(widget.following()).isTrue();
@@ -106,7 +107,7 @@ class TranscriptWidgetTest {
     /// sent from a panel follows again and hides the button.
     @Test
     void aPromptSentFromAPanelFollowsAgainAndHidesTheLatestButton() {
-        Transcript t = new Transcript();
+        final Transcript t = new Transcript();
         fill(t, 0, 40);
         widget.render(new TranscriptView("s", t));
         widget.scrolledAway();
@@ -128,13 +129,13 @@ class TranscriptWidgetTest {
     /// another transcript is shown and this one rebuilt, and clearing the approvals restores "running".
     @Test
     void aWaitingApprovalMarksItsToolCallAndSurvivesAReload() {
-        Transcript t = new Transcript();
+        final Transcript t = new Transcript();
         t.append(new Block.UserPrompt("clean", "main", ""));
         t.append(new Block.ToolCall("tu1", "Bash", "{\"command\":\"rm -rf build\"}", "", Block.ToolStatus.RUNNING, ""));
         widget.render(new TranscriptView("s", t));
         assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");
 
-        List<Approval> waiting = List.of(new Approval(7, "s", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 0L, "tu1"));
+        final List<Approval> waiting = List.of(new Approval(7, "s", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 0L, "tu1"));
         widget.setWaiting(waiting);
         assertThat(widget.canvas().cardStatus("tu1")).isEqualTo(KeyText.of("waiting for your approval · ⌃2"));
 
@@ -154,7 +155,7 @@ class TranscriptWidgetTest {
         for (int i = 0; i < 100; i++) {
             widget.zoom(-1);
         }
-        int smallest = widget.canvas().zoom();
+        final int smallest = widget.canvas().zoom();
         assertThat(smallest).as("the steps stop where the text reaches 8 pt").isGreaterThan(-20);
         widget.zoom(1);
         assertThat(widget.canvas().zoom()).as("one step back enlarges again").isEqualTo(smallest + 1);
@@ -168,12 +169,12 @@ class TranscriptWidgetTest {
 
     // ---- sub-agents
 
-    private static Block.ToolCall agent(String id, String description) {
+    private static Block.ToolCall agent(final String id, final String description) {
         return new Block.ToolCall(id, "Agent", "{\"description\":\"" + description + "\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, "");
     }
 
-    private static List<String> chipTexts(AgentStrip strip) {
+    private static List<String> chipTexts(final AgentStrip strip) {
         return strip.chips().stream().map(JLabel::getText).map(t -> t.replaceAll(" · \\d+ s$", "")).toList();
     }
 
@@ -181,10 +182,10 @@ class TranscriptWidgetTest {
     /// finished calls leave, and the strip hides when nothing runs.
     @Test
     void theStripNamesRunningSubagentsThenBackgroundOnesAndHidesWhenNoneRun() {
-        Transcript t = new Transcript();
+        final Transcript t = new Transcript();
         t.append(new Block.UserPrompt("survey", "main", ""));
-        Block.ToolCall first = agent("a1", "read the user guide");
-        Block.ToolCall second = agent("a2", "a description far longer than a chip shows");
+        final Block.ToolCall first = agent("a1", "read the user guide");
+        final Block.ToolCall second = agent("a2", "a description far longer than a chip shows");
         t.append(first);
         t.append(second);
         widget.render(new TranscriptView("s", t));
@@ -192,7 +193,7 @@ class TranscriptWidgetTest {
                 new BackgroundTask("bg1", "local_agent", "watch the build", 0L),
                 new BackgroundTask("sh1", "local_bash", "gradle test", 0L)));
 
-        AgentStrip strip = widget.strip();
+        final AgentStrip strip = widget.strip();
         assertThat(strip.isVisible()).isTrue();
         assertThat(chipTexts(strip)).as("running cards in start order, then background sub-agents; shell tasks stay out")
                 .containsExactly("read the user guide", "a description far longer th…", "watch the build");
@@ -210,7 +211,7 @@ class TranscriptWidgetTest {
     /// A background task whose id is a running card's gets no second chip.
     @Test
     void aBackgroundTaskWithARunningCardHasNoChipOfItsOwn() {
-        Transcript t = new Transcript();
+        final Transcript t = new Transcript();
         t.append(agent("a1", "watch the build"));
         widget.render(new TranscriptView("s", t));
         widget.setBackgroundTasks(List.of(new BackgroundTask("a1", "local_agent", "something", 1L),
@@ -224,20 +225,20 @@ class TranscriptWidgetTest {
     /// strip rebuilds its chips as the sub-agents change, so a click whose release lands on a new chip would be lost.
     @Test
     void aRunningChipShowsItsCardOnAPressAndOpensItsTabOnADoublePress() {
-        List<String> revealed = new ArrayList<>();
-        List<String> opened = new ArrayList<>();
-        AgentStrip strip = new AgentStrip(revealed::add, opened::add, () -> 10_000L);
+        final List<String> revealed = new ArrayList<>();
+        final List<String> opened = new ArrayList<>();
+        final AgentStrip strip = new AgentStrip(revealed::add, opened::add, () -> 10_000L);
         strip.show(List.of(new TranscriptCanvas.RunningAgent("a1", "survey", 4_000L, "")),
                 List.of(new BackgroundTask("bg1", "local_agent", "watch", 0L)));
         assertThat(strip.chips()).extracting(JLabel::getText).containsExactly("survey · 6 s", "watch");
 
-        for (JLabel chip : strip.chips()) {
+        for (final JLabel chip : strip.chips()) {
             press(chip, 1, MouseEvent.BUTTON1);
         }
         assertThat(revealed).containsExactly("a1");
         assertThat(opened).isEmpty();
 
-        for (JLabel chip : strip.chips()) {
+        for (final JLabel chip : strip.chips()) {
             press(chip, 2, MouseEvent.BUTTON1);
         }
         assertThat(opened).containsExactly("a1");
@@ -251,12 +252,12 @@ class TranscriptWidgetTest {
     /// session and the call, as the card's "transcript" link and the session card's sub-agents line do.
     @Test
     void theWidgetsChipOpensTheCardOnAPressAndTheSubagentsTabOnADoublePress() {
-        RecordingSink sink = new RecordingSink();
-        TranscriptWidget w = new TranscriptWidget(new WidgetContext(sink, new ActionRegistry()));
-        Transcript t = new Transcript();
+        final RecordingSink sink = new RecordingSink();
+        final TranscriptWidget w = new TranscriptWidget(new WidgetContext(sink, new ActionRegistry()));
+        final Transcript t = new Transcript();
         t.append(agent("a1", "survey"));
         w.render(new TranscriptView("work", t));
-        JLabel chip = w.strip().chips().getFirst();
+        final JLabel chip = w.strip().chips().getFirst();
 
         press(chip, 1, MouseEvent.BUTTON1);
         assertThat(w.canvas().isCardOpen("a1")).isTrue();
@@ -266,17 +267,17 @@ class TranscriptWidgetTest {
         assertThat(sink.of(Intent.OpenSubagent.class)).containsExactly(new Intent.OpenSubagent("work", "a1"));
     }
 
-    private static void press(JLabel chip, int clicks, int button) {
-        int mask = button == MouseEvent.BUTTON1 ? MouseEvent.BUTTON1_DOWN_MASK : MouseEvent.BUTTON3_DOWN_MASK;
+    private static void press(final JLabel chip, final int clicks, final int button) {
+        final int mask = button == MouseEvent.BUTTON1 ? MouseEvent.BUTTON1_DOWN_MASK : MouseEvent.BUTTON3_DOWN_MASK;
         chip.dispatchEvent(new MouseEvent(chip, MouseEvent.MOUSE_PRESSED, 0L, mask, 2, 2, clicks, false, button));
     }
 
     /// A link in [TranscriptCanvas#SUBAGENT_SCHEME] sends `OpenSubagent` with the session and the call id.
     @Test
     void aSubagentLinkAsksForItsTranscript() {
-        RecordingSink sink = new RecordingSink();
-        TranscriptWidget w = new TranscriptWidget(new WidgetContext(sink, new ActionRegistry()));
-        Transcript t = new Transcript();
+        final RecordingSink sink = new RecordingSink();
+        final TranscriptWidget w = new TranscriptWidget(new WidgetContext(sink, new ActionRegistry()));
+        final Transcript t = new Transcript();
         t.append(agent("toolu_9", "survey"));
         w.render(new TranscriptView("work", t));
 

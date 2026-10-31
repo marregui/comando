@@ -1,13 +1,13 @@
 package dev.marregui.comando.mcp;
 
+import java.time.Duration;
+import java.util.Optional;
+import java.util.function.Supplier;
+
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
-
-import java.time.Duration;
-import java.util.Optional;
-import java.util.function.Supplier;
 
 /** Waits for a session's turns to end: {@code session_read} with a wait, and an answer to another instance. */
 final class Turns {
@@ -23,14 +23,14 @@ final class Turns {
      * session that is gone, or a transcript shorter than the cursor (cleared since), returns at once: no block will
      * come past a cursor that no longer applies.
      */
-    static boolean awaitTurnEnd(Supplier<AppState> state, String session, Transcript t, int after, Duration within) {
-        long deadline = System.nanoTime() + within.toNanos();
+    static boolean awaitTurnEnd(final Supplier<AppState> state, final String session, final Transcript t, final int after, final Duration within) {
+        final long deadline = System.nanoTime() + within.toNanos();
         while (true) {
-            Optional<SessionState> x = state.get().session(session);
+            final Optional<SessionState> x = state.get().session(session);
             if (x.isEmpty()) {
                 return true;
             }
-            int size = t.size();
+            final int size = t.size();
             if (size < after) {
                 return true;
             }
@@ -42,19 +42,19 @@ final class Turns {
             }
             try {
                 Thread.sleep(POLL_MILLIS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
             }
         }
     }
 
-    private static boolean settled(Transcript t, int after, int size) {
+    private static boolean settled(final Transcript t, final int after, final int size) {
         if (size <= after) {
             return false;
         }
         for (int i = after; i < size; i++) {
-            Block b = t.get(i);
+            final Block b = t.get(i);
             if (b == null || !TranscriptText.finished(b)) {
                 return false;
             }

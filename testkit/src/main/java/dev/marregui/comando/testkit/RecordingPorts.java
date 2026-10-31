@@ -1,5 +1,9 @@
 package dev.marregui.comando.testkit;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -21,10 +25,6 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.ViewSpec;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 /**
  * One fake for each of the six effect ports; each call is recorded as a line such as
  * {@code db.execute 7 local SELECT 1}.
@@ -43,223 +43,223 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
         calls.clear();
     }
 
-    private void record(String line) {
+    private void record(final String line) {
         calls.add(line);
     }
 
     @Override
-    public void open(ConnectionSpec spec) {
+    public void open(final ConnectionSpec spec) {
         record("db.open " + spec.name());
     }
 
     @Override
-    public void close(String name) {
+    public void close(final String name) {
         record("db.close " + name);
     }
 
     @Override
-    public void forgetSchema(String name) {
+    public void forgetSchema(final String name) {
         record("db.forgetSchema " + name);
     }
 
     @Override
-    public void test(ConnectionSpec spec) {
+    public void test(final ConnectionSpec spec) {
         record("db.test " + spec.name());
     }
 
     @Override
-    public void execute(long requestId, ConnectionSpec spec, String sql) {
+    public void execute(final long requestId, final ConnectionSpec spec, final String sql) {
         record("db.execute " + requestId + ' ' + spec.name() + ' ' + sql);
     }
 
     @Override
-    public void cancel(long requestId) {
+    public void cancel(final long requestId) {
         record("db.cancel " + requestId);
     }
 
     @Override
-    public void release(long requestId) {
+    public void release(final long requestId) {
         record("db.release " + requestId);
     }
 
     @Override
-    public void start(SessionSpec spec) {
+    public void start(final SessionSpec spec) {
         record("claude.start " + spec.name());
     }
 
     @Override
-    public void stop(String name) {
+    public void stop(final String name) {
         record("claude.stop " + name);
     }
 
     @Override
-    public void send(String name, String text, String origin, String preface) {
+    public void send(final String name, final String text, final String origin, final String preface) {
         record("claude.send " + name + ' ' + (preface.isEmpty() ? "" : "[preface] ") + text);
     }
 
     @Override
-    public void interrupt(String name) {
+    public void interrupt(final String name) {
         record("claude.interrupt " + name);
     }
 
     @Override
-    public void clearTranscript(String name) {
+    public void clearTranscript(final String name) {
         record("claude.clearTranscript " + name);
     }
 
     @Override
-    public void loadHistory(SessionSpec spec) {
+    public void loadHistory(final SessionSpec spec) {
         record("claude.history " + spec.name());
     }
 
     @Override
-    public void forget(String name) {
+    public void forget(final String name) {
         record("claude.forget " + name);
     }
 
     @Override
-    public void showSubagent(String name, String claudeSessionId, String toolUseId) {
+    public void showSubagent(final String name, final String claudeSessionId, final String toolUseId) {
         record("claude.showSubagent " + name + ' ' + claudeSessionId + ' ' + toolUseId);
     }
 
     @Override
-    public void resolve(Approval approval, ApprovalDecision decision) {
+    public void resolve(final Approval approval, final ApprovalDecision decision) {
         record("approval.resolve " + approval.id() + ' ' + decision);
     }
 
     @Override
-    public void editPanel(PanelId panel, String text, EditMode mode) {
+    public void editPanel(final PanelId panel, final String text, final EditMode mode) {
         record("ui.edit " + mode + ' ' + text);
     }
 
     @Override
-    public void notifyDesktop(String title, String text) {
+    public void notifyDesktop(final String title, final String text) {
         record("ui.notify " + title + ": " + text);
     }
 
     @Override
-    public void forgetPanel(PanelId panel) {
+    public void forgetPanel(final PanelId panel) {
         record("ui.forget " + panel);
     }
 
     @Override
-    public void deletePanel(PanelId panel) {
+    public void deletePanel(final PanelId panel) {
         record("ui.delete " + panel);
     }
 
     @Override
-    public void showFile(String session, String path, String baseDir, int line) {
+    public void showFile(final String session, final String path, final String baseDir, final int line) {
         record("ui.file " + baseDir + ' ' + path + ':' + line);
     }
 
     @Override
-    public void arrange(Layout layout) {
+    public void arrange(final Layout layout) {
         record("ui.arrange " + layout);
     }
 
     @Override
-    public void showFolder(FolderRoot folder, ViewSpec.TreeNode tree) {
+    public void showFolder(final FolderRoot folder, final ViewSpec.TreeNode tree) {
         record("ui.folder " + folder.name());
     }
 
     @Override
-    public void showRepos(List<RepoStatus> repos) {
+    public void showRepos(final List<RepoStatus> repos) {
         record("ui.repos " + String.join(",", repos.stream().map(RepoStatus::name).toList()));
     }
 
     @Override
-    public void showChange(ChangeTexts texts, ChangeAsk ask) {
+    public void showChange(final ChangeTexts texts, final ChangeAsk ask) {
         record("ui.change " + texts.change().path() + " " + ask);
     }
 
     @Override
-    public void showPlanUsage(PlanUsage usage) {
+    public void showPlanUsage(final PlanUsage usage) {
         record("ui.planUsage " + usage.windows().size());
     }
 
     @Override
-    public void loadSchema(ConnectionSpec spec, boolean show) {
+    public void loadSchema(final ConnectionSpec spec, final boolean show) {
         record("db.schema " + spec.name() + (show ? " show" : ""));
     }
 
     // ---- ToolPort
 
     @Override
-    public void runGradle(long runId, String workDir, String tasks) {
+    public void runGradle(final long runId, final String workDir, final String tasks) {
         record("tools.gradle " + runId + ' ' + workDir + ' ' + tasks);
     }
 
     @Override
-    public void cancelRun(long runId) {
+    public void cancelRun(final long runId) {
         record("tools.cancel " + runId);
     }
 
     @Override
-    public void forgetRun(long runId) {
+    public void forgetRun(final long runId) {
         record("tools.forget " + runId);
     }
 
     @Override
-    public void readFolders(List<FolderRoot> folders) {
+    public void readFolders(final List<FolderRoot> folders) {
         record("tools.readFolders " + names(folders));
     }
 
     @Override
-    public void watchFolders(List<FolderRoot> folders) {
+    public void watchFolders(final List<FolderRoot> folders) {
         record("tools.watchFolders " + names(folders));
     }
 
     @Override
-    public void watchRepos(List<FolderRoot> folders, boolean changesShown) {
+    public void watchRepos(final List<FolderRoot> folders, final boolean changesShown) {
         record("tools.watchRepos " + names(folders) + (changesShown ? " changes" : ""));
     }
 
     @Override
-    public void readChange(String root, RepoStatus.FileChange change, ChangeAsk ask) {
+    public void readChange(final String root, final RepoStatus.FileChange change, final ChangeAsk ask) {
         record("tools.readChange " + root + " " + change.path() + " " + ask);
     }
 
     @Override
-    public void deleteFiles(FolderRoot folder, List<String> paths) {
+    public void deleteFiles(final FolderRoot folder, final List<String> paths) {
         record("tools.deleteFiles " + folder.name() + " " + String.join(",", paths));
     }
 
     @Override
-    public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+    public void rollBack(final String root, final List<RepoStatus.FileChange> changes) {
         record("tools.rollBack " + root + " " + String.join(",", changes.stream().map(RepoStatus.FileChange::path).toList()));
     }
 
     @Override
-    public void removeFiles(String root, List<String> paths) {
+    public void removeFiles(final String root, final List<String> paths) {
         record("tools.removeFiles " + root + " " + String.join(",", paths));
     }
 
     @Override
-    public void unstage(String root, List<String> paths) {
+    public void unstage(final String root, final List<String> paths) {
         record("tools.unstage " + root + " " + String.join(",", paths));
     }
 
-    private static String names(List<FolderRoot> folders) {
+    private static String names(final List<FolderRoot> folders) {
         return String.join(",", folders.stream().map(FolderRoot::name).toList());
     }
 
     @Override
-    public void saveConnections(List<ConnectionSpec> specs) {
+    public void saveConnections(final List<ConnectionSpec> specs) {
         record("save.connections " + specs.size());
     }
 
     @Override
-    public void saveSessions(List<SessionSpec> specs) {
+    public void saveSessions(final List<SessionSpec> specs) {
         record("save.sessions " + specs.size());
     }
 
     @Override
-    public void saveFolders(List<FolderRoot> folders) {
+    public void saveFolders(final List<FolderRoot> folders) {
         record("save.folders " + folders.size());
     }
 
     @Override
-    public void savePanels(List<PanelState> panels, List<PanelState> closed) {
+    public void savePanels(final List<PanelState> panels, final List<PanelState> closed) {
         record("save.panels " + panels.size());
     }
 }

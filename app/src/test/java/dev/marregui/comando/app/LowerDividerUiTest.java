@@ -1,17 +1,5 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.state.LowerTab;
-import dev.marregui.comando.core.loop.StateLoop;
-import dev.marregui.comando.core.model.PanelId;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.JFrame;
-import javax.swing.JSplitPane;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
@@ -20,6 +8,19 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import javax.swing.JFrame;
+import javax.swing.JSplitPane;
+import javax.swing.SwingUtilities;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.state.LowerTab;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,19 +40,19 @@ class LowerDividerUiTest {
     /// position when that one comes forward, and to the moved position when the first returns.
     @Test
     void eachPanelBringsBackItsOwnLowerDivider() throws Exception {
-        Path one = Files.writeString(home.resolve("one.md"), "# One\n");
-        Path two = Files.writeString(home.resolve("two.md"), "# Two\n");
-        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        final Path one = Files.writeString(home.resolve("one.md"), "# One\n");
+        final Path two = Files.writeString(home.resolve("two.md"), "# Two\n");
+        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 "divider", () -> {
         });
         try {
             app.start();
-            StateLoop loop = app.loop();
+            final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
             loop.dispatch(new Intent.OpenFile("", one.toString(), 0));
             Awaitility.await("one's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("one.md"));
-            PanelId first = loop.state().focused();
-            JSplitPane vertical = onEdt(() -> find(frame(), JSplitPane.class, p -> p.getOrientation() == JSplitPane.VERTICAL_SPLIT));
+            final PanelId first = loop.state().focused();
+            final JSplitPane vertical = onEdt(() -> find(frame(), JSplitPane.class, p -> p.getOrientation() == JSplitPane.VERTICAL_SPLIT));
             Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(vertical::getHeight) > 400);
             Awaitility.await("a file to read hides the lower area").atMost(WAIT).until(() -> onEdt(() -> !vertical.getBottomComponent().isVisible()));
             loop.dispatch(new Intent.SelectLowerTab(LowerTab.RESULTS));
@@ -71,7 +72,7 @@ class LowerDividerUiTest {
                 vertical.setDividerLocation(350);
                 return null;
             });
-            PanelId second = loop.state().focused();
+            final PanelId second = loop.state().focused();
 
             loop.dispatch(new Intent.FocusPanel(first));
             Awaitility.await("one's divider back").atMost(WAIT).until(() -> onEdt(vertical::getDividerLocation) == 150);
@@ -83,7 +84,7 @@ class LowerDividerUiTest {
     }
 
     private static JFrame frame() {
-        for (Frame f : Frame.getFrames()) {
+        for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame j && f.isDisplayable() && f.getTitle().startsWith("comando")) {
                 return j;
             }
@@ -91,7 +92,7 @@ class LowerDividerUiTest {
         return null;
     }
 
-    private static <T extends Component> T find(Component c, Class<T> type, Predicate<T> which) {
+    private static <T extends Component> T find(final Component c, final Class<T> type, final Predicate<T> which) {
         if (c == null) {
             return null;
         }
@@ -99,8 +100,8 @@ class LowerDividerUiTest {
             return type.cast(c);
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
-                T found = find(child, type, which);
+            for (final Component child : k.getComponents()) {
+                final T found = find(child, type, which);
                 if (found != null) {
                     return found;
                 }
@@ -113,13 +114,13 @@ class LowerDividerUiTest {
         T call() throws Exception;
     }
 
-    private static <T> T onEdt(EdtCall<T> call) throws Exception {
-        AtomicReference<T> out = new AtomicReference<>();
-        AtomicReference<Exception> err = new AtomicReference<>();
+    private static <T> T onEdt(final EdtCall<T> call) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
+        final AtomicReference<Exception> err = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             try {
                 out.set(call.call());
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 err.set(e);
             }
         });

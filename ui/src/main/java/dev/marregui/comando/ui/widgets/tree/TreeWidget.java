@@ -1,5 +1,9 @@
 package dev.marregui.comando.ui.widgets.tree;
 
+import javax.swing.JComponent;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -10,22 +14,18 @@ import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 
-import javax.swing.JComponent;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
-
 /** A labelled tree: test results, a schema, a folder. A node with a file link opens the file. */
 public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
 
     private final TreeView tree = new TreeView();
     private boolean rendered;
 
-    public TreeWidget(WidgetContext context) {
+    public TreeWidget(final WidgetContext context) {
         tree.onActivate(n -> open(context, n));
         tree.onMenu((n, e) -> {
             if (!n.link().isEmpty()) {
-                JPopupMenu menu = new JPopupMenu();
-                JMenuItem item = new JMenuItem(n.link().startsWith(INSERT) ? "Insert into the editor" : "Open");
+                final JPopupMenu menu = new JPopupMenu();
+                final JMenuItem item = new JMenuItem(n.link().startsWith(INSERT) ? "Insert into the editor" : "Open");
                 item.addActionListener(a -> open(context, n));
                 menu.add(item);
                 menu.show(e.getComponent(), e.getX(), e.getY());
@@ -40,7 +40,7 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
      */
     static final String INSERT = "comando-insert:";
 
-    private static void open(WidgetContext context, ViewSpec.TreeNode n) {
+    private static void open(final WidgetContext context, final ViewSpec.TreeNode n) {
         if (n.link().startsWith(SourceLinks.SCHEME)) {
             context.intents().dispatch(new Intent.OpenFile("", SourceLinks.path(n.link()), SourceLinks.line(n.link())));
         } else if (n.link().startsWith(INSERT)) {
@@ -55,7 +55,7 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
 
     /** The first view opens two levels; a refresh keeps what the user opened and selected. */
     @Override
-    public void render(ViewSpec.Tree view) {
+    public void render(final ViewSpec.Tree view) {
         if (rendered) {
             tree.update(view.root());
         } else {

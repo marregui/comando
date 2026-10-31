@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.transcript.Block;
-
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.util.List;
+
+import dev.marregui.comando.core.transcript.Block;
 
 /**
  * The painter of one transcript block. Keeps its layout until the block, the width or the style changes;
@@ -22,20 +22,20 @@ abstract class Item {
     private int guessedWidth = -1;
     private Style guessedStyle;
 
-    Item(Block block) {
+    Item(final Block block) {
         this.block = block;
     }
 
     /** The writer replaced the block; the next layout redoes this item. */
-    final void update(Block next) {
-        Block previous = block;
+    final void update(final Block next) {
+        final Block previous = block;
         block = next;
         changed(previous, next);
         dirty = true;
         guessedWidth = -1;
     }
 
-    void changed(Block previous, Block next) {
+    void changed(final Block previous, final Block next) {
     }
 
     final void invalidate() {
@@ -46,7 +46,7 @@ abstract class Item {
         return dirty;
     }
 
-    final int layout(int w, Style s) {
+    final int layout(final int w, final Style s) {
         if (!dirty && w == width && s == style) {
             return height;
         }
@@ -58,7 +58,7 @@ abstract class Item {
     }
 
     /** True when the next layout at {@code w} with {@code s} does work. */
-    final boolean needsLayout(int w, Style s) {
+    final boolean needsLayout(final int w, final Style s) {
         return dirty || w != width || s != style;
     }
 
@@ -66,7 +66,7 @@ abstract class Item {
      * A guess of the height at width {@code w} without laying out: wrapped text grows as the width shrinks; an item
      * never laid out guesses from its content. Used for items far from the viewport until the idle pass lays them out.
      */
-    final int estimate(int w, Style s) {
+    final int estimate(final int w, final Style s) {
         if (!laidOut()) {
             if (w != guessedWidth || s != guessedStyle) {
                 guessed = guess(w, s);
@@ -78,23 +78,23 @@ abstract class Item {
         if (height <= 0) {
             return 24;
         }
-        double h = height * (double) width / w;
+        final double h = height * (double) width / w;
         return (int) Math.round(Math.clamp(h, height * 0.5, height * 2.0));
     }
 
     /** The height of this item, never laid out, at width {@code w}: one line unless the item knows better. */
-    int guess(int w, Style s) {
+    int guess(final int w, final Style s) {
         return 24;
     }
 
     /** The height of {@code text} wrapped at {@code w} in the body font, at about half an em per character. */
-    static int guessText(String text, int w, Style s) {
-        float perLine = Math.max(1f, w / (s.body.getSize2D() * 0.5f));
+    static int guessText(final String text, final int w, final Style s) {
+        final float perLine = Math.max(1f, w / (s.body.getSize2D() * 0.5f));
         int lines = 0;
         int at = 0;
         while (true) {
-            int nl = text.indexOf('\n', at);
-            int end = nl < 0 ? text.length() : nl;
+            final int nl = text.indexOf('\n', at);
+            final int end = nl < 0 ? text.length() : nl;
             lines += 1 + (int) ((end - at) / perLine);
             if (nl < 0) {
                 break;
@@ -125,12 +125,12 @@ abstract class Item {
     abstract void collect(int x, int y, List<Placed> out);
 
     /** The item whose header is at {@code (px, py)} (relative), to open or close; null when none. */
-    Item toggleAt(int px, int py) {
+    Item toggleAt(final int px, final int py) {
         return null;
     }
 
     /** The link in the header at {@code (px, py)} (relative), which a click follows rather than toggling; else null. */
-    String headerLinkAt(int px, int py) {
+    String headerLinkAt(final int px, final int py) {
         return null;
     }
 

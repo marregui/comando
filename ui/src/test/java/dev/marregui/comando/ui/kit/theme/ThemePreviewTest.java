@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import org.junit.jupiter.api.Test;
-
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,25 +18,25 @@ class ThemePreviewTest {
     @Test
     void aThemeIsDrawnInItsOwnColours() {
         assertThat(Theme.groundChosen()).isEqualTo(Ground.GRAPHITE);
-        BufferedImage paper = draw(NamedTheme.PAPER_OCHRE);
+        final BufferedImage paper = draw(NamedTheme.PAPER_OCHRE);
         assertThat(paper.getRGB(186, 6) & 0xFFFFFF).as("paper's ground").isEqualTo(Ground.PAPER.color.getRGB() & 0xFFFFFF);
-        int bar = paper.getRGB(9, 48) & 0xFFFFFF;
+        final int bar = paper.getRGB(9, 48) & 0xFFFFFF;
         assertThat(Oklch.distance(new java.awt.Color(bar), Tint.OCHRE.at(0.5f))).as("the bar in ochre").isLessThan(0.08);
         assertThat(darkest(paper)).as("dark text on paper").isLessThan(0.3);
-        BufferedImage graphite = draw(NamedTheme.GRAPHITE_GOLD);
+        final BufferedImage graphite = draw(NamedTheme.GRAPHITE_GOLD);
         assertThat(graphite.getRGB(186, 6) & 0xFFFFFF).isEqualTo(Ground.GRAPHITE.color.getRGB() & 0xFFFFFF);
     }
 
-    private static BufferedImage draw(NamedTheme t) {
-        BufferedImage img = new BufferedImage(200, 100, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = img.createGraphics();
+    private static BufferedImage draw(final NamedTheme t) {
+        final BufferedImage img = new BufferedImage(200, 100, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
         ThemePreview.paint(g, t, 0, 0, 200, 100, new Font(Font.SANS_SERIF, Font.PLAIN, 12), new Font(Font.MONOSPACED, Font.PLAIN, 11));
         g.dispose();
         return img;
     }
 
     /** The lowest Oklch lightness of any pixel. */
-    private static double darkest(BufferedImage img) {
+    private static double darkest(final BufferedImage img) {
         double min = 1;
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {

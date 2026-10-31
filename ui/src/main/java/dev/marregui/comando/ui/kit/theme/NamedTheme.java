@@ -41,7 +41,7 @@ public final class NamedTheme {
     /** The id of the theme of the other mode this one pairs with, as its file names it (record 128). */
     public final Optional<String> twin;
 
-    private NamedTheme(String id, String label, Ground ground, Tint tint, Optional<Path> file, Optional<String> twin) {
+    private NamedTheme(final String id, final String label, final Ground ground, final Tint tint, final Optional<Path> file, final Optional<String> twin) {
         this.id = id;
         this.twin = twin;
         this.label = label;
@@ -50,14 +50,14 @@ public final class NamedTheme {
         this.file = file;
     }
 
-    private static NamedTheme builtIn(String id, Ground ground, Tint tint) {
-        ThemeSpec s = BuiltInThemes.spec(id);
+    private static NamedTheme builtIn(final String id, final Ground ground, final Tint tint) {
+        final ThemeSpec s = BuiltInThemes.spec(id);
         return new NamedTheme(id, s.label(), ground, tint, Optional.empty(), s.twin());
     }
 
     /** The theme {@code spec} describes, read from {@code file}, with a ground and a tint of its own. */
-    static NamedTheme fromFile(ThemeSpec spec, Path file) {
-        String name = spec.id().toUpperCase(Locale.ROOT);
+    static NamedTheme fromFile(final ThemeSpec spec, final Path file) {
+        final String name = spec.id().toUpperCase(Locale.ROOT);
         return new NamedTheme(spec.id(), spec.label(), new Ground(name, spec.groundLabel(), spec.ground(), spec.light()),
                 new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade(), spec.light()), Optional.of(file),
                 spec.twin());
@@ -84,19 +84,19 @@ public final class NamedTheme {
     }
 
     /** Offers {@code fromFiles} after the built-in themes, in place of any offered before. At start, before the window. */
-    public static void offer(List<NamedTheme> fromFiles) {
-        List<NamedTheme> all = new ArrayList<>(BUILT_IN);
+    public static void offer(final List<NamedTheme> fromFiles) {
+        final List<NamedTheme> all = new ArrayList<>(BUILT_IN);
         all.addAll(fromFiles);
         offered = List.copyOf(all);
     }
 
     /** The theme offered with id {@code id}, if one is. */
-    public static Optional<NamedTheme> withId(String id) {
+    public static Optional<NamedTheme> withId(final String id) {
         return offered.stream().filter(t -> t.id.equals(id)).findFirst();
     }
 
     /** The curated theme of {@code ground} and {@code tint}, if they make one. */
-    public static Optional<NamedTheme> of(Ground ground, Tint tint) {
+    public static Optional<NamedTheme> of(final Ground ground, final Tint tint) {
         return offered.stream().filter(t -> t.ground == ground && t.tint == tint).findFirst();
     }
 
@@ -104,8 +104,8 @@ public final class NamedTheme {
      * The theme for a ground and tint stored apart: the one they make; else, when a ground was chosen, the theme on
      * that ground; else the theme of that tint; else {@link #GRAPHITE_GOLD}.
      */
-    public static NamedTheme closest(Optional<Ground> ground, Tint tint) {
-        Optional<NamedTheme> pair = ground.flatMap(g -> of(g, tint));
+    public static NamedTheme closest(final Optional<Ground> ground, final Tint tint) {
+        final Optional<NamedTheme> pair = ground.flatMap(g -> of(g, tint));
         if (pair.isPresent()) {
             return pair.get();
         }

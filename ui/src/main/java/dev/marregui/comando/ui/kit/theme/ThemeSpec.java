@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import java.awt.Color;
 import java.util.Optional;
 import java.util.regex.Pattern;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, the mode (dark, the
@@ -37,38 +37,38 @@ record ThemeSpec(String id, String label, boolean light, Optional<String> twin, 
     private static final Pattern HEX = Pattern.compile("#[0-9A-Fa-f]{6}");
 
     /** The theme {@code json} gives; an {@link IllegalArgumentException} naming the first thing wrong when it gives none. */
-    static ThemeSpec parse(String json) {
+    static ThemeSpec parse(final String json) {
         JsonNode root;
         try {
             root = JSON.readTree(json);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             throw new IllegalArgumentException("not JSON: " + e.getOriginalMessage());
         }
         if (root == null || !root.isObject()) {
             throw new IllegalArgumentException("not a JSON object");
         }
-        String id = text(root, "id", null);
+        final String id = text(root, "id", null);
         if (!ID.matcher(id).matches()) {
             throw new IllegalArgumentException("\"id\" must be lower case letters, digits and underscores: " + id);
         }
-        String label = text(root, "label", null);
-        String mode = text(root, "mode", "dark");
+        final String label = text(root, "label", null);
+        final String mode = text(root, "mode", "dark");
         if (!mode.equals("dark") && !mode.equals("light")) {
             throw new IllegalArgumentException("\"mode\" must be \"dark\" or \"light\": " + mode);
         }
-        Optional<String> twin = Optional.ofNullable(root.get("twin")).map(v -> text(root, "twin", null));
+        final Optional<String> twin = Optional.ofNullable(root.get("twin")).map(v -> text(root, "twin", null));
         if (twin.isPresent() && !ID.matcher(twin.get()).matches()) {
             throw new IllegalArgumentException("\"twin\" must be another theme's id: " + twin.get());
         }
-        JsonNode ground = object(root, "ground");
-        JsonNode tint = object(root, "tint");
+        final JsonNode ground = object(root, "ground");
+        final JsonNode tint = object(root, "tint");
         return new ThemeSpec(id, label, mode.equals("light"), twin, text(ground, "label", label), colour(ground, "ground.color"),
                 text(tint, "label", label), colour(tint, "tint.highlight"), colour(tint, "tint.body"), colour(tint, "tint.shade"));
     }
 
     /** Field {@code name} of {@code node} as text: {@code otherwise} when it is missing, which null forbids. */
-    private static String text(JsonNode node, String name, String otherwise) {
-        JsonNode v = node.get(name);
+    private static String text(final JsonNode node, final String name, final String otherwise) {
+        final JsonNode v = node.get(name);
         if (v == null && otherwise != null) {
             return otherwise;
         }
@@ -78,8 +78,8 @@ record ThemeSpec(String id, String label, boolean light, Optional<String> twin, 
         return v.asString().strip();
     }
 
-    private static JsonNode object(JsonNode node, String name) {
-        JsonNode v = node.get(name);
+    private static JsonNode object(final JsonNode node, final String name) {
+        final JsonNode v = node.get(name);
         if (v == null || !v.isObject()) {
             throw new IllegalArgumentException("\"" + name + "\" must be an object");
         }
@@ -87,9 +87,9 @@ record ThemeSpec(String id, String label, boolean light, Optional<String> twin, 
     }
 
     /** The colour at {@code path} ({@code tint.body}), written {@code #RRGGBB}. */
-    private static Color colour(JsonNode node, String path) {
-        String field = path.substring(path.indexOf('.') + 1);
-        JsonNode v = node.get(field);
+    private static Color colour(final JsonNode node, final String path) {
+        final String field = path.substring(path.indexOf('.') + 1);
+        final JsonNode v = node.get(field);
         if (v == null || !v.isString() || !HEX.matcher(v.asString()).matches()) {
             throw new IllegalArgumentException("\"" + path + "\" must be a colour written #RRGGBB");
         }

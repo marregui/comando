@@ -72,12 +72,12 @@ public record SessionSpec(
     }
 
     /** A session the user made: no creator recorded. */
-    public SessionSpec(String name, String workDir, String model, String effort, String permissionMode, List<String> addDirs, double budgetUsd,
-                       String claudeSessionId, StartMode startMode, String checkpoint, String carried) {
+    public SessionSpec(final String name, final String workDir, final String model, final String effort, final String permissionMode, final List<String> addDirs, final double budgetUsd,
+                       final String claudeSessionId, final StartMode startMode, final String checkpoint, final String carried) {
         this(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, "");
     }
 
-    public static SessionSpec fresh(String name, String workDir) {
+    public static SessionSpec fresh(final String name, final String workDir) {
         return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, "", StartMode.NEW, DEFAULT_CHECKPOINT, "");
     }
 
@@ -93,38 +93,38 @@ public record SessionSpec(
      * A conversation imported from Claude Code's files. It may still be open in a terminal, so its first
      * start forks it: two processes never write one conversation. The fork's own id is resumed after that.
      */
-    public static SessionSpec imported(String name, String workDir, String claudeSessionId) {
+    public static SessionSpec imported(final String name, final String workDir, final String claudeSessionId) {
         return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, claudeSessionId, StartMode.FORK, DEFAULT_CHECKPOINT, "");
     }
 
-    public SessionSpec withName(String newName) {
+    public SessionSpec withName(final String newName) {
         return new SessionSpec(newName, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy);
     }
 
     /** After Claude Code reports its session id, later starts resume that conversation. */
-    public SessionSpec resumable(String sessionId) {
+    public SessionSpec resumable(final String sessionId) {
         return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, sessionId, StartMode.RESUME, checkpoint, carried, createdBy);
     }
 
-    public SessionSpec withCheckpoint(String newCheckpoint) {
+    public SessionSpec withCheckpoint(final String newCheckpoint) {
         return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, newCheckpoint, carried, createdBy);
     }
 
     /** The checkpoint's summary that goes in front of the next prompt; empty once it has gone. */
-    public SessionSpec withCarried(String newCarried) {
+    public SessionSpec withCarried(final String newCarried) {
         return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, newCarried, createdBy);
     }
 
-    public SessionSpec withModel(String newModel) {
+    public SessionSpec withModel(final String newModel) {
         return new SessionSpec(name, workDir, newModel, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy);
     }
 
-    public SessionSpec withEffort(String newEffort) {
+    public SessionSpec withEffort(final String newEffort) {
         return new SessionSpec(name, workDir, model, newEffort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy);
     }
 
     /** The same session, recorded as created by {@code creator} (a session or client name; empty for the user). */
-    public SessionSpec withCreatedBy(String creator) {
+    public SessionSpec withCreatedBy(final String creator) {
         return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, creator);
     }
 }

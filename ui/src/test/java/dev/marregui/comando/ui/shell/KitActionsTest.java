@@ -1,18 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.KitRoot;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.model.Status;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.state.Notice;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +8,20 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.KitRoot;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,8 +37,8 @@ class KitActionsTest {
     /// Each backup says, off the EDT, where it ran and what git did: the brain's what it pushed, the kit's why it
     /// failed.
     @Test
-    void theBrainAndTheKitAreBackedUpEachSayingWhatHappened(@TempDir Path tmp) {
-        KitActions kit = actions(new KitRoot(tmp.resolve("kit"), Optional.of(KIT), tmp));
+    void theBrainAndTheKitAreBackedUpEachSayingWhatHappened(@TempDir final Path tmp) {
+        final KitActions kit = actions(new KitRoot(tmp.resolve("kit"), Optional.of(KIT), tmp));
         kit.backUp();
         kit.backUpKit();
         Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> sent.size() == 2);
@@ -52,8 +53,8 @@ class KitActionsTest {
     private final List<Intent> sent = new CopyOnWriteArrayList<>();
     private final AtomicReference<AppState> state = new AtomicReference<>();
 
-    private KitActions actions(KitRoot root) {
-        Setup setup = new Setup() {
+    private KitActions actions(final KitRoot root) {
+        final Setup setup = new Setup() {
             @Override
             public KitRoot root() {
                 return root;
@@ -79,20 +80,20 @@ class KitActionsTest {
         }), () -> null);
     }
 
-    private static SessionState session(String name, String workDir, Status status, int turns) {
+    private static SessionState session(final String name, final String workDir, final Status status, final int turns) {
         return SessionState.closed(SessionSpec.fresh(name, workDir)).withStatus(status, "").withTurns(turns, 1L);
     }
 
-    private static AppState with(SessionState... sessions) {
+    private static AppState with(final SessionState... sessions) {
         return AppState.initial(List.of(new PanelState(P, "p", "", "")), List.of(), List.of(sessions));
     }
 
     /// With no `kit` session, [KitActions#send] saves one in the kit root, opens it and sends the upgrade prompt naming
     /// the version and `INSTALL.md`.
     @Test
-    void theUpgradeMakesTheKitsSessionInTheRootAndSendsItThePrompt(@TempDir Path tmp) {
-        Path root = tmp.resolve(".claude/comando-kit");
-        KitActions kit = actions(new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude")));
+    void theUpgradeMakesTheKitsSessionInTheRootAndSendsItThePrompt(@TempDir final Path tmp) {
+        final Path root = tmp.resolve(".claude/comando-kit");
+        final KitActions kit = actions(new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude")));
 
         kit.send(with(), new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude")), "v1.3.0");
 
@@ -106,10 +107,10 @@ class KitActionsTest {
     /// A `kit` session working in another folder gets a notice to rename or remove it and nothing else; one in the kit
     /// root is reused without being saved again.
     @Test
-    void aSessionCalledKitElsewhereIsNotTakenForTheKits(@TempDir Path tmp) {
-        Path root = tmp.resolve(".claude/comando-kit");
-        KitRoot r = new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude"));
-        KitActions kit = actions(r);
+    void aSessionCalledKitElsewhereIsNotTakenForTheKits(@TempDir final Path tmp) {
+        final Path root = tmp.resolve(".claude/comando-kit");
+        final KitRoot r = new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude"));
+        final KitActions kit = actions(r);
 
         kit.send(with(session("kit", tmp.toString(), Status.CLOSED, 0)), r, "v1.3.0");
         assertThat(sent).singleElement().isInstanceOfSatisfying(Intent.Notify.class, n ->
@@ -124,13 +125,13 @@ class KitActionsTest {
     /// busy session, and ends when the session is idle again or closed.
     @Test
     void theUpgradeHasReportedOnceTheSessionTookThePromptAndFinished() {
-        KitActions.Upgrade sent = new KitActions.Upgrade("v1.3.0", false);
-        SessionState idle = session("kit", "/r", Status.OPEN, 0);
-        SessionState busy = session("kit", "/r", Status.OPEN, 1);
+        final KitActions.Upgrade sent = new KitActions.Upgrade("v1.3.0", false);
+        final SessionState idle = session("kit", "/r", Status.OPEN, 0);
+        final SessionState busy = session("kit", "/r", Status.OPEN, 1);
 
         assertThat(sent.next(null)).as("a state rendered before the session was made").contains(sent);
         assertThat(sent.next(idle)).as("before it took the prompt").contains(sent);
-        KitActions.Upgrade running = sent.next(busy).orElseThrow();
+        final KitActions.Upgrade running = sent.next(busy).orElseThrow();
         assertThat(running.running()).isTrue();
         assertThat(running.next(busy)).contains(running);
         assertThat(running.next(idle)).as("reported").isEmpty();
@@ -140,9 +141,9 @@ class KitActionsTest {
     /// [KitActions#toRestart] picks only an open, idle session that is not the kit's; a restart stops it, waits through
     /// closing, and starts it once it is closed, not twice.
     @Test
-    void theSessionsOnTheOldKitAreRestartedOnceStoppedButTheKitsAndBusyOnes(@TempDir Path tmp) {
-        KitActions kit = actions(new KitRoot(tmp, Optional.of(KIT), tmp));
-        AppState s = with(session("a", "/w", Status.OPEN, 0), session("busy", "/w", Status.OPEN, 1), session("kit", "/r", Status.OPEN, 0),
+    void theSessionsOnTheOldKitAreRestartedOnceStoppedButTheKitsAndBusyOnes(@TempDir final Path tmp) {
+        final KitActions kit = actions(new KitRoot(tmp, Optional.of(KIT), tmp));
+        final AppState s = with(session("a", "/w", Status.OPEN, 0), session("busy", "/w", Status.OPEN, 1), session("kit", "/r", Status.OPEN, 0),
                 session("off", "/w", Status.CLOSED, 0));
 
         assertThat(KitActions.toRestart(s)).containsExactly("a");
@@ -158,9 +159,9 @@ class KitActionsTest {
     /// [ComandoUi#inside] resolves a symbolic link into the brain as inside it, a real folder in it too, and a sibling
     /// not.
     @Test
-    void aBrainFolderShownThroughALinkIsInsideTheBrain(@TempDir Path tmp) throws Exception {
-        Path memory = Files.createDirectories(tmp.resolve("claude/BRAIN/MEMORY"));
-        Path link = Files.createSymbolicLink(tmp.resolve("claude/MEMORY"), memory);
+    void aBrainFolderShownThroughALinkIsInsideTheBrain(@TempDir final Path tmp) throws Exception {
+        final Path memory = Files.createDirectories(tmp.resolve("claude/BRAIN/MEMORY"));
+        final Path link = Files.createSymbolicLink(tmp.resolve("claude/MEMORY"), memory);
 
         assertThat(ComandoUi.inside(link, tmp.resolve("claude/BRAIN"))).isTrue();
         assertThat(ComandoUi.inside(memory, tmp.resolve("claude/BRAIN"))).isTrue();

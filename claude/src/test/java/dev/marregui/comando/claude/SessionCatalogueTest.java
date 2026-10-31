@@ -1,12 +1,12 @@
 package dev.marregui.comando.claude;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,14 +20,14 @@ class SessionCatalogueTest {
     /// Transcript entries are newest first and retain the latest branch, custom title, and human prompt.
     /// Two dated JSONL files and an unrelated text file distinguish ordering, extraction, and filtering.
     @Test
-    void listsConversationsNewestFirstWithTheirDirectoryTitleAndLastPrompt(@TempDir Path projects) throws Exception {
-        Path project = Files.createDirectories(projects.resolve("-Users-x-edge"));
-        Path older = project.resolve("11111111-aaaa.jsonl");
+    void listsConversationsNewestFirstWithTheirDirectoryTitleAndLastPrompt(@TempDir final Path projects) throws Exception {
+        final Path project = Files.createDirectories(projects.resolve("-Users-x-edge"));
+        final Path older = project.resolve("11111111-aaaa.jsonl");
         Files.writeString(older, """
                 {"type":"user","cwd":"/Users/x/edge","gitBranch":"main","message":{"role":"user","content":"first"},"origin":{"kind":"human"}}
                 {"type":"ai-title","aiTitle":"Old work"}
                 """);
-        Path newer = project.resolve("22222222-bbbb.jsonl");
+        final Path newer = project.resolve("22222222-bbbb.jsonl");
         Files.writeString(newer, """
                 {"type":"user","cwd":"/Users/x/edge","gitBranch":"main","message":{"role":"user","content":"hello"},"origin":{"kind":"human"}}
                 {"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}
@@ -38,10 +38,10 @@ class SessionCatalogueTest {
         Files.setLastModifiedTime(newer, FileTime.fromMillis(2_000L));
         Files.writeString(project.resolve("notes.txt"), "not a transcript");
 
-        List<SessionCatalogue.Entry> entries = new SessionCatalogue(projects).scan(10);
+        final List<SessionCatalogue.Entry> entries = new SessionCatalogue(projects).scan(10);
 
         assertThat(entries).extracting(SessionCatalogue.Entry::sessionId).containsExactly("22222222-bbbb", "11111111-aaaa");
-        SessionCatalogue.Entry e = entries.getFirst();
+        final SessionCatalogue.Entry e = entries.getFirst();
         assertThat(e.cwd()).isEqualTo("/Users/x/edge");
         assertThat(e.branch()).isEqualTo("fix/1");
         assertThat(e.title()).isEqualTo("ENG-1 fix");
@@ -51,7 +51,7 @@ class SessionCatalogueTest {
 
     /// A missing projects directory gives no entries, not a failure.
     @Test
-    void missingDirectoryIsEmpty(@TempDir Path dir) {
+    void missingDirectoryIsEmpty(@TempDir final Path dir) {
         assertThat(new SessionCatalogue(dir.resolve("nope")).scan(10)).isEmpty();
     }
 }

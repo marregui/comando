@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.kit.icon;
 
-import javax.swing.Icon;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.util.List;
+import javax.swing.Icon;
 
 /** Icons in a row, left to right, {@link #GAP} apart and centred on one line: two marks where a cell has one icon. */
 public final class RowIcon implements Icon {
@@ -12,14 +12,14 @@ public final class RowIcon implements Icon {
 
     private final List<Icon> icons;
 
-    public RowIcon(Icon... icons) {
+    public RowIcon(final Icon... icons) {
         this.icons = List.of(icons);
     }
 
     @Override
-    public void paintIcon(Component c, Graphics g, int x, int y) {
-        int h = getIconHeight();
-        for (Icon i : icons) {
+    public void paintIcon(final Component c, final Graphics g, int x, final int y) {
+        final int h = getIconHeight();
+        for (final Icon i : icons) {
             i.paintIcon(c, g, x, y + (h - i.getIconHeight()) / 2);
             x += i.getIconWidth() + GAP;
         }

@@ -1,9 +1,10 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.view.ViewSpec;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import dev.marregui.comando.core.view.ViewSpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +18,7 @@ class PlanTreeTest {
     /// "6 lines".
     @Test
     void questDbPlanNestsByIndentation() {
-        ViewSpec.TreeNode plan = PlanTree.parse(List.of(
+        final ViewSpec.TreeNode plan = PlanTree.parse(List.of(
                 "Async Group By workers: 1",
                 "  keys: [symbol]",
                 "  filter: null",
@@ -25,7 +26,7 @@ class PlanTreeTest {
                 "        Row forward scan",
                 "        Frame forward scan on: trades"));
         assertThat(plan.detail()).isEqualTo("6 lines");
-        ViewSpec.TreeNode top = plan.children().getFirst();
+        final ViewSpec.TreeNode top = plan.children().getFirst();
         assertThat(top.label()).isEqualTo("Async Group By workers: 1");
         assertThat(top.children()).extracting(ViewSpec.TreeNode::label).containsExactly("keys: [symbol]", "filter: null");
         assertThat(top.children().get(1).children().getFirst().children()).extracting(ViewSpec.TreeNode::label)
@@ -36,8 +37,8 @@ class PlanTreeTest {
     /// prefixes; [PlanTree#isExplain] accepts `explain` after leading blanks.
     @Test
     void postgresArrowsAreDropped() {
-        ViewSpec.TreeNode plan = PlanTree.parse(List.of("Hash Join  (cost=1.0..2.0)\n  ->  Seq Scan on a\n  ->  Hash\n        ->  Seq Scan on b"));
-        ViewSpec.TreeNode join = plan.children().getFirst();
+        final ViewSpec.TreeNode plan = PlanTree.parse(List.of("Hash Join  (cost=1.0..2.0)\n  ->  Seq Scan on a\n  ->  Hash\n        ->  Seq Scan on b"));
+        final ViewSpec.TreeNode join = plan.children().getFirst();
         assertThat(join.children()).extracting(ViewSpec.TreeNode::label).containsExactly("Seq Scan on a", "Hash");
         assertThat(join.children().get(1).children().getFirst().label()).isEqualTo("Seq Scan on b");
         assertThat(PlanTree.isExplain("  explain select 1")).isTrue();

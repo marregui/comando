@@ -1,11 +1,11 @@
 package dev.marregui.comando.core.port;
 
-import dev.marregui.comando.core.model.ConnectionSpec;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+
+import dev.marregui.comando.core.model.ConnectionSpec;
 
 /** SQL on behalf of Claude: runs on the connection's lane like the editor's runs, returns capped text rows. */
 public interface QueryPort {

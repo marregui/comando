@@ -1,17 +1,18 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import dev.marregui.comando.ui.kit.text.NoteLinks;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.SwingUtilities;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.ui.kit.text.NoteLinks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -82,7 +83,7 @@ class LinksTest {
         Files.createDirectories(repo.resolve(".git"));
         Files.writeString(Files.createDirectories(repo.resolve("MEMORY")).resolve("project_current_lane.md"),
                 "---\nname: project-current-lane\n---\nLane\n");
-        List<Boolean> onEdt = new CopyOnWriteArrayList<>();
+        final List<Boolean> onEdt = new CopyOnWriteArrayList<>();
         SwingUtilities.invokeAndWait(() -> Links.open(NoteLinks.href("project-current-lane", "rules"), Links.folderOf("work"),
                 (f, heading) -> {
                     onEdt.add(SwingUtilities.isEventDispatchThread());

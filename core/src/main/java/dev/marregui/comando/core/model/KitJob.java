@@ -60,16 +60,16 @@ public record KitJob(String name, String description, List<String> days, String 
 
     /** The time zero-padded, {@code 07:15}; as typed when it is no time. */
     public String paddedTime() {
-        var m = TIME.matcher(time.strip());
+        final var m = TIME.matcher(time.strip());
         return m.matches() ? String.format(Locale.ROOT, "%02d:%s", Integer.parseInt(m.group(1)), m.group(2)) : time.strip();
     }
 
     /**
      * {@code days} as the manifest writes them: a run of three or more as a range ({@code MON-FRI}), else one by one.
      */
-    public static String daysText(List<String> days) {
-        List<Integer> at = WEEKDAYS.stream().filter(days::contains).map(WEEKDAYS::indexOf).toList();
-        List<String> out = new ArrayList<>();
+    public static String daysText(final List<String> days) {
+        final List<Integer> at = WEEKDAYS.stream().filter(days::contains).map(WEEKDAYS::indexOf).toList();
+        final List<String> out = new ArrayList<>();
         int i = 0;
         while (i < at.size()) {
             int j = i;
@@ -104,9 +104,9 @@ public record KitJob(String name, String description, List<String> days, String 
      * or one outside the root, an environment name not in capitals, a log outside the root. Whether the program is an
      * executable file is {@code kit.py}'s to say.
      */
-    public static Map<String, String> problems(List<KitJob> all, int self) {
-        KitJob j = all.get(self);
-        Map<String, String> out = new LinkedHashMap<>();
+    public static Map<String, String> problems(final List<KitJob> all, final int self) {
+        final KitJob j = all.get(self);
+        final Map<String, String> out = new LinkedHashMap<>();
         if (j.name.isBlank()) {
             out.put(NAME_FIELD, "a name is needed");
         } else if (!NAME.matcher(j.name).matches()) {
@@ -133,7 +133,7 @@ public record KitJob(String name, String description, List<String> days, String 
         } else if (!insideRoot(j.program())) {
             out.put(COMMAND_FIELD, "a path inside the root, with / and no ..");
         }
-        for (String k : j.env.keySet()) {
+        for (final String k : j.env.keySet()) {
             if (!ENV.matcher(k).matches()) {
                 out.put(ENV_FIELD, k + ": names in capitals, digits and _");
                 break;
@@ -149,12 +149,12 @@ public record KitJob(String name, String description, List<String> days, String 
      * As {@code kit.py}'s {@code inside}: relative, with {@code /}, no empty part, no {@code ..}, no drive in the first
      * part.
      */
-    private static boolean insideRoot(String rel) {
-        String[] parts = rel.split("/", -1);
+    private static boolean insideRoot(final String rel) {
+        final String[] parts = rel.split("/", -1);
         if (rel.startsWith("/") || rel.contains("\\") || parts[0].contains(":")) {
             return false;
         }
-        for (String part : parts) {
+        for (final String part : parts) {
             if (part.isEmpty() || part.equals("..")) {
                 return false;
             }
@@ -166,13 +166,13 @@ public record KitJob(String name, String description, List<String> days, String 
      * The words of {@code line}, split at spaces; '…' and "…" keep spaces inside a word, and a backslash escapes in
      * "…".
      */
-    public static List<String> words(String line) {
-        List<String> out = new ArrayList<>();
-        StringBuilder w = new StringBuilder();
+    public static List<String> words(final String line) {
+        final List<String> out = new ArrayList<>();
+        final StringBuilder w = new StringBuilder();
         boolean in = false;
         char quote = 0;
         for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
+            final char c = line.charAt(i);
             if (quote != 0) {
                 if (c == quote) {
                     quote = 0;
@@ -202,10 +202,10 @@ public record KitJob(String name, String description, List<String> days, String 
     }
 
     /** {@code args} as one line {@link #words} reads back: a word with a space, a quote or nothing in it is quoted. */
-    public static String line(List<String> args) {
-        List<String> out = new ArrayList<>(args.size());
-        for (String a : args) {
-            boolean plain = !a.isEmpty() && a.chars().noneMatch(c -> Character.isWhitespace(c) || c == '\'' || c == '"' || c == '\\');
+    public static String line(final List<String> args) {
+        final List<String> out = new ArrayList<>(args.size());
+        for (final String a : args) {
+            final boolean plain = !a.isEmpty() && a.chars().noneMatch(c -> Character.isWhitespace(c) || c == '\'' || c == '"' || c == '\\');
             out.add(plain ? a : a.indexOf('\'') < 0 ? "'" + a + "'" : "\"" + a.replace("\\", "\\\\").replace("\"", "\\\"") + "\"");
         }
         return String.join(" ", out);
@@ -220,13 +220,13 @@ public record KitJob(String name, String description, List<String> days, String 
      * {@code NAME=value} lines as an environment: the name stripped, the value kept as written, spaces included; a line
      * with no {@code =} names a variable set to nothing; blank lines are skipped.
      */
-    public static Map<String, String> envOf(String lines) {
-        Map<String, String> out = new LinkedHashMap<>();
-        for (String l : lines.split("\n")) {
+    public static Map<String, String> envOf(final String lines) {
+        final Map<String, String> out = new LinkedHashMap<>();
+        for (final String l : lines.split("\n")) {
             if (l.isBlank()) {
                 continue;
             }
-            int eq = l.indexOf('=');
+            final int eq = l.indexOf('=');
             out.put(eq < 0 ? l.strip() : l.substring(0, eq).strip(), eq < 0 ? "" : l.substring(eq + 1));
         }
         return out;

@@ -14,7 +14,7 @@ public interface Zoomable {
     void resetZoom();
 
     /** {@code size}, in points, kept between {@link #MIN_SIZE} and {@link #MAX_SIZE}. */
-    static float clampSize(float size) {
+    static float clampSize(final float size) {
         return Math.max(MIN_SIZE, Math.min(MAX_SIZE, size));
     }
 }

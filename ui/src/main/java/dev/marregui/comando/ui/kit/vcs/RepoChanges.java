@@ -1,8 +1,5 @@
 package dev.marregui.comando.ui.kit.vcs;
 
-import dev.marregui.comando.core.model.RepoStatus;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
 import java.awt.Color;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -12,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The watched git repositories as last read, on the EDT: what the Changes view lists and what the Files tab colours.
@@ -27,19 +27,19 @@ public final class RepoChanges {
     private final List<Runnable> listeners = new ArrayList<>();
 
     /** The repositories as read; listeners hear of it when it differs from what was shown. */
-    public void set(List<RepoStatus> next) {
+    public void set(final List<RepoStatus> next) {
         if (next.equals(repos)) {
             return;
         }
         repos = List.copyOf(next);
-        Map<Path, RepoStatus.Kind> f = new HashMap<>();
-        Set<Path> d = new HashSet<>();
-        Map<Path, RepoStatus> top = new HashMap<>();
-        for (RepoStatus r : repos) {
-            Path root = Path.of(r.root());
+        final Map<Path, RepoStatus.Kind> f = new HashMap<>();
+        final Set<Path> d = new HashSet<>();
+        final Map<Path, RepoStatus> top = new HashMap<>();
+        for (final RepoStatus r : repos) {
+            final Path root = Path.of(r.root());
             top.put(root.toAbsolutePath().normalize(), r);
-            for (RepoStatus.FileChange c : r.changes()) {
-                Path file = root.resolve(c.path()).normalize();
+            for (final RepoStatus.FileChange c : r.changes()) {
+                final Path file = root.resolve(c.path()).normalize();
                 f.put(file, c.kind());
                 for (Path p = file.getParent(); p != null && p.startsWith(root); p = p.getParent()) {
                     if (!d.add(p)) {
@@ -51,7 +51,7 @@ public final class RepoChanges {
         files = f;
         folders = d;
         roots = top;
-        for (Runnable l : List.copyOf(listeners)) {
+        for (final Runnable l : List.copyOf(listeners)) {
             l.run();
         }
     }
@@ -63,24 +63,24 @@ public final class RepoChanges {
     /**
      * How the file at {@code path} differs from {@code HEAD}; empty when it does not or is in no watched repository.
      */
-    public Optional<RepoStatus.Kind> of(Path path) {
+    public Optional<RepoStatus.Kind> of(final Path path) {
         return Optional.ofNullable(files.get(path.toAbsolutePath().normalize()));
     }
 
     /** Whether the folder at {@code path} holds a changed or untracked file at any depth. */
-    public boolean holdsChanges(Path path) {
+    public boolean holdsChanges(final Path path) {
         return folders.contains(path.toAbsolutePath().normalize());
     }
 
     /** The repository whose top folder is {@code path}; empty when it is no watched repository's root. */
-    public Optional<RepoStatus> repoAt(Path path) {
+    public Optional<RepoStatus> repoAt(final Path path) {
         return Optional.ofNullable(roots.get(path.toAbsolutePath().normalize()));
     }
 
     /** The repository holding {@code path}, its top folder or anything under it; the innermost when nested. */
-    public Optional<RepoStatus> repoOf(Path path) {
+    public Optional<RepoStatus> repoOf(final Path path) {
         for (Path p = path.toAbsolutePath().normalize(); p != null; p = p.getParent()) {
-            RepoStatus r = roots.get(p);
+            final RepoStatus r = roots.get(p);
             if (r != null) {
                 return Optional.of(r);
             }
@@ -89,22 +89,22 @@ public final class RepoChanges {
     }
 
     /** The changes of {@code repo} inside {@code folder}, a path relative to its top folder; all of them when empty. */
-    public static List<RepoStatus.FileChange> changesIn(RepoStatus repo, String folder) {
+    public static List<RepoStatus.FileChange> changesIn(final RepoStatus repo, final String folder) {
         if (folder.isEmpty()) {
             return repo.changes();
         }
-        String prefix = folder.endsWith("/") ? folder : folder + "/";
+        final String prefix = folder.endsWith("/") ? folder : folder + "/";
         return repo.changes().stream().filter(c -> c.path().startsWith(prefix)).toList();
     }
 
     /** Calls {@code listener} after each read that changed something; the returned action removes it. */
-    public Runnable listen(Runnable listener) {
+    public Runnable listen(final Runnable listener) {
         listeners.add(listener);
         return () -> listeners.remove(listener);
     }
 
     /** The colour a file's name takes for how it changed. */
-    public static Color color(RepoStatus.Kind kind) {
+    public static Color color(final RepoStatus.Kind kind) {
         return switch (kind) {
             case MODIFIED, RENAMED, COPIED -> Theme.VCS_MODIFIED;
             case ADDED -> Theme.VCS_ADDED;
@@ -115,7 +115,7 @@ public final class RepoChanges {
     }
 
     /** What a change is called, in a tooltip or a title. */
-    public static String describe(RepoStatus.Kind kind) {
+    public static String describe(final RepoStatus.Kind kind) {
         return switch (kind) {
             case MODIFIED -> "modified";
             case ADDED -> "added";

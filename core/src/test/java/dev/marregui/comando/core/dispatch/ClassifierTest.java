@@ -54,18 +54,18 @@ class ClassifierTest {
             /model sonnet                                                | CLAUDE
             don't drop table t                                           | CLAUDE
             """)
-    void classifies(String text, Target expected) {
+    void classifies(final String text, final Target expected) {
         assertThat(Classifier.classify(text.replace("\\n", "\n")).target()).isEqualTo(expected);
     }
 
     /// A first-line `-- @sql` or `-- @claude` overrides inferred routing and is absent from the dispatched text.
     @Test
     void markerLineWinsAndIsRemoved() {
-        Classifier.Classification sql = Classifier.classify("-- @sql\ntrades WHERE price > 10");
+        final Classifier.Classification sql = Classifier.classify("-- @sql\ntrades WHERE price > 10");
         assertThat(sql.target()).isEqualTo(Target.SQL);
         assertThat(sql.text()).isEqualTo("trades WHERE price > 10");
 
-        Classifier.Classification prompt = Classifier.classify("-- @claude\nSELECT * FROM t");
+        final Classifier.Classification prompt = Classifier.classify("-- @claude\nSELECT * FROM t");
         assertThat(prompt.target()).isEqualTo(Target.CLAUDE);
         assertThat(prompt.text()).isEqualTo("SELECT * FROM t");
     }

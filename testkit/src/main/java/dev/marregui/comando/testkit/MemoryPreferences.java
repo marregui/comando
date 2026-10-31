@@ -14,22 +14,22 @@ public final class MemoryPreferences extends AbstractPreferences {
         this(null, "");
     }
 
-    private MemoryPreferences(MemoryPreferences parent, String name) {
+    private MemoryPreferences(final MemoryPreferences parent, final String name) {
         super(parent, name);
     }
 
     @Override
-    protected void putSpi(String key, String value) {
+    protected void putSpi(final String key, final String value) {
         values.put(key, value);
     }
 
     @Override
-    protected String getSpi(String key) {
+    protected String getSpi(final String key) {
         return values.get(key);
     }
 
     @Override
-    protected void removeSpi(String key) {
+    protected void removeSpi(final String key) {
         values.remove(key);
     }
 
@@ -50,7 +50,7 @@ public final class MemoryPreferences extends AbstractPreferences {
     }
 
     @Override
-    protected AbstractPreferences childSpi(String name) {
+    protected AbstractPreferences childSpi(final String name) {
         return children.computeIfAbsent(name, n -> new MemoryPreferences(this, n));
     }
 

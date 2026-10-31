@@ -1,35 +1,5 @@
 package dev.marregui.comando.ui.dialogs.folders;
 
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.model.KitFolders;
-import dev.marregui.comando.core.resource.FolderKind;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.vcs.RepoChanges;
-
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.KeyStroke;
-import javax.swing.ListSelectionModel;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -50,6 +20,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.KitFolders;
+import dev.marregui.comando.core.resource.FolderKind;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
  * The Files tab's folders as a list with the selected one's fields beside it: add (a folder chosen first), remove,
@@ -66,7 +66,7 @@ public final class FoldersEditor {
         Optional<Path> folder(Component owner, Path start);
 
         /** A file, starting in {@code start}; none by default. */
-        default Optional<Path> file(Component owner, Path start) {
+        default Optional<Path> file(final Component owner, final Path start) {
             return Optional.empty();
         }
     }
@@ -95,11 +95,11 @@ public final class FoldersEditor {
     static final class Row {
         final Map<String, String> fields;
 
-        Row(Map<String, String> fields) {
+        Row(final Map<String, String> fields) {
             this.fields = new LinkedHashMap<>(fields);
         }
 
-        String get(String key) {
+        String get(final String key) {
             return fields.getOrDefault(key, "");
         }
 
@@ -150,7 +150,7 @@ public final class FoldersEditor {
     private boolean loading;
 
     /** Edits {@code folders}, which lie inside {@code claudeDir}. */
-    public FoldersEditor(List<FolderRoot> folders, Path claudeDir, RepoChanges repos, Chooser chooser) {
+    public FoldersEditor(final List<FolderRoot> folders, final Path claudeDir, final RepoChanges repos, final Chooser chooser) {
         this.base = List.copyOf(folders);
         this.claudeDir = claudeDir.toAbsolutePath().normalize();
         this.repos = repos;
@@ -159,7 +159,7 @@ public final class FoldersEditor {
         remove = tool("close", "Take the selected folder out of the Files tab; nothing on disk changes");
         up = tool("↑", KeyText.of("Move the selected folder up (⌥↑)"));
         down = tool("↓", KeyText.of("Move the selected folder down (⌥↓)"));
-        for (FolderRoot f : folders) {
+        for (final FolderRoot f : folders) {
             rows.addElement(new Row(FolderKind.INSTANCE.toAttributes(f)));
         }
         build();
@@ -178,12 +178,12 @@ public final class FoldersEditor {
     }
 
     /** Runs whenever the list or a field changes: the window enables Save. */
-    public void onChange(Runnable r) {
+    public void onChange(final Runnable r) {
         changed = r;
     }
 
     /** Selects the folder named {@code folder}, when there is one. */
-    public void select(String folder) {
+    public void select(final String folder) {
         for (int i = 0; i < rows.size(); i++) {
             if (rows.get(i).get(NAME).equals(folder)) {
                 list.setSelectedIndex(i);
@@ -197,11 +197,11 @@ public final class FoldersEditor {
         if (!problemsOfAll().isEmpty()) {
             return Optional.empty();
         }
-        List<FolderRoot> edited = new ArrayList<>(rows.size());
+        final List<FolderRoot> edited = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             try {
                 edited.add(FolderKind.INSTANCE.fromAttributes(rows.get(i).fields));
-            } catch (IllegalArgumentException e) {
+            } catch (final IllegalArgumentException e) {
                 return Optional.empty();
             }
         }
@@ -226,8 +226,8 @@ public final class FoldersEditor {
         return false;
     }
 
-    private static Map<String, String> normalized(Map<String, String> fields) {
-        Map<String, String> out = new LinkedHashMap<>();
+    private static Map<String, String> normalized(final Map<String, String> fields) {
+        final Map<String, String> out = new LinkedHashMap<>();
         fields.forEach((k, v) -> out.put(k, v.strip()));
         return out;
     }
@@ -239,9 +239,9 @@ public final class FoldersEditor {
 
     /** The problems of every folder, by its place in the list. */
     Map<Integer, Map<String, String>> problemsOfAll() {
-        Map<Integer, Map<String, String>> out = new LinkedHashMap<>();
+        final Map<Integer, Map<String, String>> out = new LinkedHashMap<>();
         for (int i = 0; i < rows.size(); i++) {
-            Map<String, String> p = problems(i);
+            final Map<String, String> p = problems(i);
             if (!p.isEmpty()) {
                 out.put(i, p);
             }
@@ -254,10 +254,10 @@ public final class FoldersEditor {
      * not a full path, not there, not readable, still being looked up, or outside {@code ~/.claude}; an index outside
      * the folder or in a folder that does not exist; a listing file that is no file name.
      */
-    Map<String, String> problems(int i) {
-        Row r = rows.get(i);
-        Map<String, String> out = new LinkedHashMap<>();
-        String n = r.get(NAME).strip();
+    Map<String, String> problems(final int i) {
+        final Row r = rows.get(i);
+        final Map<String, String> out = new LinkedHashMap<>();
+        final String n = r.get(NAME).strip();
         if (n.isEmpty()) {
             out.put(NAME, "a name is needed");
         } else {
@@ -268,13 +268,13 @@ public final class FoldersEditor {
                 }
             }
         }
-        String p = r.get(PATH).strip();
+        final String p = r.get(PATH).strip();
         if (p.isEmpty()) {
             out.put(PATH, "choose the folder");
         } else if (!Path.of(HomeDir.expand(p)).isAbsolute()) {
             out.put(PATH, "a full path, such as ~/notes");
         } else {
-            Facts f = looked.get(HomeDir.expand(p));
+            final Facts f = looked.get(HomeDir.expand(p));
             if (f == null) {
                 out.put(PATH, "checking…");
             } else if (!f.exists()) {
@@ -285,16 +285,16 @@ public final class FoldersEditor {
                 out.put(PATH, "must be inside " + HomeDir.shorten(claudeDir.toString()));
             }
         }
-        String ix = r.get(INDEX).strip();
+        final String ix = r.get(INDEX).strip();
         if (!ix.isEmpty() && (Path.of(ix).isAbsolute() || Path.of(ix).normalize().startsWith(".."))) {
             out.put(INDEX, "must be inside the folder");
         } else if (!ix.isEmpty() && !out.containsKey(PATH)) {
-            IndexFacts f = indexes.get(indexPath(r).toString());
+            final IndexFacts f = indexes.get(indexPath(r).toString());
             if (f != null && !f.exists() && !f.folderExists()) {
                 out.put(INDEX, "its folder does not exist");
             }
         }
-        String listing = r.get(LISTED_IN).strip();
+        final String listing = r.get(LISTED_IN).strip();
         if (Boolean.parseBoolean(r.get(DELETABLE)) && !listing.isEmpty()
                 && (listing.contains("/") || listing.contains("\\") || listing.equals(".") || listing.equals(".."))) {
             out.put(LISTED_IN, "a file name, such as INDEX.md");
@@ -302,7 +302,7 @@ public final class FoldersEditor {
         if (out.isEmpty()) {
             try {
                 FolderKind.INSTANCE.fromAttributes(r.fields);
-            } catch (IllegalArgumentException e) {
+            } catch (final IllegalArgumentException e) {
                 out.put(NAME, e.getMessage());
             }
         }
@@ -317,25 +317,25 @@ public final class FoldersEditor {
     }
 
     /** Adds {@code folder} after the others, selected; a folder outside {@code ~/.claude} is refused. */
-    void add(Path folder) {
-        Path dir = folder.toAbsolutePath().normalize();
+    void add(final Path folder) {
+        final Path dir = folder.toAbsolutePath().normalize();
         if (!dir.startsWith(claudeDir)) {
             refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not added");
             return;
         }
-        String base = dir.getFileName() == null ? dir.toString() : dir.getFileName().toString();
+        final String base = dir.getFileName() == null ? dir.toString() : dir.getFileName().toString();
         String n = base;
         for (int k = 2; nameTaken(n); k++) {
             n = base + " " + k;
         }
         String guess = "";
-        for (String g : INDEX_GUESSES) {
+        for (final String g : INDEX_GUESSES) {
             if (Files.isRegularFile(dir.resolve(g))) {
                 guess = g;
                 break;
             }
         }
-        Map<String, String> fields = new LinkedHashMap<>();
+        final Map<String, String> fields = new LinkedHashMap<>();
         fields.put(NAME, n);
         fields.put(PATH, HomeDir.shorten(dir.toString()));
         fields.put(INDEX, guess);
@@ -356,14 +356,14 @@ public final class FoldersEditor {
      * "Use the kit's folders": the folders of {@code kit} the list lacks (none of its rows shows that folder or has
      * that name) go first, in the kit's order, the first selected; answers how many were added.
      */
-    int addFirst(List<FolderRoot> kit) {
-        List<FolderRoot> have = new ArrayList<>(rows.size());
+    int addFirst(final List<FolderRoot> kit) {
+        final List<FolderRoot> have = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             have.add(new FolderRoot(rows.get(i).get(NAME).strip(), HomeDir.expand(rows.get(i).get(PATH).strip()), "", List.of()));
         }
-        List<FolderRoot> missing = KitFolders.missing(have, kit);
+        final List<FolderRoot> missing = KitFolders.missing(have, kit);
         for (int k = 0; k < missing.size(); k++) {
-            Row r = new Row(FolderKind.INSTANCE.toAttributes(missing.get(k)));
+            final Row r = new Row(FolderKind.INSTANCE.toAttributes(missing.get(k)));
             rows.add(k, r);
             lookUp(r.get(PATH));
             lookUpIndex(r);
@@ -377,7 +377,7 @@ public final class FoldersEditor {
         return missing.size();
     }
 
-    private boolean nameTaken(String n) {
+    private boolean nameTaken(final String n) {
         for (int i = 0; i < rows.size(); i++) {
             if (rows.get(i).get(NAME).strip().equals(n)) {
                 return true;
@@ -388,7 +388,7 @@ public final class FoldersEditor {
 
     /** Takes the selected folder out of the list; the next one is selected. */
     void remove() {
-        int i = list.getSelectedIndex();
+        final int i = list.getSelectedIndex();
         if (i < 0) {
             return;
         }
@@ -401,13 +401,13 @@ public final class FoldersEditor {
     }
 
     /** Moves the selected folder {@code by} places, within the list. */
-    void move(int by) {
-        int i = list.getSelectedIndex();
-        int j = i + by;
+    void move(final int by) {
+        final int i = list.getSelectedIndex();
+        final int j = i + by;
         if (i < 0 || j < 0 || j >= rows.size()) {
             return;
         }
-        Row r = rows.remove(i);
+        final Row r = rows.remove(i);
         rows.add(j, r);
         list.setSelectedIndex(j);
         edited();
@@ -418,7 +418,7 @@ public final class FoldersEditor {
     }
 
     /** The field holding attribute {@code key}, for tests. */
-    JComponent field(String key) {
+    JComponent field(final String key) {
         return switch (key) {
             case NAME -> name;
             case PATH -> path;
@@ -433,8 +433,8 @@ public final class FoldersEditor {
     }
 
     /** The selected entry's problem with field {@code key}, as its outline and the message line show it; or empty. */
-    String problemShown(String key) {
-        int i = list.getSelectedIndex();
+    String problemShown(final String key) {
+        final int i = list.getSelectedIndex();
         return i < 0 ? "" : problems(i).getOrDefault(key, "");
     }
 
@@ -450,13 +450,13 @@ public final class FoldersEditor {
     // ---- facts looked up off the EDT
 
     /** Looks up whether {@code shown} (as typed) exists and the repository it belongs to, then checks again. */
-    private void lookUp(String shown) {
-        String p = HomeDir.expand(shown.strip());
+    private void lookUp(final String shown) {
+        final String p = HomeDir.expand(shown.strip());
         if (p.isEmpty() || !Path.of(p).isAbsolute() || looked.containsKey(p)) {
             return;
         }
         UiErrands.start("folder-facts", () -> {
-            Facts f = facts(Path.of(p));
+            final Facts f = facts(Path.of(p));
             Edt.later(() -> {
                 looked.put(p, f);
                 refresh();
@@ -465,18 +465,18 @@ public final class FoldersEditor {
     }
 
     /** Looks up whether {@code r}'s index file and its folder exist, then checks again. */
-    private void lookUpIndex(Row r) {
-        String ix = r.get(INDEX).strip();
-        String p = HomeDir.expand(r.get(PATH).strip());
+    private void lookUpIndex(final Row r) {
+        final String ix = r.get(INDEX).strip();
+        final String p = HomeDir.expand(r.get(PATH).strip());
         if (ix.isEmpty() || p.isEmpty() || !Path.of(p).isAbsolute() || Path.of(ix).isAbsolute()) {
             return;
         }
-        Path file = indexPath(r);
+        final Path file = indexPath(r);
         if (indexes.containsKey(file.toString())) {
             return;
         }
         UiErrands.start("folder-facts", () -> {
-            IndexFacts f = new IndexFacts(Files.isRegularFile(file), file.getParent() != null && Files.isDirectory(file.getParent()));
+            final IndexFacts f = new IndexFacts(Files.isRegularFile(file), file.getParent() != null && Files.isDirectory(file.getParent()));
             Edt.later(() -> {
                 indexes.put(file.toString(), f);
                 refresh();
@@ -484,13 +484,13 @@ public final class FoldersEditor {
         });
     }
 
-    private static Path indexPath(Row r) {
+    private static Path indexPath(final Row r) {
         return Path.of(HomeDir.expand(r.get(PATH).strip())).resolve(r.get(INDEX).strip()).toAbsolutePath().normalize();
     }
 
     /** Whether {@code p} is a readable folder, and the git repository holding it; reads the disk. */
-    static Facts facts(Path p) {
-        boolean exists = Files.isDirectory(p);
+    static Facts facts(final Path p) {
+        final boolean exists = Files.isDirectory(p);
         Path git = null;
         for (Path q = p.toAbsolutePath().normalize(); q != null; q = q.getParent()) {
             if (Files.exists(q.resolve(".git"), LinkOption.NOFOLLOW_LINKS)) {
@@ -504,16 +504,16 @@ public final class FoldersEditor {
     /**
      * The git repository holding {@code r}'s folder: "repo: ~/.claude · main · 1 uncommitted", as read; "repo: none".
      */
-    String factsOf(Row r) {
-        String p = HomeDir.expand(r.get(PATH).strip());
-        Facts f = looked.get(p);
+    String factsOf(final Row r) {
+        final String p = HomeDir.expand(r.get(PATH).strip());
+        final Facts f = looked.get(p);
         if (f == null || !f.exists()) {
             return " ";
         }
         if (f.gitRoot() == null) {
             return "repo: none";
         }
-        String state = repos.repoAt(f.gitRoot()).map(s -> s.error().isEmpty()
+        final String state = repos.repoAt(f.gitRoot()).map(s -> s.error().isEmpty()
                 ? " · " + (s.branch().isEmpty() ? "detached HEAD" : s.branch()) + " · " + s.changes().size() + (s.truncated() ? "+" : "") + " uncommitted"
                 : " · cannot be read").orElse("");
         return "repo: " + HomeDir.shorten(f.gitRoot().toString()) + state;
@@ -526,10 +526,10 @@ public final class FoldersEditor {
         list.getAccessibleContext().setAccessibleName("Folders");
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean sel, boolean focus) {
-                JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
+            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int i, final boolean sel, final boolean focus) {
+                final JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
                 if (value instanceof Row r) {
-                    boolean bad = i < rows.size() && !problems(i).isEmpty() && !"checking…".equals(problems(i).get(PATH));
+                    final boolean bad = i < rows.size() && !problems(i).isEmpty() && !"checking…".equals(problems(i).get(PATH));
                     c.setText(Plain.text((bad ? "✗ " : "") + (r.get(NAME).isBlank() ? "(no name)" : r.get(NAME))));
                     if (bad && !sel) {
                         c.setForeground(Theme.DANGER);
@@ -551,21 +551,21 @@ public final class FoldersEditor {
         up.addActionListener(e -> move(-1));
         down.addActionListener(e -> move(1));
 
-        JScrollPane listScroll = new JScrollPane(list);
+        final JScrollPane listScroll = new JScrollPane(list);
         listScroll.setPreferredSize(new Dimension(220, 220));
-        JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
+        final JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
         listButtons.add(add);
         listButtons.add(remove);
         listButtons.add(up);
         listButtons.add(down);
-        JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
+        final JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
         left.add(listScroll, BorderLayout.CENTER);
         left.add(listButtons, BorderLayout.SOUTH);
 
         icon.setRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean sel, boolean focus) {
-                JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
+            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int i, final boolean sel, final boolean focus) {
+                final JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
                 if (value instanceof String s) {
                     c.setIcon(Icons.folder(FolderRoot.FOLDER.equals(s) ? "folder" : "folder-" + s));
                 }
@@ -575,8 +575,8 @@ public final class FoldersEditor {
         choosePath.setToolTipText("Choose a folder inside " + configShown());
         path.setEditable(false); // chosen, never typed: it exists when chosen
         choosePath.addActionListener(e -> {
-            String p = HomeDir.expand(path.getText().strip());
-            Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? claudeDir : Path.of(p);
+            final String p = HomeDir.expand(path.getText().strip());
+            final Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? claudeDir : Path.of(p);
             chooser.folder(body, start).map(dir -> dir.toAbsolutePath().normalize()).ifPresent(dir -> {
                 if (!dir.startsWith(claudeDir)) {
                     refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not taken");
@@ -590,8 +590,8 @@ public final class FoldersEditor {
         chooseListing.setToolTipText("Choose a file in the folder; its name is taken");
         chooseListing.addActionListener(e -> chooseInFolder("listing").ifPresent(f -> listedIn.setText(f.getFileName().toString())));
 
-        String home = configShown();
-        JPanel form = new JPanel(new GridBagLayout());
+        final String home = configShown();
+        final JPanel form = new JPanel(new GridBagLayout());
         int y = 0;
         y = row(form, y, "Name", name, NAME, "The row's name in the Files tab; unique");
         y = row(form, y, "Folder", withButton(path, choosePath), PATH, "The folder the row shows; chosen with …, only inside " + home);
@@ -612,7 +612,7 @@ public final class FoldersEditor {
                 lines("A header the Files tab shows above this folder and the folders after it in the same group, such as Brain",
                         "The folders stay where they are: nothing nests, nothing opens or closes",
                         "Empty: the folder is in no group"));
-        GridBagConstraints g = new GridBagConstraints();
+        final GridBagConstraints g = new GridBagConstraints();
         g.gridx = 1;
         g.gridy = y;
         g.anchor = GridBagConstraints.LINE_START;
@@ -628,20 +628,20 @@ public final class FoldersEditor {
         g.weighty = 1;
         form.add(new JPanel(), g);
 
-        for (JTextField f : List.of(name, path, index, excludes, listedIn, group)) {
+        for (final JTextField f : List.of(name, path, index, excludes, listedIn, group)) {
             f.getDocument().addDocumentListener(new DocumentListener() {
                 @Override
-                public void insertUpdate(DocumentEvent e) {
+                public void insertUpdate(final DocumentEvent e) {
                     store();
                 }
 
                 @Override
-                public void removeUpdate(DocumentEvent e) {
+                public void removeUpdate(final DocumentEvent e) {
                     store();
                 }
 
                 @Override
-                public void changedUpdate(DocumentEvent e) {
+                public void changedUpdate(final DocumentEvent e) {
                     store();
                 }
             });
@@ -655,13 +655,13 @@ public final class FoldersEditor {
     }
 
     /** A labelled field, its label and the field explaining it under the mouse; answers the next free grid row. */
-    private int row(JPanel form, int y, String label, JComponent field, String key, String tip) {
-        GridBagConstraints g = new GridBagConstraints();
+    private int row(final JPanel form, final int y, final String label, final JComponent field, final String key, final String tip) {
+        final GridBagConstraints g = new GridBagConstraints();
         g.gridx = 0;
         g.gridy = y;
         g.anchor = GridBagConstraints.LINE_END;
         g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
-        JLabel caption = new JLabel(label);
+        final JLabel caption = new JLabel(label);
         caption.setToolTipText(tip);
         form.add(caption, g);
         g.gridx = 1;
@@ -670,7 +670,7 @@ public final class FoldersEditor {
         g.weightx = 1;
         g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
         form.add(field, g);
-        JComponent input = field(key);
+        final JComponent input = field(key);
         input.setToolTipText(tip);
         input.getAccessibleContext().setAccessibleName(label);
         caption.setLabelFor(input);
@@ -679,15 +679,15 @@ public final class FoldersEditor {
         return y + 1;
     }
 
-    private static JPanel withButton(JComponent field, JButton button) {
-        JPanel p = new JPanel(new BorderLayout(4, 0));
+    private static JPanel withButton(final JComponent field, final JButton button) {
+        final JPanel p = new JPanel(new BorderLayout(4, 0));
         p.add(field, BorderLayout.CENTER);
         p.add(button, BorderLayout.EAST);
         return p;
     }
 
     /** A tooltip of a few lines. */
-    private static String lines(String... lines) {
+    private static String lines(final String... lines) {
         return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
     }
 
@@ -697,13 +697,13 @@ public final class FoldersEditor {
     }
 
     /** A file chosen in the selected entry's folder, relative to it; one outside is refused, saying so. */
-    private Optional<Path> chooseInFolder(String what) {
-        Row r = list.getSelectedValue();
+    private Optional<Path> chooseInFolder(final String what) {
+        final Row r = list.getSelectedValue();
         if (r == null || r.get(PATH).isBlank()) {
             return Optional.empty();
         }
-        Path dir = Path.of(HomeDir.expand(r.get(PATH).strip())).toAbsolutePath().normalize();
-        Optional<Path> chosen = chooser.file(body, dir).map(f -> f.toAbsolutePath().normalize());
+        final Path dir = Path.of(HomeDir.expand(r.get(PATH).strip())).toAbsolutePath().normalize();
+        final Optional<Path> chosen = chooser.file(body, dir).map(f -> f.toAbsolutePath().normalize());
         if (chosen.isPresent() && !chosen.get().startsWith(dir)) {
             refuse(HomeDir.shorten(chosen.get().toString()) + " is outside the folder: not taken as its " + what);
             return Optional.empty();
@@ -712,18 +712,18 @@ public final class FoldersEditor {
     }
 
     /** Says in the message line why a pick was not taken, until the next edit. */
-    private void refuse(String why) {
+    private void refuse(final String why) {
         refused = why;
         refresh();
     }
 
     /** Fills the fields with the selected folder's; with none selected they are empty and off. */
     private void load() {
-        Row r = list.getSelectedValue();
+        final Row r = list.getSelectedValue();
         loading = true;
         try {
-            boolean on = r != null;
-            for (JComponent c : List.of(name, path, choosePath, index, chooseIndex, excludes, icon, deletable, listedIn, chooseListing, group, remove)) {
+            final boolean on = r != null;
+            for (final JComponent c : List.of(name, path, choosePath, index, chooseIndex, excludes, icon, deletable, listedIn, chooseListing, group, remove)) {
                 c.setEnabled(on);
             }
             name.setText(on ? r.get(NAME) : "");
@@ -742,7 +742,7 @@ public final class FoldersEditor {
 
     /** Takes the fields into the selected folder. */
     private void store() {
-        Row r = list.getSelectedValue();
+        final Row r = list.getSelectedValue();
         if (loading || r == null) {
             return;
         }
@@ -767,13 +767,13 @@ public final class FoldersEditor {
 
     /** Shows the selected folder's problems and facts, marks the list, and enables what applies. */
     private void refresh() {
-        int i = list.getSelectedIndex();
-        Map<String, String> p = i < 0 ? Map.of() : problems(i);
+        final int i = list.getSelectedIndex();
+        final Map<String, String> p = i < 0 ? Map.of() : problems(i);
         inputs.forEach((key, field) -> field.putClientProperty("JComponent.outline",
                 p.containsKey(key) && !"checking…".equals(p.get(key)) ? "error" : null));
-        Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
-        String note = i < 0 ? "" : note(rows.get(i));
-        String text = !refused.isEmpty() ? refused : first != null ? labels.get(first.getKey()) + ": " + first.getValue() : note;
+        final Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
+        final String note = i < 0 ? "" : note(rows.get(i));
+        final String text = !refused.isEmpty() ? refused : first != null ? labels.get(first.getKey()) + ": " + first.getValue() : note;
         message.setText(text.isEmpty() ? " " : Plain.text(text));
         message.setForeground(refused.isEmpty() && (first == null || "checking…".equals(first.getValue())) ? Theme.MUTED_STRONG : Theme.DANGER);
         listedIn.setEnabled(i >= 0 && deletable.isSelected());
@@ -786,37 +786,37 @@ public final class FoldersEditor {
     }
 
     /** What Save does with {@code r} beyond {@code folders.json}: an index file named but missing is created. */
-    private String note(Row r) {
-        String ix = r.get(INDEX).strip();
-        IndexFacts f = ix.isEmpty() ? null : indexes.get(indexPath(r).toString());
+    private String note(final Row r) {
+        final String ix = r.get(INDEX).strip();
+        final IndexFacts f = ix.isEmpty() ? null : indexes.get(indexPath(r).toString());
         if (f == null || f.exists()) {
             return "";
         }
         return ix + " does not exist yet: Save creates it";
     }
 
-    private String rowIcon(Row r) {
-        Facts f = looked.get(HomeDir.expand(r.get(PATH).strip()));
+    private String rowIcon(final Row r) {
+        final Facts f = looked.get(HomeDir.expand(r.get(PATH).strip()));
         if (f != null && f.gitRoot() != null && f.gitRoot().equals(Path.of(HomeDir.expand(r.get(PATH).strip())).toAbsolutePath().normalize())) {
             return "folder-git";
         }
-        String i = r.get(ICON);
+        final String i = r.get(ICON);
         return FolderRoot.ICONS.contains(i) && !FolderRoot.FOLDER.equals(i) ? "folder-" + i : "folder";
     }
 
-    private static JButton tool(String iconOrText, String tip) {
-        JButton b = Set.of("↑", "↓").contains(iconOrText) ? new JButton(iconOrText) : new JButton(Icons.get(iconOrText));
+    private static JButton tool(final String iconOrText, final String tip) {
+        final JButton b = Set.of("↑", "↓").contains(iconOrText) ? new JButton(iconOrText) : new JButton(Icons.get(iconOrText));
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setToolTipText(tip);
         b.getAccessibleContext().setAccessibleName(tip);
         return b;
     }
 
-    private static void bind(JComponent c, KeyStroke key, String name, Runnable r) {
+    private static void bind(final JComponent c, final KeyStroke key, final String name, final Runnable r) {
         c.getInputMap(JComponent.WHEN_FOCUSED).put(key, name);
         c.getActionMap().put(name, new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 r.run();
             }
         });

@@ -1,12 +1,12 @@
 package dev.marregui.comando.core.loop;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Standard input reaches the program; standard error is kept apart from standard output.
 class ProcessesTest {
 
-    private static Processes.Result sh(String script, byte[] stdin, Duration timeout, int maxOut) throws Exception {
+    private static Processes.Result sh(final String script, final byte[] stdin, final Duration timeout, final int maxOut) throws Exception {
         return Processes.run(List.of("/bin/sh", "-c", script), env -> env.put("COMANDO_TEST", "on"), null, stdin, timeout, maxOut);
     }
 
@@ -25,7 +25,7 @@ class ProcessesTest {
     /// output, neither timed out nor cut.
     @Test
     void theExitCodeAndTheOutputComeBack() throws Exception {
-        Processes.Result r = sh("echo hello $COMANDO_TEST; exit 3", null, Duration.ofSeconds(10), 1_024);
+        final Processes.Result r = sh("echo hello $COMANDO_TEST; exit 3", null, Duration.ofSeconds(10), 1_024);
         assertThat(r.exitCode()).isEqualTo(3);
         assertThat(r.out()).isEqualTo("hello on\n");
         assertThat(r.timedOut()).isFalse();
@@ -36,7 +36,7 @@ class ProcessesTest {
     /// first 1 000 bytes are kept, with `cut` set.
     @Test
     void outputPastThePipeDoesNotBlockAndIsCutAtMaxOut() throws Exception {
-        Processes.Result r = sh("head -c 1048576 /dev/zero | tr '\\0' x; exit 0", null, Duration.ofSeconds(20), 1_000);
+        final Processes.Result r = sh("head -c 1048576 /dev/zero | tr '\\0' x; exit 0", null, Duration.ofSeconds(20), 1_000);
         assertThat(r.timedOut()).isFalse();
         assertThat(r.exitCode()).isZero();
         assertThat(r.stdout()).hasSize(1_000);
@@ -48,14 +48,14 @@ class ProcessesTest {
     /// code -1 within 1.5 s, and the child it started has been ended: dead, or dying, within 5 s of the answer.
     @Test
     void aProgramPastItsLimitIsEndedWithItsChildren() throws Exception {
-        long start = System.nanoTime();
-        Processes.Result r = sh("sleep 60 & echo $!; wait", null, Duration.ofMillis(500), 1_024);
-        long millis = (System.nanoTime() - start) / 1_000_000;
+        final long start = System.nanoTime();
+        final Processes.Result r = sh("sleep 60 & echo $!; wait", null, Duration.ofMillis(500), 1_024);
+        final long millis = (System.nanoTime() - start) / 1_000_000;
         assertThat(r.timedOut()).isTrue();
         assertThat(r.exitCode()).isEqualTo(-1);
         assertThat(millis).isLessThan(1_500);
-        long child = Long.parseLong(r.out().strip());
-        Optional<ProcessHandle> sleeper = ProcessHandle.of(child);
+        final long child = Long.parseLong(r.out().strip());
+        final Optional<ProcessHandle> sleeper = ProcessHandle.of(child);
         if (sleeper.isPresent()) {
             sleeper.get().onExit().get(5, TimeUnit.SECONDS);
         }
@@ -65,7 +65,7 @@ class ProcessesTest {
     /// The bytes given as standard input reach the program, which sees its input end once they are written.
     @Test
     void standardInputReachesTheProgram() throws Exception {
-        Processes.Result r = sh("tr a-z A-Z", "topic of the panel".getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(10), 1_024);
+        final Processes.Result r = sh("tr a-z A-Z", "topic of the panel".getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(10), 1_024);
         assertThat(r.exitCode()).isZero();
         assertThat(r.out()).isEqualTo("TOPIC OF THE PANEL");
     }
@@ -73,7 +73,7 @@ class ProcessesTest {
     /// What the program writes to standard error comes back as text of its own and never mixes into standard output.
     @Test
     void standardErrorIsKeptApart() throws Exception {
-        Processes.Result r = sh("echo out; echo 'boom: no such file' >&2; exit 1", null, Duration.ofSeconds(10), 1_024);
+        final Processes.Result r = sh("echo out; echo 'boom: no such file' >&2; exit 1", null, Duration.ofSeconds(10), 1_024);
         assertThat(r.exitCode()).isEqualTo(1);
         assertThat(r.out()).isEqualTo("out\n");
         assertThat(r.stderr()).isEqualTo("boom: no such file\n");

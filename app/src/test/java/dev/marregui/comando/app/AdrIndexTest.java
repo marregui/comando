@@ -1,7 +1,5 @@
 package dev.marregui.comando.app;
 
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +10,8 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,8 +32,8 @@ class AdrIndexTest {
     /// Every record file has exactly one index row, and every index row links a record file.
     @Test
     void everyRecordHasOneRowAndEveryRowARecord() throws IOException {
-        List<String> files = records();
-        List<String> linked = new ArrayList<>(index().keySet());
+        final List<String> files = records();
+        final List<String> linked = new ArrayList<>(index().keySet());
         assertThat(files).as("records in docs/adr").isNotEmpty();
         assertThat(linked).as("the index's rows, by the file each links").containsExactlyInAnyOrderElementsOf(files);
     }
@@ -41,11 +41,11 @@ class AdrIndexTest {
     /// Each row's title, date, deciders and status equal the record's heading and its header row.
     @Test
     void eachRowSaysWhatItsRecordSays() throws IOException {
-        Map<String, Entry> index = index();
-        List<String> drifted = new ArrayList<>();
-        for (String file : records()) {
-            Entry own = own(ADR.resolve(file));
-            Entry row = index.get(file);
+        final Map<String, Entry> index = index();
+        final List<String> drifted = new ArrayList<>();
+        for (final String file : records()) {
+            final Entry own = own(ADR.resolve(file));
+            final Entry row = index.get(file);
             if (row != null && !row.equals(own)) {
                 drifted.add(file + "\n  record: " + own + "\n  index:  " + row);
             }
@@ -61,16 +61,16 @@ class AdrIndexTest {
 
     /** The index's rows by the file each links; a file linked twice keeps the first row and fails the first test. */
     private static Map<String, Entry> index() throws IOException {
-        Map<String, Entry> rows = new TreeMap<>();
-        List<String> twice = new ArrayList<>();
-        for (String line : Files.readAllLines(ADR.resolve("README.md"))) {
-            Matcher m = ROW.matcher(line);
+        final Map<String, Entry> rows = new TreeMap<>();
+        final List<String> twice = new ArrayList<>();
+        for (final String line : Files.readAllLines(ADR.resolve("README.md"))) {
+            final Matcher m = ROW.matcher(line);
             if (!m.matches()) {
                 continue;
             }
-            List<String> cells = cells(m.group(3));
+            final List<String> cells = cells(m.group(3));
             assertThat(cells).as("a row has title, date, deciders and status: " + line).hasSize(4);
-            Entry e = new Entry(cells.get(0), cells.get(1), cells.get(2), cells.get(3));
+            final Entry e = new Entry(cells.get(0), cells.get(1), cells.get(2), cells.get(3));
             if (rows.putIfAbsent(m.group(2), e) != null) {
                 twice.add(m.group(2));
             }
@@ -80,25 +80,25 @@ class AdrIndexTest {
     }
 
     /** A record's title from its heading, and its date, status and deciders from the row under `| Date |`. */
-    private static Entry own(Path file) throws IOException {
-        List<String> lines = Files.readAllLines(file);
-        Matcher h = HEADING.matcher(lines.getFirst());
+    private static Entry own(final Path file) throws IOException {
+        final List<String> lines = Files.readAllLines(file);
+        final Matcher h = HEADING.matcher(lines.getFirst());
         assertThat(h.matches()).as(file + " starts with '# N. Title'").isTrue();
-        int header = lines.indexOf("| Date | Status | Decided by |");
+        final int header = lines.indexOf("| Date | Status | Decided by |");
         assertThat(header).as(file + " has the header table").isGreaterThanOrEqualTo(0);
-        List<String> cells = cells(lines.get(header + 2).substring(1));
+        final List<String> cells = cells(lines.get(header + 2).substring(1));
         assertThat(cells).as(file + "'s header row").hasSize(3);
         return new Entry(h.group(2).strip(), cells.get(0), cells.get(2), cells.get(1));
     }
 
     /** The cells of a Markdown table row given without its leading `|`. */
-    private static List<String> cells(String rest) {
+    private static List<String> cells(final String rest) {
         String body = rest.strip();
         if (body.endsWith("|")) {
             body = body.substring(0, body.length() - 1);
         }
-        List<String> out = new ArrayList<>();
-        for (String c : body.split(" \\| ", -1)) {
+        final List<String> out = new ArrayList<>();
+        for (final String c : body.split(" \\| ", -1)) {
             out.add(c.strip());
         }
         return out;

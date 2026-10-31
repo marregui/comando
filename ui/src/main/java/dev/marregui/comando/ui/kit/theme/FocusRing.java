@@ -1,14 +1,14 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import com.formdev.flatlaf.ui.FlatScrollPaneUI;
-
-import javax.swing.JScrollPane;
-import javax.swing.SwingUtilities;
-import javax.swing.border.AbstractBorder;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.KeyboardFocusManager;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+import javax.swing.border.AbstractBorder;
+
+import com.formdev.flatlaf.ui.FlatScrollPaneUI;
 
 /**
  * The edge of a content view's scroll pane: a hairline in the tint while the view holds the keyboard, nothing
@@ -24,7 +24,7 @@ public final class FocusRing extends AbstractBorder {
     }
 
     /** Gives {@code scroll} the ring; the first call starts the one listener that repaints a ring as focus moves. EDT only. */
-    public static void install(JScrollPane scroll) {
+    public static void install(final JScrollPane scroll) {
         scroll.setBorder(RING);
         if (!listening) {
             listening = true;
@@ -36,13 +36,13 @@ public final class FocusRing extends AbstractBorder {
     }
 
     /** Whether {@code scroll}'s ring shows: its view, or an editor inside its table or tree, holds the keyboard. */
-    public static boolean shows(JScrollPane scroll) {
+    public static boolean shows(final JScrollPane scroll) {
         return FlatScrollPaneUI.isPermanentFocusOwner(scroll);
     }
 
-    private static void repaintRingAround(Object focused) {
+    private static void repaintRingAround(final Object focused) {
         if (focused instanceof Component c) {
-            JScrollPane scroll = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, c);
+            final JScrollPane scroll = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, c);
             if (scroll != null && scroll.getBorder() == RING) {
                 scroll.repaint();
             }
@@ -50,7 +50,7 @@ public final class FocusRing extends AbstractBorder {
     }
 
     @Override
-    public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+    public void paintBorder(final Component c, final Graphics g, final int x, final int y, final int width, final int height) {
         if (c instanceof JScrollPane scroll && shows(scroll)) {
             g.setColor(Theme.tint().body);
             g.drawRect(x, y, width - 1, height - 1);
@@ -58,7 +58,7 @@ public final class FocusRing extends AbstractBorder {
     }
 
     @Override
-    public Insets getBorderInsets(Component c, Insets insets) {
+    public Insets getBorderInsets(final Component c, final Insets insets) {
         insets.set(1, 1, 1, 1);
         return insets;
     }

@@ -1,15 +1,15 @@
 package dev.marregui.comando.testkit;
 
-import dev.marregui.comando.core.port.Clock;
-
 import java.util.concurrent.atomic.AtomicLong;
+
+import dev.marregui.comando.core.port.Clock;
 
 /** A clock tests set and advance. */
 public final class FakeClock implements Clock {
 
     private final AtomicLong now;
 
-    public FakeClock(long start) {
+    public FakeClock(final long start) {
         now = new AtomicLong(start);
     }
 
@@ -22,7 +22,7 @@ public final class FakeClock implements Clock {
         return now.get();
     }
 
-    public void advance(long millis) {
+    public void advance(final long millis) {
         now.addAndGet(millis);
     }
 }

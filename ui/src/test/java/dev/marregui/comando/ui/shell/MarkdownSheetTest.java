@@ -1,12 +1,13 @@
 package dev.marregui.comando.ui.shell;
 
+import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import org.junit.jupiter.api.Test;
-
-import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,7 +21,7 @@ class MarkdownSheetTest {
     /// alignment examples keep their backticks and pipes.
     @Test
     void theSheetRendersItsTablesAndShowsItsFencesAsTyped() {
-        String html = MarkdownHtml.render(MarkdownSheet.markdown());
+        final String html = MarkdownHtml.render(MarkdownSheet.markdown());
         assertThat(html).contains("<h1 id=\"markdown\">Markdown</h1>", "<h2 id=\"prompts-to-claude\">Prompts to Claude</h2>", "<table>")
                 .as("no table left as text").doesNotContain("|---|");
         assertThat(html).as("the fence example shows its backticks").contains("```sql\nSELECT * FROM trades LIMIT 10;\n```");

@@ -25,7 +25,7 @@ final class SqlPolicy {
     private SqlPolicy() {
     }
 
-    static boolean isReadOnly(String sql) {
+    static boolean isReadOnly(final String sql) {
         String s = stripComments(sql).strip();
         while (s.endsWith(";")) {
             s = s.substring(0, s.length() - 1).strip();
@@ -37,7 +37,7 @@ final class SqlPolicy {
         char quote = 0;
         int i = 0;
         while (i < s.length()) {
-            char c = s.charAt(i);
+            final char c = s.charAt(i);
             if (quote != 0) {
                 if (c == '\\') {
                     return false;
@@ -52,11 +52,11 @@ final class SqlPolicy {
             } else if (c == ';' || c == '$') {
                 return false;
             } else if (Character.isLetter(c) || c == '_') {
-                int start = i;
+                final int start = i;
                 while (i < s.length() && (Character.isLetterOrDigit(s.charAt(i)) || s.charAt(i) == '_')) {
                     i++;
                 }
-                String word = s.substring(start, i).toUpperCase(Locale.ROOT);
+                final String word = s.substring(start, i).toUpperCase(Locale.ROOT);
                 if (first ? !READ_ONLY.contains(word) : WRITES.contains(word)) {
                     return false;
                 }
@@ -70,12 +70,12 @@ final class SqlPolicy {
         return !first && quote == 0;
     }
 
-    private static String stripComments(String sql) {
-        StringBuilder out = new StringBuilder(sql.length());
+    private static String stripComments(final String sql) {
+        final StringBuilder out = new StringBuilder(sql.length());
         int i = 0;
         char quote = 0;
         while (i < sql.length()) {
-            char c = sql.charAt(i);
+            final char c = sql.charAt(i);
             if (quote != 0) {
                 out.append(c);
                 if (c == quote) {
@@ -87,10 +87,10 @@ final class SqlPolicy {
                 out.append(c);
                 i++;
             } else if (c == '-' && i + 1 < sql.length() && sql.charAt(i + 1) == '-') {
-                int eol = sql.indexOf('\n', i);
+                final int eol = sql.indexOf('\n', i);
                 i = eol < 0 ? sql.length() : eol;
             } else if (c == '/' && i + 1 < sql.length() && sql.charAt(i + 1) == '*') {
-                int end = sql.indexOf("*/", i + 2);
+                final int end = sql.indexOf("*/", i + 2);
                 i = end < 0 ? sql.length() : end + 2;
                 out.append(' ');
             } else {

@@ -1,44 +1,5 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
-import com.jediterm.core.compatibility.Point;
-import com.jediterm.terminal.StyledTextConsumer;
-import com.jediterm.terminal.SubstringFinder;
-import com.jediterm.terminal.TerminalColor;
-import com.jediterm.terminal.TextStyle;
-import com.jediterm.terminal.emulator.ColorPalette;
-import com.jediterm.terminal.model.CharBuffer;
-import com.jediterm.terminal.model.StyleState;
-import com.jediterm.terminal.model.SubCharBuffer;
-import com.jediterm.terminal.model.TerminalTextBuffer;
-import com.jediterm.terminal.ui.JediTermWidget;
-import com.jediterm.terminal.ui.TerminalActionPresentation;
-import com.jediterm.terminal.ui.TerminalPanel;
-import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
-import com.jediterm.terminal.ui.settings.SettingsProvider;
-import dev.marregui.comando.core.loop.Processes;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.view.Clip;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.SidebarLook;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.widget.capability.Capabilities;
-import dev.marregui.comando.ui.widget.capability.Searchable;
-import dev.marregui.comando.ui.widget.capability.Zoomable;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -63,6 +24,46 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+import com.jediterm.core.compatibility.Point;
+import com.jediterm.terminal.StyledTextConsumer;
+import com.jediterm.terminal.SubstringFinder;
+import com.jediterm.terminal.TerminalColor;
+import com.jediterm.terminal.TextStyle;
+import com.jediterm.terminal.emulator.ColorPalette;
+import com.jediterm.terminal.model.CharBuffer;
+import com.jediterm.terminal.model.StyleState;
+import com.jediterm.terminal.model.SubCharBuffer;
+import com.jediterm.terminal.model.TerminalTextBuffer;
+import com.jediterm.terminal.ui.JediTermWidget;
+import com.jediterm.terminal.ui.TerminalActionPresentation;
+import com.jediterm.terminal.ui.TerminalPanel;
+import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
+import com.jediterm.terminal.ui.settings.SettingsProvider;
+
+import dev.marregui.comando.core.loop.Processes;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widget.capability.Capabilities;
+import dev.marregui.comando.ui.widget.capability.Searchable;
+import dev.marregui.comando.ui.widget.capability.Zoomable;
 
 /**
  * A terminal: the user's login shell on a pseudo-terminal, shown by JediTerm. For what Claude does not
@@ -107,12 +108,12 @@ public final class TerminalWidget implements Zoomable, Searchable {
     /** Set by the emulator on any change of the buffer, cleared by a find that searches it again. */
     private volatile boolean bufferChanged;
 
-    public TerminalWidget(Path directory) {
+    public TerminalWidget(final Path directory) {
         this(directory, Pty.loginShell());
     }
 
     /** A terminal running {@code command} instead of the login shell. */
-    public TerminalWidget(Path directory, List<String> command) {
+    public TerminalWidget(final Path directory, final List<String> command) {
         this.directory = directory;
         this.command = List.copyOf(command);
         exitedBar.setBorder(BorderFactory.createEmptyBorder(4, Theme.PAD, 4, Theme.PAD));
@@ -127,7 +128,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         empty.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         empty.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
+            public void mouseClicked(final MouseEvent e) {
                 start();
                 focus();
             }
@@ -155,16 +156,16 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * command uses them; elsewhere Ctrl is ⌘'s key, and in a terminal the shell keeps it, as it keeps ⌃ on macOS. On
      * macOS the terminal also keeps ⌘K, its Clear Buffer, as macOS terminals do.
      */
-    public static boolean keepsKey(Component c, KeyStroke key) {
-        boolean inTerminal = c != null && (c instanceof JediTermWidget || SwingUtilities.getAncestorOfClass(JediTermWidget.class, c) != null);
-        int code = key.getKeyCode();
+    public static boolean keepsKey(final Component c, final KeyStroke key) {
+        final boolean inTerminal = c != null && (c instanceof JediTermWidget || SwingUtilities.getAncestorOfClass(JediTermWidget.class, c) != null);
+        final int code = key.getKeyCode();
         if ((key.getModifiers() & MODIFIERS) == InputEvent.META_DOWN_MASK && code == KeyEvent.VK_K && Platform.isMac()) {
             return inTerminal;
         }
         if ((key.getModifiers() & MODIFIERS) != InputEvent.CTRL_DOWN_MASK) {
             return false;
         }
-        boolean control = code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z || code == KeyEvent.VK_OPEN_BRACKET
+        final boolean control = code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z || code == KeyEvent.VK_OPEN_BRACKET
                 || code == KeyEvent.VK_BACK_SLASH || code == KeyEvent.VK_CLOSE_BRACKET || code == KeyEvent.VK_SPACE;
         return control && inTerminal;
     }
@@ -191,7 +192,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         Pty started;
         try {
             started = Pty.start(command, directory, 120, 30);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot start a shell [directory=" + directory + ']', e);
             exitedLabel.setText("Cannot start a shell in " + Labels.shortPath(directory.toString()) + ": " + e.getMessage());
             restartButton.setText("Try again");
@@ -202,7 +203,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         pty = started;
         term = new Term(new Settings(() -> fontSize));
         // the palette is read at each paint; another tint or ground repaints it (record 101)
-        Term shown = term;
+        final Term shown = term;
         SidebarLook.whileShown(shown, shown::repaint);
         term.getTerminalTextBuffer().addModelListener(() -> bufferChanged = true);
         term.setTtyConnector(started);
@@ -218,22 +219,22 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
         UiErrands.start("terminal-exit", () -> {
             try {
-                int code = started.process().waitFor();
+                final int code = started.process().waitFor();
                 Edt.later(() -> exited(started, code));
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         });
     }
 
-    private void exited(Pty which, int code) {
+    private void exited(final Pty which, final int code) {
         if (which != pty) {
             return;
         }
         showExited(code);
     }
 
-    void showExited(int code) {
+    void showExited(final int code) {
         followSource();
         exitedLabel.setText("The shell exited with code " + code);
         restartButton.setText(restartText());
@@ -252,20 +253,20 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * Where the exit bar and its Restart read the directory, at the moment the bar shows and the moment Restart is
      * clicked: the directory of the panel's session then, not when the shell started.
      */
-    public void setDirectorySource(Supplier<Path> source) {
+    public void setDirectorySource(final Supplier<Path> source) {
         this.directorySource = source;
     }
 
     private void followSource() {
-        Supplier<Path> source = directorySource;
-        Path now = source == null ? null : source.get();
+        final Supplier<Path> source = directorySource;
+        final Path now = source == null ? null : source.get();
         if (now != null) {
             setDirectory(now);
         }
     }
 
     /** Where the next start opens the shell. */
-    public void setDirectory(Path directory) {
+    public void setDirectory(final Path directory) {
         if (!directory.equals(this.directory)) {
             this.directory = directory;
             showDirectory();
@@ -300,11 +301,11 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * before it is ready (its first output followed by a short quiet, at most a few seconds) waits and is
      * written in order once it is. Never blocks the EDT.
      */
-    public void send(String text) {
+    public void send(final String text) {
         if (!isRunning()) {
             start();
         }
-        Pty p = pty;
+        final Pty p = pty;
         if (p == null) {
             return;
         }
@@ -314,20 +315,20 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     private void pollGate() {
-        Pty p = pty;
+        final Pty p = pty;
         if (p == null || !gate.poll(System.nanoTime(), p.lastOutputNanos())) {
             gatePoll.stop();
         }
     }
 
-    private void write(String text) {
-        Pty p = pty;
+    private void write(final String text) {
+        final Pty p = pty;
         if (p == null) {
             return;
         }
         try {
             p.write(text);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write to the shell", e);
         }
     }
@@ -343,13 +344,13 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     /** The foreground job as typed ("man cat") when the shell runs one, else empty; see {@link #hasRunningJob}. */
     public Optional<String> runningJob() {
-        Pty p = pty;
+        final Pty p = pty;
         if (p == null || !p.process().isAlive()) {
             return Optional.empty();
         }
         try {
             return foregroundJob(p.process().pid(), command.getFirst());
-        } catch (UnsupportedOperationException e) {
+        } catch (final UnsupportedOperationException e) {
             return Optional.of(UNCHECKED_JOB);
         }
     }
@@ -360,13 +361,13 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     /** The shell this terminal runs, while it runs; empty before a start and after the shell ended. */
     public Optional<Shell> shell() {
-        Pty p = pty;
+        final Pty p = pty;
         if (p == null || !p.process().isAlive()) {
             return Optional.empty();
         }
         try {
             return Optional.of(new Shell(p.process().pid(), command.getFirst()));
-        } catch (UnsupportedOperationException e) {
+        } catch (final UnsupportedOperationException e) {
             return Optional.of(new Shell(-1, command.getFirst()));
         }
     }
@@ -377,22 +378,22 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * {@link #UNCHECKED_JOB}, so a question asks rather than ending a program unseen. Not on the EDT: each check runs
      * {@code ps}.
      */
-    public static <K> Map<K, String> foregroundJobs(Map<K, Shell> shells, long boundMillis) {
+    public static <K> Map<K, String> foregroundJobs(final Map<K, Shell> shells, final long boundMillis) {
         return foregroundJobs(shells, boundMillis, TerminalWidget::ps);
     }
 
     /** {@link #foregroundJobs(Map, long)}, {@code ps} as {@link #foregroundJob(long, String, Function)} takes it. */
-    static <K> Map<K, String> foregroundJobs(Map<K, Shell> shells, long boundMillis, Function<List<String>, List<String>> ps) {
-        Map<K, Optional<String>> answered = new ConcurrentHashMap<>();
-        Map<K, Thread> forks = new LinkedHashMap<>();
+    static <K> Map<K, String> foregroundJobs(final Map<K, Shell> shells, final long boundMillis, final Function<List<String>, List<String>> ps) {
+        final Map<K, Optional<String>> answered = new ConcurrentHashMap<>();
+        final Map<K, Thread> forks = new LinkedHashMap<>();
         shells.forEach((key, shell) -> forks.put(key, Threads.fork("terminal-job", () ->
                 answered.put(key, shell.pid() < 0 ? Optional.of(UNCHECKED_JOB) : foregroundJob(shell.pid(), shell.command(), ps)))));
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(boundMillis);
-        Map<K, String> jobs = new LinkedHashMap<>();
-        for (Map.Entry<K, Thread> f : forks.entrySet()) {
+        final long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(boundMillis);
+        final Map<K, String> jobs = new LinkedHashMap<>();
+        for (final Map.Entry<K, Thread> f : forks.entrySet()) {
             try {
                 f.getValue().join(Duration.ofNanos(Math.max(1, deadline - System.nanoTime())));
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             answered.getOrDefault(f.getKey(), Optional.of(UNCHECKED_JOB)).ifPresent(job -> jobs.put(f.getKey(), job));
@@ -401,7 +402,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     /** {@link #foregroundJob(long, String, Function)} with the system's {@code ps}. */
-    static Optional<String> foregroundJob(long shellPid, String shell) {
+    static Optional<String> foregroundJob(final long shellPid, final String shell) {
         return foregroundJob(shellPid, shell, TerminalWidget::ps);
     }
 
@@ -420,31 +421,31 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * With job control off ({@code set +m}, or a shell started without it) a job runs in the shell's own process
      * group, so the two groups match and this check cannot see the job: it reports none.
      */
-    static Optional<String> foregroundJob(long shellPid, String shell, Function<List<String>, List<String>> ps) {
-        List<String> self = ps.apply(List.of("-o", "tpgid=,pgid=,comm=", "-p", Long.toString(shellPid)));
+    static Optional<String> foregroundJob(final long shellPid, final String shell, final Function<List<String>, List<String>> ps) {
+        final List<String> self = ps.apply(List.of("-o", "tpgid=,pgid=,comm=", "-p", Long.toString(shellPid)));
         if (self.isEmpty()) {
             return Optional.of(UNCHECKED_JOB);
         }
-        String[] ids = self.getFirst().strip().split("\\s+", 3);
+        final String[] ids = self.getFirst().strip().split("\\s+", 3);
         if (ids.length < 3) {
             return Optional.of(UNCHECKED_JOB);
         }
-        String running = programName(ids[2]);
+        final String running = programName(ids[2]);
         if (!running.equals(programName(shell)) && !SHELLS.contains(running)) {
             return Optional.of(running);
         }
         if (ids[0].equals(ids[1]) || ids[0].startsWith("-") || ids[0].equals("0")) {
             return Optional.empty();
         }
-        String foreground = ids[0];
-        String pids = ProcessHandle.of(shellPid).map(h -> h.descendants().map(d -> Long.toString(d.pid()))
+        final String foreground = ids[0];
+        final String pids = ProcessHandle.of(shellPid).map(h -> h.descendants().map(d -> Long.toString(d.pid()))
                 .collect(Collectors.joining(","))).orElse("");
         if (pids.isEmpty()) {
             return Optional.of("a program");
         }
         String member = null;
-        for (String line : ps.apply(List.of("-o", "pid=,pgid=,args=", "-p", pids))) {
-            String[] parts = line.strip().split("\\s+", 3);
+        for (final String line : ps.apply(List.of("-o", "pid=,pgid=,args=", "-p", pids))) {
+            final String[] parts = line.strip().split("\\s+", 3);
             if (parts.length == 3 && parts[1].equals(foreground)) {
                 if (parts[0].equals(foreground)) {
                     return Optional.of(jobName(parts[2]));
@@ -462,10 +463,10 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * A job as the user typed it, from its process's arguments: the program's name and what follows. A script run by
      * its interpreter is named by the script, as typed: {@code /bin/sh /usr/bin/man cat} gives {@code man cat}.
      */
-    static String jobName(String args) {
-        String[] words = args.strip().split("\\s+");
-        int from = words.length > 1 && INTERPRETERS.contains(programName(words[0])) && !words[1].startsWith("-") ? 1 : 0;
-        StringBuilder sb = new StringBuilder(programName(words[from]));
+    static String jobName(final String args) {
+        final String[] words = args.strip().split("\\s+");
+        final int from = words.length > 1 && INTERPRETERS.contains(programName(words[0])) && !words[1].startsWith("-") ? 1 : 0;
+        final StringBuilder sb = new StringBuilder(programName(words[from]));
         for (int i = from + 1; i < words.length; i++) {
             sb.append(' ').append(words[i]);
         }
@@ -473,9 +474,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     /** {@code /bin/zsh}, {@code -zsh} (a login shell) and {@code zsh} all name {@code zsh}. */
-    static String programName(String comm) {
+    static String programName(final String comm) {
         String c = comm.strip();
-        int slash = c.lastIndexOf('/');
+        final int slash = c.lastIndexOf('/');
         c = slash < 0 ? c : c.substring(slash + 1);
         return c.startsWith("-") ? c.substring(1) : c;
     }
@@ -484,19 +485,19 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * The lines {@code ps} prints for {@code args}, or none when it fails or takes over a second. Its output is read
      * while it runs: a long command line (a {@code java -cp …} child) fills the pipe before {@code ps} can exit.
      */
-    private static List<String> ps(List<String> args) {
-        List<String> command = new ArrayList<>();
+    private static List<String> ps(final List<String> args) {
+        final List<String> command = new ArrayList<>();
         command.add("ps");
         command.addAll(args);
         try {
-            Processes.Result r = Processes.run(command, Duration.ofSeconds(1), PS_MAX_OUT);
+            final Processes.Result r = Processes.run(command, Duration.ofSeconds(1), PS_MAX_OUT);
             if (r.timedOut()) {
                 return List.of();
             }
             return (r.out() + r.stderr()).lines().filter(l -> !l.isBlank()).toList();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return List.of();
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return List.of();
         }
@@ -515,7 +516,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     public void close() {
         gatePoll.stop();
         gate.clear(); // never typed into the next shell, which may open elsewhere
-        Pty p = pty;
+        final Pty p = pty;
         pty = null;
         // before the emulator closes, which signals the shell from its own thread: once the shell is gone its children
         // are no longer its descendants
@@ -570,7 +571,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     // ---- zoom
 
     @Override
-    public void zoom(int steps) {
+    public void zoom(final int steps) {
         setFontSize(fontSize + steps);
     }
 
@@ -583,8 +584,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return fontSize;
     }
 
-    private void setFontSize(float size) {
-        float s = Zoomable.clampSize(size);
+    private void setFontSize(final float size) {
+        final float s = Zoomable.clampSize(size);
         if (s == fontSize) {
             return;
         }
@@ -598,23 +599,23 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     /** Finds {@code text} in the scrollback and the screen, ignoring case; the first find selects the latest match. */
     @Override
-    public int find(String text, boolean forward) {
-        Term t = term;
+    public int find(final String text, final boolean forward) {
+        final Term t = term;
         if (t == null || text.isEmpty()) {
             clearFind();
             return 0;
         }
-        TerminalPanel panel = t.getTerminalPanel();
-        TerminalTextBuffer buffer = t.getTerminalTextBuffer();
+        final TerminalPanel panel = t.getTerminalPanel();
+        final TerminalTextBuffer buffer = t.getTerminalTextBuffer();
         SubstringFinder.FindResult result;
-        SubstringFinder.FindResult old = panel.getFindResult();
+        final SubstringFinder.FindResult old = panel.getFindResult();
         // output that changed the buffer moves or replaces lines, so earlier results point at other text
         if (!text.equals(findText) || bufferChanged || old == null) {
             // the same text again after new output: step on from the match the user was on, when it is still there
-            Point at = text.equals(findText) && old != null && !old.getItems().isEmpty() ? old.selectedItem().getStart() : null;
+            final Point at = text.equals(findText) && old != null && !old.getItems().isEmpty() ? old.selectedItem().getStart() : null;
             findText = text;
             bufferChanged = false; // before the search: a change during it searches again next time
-            SubstringFinder.FindResult found = search(buffer, text);
+            final SubstringFinder.FindResult found = search(buffer, text);
             panel.setFindResult(found);
             if (found.getItems().isEmpty()) {
                 return 0;
@@ -640,7 +641,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     /** Selects the item of {@code result} that starts at {@code at}; false, with the first selected, when none does. */
-    private static boolean selectAt(SubstringFinder.FindResult result, Point at) {
+    private static boolean selectAt(final SubstringFinder.FindResult result, final Point at) {
         for (int i = 0; i < result.getItems().size(); i++) {
             if (result.selectedItem().getStart().equals(at)) {
                 return true;
@@ -650,16 +651,16 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return false;
     }
 
-    private static SubstringFinder.FindResult search(TerminalTextBuffer buffer, String text) {
-        SubstringFinder finder = new SubstringFinder(text, true);
+    private static SubstringFinder.FindResult search(final TerminalTextBuffer buffer, final String text) {
+        final SubstringFinder finder = new SubstringFinder(text, true);
         buffer.lock();
         try {
             buffer.processHistoryAndScreenLines(-buffer.getHistoryLinesCount(), -1, new StyledTextConsumer() {
                 @Override
-                public void consume(int x, int y, TextStyle style, CharBuffer characters, int startRow) {
+                public void consume(final int x, final int y, final TextStyle style, final CharBuffer characters, final int startRow) {
                     CharBuffer chars = characters;
                     int offset = 0;
-                    int length = characters.length();
+                    final int length = characters.length();
                     if (characters instanceof SubCharBuffer sub) {
                         chars = sub.getParent();
                         offset = sub.getOffset();
@@ -670,12 +671,12 @@ public final class TerminalWidget implements Zoomable, Searchable {
                 }
 
                 @Override
-                public void consumeNul(int x, int y, int nulIndex, TextStyle style, CharBuffer characters, int startRow) {
+                public void consumeNul(final int x, final int y, final int nulIndex, final TextStyle style, final CharBuffer characters, final int startRow) {
                     // blank cells match nothing
                 }
 
                 @Override
-                public void consumeQueue(int x, int y, int nulIndex, int startRow) {
+                public void consumeQueue(final int x, final int y, final int nulIndex, final int startRow) {
                     // end of a line
                 }
             });
@@ -688,12 +689,12 @@ public final class TerminalWidget implements Zoomable, Searchable {
     /** The emulator, with a panel whose font can be changed after it was built. */
     private static final class Term extends JediTermWidget {
 
-        Term(SettingsProvider settings) {
+        Term(final SettingsProvider settings) {
             super(120, 30, settings);
         }
 
         @Override
-        protected TerminalPanel createTerminalPanel(SettingsProvider settings, StyleState style, TerminalTextBuffer buffer) {
+        protected TerminalPanel createTerminalPanel(final SettingsProvider settings, final StyleState style, final TerminalTextBuffer buffer) {
             return new Panel(settings, buffer, style);
         }
 
@@ -704,7 +705,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     private static final class Panel extends TerminalPanel {
 
-        Panel(SettingsProvider settings, TerminalTextBuffer buffer, StyleState style) {
+        Panel(final SettingsProvider settings, final TerminalTextBuffer buffer, final StyleState style) {
             super(settings, buffer, style);
         }
 
@@ -720,16 +721,16 @@ public final class TerminalWidget implements Zoomable, Searchable {
      */
     private static final ColorPalette PALETTE = new ColorPalette() {
         @Override
-        protected com.jediterm.core.Color getForegroundByColorIndex(int i) {
+        protected com.jediterm.core.Color getForegroundByColorIndex(final int i) {
             return core(Theme.content().ansi(i));
         }
 
         @Override
-        protected com.jediterm.core.Color getBackgroundByColorIndex(int i) {
+        protected com.jediterm.core.Color getBackgroundByColorIndex(final int i) {
             return core(Theme.content().ansi(i));
         }
 
-        private static com.jediterm.core.Color core(Color c) {
+        private static com.jediterm.core.Color core(final Color c) {
             return new com.jediterm.core.Color(c.getRGB() & 0xFFFFFF);
         }
     };
@@ -739,7 +740,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
         private final DoubleSupplier size;
 
-        Settings(DoubleSupplier size) {
+        Settings(final DoubleSupplier size) {
             this.size = size;
         }
 
@@ -755,7 +756,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
         @Override
         public TerminalColor getDefaultForeground() {
-            Color ink = Theme.content().ink;
+            final Color ink = Theme.content().ink;
             return TerminalColor.rgb(ink.getRed(), ink.getGreen(), ink.getBlue());
         }
 
@@ -768,7 +769,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         @Override
         public TerminalColor getDefaultBackground() {
             // the panels' ground, set once in Theme (record 98)
-            Color g = Theme.ground();
+            final Color g = Theme.ground();
             return TerminalColor.rgb(g.getRed(), g.getGreen(), g.getBlue());
         }
 

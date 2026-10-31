@@ -1,10 +1,5 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.result.Formats;
-import dev.marregui.comando.core.view.ViewSpec;
-
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
@@ -18,6 +13,11 @@ import java.util.Locale;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.result.Formats;
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * A folder of the Files tab as a tree, every level ordered the same way, names ignoring case: folders not named after
@@ -61,32 +61,32 @@ final class FolderTree {
     }
 
     /** The folder's tree; throws when the folder itself cannot be read. */
-    static ViewSpec.TreeNode tree(FolderRoot folder) throws IOException {
+    static ViewSpec.TreeNode tree(final FolderRoot folder) throws IOException {
         return tree(folder, Files::list, p -> false);
     }
 
-    static ViewSpec.TreeNode tree(FolderRoot folder, Lister lister) throws IOException {
+    static ViewSpec.TreeNode tree(final FolderRoot folder, final Lister lister) throws IOException {
         return tree(folder, lister, p -> false);
     }
 
     /** The folder's tree without the entries {@code skip} names, such as those git ignores. */
-    static ViewSpec.TreeNode tree(FolderRoot folder, Lister lister, Predicate<Path> skip) throws IOException {
+    static ViewSpec.TreeNode tree(final FolderRoot folder, final Lister lister, final Predicate<Path> skip) throws IOException {
         return new ViewSpec.TreeNode(folder.name(), HomeDir.shorten(folder.path()),
                 children(folder, Path.of(folder.path()), 1, new Budget(), lister, skip));
     }
 
     /** What a folder that cannot be read shows: its name and path, and one entry saying why, marked as an error. */
-    static ViewSpec.TreeNode unreadable(FolderRoot folder, Exception e) {
+    static ViewSpec.TreeNode unreadable(final FolderRoot folder, final Exception e) {
         return new ViewSpec.TreeNode(folder.name(), HomeDir.shorten(folder.path()), List.of(error(e)));
     }
 
     /** Whether {@code tree} is what {@link #unreadable} made. */
-    static boolean isUnreadable(ViewSpec.TreeNode tree) {
+    static boolean isUnreadable(final ViewSpec.TreeNode tree) {
         return tree.children().size() == 1 && tree.children().getFirst().label().startsWith(UNREADABLE);
     }
 
-    private static ViewSpec.TreeNode error(Exception e) {
-        String why = e instanceof NoSuchFileException ? "no such folder"
+    private static ViewSpec.TreeNode error(final Exception e) {
+        final String why = e instanceof NoSuchFileException ? "no such folder"
                 : e instanceof AccessDeniedException ? "permission denied"
                 : e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         return new ViewSpec.TreeNode(UNREADABLE + why, "", List.of());
@@ -96,13 +96,13 @@ final class FolderTree {
      * The entries of {@code dir}, ordered, within what {@code budget} leaves: no more names are listed than it allows
      * (plus one, to know there are more), and no more entries are looked at or sorted than it shows.
      */
-    private static List<ViewSpec.TreeNode> children(FolderRoot folder, Path dir, int depth, Budget budget, Lister lister,
-                                                    Predicate<Path> skip) throws IOException {
+    private static List<ViewSpec.TreeNode> children(final FolderRoot folder, final Path dir, final int depth, final Budget budget, final Lister lister,
+                                                    final Predicate<Path> skip) throws IOException {
         if (budget.listed <= 0 || budget.entries <= 0) {
             // the tree's bound is spent: the folder is not listed at all
             return List.of(new ViewSpec.TreeNode(ViewSpec.TreeNode.MORE, "more entries than the tab reads", List.of()));
         }
-        int canList = budget.listed;
+        final int canList = budget.listed;
         List<Path> listed;
         try (Stream<Path> list = lister.list(dir)) {
             listed = list.limit(canList + 1L).toList();
@@ -110,17 +110,17 @@ final class FolderTree {
         boolean more = listed.size() > canList;
         listed = listed.subList(0, Math.min(listed.size(), canList));
         budget.listed -= listed.size();
-        List<Path> shown = listed.stream().filter(p -> {
-            String name = p.getFileName().toString();
+        final List<Path> shown = listed.stream().filter(p -> {
+            final String name = p.getFileName().toString();
             return !name.startsWith(".") && !folder.excludes(name) && !skip.test(p);
         }).toList();
-        int canShow = Math.min(shown.size(), Math.max(budget.entries, 0));
+        final int canShow = Math.min(shown.size(), Math.max(budget.entries, 0));
         more |= shown.size() > canShow;
-        String index = depth == 1 ? folder.index() : "";
-        List<Entry> entries = shown.subList(0, canShow).stream().map(p -> Entry.of(p, index)).sorted(ORDER).toList();
+        final String index = depth == 1 ? folder.index() : "";
+        final List<Entry> entries = shown.subList(0, canShow).stream().map(p -> Entry.of(p, index)).sorted(ORDER).toList();
         budget.entries -= entries.size();
-        List<ViewSpec.TreeNode> out = new ArrayList<>(entries.size() + 1);
-        for (Entry e : entries) {
+        final List<ViewSpec.TreeNode> out = new ArrayList<>(entries.size() + 1);
+        for (final Entry e : entries) {
             if (e.kind() == Kind.FILE) {
                 out.add(new ViewSpec.TreeNode(e.name(), size(e.path()), ViewSpec.TreeNode.fileLink(e.path().toString(), 0), List.of()));
             } else if (e.kind() == Kind.LINKED_FOLDER) {
@@ -132,7 +132,7 @@ final class FolderTree {
                 List<ViewSpec.TreeNode> kids;
                 try {
                     kids = children(folder, e.path(), depth + 1, budget, lister, skip);
-                } catch (IOException ex) {
+                } catch (final IOException ex) {
                     kids = List.of(error(ex));
                 }
                 out.add(new ViewSpec.TreeNode(e.name(), entries(kids), kids));
@@ -147,12 +147,12 @@ final class FolderTree {
     /**
      * "3 entries", "1 entry"; "5 entries or more" for a folder read in part; "cannot be read" for one that could not.
      */
-    private static String entries(List<ViewSpec.TreeNode> kids) {
+    private static String entries(final List<ViewSpec.TreeNode> kids) {
         if (kids.size() == 1 && kids.getFirst().label().startsWith(UNREADABLE)) {
             return "cannot be read";
         }
-        boolean part = !kids.isEmpty() && kids.getLast().label().equals(ViewSpec.TreeNode.MORE);
-        int n = part ? kids.size() - 1 : kids.size();
+        final boolean part = !kids.isEmpty() && kids.getLast().label().equals(ViewSpec.TreeNode.MORE);
+        final int n = part ? kids.size() - 1 : kids.size();
         return (n == 1 ? "1 entry" : n + " entries") + (part ? " or more" : "");
     }
 
@@ -170,16 +170,16 @@ final class FolderTree {
      */
     record Entry(Path path, String name, String lower, Kind kind, int rank) {
 
-        static Entry of(Path p) {
+        static Entry of(final Path p) {
             return of(p, "");
         }
 
         /** {@code index} names the folder's index file when {@code p} is at its top level, else empty. */
-        static Entry of(Path p, String index) {
-            String name = p.getFileName().toString();
-            Kind kind = Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) ? Kind.FOLDER
+        static Entry of(final Path p, final String index) {
+            final String name = p.getFileName().toString();
+            final Kind kind = Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) ? Kind.FOLDER
                     : Files.isSymbolicLink(p) && Files.isDirectory(p) ? Kind.LINKED_FOLDER : Kind.FILE;
-            int rank = kind != Kind.FILE ? (DAY.matcher(name).matches() ? 1 : 0) : name.equals(index) ? -1 : 2;
+            final int rank = kind != Kind.FILE ? (DAY.matcher(name).matches() ? 1 : 0) : name.equals(index) ? -1 : 2;
             return new Entry(p, name, name.toLowerCase(Locale.ROOT), kind, rank);
         }
     }
@@ -190,10 +190,10 @@ final class FolderTree {
      */
     static final Comparator<Entry> ORDER = Comparator.comparingInt(Entry::rank).thenComparing(Entry::lower).thenComparing(Entry::name);
 
-    private static String size(Path p) {
+    private static String size(final Path p) {
         try {
             return Formats.bytes(Files.size(p));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return "";
         }
     }

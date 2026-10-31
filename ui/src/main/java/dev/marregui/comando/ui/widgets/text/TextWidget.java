@@ -1,5 +1,20 @@
 package dev.marregui.comando.ui.widgets.text;
 
+import java.awt.BorderLayout;
+import java.awt.Rectangle;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextScrollPane;
+
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.desktop.ExternalEditor;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -12,20 +27,6 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rtextarea.RTextScrollPane;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
-import javax.swing.text.BadLocationException;
-import java.awt.BorderLayout;
-import java.awt.Rectangle;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
 
 /** A file or text, read-only, highlighted by type, scrolled to a line. */
 public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copyable, Zoomable {
@@ -63,17 +64,17 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
     }
 
     /** The view's path; null for none, or for text no file system can name, which then shows without its header. */
-    private static Path path(String path) {
+    private static Path path(final String path) {
         try {
             return path.isEmpty() ? null : Path.of(path);
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             return null;
         }
     }
 
     @Override
-    public void render(ViewSpec.Text view) {
-        Path p = path(view.path());
+    public void render(final ViewSpec.Text view) {
+        final Path p = path(view.path());
         file = p != null && p.isAbsolute() ? p : null;
         line = view.line();
         header.setVisible(file != null);
@@ -81,23 +82,23 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
         area.setSyntaxEditingStyle(Editors.styleFor(view.syntax()));
         area.setText(view.text());
         area.removeAllLineHighlights();
-        int line = view.line();
+        final int line = view.line();
         if (line > 0 && line <= area.getLineCount()) {
             try {
-                int offset = area.getLineStartOffset(line - 1);
+                final int offset = area.getLineStartOffset(line - 1);
                 area.setCaretPosition(offset);
                 area.addLineHighlight(line - 1, Theme.withAlpha(Theme.tint().body, 60));
                 SwingUtilities.invokeLater(() -> {
                     try {
-                        Rectangle r = area.modelToView2D(offset).getBounds();
+                        final Rectangle r = area.modelToView2D(offset).getBounds();
                         r.y = Math.max(0, r.y - scroll.getViewport().getHeight() / 3);
                         r.height = scroll.getViewport().getHeight();
                         area.scrollRectToVisible(r);
-                    } catch (BadLocationException ignore) {
+                    } catch (final BadLocationException ignore) {
                         // the text changed between render and scroll; the next render scrolls again
                     }
                 });
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 area.setCaretPosition(0);
             }
         } else {
@@ -106,7 +107,7 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
     }
 
     @Override
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return search.find(text, forward);
     }
 
@@ -122,7 +123,7 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
 
     @Override
     public String copyText() {
-        String s = area.getSelectedText();
+        final String s = area.getSelectedText();
         return s != null ? s : area.getText();
     }
 
@@ -133,7 +134,7 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
     }
 
     @Override
-    public void zoom(int steps) {
+    public void zoom(final int steps) {
         area.setFont(area.getFont().deriveFont(Zoomable.clampSize(area.getFont().getSize2D() + steps)));
     }
 

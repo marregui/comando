@@ -1,7 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.state.LowerTab;
-
 import java.awt.Component;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+
+import dev.marregui.comando.core.state.LowerTab;
 
 /**
  * The return path (record 112): each panel and view remembers where the keyboard was just before the user last
@@ -32,7 +32,7 @@ final class FocusOrigins {
 
     private final Map<String, Origin> cameFrom = new LinkedHashMap<>(16, 0.75f, false) {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<String, Origin> eldest) {
+        protected boolean removeEldestEntry(final Map.Entry<String, Origin> eldest) {
             return size() > KEPT;
         }
     };
@@ -48,7 +48,7 @@ final class FocusOrigins {
      * panel brought forward or back for it): that is where its arrival comes from, more exactly than the render that
      * shows it can tell. Nothing when {@code origin} is null.
      */
-    void opened(String key, Origin origin) {
+    void opened(final String key, final Origin origin) {
         if (origin != null && !key.equals(origin.ownerKey())) {
             pending.put(key, origin);
         }
@@ -61,20 +61,20 @@ final class FocusOrigins {
      * closed, the answer is where it came from, or, when that is gone too, where that came from, and so on, the first
      * that {@code alive} accepts. Null when nothing goes back.
      */
-    Origin onRender(Set<String> nowOpen, Origin before, String now, Predicate<Origin> alive) {
-        Set<String> wasOpen = open;
-        String was = at;
+    Origin onRender(final Set<String> nowOpen, final Origin before, final String now, final Predicate<Origin> alive) {
+        final Set<String> wasOpen = open;
+        final String was = at;
         open = Set.copyOf(nowOpen);
         at = now;
         if (wasOpen == null) {
             pending.clear();
             return null;
         }
-        boolean closed = was != null && !nowOpen.contains(was);
+        final boolean closed = was != null && !nowOpen.contains(was);
         if (now != null && !now.equals(was)) {
-            Origin told = pending.remove(now);
+            final Origin told = pending.remove(now);
             // a place reached because the one the user was at closed keeps its own way back
-            Origin from = told != null ? told : closed ? null : before;
+            final Origin from = told != null ? told : closed ? null : before;
             if (from != null && !now.equals(from.ownerKey()) && !now.equals(from.front())) {
                 cameFrom.put(now, from);
             }
@@ -82,10 +82,10 @@ final class FocusOrigins {
         if (!closed) {
             return null;
         }
-        Set<String> seen = new HashSet<>();
+        final Set<String> seen = new HashSet<>();
         Origin o = cameFrom.get(was);
         while (o != null && !alive.test(o)) {
-            String up = o.ownerKey() != null ? o.ownerKey() : o.front();
+            final String up = o.ownerKey() != null ? o.ownerKey() : o.front();
             if (up == null || !seen.add(up)) {
                 return null;
             }
@@ -95,7 +95,7 @@ final class FocusOrigins {
     }
 
     /** Where {@code key} was last arrived at from; for tests. */
-    Origin of(String key) {
+    Origin of(final String key) {
         return cameFrom.get(key);
     }
 }

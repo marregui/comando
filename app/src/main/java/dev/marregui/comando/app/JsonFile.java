@@ -1,6 +1,10 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.model.AtomicFiles;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
@@ -10,10 +14,7 @@ import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.cfg.EnumFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
+import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
  * One store file. A write goes to a temporary file in the same directory and is moved over the old one
@@ -41,7 +42,7 @@ final class JsonFile<T> {
     private final Path path;
     private final TypeReference<T> type;
 
-    JsonFile(Path path, TypeReference<T> type) {
+    JsonFile(final Path path, final TypeReference<T> type) {
         this.path = path;
         this.type = type;
     }
@@ -58,7 +59,7 @@ final class JsonFile<T> {
     T readAsIs() throws IOException {
         try {
             return exists() ? JSON.readValue(path.toFile(), type) : null;
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             throw new IOException(e.getMessage(), e);
         }
     }
@@ -70,19 +71,19 @@ final class JsonFile<T> {
         }
         try {
             return JSON.readValue(path.toFile(), type);
-        } catch (JacksonException e) {
-            Path aside = path.resolveSibling(path.getFileName() + ".corrupt-" + Instant.now().toEpochMilli());
+        } catch (final JacksonException e) {
+            final Path aside = path.resolveSibling(path.getFileName() + ".corrupt-" + Instant.now().toEpochMilli());
             LOG.log(System.Logger.Level.ERROR, "unreadable store file kept aside [file=" + path + ", aside=" + aside + ']', e);
             try {
                 Files.move(path, aside);
-            } catch (IOException moveFailed) {
+            } catch (final IOException moveFailed) {
                 LOG.log(System.Logger.Level.ERROR, "cannot move the unreadable file aside [file=" + path + ']', moveFailed);
             }
             return null;
         }
     }
 
-    void write(T value) throws IOException {
+    void write(final T value) throws IOException {
         if (!Files.isDirectory(path.getParent())) {
             Files.createDirectories(path.getParent()); // on a folder that exists it throws and catches inside the JDK
         }

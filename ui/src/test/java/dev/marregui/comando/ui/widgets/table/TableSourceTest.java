@@ -1,12 +1,13 @@
 package dev.marregui.comando.ui.widgets.table;
 
-import dev.marregui.comando.core.view.ViewSpec;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.view.ViewSpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,7 +22,7 @@ class TableSourceTest {
     /// doubles.
     @Test
     void numericColumnsAreDetectedFromTheValues() {
-        TableSource s = TableSource.of(new ViewSpec.Table(List.of("n", "name"), List.of(List.of("1", "a"), List.of("null", "b"), List.of("2.5", "c"))));
+        final TableSource s = TableSource.of(new ViewSpec.Table(List.of("n", "name"), List.of(List.of("1", "a"), List.of("null", "b"), List.of("2.5", "c"))));
         assertThat(s.isNumeric(0)).isTrue();
         assertThat(s.isNumeric(1)).isFalse();
         assertThat(s.isNull(1, 0)).isTrue();
@@ -48,15 +49,15 @@ class TableSourceTest {
     /// After sorting by a column, the selected view rows map to their source rows and the export writes the rows in the
     /// sorted order.
     @Test
-    void selectionAndExportFollowTheSortOrder(@TempDir Path dir) throws Exception {
-        GridTable grid = new GridTable();
+    void selectionAndExportFollowTheSortOrder(@TempDir final Path dir) throws Exception {
+        final GridTable grid = new GridTable();
         grid.setSource(TableSource.of(new ViewSpec.Table(List.of("id", "v"),
                 List.of(List.of("a", "3"), List.of("b", "1"), List.of("c", "2")))), "t.csv");
         grid.model.toggleSort(2); // model column 0 is the row number; 2 is v, ascending: b, c, a
         grid.table().setRowSelectionInterval(0, 1);
         assertThat(grid.selectedSourceRows()).containsExactly(1, 2);
 
-        Path file = dir.resolve("t.csv");
+        final Path file = dir.resolve("t.csv");
         grid.prepare().writeTo(file);
         assertThat(Files.readString(file)).isEqualTo("id,v\nb,1\nc,2\na,3\n");
     }

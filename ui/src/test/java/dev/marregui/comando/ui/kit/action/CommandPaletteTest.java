@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.action;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.KeyStroke;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import javax.swing.KeyStroke;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,7 +33,7 @@ class CommandPaletteTest {
     /// [CommandPalette#macText] puts ⇧ before ⌘ and renders Enter and Tab as ⏎ and ⇥.
     @Test
     void keysReadAsTheMacGlyphsInAppleOrder() {
-        String text = CommandPalette.macText(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+        final String text = CommandPalette.macText(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
         assertThat(text).isEqualTo("⇧⌘⏎");
         assertThat(CommandPalette.macText(KeyStroke.getKeyStroke(KeyEvent.VK_TAB, InputEvent.CTRL_DOWN_MASK))).isEqualTo("⌃⇥");
     }

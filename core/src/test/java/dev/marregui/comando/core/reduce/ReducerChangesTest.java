@@ -1,5 +1,9 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ChangeAsk;
@@ -12,9 +16,6 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.States;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,8 +30,8 @@ class ReducerChangesTest {
     private AppState state = States.twoPanels();
     private List<Effect> effects = List.of();
 
-    private void apply(Intent intent) {
-        Transition t = reducer.apply(state, intent);
+    private void apply(final Intent intent) {
+        final Transition t = reducer.apply(state, intent);
         state = t.state();
         effects = t.effects();
     }
@@ -43,8 +44,8 @@ class ReducerChangesTest {
     /// active-view flag only when either changes.
     @Test
     void everyFoldersRepositoriesAreWatchedOftenWhileTheChangesViewIsOpen() {
-        FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
-        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        final FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
         apply(new Intent.FoldersRead(List.of(kb)));
         assertThat(effects).as("the folders changed").containsExactly(new Effect.WatchRepos(List.of(kb), false));
 
@@ -65,8 +66,8 @@ class ReducerChangesTest {
     /// untouched with an error notice.
     @Test
     void theFoldersWindowsListReplacesTheFoldersAndIsSavedSayingWhenItReplacedAChangeMadeMeanwhile() {
-        FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
-        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        final FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
         apply(new Intent.FoldersRead(List.of(kb)));
         apply(new Intent.SaveFolders(List.of(notes, kb), List.of(kb)));
         assertThat(state.folders()).containsExactly(notes, kb);
@@ -76,7 +77,7 @@ class ReducerChangesTest {
         apply(new Intent.SaveFolders(List.of(kb), List.of(kb)));
         assertThat(state.notice().text()).contains("replacing a change to folders.json");
 
-        AppState before = state;
+        final AppState before = state;
         apply(new Intent.SaveFolders(List.of(kb, new FolderRoot("KB", "/other", "", List.of())), List.of(kb)));
         assertThat(state.folders()).as("one name twice: nothing saved").isEqualTo(before.folders());
         assertThat(effects).noneMatch(x -> x instanceof Effect.SaveFolders);
@@ -86,16 +87,16 @@ class ReducerChangesTest {
     /// Repository updates and change reads produce display effects without replacing the current application state.
     @Test
     void reposAndChangesPassToTheirPortsAndLeaveTheStateAsItWas() {
-        AppState before = state;
-        RepoStatus repo = new RepoStatus("/r", "main", List.of(new RepoStatus.FileChange("a", "", RepoStatus.Kind.MODIFIED)), false, "");
+        final AppState before = state;
+        final RepoStatus repo = new RepoStatus("/r", "main", List.of(new RepoStatus.FileChange("a", "", RepoStatus.Kind.MODIFIED)), false, "");
         apply(new Intent.ReposLoaded(List.of(repo)));
         assertThat(effects).containsExactly(new Effect.ShowRepos(List.of(repo)));
 
-        RepoStatus.FileChange c = repo.changes().getFirst();
+        final RepoStatus.FileChange c = repo.changes().getFirst();
         apply(new Intent.OpenChange("/r", c, ChangeAsk.FOLLOW));
         assertThat(effects).containsExactly(new Effect.ReadChange("/r", c, ChangeAsk.FOLLOW));
 
-        ChangeTexts texts = new ChangeTexts("/r", c, "1\n", "2\n", "");
+        final ChangeTexts texts = new ChangeTexts("/r", c, "1\n", "2\n", "");
         apply(new Intent.ChangeRead(texts, ChangeAsk.OPEN));
         assertThat(effects).containsExactly(new Effect.ShowChange(texts, ChangeAsk.OPEN));
         assertThat(state).isSameAs(before);
@@ -105,7 +106,7 @@ class ReducerChangesTest {
     /// relative-root requests are refused.
     @Test
     void rollingBackRemovingAndUnstagingGoToTheToolsOnlyForPathsInsideTheRepository() {
-        RepoStatus.FileChange a = new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED);
+        final RepoStatus.FileChange a = new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED);
         apply(new Intent.RollBack("/r", List.of(a)));
         assertThat(effects).containsExactly(new Effect.RollBack("/r", List.of(a)));
         apply(new Intent.RemoveFiles("/r", List.of("notes/x.md")));
@@ -115,7 +116,7 @@ class ReducerChangesTest {
 
         apply(new Intent.RemoveFiles("/r", List.of()));
         assertThat(effects).as("nothing asked, nothing done").isEmpty();
-        for (String bad : List.of("../elsewhere.txt", "/etc/hosts", ".")) {
+        for (final String bad : List.of("../elsewhere.txt", "/etc/hosts", ".")) {
             apply(new Intent.RemoveFiles("/r", List.of(bad)));
             assertThat(effects).as(bad + ": nothing reaches the tools").noneMatch(Effect.RemoveFiles.class::isInstance);
             assertThat(state.notice().text()).as(bad).contains("not a file of the repository");

@@ -27,19 +27,19 @@ public record ToolSettings(Optional<Path> gradleSerial, String javaHome) {
     }
 
     /** With {@code path} as the {@code PATH}, its folders separated as the platform separates them. */
-    static ToolSettings of(String path) {
+    static ToolSettings of(final String path) {
         Optional<Path> serial = Optional.empty();
-        for (String dir : (path == null ? "" : path).split(File.pathSeparator)) {
+        for (final String dir : (path == null ? "" : path).split(File.pathSeparator)) {
             if (dir.isBlank()) {
                 continue;
             }
             try {
-                Path candidate = Path.of(dir).resolve(GRADLE_SERIAL);
+                final Path candidate = Path.of(dir).resolve(GRADLE_SERIAL);
                 if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
                     serial = Optional.of(candidate);
                     break;
                 }
-            } catch (InvalidPathException e) {
+            } catch (final InvalidPathException e) {
                 // a PATH entry that is no path names no tool
             }
         }

@@ -1,5 +1,20 @@
 package dev.marregui.comando.mcp;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.intent.Intent;
@@ -16,20 +31,6 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.States;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,7 +46,7 @@ class ActionToolsTest {
 
     @BeforeEach
     void start() {
-        QueryPort db = null;
+        final QueryPort db = null;
         tools = new McpTools(sink, state::get, new TranscriptRegistry(), db, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         tools.agentsFile(home.resolve("agents.json"));
         state.set(with(state.get(), session("foreman", ""), session("mine", "foreman"), session("grandchild", "mine"), session("users", "")));
@@ -55,16 +56,16 @@ class ActionToolsTest {
     /// and with a prompt starts it, headed with who sent it, without writing to any panel; a notice names the caller.
     @Test
     void sessionNewCreatesOpensAndWithAPromptStartsASessionThatRecordsItsCreator() throws Exception {
-        McpTools.Outcome out = call("foreman", "session_new", "{\"name\":\"slug-writer\",\"work_dir\":\"" + home + "\",\"model\":\"sonnet\","
+        final McpTools.Outcome out = call("foreman", "session_new", "{\"name\":\"slug-writer\",\"work_dir\":\"" + home + "\",\"model\":\"sonnet\","
                 + "\"effort\":\"high\",\"prompt\":\"write slugify\"}");
         assertThat(out.error()).as(out.text()).isFalse();
-        Intent.SaveSession save = sink.of(Intent.SaveSession.class).getFirst();
+        final Intent.SaveSession save = sink.of(Intent.SaveSession.class).getFirst();
         assertThat(save.previousName()).isEmpty();
         assertThat(save.spec().name()).isEqualTo("slug-writer");
         assertThat(save.spec().workDir()).isEqualTo(home.toAbsolutePath().normalize().toString());
         assertThat(save.spec().model()).isEqualTo("sonnet");
         assertThat(save.spec().createdBy()).isEqualTo("foreman");
-        Intent.PromptSession prompt = sink.of(Intent.PromptSession.class).getFirst();
+        final Intent.PromptSession prompt = sink.of(Intent.PromptSession.class).getFirst();
         assertThat(prompt.session()).isEqualTo("slug-writer");
         assertThat(prompt.from()).isEqualTo("foreman");
         assertThat(prompt.text()).isEqualTo("[from session foreman]\nwrite slugify");
@@ -86,7 +87,7 @@ class ActionToolsTest {
     void aStoppedSessionIsStartedOnlyByItsCreatorsRecord44() throws Exception {
         assertThat(call("foreman", "session_start", "{\"session\":\"mine\"}").error()).isFalse();
         assertThat(call("foreman", "session_start", "{\"session\":\"grandchild\"}").error()).as("through others").isFalse();
-        McpTools.Outcome users = call("foreman", "session_start", "{\"session\":\"users\"}");
+        final McpTools.Outcome users = call("foreman", "session_start", "{\"session\":\"users\"}");
         assertThat(users.error()).isTrue();
         assertThat(users.text()).contains("record 44");
         assertThat(sink.of(Intent.StartSession.class)).extracting(Intent.StartSession::name).containsExactly("mine", "grandchild");
@@ -100,7 +101,7 @@ class ActionToolsTest {
         state.set(state.get().withApprovals(List.of(card(1, "foreman"), card(2, "grandchild"), card(3, "users"))));
         assertThat(call("foreman", "approval_answer", "{\"id\":1,\"decision\":\"allow\"}").text()).contains("rule 1");
         assertThat(call("foreman", "approval_answer", "{\"id\":2,\"decision\":\"allow\"}").text()).as("created through mine").contains("rule 1");
-        McpTools.Outcome ok = call("foreman", "approval_answer", "{\"id\":3,\"decision\":\"deny\",\"message\":\"not now\"}");
+        final McpTools.Outcome ok = call("foreman", "approval_answer", "{\"id\":3,\"decision\":\"deny\",\"message\":\"not now\"}");
         assertThat(ok.error()).as(ok.text()).isFalse();
         assertThat(call("users", "approval_answer", "{\"id\":2,\"decision\":\"allow\",\"scope\":\"session\"}").error()).isFalse();
         assertThat(sink.of(Intent.ApprovalAnswered.class)).extracting(Intent.ApprovalAnswered::id).containsExactly(3L, 2L);
@@ -112,7 +113,7 @@ class ActionToolsTest {
     /// `agents.json` grants it to the caller, then runs for that caller only.
     @Test
     void aDestructiveActionRunsOnlyForACallerTheUserGrantedItRule2() throws Exception {
-        McpTools.Outcome refused = call("foreman", "session_remove", "{\"session\":\"users\"}");
+        final McpTools.Outcome refused = call("foreman", "session_remove", "{\"session\":\"users\"}");
         assertThat(refused.error()).isTrue();
         assertThat(refused.text()).contains("agents.json").contains("did not create");
         Files.writeString(home.resolve("agents.json"), "{\"grants\": {\"foreman\": [\"destructive\"]}}");
@@ -139,16 +140,16 @@ class ActionToolsTest {
     /// lists each server with whether it runs; an unknown server is answered with the ones there are.
     @Test
     void anAgentStartsAndStopsTheServersAndTheStateShowsThem() throws Exception {
-        FakeServer edge = new FakeServer("Edge", false);
-        FakeServer questDb = new FakeServer("QuestDB", true);
+        final FakeServer edge = new FakeServer("Edge", false);
+        final FakeServer questDb = new FakeServer("QuestDB", true);
         tools.servers(List.of(edge, questDb));
         assertThat(call("foreman", "server_start", "{\"server\":\"edge\"}").text()).isEqualTo("Edge up");
-        McpTools.Outcome refused = call("foreman", "server_stop", "{\"server\":\"questdb\"}");
+        final McpTools.Outcome refused = call("foreman", "server_stop", "{\"server\":\"questdb\"}");
         assertThat(refused.error()).as("a refusal is a tool error").isTrue();
         assertThat(edge.asked).containsExactly(true);
         assertThat(questDb.asked).containsExactly(false);
         assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("servers: [edge, questdb]");
-        JsonNode servers = json.readTree(tools.stateJson()).path("servers");
+        final JsonNode servers = json.readTree(tools.stateJson()).path("servers");
         assertThat(servers.findValuesAsString("name")).containsExactly("edge", "questdb");
         assertThat(servers.get(0).path("running").asBoolean()).isTrue();
         assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: server start"));
@@ -159,7 +160,7 @@ class ActionToolsTest {
     @Test
     void anEditKeepsTheCreatorAndWhatItDoesNotChange() throws Exception {
         assertThat(call("foreman", "session_edit", "{\"session\":\"mine\",\"new_name\":\"mine2\",\"effort\":\"max\"}").error()).isFalse();
-        Intent.SaveSession save = sink.of(Intent.SaveSession.class).getFirst();
+        final Intent.SaveSession save = sink.of(Intent.SaveSession.class).getFirst();
         assertThat(save.previousName()).isEqualTo("mine");
         assertThat(save.spec().name()).isEqualTo("mine2");
         assertThat(save.spec().effort()).isEqualTo("max");
@@ -174,7 +175,7 @@ class ActionToolsTest {
         assertThat(call("foreman", "panel_rename", "{\"panel\":\"" + state.get().panels().getFirst().title() + "\",\"title\":\"notes\"}").error()).isFalse();
         assertThat(call("foreman", "panel_focus", "{\"panel\":\"no such\"}").text()).contains("panels:");
         assertThat(call("foreman", "session_command", "{\"session\":\"mine\",\"command\":\"compact\"}").text()).contains("slash");
-        JsonNode s = json.readTree(tools.stateJson());
+        final JsonNode s = json.readTree(tools.stateJson());
         assertThat(s.path("sessions").findValuesAsString("createdBy")).contains("foreman", "mine");
         assertThat(s.has("approvals")).isTrue();
         assertThat(s.has("closedPanels")).isTrue();
@@ -184,12 +185,12 @@ class ActionToolsTest {
     /// unknown tool.
     @Test
     void everyActionIsListedWithItsSchemaAndHasARunner() throws Exception {
-        Set<String> listed = new HashSet<>();
+        final Set<String> listed = new HashSet<>();
         tools.definitions().forEach(d -> listed.add(d.path("name").asString()));
-        List<String> unrun = new ArrayList<>();
-        for (Action a : Actions.ALL) {
+        final List<String> unrun = new ArrayList<>();
+        for (final Action a : Actions.ALL) {
             assertThat(listed).as("listed: " + a.tool()).contains(a.tool());
-            McpTools.Outcome out = call("foreman", a.tool(), "{}");
+            final McpTools.Outcome out = call("foreman", a.tool(), "{}");
             if (out.text().contains("unknown tool") || out.text().contains("has no runner")) {
                 unrun.add(a.tool());
             }
@@ -198,7 +199,7 @@ class ActionToolsTest {
         assertThat(listed).as("no tool listed twice").hasSize(tools.definitions().size());
     }
 
-    private McpTools.Outcome call(String caller, String tool, String args) throws Exception {
+    private McpTools.Outcome call(final String caller, final String tool, final String args) throws Exception {
         return tools.call(caller, tool, json.readTree(args));
     }
 
@@ -208,7 +209,7 @@ class ActionToolsTest {
         private volatile boolean running;
         final List<Boolean> asked = new ArrayList<>();
 
-        FakeServer(String name, boolean running) {
+        FakeServer(final String name, final boolean running) {
             this.name = name;
             this.running = running;
         }
@@ -224,7 +225,7 @@ class ActionToolsTest {
         }
 
         @Override
-        public String want(boolean up) {
+        public String want(final boolean up) {
             asked.add(up);
             if (!up) {
                 return "refused: started by another comando";
@@ -234,7 +235,7 @@ class ActionToolsTest {
         }
     }
 
-    private static Approval card(long id, String session) {
+    private static Approval card(final long id, final String session) {
         return new Approval(id, session, ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 0L);
     }
 
@@ -257,12 +258,12 @@ class ActionToolsTest {
         assertThat(call("foreman", "session_checkpoint", "{\"session\":\"mine\"}").error()).as("another session").isFalse();
     }
 
-    private static SessionState session(String name, String createdBy) {
+    private static SessionState session(final String name, final String createdBy) {
         return SessionState.closed(SessionSpec.fresh(name, "/tmp").withCreatedBy(createdBy)).withStatus(Status.CLOSED, "");
     }
 
-    private static AppState with(AppState s, SessionState... more) {
-        List<SessionState> sessions = new ArrayList<>(s.sessions());
+    private static AppState with(final AppState s, final SessionState... more) {
+        final List<SessionState> sessions = new ArrayList<>(s.sessions());
         sessions.addAll(List.of(more));
         return s.withSessions(sessions);
     }

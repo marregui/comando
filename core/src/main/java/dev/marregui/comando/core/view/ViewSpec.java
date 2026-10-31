@@ -19,7 +19,7 @@ public sealed interface ViewSpec {
         public Table {
             columns = List.copyOf(columns);
             rows = rows.stream().map(List::copyOf).toList();
-            for (List<String> row : rows) {
+            for (final List<String> row : rows) {
                 if (row.size() != columns.size()) {
                     throw new IllegalArgumentException("row width " + row.size() + " differs from column count " + columns.size());
                 }
@@ -44,7 +44,7 @@ public sealed interface ViewSpec {
         }
 
         @Override
-        public boolean equals(Object o) {
+        public boolean equals(final Object o) {
             return o instanceof Series s && name.equals(s.name) && Arrays.equals(x, s.x) && Arrays.equals(y, s.y);
         }
 
@@ -132,14 +132,14 @@ public sealed interface ViewSpec {
             children = List.copyOf(children);
         }
 
-        public TreeNode(String label, String detail, List<TreeNode> children) {
+        public TreeNode(final String label, final String detail, final List<TreeNode> children) {
             this(label, detail, "", children);
         }
 
         public static final TreeNode NONE = new TreeNode("", "", "", List.of());
 
         /** The link that opens {@code path} at {@code line} (0 for none). */
-        public static String fileLink(String path, int line) {
+        public static String fileLink(final String path, final int line) {
             return FILE_SCHEME + path + "#" + line;
         }
     }
@@ -181,7 +181,7 @@ public sealed interface ViewSpec {
         }
 
         /** The repository at {@code root}, whole, its row called {@code name}. */
-        public static Changes of(String root, String name) {
+        public static Changes of(final String root, final String name) {
             return new Changes(root, "", name);
         }
 
@@ -210,11 +210,11 @@ public sealed interface ViewSpec {
             failures = Map.copyOf(failures);
         }
 
-        public static Console running(long runId, String command) {
+        public static Console running(final long runId, final String command) {
             return running(runId, command, "");
         }
 
-        public static Console running(long runId, String command, String panel) {
+        public static Console running(final long runId, final String command, final String panel) {
             return new Console(runId, command, RunState.RUNNING, -1, 0L, TreeNode.NONE, Map.of(), panel);
         }
 

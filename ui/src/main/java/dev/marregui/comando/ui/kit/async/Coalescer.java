@@ -1,7 +1,7 @@
 package dev.marregui.comando.ui.kit.async;
 
-import javax.swing.SwingUtilities;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.swing.SwingUtilities;
 
 /**
  * Turns many requests from any thread into at most one pending run on the EDT. A request made while a run
@@ -12,7 +12,7 @@ public final class Coalescer {
     private final Runnable task;
     private final AtomicBoolean pending = new AtomicBoolean();
 
-    public Coalescer(Runnable task) {
+    public Coalescer(final Runnable task) {
         this.task = task;
     }
 

@@ -1,16 +1,17 @@
 package dev.marregui.comando.mcp;
 
-import dev.marregui.comando.core.view.Clip;
-import dev.marregui.comando.core.view.ViewSpec;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * Validates view data from MCP calls into {@link ViewSpec} records. An invalid spec throws
@@ -26,7 +27,7 @@ final class ViewSpecs {
     private ViewSpecs() {
     }
 
-    static ViewSpec parse(String type, JsonNode data) {
+    static ViewSpec parse(final String type, final JsonNode data) {
         return switch (type) {
             case "table" -> table(data.path("columns"), data.path("rows"));
             case "plot" -> plot(data);
@@ -40,16 +41,16 @@ final class ViewSpecs {
     }
 
     /** A text view's path: empty, or one the file system can name, so the view can show it. */
-    private static String path(String path) {
+    private static String path(final String path) {
         try {
             Path.of(path);
             return path;
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             throw new IllegalArgumentException("path is not a file path: " + e.getReason());
         }
     }
 
-    static ViewSpec.Table table(JsonNode columns, JsonNode rows) {
+    static ViewSpec.Table table(final JsonNode columns, final JsonNode rows) {
         if (!columns.isArray() || columns.isEmpty()) {
             throw new IllegalArgumentException("columns must be a non-empty array of names");
         }
@@ -59,18 +60,18 @@ final class ViewSpecs {
         if (rows.size() > MAX_ROWS) {
             throw new IllegalArgumentException("at most " + MAX_ROWS + " rows; got " + rows.size());
         }
-        List<String> names = new ArrayList<>(columns.size());
-        for (JsonNode c : columns) {
+        final List<String> names = new ArrayList<>(columns.size());
+        for (final JsonNode c : columns) {
             names.add(c.asString(""));
         }
-        List<List<String>> out = new ArrayList<>(rows.size());
+        final List<List<String>> out = new ArrayList<>(rows.size());
         int i = 0;
-        for (JsonNode r : rows) {
+        for (final JsonNode r : rows) {
             if (!r.isArray() || r.size() != names.size()) {
                 throw new IllegalArgumentException("row " + i + " must be an array of " + names.size() + " values");
             }
-            List<String> row = new ArrayList<>(names.size());
-            for (JsonNode v : r) {
+            final List<String> row = new ArrayList<>(names.size());
+            for (final JsonNode v : r) {
                 row.add(v.isNull() ? "null" : v.isValueNode() ? v.asString("") : v.toString());
             }
             out.add(row);
@@ -83,10 +84,10 @@ final class ViewSpecs {
      * The plot {@code data} asks for: {@code series}, an array of {@code {name, x, y}}; or, for one series, {@code x}
      * and {@code y} beside the title, named after it. An array sent as JSON text ("[1, 2]") reads as the array.
      */
-    static ViewSpec.Plot plot(JsonNode data) {
+    static ViewSpec.Plot plot(final JsonNode data) {
         JsonNode series = data.path("series");
         if (series.isMissingNode() && data.has("x") && data.has("y")) {
-            ObjectNode one = JSON.createObjectNode().put("name", data.path("title").asString("series 1"));
+            final ObjectNode one = JSON.createObjectNode().put("name", data.path("title").asString("series 1"));
             one.set("x", data.get("x"));
             one.set("y", data.get("y"));
             series = JSON.createArrayNode().add(one);
@@ -94,11 +95,11 @@ final class ViewSpecs {
         if (!series.isArray() || series.isEmpty()) {
             throw new IllegalArgumentException("series must be a non-empty array of {name, x, y}, or give x and y for one series");
         }
-        List<ViewSpec.Series> out = new ArrayList<>(series.size());
+        final List<ViewSpec.Series> out = new ArrayList<>(series.size());
         long points = 0;
-        for (JsonNode s : series) {
-            double[] x = numbers(s.path("x"), "x");
-            double[] y = numbers(s.path("y"), "y");
+        for (final JsonNode s : series) {
+            final double[] x = numbers(s.path("x"), "x");
+            final double[] y = numbers(s.path("y"), "y");
             points += x.length;
             if (points > MAX_POINTS) {
                 throw new IllegalArgumentException("at most " + MAX_POINTS + " points in total");
@@ -108,21 +109,21 @@ final class ViewSpecs {
         return new ViewSpec.Plot(data.path("x_label").asString(""), data.path("y_label").asString(""), data.path("time_x").asBoolean(false), out);
     }
 
-    private static double[] numbers(JsonNode given, String what) {
+    private static double[] numbers(final JsonNode given, final String what) {
         JsonNode array = given;
         if (given.isString()) {
             try {
                 array = JSON.readTree(given.asString(""));
-            } catch (JacksonException e) {
+            } catch (final JacksonException e) {
                 throw new IllegalArgumentException(what + " must be an array of numbers, not text: " + Clip.keepStart(given.asString(""), 40));
             }
         }
         if (!array.isArray()) {
             throw new IllegalArgumentException(what + " must be an array of numbers");
         }
-        double[] out = new double[array.size()];
+        final double[] out = new double[array.size()];
         int i = 0;
-        for (JsonNode v : array) {
+        for (final JsonNode v : array) {
             if (!v.isNumber()) {
                 throw new IllegalArgumentException(what + "[" + i + "] is not a number: " + v);
             }
@@ -131,22 +132,22 @@ final class ViewSpecs {
         return out;
     }
 
-    private static ViewSpec.TreeNode node(JsonNode n, int depth) {
+    private static ViewSpec.TreeNode node(final JsonNode n, final int depth) {
         if (depth > 64) {
             throw new IllegalArgumentException("tree deeper than 64 levels");
         }
         if (!n.isObject()) {
             throw new IllegalArgumentException("a tree node is an object {label, detail, children}");
         }
-        List<ViewSpec.TreeNode> children = new ArrayList<>();
-        for (JsonNode c : n.path("children")) {
+        final List<ViewSpec.TreeNode> children = new ArrayList<>();
+        for (final JsonNode c : n.path("children")) {
             children.add(node(c, depth + 1));
         }
         return new ViewSpec.TreeNode(n.path("label").asString(""), n.path("detail").asString(""), children);
     }
 
-    private static String text(JsonNode data, String field, boolean required) {
-        JsonNode v = data.path(field);
+    private static String text(final JsonNode data, final String field, final boolean required) {
+        final JsonNode v = data.path(field);
         if (v.isMissingNode() || v.isNull()) {
             if (required) {
                 throw new IllegalArgumentException(field + " is required");

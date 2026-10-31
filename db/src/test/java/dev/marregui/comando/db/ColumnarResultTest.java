@@ -1,8 +1,5 @@
 package dev.marregui.comando.db;
 
-import dev.marregui.comando.core.loop.Threads;
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Proxy;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -10,6 +7,10 @@ import java.sql.Types;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.loop.Threads;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

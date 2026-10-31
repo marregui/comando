@@ -1,14 +1,14 @@
 package dev.marregui.comando.claude;
 
 
-import dev.marregui.comando.core.loop.Processes;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import dev.marregui.comando.core.loop.Processes;
 
 /**
  * The Claude Code versions comando is tested against, and a check of the installed one. The stream format is not
@@ -23,8 +23,8 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
 
     private static final Pattern VERSION = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)");
 
-    public static Optional<ClaudeVersion> parse(String text) {
-        Matcher m = VERSION.matcher(text == null ? "" : text);
+    public static Optional<ClaudeVersion> parse(final String text) {
+        final Matcher m = VERSION.matcher(text == null ? "" : text);
         return m.find()
                 ? Optional.of(new ClaudeVersion(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3))))
                 : Optional.empty();
@@ -35,7 +35,7 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
     }
 
     @Override
-    public int compareTo(ClaudeVersion o) {
+    public int compareTo(final ClaudeVersion o) {
         int c = Integer.compare(major, o.major);
         if (c == 0) {
             c = Integer.compare(minor, o.minor);
@@ -53,13 +53,13 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
      * Blocks up to six seconds: five for the CLI to exit, one for it to be gone once ended; call it off the EDT and off
      * the reducer thread.
      */
-    public static String check(String executable, RootLaunch launch) {
+    public static String check(final String executable, final RootLaunch launch) {
         Processes.Result r;
         try {
             r = Processes.run(List.of(executable, "--version"), launch::environment, null, null, TIMEOUT, MAX_OUT);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return "Claude Code not found at '" + executable + "'. Install it, or set COMANDO_CLAUDE to its path.";
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return "";
         }
@@ -67,7 +67,7 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
             return "'" + executable + " --version' did not answer within 5 s.";
         }
         // the version is on standard output; an error the CLI printed instead is shown with it
-        String out = (r.out() + r.stderr()).strip();
+        final String out = (r.out() + r.stderr()).strip();
         return parse(out)
                 .map(v -> v.tested() ? "" : "Claude Code " + v + " is outside the tested range " + TESTED_FROM + " to "
                         + TESTED_UNTIL + " (exclusive); the transcript may miss events.")

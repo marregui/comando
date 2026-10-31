@@ -15,7 +15,7 @@ public record Topic(String line, long readAtMillis, String problem) {
         problem = problem == null ? "" : problem;
     }
 
-    public static Topic failed(String problem, long readAtMillis) {
+    public static Topic failed(final String problem, final long readAtMillis) {
         return new Topic("", readAtMillis, problem);
     }
 }

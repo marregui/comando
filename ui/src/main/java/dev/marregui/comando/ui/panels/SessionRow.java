@@ -1,13 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.Icon;
 import java.awt.Color;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -15,6 +7,14 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import javax.swing.Icon;
+
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * One session in the sidebar's list, one line (record 90): its state icon, which a click connects or disconnects
@@ -43,7 +43,7 @@ final class SessionRow extends IconRow {
     /** The icon a working session shows in place of its state, turned by the list's timer. */
     private Icon working = Icons.get("claude");
 
-    void working(Icon spinner) {
+    void working(final Icon spinner) {
         working = spinner;
     }
 
@@ -57,8 +57,8 @@ final class SessionRow extends IconRow {
      * {@code focused} (one of its panels is the focused panel); {@code approvals} counts the waiting approvals;
      * {@code newestCli} is the newest Claude Code version a running session reported.
      */
-    SessionRow show(SessionState s, boolean open, boolean focused, int approvals, boolean selected,
-                    Color background, Color foreground, String newestCli) {
+    SessionRow show(final SessionState s, final boolean open, final boolean focused, final int approvals, final boolean selected,
+                    final Color background, final Color foreground, final String newestCli) {
         setOpaque(true);
         setBackground(background);
         title.setForeground(foreground);
@@ -73,15 +73,15 @@ final class SessionRow extends IconRow {
      * The Claude Code version the session reported when it started, "claude 2.1.303", while it runs; empty before it
      * reports one. Each start runs the CLI installed then, so sessions started before an update run the older one.
      */
-    static String cliText(SessionState s) {
-        String v = s.info().cliVersion();
+    static String cliText(final SessionState s) {
+        final String v = s.info().cliVersion();
         return v.isEmpty() || !s.status().isUsable() ? "" : "claude " + v;
     }
 
     /** The newest Claude Code version among the running sessions; empty when none has reported one. */
-    static String newestCli(List<SessionState> sessions) {
+    static String newestCli(final List<SessionState> sessions) {
         String newest = "";
-        for (SessionState s : sessions) {
+        for (final SessionState s : sessions) {
             if (!cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newest) > 0) {
                 newest = s.info().cliVersion();
             }
@@ -90,19 +90,19 @@ final class SessionRow extends IconRow {
     }
 
     /** Whether {@code s} runs an older Claude Code than {@code newestCli}: it started before the CLI was updated. */
-    static boolean olderCli(SessionState s, String newestCli) {
+    static boolean olderCli(final SessionState s, final String newestCli) {
         return !cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newestCli) < 0;
     }
 
     /** Compares "2.1.302" and "2.1.303" by number; a part that is not a number counts as 0, an empty text is oldest. */
-    static int compareVersions(String a, String b) {
+    static int compareVersions(final String a, final String b) {
         if (a.isEmpty() || b.isEmpty()) {
             return Boolean.compare(!a.isEmpty(), !b.isEmpty());
         }
-        String[] x = a.split("\\.");
-        String[] y = b.split("\\.");
+        final String[] x = a.split("\\.");
+        final String[] y = b.split("\\.");
         for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            int c = Integer.compare(number(x, i), number(y, i));
+            final int c = Integer.compare(number(x, i), number(y, i));
             if (c != 0) {
                 return c;
             }
@@ -110,16 +110,16 @@ final class SessionRow extends IconRow {
         return 0;
     }
 
-    private static int number(String[] parts, int i) {
+    private static int number(final String[] parts, final int i) {
         try {
             return i < parts.length ? Integer.parseInt(parts[i].replaceAll("\\D.*", "")) : 0;
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             return 0;
         }
     }
 
     /** How full the context is, "42%", once a turn has reported it; empty before. */
-    static String contextText(SessionState s) {
+    static String contextText(final SessionState s) {
         return s.contextWindow() <= 0L || s.contextTokens() <= 0L ? ""
                 : Math.min(100L, s.contextTokens() * 100L / s.contextWindow()) + "%";
     }
@@ -128,8 +128,8 @@ final class SessionRow extends IconRow {
      * What the menu's Copy details and ⌘C put on the clipboard: what a decision on the session (go on, compact, stop)
      * needs, one fact a line; {@code newestCli} as in {@link #show}.
      */
-    static String details(SessionState s, long nowMillis, ZoneId zone, String newestCli) {
-        StringBuilder sb = new StringBuilder();
+    static String details(final SessionState s, final long nowMillis, final ZoneId zone, final String newestCli) {
+        final StringBuilder sb = new StringBuilder();
         sb.append("Session: ").append(s.name()).append('\n');
         sb.append("Path: ").append(s.spec().workDir()).append('\n');
         if (!s.branch().isEmpty()) {
@@ -141,7 +141,7 @@ final class SessionRow extends IconRow {
             sb.append("Uptime: ").append(Labels.uptime(nowMillis - s.startedMillis())).append(", since ")
                     .append(Labels.startedAt(s.startedMillis(), nowMillis, zone)).append('\n');
         }
-        String context = contextText(s);
+        final String context = contextText(s);
         sb.append("Context: ").append(context.isEmpty() ? "unknown until a turn ends"
                 : context + " (" + Labels.tokens(s.contextTokens()) + " of " + Labels.tokens(s.contextWindow()) + " tokens)").append('\n');
         sb.append("Model: ").append(modelName(s)).append(", effort ").append(effortName(s)).append('\n');
@@ -156,7 +156,7 @@ final class SessionRow extends IconRow {
     }
 
     /** The control at {@code p}, a point in the cell whose bounds this row was laid out to. */
-    Optional<Control> hit(Rectangle cell, Point p) {
+    Optional<Control> hit(final Rectangle cell, final Point p) {
         if (onInfo(cell, p)) {
             return Optional.of(Control.INFO);
         }
@@ -164,24 +164,24 @@ final class SessionRow extends IconRow {
     }
 
     /** Where {@code control} is, in the list's coordinates, for a menu to drop from it; empty while it is hidden. */
-    Rectangle bounds(Rectangle cell, Control control) {
+    Rectangle bounds(final Rectangle cell, final Control control) {
         return control == Control.INFO ? infoBounds(cell) : iconBounds(cell);
     }
 
     /** The tooltip of the control at {@code p}, or empty over the text. */
-    Optional<String> tip(Rectangle cell, Point p) {
+    Optional<String> tip(final Rectangle cell, final Point p) {
         return iconTip(cell, p);
     }
 
     static final String COMPACT_TIP = "Compact the conversation to free context (sends " + SessionSpec.COMPACT_COMMAND + ")";
 
-    static String freshTip(SessionState s) {
+    static String freshTip(final SessionState s) {
         return "Start a new conversation" + keeps(s);
     }
 
     /** Where the current conversation goes: the start of its id, to find it among the importable ones. */
-    private static String keeps(SessionState s) {
-        String id = s.spec().claudeSessionId();
+    private static String keeps(final SessionState s) {
+        final String id = s.spec().claudeSessionId();
         return id.isEmpty() ? "" : "; this one, " + id.substring(0, Math.min(8, id.length())) + ", stays importable";
     }
 
@@ -190,7 +190,7 @@ final class SessionRow extends IconRow {
      * shows for the rest of its turn), else the one its first message or {@code system/init} reported; else the one it
      * is set to start with, else "default" (Claude Code's).
      */
-    static String modelName(SessionState s) {
+    static String modelName(final SessionState s) {
         String m = reportedModel(s);
         if (m.isBlank()) {
             m = s.spec().model();
@@ -198,8 +198,8 @@ final class SessionRow extends IconRow {
         if (m.isBlank()) {
             return "default";
         }
-        String lower = m.toLowerCase(Locale.ROOT);
-        for (String family : SessionSpec.MODELS) {
+        final String lower = m.toLowerCase(Locale.ROOT);
+        for (final String family : SessionSpec.MODELS) {
             if (lower.contains(family)) {
                 return family;
             }
@@ -208,16 +208,16 @@ final class SessionRow extends IconRow {
     }
 
     /** The model the running session reported, its running turn's first; empty when it has reported none. */
-    private static String reportedModel(SessionState s) {
+    private static String reportedModel(final SessionState s) {
         if (!s.status().isUsable()) {
             return "";
         }
         return !s.info().turnModel().isBlank() ? s.info().turnModel() : s.info().model();
     }
 
-    static String modelTip(SessionState s) {
-        String reported = reportedModel(s);
-        String turn = s.status().isUsable() ? s.info().turnModel() : "";
+    static String modelTip(final SessionState s) {
+        final String reported = reportedModel(s);
+        final String turn = s.status().isUsable() ? s.info().turnModel() : "";
         if (!turn.isBlank() && !turn.equals(s.info().model())) {
             return "Model: " + turn + " for the rest of this turn, the session's own " + s.info().model() + " after it; click to change";
         }
@@ -231,8 +231,8 @@ final class SessionRow extends IconRow {
      * the session's own (so a {@code /effort} typed in the prompt shows); else the one it is set to; else, while it
      * runs, the one Claude Code's settings give its model; else "default".
      */
-    static String effortName(SessionState s) {
-        boolean usable = s.status().isUsable();
+    static String effortName(final SessionState s) {
+        final boolean usable = s.status().isUsable();
         if (usable && !s.info().turnEffort().isBlank()) {
             return s.info().turnEffort();
         }
@@ -245,22 +245,22 @@ final class SessionRow extends IconRow {
         return usable && !s.info().effort().isBlank() ? s.info().effort() : "default";
     }
 
-    static String effortTip(SessionState s) {
-        boolean usable = s.status().isUsable();
-        String turn = usable ? s.info().turnEffort() : "";
-        String own = usable && !s.info().reportedEffort().isBlank() ? s.info().reportedEffort() : "";
+    static String effortTip(final SessionState s) {
+        final boolean usable = s.status().isUsable();
+        final String turn = usable ? s.info().turnEffort() : "";
+        final String own = usable && !s.info().reportedEffort().isBlank() ? s.info().reportedEffort() : "";
         if (!turn.isBlank() && !own.isBlank() && !turn.equals(own)) {
             return "Effort: " + turn + " for the rest of this turn, raised from the session's own " + own + "; click to change";
         }
-        String from = !turn.isBlank() || !own.isBlank() ? "as the session runs it"
+        final String from = !turn.isBlank() || !own.isBlank() ? "as the session runs it"
                 : !s.spec().effort().isBlank() ? "set for this session"
                 : usable && !s.info().effort().isBlank() ? "Claude Code's setting for this model" : "Claude Code's";
         return "Effort: " + effortName(s) + ", " + from + "; a turn may raise it; click to change";
     }
 
     /** What the state icon says and does. */
-    static String powerTip(SessionState s) {
-        String doing = s.isBusy() ? "Working: " + TabStatus.working(s) + "; " : s.isWaiting() ? "Waiting on " + s.waitingFor() + "; " : "";
+    static String powerTip(final SessionState s) {
+        final String doing = s.isBusy() ? "Working: " + TabStatus.working(s) + "; " : s.isWaiting() ? "Waiting on " + s.waitingFor() + "; " : "";
         return switch (s.status()) {
             case OPEN -> (doing.isEmpty() ? "Connected" : doing + "connected") + "; click to disconnect (stops the session)";
             case OPENING -> "Starting";
@@ -275,12 +275,12 @@ final class SessionRow extends IconRow {
      * amber ↑ when it runs an older Claude Code than another running session ({@code newestCli} as in {@link #show});
      * the context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
      */
-    static String titleHtml(SessionState s, boolean open, boolean focused, int approvals, String newestCli) {
-        String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
-        String due = s.reflection().due() && SessionBar.showsCheckpoint(s)
+    static String titleHtml(final SessionState s, final boolean open, final boolean focused, final int approvals, final String newestCli) {
+        final String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
+        final String due = s.reflection().due() && SessionBar.showsCheckpoint(s)
                 ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
-        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
-        String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
+        final String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
+        final String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
         return "<html><nobr>" + name + MarkdownHtml.escape(s.name()) + "</b>" + older + due + badge + "</nobr></html>";
     }
 }

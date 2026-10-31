@@ -1,5 +1,9 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.effect.Effect;
@@ -20,9 +24,6 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.States;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
 
 import static dev.marregui.comando.testkit.States.P1;
 import static dev.marregui.comando.testkit.States.P2;
@@ -42,8 +43,8 @@ class ReducerNoticeAndLayoutTest {
     private AppState state = States.twoPanels();
     private List<Effect> effects = List.of();
 
-    private void apply(Intent intent) {
-        Transition t = reducer.apply(state, intent);
+    private void apply(final Intent intent) {
+        final Transition t = reducer.apply(state, intent);
         state = t.state();
         effects = t.effects();
     }
@@ -123,7 +124,7 @@ class ReducerNoticeAndLayoutTest {
     /// Answering approval `7` removes the approval-bound standing notice.
     @Test
     void anAnsweredApprovalClearsItsRequestNotice() {
-        Approval a = new Approval(7L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
+        final Approval a = new Approval(7L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
         apply(new Intent.ApprovalRequested(a));
         assertThat(state.notice().subject()).isEqualTo(Notice.approval(7L));
 
@@ -212,7 +213,7 @@ class ReducerNoticeAndLayoutTest {
     void aTurnClockRunsWhileTheSessionIsBusy() {
         clock.advance(1000);
         apply(new Intent.RunText(P1, "explain", Target.CLAUDE));
-        long started = state.session("work").orElseThrow().turnStartedMillis();
+        final long started = state.session("work").orElseThrow().turnStartedMillis();
         assertThat(started).isEqualTo(clock.millis());
 
         clock.advance(500);
@@ -229,7 +230,7 @@ class ReducerNoticeAndLayoutTest {
         apply(new Intent.ImportSessions(List.of(SessionSpec.imported("old", "/tmp", "abc"))));
 
         assertThat(state.panel(P2).orElseThrow().session()).as("no other panel is taken").isEmpty();
-        PanelState own = state.homePanel("old").orElseThrow();
+        final PanelState own = state.homePanel("old").orElseThrow();
         assertThat(own.title()).isEqualTo("old");
         assertThat(state.focused()).isEqualTo(own.id());
         assertThat(state.notice().text()).isEqualTo("Imported old and opened it in its own panel");
@@ -254,7 +255,7 @@ class ReducerNoticeAndLayoutTest {
     /// while it was closed.
     @Test
     void aClosedPanelReopensAfterTheFocusedOneWithTheBindingsThatStillExist() {
-        PanelId back = new PanelId("p3");
+        final PanelId back = new PanelId("p3");
         apply(new Intent.AddPanel(back, "old"));
         apply(new Intent.FocusPanel(P1));
         apply(new Intent.ClosePanel(back));
@@ -263,7 +264,7 @@ class ReducerNoticeAndLayoutTest {
 
         assertThat(state.focused()).isEqualTo(back);
         assertThat(state.panels()).extracting(PanelState::id).containsExactly(P1, back, P2);
-        PanelState p = state.panel(back).orElseThrow();
+        final PanelState p = state.panel(back).orElseThrow();
         assertThat(p.connection()).as("removed while it was closed").isEmpty();
         assertThat(p.title()).isEqualTo("old");
         assertThat(effects).hasSize(1);
@@ -291,7 +292,7 @@ class ReducerNoticeAndLayoutTest {
     @Test
     void aTabAskedWithAFocusWaitsForTheFocus() {
         otherOnP2();
-        LowerTab before = state.lowerTab();
+        final LowerTab before = state.lowerTab();
 
         apply(new Intent.SessionLayout("other", P2, LowerTab.TERMINAL, null));
 
@@ -306,7 +307,7 @@ class ReducerNoticeAndLayoutTest {
     void aFocusRequestAppliedAfterThePanelWasReboundChangesNothing() {
         otherOnP2();
         apply(new Intent.SessionLayout("other", P2, LowerTab.TERMINAL, null));
-        LowerTab before = state.lowerTab();
+        final LowerTab before = state.lowerTab();
 
         state = state.withPanel(state.panel(P2).orElseThrow().withSession("work")); // the panel was rebound meanwhile
         apply(new Intent.SessionFocus("other", P2, LowerTab.TERMINAL));
@@ -350,7 +351,7 @@ class ReducerNoticeAndLayoutTest {
     @Test
     void aSessionsFocusRequestWaitsForTheShellAndItsPanesComeInTheSameArrange() {
         apply(new Intent.FocusPanel(P2));
-        Layout hide = new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN);
+        final Layout hide = new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN);
 
         apply(new Intent.SessionLayout("work", P1, null, hide));
 
@@ -368,7 +369,7 @@ class ReducerNoticeAndLayoutTest {
         apply(new Intent.RunText(P1, "explain", Target.CLAUDE));
         assertThat(effects).contains(new Effect.StartClaude(States.WORK));
         apply(new Intent.SessionExited("work", -1, "cannot start claude: not found; install Claude Code, or set COMANDO_CLAUDE to its path"));
-        Notice failed = state.notice();
+        final Notice failed = state.notice();
         assertThat(failed.text()).startsWith("Session work could not start").contains("COMANDO_CLAUDE");
         assertThat(effects).containsExactly(new Effect.DesktopNotify("comando", failed.text()));
 
@@ -388,7 +389,7 @@ class ReducerNoticeAndLayoutTest {
         apply(new Intent.SqlStarted(1L));
         apply(new Intent.SqlCompleted(1L, 1, -1L, false, 1, 0, 1));
         apply(new Intent.ApprovalRequested(new Approval(7L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
-        Notice asks = state.notice();
+        final Notice asks = state.notice();
 
         apply(new Intent.RefreshSql(P2, "SELECT 1"));
         apply(new Intent.SqlStarted(2L));

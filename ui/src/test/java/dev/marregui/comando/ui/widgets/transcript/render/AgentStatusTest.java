@@ -1,17 +1,18 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.ui.kit.async.OnEdt;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.swing.JScrollPane;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.swing.JScrollPane;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,18 +41,18 @@ class AgentStatusTest {
         canvas.clock(now::get);
     }
 
-    private int add(Block b) {
-        int at = next++;
+    private int add(final Block b) {
+        final int at = next++;
         canvas.append(at, b);
         return at;
     }
 
-    private static Block.ToolCall agent(String id, String description, String parent) {
+    private static Block.ToolCall agent(final String id, final String description, final String parent) {
         return new Block.ToolCall(id, "Agent", "{\"description\":\"" + description + "\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, parent);
     }
 
-    private static Block.ToolCall tool(String id, String name, String input, String parent) {
+    private static Block.ToolCall tool(final String id, final String name, final String input, final String parent) {
         return new Block.ToolCall(id, name, input, "", Block.ToolStatus.RUNNING, parent);
     }
 
@@ -92,8 +93,8 @@ class AgentStatusTest {
     @Test
     void theLatestToolsSummaryFollowsItsInputWhenItArrivesLater() {
         add(agent("a1", "survey", ""));
-        Block.ToolCall read = tool("r1", "Read", "{}", "a1");
-        int at = add(read);
+        final Block.ToolCall read = tool("r1", "Read", "{}", "a1");
+        final int at = add(read);
         assertThat(canvas.lastTool("a1")).isEqualTo("Read");
 
         canvas.update(at, read.withInput("{\"file_path\":\"/w/a.txt\"}"));
@@ -114,21 +115,21 @@ class AgentStatusTest {
     /// status.
     @Test
     void aFinishedSubagentSaysHowLongItRanAndHowManyToolsItCalled() {
-        Block.ToolCall a = agent("a1", "survey", "");
-        int at = add(a);
+        final Block.ToolCall a = agent("a1", "survey", "");
+        final int at = add(a);
         add(tool("b1", "Bash", "{\"command\":\"ls\"}", "a1"));
         now.addAndGet(20_000);
         canvas.update(at, a.withResult("Report.", false));
 
         assertThat(canvas.cardStatus("a1")).isEqualTo("done · 20 s · 1 tool");
 
-        Block.ToolCall failed = agent("a2", "broken", "");
-        int b = add(failed);
+        final Block.ToolCall failed = agent("a2", "broken", "");
+        final int b = add(failed);
         canvas.update(b, failed.withResult("boom", true));
         assertThat(canvas.cardStatus("a2")).as("a failure keeps its own mark").isEmpty();
 
-        Block.ToolCall bash = tool("t1", "Bash", "{\"command\":\"ls\"}", "");
-        int c = add(bash);
+        final Block.ToolCall bash = tool("t1", "Bash", "{\"command\":\"ls\"}", "");
+        final int c = add(bash);
         canvas.update(c, bash.withResult("ok", false));
         assertThat(canvas.cardStatus("t1")).as("other cards say nothing when done").isEmpty();
     }
@@ -137,8 +138,8 @@ class AgentStatusTest {
     /// leaves and clearing the canvas empties the list.
     @Test
     void runningAgentsAreInStartOrderAndLeaveWhenTheyFinish() {
-        Block.ToolCall first = agent("a1", "first", "");
-        int at = add(first);
+        final Block.ToolCall first = agent("a1", "first", "");
+        final int at = add(first);
         now.addAndGet(5_000);
         add(agent("a2", "second", ""));
         add(tool("t1", "Bash", "{\"command\":\"ls\"}", ""));
@@ -165,22 +166,22 @@ class AgentStatusTest {
         for (int i = 0; i < 80; i++) {
             add(new Block.AssistantText("n" + i, 0, "Paragraph " + i + " after the agent.", false, ""));
         }
-        JScrollPane scroll = new JScrollPane(canvas);
+        final JScrollPane scroll = new JScrollPane(canvas);
         scroll.setSize(600, 300);
         scroll.doLayout();
         scroll.getViewport().doLayout();
         canvas.ensureLayout(canvas.getWidth());
         // the user closed it
-        Items.ToolItem card = (Items.ToolItem) canvas.itemAt(80);
+        final Items.ToolItem card = (Items.ToolItem) canvas.itemAt(80);
         card.toggle();
         assertThat(canvas.isCardOpen("a1")).isFalse();
 
         assertThat(canvas.reveal("a1")).isTrue();
 
         assertThat(canvas.isCardOpen("a1")).isTrue();
-        int top = canvas.topOf("a1");
+        final int top = canvas.topOf("a1");
         assertThat(top).isPositive();
-        int y = scroll.getViewport().getViewPosition().y;
+        final int y = scroll.getViewport().getViewPosition().y;
         assertThat(top).isBetween(y, y + scroll.getViewport().getHeight());
         assertThat(canvas.reveal("nope")).isFalse();
     }
@@ -189,12 +190,12 @@ class AgentStatusTest {
     /// follows it without toggling the card, and elsewhere the header still toggles.
     @Test
     void theHeaderLinkOfASubagentCardOpensItsTranscript() {
-        int at = add(agent("a1", "survey", ""));
+        final int at = add(agent("a1", "survey", ""));
         canvas.setSize(700, 400);
         canvas.ensureLayout(700);
-        Item card = canvas.itemAt(at);
+        final Item card = canvas.itemAt(at);
         int linkX = -1;
-        int linkY = 3 + 5 + 8;
+        final int linkY = 3 + 5 + 8;
         for (int px = 0; px < 400 && linkX < 0; px++) {
             if (card.headerLinkAt(px, linkY) != null) {
                 linkX = px;
@@ -204,9 +205,9 @@ class AgentStatusTest {
         assertThat(card.headerLinkAt(linkX, linkY)).isEqualTo(TranscriptCanvas.SUBAGENT_SCHEME + "a1");
         assertThat(card.toggleAt(linkX, linkY)).as("elsewhere the header still toggles").isSameAs(card);
 
-        int x = linkX + Theme.PAD * 2 + 1;
-        int y = canvas.topOf("a1") + linkY;
-        boolean open = canvas.isCardOpen("a1");
+        final int x = linkX + Theme.PAD * 2 + 1;
+        final int y = canvas.topOf("a1") + linkY;
+        final boolean open = canvas.isCardOpen("a1");
         canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, MouseEvent.BUTTON1_DOWN_MASK, x, y, 1, false, MouseEvent.BUTTON1));
         canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_RELEASED, 0L, 0, x, y, 1, false, MouseEvent.BUTTON1));
         assertThat(links).as("a single click follows nothing (record 94)").isEmpty();

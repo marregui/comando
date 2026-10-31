@@ -1,16 +1,5 @@
 package dev.marregui.comando.ui.dialogs.folders;
 
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.RepoStatus;
-import dev.marregui.comando.ui.kit.vcs.RepoChanges;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.AbstractButton;
-import javax.swing.JCheckBox;
-import javax.swing.JLabel;
-import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.nio.file.Files;
@@ -23,6 +12,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import javax.swing.AbstractButton;
+import javax.swing.JCheckBox;
+import javax.swing.JLabel;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -42,8 +43,8 @@ class FoldersEditorTest {
     private final List<Path> chosen = new ArrayList<>();
 
     /** Runs {@code f} on the event thread with the editor and answers what it gives. */
-    private static <T> T on(FoldersEditor e, Function<FoldersEditor, T> f) throws Exception {
-        AtomicReference<T> out = new AtomicReference<>();
+    private static <T> T on(final FoldersEditor e, final Function<FoldersEditor, T> f) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> out.set(f.apply(e)));
         return out.get();
     }
@@ -51,20 +52,20 @@ class FoldersEditorTest {
     /**
      * The folders' window, with the CLI's config folder at the file system's root so that every folder is inside it.
      */
-    private FoldersEditor editor(List<FolderRoot> folders, RepoChanges repos) throws Exception {
+    private FoldersEditor editor(final List<FolderRoot> folders, final RepoChanges repos) throws Exception {
         return editor(folders, Path.of("/"), repos);
     }
 
-    private FoldersEditor editor(List<FolderRoot> folders, Path claudeDir, RepoChanges repos) throws Exception {
-        AtomicReference<FoldersEditor> e = new AtomicReference<>();
+    private FoldersEditor editor(final List<FolderRoot> folders, final Path claudeDir, final RepoChanges repos) throws Exception {
+        final AtomicReference<FoldersEditor> e = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> e.set(new FoldersEditor(folders, claudeDir, repos, new FoldersEditor.Chooser() {
             @Override
-            public Optional<Path> folder(Component owner, Path start) {
+            public Optional<Path> folder(final Component owner, final Path start) {
                 return chosen.isEmpty() ? Optional.empty() : Optional.of(chosen.removeFirst());
             }
 
             @Override
-            public Optional<Path> file(Component owner, Path start) {
+            public Optional<Path> file(final Component owner, final Path start) {
                 return folder(owner, start);
             }
         })));
@@ -72,21 +73,21 @@ class FoldersEditorTest {
     }
 
     /** Waits until no folder is still being looked up. */
-    private static void settled(FoldersEditor e) {
+    private static void settled(final FoldersEditor e) {
         await().atMost(Duration.ofSeconds(10)).until(() -> on(e, (FoldersEditor x) -> x.problemsOfAll().values().stream()
                 .noneMatch(p -> "checking…".equals(p.get(FoldersEditor.PATH)))));
     }
 
-    private static void type(FoldersEditor e, String key, String text) throws Exception {
+    private static void type(final FoldersEditor e, final String key, final String text) throws Exception {
         SwingUtilities.invokeAndWait(() -> ((JTextField) e.field(key)).setText(text));
     }
 
     /// Two existing folders, once looked up, give a valid, clean editor whose save returns them unchanged.
     @Test
-    void anUnchangedListIsValidCleanAndSavesAsItWas(@TempDir Path dir) throws Exception {
-        FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of("dist"), "knowledge");
-        FolderRoot b = new FolderRoot("B", Files.createDirectories(dir.resolve("b")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(a, b), new RepoChanges());
+    void anUnchangedListIsValidCleanAndSavesAsItWas(@TempDir final Path dir) throws Exception {
+        final FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of("dist"), "knowledge");
+        final FolderRoot b = new FolderRoot("B", Files.createDirectories(dir.resolve("b")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(a, b), new RepoChanges());
         settled(e);
         assertThat(on(e, FoldersEditor::valid)).isTrue();
         assertThat(on(e, FoldersEditor::dirty)).isFalse();
@@ -96,10 +97,10 @@ class FoldersEditorTest {
     /// A missing folder, a taken name, a blank name, an index climbing out and a relative path each show their problem
     /// and make the editor invalid with no save; restoring the values makes it valid and clean again.
     @Test
-    void aMissingFolderAnEmptyOrTakenNameAndAnIndexOutsideBlockSaveAndSayWhy(@TempDir Path dir) throws Exception {
-        FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
-        FolderRoot b = new FolderRoot("B", Files.createDirectories(dir.resolve("b")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(a, b), new RepoChanges());
+    void aMissingFolderAnEmptyOrTakenNameAndAnIndexOutsideBlockSaveAndSayWhy(@TempDir final Path dir) throws Exception {
+        final FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
+        final FolderRoot b = new FolderRoot("B", Files.createDirectories(dir.resolve("b")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(a, b), new RepoChanges());
         settled(e);
         type(e, FoldersEditor.PATH, dir.resolve("gone").toString());
         settled(e);
@@ -127,12 +128,12 @@ class FoldersEditorTest {
     /// [FoldersEditor#addFirst] adds only the kit folder the list lacks, in front, keeps the user's, marks the editor
     /// dirty, and adds nothing the second time.
     @Test
-    void theKitsFoldersTheListLacksGoFirstAndTheUsersStay(@TempDir Path dir) throws Exception {
-        FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(dir.resolve("kit/BRAIN/MEMORY")).toString(), "MEMORY.md",
+    void theKitsFoldersTheListLacksGoFirstAndTheUsersStay(@TempDir final Path dir) throws Exception {
+        final FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(dir.resolve("kit/BRAIN/MEMORY")).toString(), "MEMORY.md",
                 List.of(), "memory");
-        FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(dir.resolve("kit/skills")).toString(), "", List.of(), "skills");
-        FolderRoot mine = new FolderRoot("Mine", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(skills, mine), new RepoChanges());
+        final FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(dir.resolve("kit/skills")).toString(), "", List.of(), "skills");
+        final FolderRoot mine = new FolderRoot("Mine", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(skills, mine), new RepoChanges());
         settled(e);
 
         assertThat(on(e, (FoldersEditor x) -> x.addFirst(List.of(memory, skills)))).as("Skills is there already").isEqualTo(1);
@@ -145,16 +146,16 @@ class FoldersEditorTest {
     /// A chosen folder whose name is taken is named `notes 2`, gets `INDEX.md` as the first index guess found, and is
     /// selected; a cancelled chooser adds nothing.
     @Test
-    void addingChoosesTheFolderFirstAndNamesItUniquelyWithItsIndex(@TempDir Path dir) throws Exception {
-        Path notes = Files.createDirectories(dir.resolve("x").resolve("notes"));
+    void addingChoosesTheFolderFirstAndNamesItUniquelyWithItsIndex(@TempDir final Path dir) throws Exception {
+        final Path notes = Files.createDirectories(dir.resolve("x").resolve("notes"));
         Files.writeString(notes.resolve("INDEX.md"), "# a\n");
         Files.writeString(notes.resolve("MEMORY.md"), "# m\n");
-        FolderRoot taken = new FolderRoot("notes", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(taken), new RepoChanges());
+        final FolderRoot taken = new FolderRoot("notes", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(taken), new RepoChanges());
         chosen.add(notes);
         SwingUtilities.invokeAndWait(e::add);
         settled(e);
-        List<FolderRoot> saved = on(e, FoldersEditor::folders).orElseThrow();
+        final List<FolderRoot> saved = on(e, FoldersEditor::folders).orElseThrow();
         assertThat(saved).hasSize(2);
         assertThat(saved.get(1).name()).isEqualTo("notes 2");
         assertThat(saved.get(1).path()).isEqualTo(notes.toString());
@@ -169,11 +170,11 @@ class FoldersEditorTest {
     /// Moving the last folder up swaps it, a move past the top is clamped, removing drops it from the list, and its
     /// folder stays on disk.
     @Test
-    void removingAndMovingChangeOnlyTheList(@TempDir Path dir) throws Exception {
-        FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
-        FolderRoot b = new FolderRoot("B", Files.createDirectories(dir.resolve("b")).toString(), "", List.of());
-        FolderRoot c = new FolderRoot("C", Files.createDirectories(dir.resolve("c")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(a, b, c), new RepoChanges());
+    void removingAndMovingChangeOnlyTheList(@TempDir final Path dir) throws Exception {
+        final FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
+        final FolderRoot b = new FolderRoot("B", Files.createDirectories(dir.resolve("b")).toString(), "", List.of());
+        final FolderRoot c = new FolderRoot("C", Files.createDirectories(dir.resolve("c")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(a, b, c), new RepoChanges());
         settled(e);
         SwingUtilities.invokeAndWait(() -> e.select("C"));
         SwingUtilities.invokeAndWait(() -> e.move(-1));
@@ -187,9 +188,9 @@ class FoldersEditorTest {
     /// A listing file with a folder in it is a problem while the Trash is on; turning the Trash off clears the problem
     /// and disables the field.
     @Test
-    void theListingFileCountsOnlyWithTheTrash(@TempDir Path dir) throws Exception {
-        FolderRoot pad = new FolderRoot("Pad", Files.createDirectories(dir.resolve("pad")).toString(), "", List.of(), "scratchpad", true, "ALPHA.md");
-        FoldersEditor e = editor(List.of(pad), new RepoChanges());
+    void theListingFileCountsOnlyWithTheTrash(@TempDir final Path dir) throws Exception {
+        final FolderRoot pad = new FolderRoot("Pad", Files.createDirectories(dir.resolve("pad")).toString(), "", List.of(), "scratchpad", true, "ALPHA.md");
+        final FoldersEditor e = editor(List.of(pad), new RepoChanges());
         settled(e);
         type(e, FoldersEditor.LISTED_IN, "sub/ALPHA.md");
         assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.LISTED_IN))).isEqualTo("a file name, such as INDEX.md");
@@ -201,15 +202,15 @@ class FoldersEditorTest {
     /// A repository folder and a folder inside it show the repository, branch and uncommitted count; a plain folder
     /// shows `repo: none`, and none of them has a problem.
     @Test
-    void theFactsSayWhetherTheFolderIsARepositoryAndWhatItHolds(@TempDir Path dir) throws Exception {
-        Path repo = Files.createDirectories(dir.resolve("repo"));
+    void theFactsSayWhetherTheFolderIsARepositoryAndWhatItHolds(@TempDir final Path dir) throws Exception {
+        final Path repo = Files.createDirectories(dir.resolve("repo"));
         Files.createDirectories(repo.resolve(".git"));
-        Path inside = Files.createDirectories(repo.resolve("docs"));
-        Path plain = Files.createDirectories(dir.resolve("plain"));
-        RepoChanges repos = new RepoChanges();
+        final Path inside = Files.createDirectories(repo.resolve("docs"));
+        final Path plain = Files.createDirectories(dir.resolve("plain"));
+        final RepoChanges repos = new RepoChanges();
         SwingUtilities.invokeAndWait(() -> repos.set(List.of(new RepoStatus(repo.toString(), "main",
                 List.of(new RepoStatus.FileChange("a", "", RepoStatus.Kind.MODIFIED)), false, ""))));
-        FoldersEditor e = editor(List.of(new FolderRoot("R", repo.toString(), "", List.of()),
+        final FoldersEditor e = editor(List.of(new FolderRoot("R", repo.toString(), "", List.of()),
                 new FolderRoot("D", inside.toString(), "", List.of()), new FolderRoot("P", plain.toString(), "", List.of())), repos);
         settled(e);
         assertThat(on(e, FoldersEditor::factsShown)).isEqualTo("repo: " + repo + " · main · 1 uncommitted");
@@ -223,11 +224,11 @@ class FoldersEditorTest {
     /// With a config folder set, its folders are valid, a typed folder outside it shows `must be inside …`, names stay
     /// unique, and the path field is chosen, not typed.
     @Test
-    void aFolderMustLieInsideTheFoldersHome(@TempDir Path dir) throws Exception {
-        Path claude = Files.createDirectories(dir.resolve(".claude"));
-        FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
-        FolderRoot kb = new FolderRoot("KB", Files.createDirectories(claude.resolve("KB")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(memory, kb), claude, new RepoChanges());
+    void aFolderMustLieInsideTheFoldersHome(@TempDir final Path dir) throws Exception {
+        final Path claude = Files.createDirectories(dir.resolve(".claude"));
+        final FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
+        final FolderRoot kb = new FolderRoot("KB", Files.createDirectories(claude.resolve("KB")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(memory, kb), claude, new RepoChanges());
         settled(e);
         assertThat(on(e, FoldersEditor::folders)).contains(List.of(memory, kb));
         assertThat(on(e, FoldersEditor::dirty)).isFalse();
@@ -244,10 +245,10 @@ class FoldersEditorTest {
     /// A chosen folder outside the config folder is not added and says so, a chosen index outside the folder is not
     /// taken, and an index inside it is taken relative to the folder, the message then clearing.
     @Test
-    void onlyFoldersInsideTheConfigFolderArePickedAndARefusedPickChangesNothing(@TempDir Path dir) throws Exception {
-        Path claude = Files.createDirectories(dir.resolve(".claude"));
-        FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(memory), claude, new RepoChanges());
+    void onlyFoldersInsideTheConfigFolderArePickedAndARefusedPickChangesNothing(@TempDir final Path dir) throws Exception {
+        final Path claude = Files.createDirectories(dir.resolve(".claude"));
+        final FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(memory), claude, new RepoChanges());
         settled(e);
         chosen.add(Files.createDirectories(dir.resolve("elsewhere")));
         SwingUtilities.invokeAndWait(e::add);
@@ -270,10 +271,10 @@ class FoldersEditorTest {
     /// A missing index file is a note that Save creates it, leaving the editor valid; one whose folder is missing is a
     /// problem with an error outline, and the editor is invalid.
     @Test
-    void anIndexNamedButMissingIsCreatedAtSaveUnlessItsFolderIsMissing(@TempDir Path dir) throws Exception {
-        Path claude = Files.createDirectories(dir.resolve(".claude"));
-        FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(claude.resolve("skills")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(skills), claude, new RepoChanges());
+    void anIndexNamedButMissingIsCreatedAtSaveUnlessItsFolderIsMissing(@TempDir final Path dir) throws Exception {
+        final Path claude = Files.createDirectories(dir.resolve(".claude"));
+        final FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(claude.resolve("skills")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(skills), claude, new RepoChanges());
         settled(e);
         type(e, FoldersEditor.INDEX, "INDEX.md");
         await().atMost(Duration.ofSeconds(10)).until(() -> on(e, FoldersEditor::messageShown).equals("INDEX.md does not exist yet: Save creates it"));
@@ -288,12 +289,12 @@ class FoldersEditorTest {
 
     /// Each of the eight field labels carries a non-blank tooltip, the index and listing tips naming their rules.
     @Test
-    void everyFieldsNameExplainsItUnderTheMouse(@TempDir Path dir) throws Exception {
-        FoldersEditor e = editor(List.of(new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of())),
+    void everyFieldsNameExplainsItUnderTheMouse(@TempDir final Path dir) throws Exception {
+        final FoldersEditor e = editor(List.of(new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of())),
                 new RepoChanges());
         settled(e);
-        Map<String, String> tips = on(e, (FoldersEditor x) -> {
-            Map<String, String> out = new LinkedHashMap<>();
+        final Map<String, String> tips = on(e, (FoldersEditor x) -> {
+            final Map<String, String> out = new LinkedHashMap<>();
             labels(x.component(), out);
             return out;
         });
@@ -303,29 +304,29 @@ class FoldersEditorTest {
         assertThat(tips.get("Listed in")).contains("An entry moved to the Trash takes its lines out");
     }
 
-    private static void labels(Component c, Map<String, String> out) {
+    private static void labels(final Component c, final Map<String, String> out) {
         if (c instanceof JLabel l && l.getLabelFor() != null) {
             out.put(l.getText(), l.getToolTipText());
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 labels(child, out);
             }
         }
     }
 
-    private static AbstractButton button(FoldersEditor e, String tip) {
-        List<AbstractButton> found = new ArrayList<>();
+    private static AbstractButton button(final FoldersEditor e, final String tip) {
+        final List<AbstractButton> found = new ArrayList<>();
         find(e.component(), tip, found);
         return found.getFirst();
     }
 
-    private static void find(Component c, String tip, List<AbstractButton> found) {
+    private static void find(final Component c, final String tip, final List<AbstractButton> found) {
         if (c instanceof AbstractButton b && tip.equals(b.getToolTipText())) {
             found.add(b);
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 find(child, tip, found);
             }
         }

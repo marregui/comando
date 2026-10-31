@@ -1,12 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.action.Command;
-import dev.marregui.comando.ui.kit.action.CommandPalette;
-import dev.marregui.comando.ui.kit.format.KeyText;
-
-import javax.swing.Action;
-import javax.swing.JComponent;
-import javax.swing.KeyStroke;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
@@ -14,6 +7,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.swing.Action;
+import javax.swing.JComponent;
+import javax.swing.KeyStroke;
+
+import dev.marregui.comando.ui.kit.action.Command;
+import dev.marregui.comando.ui.kit.action.CommandPalette;
+import dev.marregui.comando.ui.kit.format.KeyText;
 
 /** Keys the shell forwards to the focused component, and the table Help ▸ Keyboard shortcuts shows. */
 final class Keys {
@@ -25,7 +25,7 @@ final class Keys {
      * Whether {@code target} binds {@code key} to an enabled action, in its focused or ancestor input map; runs the
      * action when {@code run}. Components that read keys themselves, as the terminal does, have no such binding.
      */
-    static boolean forward(Component target, KeyStroke key, boolean run) {
+    static boolean forward(final Component target, final KeyStroke key, final boolean run) {
         if (!(target instanceof JComponent c)) {
             return false;
         }
@@ -33,7 +33,7 @@ final class Keys {
         if (name == null) {
             name = c.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).get(key);
         }
-        Action a = name == null ? null : c.getActionMap().get(name);
+        final Action a = name == null ? null : c.getActionMap().get(name);
         if (a == null || !a.isEnabled()) {
             return false;
         }
@@ -49,15 +49,15 @@ final class Keys {
      * where its first command is; then the keys that belong to one place and are no command: an approval card's, and
      * those of the find bar, the transcript, the sessions list, the Files tab and the dialogs.
      */
-    static String markdown(List<Command> commands) {
-        StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Where | Command | Keys |\n|---|---|---|\n");
-        Map<String, List<Command>> byPlace = new LinkedHashMap<>();
-        for (Command c : commands) {
+    static String markdown(final List<Command> commands) {
+        final StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Where | Command | Keys |\n|---|---|---|\n");
+        final Map<String, List<Command>> byPlace = new LinkedHashMap<>();
+        for (final Command c : commands) {
             if (c.key() != null) {
                 byPlace.computeIfAbsent(c.group(), g -> new ArrayList<>()).add(c);
             }
         }
-        for (Command c : byPlace.values().stream().flatMap(List::stream).toList()) {
+        for (final Command c : byPlace.values().stream().flatMap(List::stream).toList()) {
             md.append("| ").append(c.group().isEmpty() ? "—" : c.group()).append(" | ").append(c.label().replace("|", "\\|"))
                     .append(" | ").append(CommandPalette.keyText(c.key())).append(" |\n");
         }

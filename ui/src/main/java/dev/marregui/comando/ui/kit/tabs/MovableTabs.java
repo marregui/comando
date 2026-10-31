@@ -1,14 +1,14 @@
 package dev.marregui.comando.ui.kit.tabs;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
 import java.awt.Cursor;
 import java.awt.Graphics;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Tabs that move by drag: a tab pressed and dragged a few pixels shows a line in the gap it would land in, and the
@@ -34,12 +34,12 @@ public final class MovableTabs extends JTabbedPane {
     /** A drop just ended: the click the platform may send for the same press and release is not a click on a tab. */
     private boolean dropped;
 
-    public void onMove(Move move) {
+    public void onMove(final Move move) {
         this.move = move;
     }
 
     @Override
-    protected void processMouseEvent(MouseEvent e) {
+    protected void processMouseEvent(final MouseEvent e) {
         if (e.getID() == MouseEvent.MOUSE_CLICKED && dropped) {
             dropped = false;
             e.consume();
@@ -50,14 +50,14 @@ public final class MovableTabs extends JTabbedPane {
             pressed = SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger() ? indexAtLocation(e.getX(), e.getY()) : -1;
             pressedAt = e.getPoint();
         } else if (e.getID() == MouseEvent.MOUSE_RELEASED) {
-            int from = pressed;
-            int to = gap;
+            final int from = pressed;
+            final int to = gap;
             pressed = -1;
             if (to >= 0) {
                 endDrag();
                 dropped = true;
                 // the gap counts the dragged tab, which leaves its place first
-                int index = to > from ? to - 1 : to;
+                final int index = to > from ? to - 1 : to;
                 if (index != from) {
                     move.move(from, index);
                 }
@@ -67,9 +67,9 @@ public final class MovableTabs extends JTabbedPane {
     }
 
     @Override
-    protected void processMouseMotionEvent(MouseEvent e) {
+    protected void processMouseMotionEvent(final MouseEvent e) {
         if (e.getID() == MouseEvent.MOUSE_DRAGGED && pressed >= 0 && (gap >= 0 || e.getPoint().distance(pressedAt) >= DRAG_SLOP)) {
-            int next = gapAt(e.getX());
+            final int next = gapAt(e.getX());
             if (next != gap) {
                 gap = next;
                 setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
@@ -91,10 +91,10 @@ public final class MovableTabs extends JTabbedPane {
     }
 
     /** The gap nearest {@code x}: before the tab whose left half holds it, after the last tab right of them all. */
-    private int gapAt(int x) {
-        int n = getTabCount();
+    private int gapAt(final int x) {
+        final int n = getTabCount();
         for (int i = 0; i < n; i++) {
-            Rectangle r = getBoundsAt(i);
+            final Rectangle r = getBoundsAt(i);
             if (r != null && x < r.x + r.width / 2) {
                 return i;
             }
@@ -104,17 +104,17 @@ public final class MovableTabs extends JTabbedPane {
 
     /** The drop line over the tabs, which a scrolling tab row paints in a child of the pane. */
     @Override
-    public void paint(Graphics g) {
+    public void paint(final Graphics g) {
         super.paint(g);
-        int n = getTabCount();
+        final int n = getTabCount();
         if (gap < 0 || n == 0) {
             return;
         }
-        Rectangle r = getBoundsAt(Math.min(gap, n - 1));
+        final Rectangle r = getBoundsAt(Math.min(gap, n - 1));
         if (r == null) {
             return;
         }
-        int x = gap < n ? r.x : r.x + r.width;
+        final int x = gap < n ? r.x : r.x + r.width;
         g.setColor(Theme.tint().body);
         g.fillRect(Math.max(0, x - 1), r.y, 2, r.height);
     }

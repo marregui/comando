@@ -1,8 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
@@ -16,6 +13,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

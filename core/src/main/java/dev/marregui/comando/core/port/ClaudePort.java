@@ -9,7 +9,7 @@ public interface ClaudePort {
 
     void stop(String name);
 
-    default void send(String name, String text, String origin) {
+    default void send(final String name, final String text, final String origin) {
         send(name, text, origin, "");
     }
 

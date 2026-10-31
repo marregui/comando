@@ -1,11 +1,12 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
+import java.util.List;
+import javax.swing.text.BadLocationException;
+
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
-import javax.swing.text.BadLocationException;
-import java.util.List;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /** A unified diff of two texts with added and removed lines highlighted. */
 public final class DiffPane {
@@ -26,10 +27,10 @@ public final class DiffPane {
     }
 
     /** Shows the diff of {@code before} and {@code after}, or "(no changes)" when they are equal. */
-    public void show(String path, String before, String after) {
-        List<String> lines = Diffs.unified(path, before, after);
-        StringBuilder text = new StringBuilder();
-        for (String l : lines) {
+    public void show(final String path, final String before, final String after) {
+        final List<String> lines = Diffs.unified(path, before, after);
+        final StringBuilder text = new StringBuilder();
+        for (final String l : lines) {
             text.append(l).append('\n');
         }
         if (lines.isEmpty()) {
@@ -38,14 +39,14 @@ public final class DiffPane {
         area.setText(text.toString());
         area.removeAllLineHighlights();
         for (int i = 0; i < lines.size(); i++) {
-            String l = lines.get(i);
+            final String l = lines.get(i);
             try {
                 if (Diffs.isAdded(i, l)) {
                     area.addLineHighlight(i, Theme.content().added);
                 } else if (Diffs.isRemoved(i, l)) {
                     area.addLineHighlight(i, Theme.content().removed);
                 }
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 throw new IllegalStateException(e);
             }
         }

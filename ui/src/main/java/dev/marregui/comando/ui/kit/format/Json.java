@@ -13,19 +13,19 @@ public final class Json {
     }
 
     /** The tree of {@code json}, or an empty object when it is not JSON. */
-    public static JsonNode parse(String json) {
+    public static JsonNode parse(final String json) {
         try {
             return MAPPER.readTree(json);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return MAPPER.createObjectNode();
         }
     }
 
     /** {@code node} indented, one field per line. */
-    public static String pretty(JsonNode node) {
+    public static String pretty(final JsonNode node) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(node);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return node.toString();
         }
     }

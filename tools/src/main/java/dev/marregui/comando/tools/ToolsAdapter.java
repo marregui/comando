@@ -1,21 +1,5 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.console.Console;
-import dev.marregui.comando.core.console.ConsoleRegistry;
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.Errands;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.AtomicFiles;
-import dev.marregui.comando.core.model.ChangeAsk;
-import dev.marregui.comando.core.model.ChangeTexts;
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.RepoStatus;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.port.ToolPort;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.loop.ExecutorStop;
-import dev.marregui.comando.core.view.ViewSpec;
-
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -42,6 +26,22 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+
+import dev.marregui.comando.core.console.Console;
+import dev.marregui.comando.core.console.ConsoleRegistry;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.ToolPort;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * The tools port: Gradle runs, the Files tab's folders and their git repositories, and moves to the Trash. Nothing
@@ -91,16 +91,16 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /** How long a quit waits for the repository writes asked for: one git run's own bound. */
     static final Duration REPO_WRITES_DRAIN = Duration.ofMillis(Git.TIMEOUT_MILLIS);
 
-    public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings) {
+    public ToolsAdapter(final IntentSink sink, final ConsoleRegistry consoles, final Supplier<ToolSettings> settings) {
         this(sink, consoles, settings, Trash.NONE);
     }
 
-    public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings, Trash trash) {
+    public ToolsAdapter(final IntentSink sink, final ConsoleRegistry consoles, final Supplier<ToolSettings> settings, final Trash trash) {
         this(sink, consoles, settings, trash, new Git());
     }
 
     /** With the git it runs; tests name one that is missing. */
-    ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings, Trash trash, Git git) {
+    ToolsAdapter(final IntentSink sink, final ConsoleRegistry consoles, final Supplier<ToolSettings> settings, final Trash trash, final Git git) {
         this.sink = sink;
         this.consoles = consoles;
         this.settings = settings;
@@ -109,21 +109,21 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     @Override
-    public void runGradle(long runId, String workDir, String tasks) {
+    public void runGradle(final long runId, final String workDir, final String tasks) {
         active.add(runId);
-        Runnable runIt = () -> guarded(runId, () -> {
-            Console out = consoles.of(runId);
-            ToolSettings tools = settings.get();
-            Optional<Path> root = GradleBuild.root(Path.of(workDir));
+        final Runnable runIt = () -> guarded(runId, () -> {
+            final Console out = consoles.of(runId);
+            final ToolSettings tools = settings.get();
+            final Optional<Path> root = GradleBuild.root(Path.of(workDir));
             if (root.isEmpty()) {
                 out.append("No gradlew at or above " + workDir + "\n");
                 ended(runId);
                 sink.dispatch(new Intent.CommandFinished(runId, 2, 0L, false, ViewSpec.TreeNode.NONE, Map.of()));
                 return;
             }
-            long start = System.currentTimeMillis();
-            int exit = run(runId, GradleBuild.command(root.get(), tasks, tools.gradleSerial()), root.get(), out, tools);
-            TestReports reports = exit == Integer.MIN_VALUE ? TestReports.NONE : TestReports.collect(root.get(), start);
+            final long start = System.currentTimeMillis();
+            final int exit = run(runId, GradleBuild.command(root.get(), tasks, tools.gradleSerial()), root.get(), out, tools);
+            final TestReports reports = exit == Integer.MIN_VALUE ? TestReports.NONE : TestReports.collect(root.get(), start);
             finish(runId, exit, start, reports);
         });
         if (errands.start("gradle-" + runId, runIt) == null) {
@@ -133,10 +133,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /** Runs a run's body so that it always ends with {@link Intent.CommandFinished}, even when the body fails. */
-    private void guarded(long runId, Runnable body) {
+    private void guarded(final long runId, final Runnable body) {
         try {
             body.run();
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "tool run failed [run=" + runId + ']', e);
             consoles.of(runId).append("\n" + e.getMessage() + "\n");
             cancelled.remove(runId);
@@ -151,9 +151,9 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * being stopped, or re-parented) can hold the output pipe open; the run then stops waiting for output
      * {@link #DRAIN_MILLIS} after the process exits, instead of waiting for that child.
      */
-    private int run(long runId, List<String> cmd, Path dir, Console out, ToolSettings tools) {
+    private int run(final long runId, final List<String> cmd, final Path dir, final Console out, final ToolSettings tools) {
         out.append("$ " + String.join(" ", cmd) + "\n");
-        ProcessBuilder pb = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true);
+        final ProcessBuilder pb = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true);
         pb.environment().putIfAbsent("JAVA_HOME", tools.javaHome());
         if (closed) {
             out.append("Not started: comando is closing\n");
@@ -162,7 +162,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         Process p;
         try {
             p = pb.start();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             out.append("Cannot start: " + e.getMessage() + "\n");
             return Integer.MIN_VALUE;
         }
@@ -170,21 +170,21 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         if (cancelled.contains(runId) || closed) {
             cancelRun(runId); // the stop, or comando's close, came while the process was starting
         }
-        Output output = new Output(out);
-        Thread reader = Threads.fork("tool-output-" + runId, () -> output.copy(p));
+        final Output output = new Output(out);
+        final Thread reader = Threads.fork("tool-output-" + runId, () -> output.copy(p));
         try {
             p.getOutputStream().close();
-            int exit = p.waitFor();
+            final int exit = p.waitFor();
             if (!reader.join(Duration.ofMillis(DRAIN_MILLIS))) {
                 output.close("\nA child process still holds the output open; stopped reading it.\n");
             } else {
                 output.close(null);
             }
             return exit;
-        } catch (IOException e) {
+        } catch (final IOException e) {
             output.close("\nOutput ended: " + e.getMessage() + "\n");
             return waitQuietly(p);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             terminate(p, true);
             output.close(null);
@@ -202,13 +202,13 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         private final Console out;
         private boolean open = true; // guarded by this
 
-        Output(Console out) {
+        Output(final Console out) {
             this.out = out;
         }
 
-        void copy(Process p) {
+        void copy(final Process p) {
             try (Reader r = new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)) {
-                char[] buf = new char[8192];
+                final char[] buf = new char[8192];
                 for (int n; (n = r.read(buf)) >= 0; ) {
                     synchronized (this) {
                         if (!open) {
@@ -217,7 +217,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                         out.append(new String(buf, 0, n));
                     }
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 synchronized (this) {
                     if (open) {
                         out.append("\nOutput ended: " + e.getMessage() + "\n");
@@ -226,7 +226,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             }
         }
 
-        synchronized void close(String last) {
+        synchronized void close(final String last) {
             if (open && last != null) {
                 out.append(last);
             }
@@ -234,26 +234,26 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }
     }
 
-    private static int waitQuietly(Process p) {
+    private static int waitQuietly(final Process p) {
         try {
             return p.waitFor();
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return -1;
         }
     }
 
-    private void finish(long runId, int exit, long start, TestReports reports) {
-        boolean wasCancelled = cancelled.remove(runId);
-        long millis = System.currentTimeMillis() - start;
-        Console console = consoles.of(runId);
+    private void finish(final long runId, final int exit, final long start, final TestReports reports) {
+        final boolean wasCancelled = cancelled.remove(runId);
+        final long millis = System.currentTimeMillis() - start;
+        final Console console = consoles.of(runId);
         console.seal();
         console.append(wasCancelled ? "\nStopped.\n" : "\nExit code " + exit + " after " + millis / 1000.0 + " s\n");
         ended(runId);
         sink.dispatch(new Intent.CommandFinished(runId, exit, millis, wasCancelled, reports.tree(), reports.failures()));
     }
 
-    private void ended(long runId) {
+    private void ended(final long runId) {
         active.remove(runId);
         if (forgotten.remove(runId)) {
             consoles.forget(runId);
@@ -261,17 +261,17 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     @Override
-    public void cancelRun(long runId) {
+    public void cancelRun(final long runId) {
         cancelled.add(runId); // also before the process exists: the run stops it as soon as it starts
-        Process p = running.get(runId);
+        final Process p = running.get(runId);
         if (p == null) {
             return;
         }
-        List<ProcessHandle> tree = terminate(p, false);
+        final List<ProcessHandle> tree = terminate(p, false);
         errands.start("tool-kill-" + runId, () -> {
             try {
                 Thread.sleep(KILL_AFTER_MILLIS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             forceRemaining(p, tree);
@@ -282,10 +282,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * Sends SIGTERM (or SIGKILL with {@code force}) to the process and its descendants; returns the
      * descendants it found, so a later pass can reach those the process's exit re-parented.
      */
-    private static List<ProcessHandle> terminate(Process p, boolean force) {
+    private static List<ProcessHandle> terminate(final Process p, final boolean force) {
         // only while it lives: the JDK finds descendants by pid, and an ended process's pid may be another's
         final List<ProcessHandle> tree = p.isAlive() ? p.toHandle().descendants().toList() : List.of();
-        for (ProcessHandle h : tree) {
+        for (final ProcessHandle h : tree) {
             if (force) {
                 h.destroyForcibly();
             } else {
@@ -303,8 +303,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /**
      * SIGKILL to whatever of the run's process tree is still alive: a child that ignores SIGTERM, or one forked late.
      */
-    private static void forceRemaining(Process p, List<ProcessHandle> tree) {
-        for (ProcessHandle h : tree) {
+    private static void forceRemaining(final Process p, final List<ProcessHandle> tree) {
+        for (final ProcessHandle h : tree) {
             if (h.isAlive()) {
                 h.destroyForcibly();
             }
@@ -315,7 +315,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     @Override
-    public void forgetRun(long runId) {
+    public void forgetRun(final long runId) {
         forgotten.add(runId);
         if (!active.contains(runId)) {
             forgotten.remove(runId);
@@ -343,21 +343,21 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     /** Reads {@code folders} now, off the caller's thread, and sends each tree even when it did not change. */
     @Override
-    public void readFolders(List<FolderRoot> folders) {
-        List<FolderRoot> copy = List.copyOf(folders);
+    public void readFolders(final List<FolderRoot> folders) {
+        final List<FolderRoot> copy = List.copyOf(folders);
         errands.start("folder-read", () -> copy.forEach(f -> readFolder(f, true)));
     }
 
     /** From now on the poll reads {@code folders} only; a folder newly watched is read at once. */
     @Override
-    public void watchFolders(List<FolderRoot> folders) {
-        List<FolderRoot> before = watchedFolders;
+    public void watchFolders(final List<FolderRoot> folders) {
+        final List<FolderRoot> before = watchedFolders;
         watchedFolders = List.copyOf(folders);
         synchronized (sentFolders) {
             // a folder no longer watched sends at its next read whatever it holds: what was sent of it is not needed
             sentFolders.keySet().retainAll(watchedFolders);
         }
-        List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
+        final List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
         if (!added.isEmpty()) {
             // the repositories first: the new folders' trees leave out what git ignores and come with their colours
             errands.start("folder-read", () -> {
@@ -372,12 +372,12 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * watched folder, and sends what changed: a tree when an entry was added, removed, renamed or resized. Folders that
      * are not open cost nothing.
      */
-    public void pollFolders(Duration every) {
+    public void pollFolders(final Duration every) {
         folderPoll.scheduleWithFixedDelay(() -> {
             try {
                 readRepos(false, polls++ % COLD_POLLS == 0);
                 watchedFolders.forEach(f -> readFolder(f, false));
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 // a task that throws is never run again: log and keep polling
                 LOG.log(System.Logger.Level.WARNING, "cannot poll the folders [folders=" + watchedFolders.size() + ']', e);
             }
@@ -390,8 +390,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * read takes a ticket first: when a newer read of the same folder has already sent, this one sends nothing; nor
      * does a poll's read of a folder closed or edited since the poll began.
      */
-    private void readFolder(FolderRoot folder, boolean force) {
-        long ticket = readTickets.incrementAndGet();
+    private void readFolder(final FolderRoot folder, final boolean force) {
+        final long ticket = readTickets.incrementAndGet();
         ViewSpec.TreeNode tree;
         try {
             tree = FolderTree.tree(folder, Files::list, ignoredIn(folder));
@@ -399,7 +399,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             tree = FolderTree.unreadable(folder, e);
         }
         synchronized (sentFolders) {
-            Sent before = sentFolders.get(folder);
+            final Sent before = sentFolders.get(folder);
             if (before != null && before.ticket() > ticket) {
                 return;
             }
@@ -452,7 +452,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * once.
      */
     @Override
-    public void watchRepos(List<FolderRoot> folders, boolean changesShown) {
+    public void watchRepos(final List<FolderRoot> folders, final boolean changesShown) {
         repoFolders = List.copyOf(folders);
         this.changesShown = changesShown;
         errands.start("repo-read", () -> readRepos(true, true));
@@ -463,30 +463,30 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * when {@code force}. Those of the watched folders, and every one while the Changes view is open, are read now; the
      * others when {@code all}, or when never read, else they keep their last read.
      */
-    private void readRepos(boolean force, boolean all) {
+    private void readRepos(final boolean force, final boolean all) {
         repoReading.lock();
         try {
             if (closed) {
                 return;
             }
             // the folders as they are now, under the lock: a read that waited never sends a set older than one sent
-            List<Path> roots = new ArrayList<>();
-            Set<FolderRoot> folders = new LinkedHashSet<>(repoFolders);
+            final List<Path> roots = new ArrayList<>();
+            final Set<FolderRoot> folders = new LinkedHashSet<>(repoFolders);
             folders.addAll(watchedFolders);
-            for (FolderRoot f : folders) {
-                for (Path r : Git.repos(Path.of(f.path()))) {
+            for (final FolderRoot f : folders) {
+                for (final Path r : Git.repos(Path.of(f.path()))) {
                     if (!roots.contains(r)) {
                         roots.add(r);
                     }
                 }
             }
-            Set<Path> hot = new HashSet<>();
-            for (FolderRoot f : changesShown ? folders : new LinkedHashSet<>(watchedFolders)) {
+            final Set<Path> hot = new HashSet<>();
+            for (final FolderRoot f : changesShown ? folders : new LinkedHashSet<>(watchedFolders)) {
                 hot.addAll(Git.repos(Path.of(f.path())));
             }
             repoReads.keySet().retainAll(roots);
-            List<RepoStatus> statuses = new ArrayList<>(roots.size());
-            for (Path r : roots) {
+            final List<RepoStatus> statuses = new ArrayList<>(roots.size());
+            for (final Path r : roots) {
                 RepoRead read = repoReads.get(r);
                 if (read == null || all || hot.contains(r)) {
                     read = new RepoRead(git.status(r), System.currentTimeMillis());
@@ -509,16 +509,16 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * the last {@link #REPO_FRESH_MILLIS}, else from one made now. A folder git ignores as a whole (one inside a build
      * folder, say) leaves nothing out: the user asked for it.
      */
-    private Predicate<Path> ignoredIn(FolderRoot folder) {
-        Path top = Path.of(folder.path()).toAbsolutePath().normalize();
-        List<Path> roots = Git.repos(top);
+    private Predicate<Path> ignoredIn(final FolderRoot folder) {
+        final Path top = Path.of(folder.path()).toAbsolutePath().normalize();
+        final List<Path> roots = Git.repos(top);
         if (roots.isEmpty()) {
             return p -> false;
         }
-        Set<Path> ignored = new HashSet<>();
+        final Set<Path> ignored = new HashSet<>();
         repoReading.lock();
         try {
-            for (Path r : roots) {
+            for (final Path r : roots) {
                 RepoRead read = repoReads.get(r);
                 if (read == null || System.currentTimeMillis() - read.at() > REPO_FRESH_MILLIS) {
                     if (closed) {
@@ -549,22 +549,22 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     /** Reads {@code change}'s two versions off the caller's thread and sends them. */
     @Override
-    public void readChange(String root, RepoStatus.FileChange change, ChangeAsk ask) {
+    public void readChange(final String root, final RepoStatus.FileChange change, final ChangeAsk ask) {
         if (closed) {
             return;
         }
         try {
             changeReads.execute(() -> readChange(Path.of(root), change, ask));
-        } catch (RejectedExecutionException e) {
+        } catch (final RejectedExecutionException e) {
             // closing: nothing is shown any more
         }
     }
 
-    private void readChange(Path root, RepoStatus.FileChange change, ChangeAsk ask) {
+    private void readChange(final Path root, final RepoStatus.FileChange change, final ChangeAsk ask) {
         ChangeTexts texts;
         try {
             texts = git.texts(root, change);
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read a change [path=" + change.path() + ']', e);
             texts = ChangeTexts.noted(root.toString(), change, "cannot be read: " + e.getMessage());
         }
@@ -579,29 +579,29 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             Threads.strand("repo-write");
 
     @Override
-    public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+    public void rollBack(final String root, final List<RepoStatus.FileChange> changes) {
         onRepository(() -> sink.dispatch(rollBack(Path.of(root).toAbsolutePath().normalize(), changes)));
     }
 
     @Override
-    public void removeFiles(String root, List<String> paths) {
+    public void removeFiles(final String root, final List<String> paths) {
         onRepository(() -> sink.dispatch(remove(Path.of(root).toAbsolutePath().normalize(), paths)));
     }
 
     @Override
-    public void unstage(String root, List<String> paths) {
+    public void unstage(final String root, final List<String> paths) {
         onRepository(() -> {
-            List<String> args = new ArrayList<>(List.of("restore", "--staged", "--"));
+            final List<String> args = new ArrayList<>(List.of("restore", "--staged", "--"));
             args.addAll(paths);
             try {
                 git(Path.of(root), args);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot unstage " + String.join(", ", paths) + ": " + e.getMessage(), e));
             }
         });
     }
 
-    private void onRepository(Runnable work) {
+    private void onRepository(final Runnable work) {
         if (closed) {
             return;
         }
@@ -609,13 +609,13 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             repoWrites.execute(() -> {
                 try {
                     work.run();
-                } catch (RuntimeException e) {
+                } catch (final RuntimeException e) {
                     sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Git failed: " + e.getMessage(), e));
                 } finally {
                     readRepos(true, true);
                 }
             });
-        } catch (RejectedExecutionException e) {
+        } catch (final RejectedExecutionException e) {
             // closing: nothing more is changed
         }
     }
@@ -625,20 +625,20 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * happens to a file whose version cannot go there; a file {@code HEAD} does not have goes to the Trash and out of
      * the index; a renamed file's old path comes back. Answers the notice saying what came of it.
      */
-    Intent.Notify rollBack(Path root, List<RepoStatus.FileChange> changes) {
-        List<String> failed = new ArrayList<>();
+    Intent.Notify rollBack(final Path root, final List<RepoStatus.FileChange> changes) {
+        final List<String> failed = new ArrayList<>();
         int done = 0;
         int trashed = 0;
         String last = "";
-        for (RepoStatus.FileChange c : changes) {
-            Path file = inside(root, c.path());
-            String name = Path.of(c.path()).getFileName().toString();
+        for (final RepoStatus.FileChange c : changes) {
+            final Path file = inside(root, c.path());
+            final String name = Path.of(c.path()).getFileName().toString();
             if (file == null) {
                 failed.add(c.path() + ": not in the repository");
                 continue;
             }
             try {
-                boolean there = Files.exists(file, LinkOption.NOFOLLOW_LINKS);
+                final boolean there = Files.exists(file, LinkOption.NOFOLLOW_LINKS);
                 switch (c.kind()) {
                     case UNTRACKED -> toTrash(file);
                     case ADDED, COPIED -> {
@@ -664,11 +664,11 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 trashed += there ? 1 : 0;
                 done++;
                 last = name;
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 failed.add(name + ": " + e.getMessage());
             }
         }
-        StringBuilder text = new StringBuilder(done == 0 ? "Nothing rolled back"
+        final StringBuilder text = new StringBuilder(done == 0 ? "Nothing rolled back"
                 : "Rolled back " + (done == 1 ? last : done + " files") + " to HEAD");
         if (trashed > 0) {
             text.append(trashed == 1 ? "; the version you had is in the Trash" : "; the versions you had are in the Trash");
@@ -678,13 +678,13 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /** Moves each file to the Trash; one {@code HEAD} does not have also leaves the index. Answers what came of it. */
-    Intent.Notify remove(Path root, List<String> paths) {
-        List<String> failed = new ArrayList<>();
+    Intent.Notify remove(final Path root, final List<String> paths) {
+        final List<String> failed = new ArrayList<>();
         int done = 0;
         String last = "";
-        for (String p : paths) {
-            Path file = inside(root, p);
-            String name = Path.of(p).getFileName().toString();
+        for (final String p : paths) {
+            final Path file = inside(root, p);
+            final String name = Path.of(p).getFileName().toString();
             if (file == null || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 failed.add(name + (file == null ? ": not in the repository" : ": no such file"));
                 continue;
@@ -696,32 +696,32 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 }
                 done++;
                 last = name;
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 failed.add(name + ": " + e.getMessage());
             }
         }
-        StringBuilder text = new StringBuilder(done == 0 ? "Nothing moved to the Trash"
+        final StringBuilder text = new StringBuilder(done == 0 ? "Nothing moved to the Trash"
                 : "Moved " + (done == 1 ? last : done + " files") + " to the Trash");
         failed.forEach(f -> text.append("; ").append(f));
         return new Intent.Notify(failed.isEmpty() ? Notice.Level.INFO : Notice.Level.WARN, text.toString(), false);
     }
 
     /** {@code relative} under {@code root}, or null when it is the root itself or leaves it. */
-    private static Path inside(Path root, String relative) {
-        Path p = root.resolve(relative).normalize();
+    private static Path inside(final Path root, final String relative) {
+        final Path p = root.resolve(relative).normalize();
         return p.startsWith(root) && !p.equals(root) ? p : null;
     }
 
     /** Moves {@code file} to the Trash; throws, leaving it in place, when the desktop has none. */
-    private void toTrash(Path file) throws IOException {
+    private void toTrash(final Path file) throws IOException {
         if (!trash.moveToTrash(file)) {
             throw new IOException("this desktop has no Trash; left as it is");
         }
     }
 
     /** Runs git in {@code root}; throws with git's own words when it fails or takes too long. */
-    private void git(Path root, List<String> args) throws IOException {
-        Git.Run r = git.run(root, args);
+    private void git(final Path root, final List<String> args) throws IOException {
+        final Git.Run r = git.run(root, args);
         if (r.exit() != 0) {
             throw new IOException(r.exit() < 0 ? "git took too long" : r.err().isBlank() ? "git exited with " + r.exit() : r.err().strip());
         }
@@ -733,17 +733,17 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * good: without a Trash nothing moves. An entry inside another one asked for goes with it.
      */
     @Override
-    public void deleteFiles(FolderRoot folder, List<String> paths) {
-        Path root = Path.of(folder.path()).toAbsolutePath().normalize();
-        List<Path> asked = paths.stream().map(p -> Path.of(p).toAbsolutePath().normalize()).distinct().toList();
+    public void deleteFiles(final FolderRoot folder, final List<String> paths) {
+        final Path root = Path.of(folder.path()).toAbsolutePath().normalize();
+        final List<Path> asked = paths.stream().map(p -> Path.of(p).toAbsolutePath().normalize()).distinct().toList();
         // only an entry that goes itself takes the ones inside it along: the folder, refused, takes nothing
-        List<Path> items = asked.stream().filter(p -> asked.stream()
+        final List<Path> items = asked.stream().filter(p -> asked.stream()
                 .noneMatch(o -> !o.equals(p) && p.startsWith(o) && o.startsWith(root) && !o.equals(root))).toList();
         errands.start("file-trash", () -> {
             trashing.lock();
             try {
                 sink.dispatch(trash(folder, items));
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot move to the Trash [root=" + root + ", items=" + items.size() + ']', e);
                 sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot move to the Trash: " + e, false));
             } finally {
@@ -755,20 +755,20 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /** Moves {@code items}, then edits their listing files; answers the notice that says what came of it. */
-    private Intent.Notify trash(FolderRoot folder, List<Path> items) {
-        Path root = Path.of(folder.path()).toAbsolutePath().normalize();
-        List<String> failed = new ArrayList<>();
+    private Intent.Notify trash(final FolderRoot folder, final List<Path> items) {
+        final Path root = Path.of(folder.path()).toAbsolutePath().normalize();
+        final List<String> failed = new ArrayList<>();
         // each listing file with the entries it loses, relative to its folder, a folder's with a trailing slash
-        Map<Path, List<String>> listed = new LinkedHashMap<>();
+        final Map<Path, List<String>> listed = new LinkedHashMap<>();
         // each entry's listing, found before anything moves: a listing that goes in the same batch is not replaced by
         // one above it
-        Map<Path, Optional<Path>> listings = new HashMap<>();
+        final Map<Path, Optional<Path>> listings = new HashMap<>();
         items.forEach(item -> listings.put(item, listing(folder, root, item)));
         int moved = 0;
         String last = "";
         for (int at = 0; at < items.size(); at++) {
-            Path item = items.get(at);
-            String name = item.getFileName() == null ? item.toString() : item.getFileName().toString();
+            final Path item = items.get(at);
+            final String name = item.getFileName() == null ? item.toString() : item.getFileName().toString();
             if (!folder.deletable() || !item.startsWith(root) || item.equals(root)) {
                 failed.add(name + ": not an entry of folder " + folder.name() + " that goes to the Trash");
                 continue;
@@ -777,10 +777,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 failed.add(name + ": no such file or folder");
                 continue;
             }
-            boolean dir = Files.isDirectory(item, LinkOption.NOFOLLOW_LINKS);
+            final boolean dir = Files.isDirectory(item, LinkOption.NOFOLLOW_LINKS);
             try {
                 if (!trash.moveToTrash(item)) {
-                    int left = items.size() - at - 1;
+                    final int left = items.size() - at - 1;
                     failed.add(name + ": this desktop has no Trash" + (left == 0 ? "" : "; " + left + " more left in place"));
                     break;
                 }
@@ -794,17 +794,17 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             listings.get(item).ifPresent(l -> listed.computeIfAbsent(l, k -> new ArrayList<>())
                     .add(l.getParent().relativize(item).toString().replace('\\', '/') + (dir ? "/" : "")));
         }
-        StringBuilder text = new StringBuilder(moved == 0 ? "Nothing moved to the Trash"
+        final StringBuilder text = new StringBuilder(moved == 0 ? "Nothing moved to the Trash"
                 : "Moved " + (moved == 1 ? last : moved + " entries") + " to the Trash");
-        List<String> unlisted = new ArrayList<>();
-        for (Map.Entry<Path, List<String>> e : listed.entrySet()) {
-            String where = root.relativize(e.getKey()).toString();
+        final List<String> unlisted = new ArrayList<>();
+        for (final Map.Entry<Path, List<String>> e : listed.entrySet()) {
+            final String where = root.relativize(e.getKey()).toString();
             if (!Files.isRegularFile(e.getKey(), LinkOption.NOFOLLOW_LINKS)) {
                 // the listing file went to the Trash too, after the entry it lists
                 continue;
             }
             try {
-                ListingLines.Result r = ListingLines.without(Files.readString(e.getKey(), StandardCharsets.UTF_8), e.getValue());
+                final ListingLines.Result r = ListingLines.without(Files.readString(e.getKey(), StandardCharsets.UTF_8), e.getValue());
                 if (r.removed() > 0) {
                     AtomicFiles.writeString(e.getKey(), r.text());
                     text.append("; ").append(r.removed()).append(r.removed() == 1 ? " line" : " lines").append(" out of ").append(where);
@@ -829,12 +829,12 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * The listing file nearest {@code item}: in its folder or one above it, up to the configured folder; empty when
      * none.
      */
-    private static Optional<Path> listing(FolderRoot folder, Path root, Path item) {
+    private static Optional<Path> listing(final FolderRoot folder, final Path root, final Path item) {
         if (folder.listedIn().isEmpty()) {
             return Optional.empty();
         }
         for (Path dir = item.getParent(); dir != null && dir.startsWith(root); dir = dir.getParent()) {
-            Path candidate = dir.resolve(folder.listedIn());
+            final Path candidate = dir.resolve(folder.listedIn());
             if (Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
                 return Optional.of(candidate);
             }
@@ -854,15 +854,15 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         // a git killed while it writes the index leaves index.lock behind, and the user's next git command fails
         ExecutorStop.drain("tools", REPO_WRITES_DRAIN, repoWrites);
         git.close();
-        Map<Process, List<ProcessHandle>> trees = new HashMap<>();
-        for (Process p : List.copyOf(running.values())) {
+        final Map<Process, List<ProcessHandle>> trees = new HashMap<>();
+        for (final Process p : List.copyOf(running.values())) {
             trees.put(p, terminate(p, false));
         }
-        long deadline = System.nanoTime() + KILL_AFTER_MILLIS * 1_000_000L;
-        for (Map.Entry<Process, List<ProcessHandle>> e : trees.entrySet()) {
+        final long deadline = System.nanoTime() + KILL_AFTER_MILLIS * 1_000_000L;
+        for (final Map.Entry<Process, List<ProcessHandle>> e : trees.entrySet()) {
             try {
                 e.getKey().waitFor(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
-            } catch (InterruptedException ex) {
+            } catch (final InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
             forceRemaining(e.getKey(), e.getValue());

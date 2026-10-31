@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.format.KeyText;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+
+import dev.marregui.comando.ui.kit.format.KeyText;
 
 /** Help ▸ Markdown sheet: what a panel's Markdown may hold and what its preview shows, beside the work. */
 final class MarkdownSheet {
@@ -20,7 +20,7 @@ final class MarkdownSheet {
                 throw new IllegalStateException("markdown-sheet.md is missing from the build");
             }
             return KeyText.of(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException("cannot read the Markdown sheet", e);
         }
     }

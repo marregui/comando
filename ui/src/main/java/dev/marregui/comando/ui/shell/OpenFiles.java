@@ -15,20 +15,20 @@ final class OpenFiles {
     }
 
     /** At most {@link #MAX_PANEL_BYTES} and without a NUL byte in its first 8 kB; called off the EDT. */
-    static boolean isText(Path file) {
+    static boolean isText(final Path file) {
         try {
             if (Files.size(file) > MAX_PANEL_BYTES) {
                 return false;
             }
             try (InputStream in = Files.newInputStream(file)) {
-                for (byte b : in.readNBytes(8192)) {
+                for (final byte b : in.readNBytes(8192)) {
                     if (b == 0) {
                         return false;
                     }
                 }
             }
             return true;
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return true; // the panel's own read says why it cannot open
         }
     }

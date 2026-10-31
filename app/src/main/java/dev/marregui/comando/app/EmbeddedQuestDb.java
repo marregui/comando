@@ -1,16 +1,5 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.Errands;
-import dev.marregui.comando.core.model.AtomicFiles;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.port.ServerSwitch;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.ui.shell.ServerToggle;
-import io.questdb.Bootstrap;
-import io.questdb.DefaultBootstrapConfiguration;
-import io.questdb.ServerMain;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -24,6 +13,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
+
+import io.questdb.Bootstrap;
+import io.questdb.DefaultBootstrapConfiguration;
+import io.questdb.ServerMain;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.ServerSwitch;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.ui.shell.ServerToggle;
 
 /**
  * A QuestDB server comando starts in its data root, on QuestDB's default ports (PG wire 8812, web console 9000,
@@ -76,11 +77,11 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
     /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
     private final AtomicBoolean busy = new AtomicBoolean();
 
-    EmbeddedQuestDb(Path root, IntentSink intents) {
+    EmbeddedQuestDb(final Path root, final IntentSink intents) {
         this(root, intents, LOOPBACK);
     }
 
-    EmbeddedQuestDb(Path root, IntentSink intents, Map<String, String> overrides) {
+    EmbeddedQuestDb(final Path root, final IntentSink intents, final Map<String, String> overrides) {
         this.root = root;
         this.intents = intents;
         this.overrides = Map.copyOf(overrides);
@@ -124,14 +125,14 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
 
     /** An agent's start or stop (record 121); the start or stop re-checks under the monitor. */
     @Override
-    public String want(boolean up) {
+    public String want(final boolean up) {
         if (up == (server != null)) {
             return up ? "QuestDB is up already: PG wire on 8812, console on http://localhost:9000" : "QuestDB is not running";
         }
         if (!busy.compareAndSet(false, true)) {
             return (server == null ? "QuestDB is starting" : "QuestDB is stopping") + "; try again when that ends";
         }
-        Thread t = errands.start(up ? "questdb-start" : "questdb-stop", () -> {
+        final Thread t = errands.start(up ? "questdb-start" : "questdb-stop", () -> {
             try {
                 flip(up);
             } finally {
@@ -146,7 +147,7 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
     }
 
     /** Starts a stopped server or stops a running one; {@code want}, when given, is the only direction it may go. */
-    private synchronized void flip(Boolean want) {
+    private synchronized void flip(final Boolean want) {
         if (want != null && want == (server != null)) {
             return;
         }
@@ -155,7 +156,7 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
                 server = start();
                 LOG.log(System.Logger.Level.INFO, "QuestDB started [root=" + root + "]");
                 intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: PG wire on 8812, console on http://localhost:9000", false));
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start QuestDB [root=" + root + "]: " + e.getMessage(), e));
             }
         } else {
@@ -170,9 +171,9 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
      */
     @Override
     public Path log() {
-        Path dir = root.resolve("log");
+        final Path dir = root.resolve("log");
         try (Stream<Path> files = Files.list(dir)) {
-            Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("questdb-\\d{8}\\.log"))
+            final Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("questdb-\\d{8}\\.log"))
                     .max(Comparator.comparing(f -> f.getFileName().toString()));
             if (newest.isPresent()) {
                 return newest.get();
@@ -188,12 +189,12 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
      * already: by the {@link #LOG_CONFIG_PROPERTY} property set by anyone but comando, or by a file writer in the
      * root's {@code conf/log.conf}. QuestDB reads it once per process, at its first start.
      */
-    static Optional<Path> logConfig(Path root, String property) throws IOException {
-        Path ours = root.resolve("conf").resolve(LOG_CONFIG_NAME);
+    static Optional<Path> logConfig(final Path root, final String property) throws IOException {
+        final Path ours = root.resolve("conf").resolve(LOG_CONFIG_NAME);
         if (property != null && !property.isBlank() && !Path.of(property).getFileName().toString().equals(LOG_CONFIG_NAME)) {
             return Optional.empty();
         }
-        Path shipped = root.resolve("conf").resolve("log.conf");
+        final Path shipped = root.resolve("conf").resolve("log.conf");
         if (Files.isRegularFile(shipped) && Files.readAllLines(shipped).stream().map(String::strip).anyMatch(l -> l.startsWith("w.file.class="))) {
             return Optional.empty();
         }
@@ -208,12 +209,12 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
             Files.createDirectories(root);
             logConfig(root, System.getProperty(LOG_CONFIG_PROPERTY))
                     .ifPresent(c -> System.setProperty(LOG_CONFIG_PROPERTY, c.toAbsolutePath().toString()));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException("cannot create " + root, e);
         }
-        Map<String, String> env = new HashMap<>(System.getenv());
+        final Map<String, String> env = new HashMap<>(System.getenv());
         env.putAll(overrides);
-        ServerMain s = new ServerMain(new Bootstrap(new DefaultBootstrapConfiguration() {
+        final ServerMain s = new ServerMain(new Bootstrap(new DefaultBootstrapConfiguration() {
             @Override
             public Map<String, String> getEnv() {
                 return env;
@@ -222,7 +223,7 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
         try {
             s.start(false);
             return s;
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             s.close();
             throw e;
         }
@@ -231,7 +232,7 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
     private void stop() {
         try {
             server.close();
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot close QuestDB cleanly", e);
         } finally {
             server = null;

@@ -1,17 +1,17 @@
 package dev.marregui.comando.ui.shell;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
 import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
@@ -102,7 +102,7 @@ final class Menus {
      */
     static Map<String, String> areas() {
         // the themes' swatches, painted, named as their commands are
-        for (NamedTheme t : NamedTheme.values()) {
+        for (final NamedTheme t : NamedTheme.values()) {
             Icons.put(t.commandId(), new GroundIcon(t));
         }
         return areasOf();
@@ -112,13 +112,13 @@ final class Menus {
     }
 
     /** The icon of command {@code id}, or null; a theme's command is named as its swatch is. */
-    static String icon(String id) {
+    static String icon(final String id) {
         return id.startsWith("theme.") ? id : ICONS.get(id);
     }
 
     /** The tooltip of command {@code id}, or null. */
-    static String tip(String id) {
-        for (NamedTheme t : NamedTheme.values()) {
+    static String tip(final String id) {
+        for (final NamedTheme t : NamedTheme.values()) {
             if (t.commandId().equals(id)) {
                 return t.file.map(f -> t.label + ", from " + f.getFileName() + "; kept across restarts")
                         .orElse(t.ground.label + " with " + t.tint.label.toLowerCase(Locale.ROOT) + "; kept across restarts");
@@ -138,8 +138,8 @@ final class Menus {
      * The buttons left of the theme's swatch, each its commands, shown by the first that can run: the shell, the
      * refreshing plots, then the embedded server and the Edge, each only when comando has one.
      */
-    static List<List<String>> corner(boolean server, boolean edge) {
-        List<List<String>> buttons = new ArrayList<>(List.of(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop")));
+    static List<List<String>> corner(final boolean server, final boolean edge) {
+        final List<List<String>> buttons = new ArrayList<>(List.of(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop")));
         if (server) {
             buttons.add(List.of("server.start", "server.stop"));
         }
@@ -150,8 +150,8 @@ final class Menus {
     }
 
     /** The Connections tab's menu: the embedded server's start and stop, then the Edge's, each when comando has one. */
-    static List<String> toggles(boolean server, boolean edge) {
-        List<String> ids = new ArrayList<>();
+    static List<String> toggles(final boolean server, final boolean edge) {
+        final List<String> ids = new ArrayList<>();
         if (server) {
             ids.addAll(List.of("server.start", "server.stop"));
         }
@@ -162,7 +162,7 @@ final class Menus {
     }
 
     private static Map<String, String> areasOf() {
-        Map<String, String> a = new HashMap<>();
+        final Map<String, String> a = new HashMap<>();
         put(a, "Panels", "panel.new", "panel.reopen", "panel.openSpec", "panel.save", "panel.rename", "file.close", "panel.next", "panel.previous",
                 "panel.preview", "focus.editor");
         for (int i = 1; i <= 9; i++) {
@@ -182,14 +182,14 @@ final class Menus {
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");
         put(a, "comando", "app.about", "app.quit");
-        for (NamedTheme t : NamedTheme.values()) {
+        for (final NamedTheme t : NamedTheme.values()) {
             a.put(t.commandId(), "Theme");
         }
         return Map.copyOf(a);
     }
 
-    private static void put(Map<String, String> areas, String area, String... ids) {
-        for (String id : ids) {
+    private static void put(final Map<String, String> areas, final String area, final String... ids) {
+        for (final String id : ids) {
             areas.put(id, area);
         }
     }

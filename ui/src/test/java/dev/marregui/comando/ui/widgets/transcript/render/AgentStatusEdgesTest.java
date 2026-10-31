@@ -1,14 +1,15 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.ui.kit.async.OnEdt;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,8 +35,8 @@ class AgentStatusEdgesTest {
         canvas.clock(now::get);
     }
 
-    private int add(Block b) {
-        int at = next++;
+    private int add(final Block b) {
+        final int at = next++;
         canvas.append(at, b);
         return at;
     }
@@ -44,9 +45,9 @@ class AgentStatusEdgesTest {
     @Test
     void aSubagentLaunchedInTheBackgroundIsNotReportedDoneWhileItWorks() {
         // the Agent call returns at once with an "async launched" result; the sub-agent goes on working
-        Block.ToolCall a = new Block.ToolCall("a1", "Agent",
+        final Block.ToolCall a = new Block.ToolCall("a1", "Agent",
                 "{\"description\":\"survey\",\"prompt\":\"Do it.\",\"run_in_background\":true}", "", Block.ToolStatus.RUNNING, "");
-        int at = add(a);
+        final int at = add(a);
         now.addAndGet(300);
         canvas.update(at, a.withResult("Async agent launched successfully.\nagentId: x1 (internal ID)", false));
 
@@ -71,10 +72,10 @@ class AgentStatusEdgesTest {
                 Block.ToolStatus.RUNNING, ""));
         // "Bash " (5) + 53 characters puts an emoji's high surrogate at index 58, the last one a 60-character clip
         // keeps
-        String command = "x".repeat(53) + "😀" + "y".repeat(20);
+        final String command = "x".repeat(53) + "😀" + "y".repeat(20);
         add(new Block.ToolCall("b1", "Bash", "{\"command\":\"" + command + "\"}", "", Block.ToolStatus.RUNNING, "a1"));
 
-        String last = canvas.lastTool("a1");
+        final String last = canvas.lastTool("a1");
         // a lone surrogate comes back from codePoints() as a code point in the surrogate range
         assertThat(last.codePoints().filter(cp -> cp >= Character.MIN_SURROGATE && cp <= Character.MAX_SURROGATE).count())
                 .as("lone surrogates in " + last).isZero();
@@ -91,8 +92,8 @@ class AgentStatusEdgesTest {
     /// call, and is a running sub-agent by its agent id; once the session drops it, it reads done with its total time.
     @Test
     void aBackgroundSubagentRunsWhileTheSessionListsItAndCountsTheToolsItsBlocksCall() {
-        Block.ToolCall a = backgroundAgent();
-        int at = add(a);
+        final Block.ToolCall a = backgroundAgent();
+        final int at = add(a);
         canvas.update(at, a.withResult(LAUNCHED, false));
         canvas.setBackgroundTasks(List.of(new BackgroundTask("a58", "local_agent", "watch", 0L)));
         // its blocks keep arriving in the stream after its call returned
@@ -113,8 +114,8 @@ class AgentStatusEdgesTest {
     /// listing it, then reads done.
     @Test
     void aLaunchSeenBeforeTheSessionListsItRunsForAGraceThenEnds() {
-        Block.ToolCall a = backgroundAgent();
-        int at = add(a);
+        final Block.ToolCall a = backgroundAgent();
+        final int at = add(a);
         canvas.update(at, a.withResult(LAUNCHED, false));
         assertThat(canvas.cardStatus("a1")).startsWith("running in background");
 
@@ -128,8 +129,8 @@ class AgentStatusEdgesTest {
     void aBackgroundSubagentTheSessionAlreadyLetGoReadsDone() {
         canvas.setBackgroundTasks(List.of(new BackgroundTask("a58", "local_agent", "watch", 0L)));
         canvas.setBackgroundTasks(List.of());
-        Block.ToolCall a = backgroundAgent();
-        int at = add(a);
+        final Block.ToolCall a = backgroundAgent();
+        final int at = add(a);
         canvas.update(at, a.withResult(LAUNCHED, false));
 
         assertThat(canvas.cardStatus("a1")).startsWith("done");

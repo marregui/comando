@@ -1,14 +1,15 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.state.PanelState;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.state.PanelState;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,7 +26,7 @@ class StoreSaveNowTest {
     /// `panels.json` names it.
     @Test
     void saveNowWritesThePanelsBeforeItCompletes() throws Exception {
-        PanelId id = new PanelId("p-1");
+        final PanelId id = new PanelId("p-1");
         try (Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(id, "work", "", "")), List.of());

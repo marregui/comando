@@ -85,14 +85,14 @@ public final class ContentPalette {
     /** A code block's ground: a step above the panels'. */
     public final Color codeGround;
 
-    private ContentPalette(Tint tint, Ground ground) {
-        Color g = ground.color;
-        boolean light = ground.light;
-        double syntaxL = light ? SYNTAX_L_LIGHT : SYNTAX_L;
-        double syntaxC = light ? SYNTAX_C_LIGHT : SYNTAX_C;
-        double[] t = Oklch.lch(tint.body);
-        double turn = t[1] < HUELESS ? 0 : turn(t[2]);
-        double[] hue = new double[CUSTOM.length];
+    private ContentPalette(final Tint tint, final Ground ground) {
+        final Color g = ground.color;
+        final boolean light = ground.light;
+        final double syntaxL = light ? SYNTAX_L_LIGHT : SYNTAX_L;
+        final double syntaxC = light ? SYNTAX_C_LIGHT : SYNTAX_C;
+        final double[] t = Oklch.lch(tint.body);
+        final double turn = t[1] < HUELESS ? 0 : turn(t[2]);
+        final double[] hue = new double[CUSTOM.length];
         for (int i = 0; i < CUSTOM.length; i++) {
             hue[i] = (CUSTOM[i] + turn + 360) % 360;
         }
@@ -102,14 +102,14 @@ public final class ContentPalette {
         keyword = light ? tint.highlight : tint.body;
         // on a light ground the dark end of the gamut holds less chroma, so neighbouring hues alternate a step in
         // lightness to stay apart
-        double step = light ? SYNTAX_STEP_LIGHT : 0;
+        final double step = light ? SYNTAX_STEP_LIGHT : 0;
         annotation = Oklch.of(syntaxL - step, syntaxC, hue[0]);
         number = Oklch.of(syntaxL + step, syntaxC, hue[1]);
         string = Oklch.of(syntaxL - step, syntaxC, hue[2]);
         regex = Oklch.of(syntaxL + step, syntaxC, hue[3]);
         type = Oklch.of(syntaxL - step, syntaxC, hue[4]);
         variable = Oklch.of(syntaxL + step, syntaxC, hue[5]);
-        Color muted = Theme.fixed(Theme.MUTED, light);
+        final Color muted = Theme.fixed(Theme.MUTED, light);
         comment = muted;
         commentTag = Tint.over(muted, tint.body, 0.45f);
         error = Theme.fixed(Theme.DANGER, light);
@@ -128,14 +128,14 @@ public final class ContentPalette {
                 Tint.over(g, Oklch.of(0.6, 0.12, 150), 0.12f),
                 Tint.over(g, Oklch.of(0.6, 0.12, 25), 0.12f)};
 
-        Color green = Oklch.of(0.62, 0.13, 150);
-        Color red = Oklch.of(0.62, 0.13, 25);
+        final Color green = Oklch.of(0.62, 0.13, 150);
+        final Color red = Oklch.of(0.62, 0.13, 25);
         added = Tint.over(g, green, 0.30f);
         removed = Tint.over(g, red, 0.30f);
         addedWord = Tint.over(g, green, 0.48f);
         removedWord = Tint.over(g, red, 0.48f);
 
-        double[] names = {25, 145, 95, 255, 330, 200};
+        final double[] names = {25, 145, 95, 255, 330, 200};
         ansi = new Color[16];
         // black and white at the ends of the ground-to-ink line: black near the ground on a dark one, near the ink on a
         // light one, as a terminal's black is the colour of its ground
@@ -160,7 +160,7 @@ public final class ContentPalette {
     }
 
     /** The palette of {@code tint} on {@code ground}, made once per pair. */
-    public static ContentPalette of(Tint tint, Ground ground) {
+    public static ContentPalette of(final Tint tint, final Ground ground) {
         return CACHE.computeIfAbsent(new Pair(tint, ground), k -> new ContentPalette(tint, ground));
     }
 
@@ -168,18 +168,18 @@ public final class ContentPalette {
      * How far the wheel turns, −30° to 30°, so that {@code tintHue} lies midway between two of its hues: the
      * nearest midpoint of the customary wheel (30°, 90°, … 330°) is moved onto the tint.
      */
-    static double turn(double tintHue) {
-        double off = (((tintHue - 30) % 60) + 60) % 60;
+    static double turn(final double tintHue) {
+        final double off = (((tintHue - 30) % 60) + 60) % 60;
         return off <= 30 ? off : off - 60;
     }
 
     /** The terminal's colour {@code i}, 0 to 15. */
-    public Color ansi(int i) {
+    public Color ansi(final int i) {
         return ansi[i];
     }
 
     /** Plot series {@code i}, any index: the eight repeat. */
-    public Color series(int i) {
+    public Color series(final int i) {
         return series[Math.floorMod(i, series.length)];
     }
 

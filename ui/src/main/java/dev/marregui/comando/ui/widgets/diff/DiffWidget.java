@@ -1,5 +1,8 @@
 package dev.marregui.comando.ui.widgets.diff;
 
+import java.nio.file.Files;
+import javax.swing.JComponent;
+
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.text.DiffPane;
 import dev.marregui.comando.ui.kit.text.TextSearch;
@@ -8,9 +11,6 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widget.capability.Exportable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
-
-import javax.swing.JComponent;
-import java.nio.file.Files;
 
 /** A unified diff of two versions of a text. */
 public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copyable, Exportable {
@@ -28,12 +28,12 @@ public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copy
     }
 
     @Override
-    public void render(ViewSpec.Diff view) {
+    public void render(final ViewSpec.Diff view) {
         pane.show(view.path(), view.before(), view.after());
     }
 
     @Override
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return search.find(text, forward);
     }
 
@@ -49,7 +49,7 @@ public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copy
 
     @Override
     public String copyText() {
-        String s = pane.area().getSelectedText();
+        final String s = pane.area().getSelectedText();
         return s != null ? s : pane.area().getText();
     }
 
@@ -66,7 +66,7 @@ public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copy
 
     @Override
     public Export prepare() {
-        String text = pane.area().getText();
+        final String text = pane.area().getText();
         return file -> Files.writeString(file, text);
     }
 }

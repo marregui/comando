@@ -2,6 +2,7 @@
 // and tests that never touch the user's data root.
 subprojects {
     apply(plugin = "java-library")
+    apply(plugin = "checkstyle")
 
     group = "dev.marregui.comando"
     version = "2.0.0-SNAPSHOT"
@@ -31,6 +32,16 @@ subprojects {
         // every lint as an error (G-10.10), this-escape included (G-9.5); serial excluded, as Swing components are
         // Serializable and comando never serializes one
         options.compilerArgs.addAll(listOf("-Xlint:all,-serial", "-Werror"))
+    }
+
+    // the checks of the Java Coding Standard javac cannot make (G-10.2 final, G-10.8 braces, G-10.11 imports), on
+    // main and test code; any report fails the build
+    extensions.configure<CheckstyleExtension> {
+        toolVersion = libs.findVersion("checkstyle").get().requiredVersion
+        configFile = rootProject.file("config/checkstyle/checkstyle.xml")
+        configProperties = mapOf("projectPackagePattern" to "^dev\\.marregui\\.comando\\.")
+        maxWarnings = 0
+        isIgnoreFailures = false
     }
 
     tasks.withType<Test>().configureEach {

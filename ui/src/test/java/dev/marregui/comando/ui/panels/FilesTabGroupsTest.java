@@ -1,5 +1,23 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.Icon;
+import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.JTree;
+import javax.swing.tree.DefaultMutableTreeNode;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
@@ -9,23 +27,6 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.OnEdt;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.swing.Icon;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
-import javax.swing.JTree;
-import javax.swing.tree.DefaultMutableTreeNode;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Rectangle;
-import java.awt.event.MouseEvent;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,7 +57,7 @@ class FilesTabGroupsTest {
     private final List<String> extras = new ArrayList<>();
 
     private FilesTab tab() {
-        FilesTab tab = new FilesTab(intents::add, p -> { }, p -> { }, (parent, text, title, options) -> 1);
+        final FilesTab tab = new FilesTab(intents::add, p -> { }, p -> { }, (parent, text, title, options) -> 1);
         tab.render(AppState.initial(List.of(new PanelState(new PanelId("p"), "scratch", "", "")), List.of(), List.of(),
                 List.of(SCRATCHPAD, KB, MEMORY, KIT)));
         tab.onFolderMenu((f, menu) -> {
@@ -67,37 +68,37 @@ class FilesTabGroupsTest {
         return tab;
     }
 
-    private static ViewSpec.TreeNode file(String path) {
+    private static ViewSpec.TreeNode file(final String path) {
         return new ViewSpec.TreeNode(Path.of(path).getFileName().toString(), "", "comando-file:" + path + "#0", List.of());
     }
 
-    private static ViewSpec.TreeNode folder(String name, ViewSpec.TreeNode... children) {
+    private static ViewSpec.TreeNode folder(final String name, final ViewSpec.TreeNode... children) {
         return new ViewSpec.TreeNode(name, children.length + " entries", List.of(children));
     }
 
-    private static List<String> rows(JTree tree) {
-        List<String> out = new ArrayList<>();
+    private static List<String> rows(final JTree tree) {
+        final List<String> out = new ArrayList<>();
         for (int i = 0; i < tree.getRowCount(); i++) {
             out.add(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getPathForRow(i).getLastPathComponent()).getUserObject()).label());
         }
         return out;
     }
 
-    private static int row(JTree tree, String label) {
-        int i = rows(tree).indexOf(label);
+    private static int row(final JTree tree, final String label) {
+        final int i = rows(tree).indexOf(label);
         assertThat(i).as("a row " + label).isNotNegative();
         return i;
     }
 
-    private static ViewSpec.TreeNode select(JTree tree, String label) {
-        int i = row(tree, label);
+    private static ViewSpec.TreeNode select(final JTree tree, final String label) {
+        final int i = row(tree, label);
         tree.setSelectionRow(i);
         return (ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getPathForRow(i).getLastPathComponent()).getUserObject();
     }
 
-    private static List<String> items(JPopupMenu menu) {
-        List<String> out = new ArrayList<>();
-        for (Component c : menu.getComponents()) {
+    private static List<String> items(final JPopupMenu menu) {
+        final List<String> out = new ArrayList<>();
+        for (final Component c : menu.getComponents()) {
             if (c instanceof JMenuItem m) {
                 out.add(m.getText());
             }
@@ -105,8 +106,8 @@ class FilesTabGroupsTest {
         return out;
     }
 
-    private static void doubleClick(JTree tree, int row) {
-        Rectangle r = tree.getRowBounds(row);
+    private static void doubleClick(final JTree tree, final int row) {
+        final Rectangle r = tree.getRowBounds(row);
         tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, r.x + 4, r.y + r.height / 2, 2, false,
                 MouseEvent.BUTTON1));
     }
@@ -117,8 +118,8 @@ class FilesTabGroupsTest {
     @Test
     void aGroupIsOneRowInCapitalsHoldingItsFoldersAndItsOtherFolders() {
         assertThat(FolderRoot.groupRoots(List.of(SCRATCHPAD, KB, MEMORY, KIT))).containsExactly(BRAIN);
-        FilesTab tab = tab();
-        JTree tree = tab.tree().tree();
+        final FilesTab tab = tab();
+        final JTree tree = tab.tree().tree();
         assertThat(rows(tree)).containsExactly("BRAIN", "KIT");
 
         tree.expandRow(0);
@@ -140,8 +141,8 @@ class FilesTabGroupsTest {
     /// folder, which moves the right path.
     @Test
     void onlyATopRowShowsItsChangesAndGainsTheBackup() {
-        FilesTab tab = tab();
-        JTree tree = tab.tree().tree();
+        final FilesTab tab = tab();
+        final JTree tree = tab.tree().tree();
         tree.expandRow(0);
         tab.show(SCRATCHPAD, folder("Scratchpad", folder("2026-10-28", file("/b/SCRATCHPAD/2026-10-28/a.md")), file("/b/SCRATCHPAD/INDEX.md")));
         tab.showRepos(List.of(
@@ -171,8 +172,8 @@ class FilesTabGroupsTest {
     /// their tooltip says where they are. A folder inside BRAIN keeps its icon.
     @Test
     void aGroupsRowHasNoIconAndNamesItsCommit() {
-        FilesTab tab = tab();
-        JTree tree = tab.tree().tree();
+        final FilesTab tab = tab();
+        final JTree tree = tab.tree().tree();
         tree.expandRow(0);
         tab.showRepos(List.of(new RepoStatus("/b", "main", List.of(), false, "", "737f602aa11bb22cc33dd44ee55ff6677889900a"),
                 new RepoStatus("/k", "master", List.of(), false, "", "c312e98ff00ee11dd22cc33bb44aa5566778899b")));
@@ -191,10 +192,10 @@ class FilesTabGroupsTest {
     /// opens the subfolder and selects the file; a file in no folder of the tab is said beside the tree.
     @Test
     void revealOpensTheWayAndSelectsTheFile() {
-        List<String> told = new ArrayList<>();
-        FilesTab tab = tab();
+        final List<String> told = new ArrayList<>();
+        final FilesTab tab = tab();
         tab.tell((owner, at, text) -> told.add(text));
-        JTree tree = tab.tree().tree();
+        final JTree tree = tab.tree().tree();
         tab.reveal(Path.of("/b/MEMORY/topic/notes.md"));
         assertThat(rows(tree)).as("opened as far as read").containsExactly("BRAIN", "Scratchpad", "KB", "Memory", FilesTab.READING, "KIT");
         assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "BRAIN")));
@@ -213,32 +214,32 @@ class FilesTabGroupsTest {
         assertThat(told).containsExactly("Not in a folder of the Files tab: /elsewhere/x.md");
     }
 
-    private static MouseEvent at(JTree tree, String label) {
-        Rectangle r = tree.getRowBounds(row(tree, label));
+    private static MouseEvent at(final JTree tree, final String label) {
+        final Rectangle r = tree.getRowBounds(row(tree, label));
         return new MouseEvent(tree, MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false);
     }
 
-    private static Component cell(JTree tree, String label) {
-        int i = row(tree, label);
+    private static Component cell(final JTree tree, final String label) {
+        final int i = row(tree, label);
         return tree.getCellRenderer().getTreeCellRendererComponent(tree, tree.getPathForRow(i).getLastPathComponent(), false, false, false, i, false);
     }
 
-    private static String detail(JTree tree, String label) {
+    private static String detail(final JTree tree, final String label) {
         return ((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getPathForRow(row(tree, label)).getLastPathComponent()).getUserObject()).detail();
     }
 
     /** The icon of the row's name: the first label in its cell, under a separator's space when it has one. */
-    private static Icon icon(JTree tree, String label) {
+    private static Icon icon(final JTree tree, final String label) {
         return firstLabel(cell(tree, label)).getIcon();
     }
 
-    private static JLabel firstLabel(Component c) {
+    private static JLabel firstLabel(final Component c) {
         if (c instanceof JLabel l) {
             return l;
         }
-        for (Component child : ((Container) c).getComponents()) {
+        for (final Component child : ((Container) c).getComponents()) {
             if (child instanceof Container k && (k instanceof JLabel || k.getComponentCount() > 0)) {
-                JLabel found = firstLabel(child);
+                final JLabel found = firstLabel(child);
                 if (found != null) {
                     return found;
                 }

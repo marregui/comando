@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.async;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -20,8 +20,8 @@ class DebouncerTest {
     /// machine cannot split it in two.
     @Test
     void aBurstRunsTheTaskOnceAfterTheLastRequest() throws Exception {
-        AtomicInteger runs = new AtomicInteger();
-        Debouncer d = new Debouncer(500, runs::incrementAndGet);
+        final AtomicInteger runs = new AtomicInteger();
+        final Debouncer d = new Debouncer(500, runs::incrementAndGet);
         for (int i = 0; i < 10; i++) {
             SwingUtilities.invokeAndWait(d::request);
         }
@@ -37,8 +37,8 @@ class DebouncerTest {
     /// runs.
     @Test
     void aStopDropsTheWaitingRequest() throws Exception {
-        AtomicInteger runs = new AtomicInteger();
-        Debouncer d = new Debouncer(50, runs::incrementAndGet);
+        final AtomicInteger runs = new AtomicInteger();
+        final Debouncer d = new Debouncer(50, runs::incrementAndGet);
         SwingUtilities.invokeAndWait(() -> {
             d.request();
             d.stop();
@@ -48,8 +48,8 @@ class DebouncerTest {
         assertThat(runs).hasValue(0);
     }
 
-    private static boolean onEdt(Debouncer d) throws Exception {
-        boolean[] pending = new boolean[1];
+    private static boolean onEdt(final Debouncer d) throws Exception {
+        final boolean[] pending = new boolean[1];
         SwingUtilities.invokeAndWait(() -> pending[0] = d.pending());
         return pending[0];
     }

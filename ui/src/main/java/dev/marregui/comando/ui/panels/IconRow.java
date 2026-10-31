@@ -1,13 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.icon.Icons;
-
-import javax.swing.BorderFactory;
-import javax.swing.Icon;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
@@ -16,6 +8,14 @@ import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.util.Optional;
+import javax.swing.BorderFactory;
+import javax.swing.Icon;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+
+import dev.marregui.comando.ui.kit.icon.Icons;
 
 /**
  * A resource's row in the sidebar, one line: its state icon, which a click connects or disconnects, its name with its
@@ -59,15 +59,15 @@ abstract class IconRow extends JPanel {
     }
 
     /** Whether {@code p}, a point in the cell whose bounds this row was laid out to, is on the ⓘ of a hovered row. */
-    boolean onInfo(Rectangle cell, Point p) {
+    boolean onInfo(final Rectangle cell, final Point p) {
         layOut(cell);
         return hovered && SwingUtilities.getDeepestComponentAt(this, p.x - cell.x, p.y - cell.y) == info;
     }
 
     /** Where the ⓘ is, in the list's coordinates. */
-    Rectangle infoBounds(Rectangle cell) {
+    Rectangle infoBounds(final Rectangle cell) {
         layOut(cell);
-        Rectangle r = SwingUtilities.convertRectangle(info.getParent(), info.getBounds(), this);
+        final Rectangle r = SwingUtilities.convertRectangle(info.getParent(), info.getBounds(), this);
         r.translate(cell.x, cell.y);
         return r;
     }
@@ -75,7 +75,7 @@ abstract class IconRow extends JPanel {
     /** An icon that takes room and draws nothing: the ⓘ's place on a row the pointer is not over. */
     private record EmptyIcon(int width, int height) implements Icon {
         @Override
-        public void paintIcon(Component c, Graphics g, int x, int y) {
+        public void paintIcon(final Component c, final Graphics g, final int x, final int y) {
         }
 
         @Override
@@ -90,24 +90,24 @@ abstract class IconRow extends JPanel {
     }
 
     /** Whether {@code p}, a point in the cell whose bounds this row was laid out to, is on the state icon. */
-    boolean onIcon(Rectangle cell, Point p) {
+    boolean onIcon(final Rectangle cell, final Point p) {
         layOut(cell);
         return SwingUtilities.getDeepestComponentAt(this, p.x - cell.x, p.y - cell.y) == power && power.isVisible();
     }
 
     /** Where the state icon is, in the list's coordinates, for a menu to drop from it; empty while it is hidden. */
-    Rectangle iconBounds(Rectangle cell) {
+    Rectangle iconBounds(final Rectangle cell) {
         layOut(cell);
         if (!power.isVisible()) {
             return new Rectangle();
         }
-        Rectangle r = SwingUtilities.convertRectangle(power.getParent(), power.getBounds(), this);
+        final Rectangle r = SwingUtilities.convertRectangle(power.getParent(), power.getBounds(), this);
         r.translate(cell.x, cell.y);
         return r;
     }
 
     /** The tooltip of the state icon or the ⓘ when {@code p} is on one; empty over the name. */
-    Optional<String> iconTip(Rectangle cell, Point p) {
+    Optional<String> iconTip(final Rectangle cell, final Point p) {
         if (onInfo(cell, p)) {
             return Optional.of(INFO_TIP);
         }
@@ -115,14 +115,14 @@ abstract class IconRow extends JPanel {
     }
 
     /** A renderer is never in a window, so nothing lays it out for a hit test; this does, as painting would. */
-    private void layOut(Rectangle cell) {
+    private void layOut(final Rectangle cell) {
         setBounds(0, 0, cell.width, cell.height);
         layOut((Container) this);
     }
 
-    private static void layOut(Container c) {
+    private static void layOut(final Container c) {
         c.doLayout();
-        for (Component child : c.getComponents()) {
+        for (final Component child : c.getComponents()) {
             if (child instanceof Container k) {
                 layOut(k);
             }

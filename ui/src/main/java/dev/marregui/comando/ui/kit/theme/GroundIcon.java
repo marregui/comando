@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import javax.swing.Icon;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.geom.RoundRectangle2D;
+import javax.swing.Icon;
 
 /**
  * A swatch of a ground, the one given or the one chosen at each paint: a rounded square of the ground, edged so it
@@ -20,26 +20,26 @@ public final class GroundIcon implements Icon {
     /** Null for whichever tint is chosen when it paints. */
     private final Tint tint;
 
-    public GroundIcon(Ground ground) {
+    public GroundIcon(final Ground ground) {
         this(ground, null);
     }
 
     /** The swatch of a curated theme: its ground and its tint (record 103). */
-    public GroundIcon(NamedTheme theme) {
+    public GroundIcon(final NamedTheme theme) {
         this(theme.ground, theme.tint);
     }
 
-    private GroundIcon(Ground ground, Tint tint) {
+    private GroundIcon(final Ground ground, final Tint tint) {
         this.ground = ground;
         this.tint = tint;
     }
 
     @Override
-    public void paintIcon(Component c, Graphics g0, int x, int y) {
-        Graphics2D g = (Graphics2D) g0.create();
+    public void paintIcon(final Component c, final Graphics g0, final int x, final int y) {
+        final Graphics2D g = (Graphics2D) g0.create();
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            RoundRectangle2D square = new RoundRectangle2D.Float(x + 1.5f, y + 1.5f, 13, 13, 4, 4);
+            final RoundRectangle2D square = new RoundRectangle2D.Float(x + 1.5f, y + 1.5f, 13, 13, 4, 4);
             g.setColor(ground == null ? Theme.ground() : ground.color);
             g.fill(square);
             g.clip(square);

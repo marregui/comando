@@ -27,7 +27,7 @@ public final class Platform {
         return MAC;
     }
 
-    static boolean isMac(String osName) {
+    static boolean isMac(final String osName) {
         return osName.toLowerCase(Locale.ROOT).contains("mac");
     }
 
@@ -37,7 +37,7 @@ public final class Platform {
      * any desktop.
      */
     public static boolean macKeys() {
-        String keys = System.getProperty(KEYS_PROPERTY, "");
+        final String keys = System.getProperty(KEYS_PROPERTY, "");
         return keys.equals("mac") || !keys.equals("linux") && MAC;
     }
 
@@ -51,19 +51,19 @@ public final class Platform {
                 : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
     }
 
-    static int menuShortcutMask(boolean mac) {
+    static int menuShortcutMask(final boolean mac) {
         return mac ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK;
     }
 
     /** {@code program} in each folder of the PATH, in the PATH's order; the caller checks which exist. */
-    public static List<Path> onPath(String program) {
+    public static List<Path> onPath(final String program) {
         return onPath(program, System.getenv("PATH"));
     }
 
-    static List<Path> onPath(String program, String path) {
-        List<Path> found = new ArrayList<>();
+    static List<Path> onPath(final String program, final String path) {
+        final List<Path> found = new ArrayList<>();
         if (path != null) {
-            for (String dir : path.split(File.pathSeparator)) {
+            for (final String dir : path.split(File.pathSeparator)) {
                 if (!dir.isBlank()) {
                     found.add(Path.of(dir, program));
                 }

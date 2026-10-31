@@ -46,7 +46,7 @@ class SqlPolicyTest {
             (SELECT 1)                                        | false
             SELECT 'x                                         | false
             """)
-    void readOnly(String sql, boolean expected) {
+    void readOnly(final String sql, final boolean expected) {
         assertThat(SqlPolicy.isReadOnly(sql.replace("\\n", "\n"))).isEqualTo(expected);
     }
 }

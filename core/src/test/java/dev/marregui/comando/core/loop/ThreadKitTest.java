@@ -1,7 +1,5 @@
 package dev.marregui.comando.core.loop;
 
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -11,6 +9,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,11 +24,11 @@ class ThreadKitTest {
     /// A twenty-task strand keeps submission order on one live virtual thread carrying the requested name.
     @Test
     void strandsRunInOrderOnOneVirtualThreadThatTestsCanFindByName() throws Exception {
-        ExecutorService strand = Threads.strand("kit-strand");
-        List<Integer> order = new CopyOnWriteArrayList<>();
-        List<Thread> threads = new CopyOnWriteArrayList<>();
+        final ExecutorService strand = Threads.strand("kit-strand");
+        final List<Integer> order = new CopyOnWriteArrayList<>();
+        final List<Thread> threads = new CopyOnWriteArrayList<>();
         for (int i = 0; i < 20; i++) {
-            int n = i;
+            final int n = i;
             strand.execute(() -> {
                 order.add(n);
                 threads.add(Thread.currentThread());
@@ -47,14 +47,14 @@ class ThreadKitTest {
     /// strand queue.
     @Test
     void aTimedStrandRunsOnAVirtualThreadAndACancelledTaskLeavesItsQueue() throws Exception {
-        ScheduledExecutorService timed = Threads.timedStrand("kit-timed");
-        CountDownLatch ran = new CountDownLatch(1);
-        Thread[] on = new Thread[1];
+        final ScheduledExecutorService timed = Threads.timedStrand("kit-timed");
+        final CountDownLatch ran = new CountDownLatch(1);
+        final Thread[] on = new Thread[1];
         timed.schedule(() -> {
             on[0] = Thread.currentThread();
             ran.countDown();
         }, 20, TimeUnit.MILLISECONDS);
-        var later = timed.schedule(() -> { }, 1, TimeUnit.HOURS);
+        final var later = timed.schedule(() -> { }, 1, TimeUnit.HOURS);
         assertThat(ran.await(5, TimeUnit.SECONDS)).isTrue();
         assertThat(on[0].isVirtual()).isTrue();
         assertThat(Threads.alive("kit-timed")).containsExactly(on[0]);
@@ -67,15 +67,15 @@ class ThreadKitTest {
     /// Closing two blocked errands interrupts and joins both within `CLOSE_WAIT`, then makes a later start return null.
     @Test
     void closingErrandsInterruptsAndWaitsForThoseRunningAndRefusesNewOnes() throws Exception {
-        Errands errands = new Errands("test");
-        CountDownLatch started = new CountDownLatch(2);
-        AtomicInteger interrupted = new AtomicInteger();
+        final Errands errands = new Errands("test");
+        final CountDownLatch started = new CountDownLatch(2);
+        final AtomicInteger interrupted = new AtomicInteger();
         for (int i = 0; i < 2; i++) {
             errands.start("kit-errand", () -> {
                 started.countDown();
                 try {
                     new CountDownLatch(1).await(); // blocks until interrupted
-                } catch (InterruptedException e) {
+                } catch (final InterruptedException e) {
                     interrupted.incrementAndGet();
                     Thread.currentThread().interrupt();
                 }
@@ -83,7 +83,7 @@ class ThreadKitTest {
         }
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
         assertThat(errands.running()).isEqualTo(2);
-        long start = System.nanoTime();
+        final long start = System.nanoTime();
         errands.close();
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Errands.CLOSE_WAIT);
         assertThat(interrupted.get()).isEqualTo(2);
@@ -94,13 +94,13 @@ class ThreadKitTest {
     /// Two registrations execute on the same platform `watchdog` thread, which ends after the final handle closes.
     @Test
     void oneWatchdogThreadRunsEveryLookAndEndsWhenTheLastLeaves() throws Exception {
-        CountDownLatch both = new CountDownLatch(4);
-        List<Thread> lookers = new CopyOnWriteArrayList<>();
-        AutoCloseable a = Watchdog.shared().watch(() -> {
+        final CountDownLatch both = new CountDownLatch(4);
+        final List<Thread> lookers = new CopyOnWriteArrayList<>();
+        final AutoCloseable a = Watchdog.shared().watch(() -> {
             lookers.add(Thread.currentThread());
             both.countDown();
         });
-        AutoCloseable b = Watchdog.shared().watch(() -> {
+        final AutoCloseable b = Watchdog.shared().watch(() -> {
             lookers.add(Thread.currentThread());
             both.countDown();
         });
@@ -111,7 +111,7 @@ class ThreadKitTest {
         });
         a.close();
         b.close();
-        Thread watchdog = lookers.getFirst();
+        final Thread watchdog = lookers.getFirst();
         assertThat(watchdog.join(Duration.ofSeconds(5))).as("the thread ends with its last look").isTrue();
     }
 }

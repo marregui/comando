@@ -1,5 +1,14 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import javax.swing.JLabel;
+import javax.swing.SwingUtilities;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -7,14 +16,6 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.widget.WidgetContext;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JLabel;
-import javax.swing.SwingUtilities;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,19 +29,19 @@ class AgentWidgetTest {
     /// session's; once unmounted it ignores further blocks.
     @Test
     void showsTheSubagentsTranscriptAsItGrowsAndSaysWhetherItIsFollowed() throws Exception {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        AgentWidget[] w = new AgentWidget[1];
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final AgentWidget[] w = new AgentWidget[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new AgentWidget(new WidgetContext(intents::add, new ActionRegistry()), transcripts);
             w[0].render(new ViewSpec.Agent("work", "toolu_1", "review", "Updating while the sub-agent runs."));
         });
-        AgentWidget widget = w[0];
-        JLabel state = (JLabel) find(widget.component(), "agent-state");
+        final AgentWidget widget = w[0];
+        final JLabel state = (JLabel) find(widget.component(), "agent-state");
         assertThat(state.getText()).isEqualTo("Updating while the sub-agent runs.");
         assertThat(onEdt(() -> widget.transcript().canvas().itemCount())).as("nothing written yet").isZero();
 
-        Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", "toolu_1"));
+        final Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", "toolu_1"));
         t.append(new Block.AssistantText("m1", 0, "first step", false, ""));
         t.changed();
         Awaitility.await("the first block").atMost(Duration.ofSeconds(5)).until(() -> onEdt(() -> widget.transcript().canvas().itemCount()) == 1);
@@ -63,8 +64,8 @@ class AgentWidgetTest {
     /// only starts the same.
     @Test
     void aSessionsSubagentsGoWithIt() {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
-        Transcript sub = transcripts.of(TranscriptRegistry.subagentKey("work", "toolu_1"));
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
+        final Transcript sub = transcripts.of(TranscriptRegistry.subagentKey("work", "toolu_1"));
         sub.append(new Block.AssistantText("m", 0, "x", false, ""));
         transcripts.of(TranscriptRegistry.subagentKey("workshop", "toolu_2")).append(new Block.AssistantText("m", 0, "y", false, ""));
         transcripts.forget("work");
@@ -72,13 +73,13 @@ class AgentWidgetTest {
         assertThat(transcripts.of(TranscriptRegistry.subagentKey("workshop", "toolu_2")).size()).as("another session's, by a longer name").isEqualTo(1);
     }
 
-    private static java.awt.Component find(java.awt.Component c, String name) {
+    private static java.awt.Component find(final java.awt.Component c, final String name) {
         if (name.equals(c.getName())) {
             return c;
         }
         if (c instanceof java.awt.Container k) {
-            for (java.awt.Component child : k.getComponents()) {
-                java.awt.Component f = find(child, name);
+            for (final java.awt.Component child : k.getComponents()) {
+                final java.awt.Component f = find(child, name);
                 if (f != null) {
                     return f;
                 }
@@ -87,20 +88,20 @@ class AgentWidgetTest {
         return null;
     }
 
-    private static <T> T onEdt(java.util.concurrent.Callable<T> c) throws Exception {
-        Object[] out = new Object[1];
-        Exception[] err = new Exception[1];
+    private static <T> T onEdt(final java.util.concurrent.Callable<T> c) throws Exception {
+        final Object[] out = new Object[1];
+        final Exception[] err = new Exception[1];
         SwingUtilities.invokeAndWait(() -> {
             try {
                 out[0] = c.call();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 err[0] = e;
             }
         });
         if (err[0] != null) {
             throw err[0];
         }
-        @SuppressWarnings("unchecked") T t = (T) out[0];
+        @SuppressWarnings("unchecked") final T t = (T) out[0];
         return t;
     }
 }

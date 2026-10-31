@@ -27,7 +27,7 @@ who builds from source; installing a release is in `INSTALL.md` at the top of th
 
 | Command | Does |
 |---|---|
-| `./gradlew build` | compiles every module with javac's lint warnings as errors (`-Xlint:all` less `serial`, `-Werror`), and runs the unit and adapter tests; the opt-in tests are skipped |
+| `./gradlew build` | compiles every module with javac's lint warnings as errors (`-Xlint:all` less `serial`, `-Werror`), checks main and test code with the Java Coding Standard's Checkstyle configuration (`config/checkstyle/checkstyle.xml`; any report fails it), and runs the unit and adapter tests; the opt-in tests are skipped |
 | `./gradlew :app:run` | starts comando on the default data root from a copy of the build output made at launch, so a build while it runs leaves it alone (below) |
 | `./gradlew :app:installDist` | a runnable distribution in `app/build/install/comando`; start it with `bin/comando` |
 | `./gradlew :app:package` | this system's release file, with its own Java runtime, unsigned, in `app/build/package`: `comando-<version>-macos-<arch>.dmg`, `comando-<version>-linux-<arch>.tar.gz` or `comando-<version>-windows-<arch>.zip`. `<arch>` is `arm64` or `x64`; each archive holds one folder, `comando/`. `-PreleaseVersion=<version>` names the file and sets the version comando shows, as the release workflow does from the tag |

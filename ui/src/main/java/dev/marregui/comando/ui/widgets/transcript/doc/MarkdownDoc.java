@@ -1,9 +1,8 @@
 package dev.marregui.comando.ui.widgets.transcript.doc;
 
-import dev.marregui.comando.ui.kit.text.Fences;
-import dev.marregui.comando.ui.kit.text.NoteLinks;
-import dev.marregui.comando.ui.kit.text.SourceLinks;
-import dev.marregui.comando.ui.kit.text.TextLinks;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableBlock;
 import org.commonmark.ext.gfm.tables.TableBody;
@@ -33,8 +32,10 @@ import org.commonmark.node.Text;
 import org.commonmark.node.ThematicBreak;
 import org.commonmark.parser.Parser;
 
-import java.util.ArrayList;
-import java.util.List;
+import dev.marregui.comando.ui.kit.text.Fences;
+import dev.marregui.comando.ui.kit.text.NoteLinks;
+import dev.marregui.comando.ui.kit.text.SourceLinks;
+import dev.marregui.comando.ui.kit.text.TextLinks;
 
 /**
  * Markdown to the transcript's paragraph list. A soft line break stays a line break: Claude's text uses
@@ -49,19 +50,19 @@ public final class MarkdownDoc {
     private MarkdownDoc() {
     }
 
-    public static List<Para> parse(String markdown) {
-        List<Para> out = new ArrayList<>();
+    public static List<Para> parse(final String markdown) {
+        final List<Para> out = new ArrayList<>();
         blocks(PARSER.parse(markdown), 0, out);
         return out;
     }
 
-    private static void blocks(Node parent, int depth, List<Para> out) {
+    private static void blocks(final Node parent, final int depth, final List<Para> out) {
         for (Node n = parent.getFirstChild(); n != null; n = n.getNext()) {
             block(n, depth, "", out);
         }
     }
 
-    private static void block(Node n, int depth, String marker, List<Para> out) {
+    private static void block(final Node n, final int depth, final String marker, final List<Para> out) {
         switch (n) {
             case Heading h -> out.add(new Para.Text(Para.Kind.HEADING, h.getLevel(), depth, "", inlines(h)));
             case Paragraph p -> out.add(new Para.Text(Para.Kind.PARAGRAPH, 0, depth, marker, inlines(p)));
@@ -85,13 +86,13 @@ public final class MarkdownDoc {
         }
     }
 
-    private static void items(Node list, int depth, boolean ordered, int start, List<Para> out) {
+    private static void items(final Node list, final int depth, final boolean ordered, final int start, final List<Para> out) {
         int number = start;
         for (Node item = list.getFirstChild(); item != null; item = item.getNext()) {
             if (!(item instanceof ListItem)) {
                 continue;
             }
-            String marker = ordered ? number++ + "." : depth % 2 == 0 ? "•" : "◦";
+            final String marker = ordered ? number++ + "." : depth % 2 == 0 ? "•" : "◦";
             boolean first = true;
             for (Node c = item.getFirstChild(); c != null; c = c.getNext()) {
                 if (c instanceof Paragraph p) {
@@ -110,13 +111,13 @@ public final class MarkdownDoc {
         }
     }
 
-    private static Para.Table table(TableBlock t, int depth) {
-        List<List<List<Span>>> rows = new ArrayList<>();
+    private static Para.Table table(final TableBlock t, final int depth) {
+        final List<List<List<Span>>> rows = new ArrayList<>();
         for (Node section = t.getFirstChild(); section != null; section = section.getNext()) {
             if (section instanceof TableHead || section instanceof TableBody) {
                 for (Node row = section.getFirstChild(); row != null; row = row.getNext()) {
                     if (row instanceof TableRow) {
-                        List<List<Span>> cells = new ArrayList<>();
+                        final List<List<Span>> cells = new ArrayList<>();
                         for (Node cell = row.getFirstChild(); cell != null; cell = cell.getNext()) {
                             if (cell instanceof TableCell) {
                                 cells.add(inlines(cell));
@@ -132,13 +133,13 @@ public final class MarkdownDoc {
 
     // ---- inlines
 
-    private static List<Span> inlines(Node parent) {
-        List<Span> out = new ArrayList<>();
+    private static List<Span> inlines(final Node parent) {
+        final List<Span> out = new ArrayList<>();
         inline(parent, 0, "", out);
         return merge(out);
     }
 
-    private static void inline(Node parent, int style, String href, List<Span> out) {
+    private static void inline(final Node parent, final int style, final String href, final List<Span> out) {
         for (Node n = parent.getFirstChild(); n != null; n = n.getNext()) {
             switch (n) {
                 case Text t -> text(t.getLiteral(), style, href, out);
@@ -155,7 +156,7 @@ public final class MarkdownDoc {
         }
     }
 
-    private static boolean isStrike(Node n) {
+    private static boolean isStrike(final Node n) {
         return n.getClass().getSimpleName().equals("Strikethrough");
     }
 
@@ -164,14 +165,14 @@ public final class MarkdownDoc {
      * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}). A code span is as written, as on the
      * rendered page: only its {@code path:line} references are links.
      */
-    private static void text(String text, int style, String href, List<Span> out) {
+    private static void text(final String text, final int style, final String href, final List<Span> out) {
         if (!href.isEmpty()) {
             out.add(new Span(text, style, href));
             return;
         }
-        boolean code = (style & Span.CODE) != 0;
+        final boolean code = (style & Span.CODE) != 0;
         int at = 0;
-        for (TextLinks.Ref r : TextLinks.refs(text, false)) {
+        for (final TextLinks.Ref r : TextLinks.refs(text, false)) {
             if (code && !r.href().startsWith(SourceLinks.SCHEME)) {
                 continue;
             }
@@ -187,14 +188,14 @@ public final class MarkdownDoc {
     }
 
     /** Joins neighbours with the same style and link, so a paragraph is a few runs, not one per token. */
-    private static List<Span> merge(List<Span> spans) {
-        List<Span> out = new ArrayList<>(spans.size());
-        for (Span s : spans) {
+    private static List<Span> merge(final List<Span> spans) {
+        final List<Span> out = new ArrayList<>(spans.size());
+        for (final Span s : spans) {
             if (s.text().isEmpty()) {
                 continue;
             }
             if (!out.isEmpty()) {
-                Span last = out.getLast();
+                final Span last = out.getLast();
                 if (last.style() == s.style() && last.href().equals(s.href())) {
                     out.set(out.size() - 1, new Span(last.text() + s.text(), s.style(), s.href()));
                     continue;
@@ -205,7 +206,7 @@ public final class MarkdownDoc {
         return out;
     }
 
-    private static String trimEnd(String s) {
+    private static String trimEnd(final String s) {
         int end = s.length();
         while (end > 0 && (s.charAt(end - 1) == '\n' || s.charAt(end - 1) == '\r')) {
             end--;

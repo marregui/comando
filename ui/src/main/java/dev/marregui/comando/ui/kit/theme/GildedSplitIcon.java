@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import javax.swing.Icon;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
@@ -11,6 +10,7 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.Arrays;
 import java.util.Optional;
+import javax.swing.Icon;
 
 /**
  * The theme button's icon (record 128): a rounded square in a rim of polished metal, the ramp of the tint chosen,
@@ -24,29 +24,29 @@ public final class GildedSplitIcon implements Icon {
     private static final Color GLINT = new Color(255, 255, 255, 96);
 
     @Override
-    public void paintIcon(Component c, Graphics g0, int x, int y) {
-        Graphics2D g = (Graphics2D) g0.create();
+    public void paintIcon(final Component c, final Graphics g0, final int x, final int y) {
+        final Graphics2D g = (Graphics2D) g0.create();
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Tint tint = Theme.tint();
-            Ground now = Theme.groundChosen();
-            Ground twin = NamedTheme.chosen().flatMap(GildedSplitIcon::twinOf).map(t -> t.ground)
+            final Tint tint = Theme.tint();
+            final Ground now = Theme.groundChosen();
+            final Ground twin = NamedTheme.chosen().flatMap(GildedSplitIcon::twinOf).map(t -> t.ground)
                     .orElse(now.light ? Ground.GRAPHITE : Ground.PAPER);
-            Color dark = (now.light ? twin : now).color;
-            Color light = (now.light ? now : twin).color;
-            float o = 1f;
-            float s = SIZE - 2f;
-            RoundRectangle2D rim = new RoundRectangle2D.Float(x + o, y + o, s, s, 6, 6);
+            final Color dark = (now.light ? twin : now).color;
+            final Color light = (now.light ? now : twin).color;
+            final float o = 1f;
+            final float s = SIZE - 2f;
+            final RoundRectangle2D rim = new RoundRectangle2D.Float(x + o, y + o, s, s, 6, 6);
             g.setPaint(tint.ramp(y + o, y + o + s, false));
             g.fill(rim);
-            float in = 2f;
-            RoundRectangle2D face = new RoundRectangle2D.Float(x + o + in, y + o + in, s - 2 * in, s - 2 * in, 3.5f, 3.5f);
+            final float in = 2f;
+            final RoundRectangle2D face = new RoundRectangle2D.Float(x + o + in, y + o + in, s - 2 * in, s - 2 * in, 3.5f, 3.5f);
             g.clip(face);
             g.setColor(dark);
             g.fill(face);
-            int fx = Math.round(x + o + in);
-            int fy = Math.round(y + o + in);
-            int fw = Math.round(s - 2 * in);
+            final int fx = Math.round(x + o + in);
+            final int fy = Math.round(y + o + in);
+            final int fw = Math.round(s - 2 * in);
             g.setColor(light);
             g.fillPolygon(new Polygon(new int[]{fx + fw, fx + fw, fx}, new int[]{fy, fy + fw, fy + fw}, 3));
             g.setClip(null);
@@ -59,7 +59,7 @@ public final class GildedSplitIcon implements Icon {
     }
 
     /** The theme of the other mode {@code t} pairs with: its twin, or the dark theme whose twin it is. */
-    private static Optional<NamedTheme> twinOf(NamedTheme t) {
+    private static Optional<NamedTheme> twinOf(final NamedTheme t) {
         if (t.twin.isPresent()) {
             return NamedTheme.withId(t.twin.get());
         }

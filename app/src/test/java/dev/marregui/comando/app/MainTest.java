@@ -1,11 +1,11 @@
 package dev.marregui.comando.app;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,7 +24,7 @@ class MainTest {
 
     /// The data root's `instance.json` names the instance; a missing, unreadable or nameless file names none.
     @Test
-    void theDataRootsInstanceFileNamesTheInstance(@TempDir Path home) throws IOException {
+    void theDataRootsInstanceFileNamesTheInstance(@TempDir final Path home) throws IOException {
         assertThat(Main.nameFile(home)).as("no file").isNull();
         Files.writeString(home.resolve("instance.json"), "{\"name\": \"Comando Expert\", \"slug\": \"b\"}");
         assertThat(Main.nameFile(home)).isEqualTo("Comando Expert");

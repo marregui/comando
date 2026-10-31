@@ -25,8 +25,8 @@ final class BuiltInThemes {
     }
 
     /** The built-in theme {@code id}, as its file gives it. */
-    static ThemeSpec spec(String id) {
-        ThemeSpec s = SPECS.get(id);
+    static ThemeSpec spec(final String id) {
+        final ThemeSpec s = SPECS.get(id);
         if (s == null) {
             throw new IllegalArgumentException("no built-in theme " + id);
         }
@@ -34,19 +34,19 @@ final class BuiltInThemes {
     }
 
     private static Map<String, ThemeSpec> read() {
-        Map<String, ThemeSpec> specs = new LinkedHashMap<>();
-        for (String id : IDS) {
-            String resource = "/themes/" + id + ".json";
+        final Map<String, ThemeSpec> specs = new LinkedHashMap<>();
+        for (final String id : IDS) {
+            final String resource = "/themes/" + id + ".json";
             try (InputStream in = BuiltInThemes.class.getResourceAsStream(resource)) {
                 if (in == null) {
                     throw new IllegalStateException("missing " + resource);
                 }
-                ThemeSpec s = ThemeSpec.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                final ThemeSpec s = ThemeSpec.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
                 if (!s.id().equals(id)) {
                     throw new IllegalStateException(resource + " names itself " + s.id());
                 }
                 specs.put(id, s);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new UncheckedIOException(resource, e);
             }
         }

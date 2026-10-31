@@ -1,22 +1,5 @@
 package dev.marregui.comando.ui.dialogs.folders;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.ui.kit.desktop.FileChoosers;
-import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.vcs.RepoChanges;
-
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.WindowConstants;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
@@ -29,6 +12,23 @@ import java.awt.event.WindowEvent;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.WindowConstants;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.ui.kit.desktop.FileChoosers;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
  * The Files tab's folders inside Claude Code's folder in a window over comando's: the {@link FoldersEditor}, Cancel
@@ -48,19 +48,19 @@ public final class FoldersDialog {
     private final ResourceActions.Questions questions;
     private final String title;
 
-    private FoldersDialog(Window owner, List<FolderRoot> folders, RepoChanges repos, IntentSink intents, List<FolderRoot> kitFolders) {
+    private FoldersDialog(final Window owner, final List<FolderRoot> folders, final RepoChanges repos, final IntentSink intents, final List<FolderRoot> kitFolders) {
         this.intents = intents;
         this.questions = ResourceActions.Questions.MODAL;
         this.title = title();
-        String claude = HomeDir.shorten(HomeDir.claudeDir().toString());
+        final String claude = HomeDir.shorten(HomeDir.claudeDir().toString());
         editor = new FoldersEditor(folders, HomeDir.claudeDir(), repos, new FoldersEditor.Chooser() {
             @Override
-            public Optional<Path> folder(Component parent, Path start) {
+            public Optional<Path> folder(final Component parent, final Path start) {
                 return FileChoosers.directory(parent, "Choose a folder inside " + claude, start);
             }
 
             @Override
-            public Optional<Path> file(Component parent, Path start) {
+            public Optional<Path> file(final Component parent, final Path start) {
                 return FileChoosers.open(parent, "Choose a file in the folder", start);
             }
         });
@@ -68,38 +68,38 @@ public final class FoldersDialog {
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         dialog.addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(WindowEvent e) {
+            public void windowClosing(final WindowEvent e) {
                 cancel();
             }
         });
-        JButton cancel = new JButton("Cancel");
+        final JButton cancel = new JButton("Cancel");
         cancel.addActionListener(e -> cancel());
         save.putClientProperty("JButton.buttonType", "default");
         save.addActionListener(e -> save());
         editor.onChange(() -> save.setEnabled(editor.valid()));
         save.setEnabled(editor.valid());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
+        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
         buttons.add(cancel);
         buttons.add(save);
-        JPanel south = new JPanel(new BorderLayout());
+        final JPanel south = new JPanel(new BorderLayout());
         south.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
         south.add(buttons, BorderLayout.EAST);
         if (!kitFolders.isEmpty()) {
             // the kit's folders back at the top, as comando set them at the first start on the kit; the user's stay
-            JButton kit = new JButton(USE_KIT);
+            final JButton kit = new JButton(USE_KIT);
             kit.setToolTipText("Put the kit's folders the list lacks at its top; the others stay");
             kit.addActionListener(e -> editor.addFirst(kitFolders));
             south.add(kit, BorderLayout.WEST);
         }
-        JPanel content = new JPanel(new BorderLayout());
+        final JPanel content = new JPanel(new BorderLayout());
         content.add(editor.component(), BorderLayout.CENTER);
         content.add(south, BorderLayout.SOUTH);
         dialog.setContentPane(content);
-        JComponent root = dialog.getRootPane();
+        final JComponent root = dialog.getRootPane();
         root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
         root.getActionMap().put("cancel", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 cancel();
             }
         });
@@ -115,12 +115,12 @@ public final class FoldersDialog {
     /**
      * Opens the window over {@code owner}; returns when it closes. Offers {@link #USE_KIT} when the kit has folders.
      */
-    public static void show(Window owner, List<FolderRoot> folders, RepoChanges repos, IntentSink intents, List<FolderRoot> kitFolders) {
+    public static void show(final Window owner, final List<FolderRoot> folders, final RepoChanges repos, final IntentSink intents, final List<FolderRoot> kitFolders) {
         new FoldersDialog(owner, folders, repos, intents, kitFolders).dialog.setVisible(true);
     }
 
     private void save() {
-        Optional<List<FolderRoot>> folders = editor.folders();
+        final Optional<List<FolderRoot>> folders = editor.folders();
         if (folders.isEmpty()) {
             return;
         }
@@ -132,7 +132,7 @@ public final class FoldersDialog {
 
     private void cancel() {
         if (editor.dirty()) {
-            Object[] options = {"Discard", "Keep editing"};
+            final Object[] options = {"Discard", "Keep editing"};
             if (questions.ask(dialog, "Discard the changes to the " + title + "?", title, options) != 0) {
                 return;
             }

@@ -1,17 +1,17 @@
 package dev.marregui.comando.core.action;
 
-import dev.marregui.comando.core.action.Action.Arg;
-import dev.marregui.comando.core.action.Action.Kind;
-import dev.marregui.comando.core.action.Action.Type;
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.SessionSpec;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import dev.marregui.comando.core.action.Action.Arg;
+import dev.marregui.comando.core.action.Action.Kind;
+import dev.marregui.comando.core.action.Action.Type;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.SessionSpec;
 
 /**
  * The registry of user actions (record 121): every action a person has in the window, as an agent's MCP tool, and every
@@ -214,8 +214,8 @@ public final class Actions {
     }
 
     private static Map<Class<? extends Intent>, String> notYet() {
-        Map<Class<? extends Intent>, String> m = new LinkedHashMap<>();
-        String git = "a git change of the Files tab: needs the repository status, which the window reads and comando's state does not hold (record 121, increment 2)";
+        final Map<Class<? extends Intent>, String> m = new LinkedHashMap<>();
+        final String git = "a git change of the Files tab: needs the repository status, which the window reads and comando's state does not hold (record 121, increment 2)";
         m.put(Intent.OpenChange.class, git);
         m.put(Intent.RollBack.class, git);
         m.put(Intent.RemoveFiles.class, git);
@@ -227,16 +227,16 @@ public final class Actions {
     }
 
     /** The action offered as {@code tool}. */
-    public static Optional<Action> byTool(String tool) {
+    public static Optional<Action> byTool(final String tool) {
         return ALL.stream().filter(a -> a.tool().equals(tool)).findFirst();
     }
 
     /** Whether an action sends intents of this kind. */
-    public static boolean offered(Class<? extends Intent> kind) {
+    public static boolean offered(final Class<? extends Intent> kind) {
         return ALL.stream().anyMatch(a -> a.intents().contains(kind));
     }
 
-    private static List<String> withDefault(List<String> values) {
+    private static List<String> withDefault(final List<String> values) {
         return Stream.concat(Stream.of(""), values.stream()).toList();
     }
 }

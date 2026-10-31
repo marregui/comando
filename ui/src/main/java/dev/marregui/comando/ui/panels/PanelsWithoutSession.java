@@ -1,5 +1,32 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Graphics;
+import java.awt.Rectangle;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.IntentSink;
@@ -13,33 +40,6 @@ import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JScrollPane;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
-import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Rectangle;
-import java.awt.Graphics;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Consumer;
 
 /**
  * The foot of the Sessions tab: comando's own panels that belong to no session, open and closed, by title (record 91).
@@ -63,10 +63,10 @@ final class PanelsWithoutSession {
     private final JList<Row> list = new JList<>(model) {
         /** The report's bar down the left edge of the selected row (record 98). */
         @Override
-        protected void paintComponent(Graphics g) {
+        protected void paintComponent(final Graphics g) {
             super.paintComponent(g);
-            for (int i : getSelectedIndices()) {
-                Rectangle r = getCellBounds(i, i);
+            for (final int i : getSelectedIndices()) {
+                final Rectangle r = getCellBounds(i, i);
                 if (r != null) {
                     SidebarLook.bar(g, r);
                 }
@@ -78,7 +78,7 @@ final class PanelsWithoutSession {
     private AppState state;
 
     /** {@code newSession} opens the session dialog on a new session with the name given, as a panel's chip does. */
-    PanelsWithoutSession(IntentSink intents, PanelTexts texts, Consumer<String> newSession, ResourceActions.Questions questions) {
+    PanelsWithoutSession(final IntentSink intents, final PanelTexts texts, final Consumer<String> newSession, final ResourceActions.Questions questions) {
         this.intents = intents;
         this.texts = texts;
         this.newSession = newSession;
@@ -86,9 +86,9 @@ final class PanelsWithoutSession {
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> l, Object value, int index, boolean selected, boolean focus) {
-                JLabel label = (JLabel) super.getListCellRendererComponent(l, "", index, selected, focus);
-                Row r = (Row) value;
+            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int index, final boolean selected, final boolean focus) {
+                final JLabel label = (JLabel) super.getListCellRendererComponent(l, "", index, selected, focus);
+                final Row r = (Row) value;
                 label.setText(html(r));
                 label.setIcon(Icons.get("file"));
                 label.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S));
@@ -98,25 +98,25 @@ final class PanelsWithoutSession {
         });
         list.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                Row r = at(e);
+            public void mouseClicked(final MouseEvent e) {
+                final Row r = at(e);
                 if (r != null && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
                     open(r);
                 }
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 popup(e);
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 popup(e);
             }
 
-            private void popup(MouseEvent e) {
-                Row r = at(e);
+            private void popup(final MouseEvent e) {
+                final Row r = at(e);
                 if (e.isPopupTrigger() && r != null) {
                     list.setSelectedValue(r, false);
                     menu(r).show(list, e.getX(), e.getY());
@@ -131,18 +131,18 @@ final class PanelsWithoutSession {
             }
 
             @Override
-            public void edit(String id) {
+            public void edit(final String id) {
                 row(id).ifPresent(r -> Workspace.rename(r.panel(), list, intents));
             }
 
             @Override
-            public void cloneOf(String id) {
+            public void cloneOf(final String id) {
                 // panels are not cloned (record 91)
             }
         }, id -> intents.dispatch(new Intent.RemovePanel(new PanelId(id))), questions);
         // a group's header, as the Files tab's (record 98)
-        JLabel title = SidebarLook.header("Without a session");
-        JScrollPane scroll = new JScrollPane(list);
+        final JLabel title = SidebarLook.header("Without a session");
+        final JScrollPane scroll = new JScrollPane(list);
         // a name wider than the sidebar scrolls into view, as in the sessions and connections lists above it
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         FocusRing.install(scroll);
@@ -164,17 +164,17 @@ final class PanelsWithoutSession {
     }
 
     /** Whether {@code p} is a panel of comando's own that no session has: none named, or one named that is gone. */
-    static boolean withoutSession(AppState s, PanelState p) {
+    static boolean withoutSession(final AppState s, final PanelState p) {
         return !p.document() && (p.session().isEmpty() || s.session(p.session()).isEmpty());
     }
 
-    void render(AppState s) {
+    void render(final AppState s) {
         state = s;
-        List<Row> rows = new ArrayList<>();
+        final List<Row> rows = new ArrayList<>();
         s.panels().stream().filter(p -> withoutSession(s, p)).forEach(p -> rows.add(new Row(p, true)));
         s.closed().stream().filter(p -> withoutSession(s, p)).forEach(p -> rows.add(new Row(p, false)));
         rows.sort(Comparator.comparing((Row r) -> r.panel().title().toLowerCase(Locale.ROOT)));
-        Row selected = list.getSelectedValue();
+        final Row selected = list.getSelectedValue();
         if (!rows.equals(Collections.list(model.elements()))) {
             model.clear();
             model.addAll(rows);
@@ -193,24 +193,24 @@ final class PanelsWithoutSession {
     }
 
     /** A closed panel opens again; an open one comes forward. */
-    void open(Row r) {
+    void open(final Row r) {
         intents.dispatch(r.open() ? new Intent.FocusPanel(r.panel().id()) : new Intent.ReopenPanel(r.panel().id()));
     }
 
     /** What removing the panel does, for the question Remove asks. */
-    String question(Row r) {
-        PanelState p = r.panel();
-        String file = texts.file(p.id()).map(f -> f.getFileName().toString()).orElse(p.title() + ".md");
+    String question(final Row r) {
+        final PanelState p = r.panel();
+        final String file = texts.file(p.id()).map(f -> f.getFileName().toString()).orElse(p.title() + ".md");
         return "Remove panel " + p.title() + "? Its file " + file + " is deleted." + (r.open() ? " The panel closes first." : "");
     }
 
     /** A row's menu: open or bring forward, rename, make it a session's own, remove. */
-    JPopupMenu menu(Row r) {
-        JPopupMenu m = new JPopupMenu();
+    JPopupMenu menu(final Row r) {
+        final JPopupMenu m = new JPopupMenu();
         m.add(item(r.open() ? "Bring forward" : "Open", "file", () -> open(r)));
         m.addSeparator();
         m.add(item("Rename…", "edit", () -> Workspace.rename(r.panel(), list, intents)));
-        JMenuItem create = item(Plain.text("New session " + r.panel().title() + "…"), "add", () -> newSession.accept(r.panel().title()));
+        final JMenuItem create = item(Plain.text("New session " + r.panel().title() + "…"), "add", () -> newSession.accept(r.panel().title()));
         create.setToolTipText("A session with this panel's name, this panel its own");
         m.add(create);
         m.addSeparator();
@@ -218,7 +218,7 @@ final class PanelsWithoutSession {
         return m;
     }
 
-    private Optional<Row> row(String id) {
+    private Optional<Row> row(final String id) {
         for (int i = 0; i < model.size(); i++) {
             if (model.get(i).panel().id().value().equals(id)) {
                 return Optional.of(model.get(i));
@@ -227,17 +227,17 @@ final class PanelsWithoutSession {
         return Optional.empty();
     }
 
-    private Row at(MouseEvent e) {
-        int i = list.locationToIndex(e.getPoint());
+    private Row at(final MouseEvent e) {
+        final int i = list.locationToIndex(e.getPoint());
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? model.get(i) : null;
     }
 
     /** Two lines: open or closed and the title; then the connection and the file. */
-    private String html(Row r) {
-        PanelState p = r.panel();
-        String dot = "<span style='color:" + Theme.hex(r.open() ? Theme.tint().body : Theme.MUTED) + "'>" + (r.open() ? "●" : "○") + "</span>";
-        boolean focused = state != null && r.open() && Objects.equals(state.focused(), p.id());
-        List<String> parts = new ArrayList<>();
+    private String html(final Row r) {
+        final PanelState p = r.panel();
+        final String dot = "<span style='color:" + Theme.hex(r.open() ? Theme.tint().body : Theme.MUTED) + "'>" + (r.open() ? "●" : "○") + "</span>";
+        final boolean focused = state != null && r.open() && Objects.equals(state.focused(), p.id());
+        final List<String> parts = new ArrayList<>();
         if (!p.connection().isEmpty()) {
             parts.add(p.connection());
         }
@@ -249,8 +249,8 @@ final class PanelsWithoutSession {
                 + MarkdownHtml.escape(String.join(" · ", parts)) + "</span></nobr></html>";
     }
 
-    private static JMenuItem item(String text, String icon, Runnable r) {
-        JMenuItem i = new JMenuItem(text, Icons.get(icon));
+    private static JMenuItem item(final String text, final String icon, final Runnable r) {
+        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(e -> r.run());
         return i;
     }

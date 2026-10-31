@@ -1,13 +1,13 @@
 package dev.marregui.comando.ui.shell;
 
-import javax.imageio.ImageIO;
-import javax.swing.JFrame;
 import java.awt.Image;
 import java.awt.Taskbar;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import javax.imageio.ImageIO;
+import javax.swing.JFrame;
 
 /**
  * comando's own icon on the window and the Dock, instead of the Java runtime's: {@code /icons/comando.png}, drawn
@@ -20,8 +20,8 @@ final class AppIcon {
     private AppIcon() {
     }
 
-    static void install(JFrame frame) {
-        BufferedImage image = load();
+    static void install(final JFrame frame) {
+        final BufferedImage image = load();
         if (image == null) {
             return;
         }
@@ -29,7 +29,7 @@ final class AppIcon {
         if (Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_IMAGE)) {
             try {
                 Taskbar.getTaskbar().setIconImage(image);
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.DEBUG, "Dock icon not set [cause=" + e.getMessage() + ']');
             }
         }
@@ -39,7 +39,7 @@ final class AppIcon {
     static BufferedImage load() {
         try (InputStream in = AppIcon.class.getResourceAsStream("/icons/comando.png")) {
             return in == null ? null : ImageIO.read(in);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read the app icon", e);
             return null;
         }

@@ -1,13 +1,14 @@
 package dev.marregui.comando.ui.widgets.text;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,13 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - zoom stays between 8 and 40 points and resets to the theme's mono size
 class TextWidgetTest {
 
-    private static RSyntaxTextArea area(Component c) {
+    private static RSyntaxTextArea area(final Component c) {
         if (c instanceof RSyntaxTextArea a) {
             return a;
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
-                RSyntaxTextArea a = area(child);
+            for (final Component child : k.getComponents()) {
+                final RSyntaxTextArea a = area(child);
                 if (a != null) {
                     return a;
                 }
@@ -33,12 +34,12 @@ class TextWidgetTest {
     /// Sixty steps in stop at 40 pt, a large step out stops at 8 pt, and reset returns to [Theme#mono]'s size.
     @Test
     void zoomStaysBetween8And40PointsAndResets() throws Exception {
-        AtomicReference<Float> largest = new AtomicReference<>();
-        AtomicReference<Float> smallest = new AtomicReference<>();
-        AtomicReference<Float> reset = new AtomicReference<>();
+        final AtomicReference<Float> largest = new AtomicReference<>();
+        final AtomicReference<Float> smallest = new AtomicReference<>();
+        final AtomicReference<Float> reset = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
-            TextWidget w = new TextWidget();
-            RSyntaxTextArea area = area(w.component());
+            final TextWidget w = new TextWidget();
+            final RSyntaxTextArea area = area(w.component());
             for (int i = 0; i < 60; i++) {
                 w.zoom(1);
             }

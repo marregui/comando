@@ -23,12 +23,12 @@ public final class LogLines {
      * entry is, and the reading stops at an entry more than {@link #SLACK_MILLIS} older: threads take an entry's time
      * before they wait for the file, so a neighbour can be written in a slightly different order.
      */
-    public static int offsetOf(String text, long atMillis) {
+    public static int offsetOf(final String text, final long atMillis) {
         int found = -1;
         int end = text.length(); // the end of the line read, its newline excluded
         while (true) {
-            int start = text.lastIndexOf('\n', end - 1) + 1;
-            long t = timeOf(text, start, end);
+            final int start = text.lastIndexOf('\n', end - 1) + 1;
+            final long t = timeOf(text, start, end);
             if (t != Long.MIN_VALUE) {
                 if (t < atMillis - SLACK_MILLIS) {
                     break;
@@ -46,17 +46,17 @@ public final class LogLines {
     }
 
     /** The time an entry's line starts with, in epoch milliseconds; {@link Long#MIN_VALUE} for any other line. */
-    static long timeOf(String text, int start, int end) {
+    static long timeOf(final String text, final int start, final int end) {
         if (start >= end || !Character.isDigit(text.charAt(start))) {
             return Long.MIN_VALUE;
         }
-        int space = text.indexOf(' ', start);
+        final int space = text.indexOf(' ', start);
         if (space < 0 || space > end) {
             return Long.MIN_VALUE;
         }
         try {
             return Instant.parse(text.substring(start, space)).toEpochMilli();
-        } catch (DateTimeParseException e) {
+        } catch (final DateTimeParseException e) {
             return Long.MIN_VALUE;
         }
     }

@@ -1,5 +1,19 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.BorderLayout;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.Status;
@@ -14,20 +28,6 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import java.awt.BorderLayout;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * The focused panel's session, under the lower panel (record 105). On the left its chip, the session's state icon, name
@@ -64,7 +64,7 @@ public final class SessionBar {
     private PanelState panel;
     private AppState state;
 
-    public SessionBar(IntentSink intents) {
+    public SessionBar(final IntentSink intents) {
         this.intents = intents;
         root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
@@ -83,14 +83,14 @@ public final class SessionBar {
         checkpoint.setIcon(Icons.get("checkpoint"));
         checkpoint.getAccessibleContext().setAccessibleName("Checkpoint");
         // on a narrow window the chip's name and the activity give way, ending in "…"; the buttons stay whole
-        JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, activity)));
+        final JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, activity)));
         left.add(session);
         left.add(toggle);
         left.add(fresh);
         left.add(activity);
         activity.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
         // centred on the chip's line, as the left's row is; the checkpoint right after the context it belongs to
-        JPanel right = new JPanel(new ShrinkingRow(2, 0, Set.of()));
+        final JPanel right = new JPanel(new ShrinkingRow(2, 0, Set.of()));
         right.add(model);
         right.add(effort);
         right.add(context);
@@ -114,7 +114,7 @@ public final class SessionBar {
     }
 
     /** What "New session ‹title›…" opens: the session dialog with the name filled in. */
-    public void onNewSession(Consumer<String> open) {
+    public void onNewSession(final Consumer<String> open) {
         newSession = open;
     }
 
@@ -133,27 +133,27 @@ public final class SessionBar {
         return choices(s -> SessionsSidebar.effortItems(s, intents));
     }
 
-    private JPopupMenu choices(Function<SessionState, List<JMenuItem>> items) {
-        JPopupMenu m = new JPopupMenu();
+    private JPopupMenu choices(final Function<SessionState, List<JMenuItem>> items) {
+        final JPopupMenu m = new JPopupMenu();
         shown().ifPresent(s -> items.apply(s).forEach(m::add));
         return m;
     }
 
     /** Shows the focused panel's session. */
-    public void render(AppState s) {
+    public void render(final AppState s) {
         state = s;
         panel = s.focusedPanel();
-        Optional<SessionState> x = shown();
+        final Optional<SessionState> x = shown();
         if (x.isEmpty()) {
             session.setIcon(Icons.get("claude-off"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
-            for (JComponent c : new JComponent[]{toggle, fresh, activity, model, effort, context, checkpoint}) {
+            for (final JComponent c : new JComponent[]{toggle, fresh, activity, model, effort, context, checkpoint}) {
                 c.setVisible(false);
             }
             return;
         }
-        SessionState ss = x.get();
+        final SessionState ss = x.get();
         // the session runs its checkpoint: every control but the plug, which stops it, waits until it ends (record 130)
         final boolean free = !ss.isCheckpointing();
         session.setEnabled(free);
@@ -171,7 +171,7 @@ public final class SessionBar {
         fresh.setVisible(!ss.spec().claudeSessionId().isEmpty());
         fresh.setEnabled(showsFresh(ss));
         fresh.setToolTipText(showsFresh(ss) ? SessionRow.freshTip(ss) : "Start a new conversation; stop the session first");
-        String doing = busyText(ss).strip();
+        final String doing = busyText(ss).strip();
         activity.setVisible(true);
         activity.setText(doing);
         activity.setForeground(free ? Theme.MUTED : Theme.THINKING);
@@ -183,7 +183,7 @@ public final class SessionBar {
         effort.setEnabled(free);
         effort.setText(SessionRow.effortName(ss) + " ▾");
         effort.setToolTipText(SessionRow.effortTip(ss));
-        boolean due = ss.reflection().due() && showsCheckpoint(ss);
+        final boolean due = ss.reflection().due() && showsCheckpoint(ss);
         context.setVisible(true);
         context.setText(contextText(ss));
         context.setForeground(due ? Theme.THINKING : Theme.MUTED);
@@ -206,10 +206,10 @@ public final class SessionBar {
      * sessions, whose own panels a choice brings forward.
      */
     JPopupMenu sessionMenu() {
-        JPopupMenu m = new JPopupMenu();
+        final JPopupMenu m = new JPopupMenu();
         if (!panel.session().isEmpty()) {
             if (panel.document()) {
-                JMenuItem detach = new JMenuItem(Plain.text("Detach from " + panel.session()));
+                final JMenuItem detach = new JMenuItem(Plain.text("Detach from " + panel.session()));
                 detach.setToolTipText("The document stays open; its selection no longer runs in the session");
                 detach.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
                 m.add(detach);
@@ -219,19 +219,19 @@ public final class SessionBar {
             return m;
         }
         if (!panel.document()) {
-            JMenuItem create = new JMenuItem(Plain.text("New session " + panel.title() + "…"), Icons.get("add"));
+            final JMenuItem create = new JMenuItem(Plain.text("New session " + panel.title() + "…"), Icons.get("add"));
             create.setToolTipText("A session with this panel's name, this panel its own");
-            String title = panel.title();
+            final String title = panel.title();
             create.addActionListener(e -> newSession.accept(title));
             m.add(create);
             if (!state.sessions().isEmpty()) {
                 m.addSeparator();
             }
         }
-        PanelState p = panel;
-        for (SessionState x : state.sessions()) {
-            String verb = p.document() ? "Attach to " : "Open ";
-            JMenuItem item = new JMenuItem(Plain.text(verb + x.name() + "  " + Labels.shortPath(x.spec().workDir())), Icons.get("claude"));
+        final PanelState p = panel;
+        for (final SessionState x : state.sessions()) {
+            final String verb = p.document() ? "Attach to " : "Open ";
+            final JMenuItem item = new JMenuItem(Plain.text(verb + x.name() + "  " + Labels.shortPath(x.spec().workDir())), Icons.get("claude"));
             item.addActionListener(e -> intents.dispatch(p.document() ? new Intent.BindSession(p.id(), x.name())
                     : new Intent.OpenSession(x.name(), p.id(), PanelId.random())));
             m.add(item);
@@ -243,12 +243,12 @@ public final class SessionBar {
     }
 
     /** The session chip: name and branch, which change only when the session or its branch does; shown as text. */
-    static String chipText(SessionState ss) {
+    static String chipText(final SessionState ss) {
         return Plain.text(ss.name() + (ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch()));
     }
 
     /** The state the chip's icon shows, in words, for its tooltip. */
-    static String stateText(SessionState ss) {
+    static String stateText(final SessionState ss) {
         return switch (ss.status()) {
             case OPEN -> "Running";
             case OPENING -> "Starting";
@@ -263,44 +263,44 @@ public final class SessionBar {
      * While the checkpoint runs, what it does and how to leave it: "  checkpoint · compacting · 12 s · Stop to carry
      * on".
      */
-    static String busyText(SessionState ss) {
+    static String busyText(final SessionState ss) {
         if (ss.isCheckpointing()) {
             final long since = ss.turnStartedMillis();
             final String elapsed = since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "";
             return "  checkpoint · " + TabStatus.working(ss) + elapsed + " · " + LOCKED_HINT;
         }
         if (ss.isWaiting()) {
-            long since = ss.waitingSinceMillis();
+            final long since = ss.waitingSinceMillis();
             return "  " + TabStatus.waiting(ss) + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "");
         }
         if (!ss.isBusy()) {
             return "";
         }
-        String what = TabStatus.working(ss);
-        long since = ss.turnStartedMillis();
-        int queued = ss.pendingTurns() - 1;
+        final String what = TabStatus.working(ss);
+        final long since = ss.turnStartedMillis();
+        final int queued = ss.pendingTurns() - 1;
         return "  " + what + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "")
                 + (queued > 0 ? " · " + queued + " queued" : "");
     }
 
     /** Whether the activity shows a time that the shell's one-second tick moves on: working, or waiting. */
-    static boolean counting(SessionState ss) {
+    static boolean counting(final SessionState ss) {
         return ss.isBusy() || ss.isWaiting();
     }
 
     /** "ctx 412k (41%)" once a turn has reported the context, "ctx –" before; no cost. */
-    static String contextText(SessionState ss) {
+    static String contextText(final SessionState ss) {
         if (ss.contextTokens() <= 0) {
             return "ctx –";
         }
-        String share = SessionRow.contextText(ss);
+        final String share = SessionRow.contextText(ss);
         return "ctx " + Labels.tokens(ss.contextTokens()) + (share.isEmpty() ? "" : " (" + share + ")");
     }
 
     /** How full the context is and how it relates to the checkpoint beside it. */
-    static String contextTip(SessionState ss, boolean due) {
-        String threshold = Math.round(Reflection.THRESHOLD * 100) + "%";
-        String used = ss.contextTokens() <= 0 ? "Context: unknown until a turn ends"
+    static String contextTip(final SessionState ss, final boolean due) {
+        final String threshold = Math.round(Reflection.THRESHOLD * 100) + "%";
+        final String used = ss.contextTokens() <= 0 ? "Context: unknown until a turn ends"
                 : "Context: " + SessionRow.contextText(ss) + " (" + Labels.tokens(ss.contextTokens())
                 + (ss.contextWindow() > 0 ? " of " + Labels.tokens(ss.contextWindow()) : "") + " tokens)";
         if (!showsCheckpoint(ss)) {
@@ -311,16 +311,16 @@ public final class SessionBar {
     }
 
     /** The fresh-start button works while the session is stopped and has a conversation to leave behind. */
-    static boolean showsFresh(SessionState ss) {
+    static boolean showsFresh(final SessionState ss) {
         return !ss.status().isUsable() && ss.status() != Status.CLOSING && !ss.spec().claudeSessionId().isEmpty();
     }
 
-    static boolean showsCheckpoint(SessionState ss) {
+    static boolean showsCheckpoint(final SessionState ss) {
         return !ss.spec().checkpoint().isEmpty();
     }
 
     /** Grey; purple once the checkpoint is due: the context filled past the threshold since the last one. */
-    static String checkpointIcon(SessionState ss) {
+    static String checkpointIcon(final SessionState ss) {
         return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
     }
 
@@ -328,8 +328,8 @@ public final class SessionBar {
      * What the checkpoint sends and what follows: the compaction (record 129), or nothing while an earlier checkpoint's
      * summary still waits.
      */
-    static String checkpointTip(SessionState ss) {
-        String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
+    static String checkpointTip(final SessionState ss) {
+        final String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
                 ? ", then compacts the conversation"
                 : "; the last checkpoint's summary still waits for the next prompt");
         return ss.reflection().due() ? "Checkpoint due, context past " + Math.round(Reflection.THRESHOLD * 100) + "%: " + send

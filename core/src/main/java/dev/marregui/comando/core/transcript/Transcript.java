@@ -26,8 +26,8 @@ public final class Transcript {
     // ---- writer side
 
     /** Appends a block and returns its index. Writer thread only. */
-    public int append(Block block) {
-        int n = size;
+    public int append(final Block block) {
+        final int n = size;
         Block[] a = blocks;
         if (n == a.length) {
             // doubles; past MAX_BLOCKS an append fails loudly instead of overflowing the length (G-1.7)
@@ -44,7 +44,7 @@ public final class Transcript {
     }
 
     /** Replaces block {@code index}. Writer thread only. */
-    public void replace(int index, Block block) {
+    public void replace(final int index, final Block block) {
         if (index < 0 || index >= size) {
             throw new IndexOutOfBoundsException("index " + index + ", size " + size);
         }
@@ -61,7 +61,7 @@ public final class Transcript {
 
     /** Tells listeners that blocks changed; the writer calls it after a batch, listeners coalesce. */
     public void changed() {
-        for (Runnable l : listeners) {
+        for (final Runnable l : listeners) {
             l.run();
         }
     }
@@ -76,12 +76,12 @@ public final class Transcript {
      * The block at {@code index}; null at or past the end, which a reader holding a size from before a
      * {@link #clear()} reaches, so it stops rather than fails.
      */
-    public Block get(int index) {
+    public Block get(final int index) {
         if (index < 0) {
             throw new IndexOutOfBoundsException("index " + index);
         }
-        int n = size;
-        Block[] a = blocks;
+        final int n = size;
+        final Block[] a = blocks;
         return index < n && index < a.length ? a[index] : null;
     }
 
@@ -89,11 +89,11 @@ public final class Transcript {
         return version;
     }
 
-    public void addListener(Runnable listener) {
+    public void addListener(final Runnable listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(Runnable listener) {
+    public void removeListener(final Runnable listener) {
         listeners.remove(listener);
     }
 }

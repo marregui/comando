@@ -12,7 +12,7 @@ final class ByMode extends Color {
     private final int dark;
     private final int light;
 
-    ByMode(int dark, int light) {
+    ByMode(final int dark, final int light) {
         super(dark);
         this.dark = 0xFF000000 | dark;
         this.light = 0xFF000000 | light;
@@ -24,12 +24,12 @@ final class ByMode extends Color {
     }
 
     /** The value on a light ground, or on a dark one, whichever is chosen: a plain colour that never changes. */
-    Color in(boolean onLight) {
+    Color in(final boolean onLight) {
         return new Color(onLight ? light : dark);
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         return o instanceof Color c && c.getRGB() == getRGB();
     }
 

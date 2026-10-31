@@ -1,9 +1,9 @@
 package dev.marregui.comando.core.resource;
 
-import dev.marregui.comando.core.state.AppState;
-
 import java.util.List;
 import java.util.Map;
+
+import dev.marregui.comando.core.state.AppState;
 
 /**
  * The generic part of a configurable resource: its attributes and the conversion between a spec and the
@@ -28,7 +28,7 @@ public interface ResourceKind<S> {
     S withName(S spec, String name);
 
     /** A copy for the Clone button; by default the same spec under a new name. */
-    default S cloneOf(S spec, String name) {
+    default S cloneOf(final S spec, final String name) {
         return withName(spec, name);
     }
 
@@ -54,17 +54,17 @@ public interface ResourceKind<S> {
     }
 
     /** Whether a form holding {@code values} opens its "Advanced" section. */
-    default boolean showAdvanced(Map<String, String> values) {
+    default boolean showAdvanced(final Map<String, String> values) {
         return false;
     }
 
     /** A warning about what the form's values will do, or empty. */
-    default String advice(Map<String, String> values) {
+    default String advice(final Map<String, String> values) {
         return "";
     }
 
     /** "a, b and c". */
-    static String sentence(List<String> parts) {
+    static String sentence(final List<String> parts) {
         if (parts.size() <= 1) {
             return String.join("", parts);
         }
@@ -72,7 +72,7 @@ public interface ResourceKind<S> {
     }
 
     /** "1 panel", "2 panels". */
-    static String count(int n, String noun) {
+    static String count(final int n, final String noun) {
         return n + " " + noun + (n == 1 ? "" : "s");
     }
 }

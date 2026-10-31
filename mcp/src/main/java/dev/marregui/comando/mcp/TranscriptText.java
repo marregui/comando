@@ -1,9 +1,9 @@
 package dev.marregui.comando.mcp;
 
+import java.util.Locale;
+
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
-
-import java.util.Locale;
 
 /**
  * A session's transcript as text for another session, from a block index on: the prompts, Claude's text, the tool
@@ -28,9 +28,9 @@ final class TranscriptText {
      * {@code status} heads the text. An {@code after} beyond the end (a transcript that restarted) reads from the
      * start.
      */
-    static Read read(String session, String status, Transcript t, int after, int maxChars) {
-        int size = t.size();
-        StringBuilder body = new StringBuilder();
+    static Read read(final String session, final String status, final Transcript t, int after, final int maxChars) {
+        final int size = t.size();
+        final StringBuilder body = new StringBuilder();
         String restarted = "";
         if (after > size) {
             restarted = "; the transcript restarted since that cursor, read from its start";
@@ -39,12 +39,12 @@ final class TranscriptText {
         int next = size;
         int unfinished = -1;
         for (int i = after; i < size; i++) {
-            Block b = t.get(i);
+            final Block b = t.get(i);
             if (b == null) {
                 next = i; // cleared under the reader
                 break;
             }
-            String entry = entry(i, b);
+            final String entry = entry(i, b);
             if (body.length() + entry.length() > maxChars && body.length() > 0) {
                 next = i;
                 break;
@@ -57,7 +57,7 @@ final class TranscriptText {
         if (unfinished >= 0) {
             next = Math.min(next, unfinished);
         }
-        String head = "session " + session + " · " + status + " · " + size + " blocks, shown from " + after
+        final String head = "session " + session + " · " + status + " · " + size + " blocks, shown from " + after
                 + " · next read: after " + next + restarted + (next < size && unfinished < 0 ? "; more blocks follow" : "") + '\n';
         return new Read(body.isEmpty() ? head + "(no blocks)\n" : head + body, next);
     }
@@ -72,17 +72,17 @@ final class TranscriptText {
      * after their ends, so their text is not its answer. Without its own turn end (the session took queued prompts as
      * one turn), the text after the prompt up to the last turn end.
      */
-    static Turn answer(Transcript t, int prompt) {
+    static Turn answer(final Transcript t, final int prompt) {
         int open = 0;
         for (int i = 0; i < prompt; i++) {
-            Block b = t.get(i);
+            final Block b = t.get(i);
             if (b instanceof Block.UserPrompt p && p.parent().isEmpty()) {
                 open++;
             } else if (b instanceof Block.TurnEnd) {
                 open = Math.max(0, open - 1);
             }
         }
-        int size = t.size();
+        final int size = t.size();
         int start = prompt;
         int ends = 0;
         int lastEnd = -1;
@@ -104,8 +104,8 @@ final class TranscriptText {
     }
 
     /** Claude's top-level text strictly between {@code from} and {@code to}. */
-    private static String text(Transcript t, int from, int to) {
-        StringBuilder out = new StringBuilder();
+    private static String text(final Transcript t, final int from, final int to) {
+        final StringBuilder out = new StringBuilder();
         for (int i = from + 1; i < to; i++) {
             if (t.get(i) instanceof Block.AssistantText a && a.parent().isEmpty() && !a.text().isBlank()) {
                 if (!out.isEmpty()) {
@@ -117,7 +117,7 @@ final class TranscriptText {
         return out.toString();
     }
 
-    static boolean finished(Block b) {
+    static boolean finished(final Block b) {
         return switch (b) {
             case Block.AssistantText a -> !a.streaming();
             case Block.Thinking th -> !th.streaming();
@@ -126,9 +126,9 @@ final class TranscriptText {
         };
     }
 
-    private static String entry(int i, Block b) {
-        String sub = b.parent().isEmpty() ? "" : "(subagent) ";
-        String line = switch (b) {
+    private static String entry(final int i, final Block b) {
+        final String sub = b.parent().isEmpty() ? "" : "(subagent) ";
+        final String line = switch (b) {
             case Block.UserPrompt p -> "prompt" + (p.origin().isEmpty() ? "" : " from panel " + p.origin()) + ":\n" + indent(clip(p.text(), MAX_TEXT));
             case Block.AssistantText a -> "Claude" + (a.streaming() ? " (still writing)" : "") + ":\n" + indent(clip(a.text(), MAX_TEXT));
             case Block.Thinking th -> "thinking" + (th.tokens() > 0 ? " (" + th.tokens() + " tokens)" : "") + (th.streaming() ? " (still thinking)" : "");
@@ -142,11 +142,11 @@ final class TranscriptText {
         return "[" + i + "] " + sub + line + '\n';
     }
 
-    private static String indent(String text) {
+    private static String indent(final String text) {
         return "  " + text.strip().replace("\n", "\n  ");
     }
 
-    private static String clip(String s, int max) {
+    private static String clip(final String s, final int max) {
         return McpTools.clip(s, max);
     }
 }

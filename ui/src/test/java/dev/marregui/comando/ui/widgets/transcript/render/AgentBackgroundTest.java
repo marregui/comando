@@ -1,15 +1,16 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.ui.kit.async.OnEdt;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,12 +33,12 @@ class AgentBackgroundTest {
         canvas.clock(now::get);
     }
 
-    private static Block.ToolCall agent(String id) {
+    private static Block.ToolCall agent(final String id) {
         return new Block.ToolCall(id, "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\",\"run_in_background\":true}", "",
                 Block.ToolStatus.RUNNING, "");
     }
 
-    private static List<BackgroundTask> tasks(String... ids) {
+    private static List<BackgroundTask> tasks(final String... ids) {
         return Arrays.stream(ids).map(id -> new BackgroundTask(id, "local_agent", "task " + id, 1L)).toList();
     }
 
@@ -46,9 +47,9 @@ class AgentBackgroundTest {
     @Test
     void aSessionSwitchBackDoesNotEndTheBackgroundAgentsTime() {
         // session B launches a background sub-agent, seen live
-        Block.ToolCall a = agent("a1");
+        final Block.ToolCall a = agent("a1");
         canvas.append(0, a);
-        Block.ToolCall launched = a.withResult("Async agent launched successfully.\nagentId: ag1 (internal)", false);
+        final Block.ToolCall launched = a.withResult("Async agent launched successfully.\nagentId: ag1 (internal)", false);
         canvas.update(0, launched);
         canvas.setBackgroundTasks(tasks("ag1"));
         now.addAndGet(60_000);
@@ -75,7 +76,7 @@ class AgentBackgroundTest {
     /// A foreground call whose report text contains `agentId:` is done, not taken for a background launch.
     @Test
     void aForegroundReportThatMentionsALaunchedAgentIsDone() {
-        Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"review\",\"prompt\":\"Do it.\"}", "",
+        final Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"review\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, "");
         canvas.append(0, a);
         now.addAndGet(30_000);
@@ -89,7 +90,7 @@ class AgentBackgroundTest {
     /// canvas is rebuilt, as on a session switch or "Show earlier".
     @Test
     void aLongRunningSubagentsTimeSurvivesARebuildAfterManyToolCalls() {
-        Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "",
+        final Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, "");
         canvas.append(0, a);
         for (int i = 1; i <= 2048; i++) {

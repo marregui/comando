@@ -1,5 +1,14 @@
 package dev.marregui.comando.ui.shell;
 
+import java.awt.Component;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import javax.swing.JFrame;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
@@ -11,15 +20,6 @@ import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
-
-import javax.swing.JFrame;
-import java.awt.Component;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * The kit's scheduled jobs in the window (record 117): read through {@link Setup#jobs} at start, after each change
@@ -39,14 +39,14 @@ final class JobActions {
     private ShownTimer timer;
     private KitJobs jobs = KitJobs.NONE;
 
-    JobActions(ComandoUi.Dependencies deps, Supplier<JFrame> frame, Consumer<Path> openFile) {
+    JobActions(final ComandoUi.Dependencies deps, final Supplier<JFrame> frame, final Consumer<Path> openFile) {
         this.deps = deps;
         this.frame = frame;
         this.openFile = openFile;
     }
 
     /** Shows the jobs in {@code bar}'s Files tab, once the window is built: read now, then every minute it shows. */
-    void attach(SessionsSidebar bar) {
+    void attach(final SessionsSidebar bar) {
         sidebar = bar;
         bar.onJobs(this::configure, this::apply);
         if (deps.setup().root().kit().isEmpty()) {
@@ -76,12 +76,12 @@ final class JobActions {
     /** Reads the jobs again off the EDT; the row follows. */
     void refresh() {
         UiErrands.start("kit-jobs", () -> {
-            KitJobs now = deps.setup().jobs();
+            final KitJobs now = deps.setup().jobs();
             Edt.later(() -> show(now));
         });
     }
 
-    private void show(KitJobs now) {
+    private void show(final KitJobs now) {
         jobs = now;
         if (sidebar != null) {
             sidebar.showJobs(now);
@@ -98,7 +98,7 @@ final class JobActions {
             return;
         }
         UiErrands.start("kit-jobs", () -> {
-            KitJobs now = deps.setup().jobs();
+            final KitJobs now = deps.setup().jobs();
             Edt.later(() -> {
                 show(now);
                 if (!now.read() || !now.error().isEmpty()) {
@@ -111,21 +111,21 @@ final class JobActions {
         });
     }
 
-    private void open(KitJobs now) {
-        Path root = deps.setup().root().dir();
+    private void open(final KitJobs now) {
+        final Path root = deps.setup().root().dir();
         JobsDialog.show(frame.get(), now, root, new JobsEditor.Actions() {
             @Override
-            public Optional<Path> program(Component owner, Path bin) {
+            public Optional<Path> program(final Component owner, final Path bin) {
                 return FileChoosers.open(owner, "Choose the job's program", bin);
             }
 
             @Override
-            public void run(String name) {
+            public void run(final String name) {
                 JobActions.this.run(name);
             }
 
             @Override
-            public void openLog(Path log) {
+            public void openLog(final Path log) {
                 openFile.accept(log);
             }
         }, this::save, null);
@@ -134,17 +134,17 @@ final class JobActions {
     /**
      * Hands the whole list to {@code kit.py} off the EDT, then runs {@code done}, or {@code refused} with why, on it.
      */
-    private void save(List<KitJob> list, Runnable done, Consumer<String> refused) {
+    private void save(final List<KitJob> list, final Runnable done, final Consumer<String> refused) {
         UiErrands.start("kit-jobs-save", () -> {
             try {
-                Setup.JobsDone r = deps.setup().saveJobs(list);
+                final Setup.JobsDone r = deps.setup().saveJobs(list);
                 Edt.later(() -> {
                     told(r, "The kit jobs are saved");
                     done.run();
                     refresh();
                 });
-            } catch (IOException e) {
-                String why = e.getMessage() == null ? e.toString() : e.getMessage();
+            } catch (final IOException e) {
+                final String why = e.getMessage() == null ? e.toString() : e.getMessage();
                 Edt.later(() -> {
                     refused.accept(why.strip().lines().reduce((a, b) -> b).orElse(why));
                     refresh();
@@ -160,13 +160,13 @@ final class JobActions {
     void apply() {
         UiErrands.start("kit-jobs-apply", () -> {
             try {
-                KitJobs now = deps.setup().jobs();
+                final KitJobs now = deps.setup().jobs();
                 if (!now.read() || !now.error().isEmpty()) {
                     throw new IOException(now.error().isEmpty() ? "the jobs cannot be read" : now.error());
                 }
-                Setup.JobsDone r = deps.setup().saveJobs(now.definitions());
+                final Setup.JobsDone r = deps.setup().saveJobs(now.definitions());
                 Edt.later(() -> told(r, "The scheduler follows the kit jobs again"));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 notify(Notice.Level.ERROR, "The kit jobs were not applied: " + e.getMessage());
             }
             Edt.later(this::refresh);
@@ -174,12 +174,12 @@ final class JobActions {
     }
 
     /** Starts job {@code name} now through the scheduler. */
-    void run(String name) {
+    void run(final String name) {
         UiErrands.start("kit-jobs-run", () -> {
             try {
-                Setup.JobsDone r = deps.setup().runJob(name);
+                final Setup.JobsDone r = deps.setup().runJob(name);
                 Edt.later(() -> told(r, "The job " + name + " started; its output goes to its log"));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 notify(Notice.Level.ERROR, "The job " + name + " did not start: " + e.getMessage());
             }
             Edt.later(this::refresh);
@@ -187,17 +187,17 @@ final class JobActions {
     }
 
     /** A notice of what {@code kit.py} did: {@code ok} when all of it, else its own words on what it left. */
-    private void told(Setup.JobsDone r, String ok) {
+    private void told(final Setup.JobsDone r, final String ok) {
         if (r.complete()) {
             notify(Notice.Level.INFO, ok);
         } else {
-            String left = r.text().lines().filter(l -> l.contains("running") || l.contains("failed") || l.contains("not ")).findFirst()
+            final String left = r.text().lines().filter(l -> l.contains("running") || l.contains("failed") || l.contains("not ")).findFirst()
                     .orElse(r.text().strip());
             notify(Notice.Level.WARN, "Kit jobs: " + left);
         }
     }
 
-    private void notify(Notice.Level level, String text) {
+    private void notify(final Notice.Level level, final String text) {
         deps.intents().dispatch(new Intent.Notify(level, text, false, ""));
     }
 }

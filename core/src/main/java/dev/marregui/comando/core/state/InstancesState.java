@@ -55,7 +55,7 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
         }
 
         /** A present instance that did not start the Edge. */
-        public Instance(String slug, String name, String version, String role, String kit, boolean busy, String started, List<Member> sessions) {
+        public Instance(final String slug, final String name, final String version, final String role, final String kit, final boolean busy, final String started, final List<Member> sessions) {
             this(slug, name, version, role, kit, busy, started, sessions, false, true, 0L);
         }
     }
@@ -90,7 +90,7 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
         }
 
         /** A session known only by its name and whether it is busy. */
-        public Member(String name, boolean busy) {
+        public Member(final String name, final boolean busy) {
             this(name, busy, "", "", 0L, "", "", -1, "", "", List.of(), "", "");
         }
     }
@@ -123,7 +123,7 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
             reply = reply == null ? "" : reply;
         }
 
-        public Consult ended(Status s, String text, long at) {
+        public Consult ended(final Status s, final String text, final long at) {
             return new Consult(id, direction, peer, peerName, session, question, s, askedAt, at, text);
         }
     }

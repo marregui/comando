@@ -1,13 +1,13 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.ui.kit.text.CaseFold;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import dev.marregui.comando.ui.kit.text.CaseFold;
 
 /**
  * Find in the transcript: the matches over the boxes in reading order, the current one, and the closed items a find
@@ -54,7 +54,7 @@ final class Finder {
     /** Items the current find opened; clearing the find closes them again. */
     private final List<Item> revealed = new ArrayList<>();
 
-    Finder(Host host) {
+    Finder(final Host host) {
         this.host = host;
     }
 
@@ -73,7 +73,7 @@ final class Finder {
      * Finds {@code text}, opening the closed items that hold it; returns the number of matches. A new text first
      * closes what the previous one opened.
      */
-    int find(String text, boolean forward) {
+    int find(final String text, final boolean forward) {
         boolean fromRewound = false;
         if (!text.equals(findText)) {
             fromRewound = rewoundAt >= 0;
@@ -86,7 +86,7 @@ final class Finder {
             host.relayout();
         }
         // the same text again, after a switch or new blocks: matches are counted over every item
-        List<Placed> placed = host.placedExactly();
+        final List<Placed> placed = host.placedExactly();
         rematch(placed);
         if (matches.isEmpty()) {
             currentMatch = -1;
@@ -101,18 +101,18 @@ final class Finder {
                     : Math.floorMod(currentMatch + (forward ? 1 : -1), matches.size());
         }
         dropRewound();
-        int[] m = matches.get(currentMatch);
-        Placed p = placed.get(m[0]);
+        final int[] m = matches.get(currentMatch);
+        final Placed p = placed.get(m[0]);
         host.scrollTo(p.y() + Math.round(p.box().topOf(m[1])));
         host.repaint();
         return matches.size();
     }
 
     /** The next find of a new text starts where the current match begins; {@code placed} null when not placed. */
-    void rewind(List<Placed> placed) {
+    void rewind(final List<Placed> placed) {
         dropRewound();
         if (placed != null && currentMatch >= 0 && currentMatch < matches.size()) {
-            int[] m = matches.get(currentMatch);
+            final int[] m = matches.get(currentMatch);
             rewoundBox = placed.get(m[0]).box();
             rewoundItem = placed.get(m[0]).item();
             rewoundAt = m[1];
@@ -120,7 +120,7 @@ final class Finder {
     }
 
     /** The first match at or after the anchor, in reading order; the first match when the anchor's text is gone. */
-    private int atOrAfterRewound(List<Placed> placed) {
+    private int atOrAfterRewound(final List<Placed> placed) {
         int from = -1;
         for (int i = 0; i < placed.size() && from < 0; i++) {
             if (placed.get(i).box() == rewoundBox) {
@@ -136,7 +136,7 @@ final class Finder {
             return 0;
         }
         for (int k = 0; k < matches.size(); k++) {
-            int[] m = matches.get(k);
+            final int[] m = matches.get(k);
             if (m[0] > from || (m[0] == from && m[1] >= rewoundAt)) {
                 return k;
             }
@@ -151,12 +151,12 @@ final class Finder {
     }
 
     /** The top of the current match in the canvas, -1 when there is none; {@code placed} null when not placed. */
-    int currentMatchY(List<Placed> placed) {
+    int currentMatchY(final List<Placed> placed) {
         if (placed == null || currentMatch < 0 || currentMatch >= matches.size()) {
             return -1;
         }
-        int[] m = matches.get(currentMatch);
-        Placed p = placed.get(m[0]);
+        final int[] m = matches.get(currentMatch);
+        final Placed p = placed.get(m[0]);
         return p.y() + Math.round(p.box().topOf(m[1]));
     }
 
@@ -165,9 +165,9 @@ final class Finder {
      * current match, with the cards around it.
      */
     void clear() {
-        Set<Item> keep = Collections.newSetFromMap(new IdentityHashMap<>());
+        final Set<Item> keep = Collections.newSetFromMap(new IdentityHashMap<>());
         if (!findText.isEmpty() && !revealed.isEmpty()) {
-            List<Placed> placed = host.placedExactly();
+            final List<Placed> placed = host.placedExactly();
             if (currentMatch >= 0 && currentMatch < matches.size()) {
                 for (Item i = placed.get(matches.get(currentMatch)[0]).item(); i != null; i = host.parentOf(i)) {
                     keep.add(i);
@@ -185,9 +185,9 @@ final class Finder {
     }
 
     /** Closes what the find opened, except {@code keep}; true when something closed. */
-    private boolean concealRevealed(Set<Item> keep) {
+    private boolean concealRevealed(final Set<Item> keep) {
         boolean closed = false;
-        for (Item item : revealed) {
+        for (final Item item : revealed) {
             if (item.fold().conceal(keep.contains(item))) {
                 host.foldChanged(item);
                 closed = true;
@@ -207,8 +207,8 @@ final class Finder {
      * Matches the find's text over {@code placed}, the boxes in reading order, keeping the current match when it still
      * is one.
      */
-    void rematch(List<Placed> placed) {
-        int keep = currentMatch;
+    void rematch(final List<Placed> placed) {
+        final int keep = currentMatch;
         matches.clear();
         matchesByBox = new IdentityHashMap<>();
         if (findText.isEmpty()) {
@@ -218,7 +218,7 @@ final class Finder {
         // folded char by char, so an offset in the folded text is the same offset in the box's text
         final String needle = CaseFold.fold(findText);
         for (int i = 0; i < placed.size(); i++) {
-            TextBox box = placed.get(i).box();
+            final TextBox box = placed.get(i).box();
             final String hay = CaseFold.fold(box.text());
             for (int at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length())) {
                 matches.add(new int[]{i, at});
@@ -228,9 +228,9 @@ final class Finder {
         currentMatch = keep < matches.size() ? keep : -1;
     }
 
-    private void revealContaining(List<Item> list, String needle) {
-        for (Item item : list) {
-            Fold fold = item.fold();
+    private void revealContaining(final List<Item> list, final String needle) {
+        for (final Item item : list) {
+            final Fold fold = item.fold();
             if ((fold == null && item.children().isEmpty()) || !subtreeContains(item, needle)) {
                 continue;
             }
@@ -243,11 +243,11 @@ final class Finder {
     }
 
     /** True when the item or any block nested in it, at any depth, contains {@code needle}. */
-    private static boolean subtreeContains(Item item, String needle) {
+    private static boolean subtreeContains(final Item item, final String needle) {
         if (CaseFold.contains(item.text(), needle)) {
             return true;
         }
-        for (Item c : item.children()) {
+        for (final Item c : item.children()) {
             if (subtreeContains(c, needle)) {
                 return true;
             }
@@ -258,20 +258,20 @@ final class Finder {
     // ---- what painting reads
 
     /** The matches in {@code box}, as {@code [start, end]} pairs; null when none. */
-    List<int[]> finds(TextBox box) {
+    List<int[]> finds(final TextBox box) {
         return matchesByBox.get(box);
     }
 
     /** The index among {@code box}'s matches of the current match; -1 when it is not in that box. */
-    int currentFind(TextBox box, List<Placed> placed) {
+    int currentFind(final TextBox box, final List<Placed> placed) {
         if (currentMatch < 0 || placed == null) {
             return -1;
         }
-        int[] m = matches.get(currentMatch);
+        final int[] m = matches.get(currentMatch);
         if (placed.get(m[0]).box() != box) {
             return -1;
         }
-        List<int[]> inBox = matchesByBox.get(box);
+        final List<int[]> inBox = matchesByBox.get(box);
         for (int i = 0; inBox != null && i < inBox.size(); i++) {
             if (inBox.get(i)[0] == m[1]) {
                 return i;

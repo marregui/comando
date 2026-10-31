@@ -1,5 +1,27 @@
 package dev.marregui.comando.ui.widgets.changes;
 
+import java.awt.Color;
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.function.Consumer;
+import javax.swing.Icon;
+import javax.swing.JComponent;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeExpansionListener;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.TreePath;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.RepoStatus;
@@ -14,28 +36,6 @@ import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
-
-import javax.swing.Icon;
-import javax.swing.JComponent;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
-import javax.swing.event.TreeExpansionEvent;
-import javax.swing.event.TreeExpansionListener;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.TreePath;
-import java.awt.Color;
-import java.awt.event.MouseEvent;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.function.Consumer;
 
 /**
  * What the Files tab's git repositories hold that their last commits do not, as IDEs show it before a commit: a row per
@@ -74,15 +74,15 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         void remove(String root, List<String> paths);
 
         /** The intents, as is. */
-        static Actions of(IntentSink intents) {
+        static Actions of(final IntentSink intents) {
             return new Actions() {
                 @Override
-                public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+                public void rollBack(final String root, final List<RepoStatus.FileChange> changes) {
                     intents.dispatch(new Intent.RollBack(root, changes));
                 }
 
                 @Override
-                public void remove(String root, List<String> paths) {
+                public void remove(final String root, final List<String> paths) {
                     intents.dispatch(new Intent.RemoveFiles(root, paths));
                 }
             };
@@ -105,12 +105,12 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     /** True while a read is shown: the selection it restores is not the user's move. */
     private boolean rendering;
 
-    public ChangesWidget(WidgetContext context, RepoChanges changes, Consumer<Path> openFile) {
+    public ChangesWidget(final WidgetContext context, final RepoChanges changes, final Consumer<Path> openFile) {
         this(context, changes, openFile, Actions.of(context.intents()), ResourceActions.Questions.MODAL);
     }
 
     /** With what rolling back and removing do, and the question asked first; tests answer it. */
-    public ChangesWidget(WidgetContext context, RepoChanges changes, Consumer<Path> openFile, Actions actions, ResourceActions.Questions questions) {
+    public ChangesWidget(final WidgetContext context, final RepoChanges changes, final Consumer<Path> openFile, final Actions actions, final ResourceActions.Questions questions) {
         this.intents = context.intents();
         this.changes = changes;
         this.openFile = openFile;
@@ -129,14 +129,14 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         });
         tree.tree().addTreeExpansionListener(new TreeExpansionListener() {
             @Override
-            public void treeExpanded(TreeExpansionEvent e) {
+            public void treeExpanded(final TreeExpansionEvent e) {
                 if (!rendering) {
                     closed.remove(key(e.getPath()));
                 }
             }
 
             @Override
-            public void treeCollapsed(TreeExpansionEvent e) {
+            public void treeCollapsed(final TreeExpansionEvent e) {
                 if (!rendering) {
                     closed.add(key(e.getPath()));
                 }
@@ -153,7 +153,7 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     }
 
     @Override
-    public void render(ViewSpec.Changes view) {
+    public void render(final ViewSpec.Changes view) {
         scope = view;
         refresh();
     }
@@ -179,9 +179,9 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     }
 
     private void refresh() {
-        ViewSpec.TreeNode selected = tree.selected();
-        String selectedLink = selected == null ? "" : selected.link();
-        ViewSpec.TreeNode root = build(changes.repos(), scope, targets);
+        final ViewSpec.TreeNode selected = tree.selected();
+        final String selectedLink = selected == null ? "" : selected.link();
+        final ViewSpec.TreeNode root = build(changes.repos(), scope, targets);
         rendering = true;
         try {
             if (built) {
@@ -202,7 +202,7 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     /** Opens every row the user has not closed, so a new repository, group or folder shows its files. */
     private void openAllButClosed() {
         for (int i = 0; i < tree.tree().getRowCount() && i < MAX_ROWS_OPENED; i++) {
-            TreePath p = tree.tree().getPathForRow(i);
+            final TreePath p = tree.tree().getPathForRow(i);
             if (!((DefaultMutableTreeNode) p.getLastPathComponent()).isLeaf() && !tree.tree().isExpanded(p) && !closed.contains(key(p))) {
                 tree.tree().expandRow(i);
             }
@@ -210,9 +210,9 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     }
 
     /** Selects the file row linked {@code link}, when it shows: a folder chain that split or joined moved it. */
-    private void reselect(String link) {
+    private void reselect(final String link) {
         for (int i = 0; i < tree.tree().getRowCount(); i++) {
-            TreePath p = tree.tree().getPathForRow(i);
+            final TreePath p = tree.tree().getPathForRow(i);
             if (((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n && n.link().equals(link)) {
                 tree.tree().setSelectionPath(p);
                 return;
@@ -224,8 +224,8 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
      * A row's key: the labels below the root joined by '/', so a chain of folders shown as one row ("a/b/c") and the
      * same folders shown apart ("a/b", then "c") have the same key.
      */
-    static String key(TreePath p) {
-        StringBuilder out = new StringBuilder();
+    static String key(final TreePath p) {
+        final StringBuilder out = new StringBuilder();
         for (int i = 1; i < p.getPathCount(); i++) {
             if (((DefaultMutableTreeNode) p.getPathComponent(i)).getUserObject() instanceof ViewSpec.TreeNode n) {
                 out.append(i > 1 ? "/" : "").append(n.label());
@@ -238,7 +238,7 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
      * The rows of {@code repos}; each file's row is linked to its change in {@code targets}. A repository's row is
      * named after its folder, or after its path when two watched repositories share a name.
      */
-    static ViewSpec.TreeNode build(List<RepoStatus> repos, Map<String, Target> targets) {
+    static ViewSpec.TreeNode build(final List<RepoStatus> repos, final Map<String, Target> targets) {
         return build(repos, new ViewSpec.Changes(), targets);
     }
 
@@ -246,44 +246,44 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
      * The rows of what {@code scope} asks for: every repository, or the one at its root, called its name, with only the
      * changes inside its folder when it names one.
      */
-    static ViewSpec.TreeNode build(List<RepoStatus> repos, ViewSpec.Changes scope, Map<String, Target> targets) {
+    static ViewSpec.TreeNode build(final List<RepoStatus> repos, final ViewSpec.Changes scope, final Map<String, Target> targets) {
         if (scope.root().isEmpty()) {
             return all(repos, targets);
         }
         targets.clear();
-        Path top = Path.of(scope.root()).toAbsolutePath().normalize();
-        for (RepoStatus r : repos) {
+        final Path top = Path.of(scope.root()).toAbsolutePath().normalize();
+        for (final RepoStatus r : repos) {
             if (Path.of(r.root()).toAbsolutePath().normalize().equals(top)) {
-                RepoStatus shown = scope.folder().isEmpty() ? r
+                final RepoStatus shown = scope.folder().isEmpty() ? r
                         : new RepoStatus(r.root(), r.branch(), RepoChanges.changesIn(r, scope.folder()), r.truncated(), r.error(), r.head());
-                String label = scope.name().isEmpty() ? r.name() : scope.name();
+                final String label = scope.name().isEmpty() ? r.name() : scope.name();
                 return new ViewSpec.TreeNode("Changes", "", List.of(repo(shown, label, targets)));
             }
         }
         return new ViewSpec.TreeNode("Changes", "", List.of(note(NOT_WATCHED + Labels.shortPath(scope.root()))));
     }
 
-    private static ViewSpec.TreeNode all(List<RepoStatus> repos, Map<String, Target> targets) {
+    private static ViewSpec.TreeNode all(final List<RepoStatus> repos, final Map<String, Target> targets) {
         targets.clear();
-        Map<String, Integer> names = new HashMap<>();
+        final Map<String, Integer> names = new HashMap<>();
         repos.forEach(r -> names.merge(r.name(), 1, Integer::sum));
-        List<ViewSpec.TreeNode> rows = new ArrayList<>(repos.size());
-        for (RepoStatus r : repos) {
-            String label = names.get(r.name()) > 1 ? Labels.shortPath(r.root()) : r.name();
+        final List<ViewSpec.TreeNode> rows = new ArrayList<>(repos.size());
+        for (final RepoStatus r : repos) {
+            final String label = names.get(r.name()) > 1 ? Labels.shortPath(r.root()) : r.name();
             rows.add(repo(r, label, targets));
         }
         return new ViewSpec.TreeNode("Changes", "", rows.isEmpty() ? List.of(note(NO_REPOS)) : rows);
     }
 
-    private static ViewSpec.TreeNode repo(RepoStatus r, String label, Map<String, Target> targets) {
+    private static ViewSpec.TreeNode repo(final RepoStatus r, final String label, final Map<String, Target> targets) {
         if (!r.error().isEmpty()) {
             return new ViewSpec.TreeNode(label, Labels.shortPath(r.root()), List.of(note("✗ cannot be read: " + r.error())));
         }
-        List<RepoStatus.FileChange> untracked = r.changes().stream().filter(c -> c.kind() == RepoStatus.Kind.UNTRACKED).toList();
-        List<RepoStatus.FileChange> removed = r.changes().stream().filter(c -> c.kind() == RepoStatus.Kind.DELETED).toList();
-        List<RepoStatus.FileChange> changed = r.changes().stream()
+        final List<RepoStatus.FileChange> untracked = r.changes().stream().filter(c -> c.kind() == RepoStatus.Kind.UNTRACKED).toList();
+        final List<RepoStatus.FileChange> removed = r.changes().stream().filter(c -> c.kind() == RepoStatus.Kind.DELETED).toList();
+        final List<RepoStatus.FileChange> changed = r.changes().stream()
                 .filter(c -> c.kind() != RepoStatus.Kind.UNTRACKED && c.kind() != RepoStatus.Kind.DELETED).toList();
-        List<ViewSpec.TreeNode> kids = new ArrayList<>(4);
+        final List<ViewSpec.TreeNode> kids = new ArrayList<>(4);
         if (!changed.isEmpty()) {
             kids.add(new ViewSpec.TreeNode(CHANGED, files(changed.size()), folders(r.root(), changed, targets)));
         }
@@ -296,16 +296,16 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         if (r.truncated()) {
             kids.add(new ViewSpec.TreeNode(ViewSpec.TreeNode.MORE, "more changes than the view shows", List.of()));
         }
-        String count = r.changes().isEmpty() ? CLEAN : r.changes().size() + (r.truncated() ? "+" : "") + (r.changes().size() == 1 ? " change" : " changes");
-        String detail = (r.branch().isEmpty() ? "" : r.branch() + " · ") + count;
+        final String count = r.changes().isEmpty() ? CLEAN : r.changes().size() + (r.truncated() ? "+" : "") + (r.changes().size() == 1 ? " change" : " changes");
+        final String detail = (r.branch().isEmpty() ? "" : r.branch() + " · ") + count;
         return new ViewSpec.TreeNode(label, detail, kids);
     }
 
-    private static String files(int n) {
+    private static String files(final int n) {
         return n == 1 ? "1 file" : n + " files";
     }
 
-    private static ViewSpec.TreeNode note(String text) {
+    private static ViewSpec.TreeNode note(final String text) {
         return new ViewSpec.TreeNode(text, "", List.of());
     }
 
@@ -317,10 +317,10 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     }
 
     /** {@code list} as folders and files, folders first; a folder holding only one folder joins it in one row. */
-    static List<ViewSpec.TreeNode> folders(String root, List<RepoStatus.FileChange> list, Map<String, Target> targets) {
-        Dir top = new Dir();
-        for (RepoStatus.FileChange c : list) {
-            String[] parts = c.path().split("/");
+    static List<ViewSpec.TreeNode> folders(final String root, final List<RepoStatus.FileChange> list, final Map<String, Target> targets) {
+        final Dir top = new Dir();
+        for (final RepoStatus.FileChange c : list) {
+            final String[] parts = c.path().split("/");
             Dir d = top;
             d.count++;
             for (int i = 0; i < parts.length - 1; i++) {
@@ -332,30 +332,30 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         return nodes(root, top, targets);
     }
 
-    private static List<ViewSpec.TreeNode> nodes(String root, Dir dir, Map<String, Target> targets) {
-        List<ViewSpec.TreeNode> out = new ArrayList<>(dir.dirs.size() + dir.files.size());
-        for (Map.Entry<String, Dir> e : dir.dirs.entrySet()) {
-            StringBuilder label = new StringBuilder(e.getKey());
+    private static List<ViewSpec.TreeNode> nodes(final String root, final Dir dir, final Map<String, Target> targets) {
+        final List<ViewSpec.TreeNode> out = new ArrayList<>(dir.dirs.size() + dir.files.size());
+        for (final Map.Entry<String, Dir> e : dir.dirs.entrySet()) {
+            final StringBuilder label = new StringBuilder(e.getKey());
             Dir d = e.getValue();
             while (d.files.isEmpty() && d.dirs.size() == 1) {
-                Map.Entry<String, Dir> only = d.dirs.firstEntry();
+                final Map.Entry<String, Dir> only = d.dirs.firstEntry();
                 label.append('/').append(only.getKey());
                 d = only.getValue();
             }
             out.add(new ViewSpec.TreeNode(label.toString(), files(d.count), nodes(root, d, targets)));
         }
-        for (Map.Entry<String, RepoStatus.FileChange> e : dir.files.entrySet()) {
-            RepoStatus.FileChange c = e.getValue();
+        for (final Map.Entry<String, RepoStatus.FileChange> e : dir.files.entrySet()) {
+            final RepoStatus.FileChange c = e.getValue();
             // the kind is part of the link: after git rm --cached one path is both deleted and untracked
-            String link = LINK + root + '\n' + c.kind() + '\n' + c.path();
+            final String link = LINK + root + '\n' + c.kind() + '\n' + c.path();
             targets.put(link, new Target(root, c));
-            String detail = RepoChanges.describe(c.kind()) + (c.from().isEmpty() ? "" : " from " + c.from());
+            final String detail = RepoChanges.describe(c.kind()) + (c.from().isEmpty() ? "" : " from " + c.from());
             out.add(new ViewSpec.TreeNode(e.getKey(), detail, link, List.of()));
         }
         return out;
     }
 
-    private Icon icon(ViewSpec.TreeNode n) {
+    private Icon icon(final ViewSpec.TreeNode n) {
         if (targets.containsKey(n.link())) {
             return Icons.get("file");
         }
@@ -370,21 +370,21 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         });
     }
 
-    private Color color(DefaultMutableTreeNode node) {
+    private Color color(final DefaultMutableTreeNode node) {
         return node.getUserObject() instanceof ViewSpec.TreeNode n && targets.get(n.link()) instanceof Target t
                 ? RepoChanges.color(t.change().kind()) : null;
     }
 
     /** Compares the file of row {@code n} with its {@code HEAD} version; a row that is not a file's does nothing. */
-    private void compare(ViewSpec.TreeNode n, ChangeAsk ask) {
-        Target t = n == null ? null : targets.get(n.link());
+    private void compare(final ViewSpec.TreeNode n, final ChangeAsk ask) {
+        final Target t = n == null ? null : targets.get(n.link());
         if (t != null) {
             intents.dispatch(new Intent.OpenChange(t.root(), t.change(), ask));
         }
     }
 
-    private void menu(ViewSpec.TreeNode n, MouseEvent e) {
-        JPopupMenu menu = menuFor(n);
+    private void menu(final ViewSpec.TreeNode n, final MouseEvent e) {
+        final JPopupMenu menu = menuFor(n);
         if (menu.getComponentCount() > 0) {
             menu.show(e.getComponent(), e.getX(), e.getY());
         }
@@ -394,10 +394,10 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
      * The menu of {@code n}, right-clicked inside the selection: a file alone compares or opens; any selection rolls
      * back or removes its files, a folder's, a group's or a repository's row standing for every file under it.
      */
-    JPopupMenu menuFor(ViewSpec.TreeNode n) {
-        JPopupMenu menu = new JPopupMenu();
-        Target t = targets.get(n.link());
-        List<Target> chosen = chosen();
+    JPopupMenu menuFor(final ViewSpec.TreeNode n) {
+        final JPopupMenu menu = new JPopupMenu();
+        final Target t = targets.get(n.link());
+        final List<Target> chosen = chosen();
         if (t != null && chosen.size() <= 1) {
             menu.add(item("Compare with HEAD", "diff", () -> compare(n, ChangeAsk.OPEN)));
             if (t.change().kind() != RepoStatus.Kind.DELETED) {
@@ -411,8 +411,8 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
             menu.addSeparator();
         }
         menu.add(item("Roll back " + what(chosen) + " to HEAD…", "rollback", () -> rollBack(chosen)));
-        List<Target> removable = chosen.stream().filter(x -> x.change().kind() != RepoStatus.Kind.DELETED).toList();
-        JMenuItem trash = item(removable.isEmpty() ? "Move to the Trash…" : "Move " + what(removable) + " to the Trash…", "trash",
+        final List<Target> removable = chosen.stream().filter(x -> x.change().kind() != RepoStatus.Kind.DELETED).toList();
+        final JMenuItem trash = item(removable.isEmpty() ? "Move to the Trash…" : "Move " + what(removable) + " to the Trash…", "trash",
                 () -> remove(removable));
         trash.setEnabled(!removable.isEmpty());
         menu.add(trash);
@@ -421,9 +421,9 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
 
     /** The selection's files: each file's row, and every file under a selected folder, group or repository row. */
     List<Target> chosen() {
-        TreePath[] selected = tree.tree().getSelectionPaths();
-        Set<Target> out = new LinkedHashSet<>();
-        for (TreePath p : selected == null ? new TreePath[0] : selected) {
+        final TreePath[] selected = tree.tree().getSelectionPaths();
+        final Set<Target> out = new LinkedHashSet<>();
+        for (final TreePath p : selected == null ? new TreePath[0] : selected) {
             if (((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n) {
                 collect(n, out);
             }
@@ -431,42 +431,42 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         return List.copyOf(out);
     }
 
-    private void collect(ViewSpec.TreeNode n, Set<Target> out) {
-        Target t = targets.get(n.link());
+    private void collect(final ViewSpec.TreeNode n, final Set<Target> out) {
+        final Target t = targets.get(n.link());
         if (t != null) {
             out.add(t);
         }
         n.children().forEach(c -> collect(c, out));
     }
 
-    private static String what(List<Target> files) {
+    private static String what(final List<Target> files) {
         return files.size() == 1 ? Path.of(files.getFirst().change().path()).getFileName().toString() : files.size() + " files";
     }
 
-    private void rollBack(List<Target> files) {
-        String text = "Roll back " + what(files) + " to HEAD? The versions you have go to the Trash, and so do files HEAD does not have.";
+    private void rollBack(final List<Target> files) {
+        final String text = "Roll back " + what(files) + " to HEAD? The versions you have go to the Trash, and so do files HEAD does not have.";
         if (questions.ask(tree.tree(), text, "Roll back", new Object[] {"Roll back", "Cancel"}) != 0) {
             return;
         }
         byRoot(files).forEach((root, list) -> actions.rollBack(root, list.stream().map(Target::change).toList()));
     }
 
-    private void remove(List<Target> files) {
-        String text = "Move " + what(files) + " to the Trash? " + (files.size() == 1 ? "It" : "They") + " can be put back from there.";
+    private void remove(final List<Target> files) {
+        final String text = "Move " + what(files) + " to the Trash? " + (files.size() == 1 ? "It" : "They") + " can be put back from there.";
         if (questions.ask(tree.tree(), text, "Remove", new Object[] {"Move to Trash", "Cancel"}) != 0) {
             return;
         }
         byRoot(files).forEach((root, list) -> actions.remove(root, list.stream().map(x -> x.change().path()).toList()));
     }
 
-    private static Map<String, List<Target>> byRoot(List<Target> files) {
-        Map<String, List<Target>> out = new LinkedHashMap<>();
+    private static Map<String, List<Target>> byRoot(final List<Target> files) {
+        final Map<String, List<Target>> out = new LinkedHashMap<>();
         files.forEach(f -> out.computeIfAbsent(f.root(), k -> new ArrayList<>()).add(f));
         return out;
     }
 
-    private static JMenuItem item(String text, String icon, Runnable r) {
-        JMenuItem i = new JMenuItem(text, Icons.get(icon));
+    private static JMenuItem item(final String text, final String icon, final Runnable r) {
+        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(a -> r.run());
         return i;
     }

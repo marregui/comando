@@ -15,13 +15,13 @@ public final class UiErrands {
     }
 
     /** Runs {@code task} on a virtual thread named {@code name}, owned by the window. */
-    public static void start(String name, Runnable task) {
+    public static void start(final String name, final Runnable task) {
         current.start(name, task);
     }
 
     /** Closes the errands running now; later ones belong to the next window. */
     public static void closeAll() {
-        Errands closing = current;
+        final Errands closing = current;
         current = new Errands("window");
         closing.close();
     }

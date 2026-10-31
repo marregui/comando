@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.kit.format;
 
-import dev.marregui.comando.ui.kit.desktop.Platform;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 /**
  * Keys named in text, as the desktop names them. comando's texts write keys as macOS does ("⌘⇧T", "⌃2", "⌥⏎");
@@ -20,45 +20,45 @@ public final class KeyText {
     }
 
     /** {@code text} with its keys named as this desktop names them; unchanged with macOS's keys. */
-    public static String of(String text) {
+    public static String of(final String text) {
         return text == null || Platform.macKeys() ? text : other(text);
     }
 
     /** {@code text} with its keys named as the desktops other than macOS name them. */
-    static String other(String text) {
-        StringBuilder out = new StringBuilder(text.length() + 16);
+    static String other(final String text) {
+        final StringBuilder out = new StringBuilder(text.length() + 16);
         int i = 0;
         while (i < text.length()) {
-            char c = text.charAt(i);
+            final char c = text.charAt(i);
             if (MODIFIERS.indexOf(c) < 0) {
                 out.append(c);
                 i++;
                 continue;
             }
-            int start = i;
+            final int start = i;
             while (i < text.length() && MODIFIERS.indexOf(text.charAt(i)) >= 0) {
                 i++;
             }
-            String mods = text.substring(start, i);
-            String key = i < text.length() && isKey(text.charAt(i)) ? String.valueOf(text.charAt(i)) : "";
+            final String mods = text.substring(start, i);
+            final String key = i < text.length() && isKey(text.charAt(i)) ? String.valueOf(text.charAt(i)) : "";
             i += key.length();
             out.append(chord(mods, key));
         }
         return out.toString();
     }
 
-    private static boolean isKey(char c) {
+    private static boolean isKey(final char c) {
         return !Character.isWhitespace(c) && c != ',' && c != ';' && c != ')' && c != '(' && c != '|' && c != '–' && c != '…';
     }
 
-    private static String chord(String mods, String key) {
-        boolean control = mods.indexOf('⌃') >= 0;
+    private static String chord(final String mods, final String key) {
+        final boolean control = mods.indexOf('⌃') >= 0;
         boolean ctrl = mods.indexOf('⌘') >= 0;
         boolean alt = mods.indexOf('⌥') >= 0;
-        boolean shift = mods.indexOf('⇧') >= 0;
+        final boolean shift = mods.indexOf('⇧') >= 0;
         if (control) {
-            boolean digit = key.length() == 1 && Character.isDigit(key.charAt(0));
-            boolean enter = key.equals("⏎") && !ctrl && !alt && !shift;
+            final boolean digit = key.length() == 1 && Character.isDigit(key.charAt(0));
+            final boolean enter = key.equals("⏎") && !ctrl && !alt && !shift;
             if (digit) {
                 alt = true; // the lower tabs: Ctrl with a digit is a panel
             } else {
@@ -66,7 +66,7 @@ public final class KeyText {
                 alt |= enter; // the line to the terminal: Ctrl+⏎ is Run, Alt+⏎ Run as SQL
             }
         }
-        List<String> parts = new ArrayList<>(4);
+        final List<String> parts = new ArrayList<>(4);
         if (ctrl) {
             parts.add("Ctrl");
         }
@@ -83,7 +83,7 @@ public final class KeyText {
     }
 
     /** A key as a chord on the other desktops names it: Enter, Tab, Esc, Backspace, else itself. */
-    public static String name(String key) {
+    public static String name(final String key) {
         return switch (key) {
             case "⏎" -> "Enter";
             case "⇥" -> "Tab";

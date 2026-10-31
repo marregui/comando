@@ -1,13 +1,14 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.state.LowerTab;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JLabel;
 import java.awt.Component;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import javax.swing.JLabel;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.state.LowerTab;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,11 +30,11 @@ class FocusOriginsTest {
     private String at;
 
     /** A render: {@code open} shows, the user is at {@code now}, the keyboard having been in {@code at} before. */
-    private FocusOrigins.Origin render(Set<String> open, String now) {
+    private FocusOrigins.Origin render(final Set<String> open, final String now) {
         this.open = open;
-        FocusOrigins.Origin before = at == null ? null : new FocusOrigins.Origin(text.get(at), at, LowerTab.SESSION, at);
+        final FocusOrigins.Origin before = at == null ? null : new FocusOrigins.Origin(text.get(at), at, LowerTab.SESSION, at);
         at = now;
-        Set<String> shown = open;
+        final Set<String> shown = open;
         return origins.onRender(open, before, now,
                 o -> !gone.contains(o.owner()) && (o.ownerKey() == null || shown.contains(o.ownerKey())));
     }
@@ -55,7 +56,7 @@ class FocusOriginsTest {
         render(Set.of("panel:review", "panel:main", "panel:f"), "panel:f"); // opened from review
         render(Set.of("panel:review", "panel:main", "panel:f"), "panel:main"); // a click on main
         render(Set.of("panel:review", "panel:main", "panel:f"), "panel:f"); // and back to F
-        FocusOrigins.Origin back = render(Set.of("panel:review", "panel:main"), "panel:review");
+        final FocusOrigins.Origin back = render(Set.of("panel:review", "panel:main"), "panel:review");
         assertThat(back.owner()).as("F closed: back to main, where the user came from").isSameAs(text.get("panel:main"));
     }
 

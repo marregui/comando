@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,8 +15,8 @@ class ThemeChoiceTest {
     /// One choice of ground and tint runs each listener once, after both are set; the same pair again runs none.
     @Test
     void aThemeIsAppliedInOnePass() {
-        List<String> heard = new ArrayList<>();
-        Runnable stop = Theme.onTint(() -> heard.add(Theme.groundChosen() + "/" + Theme.tint()));
+        final List<String> heard = new ArrayList<>();
+        final Runnable stop = Theme.onTint(() -> heard.add(Theme.groundChosen() + "/" + Theme.tint()));
         try {
             Theme.choose(Ground.MIDNIGHT, Tint.ELECTRIC_BLUE);
             assertThat(heard).as("one pass, never the new ground in the old tint").containsExactly("MIDNIGHT/ELECTRIC_BLUE");

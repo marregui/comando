@@ -1,12 +1,5 @@
 package dev.marregui.comando.db;
 
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.port.QueryPort;
-import dev.marregui.comando.core.result.ResultRegistry;
-import dev.marregui.comando.testkit.RecordingSink;
-import org.junit.jupiter.api.Test;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -22,6 +15,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

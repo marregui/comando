@@ -1,14 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.model.LinearTickets;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.reduce.Reducer;
-import dev.marregui.comando.ui.kit.theme.Ground;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.panels.SessionsSidebar;
-
-import javax.swing.JFrame;
 import java.awt.Frame;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
@@ -20,6 +11,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import javax.swing.JFrame;
+
+import dev.marregui.comando.core.model.LinearTickets;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.reduce.Reducer;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.panels.SessionsSidebar;
 
 /**
  * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root,
@@ -48,7 +48,7 @@ final class WindowLayout {
     private final Settings prefs;
     private final boolean offScreen;
 
-    WindowLayout(Settings prefs) {
+    WindowLayout(final Settings prefs) {
         this.prefs = prefs;
         this.offScreen = Boolean.getBoolean(OFF_SCREEN_PROPERTY);
     }
@@ -58,12 +58,12 @@ final class WindowLayout {
      * centred on the main one. Returns the height it opens at. Off screen, the window is undecorated, as macOS moves
      * a titled window back onto a screen, and left of every screen.
      */
-    int restoreBounds(JFrame frame) {
-        int w = prefs.getInt("window.width", 1500);
-        int h = prefs.getInt("window.height", 950);
+    int restoreBounds(final JFrame frame) {
+        final int w = prefs.getInt("window.width", 1500);
+        final int h = prefs.getInt("window.height", 950);
         if (offScreen) {
             Rectangle screens = new Rectangle();
-            for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            for (final GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
                 screens = screens.union(d.getDefaultConfiguration().getBounds());
             }
             frame.setUndecorated(true);
@@ -71,12 +71,12 @@ final class WindowLayout {
             frame.setBounds(screens.x - w - 1_000, screens.y, w, h);
             return h;
         }
-        int x = prefs.getInt("window.x", Integer.MIN_VALUE);
-        int y = prefs.getInt("window.y", Integer.MIN_VALUE);
-        Rectangle saved = new Rectangle(x, y, w, h);
-        Rectangle screen = onScreen(saved);
+        final int x = prefs.getInt("window.x", Integer.MIN_VALUE);
+        final int y = prefs.getInt("window.y", Integer.MIN_VALUE);
+        final Rectangle saved = new Rectangle(x, y, w, h);
+        final Rectangle screen = onScreen(saved);
         if (x != Integer.MIN_VALUE && screen != null) {
-            Rectangle fit = saved.intersection(screen);
+            final Rectangle fit = saved.intersection(screen);
             frame.setBounds(fit.width < 400 || fit.height < 300 ? new Rectangle(screen.x, screen.y, Math.min(w, screen.width),
                     Math.min(h, screen.height)) : fit);
         } else {
@@ -87,13 +87,13 @@ final class WindowLayout {
     }
 
     /** The bounds of the screen {@code r} overlaps most, or null when it is on none. */
-    private static Rectangle onScreen(Rectangle r) {
+    private static Rectangle onScreen(final Rectangle r) {
         Rectangle best = null;
         long bestArea = 0;
-        for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
-            Rectangle b = d.getDefaultConfiguration().getBounds();
-            Rectangle i = b.intersection(r);
-            long area = i.isEmpty() ? 0 : (long) i.width * i.height;
+        for (final GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            final Rectangle b = d.getDefaultConfiguration().getBounds();
+            final Rectangle i = b.intersection(r);
+            final long area = i.isEmpty() ? 0 : (long) i.width * i.height;
             if (area > bestArea) {
                 best = b;
                 bestArea = area;
@@ -113,11 +113,11 @@ final class WindowLayout {
      * Panels, Connections, Files). Panels reads as Sessions, which lists the panels without a session (record 91).
      */
     int sidebarTab() {
-        int selected = prefs.getInt("sidebar.selected", -1);
+        final int selected = prefs.getInt("sidebar.selected", -1);
         if (selected >= 0) {
             return selected <= SessionsSidebar.FILES ? selected : SessionsSidebar.SESSIONS;
         }
-        int front = prefs.getInt("sidebar.front", -1);
+        final int front = prefs.getInt("sidebar.front", -1);
         if (front >= 0) {
             return switch (front) {
                 case 1 -> SessionsSidebar.CONNECTIONS;
@@ -138,11 +138,11 @@ final class WindowLayout {
 
     /** Linear's workspace and team keys as learnt from its links, which make a tab card's tickets links. */
     LinearTickets.Site linearSite() {
-        String teams = prefs.get("linear.teams", "");
+        final String teams = prefs.get("linear.teams", "");
         return new LinearTickets.Site(prefs.get("linear.workspace", ""), teams.isEmpty() ? Set.of() : Set.of(teams.split(",")));
     }
 
-    void linearSite(LinearTickets.Site site) {
+    void linearSite(final LinearTickets.Site site) {
         prefs.put("linear.workspace", site.workspace());
         prefs.put("linear.teams", String.join(",", new TreeSet<>(site.teams())));
         prefs.flush();
@@ -153,7 +153,7 @@ final class WindowLayout {
         return Path.of(prefs.get("export.dir", System.getProperty("user.home")));
     }
 
-    void exportDir(Path dir) {
+    void exportDir(final Path dir) {
         prefs.put("export.dir", dir.toString());
         prefs.flush();
     }
@@ -163,7 +163,7 @@ final class WindowLayout {
         return prefs.get("tools.gradle", "build");
     }
 
-    void gradleTasks(String tasks) {
+    void gradleTasks(final String tasks) {
         prefs.put("tools.gradle", tasks);
         prefs.flush();
     }
@@ -176,7 +176,7 @@ final class WindowLayout {
         return Math.max(0, prefs.getInt(CHECKPOINT_THRESHOLD, (int) Reducer.CHECKPOINT_THRESHOLD_TOKENS));
     }
 
-    void checkpointThreshold(long tokens) {
+    void checkpointThreshold(final long tokens) {
         prefs.putInt(CHECKPOINT_THRESHOLD, Math.clamp(tokens, 0, Integer.MAX_VALUE));
         prefs.flush();
     }
@@ -187,16 +187,16 @@ final class WindowLayout {
      * {@code theme.gold} is read as the tint (record 96). Graphite and gold until one is chosen.
      */
     NamedTheme theme() {
-        Optional<NamedTheme> kept = Optional.ofNullable(prefs.get("theme.id", null)).flatMap(NamedTheme::withId);
+        final Optional<NamedTheme> kept = Optional.ofNullable(prefs.get("theme.id", null)).flatMap(NamedTheme::withId);
         if (kept.isPresent()) {
             return kept.get();
         }
-        Optional<Ground> ground = Optional.ofNullable(prefs.get("theme.ground", null)).flatMap(Ground::find);
-        Tint tint = Tint.named(prefs.get("theme.tint", prefs.get("theme.gold", Tint.TREASURE.name())));
+        final Optional<Ground> ground = Optional.ofNullable(prefs.get("theme.ground", null)).flatMap(Ground::find);
+        final Tint tint = Tint.named(prefs.get("theme.tint", prefs.get("theme.gold", Tint.TREASURE.name())));
         return NamedTheme.closest(ground, tint);
     }
 
-    void theme(NamedTheme theme) {
+    void theme(final NamedTheme theme) {
         prefs.put("theme.id", theme.id);
         prefs.put("theme.ground", theme.ground.name());
         prefs.put("theme.tint", theme.tint.name());
@@ -212,19 +212,19 @@ final class WindowLayout {
         return prefs.getInt("divider.sidebar", 260);
     }
 
-    void sidebarDivider(int at) {
+    void sidebarDivider(final int at) {
         prefs.putInt("divider.sidebar", at);
         prefs.flush();
     }
 
     /** Where the lower panel's divider was, else a little under the middle of a window {@code height} high. */
-    int lowerDivider(int height) {
+    int lowerDivider(final int height) {
         return prefs.getInt("divider.lower", (int) (height * 0.45));
     }
 
     /** Each panel's lower divider as last set while it was in front, by panel id; empty before any. */
     Map<PanelId, Integer> panelDividers() {
-        Map<PanelId, Integer> out = new HashMap<>();
+        final Map<PanelId, Integer> out = new HashMap<>();
         prefs.values().forEach((k, v) -> {
             if (k.startsWith(PANEL_DIVIDER) && v instanceof Number n) {
                 out.put(new PanelId(k.substring(PANEL_DIVIDER.length())), n.intValue());
@@ -234,7 +234,7 @@ final class WindowLayout {
     }
 
     /** Keeps {@code dividers} as each panel's lower divider, in place of every one kept before. */
-    void panelDividers(Map<PanelId, Integer> dividers) {
+    void panelDividers(final Map<PanelId, Integer> dividers) {
         List.copyOf(prefs.values().keySet()).stream().filter(k -> k.startsWith(PANEL_DIVIDER)).forEach(prefs::remove);
         dividers.forEach((id, at) -> prefs.putInt(PANEL_DIVIDER + id.value(), at));
         prefs.flush();
@@ -249,7 +249,7 @@ final class WindowLayout {
         return prefs.getBoolean("editor.outline", false);
     }
 
-    void outlineShown(boolean shown) {
+    void outlineShown(final boolean shown) {
         prefs.putBoolean("editor.outline", shown);
         prefs.flush();
     }
@@ -263,8 +263,8 @@ final class WindowLayout {
      * Keeps the window's bounds, unless maximised, and what it shows. A divider of a hidden part is not kept:
      * {@code sidebarDivider} and {@code sideDivider} are -1 then, and the last shown position stays.
      */
-    void save(JFrame frame, Saved s) {
-        boolean maximized = (frame.getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH;
+    void save(final JFrame frame, final Saved s) {
+        final boolean maximized = (frame.getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH;
         prefs.putBoolean("window.maximized", maximized);
         if (!maximized) {
             prefs.putInt("window.width", frame.getWidth());

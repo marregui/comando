@@ -21,16 +21,16 @@ public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId
 
     public static final Layout KEEP = new Layout(Toggle.KEEP, Toggle.KEEP, Double.NaN);
 
-    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare) {
+    public Layout(final Toggle sidebar, final Toggle sidePane, final double lowerShare) {
         this(sidebar, sidePane, lowerShare, null, null, "");
     }
 
-    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId focus) {
+    public Layout(final Toggle sidebar, final Toggle sidePane, final double lowerShare, final PanelId focus) {
         this(sidebar, sidePane, lowerShare, focus, null, "");
     }
 
-    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId focus,
-                  LowerTab tab) {
+    public Layout(final Toggle sidebar, final Toggle sidePane, final double lowerShare, final PanelId focus,
+                  final LowerTab tab) {
         this(sidebar, sidePane, lowerShare, focus, tab, "");
     }
 

@@ -7,21 +7,21 @@ public final class Formats {
     }
 
     /** Appends {@code yyyy-MM-ddTHH:mm:ss.SSSSSSZ} for epoch microseconds UTC. */
-    public static void appendMicrosUtc(StringBuilder sink, long micros) {
-        long seconds = Math.floorDiv(micros, 1_000_000L);
-        int fraction = (int) Math.floorMod(micros, 1_000_000L);
-        long days = Math.floorDiv(seconds, 86_400L);
-        int secOfDay = (int) Math.floorMod(seconds, 86_400L);
+    public static void appendMicrosUtc(final StringBuilder sink, final long micros) {
+        final long seconds = Math.floorDiv(micros, 1_000_000L);
+        final int fraction = (int) Math.floorMod(micros, 1_000_000L);
+        final long days = Math.floorDiv(seconds, 86_400L);
+        final int secOfDay = (int) Math.floorMod(seconds, 86_400L);
         // civil-from-days (Howard Hinnant), valid for the whole proleptic Gregorian range of long days
-        long z = days + 719_468L;
-        long era = Math.floorDiv(z, 146_097L);
-        long doe = z - era * 146_097L;
-        long yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+        final long z = days + 719_468L;
+        final long era = Math.floorDiv(z, 146_097L);
+        final long doe = z - era * 146_097L;
+        final long yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
         long y = yoe + era * 400;
-        long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-        long mp = (5 * doy + 2) / 153;
-        long d = doy - (153 * mp + 2) / 5 + 1;
-        long m = mp < 10 ? mp + 3 : mp - 9;
+        final long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        final long mp = (5 * doy + 2) / 153;
+        final long d = doy - (153 * mp + 2) / 5 + 1;
+        final long m = mp < 10 ? mp + 3 : mp - 9;
         if (m <= 2) {
             y++;
         }
@@ -35,7 +35,7 @@ public final class Formats {
     }
 
     /** Appends a duration in milliseconds as {@code 850 ms}, {@code 12.4 s} or {@code 3 m 05 s}. */
-    public static void appendMillis(StringBuilder sink, long millis) {
+    public static void appendMillis(final StringBuilder sink, final long millis) {
         if (millis < 1000) {
             sink.append(millis).append(" ms");
         } else if (millis < 60_000) {
@@ -47,7 +47,7 @@ public final class Formats {
     }
 
     /** Appends a size in bytes as {@code 500 B}, {@code 12 kB} or {@code 3 MB}, each unit 1024 of the one below. */
-    public static void appendBytes(StringBuilder sink, long bytes) {
+    public static void appendBytes(final StringBuilder sink, final long bytes) {
         if (bytes < 1024) {
             sink.append(bytes).append(" B");
         } else if (bytes < 1024 * 1024) {
@@ -58,13 +58,13 @@ public final class Formats {
     }
 
     /** {@link #appendBytes} as a string, for labels made once. */
-    public static String bytes(long bytes) {
-        StringBuilder sb = new StringBuilder(8);
+    public static String bytes(final long bytes) {
+        final StringBuilder sb = new StringBuilder(8);
         appendBytes(sb, bytes);
         return sb.toString();
     }
 
-    private static StringBuilder pad(StringBuilder sink, long value, int width) {
+    private static StringBuilder pad(final StringBuilder sink, long value, final int width) {
         if (value < 0) {
             sink.append('-');
             value = -value;

@@ -1,11 +1,12 @@
 package dev.marregui.comando.ui.kit.icon;
 
-import com.formdev.flatlaf.extras.FlatSVGIcon;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.Icon;
 import java.awt.Color;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.swing.Icon;
+
+import com.formdev.flatlaf.extras.FlatSVGIcon;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /** The one icon set: SVGs under {@code /icons}, scaled for HiDPI and recoloured by the theme. */
 public final class Icons {
@@ -30,20 +31,20 @@ public final class Icons {
     private Icons() {
     }
 
-    public static Icon get(String name) {
+    public static Icon get(final String name) {
         return get(name, 16);
     }
 
     /** {@code c}; the SVGs' gold as the tint chosen, their amber as the attention's gold, each in {@code c}'s alpha. */
-    static Color gilded(Color c) {
-        int rgb = c.getRGB() & 0xFFFFFF;
-        Color to = rgb == SVG_GOLD ? Theme.tint().body : rgb == SVG_AMBER ? Theme.ATTENTION : null;
+    static Color gilded(final Color c) {
+        final int rgb = c.getRGB() & 0xFFFFFF;
+        final Color to = rgb == SVG_GOLD ? Theme.tint().body : rgb == SVG_AMBER ? Theme.ATTENTION : null;
         return to == null ? c : Theme.withAlpha(to, c.getAlpha());
     }
 
     /** The SVG {@code name} at {@code size} pixels, or the icon painted in code under that name at its own size. */
-    public static Icon get(String name, int size) {
-        Icon painted = PAINTED.get(name);
+    public static Icon get(final String name, final int size) {
+        final Icon painted = PAINTED.get(name);
         if (painted != null) {
             return painted;
         }
@@ -55,7 +56,7 @@ public final class Icons {
      * family ({@code icons/sidebar/}), drawn as the sidebar's tabs are, an outline in one colour per kind (record 98),
      * with git's mark on a repository's; any other name as {@link #get(String)}.
      */
-    public static Icon folder(String name) {
+    public static Icon folder(final String name) {
         return switch (name) {
             case "folder" -> get("sidebar/folder");
             case "folder-scratchpad" -> get("sidebar/scratchpad");
@@ -77,13 +78,13 @@ public final class Icons {
      * {@code name}'s icon with a small left arrow before it: the Locate button's, which goes to that mark's tab in the
      * sidebar, told from the tab's own icon by the arrow (record 119).
      */
-    public static Icon locate(String name) {
+    public static Icon locate(final String name) {
         return COMPOSED.computeIfAbsent("locate-" + name, k -> new BesideIcon(
                 CACHE.computeIfAbsent("locate-arrow", a -> new FlatSVGIcon("icons/locate-arrow.svg", 7, 16)), get(name)));
     }
 
     /** Names {@code icon}, painted in code, so that a command can name it as it names an SVG. */
-    public static void put(String name, Icon icon) {
+    public static void put(final String name, final Icon icon) {
         PAINTED.put(name, icon);
     }
 }

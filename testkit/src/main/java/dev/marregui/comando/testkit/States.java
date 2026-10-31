@@ -1,5 +1,7 @@
 package dev.marregui.comando.testkit;
 
+import java.util.List;
+
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -7,8 +9,6 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
-
-import java.util.List;
 
 /**
  * A small state used by most tests: panel p1 bound to connection "local" and session "work", panel p2 bound to "local"

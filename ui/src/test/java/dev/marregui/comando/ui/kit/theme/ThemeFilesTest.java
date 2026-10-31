@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,7 +41,7 @@ class ThemeFilesTest {
                 .isEqualTo("#ffedaa#e7c55a#9e8230");
         assertThat(Theme.hex(Tint.ELECTRIC_BLUE.body)).isEqualTo("#63b5ff");
         assertThat(NamedTheme.GRAPHITE_GOLD.commandId()).as("the commands keep their ids").isEqualTo("theme.graphite_gold");
-        for (NamedTheme t : NamedTheme.builtIn()) {
+        for (final NamedTheme t : NamedTheme.builtIn()) {
             assertThat(ThemeRules.problems(t.ground, t.tint)).as(t.id).isEmpty();
             assertThat(t.file).isEmpty();
         }
@@ -58,13 +58,13 @@ class ThemeFilesTest {
                 """);
         write("c.json", theme("parchment", "Parchment", "#F4EFE4", "#3D2900", "#5E4210", "#8A6524").replace("\"dark\"", "\"light\""));
         Files.writeString(folder.resolve("notes.txt"), "not a theme");
-        ThemeFiles.Read read = ThemeFiles.read(folder);
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
         assertThat(read.problems()).isEmpty();
         assertThat(read.themes()).extracting(t -> t.id).containsExactly("pine", "ink_rose", "parchment");
         assertThat(read.themes().get(2).ground.light).as("a light file's ground and tint are light").isTrue();
         assertThat(read.themes().get(2).tint.light).isTrue();
         assertThat(read.themes().getFirst().ground.light).isFalse();
-        NamedTheme pine = read.themes().getFirst();
+        final NamedTheme pine = read.themes().getFirst();
         assertThat(pine.ground.label).as("the ground's label left out").isEqualTo("Pine");
         assertThat(pine.tint.label).isEqualTo("Pine");
         assertThat(pine.ground).as("a ground of its own, though its colour is a built-in one's").isNotSameAs(Ground.EVERGREEN);
@@ -98,7 +98,7 @@ class ThemeFilesTest {
         write("7-good.json", theme("good", "Good", "#121212", "#FFEDAA", "#E7C55A", "#9E8230"));
         write("8-again.json", theme("good", "Good again", "#121212", "#FFEDAA", "#E7C55A", "#9E8230"));
         Files.writeString(folder.resolve("9-field.json"), "{\"id\": \"nofield\", \"label\": \"No tint\", \"ground\": {\"color\": \"#121212\"}}");
-        ThemeFiles.Read read = ThemeFiles.read(folder);
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
         assertThat(read.themes()).extracting(t -> t.id).containsExactly("good");
         assertThat(read.problems()).hasSize(8);
         assertThat(read.problems().get(0)).startsWith("1-json.json: not JSON");
@@ -120,11 +120,11 @@ class ThemeFilesTest {
         assertThat(ThemeFiles.read(folder.resolve("missing"))).isEqualTo(new ThemeFiles.Read(List.of(), List.of()));
     }
 
-    private void write(String name, String json) throws IOException {
+    private void write(final String name, final String json) throws IOException {
         Files.writeString(folder.resolve(name), json);
     }
 
-    private static String theme(String id, String label, String ground, String highlight, String body, String shade) {
+    private static String theme(final String id, final String label, final String ground, final String highlight, final String body, final String shade) {
         return """
                 {"id": "%s", "label": "%s", "mode": "dark", "ground": {"label": "%s ground", "color": "%s"},
                  "tint": {"label": "%s tint", "highlight": "%s", "body": "%s", "shade": "%s"}}

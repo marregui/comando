@@ -1,16 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.state.SessionInfo;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,6 +11,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.state.SessionInfo;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 
 /**
  * Turns Claude Code's stream-JSON events, or the lines of a stored transcript, into transcript blocks
@@ -90,7 +91,7 @@ final class StreamMapper {
     /** Whether the running turn has had a top-level message: its first runs at the session's own setting. */
     private boolean turnHadMessage;
 
-    StreamMapper(String session, Transcript transcript, IntentSink sink, ObjectMapper json) {
+    StreamMapper(final String session, final Transcript transcript, final IntentSink sink, final ObjectMapper json) {
         this.session = session;
         this.transcript = transcript;
         this.sink = sink;
@@ -98,12 +99,12 @@ final class StreamMapper {
     }
 
     /** Maps one line of the live stream; returns the event type, empty for a line that is not JSON. */
-    String accept(String line) {
-        JsonNode e = parse(line);
+    String accept(final String line) {
+        final JsonNode e = parse(line);
         if (e == null) {
             return "";
         }
-        String type = e.path("type").asString("");
+        final String type = e.path("type").asString("");
         if (ranPending != null) {
             readRan(false);
         }
@@ -131,7 +132,7 @@ final class StreamMapper {
      * ({@code stop_reason} {@code end_turn}), which gets a {@link Block.TurnEnd#stored()} after the message's last
      * line.
      */
-    void acceptHistory(String line) {
+    void acceptHistory(final String line) {
         replaying = true;
         try {
             history(line);
@@ -140,13 +141,13 @@ final class StreamMapper {
         }
     }
 
-    private void history(String line) {
-        JsonNode e = parse(line);
+    private void history(final String line) {
+        final JsonNode e = parse(line);
         if (e == null || e.path("isMeta").asBoolean(false)) {
             return;
         }
-        String type = e.path("type").asString("");
-        String messageId = e.path("message").path("id").asString("");
+        final String type = e.path("type").asString("");
+        final String messageId = e.path("message").path("id").asString("");
         // a message is stored a content block per line, each with its stop reason: the turn ends after its last one
         if (turnEndingMessage != null && (type.equals("user") || type.equals("assistant") && !messageId.equals(turnEndingMessage))) {
             endHistoryTurn();
@@ -175,7 +176,7 @@ final class StreamMapper {
      * The stored conversation's context, sent once it is loaded (record 120): the tokens its last model call read, else
      * {@code kept}'s, the context and window the metrics log kept of its last turn; nothing when neither is known.
      */
-    void reportContext(Optional<long[]> kept) {
+    void reportContext(final Optional<long[]> kept) {
         long tokens = contextTokens;
         if (kept.isPresent()) {
             contextWindow = Math.max(contextWindow, kept.get()[1]);
@@ -202,11 +203,11 @@ final class StreamMapper {
     }
 
     /** Appends the prompt comando sent; called on the strand before the line goes to the process. */
-    void prompt(String text, String origin) {
+    void prompt(final String text, final String origin) {
         transcript.append(new Block.UserPrompt(text, origin, ""));
     }
 
-    void note(Block.NoteKind kind, String text) {
+    void note(final Block.NoteKind kind, final String text) {
         transcript.append(new Block.Note(kind, text, ""));
     }
 
@@ -220,7 +221,7 @@ final class StreamMapper {
      * Shows {@code summary}, which a checkpoint carried out of the conversation it cleared, as the answer of a turn
      * that ended: it is what the next prompt takes with it.
      */
-    void carried(String summary) {
+    void carried(final String summary) {
         note(Block.NoteKind.INFO, "Conversation cleared after the checkpoint; its summary below goes in front of the next prompt");
         transcript.append(new Block.AssistantText(CARRIED_ID, 0, summary, false, ""));
         transcript.append(Block.TurnEnd.stored());
@@ -232,13 +233,13 @@ final class StreamMapper {
      * {@code later} runs a read again on this mapper's thread {@link #RAN_RETRY_MILLIS} ms on, so a message is read in
      * time even when the stream falls silent while a tool runs.
      */
-    void ranFrom(BiFunction<String, String, Optional<RunSettings.Ran>> reader, Consumer<Runnable> later) {
+    void ranFrom(final BiFunction<String, String, Optional<RunSettings.Ran>> reader, final Consumer<Runnable> later) {
         ranOf = reader;
         ranLater = later;
     }
 
     /** Where the base effort of the model a {@code system/init} names is read from. */
-    void effortFrom(Function<String, String> effort) {
+    void effortFrom(final Function<String, String> effort) {
         effortOf = effort;
     }
 
@@ -276,26 +277,26 @@ final class StreamMapper {
         toolIndex.clear();
     }
 
-    private void system(JsonNode e) {
-        String subtype = e.path("subtype").asString("");
+    private void system(final JsonNode e) {
+        final String subtype = e.path("subtype").asString("");
         switch (subtype) {
             case "init" -> init(e);
             case "status" -> {
-                String status = e.path("status").isNull() ? "" : e.path("status").asString("");
+                final String status = e.path("status").isNull() ? "" : e.path("status").asString("");
                 sink.dispatch(new Intent.SessionActivity(session, status));
                 if (e.path("compact_result").asString("").equals("success")) {
                     note(Block.NoteKind.COMPACT, "Compaction finished");
                 }
             }
             case "compact_boundary" -> {
-                JsonNode m = e.path("compact_metadata");
+                final JsonNode m = e.path("compact_metadata");
                 note(Block.NoteKind.COMPACT, "Compacted " + m.path("trigger").asString("") + ": "
                         + m.path("pre_tokens").asLong(0) + " → " + m.path("post_tokens").asLong(0) + " tokens");
                 // the context before compaction no longer applies; 0 means unknown until the next call reports it
                 contextTokens = Math.max(0L, m.path("post_tokens").asLong(0));
             }
             case "hook_response" -> {
-                String out = e.path("output").asString("").strip();
+                final String out = e.path("output").asString("").strip();
                 if (!out.isEmpty()) {
                     transcript.append(new Block.Note(Block.NoteKind.HOOK, e.path("hook_name").asString("") + ": " + clip(out, 2_000),
                             parent(e)));
@@ -306,7 +307,7 @@ final class StreamMapper {
             case "task_started" -> sink.dispatch(new Intent.SessionActivity(session, e.path("description").asString("task")));
             case "task_notification" -> {
                 // a background task's end, named by the call that started it (2.1.302: status "completed")
-                String call = e.path("tool_use_id").asString("");
+                final String call = e.path("tool_use_id").asString("");
                 if (!call.isEmpty() && !e.path("status").asString("").equals("running")) {
                     endedAgents.add(call);
                     agentEnded(call, e.path("status").asString("completed").equals("completed") ? "done" : "error", true);
@@ -324,10 +325,10 @@ final class StreamMapper {
      * running past its turn; a foreground agent and a background agent's own commands are not in it). A task Claude
      * Code runs by itself ({@code ambient}) is not the session's work.
      */
-    private void backgroundTasks(JsonNode tasks) {
-        List<BackgroundTask> open = new ArrayList<>();
-        for (JsonNode t : tasks) {
-            String id = t.path("task_id").asString("");
+    private void backgroundTasks(final JsonNode tasks) {
+        final List<BackgroundTask> open = new ArrayList<>();
+        for (final JsonNode t : tasks) {
+            final String id = t.path("task_id").asString("");
             if (!id.isEmpty() && !t.path("ambient").asBoolean(false)) {
                 open.add(new BackgroundTask(id, t.path("task_type").asString(""), t.path("description").asString(""), 0L));
             }
@@ -335,12 +336,12 @@ final class StreamMapper {
         sink.dispatch(new Intent.SessionTasksChanged(session, open));
     }
 
-    private void init(JsonNode e) {
-        List<String> caps = new ArrayList<>();
-        for (JsonNode c : e.path("capabilities")) {
+    private void init(final JsonNode e) {
+        final List<String> caps = new ArrayList<>();
+        for (final JsonNode c : e.path("capabilities")) {
             caps.add(c.asString(""));
         }
-        SessionInfo info = new SessionInfo(
+        final SessionInfo info = new SessionInfo(
                 e.path("session_id").asString(""),
                 e.path("model").asString(""),
                 e.path("cwd").asString(""),
@@ -356,11 +357,11 @@ final class StreamMapper {
         sink.dispatch(new Intent.SessionInit(session, info));
     }
 
-    private void streamEvent(JsonNode e) {
-        JsonNode ev = e.path("event");
-        String messageId = e.path("api_message_id").asString(ev.path("message").path("id").asString(""));
-        int index = ev.path("index").asInt(-1);
-        String key = messageId + ':' + index;
+    private void streamEvent(final JsonNode e) {
+        final JsonNode ev = e.path("event");
+        final String messageId = e.path("api_message_id").asString(ev.path("message").path("id").asString(""));
+        final int index = ev.path("index").asInt(-1);
+        final String key = messageId + ':' + index;
         switch (ev.path("type").asString("")) {
             case "message_start" -> {
                 // the main conversation calls the model: a turn runs, also one Claude Code started itself. Claude Code
@@ -371,14 +372,14 @@ final class StreamMapper {
                 }
             }
             case "content_block_start" -> {
-                JsonNode block = ev.path("content_block");
-                String parent = parent(e);
+                final JsonNode block = ev.path("content_block");
+                final String parent = parent(e);
                 switch (block.path("type").asString("")) {
                     case "text" -> streamIndex.put(key, transcript.append(new Block.AssistantText(messageId, index, "", true, parent)));
                     case "thinking" -> streamIndex.put(key, transcript.append(new Block.Thinking(messageId, index, "", 0L, true, parent)));
                     case "tool_use" -> {
-                        String id = block.path("id").asString("");
-                        int at = transcript.append(new Block.ToolCall(id, block.path("name").asString(""), "{}", "", Block.ToolStatus.RUNNING, parent));
+                        final String id = block.path("id").asString("");
+                        final int at = transcript.append(new Block.ToolCall(id, block.path("name").asString(""), "{}", "", Block.ToolStatus.RUNNING, parent));
                         streamIndex.put(key, at);
                         toolIndex.put(id, at);
                         agentStarts(id, block.path("name").asString(""));
@@ -389,12 +390,12 @@ final class StreamMapper {
                 }
             }
             case "content_block_delta" -> {
-                Integer at = streamIndex.get(key);
+                final Integer at = streamIndex.get(key);
                 if (at == null) {
                     return;
                 }
-                JsonNode delta = ev.path("delta");
-                Block current = transcript.get(at);
+                final JsonNode delta = ev.path("delta");
+                final Block current = transcript.get(at);
                 switch (delta.path("type").asString("")) {
                     case "text_delta" -> {
                         if (current instanceof Block.AssistantText t) {
@@ -418,10 +419,10 @@ final class StreamMapper {
         }
     }
 
-    private void assistant(JsonNode e) {
-        JsonNode message = e.path("message");
-        String messageId = message.path("id").asString("");
-        String parent = parent(e);
+    private void assistant(final JsonNode e) {
+        final JsonNode message = e.path("message");
+        final String messageId = message.path("id").asString("");
+        final String parent = parent(e);
         if (!replaying && parent.isEmpty() && !messageId.isEmpty() && !messageId.equals(ranLast)) {
             ranLast = messageId;
             ranPending = messageId;
@@ -431,9 +432,9 @@ final class StreamMapper {
             ranPendingSince = ranTriedAt = 0L;
             readRan(false);
         }
-        JsonNode usage = message.path("usage");
+        final JsonNode usage = message.path("usage");
         if (!usage.isMissingNode() && parent.isEmpty()) {
-            long tokens = usage.path("input_tokens").asLong(0) + usage.path("cache_creation_input_tokens").asLong(0)
+            final long tokens = usage.path("input_tokens").asLong(0) + usage.path("cache_creation_input_tokens").asLong(0)
                     + usage.path("cache_read_input_tokens").asLong(0);
             if (tokens > 0) {
                 contextTokens = tokens;
@@ -443,22 +444,22 @@ final class StreamMapper {
                 }
             }
         }
-        for (JsonNode block : message.path("content")) {
-            int index = closedBlocks.merge(messageId, 1, Integer::sum) - 1;
-            Integer at = streamIndex.remove(messageId + ':' + index);
+        for (final JsonNode block : message.path("content")) {
+            final int index = closedBlocks.merge(messageId, 1, Integer::sum) - 1;
+            final Integer at = streamIndex.remove(messageId + ':' + index);
             switch (block.path("type").asString("")) {
                 case "text" -> {
-                    Block.AssistantText text = new Block.AssistantText(messageId, index, block.path("text").asString(""), false, parent);
+                    final Block.AssistantText text = new Block.AssistantText(messageId, index, block.path("text").asString(""), false, parent);
                     put(at, text);
                 }
                 case "thinking", "redacted_thinking" -> {
-                    long tokens = at != null && transcript.get(at) instanceof Block.Thinking t ? t.tokens() : 0L;
+                    final long tokens = at != null && transcript.get(at) instanceof Block.Thinking t ? t.tokens() : 0L;
                     put(at, new Block.Thinking(messageId, index, block.path("thinking").asString(""), tokens, false, parent));
                 }
                 case "tool_use", "server_tool_use" -> {
-                    String id = block.path("id").asString("");
-                    String input = block.path("input").toString();
-                    Integer known = toolIndex.get(id);
+                    final String id = block.path("id").asString("");
+                    final String input = block.path("input").toString();
+                    final Integer known = toolIndex.get(id);
                     if (known != null && transcript.get(known) instanceof Block.ToolCall call) {
                         transcript.replace(known, call.withInput(input));
                     } else {
@@ -474,7 +475,7 @@ final class StreamMapper {
         }
     }
 
-    private void put(Integer at, Block block) {
+    private void put(final Integer at, final Block block) {
         if (at != null) {
             transcript.replace(at, block);
         } else {
@@ -482,14 +483,14 @@ final class StreamMapper {
         }
     }
 
-    private void user(JsonNode e, boolean history) {
-        JsonNode content = e.path("message").path("content");
-        String parent = parent(e);
+    private void user(final JsonNode e, final boolean history) {
+        final JsonNode content = e.path("message").path("content");
+        final String parent = parent(e);
         if (content.isString()) {
             userText(content.asString(""), parent, history);
             return;
         }
-        for (JsonNode block : content) {
+        for (final JsonNode block : content) {
             switch (block.path("type").asString("")) {
                 case "tool_result" -> toolResult(block);
                 case "text" -> userText(block.path("text").asString(""), parent, history);
@@ -500,15 +501,15 @@ final class StreamMapper {
         }
     }
 
-    private void userText(String text, String parent, boolean history) {
-        String t = text.strip();
+    private void userText(final String text, final String parent, final boolean history) {
+        final String t = text.strip();
         if (t.isEmpty()) {
             return;
         }
         if (t.startsWith(COMPACT_SUMMARY_PREFIX)) {
             transcript.append(new Block.Note(Block.NoteKind.COMPACT, "Conversation continued from a summary", parent));
         } else if (t.startsWith("<local-command-stdout>")) {
-            String out = t.replace("<local-command-stdout>", "").replace("</local-command-stdout>", "").strip();
+            final String out = t.replace("<local-command-stdout>", "").replace("</local-command-stdout>", "").strip();
             transcript.append(new Block.Note(Block.NoteKind.COMMAND, out.isEmpty() ? "command done" : clip(out, 2_000), parent));
         } else if (t.startsWith("[Request interrupted")) {
             transcript.append(new Block.Note(Block.NoteKind.INTERRUPT, "Interrupted", parent));
@@ -522,19 +523,19 @@ final class StreamMapper {
         // a live main-conversation prompt was appended by prompt() when comando sent it
     }
 
-    private void toolResult(JsonNode block) {
-        String id = block.path("tool_use_id").asString("");
-        Integer at = toolIndex.get(id);
+    private void toolResult(final JsonNode block) {
+        final String id = block.path("tool_use_id").asString("");
+        final Integer at = toolIndex.get(id);
         if (at == null || !(transcript.get(at) instanceof Block.ToolCall call)) {
             return;
         }
-        JsonNode content = block.path("content");
+        final JsonNode content = block.path("content");
         String text;
         if (content.isString()) {
             text = content.asString("");
         } else {
-            StringBuilder sb = new StringBuilder();
-            for (JsonNode part : content) {
+            final StringBuilder sb = new StringBuilder();
+            for (final JsonNode part : content) {
                 if (part.path("type").asString("").equals("text")) {
                     if (!sb.isEmpty()) {
                         sb.append('\n');
@@ -552,12 +553,12 @@ final class StreamMapper {
     }
 
     /** Where the metrics go, and who hears a sub-agent's end to add its spend (record 110). */
-    void metrics(MetricsLog log, Consumer<ObjectNode> onAgentEnd) {
+    void metrics(final MetricsLog log, final Consumer<ObjectNode> onAgentEnd) {
         metrics = log;
         agentEnds = onAgentEnd;
     }
 
-    private void agentStarts(String id, String tool) {
+    private void agentStarts(final String id, final String tool) {
         if (!replaying && (tool.equals("Agent") || tool.equals("Task"))) {
             agentStarted.putIfAbsent(id, metrics.now());
         }
@@ -568,14 +569,14 @@ final class StreamMapper {
      * background), how long it ran, how it ended, and the tool calls inside it at any depth. The adapter adds its
      * spend.
      */
-    private void agentEnded(String id, String status, boolean background) {
-        Long started = agentStarted.remove(id);
-        Integer at = toolIndex.get(id);
+    private void agentEnded(final String id, final String status, final boolean background) {
+        final Long started = agentStarted.remove(id);
+        final Integer at = toolIndex.get(id);
         if (replaying || started == null || at == null || !(transcript.get(at) instanceof Block.ToolCall call)) {
             return;
         }
-        JsonNode in = parse(call.inputJson());
-        ObjectNode e = metrics.event("agent");
+        final JsonNode in = parse(call.inputJson());
+        final ObjectNode e = metrics.event("agent");
         e.put("session", session);
         e.put("conversation", conversation);
         e.put("tool_use_id", id);
@@ -592,9 +593,9 @@ final class StreamMapper {
     }
 
     /** The tool calls in the transcript that ran inside the call {@code id}, at any depth. */
-    private int nestedTools(String id) {
-        Map<String, String> parentOf = new HashMap<>();
-        List<String> calls = new ArrayList<>();
+    private int nestedTools(final String id) {
+        final Map<String, String> parentOf = new HashMap<>();
+        final List<String> calls = new ArrayList<>();
         for (int i = 0; i < transcript.size(); i++) {
             if (transcript.get(i) instanceof Block.ToolCall c) {
                 parentOf.put(c.toolUseId(), c.parent());
@@ -602,7 +603,7 @@ final class StreamMapper {
             }
         }
         int n = 0;
-        for (String c : calls) {
+        for (final String c : calls) {
             String up = parentOf.getOrDefault(c, "");
             for (int depth = 0; !up.isEmpty() && depth < 64; depth++) {
                 if (up.equals(id)) {
@@ -616,7 +617,7 @@ final class StreamMapper {
     }
 
     /** True when the sub-agent the Agent call {@code toolUseId} started has ended, as the stream told; any thread. */
-    boolean agentEnded(String toolUseId) {
+    boolean agentEnded(final String toolUseId) {
         return endedAgents.contains(toolUseId);
     }
 
@@ -625,8 +626,8 @@ final class StreamMapper {
      * again {@value #RAN_RETRY_MILLIS} ms later, or on a later line of the stream, and for the last time at the turn's
      * end or {@value #RAN_GIVE_UP_MILLIS} ms after the message, with the stream's model alone.
      */
-    private void readRan(boolean last) {
-        long now = System.nanoTime();
+    private void readRan(final boolean last) {
+        final long now = System.nanoTime();
         if (ranPendingSince == 0L) {
             ranPendingSince = now;
         } else if (!last && now - ranTriedAt < RAN_RETRY_MILLIS * 1_000_000L) {
@@ -634,14 +635,14 @@ final class StreamMapper {
             return;
         }
         ranTriedAt = now;
-        Optional<RunSettings.Ran> ran = ranOf.apply(conversation, ranPending);
-        boolean giveUp = last || now - ranPendingSince >= RAN_GIVE_UP_MILLIS * 1_000_000L;
+        final Optional<RunSettings.Ran> ran = ranOf.apply(conversation, ranPending);
+        final boolean giveUp = last || now - ranPendingSince >= RAN_GIVE_UP_MILLIS * 1_000_000L;
         if (ran.isEmpty() && !giveUp) {
             armRanRetry();
             return;
         }
-        String model = ran.map(RunSettings.Ran::model).filter(m -> !m.isEmpty()).orElse(ranModel);
-        String effort = ran.map(RunSettings.Ran::effort).orElse("");
+        final String model = ran.map(RunSettings.Ran::model).filter(m -> !m.isEmpty()).orElse(ranModel);
+        final String effort = ran.map(RunSettings.Ran::effort).orElse("");
         ranPending = null;
         sink.dispatch(new Intent.SessionRanAt(session, model, effort, ranFirst));
     }
@@ -663,20 +664,20 @@ final class StreamMapper {
         });
     }
 
-    private void result(JsonNode e) {
+    private void result(final JsonNode e) {
         if (ranPending != null) {
             readRan(true); // before the turn's end, which clears what the turn ran at
         }
         turnHadMessage = false;
-        boolean error = e.path("is_error").asBoolean(false);
-        String subtype = e.path("subtype").asString("");
-        String message = error ? errorText(e) : "";
+        final boolean error = e.path("is_error").asBoolean(false);
+        final String subtype = e.path("subtype").asString("");
+        final String message = error ? errorText(e) : "";
         // result.usage sums every API call of the turn; the context is the last call's input
-        long tokens = contextTokens;
+        final long tokens = contextTokens;
         transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(0), e.path("duration_ms").asLong(0),
                 e.path("num_turns").asInt(0), error, message.isEmpty() ? subtype : message));
         long window = 0;
-        for (JsonNode model : e.path("modelUsage")) {
+        for (final JsonNode model : e.path("modelUsage")) {
             window = Math.max(window, model.path("contextWindow").asLong(0));
         }
         if (window > 0) {
@@ -692,8 +693,8 @@ final class StreamMapper {
      * API, how many model calls, the tokens it used, by model as Claude Code sums them, the context it ended with, and
      * how it ended. The money field is kept as it arrives.
      */
-    private void turnMetric(JsonNode e, long context, long window, boolean error, String subtype) {
-        ObjectNode m = metrics.event("turn");
+    private void turnMetric(final JsonNode e, final long context, final long window, final boolean error, final String subtype) {
+        final ObjectNode m = metrics.event("turn");
         m.put("session", session);
         m.put("conversation", conversation);
         m.put("model", lastModel);
@@ -712,54 +713,54 @@ final class StreamMapper {
         metrics.write(m);
     }
 
-    private static String errorText(JsonNode e) {
+    private static String errorText(final JsonNode e) {
         if (e.path("terminal_reason").asString("").equals("aborted_tools") || e.path("subtype").asString("").equals("error_during_execution")) {
             return "interrupted";
         }
-        String r = e.path("result").asString("");
+        final String r = e.path("result").asString("");
         if (!r.isEmpty()) {
             return clip(r, 500);
         }
-        StringBuilder sb = new StringBuilder(e.path("subtype").asString("error"));
-        for (JsonNode x : e.path("errors")) {
+        final StringBuilder sb = new StringBuilder(e.path("subtype").asString("error"));
+        for (final JsonNode x : e.path("errors")) {
             sb.append("; ").append(x.asString(""));
         }
         return clip(sb.toString(), 500);
     }
 
-    private void rateLimit(JsonNode e) {
-        JsonNode info = e.path("rate_limit_info");
-        String status = info.path("status").asString("allowed");
+    private void rateLimit(final JsonNode e) {
+        final JsonNode info = e.path("rate_limit_info");
+        final String status = info.path("status").asString("allowed");
         if (!status.equals("allowed")) {
             note(Block.NoteKind.INFO, "Rate limit " + status + " (" + info.path("rateLimitType").asString("") + ")");
         }
     }
 
-    private JsonNode parse(String line) {
+    private JsonNode parse(final String line) {
         try {
             return json.readTree(line);
-        } catch (JacksonException ex) {
+        } catch (final JacksonException ex) {
             LOG.log(System.Logger.Level.WARNING, "not JSON, ignored [session=" + session + ", line=" + clip(line, 200) + ']');
             return null;
         }
     }
 
-    private static String parent(JsonNode e) {
-        JsonNode p = e.path("parent_tool_use_id");
+    private static String parent(final JsonNode e) {
+        final JsonNode p = e.path("parent_tool_use_id");
         return p.isString() ? p.asString("") : "";
     }
 
-    private static String commandName(String t) {
-        int a = t.indexOf("<command-name>") + "<command-name>".length();
-        int b = t.indexOf("</command-name>");
-        String name = b > a ? t.substring(a, b) : "command";
-        int c = t.indexOf("<command-args>");
-        int d = t.indexOf("</command-args>");
-        String args = c >= 0 && d > c ? t.substring(c + "<command-args>".length(), d).strip() : "";
+    private static String commandName(final String t) {
+        final int a = t.indexOf("<command-name>") + "<command-name>".length();
+        final int b = t.indexOf("</command-name>");
+        final String name = b > a ? t.substring(a, b) : "command";
+        final int c = t.indexOf("<command-args>");
+        final int d = t.indexOf("</command-args>");
+        final String args = c >= 0 && d > c ? t.substring(c + "<command-args>".length(), d).strip() : "";
         return args.isEmpty() ? name : name + ' ' + args;
     }
 
-    static String clip(String s, int max) {
+    static String clip(final String s, final int max) {
         return s.length() <= max ? s : s.substring(0, max) + "… [" + (s.length() - max) + " more characters]";
     }
 }

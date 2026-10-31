@@ -16,10 +16,10 @@ class TextLinksTest {
     /// label its name.
     @Test
     void findsEveryKindOfLinkInOrder() {
-        String text = "See [[feedback-verification-discipline]], https://example.org/a and core/Reducer.java:42.";
+        final String text = "See [[feedback-verification-discipline]], https://example.org/a and core/Reducer.java:42.";
         assertThat(TextLinks.refs(text, false)).extracting(TextLinks.Ref::href).containsExactly(
                 NoteLinks.SCHEME + "feedback-verification-discipline", "https://example.org/a", SourceLinks.SCHEME + "core/Reducer.java#42");
-        TextLinks.Ref note = TextLinks.refs(text, false).getFirst();
+        final TextLinks.Ref note = TextLinks.refs(text, false).getFirst();
         assertThat(text.substring(note.start(), note.end())).isEqualTo("[[feedback-verification-discipline]]");
         assertThat(note.label()).isEqualTo("feedback-verification-discipline");
     }
@@ -28,7 +28,7 @@ class TextLinksTest {
     /// `name › heading`; blank and empty brackets are no link.
     @Test
     void aNoteLinkNamesItsHeadingAndItsLabel() {
-        TextLinks.Ref labelled = TextLinks.refs("[[notes#2-install|the install]]", false).getFirst();
+        final TextLinks.Ref labelled = TextLinks.refs("[[notes#2-install|the install]]", false).getFirst();
         assertThat(labelled.href()).isEqualTo(NoteLinks.SCHEME + "notes#2-install");
         assertThat(labelled.label()).isEqualTo("the install");
         assertThat(NoteLinks.name(labelled.href())).isEqualTo("notes");
@@ -52,7 +52,7 @@ class TextLinksTest {
     /// are found as source and web links.
     @Test
     void markdownLinksOnlyInTextNotParsedAsMarkdown() {
-        String text = "read [the guide](docs/guide.md#setup) or [site](https://example.org), not ![pic](a.png)";
+        final String text = "read [the guide](docs/guide.md#setup) or [site](https://example.org), not ![pic](a.png)";
         assertThat(TextLinks.refs(text, true)).extracting(TextLinks.Ref::href)
                 .containsExactly("docs/guide.md#setup", "https://example.org");
         assertThat(TextLinks.refs(text, false)).extracting(TextLinks.Ref::href).as("the address and the path in it are still ones")
@@ -62,7 +62,7 @@ class TextLinksTest {
     /// An index inside the note finds it; an index before it or at its end finds null.
     @Test
     void theLinkAtAnIndex() {
-        String text = "x [[a]] y";
+        final String text = "x [[a]] y";
         assertThat(TextLinks.at(text, 3, false).href()).isEqualTo(NoteLinks.SCHEME + "a");
         assertThat(TextLinks.at(text, 0, false)).isNull();
         assertThat(TextLinks.at(text, 7, false)).as("the end is outside").isNull();

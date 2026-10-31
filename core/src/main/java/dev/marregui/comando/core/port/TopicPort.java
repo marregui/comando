@@ -1,8 +1,8 @@
 package dev.marregui.comando.core.port;
 
-import dev.marregui.comando.core.model.Topic;
-
 import java.util.function.Consumer;
+
+import dev.marregui.comando.core.model.Topic;
 
 /**
  * Reads a panel's topic: one line on what the panel is about, from a text that describes it. A topic is derived view

@@ -21,7 +21,7 @@ final class OnGround extends Color {
     private record Worked(Ground ground, int rgb) {
     }
 
-    OnGround(Color over, float amount, Color overLight, float amountLight) {
+    OnGround(final Color over, final float amount, final Color overLight, final float amountLight) {
         super(Tint.over(Ground.GRAPHITE.color, over, amount).getRGB());
         this.over = over;
         this.amount = amount;
@@ -31,23 +31,23 @@ final class OnGround extends Color {
 
     @Override
     public int getRGB() {
-        Ground g = Theme.groundChosen();
-        Worked w = worked;
+        final Ground g = Theme.groundChosen();
+        final Worked w = worked;
         if (w != null && w.ground() == g) {
             return w.rgb();
         }
-        int rgb = on(g).getRGB();
+        final int rgb = on(g).getRGB();
         worked = new Worked(g, rgb);
         return rgb;
     }
 
     /** The colour on {@code g}, chosen or not. */
-    Color on(Ground g) {
+    Color on(final Ground g) {
         return g.light ? Tint.over(g.color, overLight, amountLight) : Tint.over(g.color, over, amount);
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         return o instanceof Color c && c.getRGB() == getRGB();
     }
 

@@ -1,14 +1,14 @@
 package dev.marregui.comando.ui.kit.async;
 
-import dev.marregui.comando.core.loop.Watchdog;
-
-import javax.swing.SwingUtilities;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.ObjLongConsumer;
 import java.util.function.Predicate;
+import javax.swing.SwingUtilities;
+
+import dev.marregui.comando.core.loop.Watchdog;
 
 /**
  * Watches the event dispatch thread: every {@link #PERIOD_MILLIS} a probe is posted to it, and a probe still waiting
@@ -81,7 +81,7 @@ public final class EdtWatchdog implements AutoCloseable {
     private long blockedSince;
 
     /** Starts watching; {@code report} receives each hang, on the shared watchdog's thread. */
-    public EdtWatchdog(Consumer<Stall> report) {
+    public EdtWatchdog(final Consumer<Stall> report) {
         this(report, (stall, millis) -> { });
     }
 
@@ -89,12 +89,12 @@ public final class EdtWatchdog implements AutoCloseable {
      * Starts watching; {@code report} receives a hang at its limit, and {@code ended} every stall with its whole
      * length when it ends. Both run on the shared watchdog's thread.
      */
-    public EdtWatchdog(Consumer<Stall> report, ObjLongConsumer<Stall> ended) {
+    public EdtWatchdog(final Consumer<Stall> report, final ObjLongConsumer<Stall> ended) {
         this(report, ended, EdtWatchdog::drawingOnly, HANG_LIMIT_MILLIS, DRAWING_LIMIT_MILLIS);
     }
 
-    EdtWatchdog(Consumer<Stall> report, ObjLongConsumer<Stall> ended, Predicate<StackTraceElement[]> drawing,
-                long hangLimitMillis, long drawingLimitMillis) {
+    EdtWatchdog(final Consumer<Stall> report, final ObjLongConsumer<Stall> ended, final Predicate<StackTraceElement[]> drawing,
+                final long hangLimitMillis, final long drawingLimitMillis) {
         this.report = report;
         this.ended = ended;
         this.drawing = drawing;
@@ -107,12 +107,12 @@ public final class EdtWatchdog implements AutoCloseable {
 
     /** How long the latest probe has waited for the EDT, 0 once answered; for tests, which hold the EDT until seen. */
     long probeWaitMillis() {
-        long p = posted;
+        final long p = posted;
         return p == 0 || answered == p ? 0 : (System.nanoTime() - p) / 1_000_000;
     }
 
     /** Waits until the EDT has answered a probe, so the watchdog knows it; for tests. */
-    boolean awaitFirstAnswer(long timeout, TimeUnit unit) throws InterruptedException {
+    boolean awaitFirstAnswer(final long timeout, final TimeUnit unit) throws InterruptedException {
         return firstAnswer.await(timeout, unit);
     }
 
@@ -120,11 +120,11 @@ public final class EdtWatchdog implements AutoCloseable {
      * The EDT is in the JDK's drawing: waiting on Java2D's render queue (its lock, or a flush to finish) before any
      * comando frame, whoever called the drawing; or in Java2D with no comando frame on the stack at all.
      */
-    static boolean drawingOnly(StackTraceElement[] frames) {
+    static boolean drawingOnly(final StackTraceElement[] frames) {
         boolean java2d = false;
         boolean comando = false;
-        for (StackTraceElement f : frames) {
-            String c = f.getClassName();
+        for (final StackTraceElement f : frames) {
+            final String c = f.getClassName();
             if (c.startsWith("dev.marregui.")) {
                 comando = true;
             } else if (!comando && renderQueueWait(f)) {
@@ -135,17 +135,17 @@ public final class EdtWatchdog implements AutoCloseable {
         return java2d && !comando;
     }
 
-    private static boolean renderQueueWait(StackTraceElement f) {
-        String c = f.getClassName();
+    private static boolean renderQueueWait(final StackTraceElement f) {
+        final String c = f.getClassName();
         return (c.equals("sun.java2d.pipe.RenderQueue") && f.getMethodName().equals("lock"))
                 || (c.endsWith("RenderQueue$QueueFlusher") && f.getMethodName().equals("flushNow"));
     }
 
     /** {@code in=} the first frame outside {@code java.base}; {@code comando=} the first comando frame and its line. */
-    static String where(StackTraceElement[] frames) {
+    static String where(final StackTraceElement[] frames) {
         String in = "-";
         String comando = "-";
-        for (StackTraceElement f : frames) {
+        for (final StackTraceElement f : frames) {
             if (in.equals("-") && !"java.base".equals(f.getModuleName())) {
                 in = shortName(f);
             }
@@ -157,8 +157,8 @@ public final class EdtWatchdog implements AutoCloseable {
         return "in=" + in + " comando=" + comando;
     }
 
-    private static String shortName(StackTraceElement f) {
-        String c = f.getClassName();
+    private static String shortName(final StackTraceElement f) {
+        final String c = f.getClassName();
         return c.substring(c.lastIndexOf('.') + 1) + "." + f.getMethodName();
     }
 
@@ -171,7 +171,7 @@ public final class EdtWatchdog implements AutoCloseable {
         if (!running) {
             return;
         }
-        long now = System.nanoTime();
+        final long now = System.nanoTime();
         if (probe == 0 || answered == probe) {
             if (stall != null) {
                 ended.accept(stall, (now - blockedSince) / 1_000_000);
@@ -180,7 +180,7 @@ public final class EdtWatchdog implements AutoCloseable {
             post(now);
             return;
         }
-        long waited = (now - blockedSince) / 1_000_000;
+        final long waited = (now - blockedSince) / 1_000_000;
         if (stall == null && waited >= THRESHOLD_MILLIS) {
             stall = look(waited, false);
         }
@@ -190,8 +190,8 @@ public final class EdtWatchdog implements AutoCloseable {
         }
     }
 
-    private void post(long now) {
-        long p = now;
+    private void post(final long now) {
+        final long p = now;
         probe = p;
         blockedSince = p;
         posted = p;
@@ -202,8 +202,8 @@ public final class EdtWatchdog implements AutoCloseable {
         });
     }
 
-    private Stall look(long waited, boolean reported) {
-        StackTraceElement[] frames = framesOf(edt);
+    private Stall look(final long waited, final boolean reported) {
+        final StackTraceElement[] frames = framesOf(edt);
         Kind kind;
         if (frames.length == 0) {
             kind = Kind.STARTUP;
@@ -215,12 +215,12 @@ public final class EdtWatchdog implements AutoCloseable {
         return new Stall(waited, kind, frames.length == 0 ? "" : where(frames), format(frames), reported);
     }
 
-    private long limitOf(Stall stall) {
+    private long limitOf(final Stall stall) {
         return stall.drawing() ? drawingLimitMillis : hangLimitMillis;
     }
 
-    private static boolean comandoFrame(StackTraceElement[] frames) {
-        for (StackTraceElement f : frames) {
+    private static boolean comandoFrame(final StackTraceElement[] frames) {
+        for (final StackTraceElement f : frames) {
             if (f.getClassName().startsWith("dev.marregui.")) {
                 return true;
             }
@@ -228,15 +228,15 @@ public final class EdtWatchdog implements AutoCloseable {
         return false;
     }
 
-    private static StackTraceElement[] framesOf(Thread t) {
+    private static StackTraceElement[] framesOf(final Thread t) {
         return t == null ? new StackTraceElement[0] : t.getStackTrace();
     }
 
-    private static String format(StackTraceElement[] frames) {
+    private static String format(final StackTraceElement[] frames) {
         if (frames.length == 0) {
             return "(the EDT has not run a probe yet)";
         }
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < Math.min(frames.length, 40); i++) {
             sb.append("\tat ").append(frames[i]).append('\n');
         }
@@ -248,7 +248,7 @@ public final class EdtWatchdog implements AutoCloseable {
         running = false;
         try {
             watching.close();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // the look is a list entry; removing it does not fail
         }
     }

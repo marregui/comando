@@ -40,8 +40,8 @@ public final class Watchdog {
     }
 
     /** Runs {@code look} every period until the returned handle is closed. */
-    public AutoCloseable watch(Runnable look) {
-        Runnable mine = look::run; // its own identity, so one look added twice leaves once per handle
+    public AutoCloseable watch(final Runnable look) {
+        final Runnable mine = look::run; // its own identity, so one look added twice leaves once per handle
         synchronized (this) {
             looks.add(mine);
             if (thread == null) {

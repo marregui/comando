@@ -1,8 +1,5 @@
 package dev.marregui.comando.ui.widgets.table;
 
-import javax.swing.JScrollPane;
-import javax.swing.JViewport;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Graphics2D;
@@ -12,6 +9,9 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Random;
+import javax.swing.JScrollPane;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 
 /**
  * The grid's frame-time gate: a {@link GridTable} over 100 000 rows of 12 columns (longs, doubles and text, with nulls)
@@ -53,7 +53,7 @@ public final class GridGate {
         final Thread watch = new Thread(() -> {
             try {
                 Thread.sleep(EXIT_GRACE_MILLIS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 return;
             }
             System.out.println("GATE FAILED: the JVM is still alive " + EXIT_GRACE_MILLIS + " ms after the measurement; "

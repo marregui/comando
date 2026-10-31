@@ -1,5 +1,9 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.LongSupplier;
+
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Status;
@@ -8,10 +12,6 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.ViewSpec;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.LongSupplier;
 
 /**
  * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which only stamps
@@ -38,16 +38,16 @@ public final class Reducer {
     private final LongSupplier checkpointThreshold;
 
     /** A reducer that runs no automatic checkpoint: tests and tools. */
-    public Reducer(Clock clock) {
+    public Reducer(final Clock clock) {
         this(clock, () -> 0L);
     }
 
-    public Reducer(Clock clock, LongSupplier checkpointThreshold) {
+    public Reducer(final Clock clock, final LongSupplier checkpointThreshold) {
         this.clock = clock;
         this.checkpointThreshold = checkpointThreshold;
     }
 
-    public Transition apply(AppState s, Intent intent) {
+    public Transition apply(final AppState s, final Intent intent) {
         return withDesktopError(s, withRepoWatch(s, reduce(s, intent)));
     }
 
@@ -55,19 +55,19 @@ public final class Reducer {
      * The git repositories of every folder are read, often while the Changes view is open: opening it, closing it, or
      * changing the folders tells the tools which to read and how often.
      */
-    private static Transition withRepoWatch(AppState before, Transition t) {
-        boolean was = showsChanges(before);
-        boolean is = showsChanges(t.state());
+    private static Transition withRepoWatch(final AppState before, final Transition t) {
+        final boolean was = showsChanges(before);
+        final boolean is = showsChanges(t.state());
         if (was == is && before.folders().equals(t.state().folders())) {
             return t;
         }
-        List<Effect> effects = new ArrayList<>(t.effects());
+        final List<Effect> effects = new ArrayList<>(t.effects());
         effects.add(new Effect.WatchRepos(t.state().folders(), is));
         return new Transition(t.state(), effects);
     }
 
-    private static boolean showsChanges(AppState s) {
-        for (ViewState v : s.views()) {
+    private static boolean showsChanges(final AppState s) {
+        for (final ViewState v : s.views()) {
             if (v.spec() instanceof ViewSpec.Changes) {
                 return true;
             }
@@ -79,13 +79,13 @@ public final class Reducer {
      * A new error notice also goes to the desktop, which shows it only while the window is in the background, so
      * an error that arrives while the user works elsewhere is not lost.
      */
-    private static Transition withDesktopError(AppState before, Transition t) {
-        Notice n = t.state().notice();
+    private static Transition withDesktopError(final AppState before, final Transition t) {
+        final Notice n = t.state().notice();
         if (n.level() != Notice.Level.ERROR || n.isEmpty() || n.equals(before.notice())
                 || t.effects().stream().anyMatch(e -> e instanceof Effect.DesktopNotify)) {
             return t;
         }
-        List<Effect> effects = new ArrayList<>(t.effects());
+        final List<Effect> effects = new ArrayList<>(t.effects());
         effects.add(new Effect.DesktopNotify("comando", n.text()));
         return new Transition(t.state(), effects);
     }
@@ -99,7 +99,7 @@ public final class Reducer {
         return TurnRules.refused(s, intent);
     }
 
-    private Transition reduce(AppState s, Intent intent) {
+    private Transition reduce(final AppState s, final Intent intent) {
         // a session whose checkpoint runs takes only an interrupt or a stop from the window (record 130)
         if (TurnRules.refused(s, intent)) {
             return Transition.of(s);
@@ -206,15 +206,15 @@ public final class Reducer {
     }
 
     /** What goes to Claude in front of the first prompt after a checkpoint cleared the conversation. */
-    static String preface(String carried) {
+    static String preface(final String carried) {
         return "Context carried over from the previous conversation of this session: the summary its checkpoint wrote before "
                 + "the conversation was cleared.\n\n" + carried.strip() + "\n\n---\n\n";
     }
 
     /** The prompt is the checkpoint command, alone or followed by arguments ({@code /reflect now}). */
-    static boolean isCheckpoint(String prompt, String checkpoint) {
-        String p = prompt.strip();
-        String c = checkpoint.strip();
+    static boolean isCheckpoint(final String prompt, final String checkpoint) {
+        final String p = prompt.strip();
+        final String c = checkpoint.strip();
         return !c.isEmpty() && p.startsWith(c) && (p.length() == c.length() || Character.isWhitespace(p.charAt(c.length())));
     }
 }

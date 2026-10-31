@@ -1,15 +1,15 @@
 package dev.marregui.comando.core.state;
 
-import dev.marregui.comando.core.model.Approval;
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.PanelId;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
+
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.PanelId;
 
 /**
  * The whole UI state as one immutable value. It holds metadata and ids only: result rows, transcripts and
@@ -70,19 +70,19 @@ public record AppState(
     /** Notices kept for the history the status bar opens. */
     public static final int NOTICE_HISTORY = 50;
 
-    public static AppState initial(List<PanelState> panels, List<ConnectionState> connections, List<SessionState> sessions) {
+    public static AppState initial(final List<PanelState> panels, final List<ConnectionState> connections, final List<SessionState> sessions) {
         return initial(panels, connections, sessions, List.of());
     }
 
-    public static AppState initial(List<PanelState> panels, List<ConnectionState> connections, List<SessionState> sessions,
-                                   List<FolderRoot> folders) {
+    public static AppState initial(final List<PanelState> panels, final List<ConnectionState> connections, final List<SessionState> sessions,
+                                   final List<FolderRoot> folders) {
         return new AppState(panels, List.of(), panels.getFirst().id(), connections, sessions, folders, List.of(), List.of(), List.of(),
                 LowerTab.SESSION, Notice.NONE, List.of(), InstancesState.NONE, 1L);
     }
 
     // ---- lookups
 
-    public Optional<PanelState> panel(PanelId id) {
+    public Optional<PanelState> panel(final PanelId id) {
         return find(panels, p -> p.id().equals(id));
     }
 
@@ -90,32 +90,32 @@ public record AppState(
         return panel(focused).orElseThrow();
     }
 
-    public Optional<ConnectionState> connection(String name) {
+    public Optional<ConnectionState> connection(final String name) {
         return find(connections, c -> c.name().equals(name));
     }
 
-    public Optional<SessionState> session(String name) {
+    public Optional<SessionState> session(final String name) {
         return find(sessions, s -> s.name().equals(name));
     }
 
-    public Optional<SqlRun> runOf(PanelId panel) {
+    public Optional<SqlRun> runOf(final PanelId panel) {
         return find(runs, r -> r.panel().equals(panel));
     }
 
-    public Optional<SqlRun> run(long requestId) {
+    public Optional<SqlRun> run(final long requestId) {
         return find(runs, r -> r.requestId() == requestId);
     }
 
-    public Optional<Approval> approval(long id) {
+    public Optional<Approval> approval(final long id) {
         return find(approvals, a -> a.id() == id);
     }
 
-    public Optional<ViewState> view(long id) {
+    public Optional<ViewState> view(final long id) {
         return find(views, v -> v.id() == id);
     }
 
     /** The open panels bound to the session: its own panel first, then the documents attached to it. */
-    public List<PanelState> panelsBoundToSession(String session) {
+    public List<PanelState> panelsBoundToSession(final String session) {
         return panels.stream().filter(p -> p.session().equals(session))
                 .sorted((a, b) -> Boolean.compare(a.document(), b.document())).toList();
     }
@@ -124,13 +124,13 @@ public record AppState(
      * The session's own panel, open: the one panel of comando's own bound to it, titled with its name. A session has
      * one; documents attached to it are not its panel.
      */
-    public Optional<PanelState> homePanel(String session) {
+    public Optional<PanelState> homePanel(final String session) {
         return session.isEmpty() ? Optional.empty() : find(panels, p -> !p.document() && p.session().equals(session));
     }
 
-    public int pendingApprovals(String session) {
+    public int pendingApprovals(final String session) {
         int n = 0;
-        for (Approval a : approvals) {
+        for (final Approval a : approvals) {
             if (a.session().equals(session)) {
                 n++;
             }
@@ -140,77 +140,77 @@ public record AppState(
 
     // ---- copies
 
-    public AppState withPanels(List<PanelState> newPanels, PanelId newFocused) {
+    public AppState withPanels(final List<PanelState> newPanels, final PanelId newFocused) {
         return new AppState(newPanels, closed, newFocused, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    public AppState withClosed(List<PanelState> newClosed) {
+    public AppState withClosed(final List<PanelState> newClosed) {
         return new AppState(panels, newClosed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
     /** A closed panel of comando's own, by id. */
-    public Optional<PanelState> closedPanel(PanelId id) {
+    public Optional<PanelState> closedPanel(final PanelId id) {
         return find(closed, p -> p.id().equals(id));
     }
 
     /** Whether a panel, open or closed, has this title, ignoring case: a title names one panel to the tools. */
-    public boolean titleTaken(String title) {
+    public boolean titleTaken(final String title) {
         return panels.stream().anyMatch(p -> p.title().equalsIgnoreCase(title)) || closed.stream().anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
 
     /** The closed panel bound to the session, if any: its own panel, closed (a document is dropped when closed). */
-    public Optional<PanelState> closedPanelOfSession(String session) {
+    public Optional<PanelState> closedPanelOfSession(final String session) {
         return session.isEmpty() ? Optional.empty() : find(closed, p -> p.session().equals(session));
     }
 
-    public AppState withPanel(PanelState panel) {
+    public AppState withPanel(final PanelState panel) {
         return withPanels(replace(panels, p -> p.id().equals(panel.id()), panel), focused);
     }
 
     /** The state with {@code id} focused; this one when it already is. */
-    public AppState withFocused(PanelId id) {
+    public AppState withFocused(final PanelId id) {
         if (id.equals(focused)) {
             return this;
         }
         return new AppState(panels, closed, id, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    public AppState withConnections(List<ConnectionState> newConnections) {
+    public AppState withConnections(final List<ConnectionState> newConnections) {
         return new AppState(panels, closed, focused, newConnections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    public AppState withConnection(ConnectionState connection) {
+    public AppState withConnection(final ConnectionState connection) {
         return withConnections(replace(connections, c -> c.name().equals(connection.name()), connection));
     }
 
-    public AppState withFolders(List<FolderRoot> newFolders) {
+    public AppState withFolders(final List<FolderRoot> newFolders) {
         return new AppState(panels, closed, focused, connections, sessions, newFolders, runs, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    public Optional<FolderRoot> folder(String name) {
+    public Optional<FolderRoot> folder(final String name) {
         return find(folders, f -> f.name().equals(name));
     }
 
-    public AppState withSessions(List<SessionState> newSessions) {
+    public AppState withSessions(final List<SessionState> newSessions) {
         return new AppState(panels, closed, focused, connections, newSessions, folders, runs, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    public AppState withSession(SessionState session) {
+    public AppState withSession(final SessionState session) {
         return withSessions(replace(sessions, s -> s.name().equals(session.name()), session));
     }
 
-    public AppState withSession(String name, UnaryOperator<SessionState> change) {
+    public AppState withSession(final String name, final UnaryOperator<SessionState> change) {
         return session(name).map(s -> withSession(change.apply(s))).orElse(this);
     }
 
-    public AppState withRuns(List<SqlRun> newRuns) {
+    public AppState withRuns(final List<SqlRun> newRuns) {
         return new AppState(panels, closed, focused, connections, sessions, folders, newRuns, approvals, views, lowerTab, notice, notices, instances, nextId);
     }
 
     /** Puts {@code run} as the panel's run, replacing the previous one. */
-    public AppState withRun(SqlRun run) {
-        List<SqlRun> next = new ArrayList<>(runs.size() + 1);
-        for (SqlRun r : runs) {
+    public AppState withRun(final SqlRun run) {
+        final List<SqlRun> next = new ArrayList<>(runs.size() + 1);
+        for (final SqlRun r : runs) {
             if (!r.panel().equals(run.panel())) {
                 next.add(r);
             }
@@ -219,16 +219,16 @@ public record AppState(
         return withRuns(next);
     }
 
-    public AppState withApprovals(List<Approval> newApprovals) {
+    public AppState withApprovals(final List<Approval> newApprovals) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, newApprovals, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    public AppState withViews(List<ViewState> newViews) {
+    public AppState withViews(final List<ViewState> newViews) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, newViews, lowerTab, notice, notices, instances, nextId);
     }
 
     /** The state with {@code tab} selected; this one when it already is. */
-    public AppState withLowerTab(LowerTab tab) {
+    public AppState withLowerTab(final LowerTab tab) {
         if (tab.equals(lowerTab)) {
             return this;
         }
@@ -236,12 +236,12 @@ public record AppState(
     }
 
     /** The standing notice only; the history is unchanged. */
-    public AppState withNotice(Notice newNotice) {
+    public AppState withNotice(final Notice newNotice) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, newNotice, notices, instances, nextId);
     }
 
     /** The standing notice and the history. */
-    public AppState withNotices(Notice newNotice, List<Notice> newNotices) {
+    public AppState withNotices(final Notice newNotice, final List<Notice> newNotices) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, newNotice, newNotices, instances, nextId);
     }
 
@@ -251,15 +251,15 @@ public record AppState(
     }
 
     /** The instances on the comando Edge as last read. */
-    public AppState withInstances(InstancesState newInstances) {
+    public AppState withInstances(final InstancesState newInstances) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, newInstances,
                 nextId);
     }
 
     // ---- list helpers
 
-    static <T> Optional<T> find(List<T> list, Predicate<T> match) {
-        for (T t : list) {
+    static <T> Optional<T> find(final List<T> list, final Predicate<T> match) {
+        for (final T t : list) {
             if (match.test(t)) {
                 return Optional.of(t);
             }
@@ -267,9 +267,9 @@ public record AppState(
         return Optional.empty();
     }
 
-    static <T> List<T> replace(List<T> list, Predicate<T> match, T value) {
-        List<T> next = new ArrayList<>(list.size());
-        for (T t : list) {
+    static <T> List<T> replace(final List<T> list, final Predicate<T> match, final T value) {
+        final List<T> next = new ArrayList<>(list.size());
+        for (final T t : list) {
             next.add(match.test(t) ? value : t);
         }
         return next;

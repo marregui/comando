@@ -1,15 +1,15 @@
 package dev.marregui.comando.core.resource;
 
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.Notice;
-
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Notice;
 
 /**
  * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out, the row's icon,
@@ -49,8 +49,8 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
     }
 
     @Override
-    public Map<String, String> toAttributes(FolderRoot f) {
-        Map<String, String> m = new LinkedHashMap<>();
+    public Map<String, String> toAttributes(final FolderRoot f) {
+        final Map<String, String> m = new LinkedHashMap<>();
         m.put("name", f.name());
         m.put("path", f.path());
         m.put("index", f.index());
@@ -63,8 +63,8 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
     }
 
     @Override
-    public FolderRoot fromAttributes(Map<String, String> a) {
-        String name = a.getOrDefault("name", "").strip();
+    public FolderRoot fromAttributes(final Map<String, String> a) {
+        final String name = a.getOrDefault("name", "").strip();
         String path = a.getOrDefault("path", "").strip();
         if (name.isEmpty()) {
             throw new IllegalArgumentException("the folder needs a name");
@@ -76,15 +76,15 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
         if (!Path.of(path).isAbsolute()) {
             throw new IllegalArgumentException("the folder must be a full path, such as ~/notes: " + path);
         }
-        String index = a.getOrDefault("index", "").strip();
+        final String index = a.getOrDefault("index", "").strip();
         if (Path.of(index).isAbsolute() || Path.of(index).normalize().startsWith("..")) {
             throw new IllegalArgumentException("the index file must be inside the folder: " + index);
         }
-        String icon = a.getOrDefault("icon", "").strip();
+        final String icon = a.getOrDefault("icon", "").strip();
         if (!icon.isEmpty() && !FolderRoot.ICONS.contains(icon)) {
             throw new IllegalArgumentException("the icon must be one of " + String.join(", ", FolderRoot.ICONS) + ": " + icon);
         }
-        String listedIn = a.getOrDefault("listedIn", "").strip();
+        final String listedIn = a.getOrDefault("listedIn", "").strip();
         if (!listedIn.isEmpty() && (listedIn.contains("/") || listedIn.contains("\\") || listedIn.equals(".") || listedIn.equals(".."))) {
             throw new IllegalArgumentException("the listing file must be a file name, such as INDEX.md: " + listedIn);
         }
@@ -100,27 +100,27 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
     }
 
     @Override
-    public String nameOf(FolderRoot spec) {
+    public String nameOf(final FolderRoot spec) {
         return spec.name();
     }
 
     @Override
-    public FolderRoot withName(FolderRoot spec, String name) {
+    public FolderRoot withName(final FolderRoot spec, final String name) {
         return spec.withName(name);
     }
 
     @Override
-    public FolderRoot template(String name) {
+    public FolderRoot template(final String name) {
         return new FolderRoot(name, HomeDir.home(), "", List.of());
     }
 
     @Override
-    public String noticeSubject(String name) {
+    public String noticeSubject(final String name) {
         return Notice.folder(name);
     }
 
     @Override
-    public String removalQuestion(AppState s, String name) {
+    public String removalQuestion(final AppState s, final String name) {
         return "Remove folder " + name + " from the Files tab? Its files stay on disk.";
     }
 }

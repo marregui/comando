@@ -10,27 +10,27 @@ public final class SchemaRegistry {
     private final ConcurrentHashMap<String, Schema> schemas = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<Consumer<String>> listeners = new CopyOnWriteArrayList<>();
 
-    public Schema of(String connection) {
+    public Schema of(final String connection) {
         return schemas.getOrDefault(connection, Schema.EMPTY);
     }
 
-    public void put(String connection, Schema schema) {
+    public void put(final String connection, final Schema schema) {
         schemas.put(connection, schema);
-        for (Consumer<String> l : listeners) {
+        for (final Consumer<String> l : listeners) {
             l.accept(connection);
         }
     }
 
-    public void forget(String connection) {
+    public void forget(final String connection) {
         schemas.remove(connection);
     }
 
     /** Called with the connection name after its schema changed; on the writer's thread. */
-    public void addListener(Consumer<String> listener) {
+    public void addListener(final Consumer<String> listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(Consumer<String> listener) {
+    public void removeListener(final Consumer<String> listener) {
         listeners.remove(listener);
     }
 }

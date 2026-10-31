@@ -1,18 +1,18 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import com.formdev.flatlaf.FlatDarkLaf;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.util.concurrent.atomic.AtomicReference;
+
+import com.formdev.flatlaf.FlatDarkLaf;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,12 +40,12 @@ class FocusRingTest {
     /// was removed gets the look and feel's border back, which draws the system accent round it.
     @Test
     void theRingSurvivesTheLookAndFeelInstalledAgain() throws Exception {
-        AtomicReference<Object> ring = new AtomicReference<>();
-        AtomicReference<Object> removed = new AtomicReference<>();
+        final AtomicReference<Object> ring = new AtomicReference<>();
+        final AtomicReference<Object> removed = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
-            JScrollPane withRing = new JScrollPane(new JPanel());
+            final JScrollPane withRing = new JScrollPane(new JPanel());
             FocusRing.install(withRing);
-            JScrollPane without = new JScrollPane(new JPanel());
+            final JScrollPane without = new JScrollPane(new JPanel());
             without.setBorder(null);
             SwingUtilities.updateComponentTreeUI(withRing);
             SwingUtilities.updateComponentTreeUI(without);
@@ -59,12 +59,12 @@ class FocusRingTest {
     /// A scroll pane whose view does not hold the keyboard paints no ring: the edge stays the ground.
     @Test
     void withoutTheKeyboardTheRingPaintsNothing() throws Exception {
-        BufferedImage img = new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB);
+        final BufferedImage img = new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB);
         SwingUtilities.invokeAndWait(() -> {
-            JScrollPane scroll = new JScrollPane(new JPanel());
+            final JScrollPane scroll = new JScrollPane(new JPanel());
             FocusRing.install(scroll);
             assertThat(FocusRing.shows(scroll)).isFalse();
-            Graphics2D g = img.createGraphics();
+            final Graphics2D g = img.createGraphics();
             scroll.getBorder().paintBorder(scroll, g, 0, 0, 20, 20);
             g.dispose();
         });

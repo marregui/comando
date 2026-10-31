@@ -1,10 +1,5 @@
 package dev.marregui.comando.claude;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,6 +11,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.LongSupplier;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * What the sessions spend and how their work ends, kept to calibrate who does what (record 110): one JSON object a
@@ -35,19 +35,19 @@ public final class MetricsLog {
     private final ObjectMapper json;
     private final LongSupplier clock;
 
-    public MetricsLog(Path dir) {
+    public MetricsLog(final Path dir) {
         this(dir, new ObjectMapper(), System::currentTimeMillis);
     }
 
-    MetricsLog(Path dir, ObjectMapper json, LongSupplier clock) {
+    MetricsLog(final Path dir, final ObjectMapper json, final LongSupplier clock) {
         this.dir = dir;
         this.json = json;
         this.clock = clock;
     }
 
     /** A new event of {@code type}, stamped now; {@link #write} keeps it. */
-    ObjectNode event(String type) {
-        ObjectNode e = json.createObjectNode();
+    ObjectNode event(final String type) {
+        final ObjectNode e = json.createObjectNode();
         e.put("ts", Instant.ofEpochMilli(clock.getAsLong()).toString());
         e.put("event", type);
         return e;
@@ -65,24 +65,24 @@ public final class MetricsLog {
      * The context and its window the last {@code turn} of conversation {@code id} ended with, newest file first, within
      * {@link #CONTEXT_DAYS}; empty when none is kept (record 120). Reads files: off the EDT.
      */
-    Optional<long[]> lastContext(String id) {
+    Optional<long[]> lastContext(final String id) {
         if (dir == null || id == null || id.isEmpty() || !Files.isDirectory(dir)) {
             return Optional.empty();
         }
         LocalDate day = LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC);
-        String needle = "\"conversation\":\"" + id + "\"";
+        final String needle = "\"conversation\":\"" + id + "\"";
         for (int i = 0; i < CONTEXT_DAYS; i++, day = day.minusDays(1)) {
-            Path file = dir.resolve("metrics-" + day + ".jsonl");
+            final Path file = dir.resolve("metrics-" + day + ".jsonl");
             if (!Files.isRegularFile(file)) {
                 continue;
             }
             try {
-                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+                final List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
                 for (int j = lines.size() - 1; j >= 0; j--) {
-                    String line = lines.get(j);
+                    final String line = lines.get(j);
                     if (line.contains(needle) && line.contains("\"event\":\"turn\"")) {
-                        JsonNode e = json.readTree(line);
-                        long context = e.path("context").asLong(-1);
+                        final JsonNode e = json.readTree(line);
+                        final long context = e.path("context").asLong(-1);
                         if (context > 0) {
                             return Optional.of(new long[]{context, e.path("window").asLong(0)});
                         }
@@ -96,11 +96,11 @@ public final class MetricsLog {
     }
 
     /** Appends {@code event} as one line to today's file; a failure is logged, never thrown. */
-    synchronized void write(ObjectNode event) {
+    synchronized void write(final ObjectNode event) {
         if (dir == null) {
             return;
         }
-        Path file = dir.resolve("metrics-" + LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC) + ".jsonl");
+        final Path file = dir.resolve("metrics-" + LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC) + ".jsonl");
         try {
             Files.createDirectories(dir);
             Files.writeString(file, json.writeValueAsString(event) + "\n", StandardCharsets.UTF_8,

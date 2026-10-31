@@ -1,21 +1,22 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.StateLoop;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.model.Status;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,7 +57,7 @@ class ThreadBudgetTest {
     /// a strand of comando's nor one of its platform threads is left after the window closes.
     @Test
     void comandosOwnThreadsAreTheReducerTheWatchdogAndOneReaderPerRunningSession() throws Exception {
-        Path claude = home.resolve("fake-claude.sh");
+        final Path claude = home.resolve("fake-claude.sh");
         Files.writeString(claude, """
                 #!/bin/sh
                 # stands in for claude -p: init and a result for each prompt, until its input ends
@@ -70,13 +71,13 @@ class ThreadBudgetTest {
                 done
                 """);
         claude.toFile().setExecutable(true);
-        Set<Long> before = platformThreads().keySet();
+        final Set<Long> before = platformThreads().keySet();
         final Set<Thread> madeBefore = Set.copyOf(Threads.alive());
-        App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "budget", () -> {
+        final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "budget", () -> {
         });
         try {
             app.start();
-            StateLoop loop = app.loop();
+            final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> !comandos(before).isEmpty());
             for (int i = 0; i < SESSIONS; i++) {
                 loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("s" + i, home.toString())));
@@ -126,8 +127,8 @@ class ThreadBudgetTest {
     }
 
     /** comando's platform threads started since {@code before}, by name, with how many share it. */
-    private static TreeMap<String, Integer> comandos(Set<Long> before) {
-        TreeMap<String, Integer> out = new TreeMap<>();
+    private static TreeMap<String, Integer> comandos(final Set<Long> before) {
+        final TreeMap<String, Integer> out = new TreeMap<>();
         platformThreads().forEach((id, name) -> {
             if (!before.contains(id) && NOT_COMANDO.stream().noneMatch(name::startsWith)) {
                 out.merge(name, 1, Integer::sum);
@@ -140,8 +141,8 @@ class ThreadBudgetTest {
      * Each thread {@link #comandos} counts: its class, whether a daemon, its state and its top frames. A thread named
      * by the JDK's default ({@code Thread-5}) says nothing of its owner; its frames do.
      */
-    private static String stacks(Set<Long> before) {
-        StringBuilder out = new StringBuilder();
+    private static String stacks(final Set<Long> before) {
+        final StringBuilder out = new StringBuilder();
         Thread.getAllStackTraces().forEach((t, frames) -> {
             if (t.isAlive() && !t.isVirtual() && !before.contains(t.threadId())
                     && NOT_COMANDO.stream().noneMatch(t.getName()::startsWith)) {
@@ -157,8 +158,8 @@ class ThreadBudgetTest {
 
     /** Every live platform thread by id; virtual threads are not listed by the JDK. */
     private static TreeMap<Long, String> platformThreads() {
-        TreeMap<Long, String> out = new TreeMap<>();
-        for (Thread t : Thread.getAllStackTraces().keySet()) {
+        final TreeMap<Long, String> out = new TreeMap<>();
+        for (final Thread t : Thread.getAllStackTraces().keySet()) {
             if (t.isAlive() && !t.isVirtual()) {
                 out.put(t.threadId(), t.getName());
             }

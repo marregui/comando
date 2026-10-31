@@ -1,5 +1,24 @@
 package dev.marregui.comando.mcp;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
+
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.dispatch.Target;
@@ -20,24 +39,6 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 /**
  * The actions of the registry that are not among comando's first tools (record 121): their schemas, and performing them
@@ -60,18 +61,18 @@ final class ActionTools {
     private volatile Path agentsFile;
     private volatile List<ServerSwitch> servers = List.of();
 
-    ActionTools(IntentSink sink, Supplier<AppState> state) {
+    ActionTools(final IntentSink sink, final Supplier<AppState> state) {
         this.sink = sink;
         this.state = state;
     }
 
     /** Where the user's grants live; without one no caller holds a grant. */
-    void agentsFile(Path file) {
+    void agentsFile(final Path file) {
         this.agentsFile = file;
     }
 
     /** The servers {@code server_start} and {@code server_stop} reach; none until the application sets them. */
-    void servers(List<ServerSwitch> servers) {
+    void servers(final List<ServerSwitch> servers) {
         this.servers = List.copyOf(servers);
     }
 
@@ -81,28 +82,28 @@ final class ActionTools {
     }
 
     /** Whether {@code tool} is one of the actions this class performs. */
-    static boolean handles(String tool, Set<String> builtIn) {
+    static boolean handles(final String tool, final Set<String> builtIn) {
         return !builtIn.contains(tool) && Actions.byTool(tool).isPresent();
     }
 
     /** The tool definitions of the actions not in {@code builtIn}, in the registry's order. */
-    ArrayNode definitions(Set<String> builtIn) {
-        ArrayNode out = json.createArrayNode();
-        for (Action a : Actions.ALL) {
+    ArrayNode definitions(final Set<String> builtIn) {
+        final ArrayNode out = json.createArrayNode();
+        for (final Action a : Actions.ALL) {
             if (builtIn.contains(a.tool())) {
                 continue;
             }
-            ObjectNode d = out.addObject();
+            final ObjectNode d = out.addObject();
             d.put("name", a.tool());
             d.put("description", a.description() + (a.kind() == Action.Kind.DESTRUCTIVE
                     ? " Destructive: runs only if the user granted this caller \"destructive\" in agents.json"
                     + (onSession(a) ? ", or this caller created the session." : ".") : ""));
-            ObjectNode schema = d.putObject("inputSchema");
+            final ObjectNode schema = d.putObject("inputSchema");
             schema.put("type", "object");
-            ObjectNode props = schema.putObject("properties");
-            ArrayNode required = json.createArrayNode();
-            for (Action.Arg arg : a.args()) {
-                ObjectNode p = props.putObject(arg.name());
+            final ObjectNode props = schema.putObject("properties");
+            final ArrayNode required = json.createArrayNode();
+            for (final Action.Arg arg : a.args()) {
+                final ObjectNode p = props.putObject(arg.name());
                 switch (arg.type()) {
                     case STRING -> p.put("type", "string");
                     case INTEGER -> p.put("type", "integer");
@@ -132,15 +133,15 @@ final class ActionTools {
      * Performs action {@code tool} for {@code caller}; bad input is an {@link IllegalArgumentException} the caller
      * turns into a tool error.
      */
-    McpTools.Outcome run(String caller, String tool, JsonNode args) {
-        Action action = Actions.byTool(tool).orElseThrow(() -> new IllegalArgumentException("unknown tool " + tool));
-        AppState s = state.get();
+    McpTools.Outcome run(final String caller, final String tool, final JsonNode args) {
+        final Action action = Actions.byTool(tool).orElseThrow(() -> new IllegalArgumentException("unknown tool " + tool));
+        final AppState s = state.get();
         if (action.kind() == Action.Kind.DESTRUCTIVE && !granted(caller, DESTRUCTIVE) && !created(caller, action, s, args)) {
             return McpTools.Outcome.fail(tool + " is destructive: the user has not granted " + caller + " \"destructive\" (agents.json in comando's "
                     + "data root, {\"grants\": {\"" + caller + "\": [\"destructive\"]}})" + (onSession(action) ? " and " + caller
                     + " did not create the session" : "") + "; ask the user to do it or to grant it");
         }
-        String done = switch (tool) {
+        final String done = switch (tool) {
             case "session_new" -> sessionNew(caller, s, args);
             case "session_edit" -> sessionEdit(s, args);
             case "session_open" -> send(new Intent.OpenSession(session(s, args).name(), s.focused(), PanelId.random()));
@@ -194,17 +195,17 @@ final class ActionTools {
         return done.startsWith("refused") ? McpTools.Outcome.fail(done) : McpTools.Outcome.ok(done);
     }
 
-    private String sessionNew(String caller, AppState s, JsonNode args) {
-        String name = name(args, "name");
+    private String sessionNew(final String caller, final AppState s, final JsonNode args) {
+        final String name = name(args, "name");
         if (s.session(name).isPresent()) {
             throw new IllegalArgumentException("a session called " + name + " exists; sessions: " + names(s));
         }
-        SessionSpec spec = new SessionSpec(name, dir(args), args.path("model").asString("").strip(), args.path("effort").asString("").strip(),
+        final SessionSpec spec = new SessionSpec(name, dir(args), args.path("model").asString("").strip(), args.path("effort").asString("").strip(),
                 args.path("permission_mode").asString("").strip(), args.has("add_dirs") ? strings(args, "add_dirs") : List.of(), 0.0, "",
                 StartMode.NEW, args.has("checkpoint") ? args.path("checkpoint").asString("") : SessionSpec.DEFAULT_CHECKPOINT, "", caller);
         // a new session comes with its own panel (record 88); the prompt goes there, resolved when it is reduced
         sink.dispatch(new Intent.SaveSession("", spec));
-        String prompt = args.path("prompt").asString("").strip();
+        final String prompt = args.path("prompt").asString("").strip();
         if (prompt.isEmpty()) {
             return "created session " + name + " in " + spec.workDir() + ", open in its panel; start it with session_start or give it a prompt "
                     + "with session_send once started";
@@ -214,10 +215,10 @@ final class ActionTools {
                 + "{\"session\": \"" + name + "\", \"wait_seconds\": 300}";
     }
 
-    private String sessionEdit(AppState s, JsonNode args) {
-        SessionSpec old = session(s, args).spec();
-        String name = args.has("new_name") ? name(args, "new_name") : old.name();
-        SessionSpec spec = new SessionSpec(name,
+    private String sessionEdit(final AppState s, final JsonNode args) {
+        final SessionSpec old = session(s, args).spec();
+        final String name = args.has("new_name") ? name(args, "new_name") : old.name();
+        final SessionSpec spec = new SessionSpec(name,
                 args.has("work_dir") ? dir(args) : old.workDir(),
                 args.has("model") ? args.path("model").asString("").strip() : old.model(),
                 args.has("effort") ? args.path("effort").asString("").strip() : old.effort(),
@@ -228,7 +229,7 @@ final class ActionTools {
     }
 
     /** Whether the action works on one session, named by its {@code session} argument. */
-    private static boolean onSession(Action a) {
+    private static boolean onSession(final Action a) {
         return a.area().equals("session") && a.args().stream().anyMatch(x -> x.name().equals("session"));
     }
 
@@ -236,13 +237,13 @@ final class ActionTools {
      * Whether {@code caller} created, directly or through others, the session a session action names: the creator of a
      * session may clear or remove it without a grant, as it may start it again (record 44).
      */
-    private static boolean created(String caller, Action a, AppState s, JsonNode args) {
-        String name = args.path("session").asString("").strip();
+    private static boolean created(final String caller, final Action a, final AppState s, final JsonNode args) {
+        final String name = args.path("session").asString("").strip();
         return onSession(a) && !name.isEmpty() && s.session(name).isPresent() && creators(s, name).contains(caller);
     }
 
-    private ServerSwitch server(JsonNode args) {
-        String name = text(args, "server");
+    private ServerSwitch server(final JsonNode args) {
+        final String name = text(args, "server");
         return servers.stream().filter(x -> x.name().equalsIgnoreCase(name)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no server '" + name + "'; servers: "
                         + servers.stream().map(x -> x.name().toLowerCase(Locale.ROOT)).toList()));
@@ -252,7 +253,7 @@ final class ActionTools {
      * Record 44's circuit breaker, kept: a stopped session is started again by the user or by the session that created
      * it (directly or through others), never by an unrelated one.
      */
-    private String startable(String caller, AppState s, SessionState target, String what, Intent intent) {
+    private String startable(final String caller, final AppState s, final SessionState target, final String what, final Intent intent) {
         if (!creators(s, target.name()).contains(caller)) {
             return "refused: " + caller + " did not create session " + target.name() + "; only the user or its creator may " + what
                     + " it (record 44: stopping is the user's circuit breaker)";
@@ -261,11 +262,11 @@ final class ActionTools {
     }
 
     /** Who created {@code session}, then who created that one, and so on; the user is not in it. */
-    static Set<String> creators(AppState s, String session) {
-        Set<String> chain = new HashSet<>();
+    static Set<String> creators(final AppState s, final String session) {
+        final Set<String> chain = new HashSet<>();
         String at = session;
         for (int i = 0; i < CHAIN_LIMIT; i++) {
-            Optional<SessionState> x = s.session(at);
+            final Optional<SessionState> x = s.session(at);
             if (x.isEmpty() || x.get().spec().createdBy().isEmpty() || !chain.add(x.get().spec().createdBy())) {
                 break;
             }
@@ -274,16 +275,16 @@ final class ActionTools {
         return chain;
     }
 
-    private String approvalAnswer(String caller, AppState s, JsonNode args) {
-        long id = args.path("id").asLong(-1);
-        Approval card = s.approvals().stream().filter(a -> a.id() == id).findFirst()
+    private String approvalAnswer(final String caller, final AppState s, final JsonNode args) {
+        final long id = args.path("id").asLong(-1);
+        final Approval card = s.approvals().stream().filter(a -> a.id() == id).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no approval card " + id + "; pending: "
                         + s.approvals().stream().map(a -> a.id() + " (" + a.session() + ", " + a.toolName() + ")").toList()));
         if (card.session().equals(caller) || creators(s, card.session()).contains(caller)) {
             return "refused: card " + id + " was raised by " + card.session() + (card.session().equals(caller) ? ", this caller" : ", which " + caller
                     + " created") + "; someone other than the asker decides (record 121, rule 1)";
         }
-        ApprovalDecision decision = switch (args.path("decision").asString("").strip()) {
+        final ApprovalDecision decision = switch (args.path("decision").asString("").strip()) {
             case "allow" -> new ApprovalDecision.Allow(switch (args.path("scope").asString("once").strip()) {
                 case "session" -> ApprovalDecision.Scope.SESSION;
                 case "always" -> ApprovalDecision.Scope.ALWAYS;
@@ -291,7 +292,7 @@ final class ActionTools {
             });
             case "deny" -> new ApprovalDecision.Deny(args.path("message").asString("Denied by " + caller + "."));
             case "answer" -> {
-                Map<String, String> answers = new LinkedHashMap<>();
+                final Map<String, String> answers = new LinkedHashMap<>();
                 args.path("answers").properties().forEach(e -> answers.put(e.getKey(), e.getValue().asString("")));
                 if (answers.isEmpty()) {
                     throw new IllegalArgumentException("answer needs answers: {question text: chosen option label}");
@@ -303,17 +304,17 @@ final class ActionTools {
         return send(new Intent.ApprovalAnswered(id, decision));
     }
 
-    private String connectionSave(AppState s, JsonNode args) {
-        String previous = args.path("previous_name").asString("").strip();
-        Optional<ConnectionState> old = previous.isEmpty() ? s.connection(name(args, "name")) : s.connection(previous);
-        String password = args.has("password") ? args.path("password").asString("") : old.map(c -> c.spec().password()).orElse("");
-        ConnectionSpec spec = new ConnectionSpec(name(args, "name"), text(args, "host"), args.path("port").asInt(ConnectionSpec.DEFAULT_PORT),
+    private String connectionSave(final AppState s, final JsonNode args) {
+        final String previous = args.path("previous_name").asString("").strip();
+        final Optional<ConnectionState> old = previous.isEmpty() ? s.connection(name(args, "name")) : s.connection(previous);
+        final String password = args.has("password") ? args.path("password").asString("") : old.map(c -> c.spec().password()).orElse("");
+        final ConnectionSpec spec = new ConnectionSpec(name(args, "name"), text(args, "host"), args.path("port").asInt(ConnectionSpec.DEFAULT_PORT),
                 text(args, "database"), args.path("user").asString("").strip(), password, args.path("production").asBoolean(false),
                 args.path("ssl_mode").asString("").strip());
         return send(new Intent.SaveConnection(old.isPresent() ? old.get().name() : previous, spec));
     }
 
-    private String panelAdd(AppState s, JsonNode args) {
+    private String panelAdd(final AppState s, final JsonNode args) {
         String title = args.path("title").asString("").strip();
         if (title.isEmpty()) {
             int n = 1;
@@ -327,19 +328,19 @@ final class ActionTools {
         return send(new Intent.AddPanel(PanelId.random(), title, args.path("document").asBoolean(false)));
     }
 
-    private String viewClose(AppState s, JsonNode args) {
-        ViewState v = view(s, args);
+    private String viewClose(final AppState s, final JsonNode args) {
+        final ViewState v = view(s, args);
         if (v.pinned()) {
             return "refused: view " + v.id() + " is pinned; unpin it with view_pin first";
         }
         return send(new Intent.CloseView(v.id()));
     }
 
-    private static boolean titled(AppState s, String title) {
+    private static boolean titled(final AppState s, final String title) {
         return Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
 
-    private String send(Intent intent) {
+    private String send(final Intent intent) {
         // the reducer drops an action on a session whose checkpoint runs without a word: say so to the agent (record 130)
         if (Reducer.refusedWhileCheckpointing(state.get(), intent)) {
             return "refused: the session is running its checkpoint (record 130); only session_interrupt or session_stop act on it "
@@ -349,33 +350,33 @@ final class ActionTools {
         return "done: " + intent.getClass().getSimpleName();
     }
 
-    private static SessionState session(AppState s, JsonNode args) {
-        String name = text(args, "session");
+    private static SessionState session(final AppState s, final JsonNode args) {
+        final String name = text(args, "session");
         return s.session(name).orElseThrow(() -> new IllegalArgumentException("no session '" + name + "'; sessions: " + names(s)));
     }
 
-    private static PanelState panel(AppState s, JsonNode args, boolean orClosed) {
-        String key = text(args, "panel");
-        Stream<PanelState> all = orClosed ? Stream.concat(s.panels().stream(), s.closed().stream()) : s.panels().stream();
+    private static PanelState panel(final AppState s, final JsonNode args, final boolean orClosed) {
+        final String key = text(args, "panel");
+        final Stream<PanelState> all = orClosed ? Stream.concat(s.panels().stream(), s.closed().stream()) : s.panels().stream();
         return all.filter(p -> p.id().value().equals(key) || p.title().equalsIgnoreCase(key)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no " + (orClosed ? "" : "open ") + "panel '" + key + "'; panels: "
                         + s.panels().stream().map(PanelState::title).toList()
                         + (orClosed && !s.closed().isEmpty() ? ", closed: " + s.closed().stream().map(PanelState::title).toList() : "")));
     }
 
-    private static ConnectionState connection(AppState s, JsonNode args) {
-        String name = text(args, "name");
+    private static ConnectionState connection(final AppState s, final JsonNode args) {
+        final String name = text(args, "name");
         return s.connection(name).orElseThrow(() -> new IllegalArgumentException("no connection '" + name + "'; connections: "
                 + s.connections().stream().map(ConnectionState::name).toList()));
     }
 
-    private static ViewState view(AppState s, JsonNode args) {
-        long id = args.path("id").asLong(-1);
+    private static ViewState view(final AppState s, final JsonNode args) {
+        final long id = args.path("id").asLong(-1);
         return s.views().stream().filter(v -> v.id() == id).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no view " + id + "; views: " + s.views().stream().map(v -> v.id() + " " + v.title()).toList()));
     }
 
-    private static Target target(JsonNode args) {
+    private static Target target(final JsonNode args) {
         return switch (args.path("target").asString("").strip().toLowerCase(Locale.ROOT)) {
             case "sql" -> Target.SQL;
             case "claude" -> Target.CLAUDE;
@@ -383,16 +384,16 @@ final class ActionTools {
         };
     }
 
-    private static String command(JsonNode args) {
-        String c = text(args, "command");
+    private static String command(final JsonNode args) {
+        final String c = text(args, "command");
         if (!c.startsWith("/")) {
             throw new IllegalArgumentException("a command starts with a slash: /compact, /clear, …");
         }
         return c;
     }
 
-    private static String dir(JsonNode args) {
-        String d = HomeDir.expand(text(args, "work_dir"));
+    private static String dir(final JsonNode args) {
+        final String d = HomeDir.expand(text(args, "work_dir"));
         if (!Files.isDirectory(Path.of(d))) {
             throw new IllegalArgumentException("work_dir " + d + " is not a folder");
         }
@@ -400,41 +401,41 @@ final class ActionTools {
     }
 
     /** A session's or connection's name; the spec's constructor checks its form, and its error reaches the caller. */
-    private static String name(JsonNode args, String field) {
+    private static String name(final JsonNode args, final String field) {
         return text(args, field);
     }
 
-    private static String text(JsonNode args, String field) {
-        String t = args.path(field).asString("").strip();
+    private static String text(final JsonNode args, final String field) {
+        final String t = args.path(field).asString("").strip();
         if (t.isEmpty()) {
             throw new IllegalArgumentException(field + " is required");
         }
         return t;
     }
 
-    private static List<String> strings(JsonNode args, String field) {
-        JsonNode a = args.path(field);
+    private static List<String> strings(final JsonNode args, final String field) {
+        final JsonNode a = args.path(field);
         if (!a.isArray()) {
             throw new IllegalArgumentException(field + " is a list of strings");
         }
-        List<String> out = new ArrayList<>();
+        final List<String> out = new ArrayList<>();
         a.forEach(x -> out.add(x.asString("").strip()));
         return out;
     }
 
-    private static String names(AppState s) {
+    private static String names(final AppState s) {
         return s.sessions().stream().map(SessionState::name).toList().toString();
     }
 
     /** Whether {@code agents.json} grants {@code caller} the grant {@code what}; an unreadable file grants nothing. */
-    boolean granted(String caller, String what) {
-        Path file = agentsFile;
+    boolean granted(final String caller, final String what) {
+        final Path file = agentsFile;
         if (file == null || !Files.isRegularFile(file)) {
             return false;
         }
         try {
-            JsonNode grants = json.readTree(Files.readString(file)).path("grants").path(caller);
-            for (JsonNode g : grants) {
+            final JsonNode grants = json.readTree(Files.readString(file)).path("grants").path(caller);
+            for (final JsonNode g : grants) {
                 if (what.equals(g.asString(""))) {
                     return true;
                 }

@@ -11,7 +11,7 @@ public final class TextSearch {
     private final RTextArea area;
     private final SearchContext context = new SearchContext();
 
-    public TextSearch(RTextArea area) {
+    public TextSearch(final RTextArea area) {
         this.area = area;
         context.setMarkAll(true);
         context.setMatchCase(false);
@@ -20,7 +20,7 @@ public final class TextSearch {
     }
 
     /** Selects the next (or previous) match of {@code text}, wrapping at the end; returns the number of matches. */
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         context.setSearchFor(text);
         context.setSearchForward(forward);
         SearchResult r = SearchEngine.find(area, context);

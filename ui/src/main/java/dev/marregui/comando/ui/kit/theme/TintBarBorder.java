@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import javax.swing.border.AbstractBorder;
-import javax.swing.plaf.UIResource;
 import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
+import javax.swing.border.AbstractBorder;
+import javax.swing.plaf.UIResource;
 
 /**
  * A tooltip's edge, as a turn's report in the transcript: a hairline round it and a bar of the chosen tint down its
@@ -17,8 +17,8 @@ public final class TintBarBorder extends AbstractBorder implements UIResource {
     static final int BAR = 3;
 
     @Override
-    public void paintBorder(Component c, Graphics g0, int x, int y, int width, int height) {
-        Graphics2D g = (Graphics2D) g0.create();
+    public void paintBorder(final Component c, final Graphics g0, final int x, final int y, final int width, final int height) {
+        final Graphics2D g = (Graphics2D) g0.create();
         try {
             g.setColor(Theme.CARD_BORDER);
             g.drawRect(x, y, width - 1, height - 1);
@@ -30,7 +30,7 @@ public final class TintBarBorder extends AbstractBorder implements UIResource {
     }
 
     @Override
-    public Insets getBorderInsets(Component c, Insets insets) {
+    public Insets getBorderInsets(final Component c, final Insets insets) {
         insets.set(5, BAR + 7, 5, 8);
         return insets;
     }

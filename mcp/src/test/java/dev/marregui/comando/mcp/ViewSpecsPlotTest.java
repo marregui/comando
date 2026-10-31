@@ -1,9 +1,10 @@
 package dev.marregui.comando.mcp;
 
-import dev.marregui.comando.core.view.ViewSpec;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.view.ViewSpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,14 +18,14 @@ class ViewSpecsPlotTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    private static JsonNode json(String text) throws Exception {
+    private static JsonNode json(final String text) throws Exception {
         return JSON.readTree(text);
     }
 
     /// [ViewSpecs#plot] reads a `series` array with each series' name and y values.
     @Test
     void seriesAreReadAsBefore() throws Exception {
-        ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"t\", \"series\": [{\"name\": \"a\", \"x\": [1, 2], \"y\": [3, 4]}]}"));
+        final ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"t\", \"series\": [{\"name\": \"a\", \"x\": [1, 2], \"y\": [3, 4]}]}"));
         assertThat(p.series()).singleElement().satisfies(s -> {
             assertThat(s.name()).isEqualTo("a");
             assertThat(s.y()).containsExactly(3, 4);
@@ -36,7 +37,7 @@ class ViewSpecsPlotTest {
     @Test
     void oneSeriesMayBeGivenAsXAndYBesideTheTitleEvenAsJsonText() throws Exception {
         // x and y may be supplied beside the title as JSON text arrays
-        ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"price\", \"placement\": \"side\", \"x\": \"[1,2,3]\", \"y\": \"[101.5,102,99.25]\"}"));
+        final ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"price\", \"placement\": \"side\", \"x\": \"[1,2,3]\", \"y\": \"[101.5,102,99.25]\"}"));
         assertThat(p.series()).singleElement().satisfies(s -> {
             assertThat(s.name()).as("named after the title").isEqualTo("price");
             assertThat(s.x()).containsExactly(1, 2, 3);

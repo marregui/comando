@@ -1,15 +1,15 @@
 package dev.marregui.comando.ui.panels;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * What a card says above its summary (record 90): a title, the panel's or the headless session's name, and the facts,
@@ -27,24 +27,24 @@ record CardFacts(String title, List<Fact> facts) {
      * {@code doing} is what the panel's tab says it does, as {@link TabStatus#describe} words it; {@code file} the
      * panel's file, shortened.
      */
-    static CardFacts of(Optional<PanelState> panel, Optional<SessionState> session, String doing, String file, long nowMillis,
-                        String newestCli) {
-        String title = panel.map(PanelState::title).or(() -> session.map(SessionState::name)).orElse("");
-        List<Fact> facts = new ArrayList<>();
-        String what = doing.startsWith(" · ") ? doing.substring(3) : doing;
-        String state = session.map(s -> sessionState(s, what, panel.isEmpty(), nowMillis)).orElse(what);
+    static CardFacts of(final Optional<PanelState> panel, final Optional<SessionState> session, final String doing, final String file, final long nowMillis,
+                        final String newestCli) {
+        final String title = panel.map(PanelState::title).or(() -> session.map(SessionState::name)).orElse("");
+        final List<Fact> facts = new ArrayList<>();
+        final String what = doing.startsWith(" · ") ? doing.substring(3) : doing;
+        final String state = session.map(s -> sessionState(s, what, panel.isEmpty(), nowMillis)).orElse(what);
         add(facts, "State", state);
         session.ifPresent(s -> {
-            String turn = s.status().isUsable() ? s.info().turnModel() : "";
-            String reported = !turn.isBlank() ? turn : s.status().isUsable() ? s.info().model() : "";
+            final String turn = s.status().isUsable() ? s.info().turnModel() : "";
+            final String reported = !turn.isBlank() ? turn : s.status().isUsable() ? s.info().model() : "";
             add(facts, "Model", (!reported.isBlank() ? reported : SessionRow.modelName(s)) + " · effort " + SessionRow.effortName(s));
-            String context = SessionRow.contextText(s);
+            final String context = SessionRow.contextText(s);
             if (!context.isEmpty()) {
                 add(facts, "Context", context + " · " + Labels.tokens(s.contextTokens()) + " of " + Labels.tokens(s.contextWindow())
                         + (s.reflection().due() && SessionBar.showsCheckpoint(s) ? " · checkpoint due" : ""));
             }
             add(facts, "Folder", Labels.shortPath(s.spec().workDir()) + (s.branch().isEmpty() ? "" : " · " + s.branch()));
-            String id = s.spec().claudeSessionId();
+            final String id = s.spec().claudeSessionId();
             add(facts, "Conversation", id.substring(0, Math.min(8, id.length())));
             if (!SessionRow.cliText(s).isEmpty()) {
                 add(facts, "Claude Code", s.info().cliVersion()
@@ -67,9 +67,9 @@ record CardFacts(String title, List<Fact> facts) {
      * A connection's card, which has no summary (record 92): its name, then its state, database and server, user, TLS
      * mode, production, and the open panels that use it; never the password.
      */
-    static CardFacts of(ConnectionState c, List<String> panels) {
-        ConnectionSpec s = c.spec();
-        List<Fact> facts = new ArrayList<>();
+    static CardFacts of(final ConnectionState c, final List<String> panels) {
+        final ConnectionSpec s = c.spec();
+        final List<Fact> facts = new ArrayList<>();
         add(facts, "State", ConnectionRow.stateText(c));
         add(facts, "Database", s.database() + " on " + s.host() + ':' + s.port());
         add(facts, "User", s.user());
@@ -80,8 +80,8 @@ record CardFacts(String title, List<Fact> facts) {
     }
 
     /** "running · working: Bash 12 s · up 1 h 4 m"; a failed session's error; "no panel" for a headless one. */
-    private static String sessionState(SessionState s, String doing, boolean headless, long nowMillis) {
-        List<String> parts = new ArrayList<>();
+    private static String sessionState(final SessionState s, final String doing, final boolean headless, final long nowMillis) {
+        final List<String> parts = new ArrayList<>();
         parts.add(switch (s.status()) {
             case OPEN -> "running";
             case OPENING -> "starting";
@@ -89,7 +89,7 @@ record CardFacts(String title, List<Fact> facts) {
             case FAILED -> s.error().isEmpty() ? "failed" : "failed: " + s.error();
             case CLOSED -> "stopped";
         });
-        String what = headless ? (s.isBusy() ? TabStatus.working(s) : s.isWaiting() ? TabStatus.waiting(s) : "") : doing;
+        final String what = headless ? (s.isBusy() ? TabStatus.working(s) : s.isWaiting() ? TabStatus.waiting(s) : "") : doing;
         if (!what.isEmpty() && s.status() != Status.FAILED) {
             parts.add(what);
         }
@@ -102,7 +102,7 @@ record CardFacts(String title, List<Fact> facts) {
         return String.join(" · ", parts);
     }
 
-    private static void add(List<Fact> facts, String label, String value) {
+    private static void add(final List<Fact> facts, final String label, final String value) {
         if (!value.isBlank()) {
             facts.add(new Fact(label, value));
         }
@@ -110,8 +110,8 @@ record CardFacts(String title, List<Fact> facts) {
 
     /** The facts as text, "Label: value" a line; for tests. */
     String text() {
-        StringBuilder sb = new StringBuilder();
-        for (Fact f : facts) {
+        final StringBuilder sb = new StringBuilder();
+        for (final Fact f : facts) {
             sb.append(f.label()).append(": ").append(f.value()).append('\n');
         }
         return sb.toString().strip();

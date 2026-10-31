@@ -1,15 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.testkit.SyntheticSession;
-import dev.marregui.comando.ui.kit.async.OnEdt;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.swing.JPanel;
-import javax.swing.JViewport;
 import java.awt.Cursor;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -19,6 +9,17 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JPanel;
+import javax.swing.JViewport;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.testkit.SyntheticSession;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -47,13 +48,13 @@ class TranscriptCanvasViewportTest {
     }
 
     /** {@code copies} sessions one after another, with distinct tool ids: about 73 top-level items per copy. */
-    private static List<Block> session(int copies) {
-        Transcript t = SyntheticSession.transcript();
-        List<Block> out = new ArrayList<>();
+    private static List<Block> session(final int copies) {
+        final Transcript t = SyntheticSession.transcript();
+        final List<Block> out = new ArrayList<>();
         for (int k = 0; k < copies; k++) {
-            String p = "c" + k + "_";
+            final String p = "c" + k + "_";
             for (int i = 0; i < t.size(); i++) {
-                Block b = t.get(i);
+                final Block b = t.get(i);
                 out.add(switch (b) {
                     case Block.ToolCall c -> new Block.ToolCall(p + c.toolUseId(), c.name(), c.inputJson(), c.resultText(), c.status(),
                             c.parent().isEmpty() ? "" : p + c.parent());
@@ -71,7 +72,7 @@ class TranscriptCanvasViewportTest {
      * As the widget does on a session switch: clear, append the history, lay out through the viewport, scroll to the
      * end.
      */
-    private void rebuildAtEnd(List<Block> blocks) {
+    private void rebuildAtEnd(final List<Block> blocks) {
         viewport.setView(canvas);
         viewport.setSize(W, H);
         canvas.clear();
@@ -85,9 +86,9 @@ class TranscriptCanvasViewportTest {
 
     /** Paints what the viewport shows, as the repaint manager would. */
     private BufferedImage paintView() {
-        Rectangle r = viewport.getViewRect();
-        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
+        final Rectangle r = viewport.getViewRect();
+        final BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
+        final Graphics2D g = img.createGraphics();
         g.translate(0, -r.y);
         g.setClip(0, r.y, W, H);
         canvas.paint(g);
@@ -100,13 +101,13 @@ class TranscriptCanvasViewportTest {
         return viewport.getViewPosition().y + H >= canvas.contentHeight() - 40;
     }
 
-    private void move(int x, int yInView) {
-        int y = viewport.getViewPosition().y + yInView;
-        MouseEvent e = new MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 0L, 0, x, y, x, y, 0, false, MouseEvent.NOBUTTON);
+    private void move(final int x, final int yInView) {
+        final int y = viewport.getViewPosition().y + yInView;
+        final MouseEvent e = new MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 0L, 0, x, y, x, y, 0, false, MouseEvent.NOBUTTON);
         canvas.getMouseMotionListeners()[0].mouseMoved(e);
     }
 
-    private static double differing(BufferedImage a, BufferedImage b) {
+    private static double differing(final BufferedImage a, final BufferedImage b) {
         long diff = 0;
         for (int y = 0; y < a.getHeight(); y++) {
             for (int x = 0; x < a.getWidth(); x++) {
@@ -124,10 +125,10 @@ class TranscriptCanvasViewportTest {
     void aHoverDuringTheIdlePassLaysOutOnlyWhatIsVisible() {
         rebuildAtEnd(session(27));
         paintView();
-        List<Item> items = canvas.topLevel();
+        final List<Item> items = canvas.topLevel();
         assertThat(canvas.isEstimated()).as("the idle pass has work").isTrue();
         move(500, H / 2);
-        long after = items.stream().filter(Item::laidOut).count();
+        final long after = items.stream().filter(Item::laidOut).count();
         assertThat(after).as("a pointer move over the transcript lays out only what is near the view").isLessThan(items.size() / 2);
     }
 
@@ -138,14 +139,14 @@ class TranscriptCanvasViewportTest {
         paintView();
         viewport.doLayout(); // the revalidation layoutVisible asked for
         viewport.setViewPosition(new Point(0, Math.max(0, canvas.contentHeight() - H))); // the widget follows the end
-        BufferedImage shown = paintView();
+        final BufferedImage shown = paintView();
         viewport.doLayout();
         assertThat(canvas.isEstimated()).isTrue();
-        boolean endBefore = atEnd();
+        final boolean endBefore = atEnd();
         move(500, H / 2);
         viewport.doLayout(); // the next validation
-        BufferedImage after = paintView();
-        double changed = differing(shown, after);
+        final BufferedImage after = paintView();
+        final double changed = differing(shown, after);
         assertThat(endBefore).isTrue();
         assertThat(changed).as("a hover does not move what the view shows").isLessThan(0.02);
         assertThat(atEnd()).as("the view that followed the end still shows the end after a hover").isTrue();
@@ -158,10 +159,10 @@ class TranscriptCanvasViewportTest {
         // order 1: the repaint after the scroll to the end runs before the first slice of the idle pass; the last
         // answer is headings, which the first guess takes for body lines, so the visible pass grows the content well
         // past the end
-        List<Block> blocks = session(27);
+        final List<Block> blocks = session(27);
         blocks.add(new Block.AssistantText("end", 0, "# Heading\n".repeat(30), false, ""));
         rebuildAtEnd(blocks);
-        int guessed = canvas.contentHeight();
+        final int guessed = canvas.contentHeight();
         paintView();
         assertThat(canvas.contentHeight() - guessed).as("the visible pass grew the content past the end").isGreaterThan(40);
         viewport.doLayout();
@@ -185,7 +186,7 @@ class TranscriptCanvasViewportTest {
     /// end in view.
     @Test
     void selectAllDuringTheIdlePassKeepsTheViewAndTheWholeSessionScrollable() {
-        JPanel parent = new JPanel(null);
+        final JPanel parent = new JPanel(null);
         parent.add(viewport);
         parent.addNotify();
         rebuildAtEnd(session(27));
@@ -210,8 +211,8 @@ class TranscriptCanvasViewportTest {
         // the panel switches to another session while the find bar still holds its text
         rebuildAtEnd(session(27));
         paintView();
-        List<Item> items = canvas.topLevel();
-        long laid = items.stream().filter(Item::laidOut).count();
+        final List<Item> items = canvas.topLevel();
+        final long laid = items.stream().filter(Item::laidOut).count();
         assertThat(laid).as("the first paint after a switch lays out only what is near the view").isLessThan(items.size() / 2);
     }
 
@@ -219,7 +220,7 @@ class TranscriptCanvasViewportTest {
     /// pending.
     @Test
     void aHoverDuringTheIdlePassLeavesTheWholeSessionScrollable() {
-        JPanel parent = new JPanel(null);
+        final JPanel parent = new JPanel(null);
         parent.add(viewport);
         parent.addNotify();
         rebuildAtEnd(session(27));
@@ -238,7 +239,7 @@ class TranscriptCanvasViewportTest {
     /// scroll range.
     @Test
     void findDuringTheIdlePassShowsTheMatch() {
-        JPanel parent = new JPanel(null);
+        final JPanel parent = new JPanel(null);
         parent.add(viewport);
         parent.addNotify();
         rebuildAtEnd(session(27));
@@ -248,7 +249,7 @@ class TranscriptCanvasViewportTest {
         viewport.setViewPosition(new Point(0, 0)); // the user reads from the top while the idle pass runs
         // the last prompt's text: the backward search lands on the last match, near the end; no card opens for it
         assertThat(canvas.find("Summarise what changed", false)).isPositive();
-        List<Item> items = canvas.topLevel();
+        final List<Item> items = canvas.topLevel();
         int top = 10;
         int last = -1;
         for (int i = 0; i < items.size(); i++) {
@@ -259,7 +260,7 @@ class TranscriptCanvasViewportTest {
         for (int i = 0; i < last; i++) {
             top += items.get(i).height;
         }
-        int y = viewport.getViewPosition().y;
+        final int y = viewport.getViewPosition().y;
         assertThat(top).as("the current match is in view").isBetween(y, y + H);
         assertThat(canvas.getHeight()).as("the scroll range is the exact content").isEqualTo(canvas.contentHeight());
     }
@@ -282,12 +283,12 @@ class TranscriptCanvasViewportTest {
     void findNextAfterASessionSwitchCountsEveryMatch() {
         rebuildAtEnd(session(1));
         paintView();
-        int one = canvas.find("Summarise what changed", true);
+        final int one = canvas.find("Summarise what changed", true);
         // the panel switches session; the find bar keeps its text and the user presses ⌘G
         rebuildAtEnd(session(27));
         paintView();
         viewport.doLayout();
-        int n = canvas.find("Summarise what changed", true);
+        final int n = canvas.find("Summarise what changed", true);
         assertThat(n).as("the count covers the whole session").isEqualTo(one * 27);
     }
 
@@ -311,12 +312,12 @@ class TranscriptCanvasViewportTest {
         viewport.setViewPosition(new Point(0, 100_000)); // the user reads mid-session; the end was never shown
         paintView();
         viewport.doLayout();
-        BufferedImage shown = paintView();
+        final BufferedImage shown = paintView();
         assertThat(canvas.isEstimated()).isTrue();
         canvas.append(next++, new Block.AssistantText("live", 0, "A new answer arrives.", true, ""));
         assertThat(canvas.find("no such text anywhere", true)).isZero(); // before the validation the append asked for
         viewport.doLayout();
-        BufferedImage after = paintView();
+        final BufferedImage after = paintView();
         assertThat(viewport.getViewPosition().y).as("a find with no match leaves the view where the user read").isGreaterThan(50_000);
     }
 
@@ -331,7 +332,7 @@ class TranscriptCanvasViewportTest {
         viewport.setViewPosition(new Point(0, Math.max(0, canvas.contentHeight() - H - 300)));
         int y = -1;
         for (int dy = 20; dy < H - 20 && y < 0; dy += 7) { // a point over text, not a card header
-            int at = viewport.getViewPosition().y + dy;
+            final int at = viewport.getViewPosition().y + dy;
             canvas.getMouseMotionListeners()[0].mouseMoved(new MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 0L, 0, 300, at, 300, at, 0, false,
                     MouseEvent.NOBUTTON));
             if (canvas.getCursor().getType() == Cursor.TEXT_CURSOR) {
@@ -339,17 +340,17 @@ class TranscriptCanvasViewportTest {
             }
         }
         assertThat(y).isPositive();
-        MouseEvent press = new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, 300, y, 300, y, 2, false,
+        final MouseEvent press = new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, 300, y, 300, y, 2, false,
                 MouseEvent.BUTTON1);
         canvas.getMouseListeners()[0].mousePressed(press); // a double click selects a word
-        BufferedImage shown = paintView();
+        final BufferedImage shown = paintView();
         viewport.doLayout();
         assertThat(canvas.isEstimated()).isTrue();
         canvas.append(next++, new Block.AssistantText("live", 0, "A new answer arrives.", true, ""));
-        String copied = canvas.selectionText(); // ⌘C before the validation the append asked for
+        final String copied = canvas.selectionText(); // ⌘C before the validation the append asked for
         viewport.doLayout();
-        BufferedImage after = paintView();
-        double changed = differing(shown, after);
+        final BufferedImage after = paintView();
+        final double changed = differing(shown, after);
         assertThat(copied).isNotEmpty();
         assertThat(changed).as("copying does not move what the view shows").isLessThan(0.05);
     }
@@ -359,11 +360,11 @@ class TranscriptCanvasViewportTest {
     void findNextAfterASessionSwitchCountsMatchesInClosedCards() {
         rebuildAtEnd(session(1));
         paintView();
-        int one = canvas.find("cancelSignalTimeout", true); // only in Grep cards, closed by default
+        final int one = canvas.find("cancelSignalTimeout", true); // only in Grep cards, closed by default
         rebuildAtEnd(session(27));
         paintView();
         viewport.doLayout();
-        int n = canvas.find("cancelSignalTimeout", true); // ⌘G with the text the bar kept
+        final int n = canvas.find("cancelSignalTimeout", true); // ⌘G with the text the bar kept
         assertThat(n).as("the count covers the matches in closed cards too").isEqualTo(one * 27);
     }
 
@@ -372,13 +373,13 @@ class TranscriptCanvasViewportTest {
     void aSliceAfterAnAppendWithTheViewMidSessionKeepsTheView() {
         rebuildAtEnd(session(27));
         viewport.setViewPosition(new Point(0, 100_000));
-        BufferedImage shown = paintView();
+        final BufferedImage shown = paintView();
         viewport.doLayout();
         canvas.append(next++, new Block.AssistantText("live", 0, "A new answer arrives.", true, ""));
         canvas.refineAll(); // the tick runs before the validation
         viewport.doLayout();
-        BufferedImage after = paintView();
-        double changed = differing(shown, after);
+        final BufferedImage after = paintView();
+        final double changed = differing(shown, after);
         assertThat(changed).isLessThan(0.05);
     }
 }

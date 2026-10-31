@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.shell;
 
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -17,7 +17,7 @@ class NotifierTest {
     /// `sleep 30` with a 200 ms bound returns false well within 5 s.
     @Test
     void aNotificationThatDoesNotFinishIsStoppedAtItsBound() {
-        boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
+        final boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
                 () -> Notifier.run(List.of("sleep", "30"), Duration.ofMillis(200)));
         assertThat(done).isFalse();
     }
@@ -25,7 +25,7 @@ class NotifierTest {
     /// `cat` returns true within its bound because its standard input is closed.
     @Test
     void aNotificationThatWaitsForInputGetsNoneAndEnds() {
-        boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
+        final boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
                 () -> Notifier.run(List.of("cat"), Duration.ofSeconds(4)));
         assertThat(done).as("stdin is closed, so cat ends").isTrue();
     }

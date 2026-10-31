@@ -1,14 +1,15 @@
 package dev.marregui.comando.app;
 
-import com.hivemq.client.mqtt.datatypes.MqttQos;
-import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
-import dev.marregui.comando.mcp.PeerBroker;
-import org.junit.jupiter.api.Test;
-
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.mcp.PeerBroker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,16 +25,16 @@ class MqttPeerBrokerTest {
     /// correlation reads back empty and null.
     @Test
     void aQuestionKeepsItsResponseTopicAndCorrelationDataThroughTheClientsTypes() {
-        Mqtt5Publish p = MqttPeerBroker.publishOf(INBOX, bytes("{\"text\":\"what is X?\"}"), false, REPLY, bytes("id-1"));
+        final Mqtt5Publish p = MqttPeerBroker.publishOf(INBOX, bytes("{\"text\":\"what is X?\"}"), false, REPLY, bytes("id-1"));
         assertThat(p.getQos()).isEqualTo(MqttQos.AT_LEAST_ONCE);
         assertThat(p.isRetain()).isFalse();
-        PeerBroker.Message m = MqttPeerBroker.message(p);
+        final PeerBroker.Message m = MqttPeerBroker.message(p);
         assertThat(m.topic()).isEqualTo(INBOX);
         assertThat(m.payload()).isEqualTo(bytes("{\"text\":\"what is X?\"}"));
         assertThat(m.responseTopic()).isEqualTo(REPLY);
         assertThat(m.correlation()).isEqualTo(bytes("id-1"));
 
-        PeerBroker.Message presence = MqttPeerBroker.message(MqttPeerBroker.publishOf(PRESENCE, new byte[0], true, null, null));
+        final PeerBroker.Message presence = MqttPeerBroker.message(MqttPeerBroker.publishOf(PRESENCE, new byte[0], true, null, null));
         assertThat(presence.payload()).isEmpty();
         assertThat(presence.responseTopic()).isNull();
         assertThat(presence.correlation()).isNull();
@@ -44,9 +45,9 @@ class MqttPeerBrokerTest {
     /// neither.
     @Test
     void aMessageReachesOnlyTheHandlersWhoseFiltersMatchItsTopic() {
-        MqttPeerBroker broker = new MqttPeerBroker("comando-test", 1, () -> false);
-        List<String> presence = new CopyOnWriteArrayList<>();
-        List<String> inbox = new CopyOnWriteArrayList<>();
+        final MqttPeerBroker broker = new MqttPeerBroker("comando-test", 1, () -> false);
+        final List<String> presence = new CopyOnWriteArrayList<>();
+        final List<String> inbox = new CopyOnWriteArrayList<>();
         broker.subscribe("comando/v1/local/instance/+/presence", m -> presence.add(m.topic()));
         broker.subscribe(INBOX, m -> inbox.add(m.topic()));
         broker.deliver(MqttPeerBroker.publishOf(PRESENCE, bytes("{}"), true, null, null));
@@ -61,8 +62,8 @@ class MqttPeerBrokerTest {
     /// once instead of waiting; a second close does nothing.
     @Test
     void withNoEdgeRunningItNeverConnectsAndAPublishFailsAtOnce() {
-        AtomicInteger looked = new AtomicInteger();
-        MqttPeerBroker broker = new MqttPeerBroker("comando-test", 1, () -> {
+        final AtomicInteger looked = new AtomicInteger();
+        final MqttPeerBroker broker = new MqttPeerBroker("comando-test", 1, () -> {
             looked.incrementAndGet();
             return false;
         });
@@ -86,7 +87,7 @@ class MqttPeerBrokerTest {
         assertThat(MqttPeerBroker.reconnectDelay(1_000)).isEqualTo(MqttPeerBroker.FOLLOW_EVERY.toMillis());
     }
 
-    private static byte[] bytes(String s) {
+    private static byte[] bytes(final String s) {
         return s.getBytes(StandardCharsets.UTF_8);
     }
 }

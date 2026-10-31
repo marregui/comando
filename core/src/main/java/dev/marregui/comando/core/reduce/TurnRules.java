@@ -1,5 +1,9 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.EditMode;
@@ -15,10 +19,6 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 import static dev.marregui.comando.core.reduce.Shared.clear;
 import static dev.marregui.comando.core.reduce.Shared.notice;
@@ -36,13 +36,13 @@ final class TurnRules {
     /** The message of a turn the user interrupted, as the stream mapper reports it. */
     static final String INTERRUPTED = "interrupted";
 
-    static Transition runPrompt(Clock clock, AppState s, PanelState panel, String prompt) {
-        String subject = Notice.panel(panel.id().value());
+    static Transition runPrompt(final Clock clock, final AppState s, final PanelState panel, final String prompt) {
+        final String subject = Notice.panel(panel.id().value());
         if (panel.session().isEmpty()) {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "Panel " + panel.title()
                     + " has no session: pick one from its header, or add one with Session settings… (⌘⇧K)", subject));
         }
-        Optional<SessionState> found = s.session(panel.session());
+        final Optional<SessionState> found = s.session(panel.session());
         if (found.isEmpty()) {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "No session called " + panel.session(), subject));
         }
@@ -52,17 +52,17 @@ final class TurnRules {
             return Transition.of(notice(clock, s, Notice.Level.WARN, "Session " + session.name() + " is stopping; send the prompt again once it has stopped",
                     subject));
         }
-        List<Effect> effects = new ArrayList<>();
+        final List<Effect> effects = new ArrayList<>();
         if (!session.status().isUsable()) {
             effects.add(new Effect.StartClaude(session.spec()));
             session = session.withStatus(Status.OPENING, "");
         }
-        boolean checkpoint = Reducer.isCheckpoint(prompt, session.spec().checkpoint());
-        String carried = session.spec().carried();
+        final boolean checkpoint = Reducer.isCheckpoint(prompt, session.spec().checkpoint());
+        final String carried = session.spec().carried();
         // a command (the checkpoint, /compact) leaves the carried summary for the next prompt that is not one
-        boolean carries = !carried.isEmpty() && !prompt.strip().startsWith("/");
+        final boolean carries = !carried.isEmpty() && !prompt.strip().startsWith("/");
         effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title(), carries ? Reducer.preface(carried) : ""));
-        long now = clock.millis();
+        final long now = clock.millis();
         session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
         if (checkpoint) {
             // typed, sent by the button or by another session alike: the session is no longer due, and the automatic
@@ -96,13 +96,13 @@ final class TurnRules {
      * still carried, from a checkpoint that cleared the conversation (record 86), means the conversation has had no
      * prompt since its clear: there is nothing new to compact, and the command runs alone.
      */
-    static Transition checkpoint(Clock clock, AppState s, String name) {
-        Optional<SessionState> found = s.session(name);
+    static Transition checkpoint(final Clock clock, final AppState s, final String name) {
+        final Optional<SessionState> found = s.session(name);
         if (found.isEmpty()) {
             return Transition.of(s);
         }
-        Transition t = sessionCommand(clock, s, name, found.get().spec().checkpoint());
-        boolean sent = t.effects().stream().anyMatch(e -> e instanceof Effect.SendToClaude);
+        final Transition t = sessionCommand(clock, s, name, found.get().spec().checkpoint());
+        final boolean sent = t.effects().stream().anyMatch(e -> e instanceof Effect.SendToClaude);
         if (!sent || !found.get().spec().carried().isEmpty()) {
             return t;
         }
@@ -144,13 +144,13 @@ final class TurnRules {
      * A command (the checkpoint, {@code /compact}) runs as a prompt from the session's panel, as if the user had typed
      * it there.
      */
-    static Transition sessionCommand(Clock clock, AppState s, String name, String command) {
-        Optional<SessionState> found = s.session(name);
+    static Transition sessionCommand(final Clock clock, final AppState s, final String name, final String command) {
+        final Optional<SessionState> found = s.session(name);
         if (found.isEmpty() || command.isBlank() || found.get().status() == Status.CLOSING) {
             return Transition.of(s);
         }
         // its own panel, else a document attached to it, else its own panel closed: the command shows in a panel
-        Optional<PanelState> panel = s.panelsBoundToSession(name).stream().findFirst().or(() -> s.closedPanelOfSession(name));
+        final Optional<PanelState> panel = s.panelsBoundToSession(name).stream().findFirst().or(() -> s.closedPanelOfSession(name));
         if (panel.isEmpty()) {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "Session " + name + " has no panel; open it to send "
                     + command, Notice.session(name)));
@@ -162,8 +162,8 @@ final class TurnRules {
      * Empties the session's Session tab; the conversation itself is untouched. Refused while a turn runs: its blocks
      * are still being written.
      */
-    static Transition clearTranscript(Clock clock, AppState s, String name) {
-        Optional<SessionState> found = s.session(name);
+    static Transition clearTranscript(final Clock clock, final AppState s, final String name) {
+        final Optional<SessionState> found = s.session(name);
         if (found.isEmpty()) {
             return Transition.of(s);
         }
@@ -175,7 +175,7 @@ final class TurnRules {
     }
 
     /** The chip and the sidebar say "interrupting" at once; the next activity or the turn's end replaces it. */
-    static Transition interruptSession(Clock clock, AppState s, String name) {
+    static Transition interruptSession(final Clock clock, final AppState s, final String name) {
         return s.session(name)
                 .filter(SessionState::isBusy)
                 .map(x -> new Transition(s.withSession(x.withActivity("interrupting", clock.millis())),
@@ -187,7 +187,7 @@ final class TurnRules {
      * A turn ended. The checkpoint's turn, once finished, sends {@code /compact}; a turn that leaves the context at or
      * above {@code threshold} (0 or below: never) runs the checkpoint, once per crossing (record 129).
      */
-    static Transition turnEnded(Clock clock, AppState s, Intent.SessionTurnEnded i, long threshold) {
+    static Transition turnEnded(final Clock clock, AppState s, final Intent.SessionTurnEnded i, final long threshold) {
         Optional<SessionState> found = s.session(i.name());
         if (found.isEmpty()) {
             return Transition.of(s);
@@ -195,10 +195,10 @@ final class TurnRules {
         // what the turn ran at no longer holds: the next turn starts at the session's own model and effort
         found = Optional.of(found.get().withInfo(found.get().info().turnEnded()));
         s = s.withSession(found.get());
-        long now = clock.millis();
+        final long now = clock.millis();
         // a result while no turn ran made no model call (Claude Code sends one after a background agent's report): it
         // finished nothing
-        boolean ran = found.get().isBusy();
+        final boolean ran = found.get().isBusy();
         if (i.error() && found.get().status() == Status.FAILED) {
             // a prompt to a session whose start failed: the start's error already stands, once
             return Transition.of(s.withSession(found.get().withTurns(Math.max(0, i.queued()), now).withActivity("", now)));
@@ -211,14 +211,14 @@ final class TurnRules {
                 .withActivity("", now);
         x = x.withReflection(x.reflection().afterTurn(x.contextTokens(), x.contextWindow()));
         AppState next = s.withSession(x);
-        List<Effect> effects = new ArrayList<>();
+        final List<Effect> effects = new ArrayList<>();
         // the user's own interrupt is an outcome, not a failure
-        boolean interrupted = i.error() && INTERRUPTED.equals(i.message());
+        final boolean interrupted = i.error() && INTERRUPTED.equals(i.message());
         x = x.withLastTurnError(i.error() && !interrupted ? i.message() : "");
         // the checkpoint has finished once nothing runs, is queued or was handed to the background; a result that made
         // no model call and carries no text finished nothing
-        boolean checkpointDone = x.checkpointCompacts() && !x.isBusy() && !x.isAwaitingHandOff() && (ran || !i.result().isBlank());
-        boolean compacts = checkpointDone && !i.error() && !i.result().isBlank();
+        final boolean checkpointDone = x.checkpointCompacts() && !x.isBusy() && !x.isAwaitingHandOff() && (ran || !i.result().isBlank());
+        final boolean compacts = checkpointDone && !i.error() && !i.result().isBlank();
         if (checkpointDone) {
             x = x.withCheckpointCompacts(false);
         }
@@ -227,13 +227,13 @@ final class TurnRules {
         final int ended = Math.max(0, found.get().pendingTurns() - x.pendingTurns());
         x = x.withCheckpointTurns(x.isBusy() ? Math.max(0, x.checkpointTurns() - ended) : 0);
         // the context fell below the threshold (a compaction, a new conversation): the next crossing checkpoints again
-        boolean above = threshold > 0 && x.contextTokens() >= threshold;
+        final boolean above = threshold > 0 && x.contextTokens() >= threshold;
         if (threshold > 0 && !above) {
             x = x.withCheckpointArmed(true);
         }
         // at the threshold, the session's own turn finished: nothing queued, no background work out, no checkpoint
         // under way, and a checkpoint command to run
-        boolean automatic = above && x.checkpointArmed() && !checkpointDone && !x.checkpointCompacts() && !i.error() && !x.isBusy()
+        final boolean automatic = above && x.checkpointArmed() && !checkpointDone && !x.checkpointCompacts() && !i.error() && !x.isBusy()
                 && !x.isAwaitingHandOff() && x.status().isUsable() && !x.spec().checkpoint().isBlank();
         next = next.withSession(x);
         if (interrupted) {
@@ -248,7 +248,7 @@ final class TurnRules {
         }
         // the compaction, or the automatic checkpoint, runs from the session's panel as the Compact and Checkpoint
         // buttons do: the Session tab shows it
-        Transition follow = compacts ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
+        final Transition follow = compacts ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
                 : automatic ? checkpoint(clock, next, i.name()) : null;
         if (follow != null) {
             next = follow.state();
@@ -287,29 +287,29 @@ final class TurnRules {
      * A prompt to a session in its own panel: appended there and run, as {@link Intent.EditPanel} and
      * {@link Intent.RunText} would.
      */
-    static Transition promptSession(Clock clock, AppState s, Intent.PromptSession i) {
-        Optional<PanelState> home = s.homePanel(i.session());
+    static Transition promptSession(final Clock clock, final AppState s, final Intent.PromptSession i) {
+        final Optional<PanelState> home = s.homePanel(i.session());
         if (home.isEmpty()) {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "Session " + i.session() + " has no open panel for the prompt from " + i.from(),
                     Notice.session(i.session())));
         }
-        PanelId panel = home.get().id();
-        Transition edited = PanelRules.editPanel(clock, s, new Intent.EditPanel(panel, i.text(), EditMode.APPEND, i.from()));
-        Transition ran = QueryRules.runText(clock, edited.state(), new Intent.RunText(panel, i.text(), Target.CLAUDE));
-        List<Effect> effects = new ArrayList<>(edited.effects());
+        final PanelId panel = home.get().id();
+        final Transition edited = PanelRules.editPanel(clock, s, new Intent.EditPanel(panel, i.text(), EditMode.APPEND, i.from()));
+        final Transition ran = QueryRules.runText(clock, edited.state(), new Intent.RunText(panel, i.text(), Target.CLAUDE));
+        final List<Effect> effects = new ArrayList<>(edited.effects());
         effects.addAll(ran.effects());
         return new Transition(ran.state(), effects);
     }
 
-    static Transition sessionActivity(Clock clock, AppState s, Intent.SessionActivity i) {
+    static Transition sessionActivity(final Clock clock, final AppState s, final Intent.SessionActivity i) {
         return Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
     }
 
-    static Transition sessionTasksChanged(Clock clock, AppState s, Intent.SessionTasksChanged i) {
+    static Transition sessionTasksChanged(final Clock clock, final AppState s, final Intent.SessionTasksChanged i) {
         return Transition.of(s.withSession(i.name(), x -> x.withTasks(i.open(), clock.millis())));
     }
 
-    static Transition sessionTurnRunning(Clock clock, AppState s, Intent.SessionTurnRunning i) {
+    static Transition sessionTurnRunning(final Clock clock, final AppState s, final Intent.SessionTurnRunning i) {
         return Transition.of(s.withSession(i.name(), x -> x.isBusy() ? x : x.withTurns(1, clock.millis())));
     }
 }

@@ -1,13 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.model.AtomicFiles;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.SerializationFeature;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +9,15 @@ import java.util.TreeMap;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import java.util.regex.Pattern;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
  * comando's own settings, kept with its other state in the data root as {@code settings.json} (record 106): one JSON
@@ -35,7 +36,7 @@ final class Settings {
     private final TreeMap<String, Object> values;
     private boolean dirty;
 
-    private Settings(Path file, TreeMap<String, Object> values) {
+    private Settings(final Path file, final TreeMap<String, Object> values) {
         this.file = file;
         this.values = values;
     }
@@ -49,31 +50,31 @@ final class Settings {
      * The settings in {@code file}; when it does not exist yet, those kept in {@code legacy}, which is left as it was,
      * written to it. An unreadable file is kept aside as {@code settings.json.unreadable} and the settings start empty.
      */
-    static Settings open(Path file, Preferences legacy) {
+    static Settings open(final Path file, final Preferences legacy) {
         if (Files.exists(file)) {
             try {
                 return new Settings(file, read(JSON.readTree(file.toFile())));
-            } catch (JacksonException e) {
+            } catch (final JacksonException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read the settings, kept aside [file=" + file + ']', e);
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".unreadable"), StandardCopyOption.REPLACE_EXISTING);
-                } catch (IOException moved) {
+                } catch (final IOException moved) {
                     LOG.log(System.Logger.Level.WARNING, "cannot keep the settings aside [file=" + file + ']', moved);
                 }
                 return new Settings(file, new TreeMap<>());
             }
         }
-        Settings s = new Settings(file, fromPreferences(legacy));
+        final Settings s = new Settings(file, fromPreferences(legacy));
         s.dirty = !s.values.isEmpty();
         s.flush();
         return s;
     }
 
-    private static TreeMap<String, Object> read(JsonNode root) {
-        TreeMap<String, Object> out = new TreeMap<>();
+    private static TreeMap<String, Object> read(final JsonNode root) {
+        final TreeMap<String, Object> out = new TreeMap<>();
         if (root != null && root.isObject()) {
             root.properties().forEach(e -> {
-                JsonNode v = e.getValue();
+                final JsonNode v = e.getValue();
                 if (v.isBoolean()) {
                     out.put(e.getKey(), v.booleanValue());
                 } else if (v.isIntegralNumber() && v.canConvertToInt()) {
@@ -87,11 +88,11 @@ final class Settings {
     }
 
     /** The preferences' values, each typed as it reads: an integer, true or false, else text. */
-    static TreeMap<String, Object> fromPreferences(Preferences prefs) {
-        TreeMap<String, Object> out = new TreeMap<>();
+    static TreeMap<String, Object> fromPreferences(final Preferences prefs) {
+        final TreeMap<String, Object> out = new TreeMap<>();
         try {
-            for (String key : prefs.keys()) {
-                String v = prefs.get(key, null);
+            for (final String key : prefs.keys()) {
+                final String v = prefs.get(key, null);
                 if (v != null) {
                     out.put(key, INT.matcher(v).matches() ? Integer.valueOf(v)
                             : v.equals("true") || v.equals("false") ? Boolean.valueOf(v) : v);
@@ -103,36 +104,36 @@ final class Settings {
         return out;
     }
 
-    String get(String key, String otherwise) {
-        Object v = values.get(key);
+    String get(final String key, final String otherwise) {
+        final Object v = values.get(key);
         return v == null ? otherwise : v.toString();
     }
 
-    int getInt(String key, int otherwise) {
+    int getInt(final String key, final int otherwise) {
         return values.get(key) instanceof Integer i ? i : otherwise;
     }
 
-    boolean getBoolean(String key, boolean otherwise) {
+    boolean getBoolean(final String key, final boolean otherwise) {
         return values.get(key) instanceof Boolean b ? b : otherwise;
     }
 
-    void put(String key, String value) {
+    void put(final String key, final String value) {
         set(key, value);
     }
 
-    void putInt(String key, int value) {
+    void putInt(final String key, final int value) {
         set(key, value);
     }
 
-    void putBoolean(String key, boolean value) {
+    void putBoolean(final String key, final boolean value) {
         set(key, value);
     }
 
-    void remove(String key) {
+    void remove(final String key) {
         dirty |= values.remove(key) != null;
     }
 
-    private void set(String key, Object value) {
+    private void set(final String key, final Object value) {
         dirty |= !value.equals(values.put(key, value));
     }
 
@@ -147,7 +148,7 @@ final class Settings {
             dirty = false;
             return;
         }
-        ObjectNode root = JSON.createObjectNode();
+        final ObjectNode root = JSON.createObjectNode();
         values.forEach((k, v) -> {
             switch (v) {
                 case Integer i -> root.put(k, i);

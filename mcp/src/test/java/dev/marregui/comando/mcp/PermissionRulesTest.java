@@ -1,19 +1,19 @@
 package dev.marregui.comando.mcp;
 
-import dev.marregui.comando.core.model.PermissionRules;
-
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-import dev.marregui.comando.core.model.ApprovalDecision;
-import dev.marregui.comando.core.transcript.TranscriptRegistry;
-import dev.marregui.comando.testkit.FakeClock;
-import dev.marregui.comando.testkit.States;
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.testkit.FakeClock;
+import dev.marregui.comando.testkit.States;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,11 +30,11 @@ class PermissionRulesTest {
 
     private final ObjectMapper json = new ObjectMapper();
 
-    private static String rule(String tool, Map<String, String> input) {
+    private static String rule(final String tool, final Map<String, String> input) {
         return PermissionRules.rules(tool, k -> input.getOrDefault(k, "")).text();
     }
 
-    private static String bash(String command) {
+    private static String bash(final String command) {
         return rule("Bash", Map.of("command", command));
     }
 
@@ -145,7 +145,7 @@ class PermissionRulesTest {
         assertThat(bash("npx prettier --write .")).isEqualTo("Bash(npx prettier --write .)");
         assertThat(bash("rm -rf build")).isEqualTo("Bash(rm -rf build)");
         assertThat(bash("/bin/rm -rf build")).isEqualTo("Bash(/bin/rm -rf build)");
-        for (String c : List.of("su", "doas", "xargs", "exec", "eval", "sh", "zsh", "fish", "ssh", "node", "ruby", "perl", "deno", "bun",
+        for (final String c : List.of("su", "doas", "xargs", "exec", "eval", "sh", "zsh", "fish", "ssh", "node", "ruby", "perl", "deno", "bun",
                 "pnpx", "bunx", "uvx")) {
             assertThat(bash(c + " x")).as(c).isEqualTo("Bash(" + c + " x)");
         }
@@ -197,12 +197,12 @@ class PermissionRulesTest {
         assertThat(PermissionRules.rules("Bash", k -> k.equals("command") ? "ls" : "").persistable()).isTrue();
         assertThat(PermissionRules.rules("WebFetch", k -> k.equals("url") ? "https://a.org" : "").persistable()).isTrue();
         // nothing to name the rule after: the whole tool, never saved
-        for (String url : new String[]{"example.com/x", "file:///etc/passwd", ""}) {
-            PermissionRules.Rules r = PermissionRules.rules("WebFetch", k -> k.equals("url") ? url : "");
+        for (final String url : new String[]{"example.com/x", "file:///etc/passwd", ""}) {
+            final PermissionRules.Rules r = PermissionRules.rules("WebFetch", k -> k.equals("url") ? url : "");
             assertThat(r.persistable()).as(url).isFalse();
         }
         assertThat(PermissionRules.rules("Bash", k -> "").persistable()).as("a blank command").isFalse();
-        for (String tool : List.of("Edit", "Write", "MultiEdit", "NotebookEdit", "Read", "Glob", "Grep", "mcp__comando__db_run_sql", "Task")) {
+        for (final String tool : List.of("Edit", "Write", "MultiEdit", "NotebookEdit", "Read", "Glob", "Grep", "mcp__comando__db_run_sql", "Task")) {
             assertThat(PermissionRules.rules(tool, k -> "/a/b").persistable()).as(tool).isFalse();
         }
     }
@@ -212,33 +212,33 @@ class PermissionRulesTest {
     /// update.
     @Test
     void theScopeButtonsSendTheDerivedRuleToItsDestination() throws Exception {
-        McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
-        ObjectNode input = json.createObjectNode().put("file_path", "/a/b/c.java").put("old_string", "x").put("new_string", "y");
-        JsonNode session = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
-        JsonNode update = session.path("updatedPermissions").path(0);
+        final McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        final ObjectNode input = json.createObjectNode().put("file_path", "/a/b/c.java").put("old_string", "x").put("new_string", "y");
+        final JsonNode session = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
+        final JsonNode update = session.path("updatedPermissions").path(0);
         assertThat(update.path("type").asString()).isEqualTo("addRules");
         assertThat(update.path("destination").asString()).isEqualTo("session");
         assertThat(update.path("rules").path(0).path("toolName").asString()).isEqualTo("Edit");
         assertThat(update.path("rules").path(0).path("ruleContent").asString()).isEqualTo("//a/b/**");
 
         // an Always for an MCP tool or an edit stays in the session, not in the local settings
-        JsonNode always = json.readTree(tools.permissionResult("mcp__comando__ui_plot", json.createObjectNode(),
+        final JsonNode always = json.readTree(tools.permissionResult("mcp__comando__ui_plot", json.createObjectNode(),
                 new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
-        JsonNode wide = always.path("updatedPermissions").path(0);
+        final JsonNode wide = always.path("updatedPermissions").path(0);
         assertThat(wide.path("destination").asString()).isEqualTo("session");
         assertThat(wide.path("rules").path(0).has("ruleContent")).isFalse();
-        JsonNode edit = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
+        final JsonNode edit = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
         assertThat(edit.path("updatedPermissions").path(0).path("destination").asString()).isEqualTo("session");
 
-        JsonNode compound = json.readTree(tools.permissionResult("Bash", json.createObjectNode().put("command", "git status && npm test"),
+        final JsonNode compound = json.readTree(tools.permissionResult("Bash", json.createObjectNode().put("command", "git status && npm test"),
                 new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
-        JsonNode saved = compound.path("updatedPermissions").path(0);
+        final JsonNode saved = compound.path("updatedPermissions").path(0);
         assertThat(saved.path("destination").asString()).isEqualTo("localSettings");
         assertThat(saved.path("rules")).hasSize(2);
         assertThat(saved.path("rules").path(0).path("ruleContent").asString()).isEqualTo("git status:*");
         assertThat(saved.path("rules").path(1).path("ruleContent").asString()).isEqualTo("npm test:*");
 
-        JsonNode once = json.readTree(tools.permissionResult("Bash", json.createObjectNode().put("command", "ls"), ApprovalDecision.allowOnce()));
+        final JsonNode once = json.readTree(tools.permissionResult("Bash", json.createObjectNode().put("command", "ls"), ApprovalDecision.allowOnce()));
         assertThat(once.has("updatedPermissions")).isFalse();
     }
 
@@ -246,18 +246,18 @@ class PermissionRulesTest {
     /// mode to `acceptEdits`.
     @Test
     void aPlanApprovedWithEditsSwitchesTheSessionToAcceptEdits() throws Exception {
-        McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
-        ObjectNode plan = json.createObjectNode().put("plan", "1. do it");
-        JsonNode r = json.readTree(tools.permissionResult("ExitPlanMode", plan, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
+        final McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        final ObjectNode plan = json.createObjectNode().put("plan", "1. do it");
+        final JsonNode r = json.readTree(tools.permissionResult("ExitPlanMode", plan, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
         assertThat(r.path("behavior").asString()).isEqualTo("allow");
         assertThat(r.path("updatedInput").path("plan").asString()).isEqualTo("1. do it");
         assertThat(r.path("updatedPermissions")).hasSize(1);
-        JsonNode update = r.path("updatedPermissions").path(0);
+        final JsonNode update = r.path("updatedPermissions").path(0);
         assertThat(update.path("type").asString()).isEqualTo("setMode");
         assertThat(update.path("mode").asString()).isEqualTo("acceptEdits");
         assertThat(update.path("destination").asString()).isEqualTo("session");
 
-        JsonNode approved = json.readTree(tools.permissionResult("ExitPlanMode", plan, ApprovalDecision.allowOnce()));
+        final JsonNode approved = json.readTree(tools.permissionResult("ExitPlanMode", plan, ApprovalDecision.allowOnce()));
         assertThat(approved.has("updatedPermissions")).isFalse();
     }
 }

@@ -36,23 +36,23 @@ final class ListingLines {
      * {@code text} without the own lines of {@code entries}: paths relative to the listing file's folder, separated by
      * {@code /}, a folder's ending in {@code /}.
      */
-    static Result without(String text, List<String> entries) {
-        String[] lines = text.split("\n", -1);
-        StringBuilder out = new StringBuilder(text.length());
-        List<Integer> mentions = new ArrayList<>();
+    static Result without(final String text, final List<String> entries) {
+        final String[] lines = text.split("\n", -1);
+        final StringBuilder out = new StringBuilder(text.length());
+        final List<Integer> mentions = new ArrayList<>();
         int removed = 0;
         int kept = 0;
         boolean fenced = false;
         for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
-            String body = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
+            final String line = lines[i];
+            final String body = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
             if (body.strip().startsWith("```") || body.strip().startsWith("~~~")) {
                 fenced = !fenced;
             } else if (!fenced && owns(body, entries)) {
                 removed++;
-                Matcher item = ITEM.matcher(body);
+                final Matcher item = ITEM.matcher(body);
                 if (item.matches()) {
-                    int indent = width(item.group(1));
+                    final int indent = width(item.group(1));
                     while (i + 1 < lines.length && !lines[i + 1].isBlank() && width(leading(lines[i + 1])) > indent) {
                         i++;
                         removed++;
@@ -73,8 +73,8 @@ final class ListingLines {
     }
 
     /** Whether {@code line} is the own line of one of {@code entries}. */
-    static boolean owns(String line, List<String> entries) {
-        String subject = subject(line);
+    static boolean owns(final String line, final List<String> entries) {
+        final String subject = subject(line);
         if (subject.isEmpty()) {
             return false;
         }
@@ -83,18 +83,18 @@ final class ListingLines {
     }
 
     /** What a list item or a table row is about: its first element, cleaned of marks; empty for any other line. */
-    static String subject(String line) {
+    static String subject(final String line) {
         String rest;
-        Matcher item = ITEM.matcher(line);
-        String stripped = line.strip();
+        final Matcher item = ITEM.matcher(line);
+        final String stripped = line.strip();
         if (item.matches()) {
             rest = item.group(2).strip();
         } else if (stripped.startsWith("|") && !TABLE_RULE.matcher(stripped).matches()) {
-            int end = stripped.indexOf('|', 1);
+            final int end = stripped.indexOf('|', 1);
             rest = (end < 0 ? stripped.substring(1) : stripped.substring(1, end)).strip();
             // a cell is its own element: the whole of it names the entry, or nothing does
             rest = unwrap(rest);
-            Matcher link = LINK.matcher(rest);
+            final Matcher link = LINK.matcher(rest);
             return link.find() && rest.substring(link.end()).isBlank() ? clean(target(link)) : clean(rest);
         } else {
             return "";
@@ -108,11 +108,11 @@ final class ListingLines {
     private static String firstElement(String rest) {
         rest = unwrap(rest);
         if (rest.startsWith("`")) {
-            int end = rest.indexOf('`', 1);
+            final int end = rest.indexOf('`', 1);
             return end < 0 ? "" : rest.substring(1, end);
         }
         if (rest.startsWith("[")) {
-            Matcher link = LINK.matcher(rest);
+            final Matcher link = LINK.matcher(rest);
             return link.find() ? target(link) : "";
         }
         int end = 0;
@@ -123,17 +123,17 @@ final class ListingLines {
     }
 
     /** A link's target, the file it names, without a heading anchor. */
-    private static String target(Matcher link) {
-        String target = link.group(2).strip();
-        int anchor = target.indexOf('#');
+    private static String target(final Matcher link) {
+        final String target = link.group(2).strip();
+        final int anchor = target.indexOf('#');
         return anchor < 0 ? target : target.substring(0, anchor);
     }
 
     /** Text without the bold or italic marks around it. */
-    private static String unwrap(String s) {
-        for (String mark : List.of("**", "__", "*", "_")) {
+    private static String unwrap(final String s) {
+        for (final String mark : List.of("**", "__", "*", "_")) {
             if (s.startsWith(mark) && s.length() > 2 * mark.length()) {
-                int end = s.indexOf(mark, mark.length());
+                final int end = s.indexOf(mark, mark.length());
                 if (end > 0 && s.substring(end + mark.length()).isBlank()) {
                     return s.substring(mark.length(), end).strip();
                 }
@@ -161,14 +161,14 @@ final class ListingLines {
      * Whether {@code line} names an entry: a file by its whole name ({@code a.md}, not {@code data.md} or {@code
      * a.md.bak}), a folder by its path with the slash.
      */
-    private static boolean names(String line, List<String> entries) {
-        for (String e : entries) {
-            String name = e.endsWith("/") ? e : e.substring(e.lastIndexOf('/') + 1);
+    private static boolean names(final String line, final List<String> entries) {
+        for (final String e : entries) {
+            final String name = e.endsWith("/") ? e : e.substring(e.lastIndexOf('/') + 1);
             for (int at = line.indexOf(name); at >= 0; at = line.indexOf(name, at + 1)) {
-                int end = at + name.length();
-                boolean startsWord = at == 0 || !nameChar(line.charAt(at - 1));
+                final int end = at + name.length();
+                final boolean startsWord = at == 0 || !nameChar(line.charAt(at - 1));
                 // a dot after the name ends a sentence unless a name goes on after it
-                boolean endsWord = end == line.length() || !nameChar(line.charAt(end))
+                final boolean endsWord = end == line.length() || !nameChar(line.charAt(end))
                         || line.charAt(end) == '.' && (end + 1 == line.length() || !nameChar(line.charAt(end + 1)));
                 if (startsWord && endsWord) {
                     return true;
@@ -178,11 +178,11 @@ final class ListingLines {
         return false;
     }
 
-    private static boolean nameChar(char c) {
+    private static boolean nameChar(final char c) {
         return Character.isLetterOrDigit(c) || c == '_' || c == '-' || c == '.';
     }
 
-    private static String leading(String line) {
+    private static String leading(final String line) {
         int i = 0;
         while (i < line.length() && (line.charAt(i) == ' ' || line.charAt(i) == '\t')) {
             i++;
@@ -191,9 +191,9 @@ final class ListingLines {
     }
 
     /** Indentation width, a tab counting four. */
-    private static int width(String indent) {
+    private static int width(final String indent) {
         int w = 0;
-        for (char c : indent.toCharArray()) {
+        for (final char c : indent.toCharArray()) {
             w += c == '\t' ? 4 : 1;
         }
         return w;

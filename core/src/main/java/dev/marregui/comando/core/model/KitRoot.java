@@ -110,7 +110,7 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
     }
 
     /** A root without a kit, on the user's own {@code ~/.claude} as {@link HomeDir#home} names it. */
-    public static KitRoot plain(Path dir) {
+    public static KitRoot plain(final Path dir) {
         return new KitRoot(dir, Optional.empty(), Path.of(HomeDir.home(), ".claude"));
     }
 
@@ -118,14 +118,14 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
      * The root for comando as started: {@code configDir} is the {@code CLAUDE_CONFIG_DIR} comando was started with
      * (null or blank when none), {@code home} the user's home folder.
      */
-    public static KitRoot resolve(String configDir, Path home, Reader reader) {
-        Path user = home.resolve(".claude");
+    public static KitRoot resolve(final String configDir, final Path home, final Reader reader) {
+        final Path user = home.resolve(".claude");
         if (configDir != null && !configDir.isBlank()) {
-            Path dir = Path.of(HomeDir.expand(configDir.strip()));
+            final Path dir = Path.of(HomeDir.expand(configDir.strip()));
             return new KitRoot(dir, read(dir, reader), user);
         }
-        for (Path dir : List.of(user, user.resolve(CLONE))) {
-            Optional<Manifest> kit = read(dir, reader);
+        for (final Path dir : List.of(user, user.resolve(CLONE))) {
+            final Optional<Manifest> kit = read(dir, reader);
             if (kit.isPresent()) {
                 return new KitRoot(dir, kit, user);
             }
@@ -134,8 +134,8 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
     }
 
     /** The kit of {@code dir}, when its {@code comando-kit.json} exists and reads; one that does not is logged. */
-    private static Optional<Manifest> read(Path dir, Reader reader) {
-        Path file = dir.resolve(FILE);
+    private static Optional<Manifest> read(final Path dir, final Reader reader) {
+        final Path file = dir.resolve(FILE);
         if (!Files.isRegularFile(file)) {
             return Optional.empty();
         }
@@ -149,16 +149,16 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
 
     /** The root comando runs on, as the application named it; before that, Claude Code's folder, without a kit. */
     public static KitRoot current() {
-        KitRoot r = current;
+        final KitRoot r = current;
         if (r != null) {
             return r;
         }
-        String env = System.getenv("CLAUDE_CONFIG_DIR");
+        final String env = System.getenv("CLAUDE_CONFIG_DIR");
         return plain(env != null && !env.isBlank() ? Path.of(HomeDir.expand(env.strip())) : Path.of(HomeDir.home(), ".claude"));
     }
 
     /** Names the root comando runs on, for what reads Claude Code's folder without being handed it; null forgets it. */
-    public static void use(KitRoot root) {
+    public static void use(final KitRoot root) {
         current = root;
     }
 
@@ -196,10 +196,10 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
     }
 
     /** Whether {@code workDir} names the root: the session there called {@link #UPGRADE_SESSION} upgrades the kit. */
-    public boolean isRoot(String workDir) {
+    public boolean isRoot(final String workDir) {
         try {
             return Path.of(HomeDir.expand(workDir)).toAbsolutePath().normalize().equals(dir);
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             return false;
         }
     }

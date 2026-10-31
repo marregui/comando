@@ -1,17 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.ui.kit.async.OnEdt;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.imageio.ImageIO;
-import javax.swing.UIManager;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -19,6 +7,19 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import javax.imageio.ImageIO;
+import javax.swing.UIManager;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -77,26 +78,26 @@ class TintSheetTest {
     /// and none of any other tint's; the sheet is written for review.
     @Test
     void everyTintPaintsTheSameAnswerInItsOwnColoursOnly() throws IOException {
-        Tint[] tints = Tint.values();
-        int cols = 3;
-        int rows = (tints.length + cols - 1) / cols;
-        BufferedImage sheet = new BufferedImage(cols * WIDTH, rows * (HEIGHT + 24), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = sheet.createGraphics();
+        final Tint[] tints = Tint.values();
+        final int cols = 3;
+        final int rows = (tints.length + cols - 1) / cols;
+        final BufferedImage sheet = new BufferedImage(cols * WIDTH, rows * (HEIGHT + 24), BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = sheet.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         for (int i = 0; i < tints.length; i++) {
-            Tint t = tints[i];
+            final Tint t = tints[i];
             Theme.tint(t);
-            BufferedImage panel = answer();
-            for (Tint other : tints) {
-                int n = count(panel, other.highlight);
+            final BufferedImage panel = answer();
+            for (final Tint other : tints) {
+                final int n = count(panel, other.highlight);
                 if (other == t) {
                     assertThat(n).as(t + "'s bar").isPositive();
                 } else {
                     assertThat(n).as(other + "'s highlight in " + t).isZero();
                 }
             }
-            int x = (i % cols) * WIDTH;
-            int y = (i / cols) * (HEIGHT + 24);
+            final int x = (i % cols) * WIDTH;
+            final int y = (i / cols) * (HEIGHT + 24);
             g.setColor(Theme.CARD);
             g.fillRect(x, y, WIDTH, 24);
             g.setColor(Theme.TRANSCRIPT_TEXT);
@@ -105,21 +106,21 @@ class TintSheetTest {
             g.drawImage(panel, x, y + 24, null);
         }
         g.dispose();
-        Path out = Path.of("build", "snapshots", "tints.png");
+        final Path out = Path.of("build", "snapshots", "tints.png");
         Files.createDirectories(out.getParent());
         ImageIO.write(sheet, "png", out.toFile());
     }
 
     private static BufferedImage answer() {
-        TranscriptCanvas canvas = new TranscriptCanvas(url -> { });
+        final TranscriptCanvas canvas = new TranscriptCanvas(url -> { });
         canvas.append(0, new Block.UserPrompt("why does the store drop retries?", "p", ""));
         canvas.append(1, new Block.AssistantText("m", 0, ANSWER, false, ""));
         canvas.append(2, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
         canvas.setSize(WIDTH, HEIGHT);
         canvas.ensureLayout(WIDTH);
         canvas.setSize(WIDTH, Math.max(HEIGHT, canvas.contentHeight()));
-        BufferedImage img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = img.createGraphics();
+        final BufferedImage img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
         g.setColor(Theme.ground());
         g.fillRect(0, 0, WIDTH, HEIGHT);
         canvas.paint(g);
@@ -127,8 +128,8 @@ class TintSheetTest {
         return img;
     }
 
-    private static int count(BufferedImage img, Color c) {
-        int rgb = c.getRGB() & 0xFFFFFF;
+    private static int count(final BufferedImage img, final Color c) {
+        final int rgb = c.getRGB() & 0xFFFFFF;
         int n = 0;
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {

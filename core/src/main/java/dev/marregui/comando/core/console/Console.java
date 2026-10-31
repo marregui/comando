@@ -22,7 +22,7 @@ public final class Console {
     private boolean sealed;
 
     /** Appends output; writer thread only. */
-    public void append(CharSequence chunk) {
+    public void append(final CharSequence chunk) {
         synchronized (text) {
             if (truncated) {
                 keepTail(chunk);
@@ -37,12 +37,12 @@ public final class Console {
                 text.append(chunk);
             }
         }
-        for (Runnable l : listeners) {
+        for (final Runnable l : listeners) {
             l.run();
         }
     }
 
-    private void keepTail(CharSequence chunk) {
+    private void keepTail(final CharSequence chunk) {
         tail.append(chunk);
         dropped += chunk.length();
         if (tail.length() > 2 * TAIL_CHARS) {
@@ -57,12 +57,12 @@ public final class Console {
             if (!truncated) {
                 return;
             }
-            int keep = Math.min(tail.length(), TAIL_CHARS);
+            final int keep = Math.min(tail.length(), TAIL_CHARS);
             text.append("\n… ").append(dropped - keep).append(" characters not shown …\n").append(tail, tail.length() - keep, tail.length());
             tail.setLength(0);
             truncated = false;
         }
-        for (Runnable l : listeners) {
+        for (final Runnable l : listeners) {
             l.run();
         }
     }
@@ -74,17 +74,17 @@ public final class Console {
     }
 
     /** The text from {@code from} to the current end. */
-    public String text(int from) {
+    public String text(final int from) {
         synchronized (text) {
             return text.substring(Math.min(from, text.length()));
         }
     }
 
-    public void addListener(Runnable listener) {
+    public void addListener(final Runnable listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(Runnable listener) {
+    public void removeListener(final Runnable listener) {
         listeners.remove(listener);
     }
 }

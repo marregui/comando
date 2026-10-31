@@ -1,14 +1,5 @@
 package dev.marregui.comando.ui.widgets.changes;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.ChangeTexts;
-import dev.marregui.comando.core.model.RepoStatus;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.SwingUtilities;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -20,6 +11,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.ChangeTexts;
+import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -46,7 +47,7 @@ class ChangeEditorTest {
 
     private ChangeEditor editor() throws Exception {
         return on(null, x -> {
-            ChangeEditor e = new ChangeEditor(sent::add, (file, text) -> {
+            final ChangeEditor e = new ChangeEditor(sent::add, (file, text) -> {
                 written.add(Map.entry(file, text));
                 return CompletableFuture.completedFuture(failing.get());
             }, (parent, text, title, options) -> {
@@ -58,35 +59,35 @@ class ChangeEditorTest {
         });
     }
 
-    private static <T> T on(ChangeEditor e, Function<ChangeEditor, T> f) throws Exception {
-        AtomicReference<T> out = new AtomicReference<>();
+    private static <T> T on(final ChangeEditor e, final Function<ChangeEditor, T> f) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> out.set(f.apply(e)));
         return out.get();
     }
 
-    private static boolean is(ChangeEditor e, Predicate<ChangeEditor> p) throws Exception {
+    private static boolean is(final ChangeEditor e, final Predicate<ChangeEditor> p) throws Exception {
         return on(e, p::test);
     }
 
-    private static String str(ChangeEditor e, Function<ChangeEditor, String> f) throws Exception {
+    private static String str(final ChangeEditor e, final Function<ChangeEditor, String> f) throws Exception {
         return on(e, f);
     }
 
-    private static void run(ChangeEditor e, Consumer<ChangeEditor> f) throws Exception {
+    private static void run(final ChangeEditor e, final Consumer<ChangeEditor> f) throws Exception {
         SwingUtilities.invokeAndWait(() -> f.accept(e));
     }
 
-    private ChangeTexts texts(String path, RepoStatus.Kind kind, String before, String after) {
+    private ChangeTexts texts(final String path, final RepoStatus.Kind kind, final String before, final String after) {
         return new ChangeTexts(root.toString(), new RepoStatus.FileChange(path, "", kind), before, after, "");
     }
 
     /** Shows {@code t} and waits until its comparison is on screen. */
-    private static void shown(ChangeEditor e, ChangeTexts t) throws Exception {
+    private static void shown(final ChangeEditor e, final ChangeTexts t) throws Exception {
         run(e, x -> x.show(t, false));
         await().atMost(Duration.ofSeconds(10)).until(() -> on(e, x -> !x.countShown().startsWith("comparing")));
     }
 
-    private static String right(ChangeEditor e) throws Exception {
+    private static String right(final ChangeEditor e) throws Exception {
         return on(e, x -> x.diff().right().getText());
     }
 
@@ -94,7 +95,7 @@ class ChangeEditorTest {
     /// saved, and undo and redo move between the two texts.
     @Test
     void anEditIsComparedAgainSavedAndUndoneAndRedone() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\nb\nc\n", "a\nB\nc\n"));
         assertThat(str(e, ChangeEditor::countShown)).isEqualTo("1 difference");
         assertThat(is(e, x -> x.diff().right().isEditable())).isTrue();
@@ -121,8 +122,8 @@ class ChangeEditorTest {
     /// saved text keeps the undo history.
     @Test
     void aReadWhileEditedIsLeftUnshownAndAReadOfTheSavedTextKeepsTheUndoHistory() throws Exception {
-        ChangeEditor e = editor();
-        ChangeTexts t = texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n");
+        final ChangeEditor e = editor();
+        final ChangeTexts t = texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n");
         shown(e, t);
         run(e, x -> x.diff().right().insert("x", 0));
         run(e, x -> x.show(texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "from a session\n"), true));
@@ -138,7 +139,7 @@ class ChangeEditorTest {
     /// the working-tree text.
     @Test
     void rollingBackAChangedFileTakesHeadsTextAsOneEditThatUndoTakesBack() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("docs/A.java", RepoStatus.Kind.MODIFIED, "one\ntwo\n", "one\n2\nthree\n"));
         run(e, ChangeEditor::rollBack);
         assertThat(right(e)).isEqualTo("one\ntwo\n");
@@ -154,8 +155,8 @@ class ChangeEditorTest {
     /// leaves the window.
     @Test
     void aFileHeadDoesNotHaveRollsBackThroughGitAfterAQuestionAndLeavesTheWindow() throws Exception {
-        ChangeEditor e = editor();
-        RepoStatus.FileChange c = new RepoStatus.FileChange("notes/n.md", "", RepoStatus.Kind.UNTRACKED);
+        final ChangeEditor e = editor();
+        final RepoStatus.FileChange c = new RepoStatus.FileChange("notes/n.md", "", RepoStatus.Kind.UNTRACKED);
         shown(e, new ChangeTexts(root.toString(), c, "", "# n\n", ""));
         run(e, ChangeEditor::rollBack);
         assertThat(sent).as("cancelled").isEmpty();
@@ -169,7 +170,7 @@ class ChangeEditorTest {
     /// Remove asks, sends `RemoveFiles` and leaves the window; a deleted file does not offer remove.
     @Test
     void removingAsksThenSendsTheFileToTheTrashAndLeavesTheWindow() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
         answer.set(0);
         run(e, ChangeEditor::remove);
@@ -185,7 +186,7 @@ class ChangeEditorTest {
     /// sends `Unstage`.
     @Test
     void aRemovedFileStaysRemovedWhileItsTextIsEmpty() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("gone.txt", RepoStatus.Kind.DELETED, "bye\n", ""));
         run(e, x -> x.diff().right().insert("y", 0));
         run(e, x -> x.diff().right().setText(""));
@@ -200,7 +201,7 @@ class ChangeEditorTest {
     /// shown next is edited as text.
     @Test
     void markdownOffersBothSidesRenderedAndOtherTextNot() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
         assertThat(is(e, x -> x.offered("rendered"))).isFalse();
         run(e, ChangeEditor::toggleRendered);
@@ -225,8 +226,8 @@ class ChangeEditorTest {
     /// A binary file shown as a note is not editable and offers no rendered view, but offers remove.
     @Test
     void aFileNotComparedIsNotEdited() throws Exception {
-        ChangeEditor e = editor();
-        RepoStatus.FileChange c = new RepoStatus.FileChange("a.png", "", RepoStatus.Kind.MODIFIED);
+        final ChangeEditor e = editor();
+        final RepoStatus.FileChange c = new RepoStatus.FileChange("a.png", "", RepoStatus.Kind.MODIFIED);
         run(e, x -> x.show(ChangeTexts.noted(root.toString(), c, "a binary file: not compared"), false));
         assertThat(is(e, x -> x.diff().right().isEditable())).isFalse();
         assertThat(is(e, x -> x.offered("rendered"))).isFalse();
@@ -237,9 +238,9 @@ class ChangeEditorTest {
     /// callback reports true then false.
     @Test
     void editsAreWrittenWithinASecondAndTheWorkingTreesSideSaysSo() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
-        List<Boolean> modified = new CopyOnWriteArrayList<>();
+        final List<Boolean> modified = new CopyOnWriteArrayList<>();
         run(e, x -> x.onModified(modified::add));
         run(e, x -> x.diff().right().insert("x", 0));
         assertThat(str(e, ChangeEditor::status)).isEqualTo("● edited");
@@ -254,7 +255,7 @@ class ChangeEditorTest {
     /// retries until the write succeeds.
     @Test
     void aWriteThatFailsSaysSoAndIsTriedAgain() throws Exception {
-        ChangeEditor e = editor();
+        final ChangeEditor e = editor();
         shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
         failing.set("disk full");
         run(e, x -> x.diff().right().insert("x", 0));

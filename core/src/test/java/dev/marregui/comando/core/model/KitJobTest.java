@@ -1,9 +1,9 @@
 package dev.marregui.comando.core.model;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.Map;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the jobs' summary says what waits, what failed, what runs and what runs next
 class KitJobTest {
 
-    private static KitJob job(String name, List<String> days, String time, String... command) {
+    private static KitJob job(final String name, final List<String> days, final String time, final String... command) {
         return new KitJob(name, "", days, time, List.of(command), Map.of(), "", true);
     }
 
@@ -35,7 +35,7 @@ class KitJobTest {
     /// a time out of range, no program or one outside the root, a lower-case variable, a log outside the root.
     @Test
     void eachRuleKitPyAppliesIsAProblemOfItsField() {
-        KitJob good = job("kb-drift", List.of("MON"), "07:30", "bin/kb-drift");
+        final KitJob good = job("kb-drift", List.of("MON"), "07:30", "bin/kb-drift");
         assertThat(KitJob.problems(List.of(good), 0)).isEmpty();
         assertThat(KitJob.problems(List.of(good, good), 1)).containsOnlyKeys(KitJob.NAME_FIELD);
         assertThat(KitJob.problems(List.of(job("KB drift", List.of("MON"), "07:30", "bin/x")), 0)).containsOnlyKeys(KitJob.NAME_FIELD);
@@ -43,10 +43,10 @@ class KitJobTest {
         assertThat(KitJob.problems(List.of(new KitJob("a", "x".repeat(81), List.of("MON"), "07:30", List.of("bin/a"), Map.of(), "", true)), 0))
                 .containsOnlyKeys(KitJob.DESCRIPTION_FIELD);
         assertThat(KitJob.problems(List.of(job("a", List.of(), "07:30", "bin/a")), 0)).containsOnlyKeys(KitJob.DAYS_FIELD);
-        for (String bad : List.of("24:00", "7", "07:60", "seven", "")) {
+        for (final String bad : List.of("24:00", "7", "07:60", "seven", "")) {
             assertThat(KitJob.problems(List.of(job("a", List.of("MON"), bad, "bin/a")), 0)).as(bad).containsOnlyKeys(KitJob.TIME_FIELD);
         }
-        for (String bad : List.of("/usr/bin/true", "../bin/a", "bin//a", "bin\\a", "C:/a")) {
+        for (final String bad : List.of("/usr/bin/true", "../bin/a", "bin//a", "bin\\a", "C:/a")) {
             assertThat(KitJob.problems(List.of(job("a", List.of("MON"), "07:30", bad)), 0)).as(bad).containsOnlyKeys(KitJob.COMMAND_FIELD);
         }
         assertThat(KitJob.problems(List.of(job("a", List.of("MON"), "07:30")), 0)).containsOnlyKeys(KitJob.COMMAND_FIELD);
@@ -63,11 +63,11 @@ class KitJobTest {
     /// does the same through `NAME=value` lines, a blank line skipped.
     @Test
     void argumentsAndTheEnvironmentRoundTrip() {
-        List<String> args = List.of("--trigger", "{scheduler}", "a b", "it's", "say \"hi\"", "", "back\\slash");
+        final List<String> args = List.of("--trigger", "{scheduler}", "a b", "it's", "say \"hi\"", "", "back\\slash");
         assertThat(KitJob.words(KitJob.line(args))).isEqualTo(args);
         assertThat(KitJob.line(List.of("--days", "7"))).isEqualTo("--days 7");
         assertThat(KitJob.words("  --a  'b c'  \"d\\\"e\" ")).containsExactly("--a", "b c", "d\"e");
-        KitJob j = new KitJob("a", "", List.of("MON"), "07:30", List.of("bin/a"), Map.of("B", "2", "A", "x=y"), "", true);
+        final KitJob j = new KitJob("a", "", List.of("MON"), "07:30", List.of("bin/a"), Map.of("B", "2", "A", "x=y"), "", true);
         assertThat(j.envLines()).isEqualTo("A=x=y\nB=2");
         assertThat(KitJob.envOf(j.envLines() + "\n\n")).isEqualTo(j.env());
         assertThat(KitJob.envOf(" A = x \n")).as("the value as written").isEqualTo(Map.of("A", " x "));
@@ -77,17 +77,17 @@ class KitJobTest {
     /// never when paused; names failed and running jobs; and picks the enabled job that runs next.
     @Test
     void theJobsSummarySaysWhatWaitsFailsRunsAndComesNext() {
-        KitJob a = job("a", List.of("MON"), "07:30", "bin/a");
-        KitJob b = new KitJob("b", "", List.of("TUE"), "08:00", List.of("bin/b"), Map.of(), "", false);
-        KitJobs.Entry ok = new KitJobs.Entry(a, true, true, true, false, "2026-10-26T07:30+01:00", 0, "2026-11-02T07:30+01:00", "/l/a.log");
-        KitJobs.Entry paused = new KitJobs.Entry(b, false, false, false, false, "", null, "", "/l/b.log");
+        final KitJob a = job("a", List.of("MON"), "07:30", "bin/a");
+        final KitJob b = new KitJob("b", "", List.of("TUE"), "08:00", List.of("bin/b"), Map.of(), "", false);
+        final KitJobs.Entry ok = new KitJobs.Entry(a, true, true, true, false, "2026-10-26T07:30+01:00", 0, "2026-11-02T07:30+01:00", "/l/a.log");
+        final KitJobs.Entry paused = new KitJobs.Entry(b, false, false, false, false, "", null, "", "/l/b.log");
         assertThat(new KitJobs(true, List.of(ok, paused), "").pending()).as("a paused job waits for nothing").isFalse();
         assertThat(new KitJobs.Entry(a, true, true, false, false, "", null, "", "").pending()).as("not loaded").isTrue();
         assertThat(new KitJobs.Entry(a, true, false, true, false, "", null, "", "").pending()).as("out of date").isTrue();
         assertThat(new KitJobs.Entry(a, true, true, null, false, "", null, "", "").pending()).as("unknown is not pending").isFalse();
-        KitJobs.Entry failedRunning = new KitJobs.Entry(job("c", List.of("WED"), "06:00", "bin/c"), true, true, true, true,
+        final KitJobs.Entry failedRunning = new KitJobs.Entry(job("c", List.of("WED"), "06:00", "bin/c"), true, true, true, true,
                 "2026-10-28T06:00+01:00", 2, "2026-10-29T06:00+01:00", "/l/c.log");
-        KitJobs all = new KitJobs(true, List.of(ok, paused, failedRunning), "");
+        final KitJobs all = new KitJobs(true, List.of(ok, paused, failedRunning), "");
         assertThat(all.failed()).containsExactly("c");
         assertThat(all.running()).containsExactly("c");
         assertThat(all.paused()).containsExactly("b");

@@ -62,10 +62,10 @@ public final class Classifier {
     public record Classification(Target target, String text) {
     }
 
-    public static Classification classify(String raw) {
-        String text = raw.strip();
-        int eol = text.indexOf('\n');
-        String firstLine = (eol < 0 ? text : text.substring(0, eol)).strip().toLowerCase(Locale.ROOT);
+    public static Classification classify(final String raw) {
+        final String text = raw.strip();
+        final int eol = text.indexOf('\n');
+        final String firstLine = (eol < 0 ? text : text.substring(0, eol)).strip().toLowerCase(Locale.ROOT);
         if (firstLine.equals(SQL_MARKER)) {
             return new Classification(Target.SQL, eol < 0 ? "" : text.substring(eol + 1).strip());
         }
@@ -82,7 +82,7 @@ public final class Classifier {
     }
 
     /** True for a block of {@code --} and {@code /* *\/} comments only, or blank: there is nothing to run. */
-    public static boolean isCommentOnly(String raw) {
+    public static boolean isCommentOnly(final String raw) {
         return stripLeadingComments(raw).isEmpty();
     }
 
@@ -90,9 +90,9 @@ public final class Classifier {
      * True for a statement that changes the schema rather than rows: CREATE, ALTER, DROP, TRUNCATE, RENAME, after any
      * leading comments. Such a statement reports no row count worth showing, and makes the cached schema stale.
      */
-    public static boolean isDdl(String sql) {
-        String head = stripLeadingComments(sql == null ? "" : sql).toUpperCase(Locale.ROOT);
-        for (String k : DDL) {
+    public static boolean isDdl(final String sql) {
+        final String head = stripLeadingComments(sql == null ? "" : sql).toUpperCase(Locale.ROOT);
+        for (final String k : DDL) {
             if (head.startsWith(k) && (head.length() == k.length() || !Character.isLetterOrDigit(head.charAt(k.length())))) {
                 return true;
             }
@@ -101,33 +101,33 @@ public final class Classifier {
     }
 
     /** True when any statement of the block changes the schema; see {@link #isDdl}. */
-    public static boolean anyDdl(String sql) {
+    public static boolean anyDdl(final String sql) {
         return Statements.split(sql).stream().anyMatch(Classifier::isDdl);
     }
 
     private static final List<String> DDL = List.of("CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME");
 
     /** Removes a marker first line, if any, for text whose target is forced by a key. */
-    public static String stripMarker(String raw) {
-        String text = raw.strip();
-        int eol = text.indexOf('\n');
-        String firstLine = (eol < 0 ? text : text.substring(0, eol)).strip().toLowerCase(Locale.ROOT);
+    public static String stripMarker(final String raw) {
+        final String text = raw.strip();
+        final int eol = text.indexOf('\n');
+        final String firstLine = (eol < 0 ? text : text.substring(0, eol)).strip().toLowerCase(Locale.ROOT);
         if (firstLine.equals(SQL_MARKER) || firstLine.equals(CLAUDE_MARKER)) {
             return eol < 0 ? "" : text.substring(eol + 1).strip();
         }
         return text;
     }
 
-    static boolean isSql(String text) {
-        String body = stripLeadingComments(text);
+    static boolean isSql(final String text) {
+        final String body = stripLeadingComments(text);
         if (body.isEmpty() || body.endsWith("?") || body.endsWith(".")) {
             return false;
         }
-        var m = LEADING_WORD.matcher(body);
+        final var m = LEADING_WORD.matcher(body);
         if (!m.find()) {
             return false;
         }
-        Pattern shape = SHAPES.get(m.group(1).toUpperCase(Locale.ROOT));
+        final Pattern shape = SHAPES.get(m.group(1).toUpperCase(Locale.ROOT));
         if (shape == null || !shape.matcher(body).lookingAt()) {
             return false;
         }
@@ -135,14 +135,14 @@ public final class Classifier {
     }
 
     /** Removes leading {@code --} line comments and {@code /* *\/} block comments. */
-    static String stripLeadingComments(String text) {
+    static String stripLeadingComments(final String text) {
         String s = text.strip();
         while (true) {
             if (s.startsWith("--")) {
-                int eol = s.indexOf('\n');
+                final int eol = s.indexOf('\n');
                 s = eol < 0 ? "" : s.substring(eol + 1).strip();
             } else if (s.startsWith("/*")) {
-                int end = s.indexOf("*/");
+                final int end = s.indexOf("*/");
                 s = end < 0 ? "" : s.substring(end + 2).strip();
             } else {
                 return s;
@@ -156,22 +156,22 @@ public final class Classifier {
      * {@code can_id} and {@code t1} are not prose, and a word next to a dot is part of a qualified name
      * ({@code i.k}). The pronoun "I" counts only as a capital letter, so the alias {@code i} stays SQL.
      */
-    static boolean hasProseWord(String body) {
-        int n = body.length();
+    static boolean hasProseWord(final String body) {
+        final int n = body.length();
         int i = 0;
         while (i < n) {
-            char c = body.charAt(i);
+            final char c = body.charAt(i);
             if (c == '\'' || c == '"' || c == '`') {
-                int close = body.indexOf(c, i + 1);
+                final int close = body.indexOf(c, i + 1);
                 i = close < 0 ? n : close + 1;
             } else if (c == '-' && i + 1 < n && body.charAt(i + 1) == '-') {
-                int eol = body.indexOf('\n', i);
+                final int eol = body.indexOf('\n', i);
                 i = eol < 0 ? n : eol;
             } else if (c == '/' && i + 1 < n && body.charAt(i + 1) == '*') {
-                int close = body.indexOf("*/", i + 2);
+                final int close = body.indexOf("*/", i + 2);
                 i = close < 0 ? n : close + 2;
             } else if (Character.isLetter(c) || c == '_') {
-                int start = i;
+                final int start = i;
                 while (i < n && isWordChar(body.charAt(i))) {
                     i++;
                 }
@@ -182,7 +182,7 @@ public final class Classifier {
                         i++;
                     }
                 }
-                boolean qualified = (start > 0 && body.charAt(start - 1) == '.') || (i < n && body.charAt(i) == '.' && i + 1 < n
+                final boolean qualified = (start > 0 && body.charAt(start - 1) == '.') || (i < n && body.charAt(i) == '.' && i + 1 < n
                         && isWordChar(body.charAt(i + 1)));
                 if (!qualified && isProse(body.substring(start, i))) {
                     return true;
@@ -194,18 +194,18 @@ public final class Classifier {
         return false;
     }
 
-    private static boolean isWordChar(char c) {
+    private static boolean isWordChar(final char c) {
         return Character.isLetterOrDigit(c) || c == '_' || c == '$';
     }
 
-    private static boolean isProse(String word) {
+    private static boolean isProse(final String word) {
         if (word.equals("i")) {
             return false; // lowercase i is an alias or a loop variable; the pronoun is written "I"
         }
         return PROSE_WORDS.contains(word.toLowerCase(Locale.ROOT));
     }
 
-    private static Map.Entry<String, Pattern> shape(String keyword, String regex) {
+    private static Map.Entry<String, Pattern> shape(final String keyword, final String regex) {
         return Map.entry(keyword, Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
     }
 }

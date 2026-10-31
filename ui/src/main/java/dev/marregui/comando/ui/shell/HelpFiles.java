@@ -1,9 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.model.AtomicFiles;
-import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.text.LogLines;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +7,10 @@ import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+
+import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.text.LogLines;
 
 /**
  * The files behind the Help menu, so each opens in a panel as any document does, and can be opened as a file too: the
@@ -24,12 +24,12 @@ final class HelpFiles {
     }
 
     /** Where the tutorial is kept: {@code help/tutorial.md} in comando's folder. */
-    static Path tutorial(Path home) {
+    static Path tutorial(final Path home) {
         return home.resolve("help").resolve("tutorial.md");
     }
 
     /** The log comando writes now; older ones are numbered after it. */
-    static Path log(Path logDir) {
+    static Path log(final Path logDir) {
         return logDir.resolve("comando-0.log");
     }
 
@@ -40,9 +40,9 @@ final class HelpFiles {
      * The log that holds the entry written at {@code atMillis} (see {@link LogLines#offsetOf}), the newest first; empty
      * when none holds it any more. Reads the files: called off the EDT.
      */
-    static Optional<Path> logHolding(Path logDir, long atMillis) {
+    static Optional<Path> logHolding(final Path logDir, final long atMillis) {
         for (int g = 0; g < LOGS; g++) {
-            Path file = logDir.resolve("comando-" + g + ".log");
+            final Path file = logDir.resolve("comando-" + g + ".log");
             if (!Files.isRegularFile(file)) {
                 break;
             }
@@ -50,7 +50,7 @@ final class HelpFiles {
                 if (LogLines.offsetOf(Files.readString(file), atMillis) >= 0) {
                     return Optional.of(file);
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 // rotated away while read, or not text: the older ones may still hold it
             }
         }
@@ -63,7 +63,7 @@ final class HelpFiles {
      *
      * @throws IOException when the build carries no tutorial, or the file cannot be written
      */
-    static Path writeTutorial(Path home) throws IOException {
+    static Path writeTutorial(final Path home) throws IOException {
         return writeTutorial(home, Files::move);
     }
 
@@ -72,7 +72,7 @@ final class HelpFiles {
         void move(Path from, Path to, CopyOption... options) throws IOException;
     }
 
-    static Path writeTutorial(Path home, Move move) throws IOException {
+    static Path writeTutorial(final Path home, final Move move) throws IOException {
         String text;
         try (InputStream in = HelpFiles.class.getResourceAsStream(TUTORIAL_RESOURCE)) {
             if (in == null) {
@@ -80,7 +80,7 @@ final class HelpFiles {
             }
             text = KeyText.of(tutorialText(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
         }
-        Path file = tutorial(home);
+        final Path file = tutorial(home);
         if (Files.isRegularFile(file) && Files.readString(file, StandardCharsets.UTF_8).equals(text)) {
             return file;
         }
@@ -93,7 +93,7 @@ final class HelpFiles {
      * The tutorial as the app shows it: links to other docs are relative to the repository, which the app does not
      * ship, so those links keep their text only; so do in-page anchors, which the shown tutorial does not need.
      */
-    static String tutorialText(String markdown) {
+    static String tutorialText(final String markdown) {
         return markdown.replaceAll("\\[([^\\]]+)\\]\\((\\.\\./[^)]+|[a-z-]+\\.md[^)]*|#[^)]+)\\)", "$1");
     }
 }

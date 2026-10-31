@@ -1,5 +1,14 @@
 package dev.marregui.comando.core.resource;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
@@ -9,15 +18,6 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 
 /**
  * Claude Code sessions as a resource kind. The dialog asks first the session's name, what it is for, then which
@@ -56,22 +56,22 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     }
 
     /** The kit's defaults, which the dialog names beside Model, Effort and Permission mode. */
-    public void defaults(Defaults d) {
+    public void defaults(final Defaults d) {
         defaults = Objects.requireNonNullElse(d, Defaults.NONE);
     }
 
     /** The model Claude Code runs a session on when neither the session nor the kit names one, once a start said it. */
-    public void cliModel(String model) {
+    public void cliModel(final String model) {
         cliModel = model == null ? "" : model.strip();
     }
 
-    static List<Attribute> attributes(Defaults d, String cliModel) {
-        String model = !d.model().isEmpty() ? d.model() + " · the kit's default"
+    static List<Attribute> attributes(final Defaults d, final String cliModel) {
+        final String model = !d.model().isEmpty() ? d.model() + " · the kit's default"
                 : cliModel.isEmpty() ? "Claude Code's default" : cliModel + " · Claude Code's default";
-        String effort = d.effort().isEmpty() ? "Claude Code's default" : d.effort() + " · the kit's default";
-        String permission = d.permissionMode().isEmpty() ? "default · asks before each tool"
+        final String effort = d.effort().isEmpty() ? "Claude Code's default" : d.effort() + " · the kit's default";
+        final String permission = d.permissionMode().isEmpty() ? "default · asks before each tool"
                 : d.permissionMode() + " · the kit's default: " + PERMISSION_MODES.getOrDefault(d.permissionMode(), "as the CLI defines");
-        String follows = "the default follows the kit; a choice here holds for this session";
+        final String follows = "the default follows the kit; a choice here holds for this session";
         return List.of(
                 Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "what this session is for: it names its panel and its ongoing conversation")
                         .about("A session is one ongoing line of work: you stop it, resume it, checkpoint it. Its name is how you find it again, "
@@ -111,7 +111,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     }
 
     private static Map<String, String> permissionModes() {
-        Map<String, String> m = new LinkedHashMap<>();
+        final Map<String, String> m = new LinkedHashMap<>();
         m.put("default", "asks before each tool");
         m.put("acceptEdits", "edits files without asking and asks for the rest");
         m.put("plan", "plans only and changes nothing");
@@ -122,8 +122,8 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     }
 
     /** The choices with the empty one, the CLI's default, first. */
-    private static List<String> orDefault(List<String> choices) {
-        List<String> all = new ArrayList<>(choices.size() + 1);
+    private static List<String> orDefault(final List<String> choices) {
+        final List<String> all = new ArrayList<>(choices.size() + 1);
         all.add("");
         all.addAll(choices);
         return List.copyOf(all);
@@ -148,15 +148,15 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     /** Where every session of this comando runs: its kit, brain and instance, which a session does not choose. */
     @Override
     public String context() {
-        KitRoot root = KitRoot.current();
-        String brain = root.brain().map(b -> " · brain " + HomeDir.shorten(b.toString())).orElse("");
+        final KitRoot root = KitRoot.current();
+        final String brain = root.brain().map(b -> " · brain " + HomeDir.shorten(b.toString())).orElse("");
         return "Runs on " + (root.kit().isPresent() ? "kit " : "folder ") + HomeDir.shorten(root.dir().toString()) + brain
                 + " · instance " + InstanceName.display(InstanceName.current());
     }
 
     @Override
-    public Map<String, String> toAttributes(SessionSpec s) {
-        Map<String, String> m = new LinkedHashMap<>();
+    public Map<String, String> toAttributes(final SessionSpec s) {
+        final Map<String, String> m = new LinkedHashMap<>();
         m.put("name", s.name());
         m.put("workDir", s.workDir());
         m.put("model", s.model());
@@ -171,22 +171,22 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     }
 
     @Override
-    public SessionSpec fromAttributes(Map<String, String> a) {
+    public SessionSpec fromAttributes(final Map<String, String> a) {
         double budget;
-        String b = a.getOrDefault("budgetUsd", "").strip();
+        final String b = a.getOrDefault("budgetUsd", "").strip();
         try {
             budget = b.isEmpty() ? 0.0 : Double.parseDouble(b);
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             throw new IllegalArgumentException("budget is not a number: " + b);
         }
-        List<String> dirs = new ArrayList<>();
-        for (String d : a.getOrDefault("addDirs", "").split(File.pathSeparator)) {
+        final List<String> dirs = new ArrayList<>();
+        for (final String d : a.getOrDefault("addDirs", "").split(File.pathSeparator)) {
             if (!d.isBlank()) {
                 dirs.add(HomeDir.expand(d.strip()));
             }
         }
-        String id = a.getOrDefault("claudeSessionId", "").strip();
-        StartMode startMode = startMode(a.getOrDefault("startMode", ""), id);
+        final String id = a.getOrDefault("claudeSessionId", "").strip();
+        final StartMode startMode = startMode(a.getOrDefault("startMode", ""), id);
         return new SessionSpec(
                 a.getOrDefault("name", "").strip(),
                 HomeDir.expand(a.getOrDefault("workDir", "").strip()),
@@ -201,15 +201,15 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 "");
     }
 
-    private static StartMode startMode(String value, String id) {
-        String mode = value.strip();
+    private static StartMode startMode(final String value, final String id) {
+        final String mode = value.strip();
         if (mode.isEmpty()) {
             return id.isEmpty() ? StartMode.NEW : StartMode.RESUME;
         }
         StartMode m;
         try {
             m = StartMode.valueOf(mode.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             throw new IllegalArgumentException("Conversation must be NEW, RESUME or FORK", e);
         }
         if (m != StartMode.NEW && id.isEmpty()) {
@@ -219,19 +219,19 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     }
 
     @Override
-    public String nameOf(SessionSpec spec) {
+    public String nameOf(final SessionSpec spec) {
         return spec.name();
     }
 
     @Override
-    public SessionSpec withName(SessionSpec spec, String name) {
+    public SessionSpec withName(final SessionSpec spec, final String name) {
         return spec.withName(name);
     }
 
     /** A clone of a session that has a conversation forks it; a clone of a new session is new. */
     @Override
-    public SessionSpec cloneOf(SessionSpec spec, String name) {
-        SessionSpec s = spec.withName(name);
+    public SessionSpec cloneOf(final SessionSpec spec, final String name) {
+        final SessionSpec s = spec.withName(name);
         if (s.claudeSessionId().isEmpty()) {
             return s;
         }
@@ -241,33 +241,33 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
 
     /** A new session runs in the kit's folder, as the user's sessions do; the user's home without a root. */
     @Override
-    public SessionSpec template(String name) {
+    public SessionSpec template(final String name) {
         return SessionSpec.fresh(name, KitRoot.current().dir().toString());
     }
 
     @Override
-    public String noticeSubject(String name) {
+    public String noticeSubject(final String name) {
         return Notice.session(name);
     }
 
     @Override
-    public String removalQuestion(AppState s, String name) {
-        List<String> parts = new ArrayList<>();
-        SessionState session = s.session(name).orElse(null);
+    public String removalQuestion(final AppState s, final String name) {
+        final List<String> parts = new ArrayList<>();
+        final SessionState session = s.session(name).orElse(null);
         if (session != null && session.status() != Status.CLOSED && session.status() != Status.FAILED) {
             parts.add("stops it");
         }
-        int approvals = s.pendingApprovals(name);
+        final int approvals = s.pendingApprovals(name);
         if (approvals > 0) {
             parts.add("denies " + ResourceKind.count(approvals, "waiting approval"));
         }
         // its own panel goes with it (record 88); documents attached to it stay, detached
         s.homePanel(name).or(() -> s.closedPanelOfSession(name)).ifPresent(p -> parts.add("removes its panel " + p.title() + " with its text"));
-        long documents = s.panelsBoundToSession(name).stream().filter(p -> p.document()).count();
+        final long documents = s.panelsBoundToSession(name).stream().filter(p -> p.document()).count();
         if (documents > 0) {
             parts.add("detaches " + ResourceKind.count((int) documents, "document"));
         }
-        StringBuilder q = new StringBuilder("Remove session ").append(name).append('?');
+        final StringBuilder q = new StringBuilder("Remove session ").append(name).append('?');
         if (!parts.isEmpty()) {
             q.append(" This ").append(ResourceKind.sentence(parts)).append('.');
         }
@@ -279,15 +279,15 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     }
 
     @Override
-    public boolean showAdvanced(Map<String, String> values) {
-        String dir = values.getOrDefault("workDir", "").strip();
+    public boolean showAdvanced(final Map<String, String> values) {
+        final String dir = values.getOrDefault("workDir", "").strip();
         return !dir.isEmpty() && !KitRoot.current().isRoot(HomeDir.expand(dir)) || !values.getOrDefault("addDirs", "").isBlank()
                 || !values.getOrDefault("checkpoint", SessionSpec.DEFAULT_CHECKPOINT).equals(SessionSpec.DEFAULT_CHECKPOINT);
     }
 
     @Override
-    public String advice(Map<String, String> values) {
-        String id = values.getOrDefault("claudeSessionId", "").strip();
+    public String advice(final Map<String, String> values) {
+        final String id = values.getOrDefault("claudeSessionId", "").strip();
         if (!id.isEmpty() && values.getOrDefault("startMode", "").strip().equalsIgnoreCase(StartMode.NEW.name())) {
             return "The next start begins a new conversation; the one before stays on disk";
         }

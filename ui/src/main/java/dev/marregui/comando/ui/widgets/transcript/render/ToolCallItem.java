@@ -1,5 +1,16 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.Shape;
+import java.awt.font.TextLayout;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.Icon;
+
+import tools.jackson.databind.JsonNode;
+
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Json;
@@ -9,16 +20,6 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Diffs;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.transcript.ToolText;
-import tools.jackson.databind.JsonNode;
-
-import javax.swing.Icon;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.Shape;
-import java.awt.font.TextLayout;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A tool call's card: its header with the status, the input and the result as it folds open, and the calls a
@@ -65,11 +66,11 @@ class ToolCallItem extends Item {
     private Style statusStyle;
     private TextLayout status;
 
-    ToolCallItem(Block.ToolCall b) {
+    ToolCallItem(final Block.ToolCall b) {
         this(b, 0, newTimes());
     }
 
-    ToolCallItem(Block.ToolCall b, long order, long[] times) {
+    ToolCallItem(final Block.ToolCall b, final long order, final long[] times) {
         super(b);
         this.order = order;
         this.times = times;
@@ -93,7 +94,7 @@ class ToolCallItem extends Item {
         return order;
     }
 
-    void addChild(Item child) {
+    void addChild(final Item child) {
         children.add(child);
         invalidate();
     }
@@ -122,7 +123,7 @@ class ToolCallItem extends Item {
     }
 
     /** Marks the sub-agent as working in the background; true when that changed. */
-    boolean setBackground(boolean b) {
+    boolean setBackground(final boolean b) {
         if (background == b) {
             return false;
         }
@@ -135,7 +136,7 @@ class ToolCallItem extends Item {
      * successfully. … agentId: a58…", Claude Code 2.1.302, undocumented); empty for any other call.
      */
     String launchedAgent() {
-        Block.ToolCall c = call();
+        final Block.ToolCall c = call();
         if (!c.isSubagent() || c.status() != Block.ToolStatus.DONE) {
             return "";
         }
@@ -150,7 +151,7 @@ class ToolCallItem extends Item {
      * Starts the elapsed time of an active call at {@code nowMillis}, the first time the canvas sees it active, and
      * stops it the first time the canvas sees it ended.
      */
-    void seen(long nowMillis) {
+    void seen(final long nowMillis) {
         if (isActive()) {
             if (times[0] < 0) {
                 times[0] = nowMillis;
@@ -162,7 +163,7 @@ class ToolCallItem extends Item {
     }
 
     /** Notes the first time the canvas sees the result launch the sub-agent, if it saw the call run before it. */
-    void launchSeen(long nowMillis) {
+    void launchSeen(final long nowMillis) {
         if (times[2] < 0 && times[0] >= 0 && !launchedAgent().isEmpty()) {
             times[2] = nowMillis;
         }
@@ -179,18 +180,18 @@ class ToolCallItem extends Item {
     }
 
     /** A tool call was nested in this card, at any depth; it is now the most recent one. */
-    void toolAdded(String toolUseId, String summary) {
+    void toolAdded(final String toolUseId, final String summary) {
         tools++;
         lastId = toolUseId;
         last = summary;
     }
 
     /** The nested call {@code toolUseId} changed; true when it is the most recent one, whose summary is shown. */
-    boolean isLastTool(String toolUseId) {
+    boolean isLastTool(final String toolUseId) {
         return lastId.equals(toolUseId);
     }
 
-    void lastToolChanged(String summary) {
+    void lastToolChanged(final String summary) {
         last = summary;
     }
 
@@ -200,7 +201,7 @@ class ToolCallItem extends Item {
 
     /** The call's one-line summary (a sub-agent's description), parsed again only when the input changed. */
     String summary() {
-        String in = call().inputJson();
+        final String in = call().inputJson();
         if (!in.equals(summaryOf)) {
             summaryOf = in;
             summary = ToolText.summary(call().name(), Json.parse(in));
@@ -216,13 +217,13 @@ class ToolCallItem extends Item {
      * The name and summary of a nested call as a sub-agent card's status shows it, at most {@link #LAST_CHARS}
      * characters: a path keeps its end, which names it.
      */
-    static String lastLabel(Block.ToolCall c) {
-        String name = ToolText.displayName(c.name());
-        String summary = ToolText.summary(c.name(), Json.parse(c.inputJson()));
+    static String lastLabel(final Block.ToolCall c) {
+        final String name = ToolText.displayName(c.name());
+        final String summary = ToolText.summary(c.name(), Json.parse(c.inputJson()));
         if (summary.isEmpty()) {
             return Clip.keepStart(name, LAST_CHARS);
         }
-        int room = LAST_CHARS - name.length() - 1;
+        final int room = LAST_CHARS - name.length() - 1;
         if (room < 8) {
             return Clip.keepStart(name + " " + summary, LAST_CHARS);
         }
@@ -230,7 +231,7 @@ class ToolCallItem extends Item {
     }
 
     /** Marks the running call as held up by an approval card; true when that changed. */
-    boolean setWaiting(boolean w) {
+    boolean setWaiting(final boolean w) {
         if (waiting == w) {
             return false;
         }
@@ -243,26 +244,26 @@ class ToolCallItem extends Item {
      * adds the tool calls it made and its latest one. Once done, empty, except for a sub-agent that did not fail:
      * how long it ran and the tool calls it made.
      */
-    String statusText(long nowMillis) {
+    String statusText(final long nowMillis) {
         return statusText(nowMillis, true);
     }
 
     /** The status, without the latest tool call when not {@code withLast}: for a card too narrow to show it. */
-    String statusText(long nowMillis, boolean withLast) {
-        boolean subagent = call().isSubagent();
+    String statusText(final long nowMillis, final boolean withLast) {
+        final boolean subagent = call().isSubagent();
         if (!isActive()) {
             if (!subagent || call().status() == Block.ToolStatus.ERROR) {
                 return "";
             }
             // a stored conversation keeps a sub-agent's blocks apart: no blocks means no count, not none
-            String took = times[0] >= 0 && times[1] >= 0 ? " · " + Labels.elapsed(times[1] - times[0]) : "";
+            final String took = times[0] >= 0 && times[1] >= 0 ? " · " + Labels.elapsed(times[1] - times[0]) : "";
             return "done" + took + toolsLabel();
         }
         if (waiting && isRunning()) {
             return KeyText.of(WAITING);
         }
-        long elapsed = times[0] < 0 ? 0 : nowMillis - times[0];
-        String running = background ? "running in background" : "running";
+        final long elapsed = times[0] < 0 ? 0 : nowMillis - times[0];
+        final String running = background ? "running in background" : "running";
         String status = elapsed < 1000 ? running : running + " · " + Labels.elapsed(elapsed);
         if (subagent && tools > 0) {
             status += toolsLabel() + (withLast && !last.isEmpty() ? " · " + last : "");
@@ -280,21 +281,21 @@ class ToolCallItem extends Item {
      * that finishes keeps the state it had, so the blocks the user is reading stay where they are.
      */
     private void autoOpen() {
-        Block.ToolCall c = call();
+        final Block.ToolCall c = call();
         fold.openIf(isEdit(c.name()) || c.status() == Block.ToolStatus.ERROR || (c.isSubagent() && c.status() == Block.ToolStatus.RUNNING));
     }
 
     /** A tool whose summary is a file's path. */
-    private static boolean isPath(String name) {
+    private static boolean isPath(final String name) {
         return isEdit(name) || name.equals("Read") || name.equals("NotebookEdit");
     }
 
-    private static boolean isEdit(String name) {
+    private static boolean isEdit(final String name) {
         return name.equals("Edit") || name.equals("MultiEdit") || name.equals("Write");
     }
 
     @Override
-    void changed(Block previous, Block next) {
+    void changed(final Block previous, final Block next) {
         built = null;
         autoOpen();
     }
@@ -305,24 +306,24 @@ class ToolCallItem extends Item {
     }
 
     @Override
-    int doLayout(int w, Style s) {
-        Block.ToolCall c = call();
+    int doLayout(final int w, final Style s) {
+        final Block.ToolCall c = call();
         if (built != s) {
             built = s;
-            JsonNode in = Json.parse(c.inputJson());
-            String summary = ToolText.summary(c.name(), in);
-            Rich t = new Rich(s.body, s.text).append(ToolText.displayName(c.name()), s.bold, s.text);
+            final JsonNode in = Json.parse(c.inputJson());
+            final String summary = ToolText.summary(c.name(), in);
+            final Rich t = new Rich(s.body, s.text).append(ToolText.displayName(c.name()), s.bold, s.text);
             if (c.isSubagent()) {
                 t.append("  ", s.body, s.text);
-                int at = t.length();
+                final int at = t.length();
                 t.append("transcript", s.small, s.link, null, true, false).link(at, t.length(), TranscriptCanvas.SUBAGENT_SCHEME + c.toolUseId());
             }
             if (!summary.isEmpty()) {
-                int at = t.length() + 3;
+                final int at = t.length() + 3;
                 t.append("   " + summary, s.body, s.muted);
                 // the summary names what the call works on: the file or address, whole even when the summary is
                 // clipped; a skill, its SKILL.md where it is found (record 108)
-                String target = ToolText.target(c.name(), in);
+                final String target = ToolText.target(c.name(), in);
                 if (!target.isEmpty()) {
                     t.link(at, t.length(), target, s.link);
                 }
@@ -336,8 +337,8 @@ class ToolCallItem extends Item {
                 case ERROR -> Icons.get("deny");
             };
         }
-        int inner = Math.max(40, w - 2 * IN_X);
-        int titleWidth = Math.max(40, inner - 22 - 70);
+        final int inner = Math.max(40, w - 2 * IN_X);
+        final int titleWidth = Math.max(40, inner - 22 - 70);
         headerHeight = Math.max(18, title.layout(titleWidth, s));
         int y = IN_Y + headerHeight;
         if (fold.isOpen()) {
@@ -363,16 +364,16 @@ class ToolCallItem extends Item {
     }
 
     /** The unified diff an edit makes, null for a tool that edits nothing; text written over nothing is clipped. */
-    private static List<String> editDiff(Block.ToolCall c, JsonNode in) {
-        Diffs.Edit e = Diffs.edit(c.name(), in);
+    private static List<String> editDiff(final Block.ToolCall c, final JsonNode in) {
+        final Diffs.Edit e = Diffs.edit(c.name(), in);
         if (e == null) {
             return null;
         }
         return Diffs.unified(e.path(), e.before(), e.before().isEmpty() ? Items.clipLines(e.after(), Items.MAX_INPUT_LINES) : e.after());
     }
 
-    private static Rich inputRich(Block.ToolCall c, JsonNode in, Style s) {
-        List<String> diff = editDiff(c, in);
+    private static Rich inputRich(final Block.ToolCall c, final JsonNode in, final Style s) {
+        final List<String> diff = editDiff(c, in);
         if (diff != null) {
             return diff(diff, s);
         }
@@ -386,13 +387,13 @@ class ToolCallItem extends Item {
         };
     }
 
-    private static Rich diff(List<String> unified, Style s) {
-        List<String> lines = unified.stream().map(Rich::detab).toList();
-        StringBuilder text = new StringBuilder();
-        List<Color> backgrounds = new ArrayList<>();
-        int shown = Math.min(lines.size(), Items.MAX_INPUT_LINES);
+    private static Rich diff(final List<String> unified, final Style s) {
+        final List<String> lines = unified.stream().map(Rich::detab).toList();
+        final StringBuilder text = new StringBuilder();
+        final List<Color> backgrounds = new ArrayList<>();
+        final int shown = Math.min(lines.size(), Items.MAX_INPUT_LINES);
         for (int i = 0; i < shown; i++) {
-            String l = lines.get(i);
+            final String l = lines.get(i);
             text.append(i == 0 ? "" : "\n").append(l);
             backgrounds.add(Diffs.isAdded(i, l) ? Theme.content().added : Diffs.isRemoved(i, l) ? Theme.content().removed : null);
         }
@@ -401,10 +402,10 @@ class ToolCallItem extends Item {
         } else if (shown < lines.size()) {
             text.append("\n… ").append(lines.size() - shown).append(" more lines");
         }
-        Rich r = new Rich(s.monoSmall, s.text).append(text.toString()).lineBackgrounds(backgrounds);
+        final Rich r = new Rich(s.monoSmall, s.text).append(text.toString()).lineBackgrounds(backgrounds);
         int at = 0;
         for (int i = 0; i < shown; i++) {
-            String l = lines.get(i);
+            final String l = lines.get(i);
             if (l.startsWith("@@") || Diffs.isHeader(i, l)) {
                 r.color(at, at + l.length(), l.startsWith("@@") ? s.accent : s.muted);
             }
@@ -413,7 +414,7 @@ class ToolCallItem extends Item {
         return r;
     }
 
-    private static Rich resultRich(Block.ToolCall c, Style s) {
+    private static Rich resultRich(final Block.ToolCall c, final Style s) {
         if (c.resultText().isEmpty()) {
             return new Rich(s.monoSmall, s.muted);
         }
@@ -425,7 +426,7 @@ class ToolCallItem extends Item {
     }
 
     /** The status layout for {@code text}, rebuilt only when the text or the style changed. */
-    private TextLayout status(String text, Style s) {
+    private TextLayout status(final String text, final Style s) {
         if (!text.equals(statusText) || statusStyle != s) {
             statusText = text;
             statusStyle = s;
@@ -435,25 +436,25 @@ class ToolCallItem extends Item {
     }
 
     @Override
-    void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
-        Style s = style();
-        int cy = y + 3;
-        int ch = height - 6;
+    void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
+        final Style s = style();
+        final int cy = y + 3;
+        final int ch = height - 6;
         Items.fillRound(g, Theme.CARD, x, cy, width(), ch);
-        Icon icon = Icons.get(call().isSubagent() ? "session" : "tool");
+        final Icon icon = Icons.get(call().isSubagent() ? "session" : "tool");
         icon.paintIcon(marks.component(), g, x + IN_X, cy + IN_Y + 1);
-        int right = x + width() - IN_X;
+        final int right = x + width() - IN_X;
         String text = statusText(marks.nowMillis());
         TextLayout st = text.isEmpty() ? null : status(text, s);
         if (st != null && st.getAdvance() > width() / 2f) {
             text = statusText(marks.nowMillis(), false); // the latest tool call gives way to the title
             st = status(text, s);
         }
-        Icon mark = background ? null : statusIcon; // a launch's result is not the sub-agent's end
-        int iconWidth = mark != null ? 16 : 0;
+        final Icon mark = background ? null : statusIcon; // a launch's result is not the sub-agent's end
+        final int iconWidth = mark != null ? 16 : 0;
         int used = iconWidth + (st != null ? (iconWidth > 0 ? 6 : 0) + Math.round(st.getAdvance()) : 0);
         if (!children.isEmpty() && !fold.isOpen()) {
-            TextLayout steps = new TextLayout(children.size() + " steps", s.small, Style.FRC);
+            final TextLayout steps = new TextLayout(children.size() + " steps", s.small, Style.FRC);
             g.setColor(s.muted);
             steps.draw(g, right - used - 6 - steps.getAdvance(), cy + IN_Y + steps.getAscent() + 1);
             used += 6 + Math.round(steps.getAdvance());
@@ -465,15 +466,15 @@ class ToolCallItem extends Item {
             g.setColor(isActive() ? Theme.ATTENTION : s.muted);
             st.draw(g, right - (iconWidth > 0 ? iconWidth + 6 : 0) - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
         }
-        Shape old = g.getClip();
-        int titleRight = right - Math.max(70, used + 8);
+        final Shape old = g.getClip();
+        final int titleRight = right - Math.max(70, used + 8);
         g.clipRect(x + IN_X + 22, cy, Math.max(0, titleRight - x - IN_X - 22), headerHeight + IN_Y);
         Paras.paintBox(g, title, x + IN_X + 22, cy + IN_Y, clip, marks);
         g.setClip(old);
         if (!fold.isOpen()) {
             return;
         }
-        int bx = x + IN_X;
+        final int bx = x + IN_X;
         if (input.length() > 0) {
             Paras.paintBox(g, input, bx, cy + inputTop, clip, marks);
         }
@@ -481,8 +482,8 @@ class ToolCallItem extends Item {
             Paras.paintBox(g, result, bx, cy + resultTop, clip, marks);
         }
         for (int i = 0; i < children.size() && i < childTops.length; i++) {
-            Item child = children.get(i);
-            int top = cy + childTops[i];
+            final Item child = children.get(i);
+            final int top = cy + childTops[i];
             g.setColor(Theme.CLAUDE);
             g.fillRect(bx, top, 2, child.height);
             if (top + child.height >= clip.y && top <= clip.y + clip.height) {
@@ -492,12 +493,12 @@ class ToolCallItem extends Item {
     }
 
     @Override
-    void collect(int x, int y, List<Placed> out) {
+    void collect(final int x, final int y, final List<Placed> out) {
         if (!fold.isOpen()) {
             return;
         }
-        int cy = y + 3;
-        int bx = x + IN_X;
+        final int cy = y + 3;
+        final int bx = x + IN_X;
         if (input.length() > 0) {
             out.add(new Placed(input, bx, cy + inputTop, this));
         }
@@ -510,14 +511,14 @@ class ToolCallItem extends Item {
     }
 
     @Override
-    String headerLinkAt(int px, int py) {
+    String headerLinkAt(final int px, final int py) {
         if (py < 3 + IN_Y + headerHeight) {
             return title == null ? null : title.linkAt(px - IN_X - 22, py - 3 - IN_Y);
         }
         if (fold.isOpen()) {
             for (int i = 0; i < children.size() && i < childTops.length; i++) {
-                Item child = children.get(i);
-                int top = 3 + childTops[i];
+                final Item child = children.get(i);
+                final int top = 3 + childTops[i];
                 if (py >= top && py < top + child.height) {
                     return child.headerLinkAt(px - IN_X - CHILD_INDENT, py - top);
                 }
@@ -527,14 +528,14 @@ class ToolCallItem extends Item {
     }
 
     @Override
-    Item toggleAt(int px, int py) {
+    Item toggleAt(final int px, final int py) {
         if (py < 3 + IN_Y + headerHeight) {
             return this;
         }
         if (fold.isOpen()) {
             for (int i = 0; i < children.size() && i < childTops.length; i++) {
-                Item child = children.get(i);
-                int top = 3 + childTops[i];
+                final Item child = children.get(i);
+                final int top = 3 + childTops[i];
                 if (py >= top && py < top + child.height) {
                     return child.toggleAt(px - IN_X - CHILD_INDENT, py - top);
                 }
@@ -553,13 +554,13 @@ class ToolCallItem extends Item {
     @Override
     String text() {
         // decoded input values, so find matches text with quotes, backslashes or newlines as shown
-        Block.ToolCall c = call();
+        final Block.ToolCall c = call();
         return c.name() + '\n' + ToolText.values(Json.parse(c.inputJson())) + c.resultText();
     }
 
     @Override
-    int guess(int w, Style s) {
-        int closed = 3 + IN_Y + 18 + IN_Y + 3; // the title row of a closed card, as doLayout measures it
+    int guess(final int w, final Style s) {
+        final int closed = 3 + IN_Y + 18 + IN_Y + 3; // the title row of a closed card, as doLayout measures it
         return fold.isOpen() ? closed + guessText(text(), w - 2 * IN_X, s) : closed;
     }
 
@@ -569,10 +570,10 @@ class ToolCallItem extends Item {
      */
     @Override
     String markdown() {
-        Block.ToolCall c = call();
-        JsonNode in = Json.parse(c.inputJson());
-        StringBuilder sb = new StringBuilder("**").append(ToolText.displayName(c.name())).append("**");
-        String summary = ToolText.summary(c.name(), in);
+        final Block.ToolCall c = call();
+        final JsonNode in = Json.parse(c.inputJson());
+        final StringBuilder sb = new StringBuilder("**").append(ToolText.displayName(c.name())).append("**");
+        final String summary = ToolText.summary(c.name(), in);
         if (!summary.isEmpty()) {
             sb.append(" · ").append(summary);
         }
@@ -582,10 +583,10 @@ class ToolCallItem extends Item {
             case DONE -> {
             }
         }
-        List<String> diff = editDiff(c, in);
+        final List<String> diff = editDiff(c, in);
         if (diff != null) {
-            List<String> shown = diff.size() > Items.MAX_INPUT_LINES ? diff.subList(0, Items.MAX_INPUT_LINES) : diff;
-            String more = diff.size() > Items.MAX_INPUT_LINES ? "\n… " + (diff.size() - Items.MAX_INPUT_LINES) + " more lines" : "";
+            final List<String> shown = diff.size() > Items.MAX_INPUT_LINES ? diff.subList(0, Items.MAX_INPUT_LINES) : diff;
+            final String more = diff.size() > Items.MAX_INPUT_LINES ? "\n… " + (diff.size() - Items.MAX_INPUT_LINES) + " more lines" : "";
             sb.append("\n\n").append(Items.fence("diff", diff.isEmpty() ? "(no changes)" : String.join("\n", shown) + more));
         } else if (c.name().equals("Bash")) {
             sb.append("\n\n").append(Items.fence("bash", in.path("command").asString("")));
@@ -595,8 +596,8 @@ class ToolCallItem extends Item {
         if (!c.resultText().isEmpty()) {
             sb.append("\n\n").append(Items.fence("", Items.clipLines(c.resultText(), Items.MAX_RESULT_LINES)));
         }
-        for (Item child : children) {
-            String m = child.markdown();
+        for (final Item child : children) {
+            final String m = child.markdown();
             if (!m.isEmpty()) {
                 sb.append("\n\n> ").append(m.replace("\n", "\n> "));
             }

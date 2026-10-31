@@ -1,5 +1,16 @@
 package dev.marregui.comando.ui.shell;
 
+import java.awt.Desktop;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
@@ -9,17 +20,6 @@ import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Browser;
-
-import javax.swing.JDialog;
-import javax.swing.JFrame;
-import java.awt.Desktop;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * The window's help: the tutorial, the keyboard and Markdown sheets, About, the logs and the data root. Each opens
@@ -41,8 +41,8 @@ final class HelpActions {
      * {@code openFile} opens a file in a panel; {@code runCommand} runs a command by id; {@code showSidePane} shows the
      * side pane even when the user hid it; {@code commands} lists every command, for the keyboard sheet.
      */
-    HelpActions(ComandoUi.Dependencies deps, Supplier<JFrame> frame, Consumer<Path> openFile,
-                Consumer<String> runCommand, Runnable showSidePane, Supplier<List<Command>> commands) {
+    HelpActions(final ComandoUi.Dependencies deps, final Supplier<JFrame> frame, final Consumer<Path> openFile,
+                final Consumer<String> runCommand, final Runnable showSidePane, final Supplier<List<Command>> commands) {
         this.deps = deps;
         this.frame = frame;
         this.openFile = openFile;
@@ -55,7 +55,7 @@ final class HelpActions {
      * Writes the tutorial's file off the EDT, so it exists from the start and opens as any file, not only from Help.
      */
     void writeTutorial() {
-        Path home = deps.home();
+        final Path home = deps.home();
         if (home == null) {
             return;
         }
@@ -70,10 +70,10 @@ final class HelpActions {
 
     /** The tutorial in a panel, as a document: its file in comando's folder, written from this build's copy first. */
     void showTutorial() {
-        Path home = deps.home();
+        final Path home = deps.home();
         UiErrands.start("show-tutorial", () -> {
             try {
-                Path file = HelpFiles.writeTutorial(home);
+                final Path file = HelpFiles.writeTutorial(home);
                 Edt.later(() -> openFile.accept(file));
             } catch (IOException | RuntimeException e) {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), e));
@@ -90,13 +90,13 @@ final class HelpActions {
             about.toFront();
             return;
         }
-        String claude = deps.state().get().sessions().stream().filter(s -> !s.info().cliVersion().isEmpty())
+        final String claude = deps.state().get().sessions().stream().filter(s -> !s.info().cliVersion().isEmpty())
                 .max(Comparator.comparingLong(SessionState::startedMillis)).map(s -> s.info().cliVersion()).orElse("");
         about = About.show(frame.get(), About.load(About.facts(deps.version(), deps.home(), claude)), this::followAbout);
     }
 
     /** A link of the About card: the tutorial, the data root, or a page in the browser. */
-    private void followAbout(String target) {
+    private void followAbout(final String target) {
         switch (target) {
             case "comando:tutorial" -> runCommand.accept("help.tutorial");
             case "comando:home" -> {
@@ -125,7 +125,7 @@ final class HelpActions {
     }
 
     /** Opens {@code dir} in the desktop's file manager, off the EDT; a failure is a notice. */
-    void reveal(Path dir) {
+    void reveal(final Path dir) {
         UiErrands.start("reveal", () -> {
             try {
                 Desktop.getDesktop().open(dir.toFile());
@@ -139,8 +139,8 @@ final class HelpActions {
      * The log {@code server} writes now, in this instance's data root, in a panel as comando's own is shown; a notice
      * naming where it would be when there is none yet.
      */
-    void showLog(ServerToggle server) {
-        Path log = server.log();
+    void showLog(final ServerToggle server) {
+        final Path log = server.log();
         if (log != null && Files.isRegularFile(log)) {
             openFile.accept(log);
         } else {
@@ -151,7 +151,7 @@ final class HelpActions {
 
     /** The log comando writes now, in a panel, as a document: read-only, following its end, reloaded as it grows. */
     void showLog() {
-        Path log = HelpFiles.log(deps.logDir());
+        final Path log = HelpFiles.log(deps.logDir());
         if (Files.isRegularFile(log)) {
             openFile.accept(log);
         } else {

@@ -1,11 +1,11 @@
 package dev.marregui.comando.core.transcript;
 
-import dev.marregui.comando.core.view.Clip;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import dev.marregui.comando.core.view.Clip;
 
 /**
  * The text a panel's topic is read from: the end of its session's conversation, or the start of its own text. Only
@@ -33,21 +33,21 @@ public final class TopicSource {
      * works ({@code workDir}, and {@code branch} when known) so the summary can name the repository, and by its panel's
      * title, {@code panel}, unless blank (a headless session); empty when it has none.
      */
-    public static String ofSession(String session, String panel, String workDir, String branch, Transcript t, int maxChars) {
-        int size = t.size();
-        Deque<String> lines = new ArrayDeque<>();
+    public static String ofSession(final String session, final String panel, final String workDir, final String branch, final Transcript t, final int maxChars) {
+        final int size = t.size();
+        final Deque<String> lines = new ArrayDeque<>();
         int used = 0;
         boolean prompt = false;
         for (int i = size - 1; i >= 0; i--) {
-            Block b = t.get(i);
+            final Block b = t.get(i);
             if (b == null || !b.parent().isEmpty()) {
                 continue;
             }
-            boolean isPrompt = b instanceof Block.UserPrompt;
+            final boolean isPrompt = b instanceof Block.UserPrompt;
             if (used >= maxChars && !isPrompt) {
                 continue; // past the budget, only the latest prompt is still taken
             }
-            String line = line(b);
+            final String line = line(b);
             if (line.isEmpty()) {
                 continue;
             }
@@ -65,8 +65,8 @@ public final class TopicSource {
         if (lines.isEmpty()) {
             return "";
         }
-        String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
-        String in = panel.isBlank() ? "" : ", in a panel titled \"" + panel + "\"";
+        final String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
+        final String in = panel.isBlank() ? "" : ", in a panel titled \"" + panel + "\"";
         return "A coding session named \"" + session + "\"" + where + in + ". The end of its conversation, oldest first:\n"
                 + String.join("", lines);
     }
@@ -86,26 +86,26 @@ public final class TopicSource {
      * ({@code workDir}, and {@code branch} when known) so the summary can name the repository. Empty when the text is
      * blank.
      */
-    public static String ofPanel(String panel, String session, String workDir, String branch, String text, String response, int maxChars) {
-        String t = text.strip();
+    public static String ofPanel(final String panel, final String session, final String workDir, final String branch, final String text, final String response, final int maxChars) {
+        final String t = text.strip();
         if (t.isEmpty()) {
             return "";
         }
-        Matcher m = BLANK_LINE.matcher(t);
+        final Matcher m = BLANK_LINE.matcher(t);
         int cut = 0;
         while (m.find()) {
             cut = m.end();
         }
-        String last = Clip.keepStart(t.substring(cut).strip(), Math.min(MAX_LAST, maxChars));
-        String before = t.substring(0, cut).strip();
-        String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
-        StringBuilder sb = new StringBuilder("The panel \"").append(panel).append("\", where the user writes the prompts of a coding session named \"")
+        final String last = Clip.keepStart(t.substring(cut).strip(), Math.min(MAX_LAST, maxChars));
+        final String before = t.substring(0, cut).strip();
+        final String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
+        final StringBuilder sb = new StringBuilder("The panel \"").append(panel).append("\", where the user writes the prompts of a coding session named \"")
                 .append(session).append('"').append(where).append(".\nIts most recent paragraph, the command being worked on now, which the summary is about:\n")
                 .append(last);
         int room = maxChars - last.length();
-        String answer = response.strip();
+        final String answer = response.strip();
         if (!answer.isEmpty() && room > 0) {
-            String kept = Clip.keepStart(answer, Math.min(MAX_RESPONSE, room));
+            final String kept = Clip.keepStart(answer, Math.min(MAX_RESPONSE, room));
             sb.append("\n\nThe session's last response, to read with that command:\n").append(kept);
             room -= kept.length();
         }
@@ -116,7 +116,7 @@ public final class TopicSource {
     }
 
     /** The text of the main conversation's latest response from the session; empty when it has none. */
-    public static String lastResponse(Transcript t) {
+    public static String lastResponse(final Transcript t) {
         for (int i = t.size() - 1, last = Math.max(0, t.size() - RESPONSE_BLOCKS); i >= last; i--) {
             if (t.get(i) instanceof Block.AssistantText a && a.parent().isEmpty() && !a.text().isBlank()) {
                 return a.text();
@@ -129,7 +129,7 @@ public final class TopicSource {
      * The start of a panel's own text, at most {@code maxChars}, with its file when it has one; empty when the text is
      * blank.
      */
-    public static String ofText(String panel, String file, String text, int maxChars) {
+    public static String ofText(final String panel, final String file, final String text, final int maxChars) {
         if (text.isBlank()) {
             return "";
         }
@@ -137,7 +137,7 @@ public final class TopicSource {
                 + Clip.keepStart(text.strip(), maxChars);
     }
 
-    private static String line(Block b) {
+    private static String line(final Block b) {
         return switch (b) {
             case Block.UserPrompt p -> p.text().isBlank() ? "" : "User: " + oneLine(p.text(), MAX_PROMPT) + '\n';
             case Block.AssistantText a -> a.text().isBlank() ? "" : "Assistant: " + oneLine(a.text(), MAX_TEXT) + '\n';
@@ -149,12 +149,12 @@ public final class TopicSource {
     }
 
     /** At most {@code max} characters of {@code text} on one line; only the start is read, however long the text. */
-    private static String oneLine(String text, int max) {
+    private static String oneLine(final String text, final int max) {
         int end = Math.min(text.length(), 2 * max);
         if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) {
             end--;
         }
-        String start = text.substring(0, end);
+        final String start = text.substring(0, end);
         return Clip.keepStart(WHITESPACE.matcher(start.strip()).replaceAll(" "), max);
     }
 }

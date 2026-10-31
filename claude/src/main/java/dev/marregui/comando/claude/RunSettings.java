@@ -1,15 +1,15 @@
 package dev.marregui.comando.claude;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The model and effort a session's message ran at, read from the transcript Claude Code writes beside its stream: the
@@ -32,7 +32,7 @@ final class RunSettings {
     private String conversation = "";
     private Path file;
 
-    RunSettings(Path projectsDir, ObjectMapper json) {
+    RunSettings(final Path projectsDir, final ObjectMapper json) {
         this.projectsDir = projectsDir;
         this.json = json;
     }
@@ -41,27 +41,27 @@ final class RunSettings {
      * What message {@code messageId} of conversation {@code conversationId} ran at; empty while its line is not yet in
      * the transcript, or the transcript cannot be found or read.
      */
-    Optional<Ran> of(String conversationId, String messageId) {
+    Optional<Ran> of(final String conversationId, final String messageId) {
         if (conversationId.isEmpty() || messageId.isEmpty()) {
             return Optional.empty();
         }
-        Path f = file(conversationId);
+        final Path f = file(conversationId);
         if (f == null) {
             return Optional.empty();
         }
         try {
-            String tail = tail(f);
-            String needle = "\"" + messageId + "\"";
+            final String tail = tail(f);
+            final String needle = "\"" + messageId + "\"";
             for (int end = tail.length(); end > 0; ) {
-                int start = tail.lastIndexOf('\n', end - 1) + 1;
-                String line = tail.substring(start, end);
+                final int start = tail.lastIndexOf('\n', end - 1) + 1;
+                final String line = tail.substring(start, end);
                 end = start - 1;
                 if (!line.contains(needle) || !line.contains("\"assistant\"")) {
                     continue;
                 }
-                JsonNode e = json.readTree(line);
+                final JsonNode e = json.readTree(line);
                 if (e.path("type").asString("").equals("assistant") && e.path("message").path("id").asString("").equals(messageId)) {
-                    String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));
+                    final String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));
                     return Optional.of(new Ran(e.path("message").path("model").asString(""), effort));
                 }
             }
@@ -72,7 +72,7 @@ final class RunSettings {
     }
 
     /** The conversation's transcript, {@code <projects>/<project>/<id>.jsonl}, found once per conversation. */
-    private Path file(String conversationId) {
+    private Path file(final String conversationId) {
         if (conversationId.equals(conversation) && file != null) {
             return file;
         }
@@ -82,24 +82,24 @@ final class RunSettings {
             return null;
         }
         try (var projects = Files.newDirectoryStream(projectsDir)) {
-            for (Path project : projects) {
-                Path candidate = project.resolve(conversationId + ".jsonl");
+            for (final Path project : projects) {
+                final Path candidate = project.resolve(conversationId + ".jsonl");
                 if (Files.isRegularFile(candidate)) {
                     file = candidate;
                     break;
                 }
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             // the projects folder could not be listed: found on a later message
         }
         return file;
     }
 
-    private static String tail(Path f) throws IOException {
+    private static String tail(final Path f) throws IOException {
         try (RandomAccessFile raf = new RandomAccessFile(f.toFile(), "r")) {
-            long length = raf.length();
-            int n = (int) Math.min(length, TAIL);
-            byte[] bytes = new byte[n];
+            final long length = raf.length();
+            final int n = (int) Math.min(length, TAIL);
+            final byte[] bytes = new byte[n];
             raf.seek(length - n);
             raf.readFully(bytes);
             return new String(bytes, StandardCharsets.UTF_8);

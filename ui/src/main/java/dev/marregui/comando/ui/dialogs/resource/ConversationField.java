@@ -1,14 +1,5 @@
 package dev.marregui.comando.ui.dialogs.resource;
 
-import dev.marregui.comando.core.model.StartMode;
-import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
-import dev.marregui.comando.ui.kit.format.Labels;
-
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.JComboBox;
-import javax.swing.JList;
-import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -18,6 +9,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JComboBox;
+import javax.swing.JList;
+import javax.swing.JPanel;
+
+import dev.marregui.comando.core.model.StartMode;
+import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
+import dev.marregui.comando.ui.kit.format.Labels;
 
 /**
  * A session's conversation, picked by what it is (record 125, 2026-10-31): a new one, the session's own, or one Claude
@@ -63,8 +63,8 @@ final class ConversationField extends JPanel {
         pick.setPrototypeDisplayValue(new Entry(Entry.Kind.NEW, "", NEW_ONE, ""));
         pick.setRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focus) {
-                Component c = super.getListCellRendererComponent(list, value, index, selected, focus);
+            public Component getListCellRendererComponent(final JList<?> list, final Object value, final int index, final boolean selected, final boolean focus) {
+                final Component c = super.getListCellRendererComponent(list, value, index, selected, focus);
                 if (value instanceof Entry e) {
                     setToolTipText(e.kind() == Entry.Kind.NEW ? null : e.label() + " · id " + e.id());
                 }
@@ -75,7 +75,7 @@ final class ConversationField extends JPanel {
             if (filling) {
                 return;
             }
-            Entry now = selected();
+            final Entry now = selected();
             if (now.kind() == Entry.Kind.STORED) {
                 // as an import does: a conversation that may still be open elsewhere is copied, and the session runs
                 // in its folder, where Claude Code keeps it
@@ -103,23 +103,23 @@ final class ConversationField extends JPanel {
     }
 
     /** {@code r} runs when the user changes the conversation or how it is reached. */
-    void onChange(Runnable r) {
+    void onChange(final Runnable r) {
         changed = r;
     }
 
     /** {@code c} hears the folder of a stored conversation the user picks. */
-    void onPicked(Consumer<String> c) {
+    void onPicked(final Consumer<String> c) {
         picked = c;
     }
 
     /** The conversations Claude Code stored on disk, newest first; the picker keeps what it shows selected. */
-    void stored(List<StoredConversation> conversations) {
+    void stored(final List<StoredConversation> conversations) {
         stored = List.copyOf(conversations);
         rebuild(selected());
     }
 
     /** The ids other sessions hold: not offered, as two sessions never write one conversation. */
-    void held(Set<String> ids) {
+    void held(final Set<String> ids) {
         if (!ids.equals(held)) {
             held = Set.copyOf(ids);
             rebuild(selected());
@@ -127,11 +127,11 @@ final class ConversationField extends JPanel {
     }
 
     /** Fills the picker from the form's values; {@code existing} when the form edits a saved session. */
-    void fill(Map<String, String> values, boolean existing) {
+    void fill(final Map<String, String> values, final boolean existing) {
         this.existing = existing;
         own = values.getOrDefault("claudeSessionId", "").strip();
-        String mode = values.getOrDefault("startMode", "").strip();
-        boolean fresh = own.isEmpty() || mode.equalsIgnoreCase(StartMode.NEW.name());
+        final String mode = values.getOrDefault("startMode", "").strip();
+        final boolean fresh = own.isEmpty() || mode.equalsIgnoreCase(StartMode.NEW.name());
         filling = true;
         try {
             rebuild(null);
@@ -144,8 +144,8 @@ final class ConversationField extends JPanel {
     }
 
     /** Puts the picker's {@code claudeSessionId} and {@code startMode} into {@code m}. */
-    void into(Map<String, String> m) {
-        Entry e = selected();
+    void into(final Map<String, String> m) {
+        final Entry e = selected();
         if (e.kind() == Entry.Kind.NEW) {
             m.put("claudeSessionId", own);
             m.put("startMode", StartMode.NEW.name());
@@ -157,15 +157,15 @@ final class ConversationField extends JPanel {
 
     /** The rows: a new conversation, the form's own when it has one, then the stored ones no other session holds. */
     List<Entry> entries() {
-        List<Entry> rows = new ArrayList<>();
+        final List<Entry> rows = new ArrayList<>();
         rows.add(new Entry(Entry.Kind.NEW, "", NEW_ONE, ""));
-        long now = System.currentTimeMillis();
+        final long now = System.currentTimeMillis();
         if (!own.isEmpty()) {
-            StoredConversation mine = stored.stream().filter(c -> c.sessionId().equals(own)).findFirst().orElse(null);
-            String what = mine == null ? "stored conversation " + own.substring(0, Math.min(8, own.length())) : label(mine, now);
+            final StoredConversation mine = stored.stream().filter(c -> c.sessionId().equals(own)).findFirst().orElse(null);
+            final String what = mine == null ? "stored conversation " + own.substring(0, Math.min(8, own.length())) : label(mine, now);
             rows.add(new Entry(Entry.Kind.OWN, own, (existing ? "Its own · " : "") + what, mine == null ? "" : mine.cwd()));
         }
-        for (StoredConversation c : stored) {
+        for (final StoredConversation c : stored) {
             if (!c.sessionId().equals(own) && !held.contains(c.sessionId())) {
                 rows.add(new Entry(Entry.Kind.STORED, c.sessionId(), label(c, now), c.cwd()));
             }
@@ -174,15 +174,15 @@ final class ConversationField extends JPanel {
     }
 
     /** "title · ~/folder · 2 h ago"; the last prompt, else the id's start, when it has no title. */
-    static String label(StoredConversation c, long nowMillis) {
-        String title = !c.title().isBlank() ? c.title().strip()
+    static String label(final StoredConversation c, final long nowMillis) {
+        final String title = !c.title().isBlank() ? c.title().strip()
                 : !c.lastPrompt().isBlank() ? c.lastPrompt().strip() : c.sessionId().substring(0, Math.min(8, c.sessionId().length()));
         return title + " · " + Labels.shortPath(c.cwd()) + " · " + Labels.ago(c.modifiedMillis(), nowMillis);
     }
 
-    private void rebuild(Entry keep) {
-        List<Entry> rows = entries();
-        boolean was = filling;
+    private void rebuild(final Entry keep) {
+        final List<Entry> rows = entries();
+        final boolean was = filling;
         filling = true;
         try {
             pick.setModel(new DefaultComboBoxModel<>(rows.toArray(Entry[]::new)));

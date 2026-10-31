@@ -1,11 +1,7 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.ui.kit.text.HtmlPane;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-
+import java.awt.Color;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.text.Element;
@@ -13,8 +9,13 @@ import javax.swing.text.ElementIterator;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
-import java.awt.Color;
-import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+
+import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,12 +30,12 @@ class DarkPageTintUiTest {
     /// further tint change leaves it as it was.
     @Test
     void aShownPageIsDrawnAgainInTheTintChosenAndOneTakenOutOfItsWindowNoMore() throws Exception {
-        AtomicReference<JFrame> frame = new AtomicReference<>();
-        HtmlPane pane = new HtmlPane();
+        final AtomicReference<JFrame> frame = new AtomicReference<>();
+        final HtmlPane pane = new HtmlPane();
         try {
             SwingUtilities.invokeAndWait(() -> {
                 pane.setMarkdown("# Result\n\nDone.");
-                JFrame f = new JFrame("dark page");
+                final JFrame f = new JFrame("dark page");
                 f.setUndecorated(true);
                 f.setAutoRequestFocus(false);
                 f.add(pane);
@@ -60,11 +61,11 @@ class DarkPageTintUiTest {
     }
 
     /** The colour the page's first heading is drawn in, as its style sheet resolves it. */
-    private static Color headingColour(HtmlPane pane) throws Exception {
-        AtomicReference<Color> out = new AtomicReference<>();
+    private static Color headingColour(final HtmlPane pane) throws Exception {
+        final AtomicReference<Color> out = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
-            HTMLDocument doc = (HTMLDocument) pane.getDocument();
-            ElementIterator it = new ElementIterator(doc);
+            final HTMLDocument doc = (HTMLDocument) pane.getDocument();
+            final ElementIterator it = new ElementIterator(doc);
             for (Element e = it.next(); e != null; e = it.next()) {
                 if (e.getAttributes().getAttribute(StyleConstants.NameAttribute) == HTML.Tag.H1) {
                     out.set(doc.getStyleSheet().getForeground(doc.getStyleSheet().getRule(HTML.Tag.H1, e)));

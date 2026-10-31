@@ -1,5 +1,16 @@
 package dev.marregui.comando.ui.shell;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
@@ -20,17 +31,6 @@ import dev.marregui.comando.ui.panels.Workspace;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Exportable;
 import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
-
-import javax.swing.JFrame;
-import javax.swing.JOptionPane;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * A panel's file and the panel itself: files opened in a panel or the side pane, a panel saved, closed, reopened, a
@@ -53,8 +53,8 @@ final class PanelFiles {
     /** The panels whose close is being checked or asked about. */
     private final Set<PanelId> closingPanels = new HashSet<>();
 
-    PanelFiles(ComandoUi.Dependencies deps, ShellParts parts, FocusRouter focus, LayoutKeeper layout, WindowLayout windowLayout,
-            OpenedFiles openedFiles, Runnable render) {
+    PanelFiles(final ComandoUi.Dependencies deps, final ShellParts parts, final FocusRouter focus, final LayoutKeeper layout, final WindowLayout windowLayout,
+            final OpenedFiles openedFiles, final Runnable render) {
         this.deps = deps;
         this.parts = parts;
         this.focus = focus;
@@ -69,12 +69,12 @@ final class PanelFiles {
      * off the EDT; a file that is binary or over {@link OpenFiles#MAX_PANEL_BYTES} goes to the side pane, read as
      * {@link FileView} reads it (a binary file said to be one, a file over {@link FileView#MAX_BYTES} refused).
      */
-    void openFile(Path chosen) {
-        Path file = chosen.toAbsolutePath().normalize();
+    void openFile(final Path chosen) {
+        final Path file = chosen.toAbsolutePath().normalize();
         openedFiles.add(file);
         // what the file opens from, read now, at the request: closing it gives the keyboard back there (record 112)
-        FocusOrigins.Origin from = focus.originNow();
-        for (PanelState p : deps.state().get().panels()) {
+        final FocusOrigins.Origin from = focus.originNow();
+        for (final PanelState p : deps.state().get().panels()) {
             if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 focus.opened("panel:" + p.id().value(), from);
                 deps.intents().dispatch(new Intent.FocusPanel(p.id()));
@@ -82,7 +82,7 @@ final class PanelFiles {
             }
         }
         // the file of a closed panel: the panel comes back, with its bindings
-        for (PanelState p : deps.state().get().closed()) {
+        for (final PanelState p : deps.state().get().closed()) {
             if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 focus.opened("panel:" + p.id().value(), from);
                 deps.intents().dispatch(new Intent.ReopenPanel(p.id()));
@@ -98,15 +98,15 @@ final class PanelFiles {
                 Edt.later(() -> openingFiles.remove(file));
                 return;
             }
-            PanelId id = PanelId.random();
+            final PanelId id = PanelId.random();
             Edt.run(() -> focus.opened("panel:" + id.value(), from));
             deps.texts().open(id, file).thenAccept(opened -> {
                 switch (opened.kind()) {
                     case BOUND -> {
                         // a file elsewhere keeps its extension, so it never takes a session's or a panel's name; a file
                         // of the panels' folder is named after its panel's title, so it takes the title without .md
-                        boolean document = deps.texts().document(id);
-                        String title = document ? PanelTexts.documentTitle(file, deps.state().get()::titleTaken) : PanelTexts.titleOf(file);
+                        final boolean document = deps.texts().document(id);
+                        final String title = document ? PanelTexts.documentTitle(file, deps.state().get()::titleTaken) : PanelTexts.titleOf(file);
                         deps.intents().dispatch(new Intent.AddPanel(id, title, document));
                     }
                     // a click racing the first one's panel, which comes forward on its own
@@ -119,17 +119,17 @@ final class PanelFiles {
     }
 
     /** A file a session or a link names, opened as the Files tab opens it, or shown in the side pane. Any thread. */
-    void showFile(String session, String path, String baseDir, int line) {
+    void showFile(final String session, final String path, final String baseDir, final int line) {
         UiErrands.start("show-file", () -> {
             try {
-                Path p = located(session, path, baseDir);
+                final Path p = located(session, path, baseDir);
                 // a file named without a line opens as the Files tab opens it: in a panel, or its panel comes forward;
                 // a binary or large one, and one at a line, show in the side pane (record 111)
                 if (line <= 0 && Files.isRegularFile(p) && OpenFiles.isText(p)) {
                     Edt.run(() -> openFile(p));
                     return;
                 }
-                FileView file = FileView.read(p, line);
+                final FileView file = FileView.read(p, line);
                 // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even
                 // when it replaces the same file's view in place
                 Edt.run(() -> {
@@ -140,7 +140,7 @@ final class PanelFiles {
                 });
             } catch (IOException | RuntimeException e) {
                 // a path that is no path (a NUL in it) is told like a file that cannot be read
-                String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                final String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot open " + path + ": " + why, e));
             }
         });
@@ -151,19 +151,19 @@ final class PanelFiles {
      * that folder's tree, then under the repositories of the files {@code session}'s own tool calls named, the latest
      * first, then under the Files tab's folders (record 111). Off the EDT.
      */
-    private Path located(String session, String path, String baseDir) {
-        Path p = FileView.resolve(path, baseDir);
+    private Path located(final String session, final String path, final String baseDir) {
+        final Path p = FileView.resolve(path, baseDir);
         if (Files.exists(p) || Path.of(HomeDir.expand(path)).isAbsolute()) {
             return p;
         }
-        List<Path> roots = new ArrayList<>();
+        final List<Path> roots = new ArrayList<>();
         if (baseDir != null && !baseDir.isBlank()) {
             roots.add(Path.of(baseDir));
         }
         if (session != null && !session.isEmpty()) {
             roots.addAll(WorkedIn.roots(deps.transcripts().of(session), WorkedIn.MAX_ROOTS));
         }
-        for (FolderRoot f : deps.state().get().folders()) {
+        for (final FolderRoot f : deps.state().get().folders()) {
             roots.add(Path.of(HomeDir.expand(f.path())));
         }
         return FileSearch.bySuffix(path, roots).orElse(p);
@@ -171,7 +171,7 @@ final class PanelFiles {
 
     /** Files ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
     void openSpec() {
-        Optional<Path> folder = deps.texts().folder();
+        final Optional<Path> folder = deps.texts().folder();
         if (folder.isPresent()) {
             FileChoosers.open(parts.frame(), "Open a file in a panel", folder.get()).ifPresent(this::openFile);
         }
@@ -182,9 +182,9 @@ final class PanelFiles {
      * bindings; a document opens on its file again. A panel removed since is skipped.
      */
     void reopenPanel() {
-        Workspace workspace = parts.workspace();
+        final Workspace workspace = parts.workspace();
         while (workspace.hasClosed()) {
-            Workspace.ClosedPanel c = workspace.popClosed().orElseThrow();
+            final Workspace.ClosedPanel c = workspace.popClosed().orElseThrow();
             if (!c.document()) {
                 if (deps.state().get().closedPanel(c.id()).isPresent()) {
                     deps.intents().dispatch(new Intent.ReopenPanel(c.id()));
@@ -199,9 +199,9 @@ final class PanelFiles {
 
     /** Panels save as they change; ⌘S saves now and says so, for the habit. */
     void savePanel() {
-        EditorPanel p = parts.workspace().focused();
+        final EditorPanel p = parts.workspace().focused();
         if (p != null) {
-            String title = p.panel().title();
+            final String title = p.panel().title();
             deps.texts().changed(p.panel().id(), p.editor().text());
             deps.texts().saveNow().thenAccept(error -> deps.intents().dispatch(error == null
                     ? new Intent.Notify(Notice.Level.INFO, "Saved " + title + " (panels also save as you type)", false)
@@ -213,7 +213,7 @@ final class PanelFiles {
      * Closes a panel; asks first when its shell runs a job in front, which closing would end. The job is looked up off
      * the EDT, so the close happens, or the question opens, once the check answers.
      */
-    void closePanel(PanelId id) {
+    void closePanel(final PanelId id) {
         // the last panel is never closed: the reducer says so, with nothing asked first
         if (deps.state().get().panels().size() <= 1) {
             deps.intents().dispatch(new Intent.ClosePanel(id));
@@ -234,10 +234,10 @@ final class PanelFiles {
     /**
      * Asks, when the panel's shell runs {@code job}, then closes; a panel gone meanwhile is closed without a question.
      */
-    private void answerClose(PanelId id, String job) {
+    private void answerClose(final PanelId id, final String job) {
         if (job != null && deps.state().get().panel(id).isPresent()) {
-            String title = deps.state().get().panel(id).map(x -> x.title()).orElse("the panel");
-            String why = job.equals(TerminalWidget.UNCHECKED_JOB)
+            final String title = deps.state().get().panel(id).map(x -> x.title()).orElse("the panel");
+            final String why = job.equals(TerminalWidget.UNCHECKED_JOB)
                     ? "comando cannot tell whether the shell in its Terminal tab is running a program; closing the panel ends anything it runs."
                     : "The shell in its Terminal tab is running " + job + "; closing the panel ends it.";
             if (!confirm(parts.frame(), "Close " + title + "?", why, "Close panel")) {
@@ -248,8 +248,8 @@ final class PanelFiles {
     }
 
     /** A yes-or-no question with the action named on the button; Cancel is the default. */
-    static boolean confirm(JFrame frame, String title, String message, String action) {
-        Object[] options = {action, "Cancel"};
+    static boolean confirm(final JFrame frame, final String title, final String message, final String action) {
+        final Object[] options = {action, "Cancel"};
         return JOptionPane.showOptionDialog(frame, Plain.text(message), title, JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
                 null, options, options[1]) == 0;
     }
@@ -261,11 +261,11 @@ final class PanelFiles {
 
     /** Exports the view the user means to a file chosen in the folder of the last export. */
     void export() {
-        Exportable e = focus.capability(Exportable.class);
+        final Exportable e = focus.capability(Exportable.class);
         if (e == null) {
             return;
         }
-        Path dir = windowLayout.exportDir();
+        final Path dir = windowLayout.exportDir();
         Capabilities.export(parts.frame(), e, dir, (file, error) -> {
             if (error == null) {
                 windowLayout.exportDir(file.toAbsolutePath().getParent());

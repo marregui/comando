@@ -1,5 +1,8 @@
 package dev.marregui.comando.core.intent;
 
+import java.util.List;
+import java.util.Map;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -20,9 +23,6 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
-import java.util.List;
-import java.util.Map;
-
 /**
  * Every change to the state is an intent, applied in order by the reducer on one thread. Every module sends its
  * intents to the one queue of the state loop.
@@ -38,7 +38,7 @@ public sealed interface Intent {
      */
     record AddPanel(PanelId panel, String title, boolean document) implements Intent {
         /** A panel of comando's own. */
-        public AddPanel(PanelId panel, String title) {
+        public AddPanel(final PanelId panel, final String title) {
             this(panel, title, false);
         }
     }
@@ -310,7 +310,7 @@ public sealed interface Intent {
         }
 
         /** A turn that ended without an answer to read: it failed before one, or nothing ran. */
-        public SessionTurnEnded(String name, int queued, double costUsd, long contextTokens, long contextWindow, boolean error, String message) {
+        public SessionTurnEnded(final String name, final int queued, final double costUsd, final long contextTokens, final long contextWindow, final boolean error, final String message) {
             this(name, queued, costUsd, contextTokens, contextWindow, error, message, "");
         }
     }
@@ -395,7 +395,7 @@ public sealed interface Intent {
             session = session == null ? "" : session;
         }
 
-        public EditPanel(PanelId panel, String text, EditMode mode) {
+        public EditPanel(final PanelId panel, final String text, final EditMode mode) {
             this(panel, text, mode, "");
         }
     }
@@ -529,7 +529,7 @@ public sealed interface Intent {
             subject = subject == null ? "" : subject;
         }
 
-        public Notify(Notice.Level level, String text, boolean desktop) {
+        public Notify(final Notice.Level level, final String text, final boolean desktop) {
             this(level, text, desktop, "");
         }
 
@@ -538,9 +538,9 @@ public sealed interface Intent {
          * {@code cause} when there is one; and as the notice {@code text}, a click on which opens the log at that
          * entry. The time is read before the entry is written, as {@link Notice#log} needs.
          */
-        public static Notify logged(System.Logger log, Notice.Level level, String text, Throwable cause) {
-            long at = System.currentTimeMillis();
-            System.Logger.Level as = level == Notice.Level.ERROR ? System.Logger.Level.ERROR : System.Logger.Level.WARNING;
+        public static Notify logged(final System.Logger log, final Notice.Level level, final String text, final Throwable cause) {
+            final long at = System.currentTimeMillis();
+            final System.Logger.Level as = level == Notice.Level.ERROR ? System.Logger.Level.ERROR : System.Logger.Level.WARNING;
             if (cause == null) {
                 log.log(as, text);
             } else {

@@ -1,19 +1,5 @@
 package dev.marregui.comando.ui.widgets.editor;
 
-import dev.marregui.comando.core.dispatch.Classifier;
-import dev.marregui.comando.core.dispatch.Target;
-import dev.marregui.comando.core.schema.Schema;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import org.fife.ui.autocomplete.AutoCompletion;
-import org.fife.ui.autocomplete.BasicCompletion;
-import org.fife.ui.autocomplete.Completion;
-import org.fife.ui.autocomplete.CompletionCellRenderer;
-import org.fife.ui.autocomplete.DefaultCompletionProvider;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-
-import javax.swing.JList;
-import javax.swing.ListCellRenderer;
-import javax.swing.text.JTextComponent;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +8,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
+import javax.swing.JList;
+import javax.swing.ListCellRenderer;
+import javax.swing.text.JTextComponent;
+
+import org.fife.ui.autocomplete.AutoCompletion;
+import org.fife.ui.autocomplete.BasicCompletion;
+import org.fife.ui.autocomplete.Completion;
+import org.fife.ui.autocomplete.CompletionCellRenderer;
+import org.fife.ui.autocomplete.DefaultCompletionProvider;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+
+import dev.marregui.comando.core.dispatch.Classifier;
+import dev.marregui.comando.core.dispatch.Target;
+import dev.marregui.comando.core.schema.Schema;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 
 /**
  * Completion for the command editor: SQL keywords, then the tables and columns of the bound connection's
@@ -46,7 +47,7 @@ final class SqlCompletion {
     private BooleanSupplier inSql = () -> true;
     private final DefaultCompletionProvider provider = new DefaultCompletionProvider() {
         @Override
-        public boolean isAutoActivateOkay(JTextComponent tc, int offset) {
+        public boolean isAutoActivateOkay(final JTextComponent tc, final int offset) {
             return super.isAutoActivateOkay(tc, offset) && inSql.getAsBoolean();
         }
     };
@@ -73,8 +74,8 @@ final class SqlCompletion {
      */
     private static final class EscapingRenderer extends CompletionCellRenderer {
         @Override
-        protected void prepareForOtherCompletion(JList<?> list, Completion c, int index, boolean selected, boolean hasFocus) {
-            StringBuilder sb = new StringBuilder("<html><nobr>").append(MarkdownHtml.escape(c.getInputText()));
+        protected void prepareForOtherCompletion(final JList<?> list, final Completion c, final int index, final boolean selected, final boolean hasFocus) {
+            final StringBuilder sb = new StringBuilder("<html><nobr>").append(MarkdownHtml.escape(c.getInputText()));
             if (c instanceof BasicCompletion b && b.getShortDescription() != null) {
                 appendShortDescription(sb, MarkdownHtml.escape(b.getShortDescription()));
             }
@@ -88,7 +89,7 @@ final class SqlCompletion {
     }
 
     /** Installs on {@code area}; {@code inSql} says whether the caret's block reads as SQL. */
-    void install(RSyntaxTextArea area, BooleanSupplier inSql) {
+    void install(final RSyntaxTextArea area, final BooleanSupplier inSql) {
         this.inSql = inSql;
         auto.install(area);
     }
@@ -113,8 +114,8 @@ final class SqlCompletion {
             "INSERT", Set.of("INTO", "ATOMIC", "BATCH"),
             "DELETE", Set.of("FROM"));
 
-    static boolean startsAStatement(String block) {
-        String text = block.strip();
+    static boolean startsAStatement(final String block) {
+        final String text = block.strip();
         int n = 0;
         while (n < text.length() && Character.isLetter(text.charAt(n))) {
             n++;
@@ -122,20 +123,20 @@ final class SqlCompletion {
         if (n < 3 || n < text.length() && !Character.isWhitespace(text.charAt(n)) && text.charAt(n) != ';' && text.charAt(n) != '(') {
             return false;
         }
-        String word = text.substring(0, n);
-        boolean oneCase = word.equals(word.toLowerCase(Locale.ROOT)) || word.equals(word.toUpperCase(Locale.ROOT));
+        final String word = text.substring(0, n);
+        final boolean oneCase = word.equals(word.toLowerCase(Locale.ROOT)) || word.equals(word.toUpperCase(Locale.ROOT));
         if (!oneCase) {
             return false;
         }
-        String upper = word.toUpperCase(Locale.ROOT);
+        final String upper = word.toUpperCase(Locale.ROOT);
         if (LEADING.stream().noneMatch(k -> k.startsWith(upper)) || !proseFree(text)) {
             return false;
         }
         // the keyword and one more word ("update tr", "create table") read as a statement being typed; a longer block
         // also needs a mark of SQL (an operator, a parenthesis, a digit, a clause keyword), which keeps lower-case
         // prose such as "delete stale rows in trades" out
-        String[] words = text.split("\\s+");
-        Boolean grammar = follows(upper, words);
+        final String[] words = text.split("\\s+");
+        final Boolean grammar = follows(upper, words);
         if (grammar != null) {
             return grammar;
         }
@@ -149,7 +150,7 @@ final class SqlCompletion {
      * the word being typed, the last one, needs only to start one of them. Null when the keyword has no such word or
      * the block is too short to tell.
      */
-    private static Boolean follows(String keyword, String[] words) {
+    private static Boolean follows(final String keyword, final String[] words) {
         if (keyword.equals("UPDATE")) {
             if (words.length < 3) {
                 return null;
@@ -157,12 +158,12 @@ final class SqlCompletion {
             // UPDATE table [alias] SET
             return isWord(words, 2, Set.of("SET")) || words.length > 3 && isWord(words, 3, Set.of("SET"));
         }
-        Set<String> next = NEXT.get(keyword);
+        final Set<String> next = NEXT.get(keyword);
         return next == null || words.length < 2 ? null : isWord(words, 1, next);
     }
 
-    private static boolean isWord(String[] words, int i, Set<String> allowed) {
-        String w = words[i].toUpperCase(Locale.ROOT);
+    private static boolean isWord(final String[] words, final int i, final Set<String> allowed) {
+        final String w = words[i].toUpperCase(Locale.ROOT);
         return i == words.length - 1 ? allowed.stream().anyMatch(a -> a.startsWith(w)) : allowed.contains(w);
     }
 
@@ -170,36 +171,36 @@ final class SqlCompletion {
      * No English function word outside quotes and comments: the classifier's prose rule, reached through its public
      * API (the block behind a SELECT and before a semicolon is SQL exactly when it holds no prose word).
      */
-    static boolean proseFree(String text) {
+    static boolean proseFree(final String text) {
         return Classifier.classify("SELECT " + text + "\n;").target() == Target.SQL;
     }
 
-    boolean autoActivates(JTextComponent tc) {
+    boolean autoActivates(final JTextComponent tc) {
         return provider.isAutoActivateOkay(tc, tc.getCaretPosition());
     }
 
-    void setSchema(Schema schema) {
+    void setSchema(final Schema schema) {
         if (schema == shown) {
             return;
         }
         shown = schema;
         provider.clear();
-        for (String k : KEYWORDS) {
+        for (final String k : KEYWORDS) {
             provider.addCompletion(new BasicCompletion(provider, k, "keyword"));
         }
-        for (Schema.Table t : schema.tables()) {
+        for (final Schema.Table t : schema.tables()) {
             provider.addCompletion(new BasicCompletion(provider, t.name(), "table, " + t.columns().size() + " columns"));
         }
-        for (Map.Entry<String, String> c : columns(schema).entrySet()) {
+        for (final Map.Entry<String, String> c : columns(schema).entrySet()) {
             provider.addCompletion(new BasicCompletion(provider, c.getKey(), c.getValue()));
         }
     }
 
     /** Each column name once, described by its type and its tables. */
-    static Map<String, String> columns(Schema schema) {
-        Map<String, String> out = new LinkedHashMap<>();
-        for (Schema.Table t : schema.tables()) {
-            for (Schema.Column c : t.columns()) {
+    static Map<String, String> columns(final Schema schema) {
+        final Map<String, String> out = new LinkedHashMap<>();
+        for (final Schema.Table t : schema.tables()) {
+            for (final Schema.Column c : t.columns()) {
                 out.merge(c.name(), c.type() + " in " + t.name(), (a, b) -> a.length() > 80 ? a : a + ", " + t.name());
             }
         }

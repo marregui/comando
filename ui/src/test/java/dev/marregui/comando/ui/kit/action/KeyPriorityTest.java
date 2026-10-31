@@ -1,17 +1,17 @@
 package dev.marregui.comando.ui.kit.action;
 
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rtextarea.RTextArea;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JComponent;
-import javax.swing.JPanel;
-import javax.swing.KeyStroke;
 import java.awt.Component;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextArea;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,8 +51,8 @@ class KeyPriorityTest {
     /// consumes the event.
     @Test
     void aCommandKeyRunsTheCommandBeforeTheFocusedEditor() {
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
-        KeyEvent press = pressed(editor, KeyEvent.VK_ENTER, CMD);
+        final KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
+        final KeyEvent press = pressed(editor, KeyEvent.VK_ENTER, CMD);
 
         assertThat(p.dispatchKeyEvent(press)).isTrue();
         assertThat(press.isConsumed()).isTrue();
@@ -63,7 +63,7 @@ class KeyPriorityTest {
     /// pass through.
     @Test
     void theCharacterTypedByAClaimedPressIsSwallowedOnce() {
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
+        final KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
         p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_ENTER, CMD));
 
         assertThat(p.dispatchKeyEvent(typed(editor, '\n'))).isTrue();
@@ -75,8 +75,8 @@ class KeyPriorityTest {
     /// all pass through without running anything.
     @Test
     void otherKeysAndOtherWindowsAreLeftAlone() {
-        JPanel elsewhere = new JPanel();
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
+        final JPanel elsewhere = new JPanel();
+        final KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
 
         assertThat(p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_J, InputEvent.ALT_DOWN_MASK))).isFalse();
         assertThat(p.dispatchKeyEvent(pressed(elsewhere, KeyEvent.VK_ENTER, CMD))).isFalse();
@@ -88,7 +88,7 @@ class KeyPriorityTest {
     @Test
     void aDisabledCommandLeavesTheKeyToTheComponent() {
         enabled.set(false);
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
+        final KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
 
         assertThat(p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_ENTER, CMD))).isFalse();
         assertThat(runs).hasValue(0);
@@ -99,11 +99,11 @@ class KeyPriorityTest {
     /// command.
     @Test
     void aKeyTheFocusedComponentKeepsIsLeftToIt() {
-        KeyStroke close = KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK);
-        AtomicInteger closes = new AtomicInteger();
+        final KeyStroke close = KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK);
+        final AtomicInteger closes = new AtomicInteger();
         registry.register(new Command("close", "Close", null, close, "Panels", closes::incrementAndGet, () -> true));
-        JPanel shell = new JPanel();
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor || c == shell, (c, k) -> c == shell && k.equals(close));
+        final JPanel shell = new JPanel();
+        final KeyPriority p = KeyPriority.detached(registry, c -> c == editor || c == shell, (c, k) -> c == shell && k.equals(close));
 
         assertThat(p.dispatchKeyEvent(pressed(shell, KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK))).as("the shell's ^W").isFalse();
         assertThat(closes).hasValue(0);
@@ -111,15 +111,15 @@ class KeyPriorityTest {
         assertThat(closes).hasValue(1);
     }
 
-    private static KeyEvent pressed(Component source, int code, int modifiers) {
+    private static KeyEvent pressed(final Component source, final int code, final int modifiers) {
         return new KeyEvent(source, KeyEvent.KEY_PRESSED, 0, modifiers, code, KeyEvent.CHAR_UNDEFINED);
     }
 
-    private static KeyEvent released(Component source, int code, int modifiers) {
+    private static KeyEvent released(final Component source, final int code, final int modifiers) {
         return new KeyEvent(source, KeyEvent.KEY_RELEASED, 0, modifiers, code, KeyEvent.CHAR_UNDEFINED);
     }
 
-    private static KeyEvent typed(Component source, char c) {
+    private static KeyEvent typed(final Component source, final char c) {
         return new KeyEvent(source, KeyEvent.KEY_TYPED, 0, 0, KeyEvent.VK_UNDEFINED, c);
     }
 }

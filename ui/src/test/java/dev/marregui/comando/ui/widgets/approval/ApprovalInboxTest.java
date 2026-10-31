@@ -1,28 +1,5 @@
 package dev.marregui.comando.ui.widgets.approval;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.Approval;
-import dev.marregui.comando.core.model.ApprovalDecision;
-import dev.marregui.comando.core.model.ApprovalKind;
-import dev.marregui.comando.core.model.PermissionRules;
-import dev.marregui.comando.ui.kit.action.ActionRegistry;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.widget.WidgetContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.AbstractButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JRadioButton;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
-import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.FontMetrics;
@@ -35,6 +12,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
+import javax.swing.AbstractButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JRadioButton;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+import javax.swing.text.JTextComponent;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.ui.kit.action.ActionRegistry;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widget.WidgetContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,23 +73,23 @@ class ApprovalInboxTest {
         }
 
         @Override
-        public void request(Component c) {
+        public void request(final Component c) {
             requested.add(c);
         }
     }
 
-    private static Approval bash(long id, String command) {
+    private static Approval bash(final long id, final String command) {
         return new Approval(id, "work", ApprovalKind.TOOL, "Bash", "{\"command\":\"" + command + "\"}", command, T0);
     }
 
-    private static Approval question(long id) {
+    private static Approval question(final long id) {
         return new Approval(id, "work", ApprovalKind.QUESTION, "AskUserQuestion", """
                 {"questions":[{"question":"Which approach?","multiSelect":false,"options":[
                   {"label":"Fast","description":"<html><img src='http://x/y.png'>skips the cache"},
                   {"label":"Safe","description":"keeps the cache"}]}]}""", "Which approach?", T0);
     }
 
-    private static Approval plan(long id) {
+    private static Approval plan(final long id) {
         return new Approval(id, "work", ApprovalKind.PLAN, "ExitPlanMode", "{\"plan\":\"1. do it\"}", "plan", T0);
     }
 
@@ -96,17 +97,17 @@ class ApprovalInboxTest {
     /// moves.
     @Test
     void theInboxComesForwardAtItsTopUnlessTheKeyboardIsInACard() throws Exception {
-        List<Approval> many = new ArrayList<>();
+        final List<Approval> many = new ArrayList<>();
         for (long id = 1; id <= 8; id++) {
             many.add(id % 2 == 0 ? question(id) : bash(id, "ls " + id));
         }
         SwingUtilities.invokeAndWait(() -> {
             inbox.render(many);
-            JComponent c = inbox.component();
+            final JComponent c = inbox.component();
             c.setSize(600, 200);
             layout(c);
         });
-        JScrollPane sp = (JScrollPane) find(inbox.component(), x -> x instanceof JScrollPane);
+        final JScrollPane sp = (JScrollPane) find(inbox.component(), x -> x instanceof JScrollPane);
         SwingUtilities.invokeAndWait(() -> sp.getViewport().setViewPosition(new Point(0, 400)));
         assertThat(inbox.scrollTop()).as("the cards are taller than the view").isEqualTo(400);
 
@@ -121,25 +122,25 @@ class ApprovalInboxTest {
         assertThat(inbox.scrollTop()).as("answering a card: nothing moves").isEqualTo(400);
     }
 
-    private static void layout(Component c) {
+    private static void layout(final Component c) {
         c.doLayout();
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 layout(child);
             }
         }
     }
 
     /** As a shown window would: every cached size dropped, then laid out from the top. */
-    private static void relayout(Component c) {
+    private static void relayout(final Component c) {
         invalidateAll(c);
         layout(c);
     }
 
-    private static void invalidateAll(Component c) {
+    private static void invalidateAll(final Component c) {
         c.invalidate();
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 invalidateAll(child);
             }
         }
@@ -149,10 +150,10 @@ class ApprovalInboxTest {
         return cardsOf(inbox);
     }
 
-    private static List<Component> cardsOf(ApprovalInbox inbox) {
-        Container list = (Container) ((JScrollPane) find(inbox.component(), c -> c instanceof JScrollPane)).getViewport().getView();
-        List<Component> out = new ArrayList<>();
-        for (Component c : list.getComponents()) {
+    private static List<Component> cardsOf(final ApprovalInbox inbox) {
+        final Container list = (Container) ((JScrollPane) find(inbox.component(), c -> c instanceof JScrollPane)).getViewport().getView();
+        final List<Component> out = new ArrayList<>();
+        for (final Component c : list.getComponents()) {
             if (c instanceof JPanel) {
                 out.add(c);
             }
@@ -160,13 +161,13 @@ class ApprovalInboxTest {
         return out;
     }
 
-    private static Component find(Component root, Predicate<Component> p) {
+    private static Component find(final Component root, final Predicate<Component> p) {
         if (p.test(root)) {
             return root;
         }
         if (root instanceof Container k) {
-            for (Component c : k.getComponents()) {
-                Component f = find(c, p);
+            for (final Component c : k.getComponents()) {
+                final Component f = find(c, p);
                 if (f != null) {
                     return f;
                 }
@@ -175,15 +176,15 @@ class ApprovalInboxTest {
         return null;
     }
 
-    private static Component named(Component root, String name) {
+    private static Component named(final Component root, final String name) {
         return find(root, c -> name.equals(c.getName()));
     }
 
-    private static boolean press(Component c, int key, int modifiers) {
+    private static boolean press(final Component c, final int key, final int modifiers) {
         return SwingUtilities.processKeyBindings(new KeyEvent(c, KeyEvent.KEY_PRESSED, 0, modifiers, key, KeyEvent.CHAR_UNDEFINED));
     }
 
-    private static void type(Component c, char ch) {
+    private static void type(final Component c, final char ch) {
         SwingUtilities.processKeyBindings(new KeyEvent(c, KeyEvent.KEY_TYPED, 0, 0, KeyEvent.VK_UNDEFINED, ch));
     }
 
@@ -198,9 +199,9 @@ class ApprovalInboxTest {
     @Test
     void enterInANoteWithTextDeniesWithItAndALetterThereTypes() {
         inbox.render(List.of(bash(1, "rm -rf build")));
-        JTextField note = (JTextField) named(cards().getFirst(), "note");
+        final JTextField note = (JTextField) named(cards().getFirst(), "note");
         assertThat(note.getClientProperty("JTextField.placeholderText")).isEqualTo("Note for Claude: ⏎ denies with it");
-        for (char c : "no, keep build/".toCharArray()) {
+        for (final char c : "no, keep build/".toCharArray()) {
             press(note, KeyEvent.getExtendedKeyCodeForChar(c), 0);
             type(note, c);
             note.setCaretPosition(note.getDocument().getLength()); // a field never shown keeps its caret at 0
@@ -216,7 +217,7 @@ class ApprovalInboxTest {
     @Test
     void enterInAnEmptyNoteGivesThePrimaryAnswer() {
         inbox.render(List.of(bash(1, "ls -la")));
-        JTextField note = (JTextField) named(cards().getFirst(), "note");
+        final JTextField note = (JTextField) named(cards().getFirst(), "note");
         note.setText("   ");
         press(note, KeyEvent.VK_ENTER, 0);
         assertThat(decision()).isEqualTo(ApprovalDecision.allowOnce());
@@ -226,7 +227,7 @@ class ApprovalInboxTest {
     @Test
     void theMenuKeyWithEnterInTheNoteDeniesWithTheNote() {
         inbox.render(List.of(bash(1, "ls -la")));
-        JTextField note = (JTextField) named(cards().getFirst(), "note");
+        final JTextField note = (JTextField) named(cards().getFirst(), "note");
         note.setText("not now");
         // the menu key of the platform the test runs on: ⌘ on macOS, Ctrl on the Linux build
         press(note, KeyEvent.VK_ENTER, Platform.menuShortcutMask());
@@ -237,7 +238,7 @@ class ApprovalInboxTest {
     @Test
     void escapeInTheNoteReturnsToTheCardWithoutAnswering() {
         inbox.render(List.of(bash(1, "ls -la")));
-        Component card = cards().getFirst();
+        final Component card = cards().getFirst();
         press(named(card, "note"), KeyEvent.VK_ESCAPE, 0);
         assertThat(sent).isEmpty();
         assertThat(focus.requested).containsExactly(card);
@@ -249,7 +250,7 @@ class ApprovalInboxTest {
         inbox.render(List.of(new Approval(1, "work", ApprovalKind.TOOL, "MultiEdit", """
                 {"file_path":"/src/A.java","edits":[{"old_string":"int a = 1;","new_string":"int a = 2;"},
                   {"old_string":"int b = 1;","new_string":"long b = 1;"}]}""", "edit A.java", T0)));
-        JTextComponent viewer = (JTextComponent) find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
+        final JTextComponent viewer = (JTextComponent) find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
         assertThat(viewer.getText()).contains("+++ /src/A.java").contains("-int a = 1;").contains("+int a = 2;")
                 .contains("-int b = 1;").contains("+long b = 1;").doesNotContain("old_string");
     }
@@ -258,7 +259,7 @@ class ApprovalInboxTest {
     @Test
     void theCardsLettersWorkFromItsViewer() {
         inbox.render(List.of(bash(1, "ls -la")));
-        Component viewer = find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
+        final Component viewer = find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
         press(viewer, KeyEvent.VK_ENTER, 0);
         assertThat(decision()).isEqualTo(ApprovalDecision.allowOnce());
     }
@@ -267,7 +268,7 @@ class ApprovalInboxTest {
     @Test
     void deniesFromTheViewerWithTheTypedNote() {
         inbox.render(List.of(bash(1, "ls -la")));
-        Component card = cards().getFirst();
+        final Component card = cards().getFirst();
         ((JTextField) named(card, "note")).setText("why");
         press(find(card, c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable()), KeyEvent.VK_D, 0);
         assertThat(decision()).isEqualTo(new ApprovalDecision.Deny("why"));
@@ -277,7 +278,7 @@ class ApprovalInboxTest {
     @Test
     void upAndDownMoveBetweenCards() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
-        List<Component> cards = cards();
+        final List<Component> cards = cards();
         press(cards.get(1), KeyEvent.VK_DOWN, 0);
         press(named(cards.get(1), "note"), KeyEvent.VK_UP, 0);
         press(cards.get(2), KeyEvent.VK_DOWN, 0);
@@ -288,8 +289,8 @@ class ApprovalInboxTest {
     @Test
     void aPressOnTheCardsTextFocusesTheCard() {
         inbox.render(List.of(bash(1, "ls")));
-        Component card = cards().getFirst();
-        Component age = named(card, "age");
+        final Component card = cards().getFirst();
+        final Component age = named(card, "age");
         age.dispatchEvent(new MouseEvent(age, MouseEvent.MOUSE_PRESSED, 0, 0, 1, 1, 1, false, MouseEvent.BUTTON1));
         assertThat(focus.requested).containsExactly(card);
     }
@@ -301,7 +302,7 @@ class ApprovalInboxTest {
     @Test
     void theFocusMovesToTheCardThatTookThePlaceOfTheAnsweredOne() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
-        List<Component> cards = cards();
+        final List<Component> cards = cards();
         focus.owner = named(cards.get(1), "note");
         press(focus.owner, KeyEvent.VK_ENTER, 0);
         inbox.render(List.of(bash(1, "ls"), bash(3, "id")));
@@ -324,9 +325,9 @@ class ApprovalInboxTest {
     @Test
     void aCardWithdrawnWhileTheUserTypesInItsNoteLeavesTheKeyboardWhereNoKeyAnswers() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "rm -rf build")));
-        Component note = named(cards().getFirst(), "note");
+        final Component note = named(cards().getFirst(), "note");
         focus.owner = note;
-        for (char c : "add a te".toCharArray()) {
+        for (final char c : "add a te".toCharArray()) {
             press(note, KeyEvent.getExtendedKeyCodeForChar(c), 0);
             type(note, c);
         }
@@ -334,10 +335,10 @@ class ApprovalInboxTest {
 
         inbox.render(List.of(bash(2, "rm -rf build")));
         assertThat(focus.requested).hasSize(1);
-        Component now = focus.requested.getLast();
+        final Component now = focus.requested.getLast();
         assertThat(now).isSameAs(named(inbox.component(), "inbox"));
         assertThat(now.isFocusable()).isTrue();
-        for (int key : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_ENTER, KeyEvent.VK_L, KeyEvent.VK_L, KeyEvent.VK_D}) {
+        for (final int key : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_ENTER, KeyEvent.VK_L, KeyEvent.VK_L, KeyEvent.VK_D}) {
             press(now, key, 0);
         }
         assertThat(sent).as("no answer from the keys typed after the withdrawal").isEmpty();
@@ -359,7 +360,7 @@ class ApprovalInboxTest {
     @Test
     void alwaysShowsItsRuleAndNeedsASecondPress() {
         inbox.render(List.of(bash(1, "git commit -m x")));
-        Component card = cards().getFirst();
+        final Component card = cards().getFirst();
         assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("Always: Bash(git commit:*)");
         assertThat(((AbstractButton) named(card, "always")).getToolTipText()).contains("Bash(git commit:*)", "settings.local.json");
 
@@ -376,7 +377,7 @@ class ApprovalInboxTest {
     @Test
     void aSecondPressAfterTheWindowAsksAgain() {
         inbox.render(List.of(bash(1, "ls -la")));
-        Component card = cards().getFirst();
+        final Component card = cards().getFirst();
         press(card, KeyEvent.VK_L, 0);
         now.addAndGet(ApprovalInbox.CONFIRM_MILLIS + 500);
         press(card, KeyEvent.VK_L, 0);
@@ -389,7 +390,7 @@ class ApprovalInboxTest {
     @Test
     void clickingAlwaysAsksInTheCardFirst() {
         inbox.render(List.of(bash(1, "ls -la")));
-        Component card = cards().getFirst();
+        final Component card = cards().getFirst();
         ((AbstractButton) named(card, "always")).doClick();
         assertThat(sent).isEmpty();
         assertThat(named(card, "confirm").getParent().isVisible()).isTrue();
@@ -401,9 +402,9 @@ class ApprovalInboxTest {
     /// the card grown to hold them.
     @Test
     void aLongRulesConfirmationKeepsItsButtonsInsideTheCard() throws Exception {
-        String command = "CLAUDE_CONFIG_DIR=/tmp/k python3 install/kit.py instance new Expert --slug expert --root /tmp/k "
+        final String command = "CLAUDE_CONFIG_DIR=/tmp/k python3 install/kit.py instance new Expert --slug expert --root /tmp/k "
                 + "--data-root /tmp/d --seed /tmp/s/expert-seed.lst --seed-from /tmp/b 2>&1";
-        ApprovalInbox wide = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
+        final ApprovalInbox wide = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
                 (tool, field) -> new PermissionRules.Rules(List.of(new PermissionRules.Rule("Bash", "cd:*"),
                         new PermissionRules.Rule("Bash", command), new PermissionRules.Rule("Bash", "head:*")), true));
         try {
@@ -412,22 +413,22 @@ class ApprovalInboxTest {
                 wide.component().setSize(700, 900);
                 layout(wide.component());
             });
-            Component card = cardsOf(wide).getFirst();
-            int before = card.getHeight();
+            final Component card = cardsOf(wide).getFirst();
+            final int before = card.getHeight();
             SwingUtilities.invokeAndWait(() -> {
                 ((AbstractButton) named(card, "always")).doClick();
                 relayout(wide.component());
                 relayout(wide.component());
             });
             assertThat(card.getHeight()).as("the card grows to hold the confirmation").isGreaterThan(before);
-            for (String name : List.of("confirm-always", "confirm-cancel")) {
-                Component b = named(card, name);
-                java.awt.Rectangle r = SwingUtilities.convertRectangle(b.getParent(), b.getBounds(), card);
+            for (final String name : List.of("confirm-always", "confirm-cancel")) {
+                final Component b = named(card, name);
+                final java.awt.Rectangle r = SwingUtilities.convertRectangle(b.getParent(), b.getBounds(), card);
                 assertThat(r.height).as(name + " has its height").isEqualTo(b.getPreferredSize().height);
                 assertThat(r.y + r.height).as(name + " lies inside the card").isLessThanOrEqualTo(card.getHeight());
                 assertThat(r.x + r.width).as(name + " lies inside the card's width").isLessThanOrEqualTo(card.getWidth());
             }
-            Component text = named(card, "confirm");
+            final Component text = named(card, "confirm");
             assertThat(text.getWidth()).as("the confirmation wraps within the card").isLessThanOrEqualTo(card.getWidth());
         } finally {
             wide.unmount();
@@ -438,7 +439,7 @@ class ApprovalInboxTest {
     @Test
     void escapeCancelsAPendingAlwaysBeforeItDenies() {
         inbox.render(List.of(bash(1, "ls -la")));
-        Component card = cards().getFirst();
+        final Component card = cards().getFirst();
         press(card, KeyEvent.VK_L, 0);
         press(card, KeyEvent.VK_ESCAPE, 0);
         assertThat(sent).isEmpty();
@@ -450,11 +451,11 @@ class ApprovalInboxTest {
     /// When the rule may not be saved, the card has no Always button, offers the session only, and L does nothing.
     @Test
     void aRuleThatMayNotBeSavedOffersTheSessionOnlyAndLDoesNothing() {
-        ApprovalInbox sessionOnly = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
+        final ApprovalInbox sessionOnly = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
                 (tool, field) -> new PermissionRules.Rules(List.of(new PermissionRules.Rule(tool, "")), false));
         try {
             sessionOnly.render(List.of(new Approval(1, "work", ApprovalKind.TOOL, "mcp__x__delete_all", "{}", "delete all", T0)));
-            Component card = cardsOf(sessionOnly).getFirst();
+            final Component card = cardsOf(sessionOnly).getFirst();
             assertThat(named(card, "always")).isNull();
             assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("For session: mcp__x__delete_all");
             assertThat(((AbstractButton) named(card, "session")).getToolTipText()).contains("mcp__x__delete_all", "this session");
@@ -472,12 +473,12 @@ class ApprovalInboxTest {
     /// A compound command's rules are shown joined, in the rule line and in the confirmation, and allowed together.
     @Test
     void severalRulesShowJoined() {
-        ApprovalInbox compound = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
+        final ApprovalInbox compound = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
                 (tool, field) -> new PermissionRules.Rules(List.of(new PermissionRules.Rule("Bash", "git status"),
                         new PermissionRules.Rule("Bash", "npm test:*")), true));
         try {
             compound.render(List.of(bash(1, "git status && npm test")));
-            Component card = cardsOf(compound).getFirst();
+            final Component card = cardsOf(compound).getFirst();
             assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("Always: Bash(git status), Bash(npm test:*)");
             press(card, KeyEvent.VK_L, 0);
             assertThat(((JTextComponent) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git status), Bash(npm test:*)");
@@ -495,13 +496,13 @@ class ApprovalInboxTest {
     @Test
     void aQuestionStartsWithNoChoiceAndShowsEachDescriptionAsText() {
         inbox.render(List.of(question(1)));
-        Component card = cards().getFirst();
-        List<JRadioButton> options = new ArrayList<>();
+        final Component card = cards().getFirst();
+        final List<JRadioButton> options = new ArrayList<>();
         collect(card, JRadioButton.class, options);
         assertThat(options).extracting(AbstractButton::getText).containsExactly("Fast", "Safe");
         assertThat(options).noneMatch(AbstractButton::isSelected);
 
-        List<JTextComponent> descriptions = new ArrayList<>();
+        final List<JTextComponent> descriptions = new ArrayList<>();
         collect(card, JTextComponent.class, descriptions);
         assertThat(descriptions.stream().filter(d -> "description".equals(d.getName())).map(JTextComponent::getText))
                 .containsExactly("<html><img src='http://x/y.png'>skips the cache", "keeps the cache");
@@ -520,8 +521,8 @@ class ApprovalInboxTest {
     @Test
     void theOtherAnswerTakesParagraphsAndOnlyTheAnswerButtonSendsIt() throws Exception {
         inbox.render(List.of(question(1)));
-        Component card = cards().getFirst();
-        JTextArea free = (JTextArea) named(card, "other");
+        final Component card = cards().getFirst();
+        final JTextArea free = (JTextArea) named(card, "other");
         // on the event thread, where the caret follows what is typed
         SwingUtilities.invokeAndWait(() -> {
             type(free, 'a');
@@ -541,19 +542,19 @@ class ApprovalInboxTest {
     @Test
     void theOtherAnswerIs120CharactersWideInTheEditorsFontWithUndoRedoAndSelectAll() throws Exception {
         inbox.render(List.of(question(1)));
-        JTextArea free = (JTextArea) named(cards().getFirst(), "other");
-        FontMetrics fm = free.getFontMetrics(free.getFont());
-        JScrollPane box = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, free);
+        final JTextArea free = (JTextArea) named(cards().getFirst(), "other");
+        final FontMetrics fm = free.getFontMetrics(free.getFont());
+        final JScrollPane box = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, free);
         assertThat(box.getViewport().getPreferredSize().width).as("120 characters").isEqualTo(120 * fm.charWidth('m'));
         assertThat(box.getViewport().getPreferredSize().height).as("five lines").isGreaterThanOrEqualTo(5 * fm.getHeight());
         assertThat(box.getMaximumSize()).as("never wider than that").isEqualTo(box.getPreferredSize());
         assertThat(free.getFont()).as("the editors' font").isEqualTo(Theme.mono());
 
-        int menu = Platform.menuShortcutMask();
-        for (KeyStroke k : List.of(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu), KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu | InputEvent.SHIFT_DOWN_MASK),
+        final int menu = Platform.menuShortcutMask();
+        for (final KeyStroke k : List.of(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu), KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu | InputEvent.SHIFT_DOWN_MASK),
                 KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), KeyStroke.getKeyStroke(KeyEvent.VK_V, menu),
                 KeyStroke.getKeyStroke(KeyEvent.VK_X, menu), KeyStroke.getKeyStroke(KeyEvent.VK_A, menu))) {
-            Object action = free.getInputMap().get(k);
+            final Object action = free.getInputMap().get(k);
             assertThat(action).as(k.toString()).isNotNull();
             assertThat(free.getActionMap().get(action)).as(k + " runs an action").isNotNull();
         }
@@ -570,7 +571,7 @@ class ApprovalInboxTest {
     @Test
     void aPlanCanBeApprovedWithEditsAccepted() {
         inbox.render(List.of(plan(1)));
-        AbstractButton edits = (AbstractButton) find(cards().getFirst(), c -> c instanceof AbstractButton b && b.getText().startsWith("Approve, auto-accept"));
+        final AbstractButton edits = (AbstractButton) find(cards().getFirst(), c -> c instanceof AbstractButton b && b.getText().startsWith("Approve, auto-accept"));
         edits.doClick();
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
     }
@@ -582,7 +583,7 @@ class ApprovalInboxTest {
     @Test
     void theAgeTicksWhileCardsWait() {
         inbox.render(List.of(bash(1, "ls")));
-        JLabel age = (JLabel) named(cards().getFirst(), "age");
+        final JLabel age = (JLabel) named(cards().getFirst(), "age");
         assertThat(age.getText()).isEqualTo("now");
         assertThat(inbox.ageWanted()).as("waiting cards want their ages ticked").isTrue();
         assertThat(inbox.ticking()).as("never shown: the timer waits for the window").isFalse();
@@ -595,12 +596,12 @@ class ApprovalInboxTest {
         assertThat(inbox.ageWanted()).isFalse();
     }
 
-    private static <T> void collect(Component root, Class<T> type, List<T> out) {
+    private static <T> void collect(final Component root, final Class<T> type, final List<T> out) {
         if (type.isInstance(root)) {
             out.add(type.cast(root));
         }
         if (root instanceof Container k) {
-            for (Component c : k.getComponents()) {
+            for (final Component c : k.getComponents()) {
                 collect(c, type, out);
             }
         }
@@ -609,7 +610,7 @@ class ApprovalInboxTest {
     /// A SQL write request's title names the connection it would change.
     @Test
     void aStatementCardNamesItsConnection() {
-        Approval sql = new Approval(9, "work", ApprovalKind.SQL_WRITE, "db_run_sql",
+        final Approval sql = new Approval(9, "work", ApprovalKind.SQL_WRITE, "db_run_sql",
                 "{\"connection\":\"local QuestDB\",\"sql\":\"insert into t values (1)\"}", "Run on local QuestDB: insert", T0);
         assertThat(ApprovalInbox.title(sql)).isEqualTo("wants to run a statement on local QuestDB");
     }

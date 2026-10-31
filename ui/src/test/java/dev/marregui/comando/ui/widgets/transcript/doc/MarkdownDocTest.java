@@ -1,8 +1,8 @@
 package dev.marregui.comando.ui.widgets.transcript.doc;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,10 +18,10 @@ class MarkdownDocTest {
     /// `\n`.
     @Test
     void headingsParagraphsAndInlineStyles() {
-        List<Para> doc = MarkdownDoc.parse("# Title\n\nSome **bold** and *it* and `code`.\nNext line.");
+        final List<Para> doc = MarkdownDoc.parse("# Title\n\nSome **bold** and *it* and `code`.\nNext line.");
         assertThat(doc).hasSize(2);
         assertThat(doc.get(0)).isEqualTo(new Para.Text(Para.Kind.HEADING, 1, 0, "", List.of(Span.plain("Title"))));
-        Para.Text p = (Para.Text) doc.get(1);
+        final Para.Text p = (Para.Text) doc.get(1);
         assertThat(p.spans()).containsExactly(
                 Span.plain("Some "), new Span("bold", Span.BOLD, ""), Span.plain(" and "), new Span("it", Span.ITALIC, ""),
                 Span.plain(" and "), new Span("code", Span.CODE, ""), Span.plain(".\nNext line."));
@@ -30,7 +30,7 @@ class MarkdownDocTest {
     /// Bullets carry `•` at depth 1 and `◦` at depth 2; an ordered list keeps its own numbers starting at 3.
     @Test
     void nestedListsCarryMarkersAndDepth() {
-        List<Para> doc = MarkdownDoc.parse("- one\n  - inner\n- two\n\n3. three\n4. four");
+        final List<Para> doc = MarkdownDoc.parse("- one\n  - inner\n- two\n\n3. three\n4. four");
         assertThat(doc).extracting(p -> ((Para.Text) p).marker()).containsExactly("•", "◦", "•", "3.", "4.");
         assertThat(doc).extracting(p -> ((Para.Text) p).depth()).containsExactly(1, 2, 1, 1, 1);
     }
@@ -39,9 +39,9 @@ class MarkdownDocTest {
     /// their kinds.
     @Test
     void codeBlocksTablesQuotesAndRules() {
-        List<Para> doc = MarkdownDoc.parse("```java\nint x;\n```\n\n| a | b |\n|---|---|\n| 1 | **2** |\n\n> quoted\n\n---\n");
+        final List<Para> doc = MarkdownDoc.parse("```java\nint x;\n```\n\n| a | b |\n|---|---|\n| 1 | **2** |\n\n> quoted\n\n---\n");
         assertThat(doc.get(0)).isEqualTo(new Para.Code("java", "int x;", 0));
-        Para.Table t = (Para.Table) doc.get(1);
+        final Para.Table t = (Para.Table) doc.get(1);
         assertThat(t.rows()).hasSize(2);
         assertThat(t.rows().get(1).get(1)).containsExactly(new Span("2", Span.BOLD, ""));
         assertThat(doc.get(2)).isEqualTo(new Para.Text(Para.Kind.QUOTE, 0, 0, "", List.of(Span.plain("quoted"))));
@@ -51,7 +51,7 @@ class MarkdownDocTest {
     /// A `file:line` in a code span becomes a `comando-file:` link; inside a Markdown link the link's own target wins.
     @Test
     void sourceReferencesBecomeLinksOutsideLinks() {
-        Para.Text p = (Para.Text) MarkdownDoc.parse("See `db/Lane.java:118` and [x.java:3](https://h).").getFirst();
+        final Para.Text p = (Para.Text) MarkdownDoc.parse("See `db/Lane.java:118` and [x.java:3](https://h).").getFirst();
         assertThat(p.spans()).contains(new Span("db/Lane.java:118", Span.CODE, "comando-file:db/Lane.java#118"));
         assertThat(p.spans()).contains(new Span("x.java:3", 0, "https://h"));
     }
@@ -60,7 +60,7 @@ class MarkdownDocTest {
     /// period.
     @Test
     void webAddressesAndNoteLinksBecomeLinksShownAsTheirLabels() {
-        Para.Text p = (Para.Text) MarkdownDoc.parse("Read [[project-current-lane|the lane]] and https://example.org/x.").getFirst();
+        final Para.Text p = (Para.Text) MarkdownDoc.parse("Read [[project-current-lane|the lane]] and https://example.org/x.").getFirst();
         assertThat(p.spans()).containsExactly(Span.plain("Read "), new Span("the lane", 0, "comando-note:project-current-lane"),
                 Span.plain(" and "), new Span("https://example.org/x", 0, "https://example.org/x"), Span.plain("."));
     }
@@ -68,7 +68,7 @@ class MarkdownDocTest {
     /// A URL or note link inside a code span stays unlinked code; only a `file:line` reference in code is linked.
     @Test
     void aCodeSpanIsAsWrittenButForItsSourceReferences() {
-        Para.Text p = (Para.Text) MarkdownDoc.parse("`https://example.org/x` and `[[notes]]` but `db/Lane.java:118`").getFirst();
+        final Para.Text p = (Para.Text) MarkdownDoc.parse("`https://example.org/x` and `[[notes]]` but `db/Lane.java:118`").getFirst();
         assertThat(p.spans()).containsExactly(new Span("https://example.org/x", Span.CODE, ""), Span.plain(" and "),
                 new Span("[[notes]]", Span.CODE, ""), Span.plain(" but "), new Span("db/Lane.java:118", Span.CODE, "comando-file:db/Lane.java#118"));
     }
@@ -76,8 +76,8 @@ class MarkdownDocTest {
     /// Re-parsing with more text in the last paragraph leaves the earlier paragraph equal and the last one different.
     @Test
     void unchangedParagraphsCompareEqualWhileTheLastOneStreams() {
-        List<Para> before = MarkdownDoc.parse("First paragraph.\n\nSecond, stre");
-        List<Para> after = MarkdownDoc.parse("First paragraph.\n\nSecond, streaming on");
+        final List<Para> before = MarkdownDoc.parse("First paragraph.\n\nSecond, stre");
+        final List<Para> after = MarkdownDoc.parse("First paragraph.\n\nSecond, streaming on");
         assertThat(after.getFirst()).isEqualTo(before.getFirst());
         assertThat(after.get(1)).isNotEqualTo(before.get(1));
     }
@@ -85,7 +85,7 @@ class MarkdownDocTest {
     /// Inline HTML tags remain literal text.
     @Test
     void rawHtmlStaysText() {
-        Para.Text p = (Para.Text) MarkdownDoc.parse("a <b>tag</b> here").getFirst();
+        final Para.Text p = (Para.Text) MarkdownDoc.parse("a <b>tag</b> here").getFirst();
         assertThat(p.plain()).isEqualTo("a <b>tag</b> here");
     }
 

@@ -131,7 +131,7 @@ final class TextBox {
     private int paragraphsShaped;
     private int linesLaidOut;
 
-    TextBox(Rich rich) {
+    TextBox(final Rich rich) {
         this.rich = rich;
         this.text = rich.text();
     }
@@ -251,11 +251,11 @@ final class TextBox {
      * True when source line {@code [at, end)} fits {@code w} unwrapped. A line that may fit by its length is
      * laid out once and the layout kept across widths, so short lines and code cost nothing on a resize.
      */
-    private boolean fitsOnOneLine(int at, int end, float w, Style s) {
+    private boolean fitsOnOneLine(final int at, final int end, final float w, final Style s) {
         if (!wrap) {
             return true;
         }
-        float estimate = (end - at) * rich.baseFont().getSize2D() * 0.62f;
+        final float estimate = (end - at) * rich.baseFont().getSize2D() * 0.62f;
         return estimate <= w && single(at, end, s).getAdvance() <= w;
     }
 
@@ -331,13 +331,13 @@ final class TextBox {
      * Paints at {@code (x, y)}; {@code [selStart, selEnd)} and the find ranges are highlighted first.
      * Lines outside {@code clipTop..clipBottom} (box coordinates) are skipped.
      */
-    void paint(Graphics2D g, float x, float y, float clipTop, float clipBottom, int selStart, int selEnd, List<int[]> finds,
-               int currentFind) {
-        for (Line line : lines) {
+    void paint(final Graphics2D g, final float x, final float y, final float clipTop, final float clipBottom, final int selStart, final int selEnd, final List<int[]> finds,
+               final int currentFind) {
+        for (final Line line : lines) {
             if (line.top() + line.height() < clipTop || line.top() > clipBottom) {
                 continue;
             }
-            Color bg = rich.hasLineBackgrounds() ? rich.lineBackground(line.sourceLine()) : null;
+            final Color bg = rich.hasLineBackgrounds() ? rich.lineBackground(line.sourceLine()) : null;
             if (bg != null) {
                 g.setColor(bg);
                 g.fill(new Rectangle2D.Float(x - 4, y + line.top(), width + 8, line.height()));
@@ -346,7 +346,7 @@ final class TextBox {
                 continue;
             }
             for (int i = 0; finds != null && i < finds.size(); i++) {
-                int[] f = finds.get(i);
+                final int[] f = finds.get(i);
                 highlight(g, line, x, y, f[0], f[1], i == currentFind ? style.findCurrent : style.findMatch);
             }
             if (selStart < selEnd) {
@@ -356,24 +356,24 @@ final class TextBox {
         }
     }
 
-    private static void highlight(Graphics2D g, Line line, float x, float y, int from, int to, Color color) {
-        int s = Math.max(from, line.start());
-        int e = Math.min(to, line.end());
+    private static void highlight(final Graphics2D g, final Line line, final float x, final float y, final int from, final int to, final Color color) {
+        final int s = Math.max(from, line.start());
+        final int e = Math.min(to, line.end());
         if (s >= e) {
             return;
         }
-        Shape shape = line.layout().getLogicalHighlightShape(s - line.start(), e - line.start());
+        final Shape shape = line.layout().getLogicalHighlightShape(s - line.start(), e - line.start());
         g.setColor(color);
         g.fill(AffineTransform.getTranslateInstance(x, y + line.baseline()).createTransformedShape(shape));
     }
 
     /** The character index at {@code (px, py)} in box coordinates, clamped to the text. */
-    int indexAt(float px, float py) {
+    int indexAt(final float px, final float py) {
         if (lines.isEmpty()) {
             return 0;
         }
         Line line = lines.getLast();
-        for (Line l : lines) {
+        for (final Line l : lines) {
             if (py < l.top() + l.height()) {
                 line = l;
                 break;
@@ -382,18 +382,18 @@ final class TextBox {
         if (line.layout() == null) {
             return line.start();
         }
-        TextHitInfo hit = line.layout().hitTestChar(px, py - line.baseline());
+        final TextHitInfo hit = line.layout().hitTestChar(px, py - line.baseline());
         return Math.min(line.end(), line.start() + hit.getInsertionIndex());
     }
 
     /** The link under {@code (px, py)}, null when none. */
-    String linkAt(float px, float py) {
-        for (Line l : lines) {
+    String linkAt(final float px, final float py) {
+        for (final Line l : lines) {
             if (py >= l.top() && py < l.top() + l.height() && l.layout() != null) {
                 if (px < 0 || px > l.layout().getAdvance()) {
                     return null;
                 }
-                TextHitInfo hit = l.layout().hitTestChar(px, py - l.baseline());
+                final TextHitInfo hit = l.layout().hitTestChar(px, py - l.baseline());
                 return rich.linkAt(l.start() + hit.getCharIndex());
             }
         }
@@ -401,8 +401,8 @@ final class TextBox {
     }
 
     /** The top of the line holding {@code index}, for scrolling to a match. */
-    float topOf(int index) {
-        for (Line l : lines) {
+    float topOf(final int index) {
+        for (final Line l : lines) {
             if (index < l.end() || l == lines.getLast()) {
                 return l.top();
             }
@@ -415,8 +415,8 @@ final class TextBox {
         float max = 0;
         int at = 0;
         while (at <= text.length()) {
-            int nl = text.indexOf('\n', at);
-            int end = nl < 0 ? text.length() : nl;
+            final int nl = text.indexOf('\n', at);
+            final int end = nl < 0 ? text.length() : nl;
             if (end > at) {
                 max = Math.max(max, new TextLayout(rich.attributed(at, end).getIterator(), Style.FRC).getAdvance());
             }

@@ -1,12 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.model.KitRoot;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -15,6 +8,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.KitRoot;
 
 /**
  * A kit's {@code comando-kit.json} read into a {@link KitRoot.Manifest}: schema version 1, a name, the brain's folder
@@ -36,11 +37,11 @@ public final class KitJson {
     }
 
     /** Reads {@code file}; throws when it does not read or breaks the schema. */
-    public static KitRoot.Manifest read(Path file) throws IOException {
+    public static KitRoot.Manifest read(final Path file) throws IOException {
         JsonNode root;
         try {
             root = JSON.readTree(file.toFile());
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             throw new IOException(e.getMessage(), e);
         }
         if (root == null || !root.isObject()) {
@@ -49,47 +50,47 @@ public final class KitJson {
         if (root.path("kit").asInt(-1) != VERSION) {
             throw new IOException("\"kit\" is " + root.path("kit") + ", comando reads version " + VERSION);
         }
-        String name = text(root, "name");
+        final String name = text(root, "name");
         if (name.isEmpty()) {
             throw new IOException("\"name\" is missing");
         }
-        String brain = inside(text(root, "brain"), "brain", false);
-        List<FolderRoot> folders = new ArrayList<>();
-        for (JsonNode f : root.path("folders")) {
-            String folder = text(f, "name");
+        final String brain = inside(text(root, "brain"), "brain", false);
+        final List<FolderRoot> folders = new ArrayList<>();
+        for (final JsonNode f : root.path("folders")) {
+            final String folder = text(f, "name");
             if (folder.isEmpty()) {
                 throw new IOException("a folder has no name");
             }
             folders.add(new FolderRoot(folder, inside(text(f, "path"), "folder " + folder, true), text(f, "index"), strings(f.path("excludes")),
                     text(f, "icon"), f.path("deletable").asBoolean(false), text(f, "listedIn"), text(f, "group")));
         }
-        List<KitRoot.Requirement> requirements = list(root.path("requirements"), r -> {
-            Map<String, List<String>> install = new LinkedHashMap<>();
+        final List<KitRoot.Requirement> requirements = list(root.path("requirements"), r -> {
+            final Map<String, List<String>> install = new LinkedHashMap<>();
             r.path("install").properties().forEach(e -> install.put(e.getKey(), strings(e.getValue())));
             return new KitRoot.Requirement(text(r, "tool"), strings(r.path("check")), install);
         });
-        List<KitRoot.Credential> credentials = list(root.path("credentials"), c -> new KitRoot.Credential(text(c, "key"), text(c, "for"), text(c, "where")));
-        List<KitRoot.Job> jobs = list(root.path("jobs"), j -> {
-            Map<String, String> schedule = new LinkedHashMap<>();
+        final List<KitRoot.Credential> credentials = list(root.path("credentials"), c -> new KitRoot.Credential(text(c, "key"), text(c, "for"), text(c, "where")));
+        final List<KitRoot.Job> jobs = list(root.path("jobs"), j -> {
+            final Map<String, String> schedule = new LinkedHashMap<>();
             j.path("schedule").properties().forEach(e -> schedule.put(e.getKey(), e.getValue().asString("")));
             return new KitRoot.Job(text(j, "name"), schedule, strings(j.path("command")));
         });
         return new KitRoot.Manifest(name, brain, folders, requirements, credentials, jobs);
     }
 
-    private static String text(JsonNode node, String field) {
-        JsonNode v = node.path(field);
+    private static String text(final JsonNode node, final String field) {
+        final JsonNode v = node.path(field);
         return v.isValueNode() ? v.asString("").strip() : "";
     }
 
-    private static List<String> strings(JsonNode array) {
-        List<String> out = new ArrayList<>();
+    private static List<String> strings(final JsonNode array) {
+        final List<String> out = new ArrayList<>();
         array.forEach(v -> out.add(v.asString("")));
         return out;
     }
 
-    private static <T> List<T> list(JsonNode array, Function<JsonNode, T> each) {
-        List<T> out = new ArrayList<>();
+    private static <T> List<T> list(final JsonNode array, final Function<JsonNode, T> each) {
+        final List<T> out = new ArrayList<>();
         array.forEach(v -> out.add(each.apply(v)));
         return out;
     }
@@ -99,11 +100,11 @@ public final class KitJson {
      * itself too ({@code "."}): a folder of the Files tab may be the kit's whole folder, its excludes leaving out the
      * rest.
      */
-    private static String inside(String path, String what, boolean root) throws IOException {
+    private static String inside(final String path, final String what, final boolean root) throws IOException {
         Path p;
         try {
             p = Path.of(path).normalize();
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             throw new IOException(what + ": " + e.getMessage(), e);
         }
         if (path.isEmpty() || p.isAbsolute() || path.startsWith("~") || p.startsWith("..") || p.toString().isEmpty() && !root) {

@@ -1,12 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
-import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.RandomAccessFile;
@@ -20,6 +14,12 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
+
+import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,16 +43,16 @@ class LocalImagesTest {
         made.forEach(LocalImages::close);
     }
 
-    private LocalImages images(Path cache) {
-        LocalImages i = new LocalImages(cache);
+    private LocalImages images(final Path cache) {
+        final LocalImages i = new LocalImages(cache);
         made.add(i);
         return i;
     }
 
     /** The picture once read: asks, waits for the reading thread, asks again. */
-    private static LocalImages.Picture read(LocalImages images, Path file) throws Exception {
-        CountDownLatch done = new CountDownLatch(1);
-        LocalImages.Picture first = images.picture(file, done::countDown);
+    private static LocalImages.Picture read(final LocalImages images, final Path file) throws Exception {
+        final CountDownLatch done = new CountDownLatch(1);
+        final LocalImages.Picture first = images.picture(file, done::countDown);
         if (!(first instanceof LocalImages.Picture.Pending)) {
             return first;
         }
@@ -60,15 +60,15 @@ class LocalImagesTest {
         return images.picture(file, () -> { });
     }
 
-    private Path png(String name, int w, int h) throws Exception {
-        Path file = dir.resolve(name);
+    private Path png(final String name, final int w, final int h) throws Exception {
+        final Path file = dir.resolve(name);
         Files.createDirectories(file.getParent());
         ImageIO.write(new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB), "png", file.toFile());
         return file;
     }
 
-    private Path svg(String name, String body) throws Exception {
-        Path file = dir.resolve(name);
+    private Path svg(final String name, final String body) throws Exception {
+        final Path file = dir.resolve(name);
         Files.createDirectories(file.getParent());
         Files.writeString(file, body);
         return file;
@@ -85,7 +85,7 @@ class LocalImagesTest {
     /// a trailing slash, the root, an empty link, and a relative link with no document folder.
     @Test
     void anImageLinkNamesAFileBesideTheDocumentInAnyFolderOrByItsFullPath() {
-        Path doc = Path.of("/kb/notes");
+        final Path doc = Path.of("/kb/notes");
         assertThat(LocalImages.resolve(doc, "chart.png")).contains(Path.of("/kb/notes/chart.png"));
         assertThat(LocalImages.resolve(doc, "./images/chart.PNG")).contains(Path.of("/kb/notes/images/chart.PNG"));
         assertThat(LocalImages.resolve(doc, "img/sub/flow.svg")).contains(Path.of("/kb/notes/img/sub/flow.svg"));
@@ -114,13 +114,13 @@ class LocalImagesTest {
     /// A PNG, a JPEG and a GIF are ready as the original file with their pixel size.
     @Test
     void aPngJpegOrGifIsShownAsItIsAtItsOwnSize() throws Exception {
-        LocalImages images = images(null);
-        Path png = png("images/chart.png", 640, 480);
+        final LocalImages images = images(null);
+        final Path png = png("images/chart.png", 640, 480);
         assertThat(read(images, png)).isEqualTo(new LocalImages.Picture.Ready(png, 640, 480));
-        Path jpg = dir.resolve("photo.jpg");
+        final Path jpg = dir.resolve("photo.jpg");
         ImageIO.write(new BufferedImage(30, 20, BufferedImage.TYPE_INT_RGB), "jpg", jpg.toFile());
         assertThat(read(images, jpg)).isEqualTo(new LocalImages.Picture.Ready(jpg, 30, 20));
-        Path gif = dir.resolve("anim.gif");
+        final Path gif = dir.resolve("anim.gif");
         ImageIO.write(new BufferedImage(8, 9, BufferedImage.TYPE_BYTE_INDEXED), "gif", gif.toFile());
         assertThat(read(images, gif)).isEqualTo(new LocalImages.Picture.Ready(gif, 8, 9));
     }
@@ -130,11 +130,11 @@ class LocalImagesTest {
     /// `data:`.
     @Test
     void anSvgLoadsOnlyFilesInItsFolderAndEmbeddedData() {
-        Path svg = Path.of("/kb/notes/img/flow.svg");
-        URI base = svg.toUri();
+        final Path svg = Path.of("/kb/notes/img/flow.svg");
+        final URI base = svg.toUri();
         assertThat(ResourcePolicy.ALLOW_RELATIVE.resolveResourceURI(base, "//host/x.png")).as("the library's policy alone")
                 .hasToString("file://host/x.png");
-        ResourcePolicy beside = LocalImages.beside(svg);
+        final ResourcePolicy beside = LocalImages.beside(svg);
         assertThat(beside.resolveResourceURI(base, "//host/x.png")).as("another machine").isNull();
         assertThat(beside.resolveResourceURI(base, "file://host/x.png")).isNull();
         assertThat(beside.resolveResourceURI(base, "https://example.org/x.png")).isNull();
@@ -149,15 +149,15 @@ class LocalImagesTest {
     /// in its new colour after the file changes on disk, leaving no temporary files.
     @Test
     void anSvgIsDrawnOnceIntoTheCacheTwiceAsLargeAndAgainWhenItChanges() throws Exception {
-        Path cache = dir.resolve("cache");
-        LocalImages images = images(cache);
-        Path flow = svg("img/flow.svg", SQUARE);
-        LocalImages.Picture p = read(images, flow);
+        final Path cache = dir.resolve("cache");
+        final LocalImages images = images(cache);
+        final Path flow = svg("img/flow.svg", SQUARE);
+        final LocalImages.Picture p = read(images, flow);
         assertThat(p).isInstanceOfSatisfying(LocalImages.Picture.Ready.class, r -> {
             assertThat(r.width()).isEqualTo(120);
             assertThat(r.height()).isEqualTo(60);
             assertThat(r.file().getParent()).isEqualTo(cache);
-            BufferedImage drawn = readImage(r.file());
+            final BufferedImage drawn = readImage(r.file());
             assertThat(drawn.getWidth()).as("drawn at twice its size").isEqualTo(240);
             assertThat(drawn.getHeight()).isEqualTo(120);
             assertThat(new Color(drawn.getRGB(120, 60), true)).as("what the SVG draws").isEqualTo(Color.RED);
@@ -167,7 +167,7 @@ class LocalImagesTest {
 
         Files.writeString(flow, SQUARE.replace("#ff0000", "#0000ff"));
         Files.setLastModifiedTime(flow, FileTime.fromMillis(System.currentTimeMillis() + 5_000));
-        LocalImages.Picture again = read(images, flow);
+        final LocalImages.Picture again = read(images, flow);
         assertThat(again).as("changed on disk: drawn again").isNotEqualTo(p)
                 .isInstanceOfSatisfying(LocalImages.Picture.Ready.class,
                         r -> assertThat(new Color(readImage(r.file()).getRGB(120, 60), true)).isEqualTo(Color.BLUE));
@@ -180,13 +180,13 @@ class LocalImagesTest {
     /// with its 2:1 shape kept.
     @Test
     void anSvgWithoutASizeTakesItsViewBoxAndAHugeOneIsDrawnSmaller() throws Exception {
-        LocalImages images = images(dir.resolve("cache"));
-        Path viewBox = svg("viewbox.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 100\"><rect width=\"400\" height=\"100\"/></svg>");
+        final LocalImages images = images(dir.resolve("cache"));
+        final Path viewBox = svg("viewbox.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 100\"><rect width=\"400\" height=\"100\"/></svg>");
         assertThat(read(images, viewBox)).isInstanceOfSatisfying(LocalImages.Picture.Ready.class, r -> {
             assertThat(r.width()).isEqualTo(400);
             assertThat(r.height()).isEqualTo(100);
         });
-        Path huge = svg("huge.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40000\" height=\"20000\"><rect width=\"40000\" height=\"20000\"/></svg>");
+        final Path huge = svg("huge.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40000\" height=\"20000\"><rect width=\"40000\" height=\"20000\"/></svg>");
         assertThat(read(images, huge)).isInstanceOfSatisfying(LocalImages.Picture.Ready.class, r -> {
             assertThat(r.width()).isEqualTo(LocalImages.MAX_SIDE);
             assertThat(r.height()).as("the shape kept").isEqualTo(LocalImages.MAX_SIDE / 2);
@@ -197,15 +197,15 @@ class LocalImagesTest {
     /// are each unavailable with a reason naming the file or the limit.
     @Test
     void whatCannotBeShownSaysWhy() throws Exception {
-        LocalImages images = images(dir.resolve("cache"));
+        final LocalImages images = images(dir.resolve("cache"));
         assertThat(images.picture(dir.resolve("missing.png"), () -> { }))
                 .isEqualTo(new LocalImages.Picture.Unavailable("no such file: missing.png"));
-        Path notPng = svg("fake.png", "this is text, not a picture");
+        final Path notPng = svg("fake.png", "this is text, not a picture");
         assertThat(read(images, notPng)).isInstanceOfSatisfying(LocalImages.Picture.Unavailable.class,
                 u -> assertThat(u.why()).isEqualTo("fake.png is not a picture comando can read"));
-        Path broken = svg("broken.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect");
+        final Path broken = svg("broken.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect");
         assertThat(read(images, broken)).isInstanceOf(LocalImages.Picture.Unavailable.class);
-        Path big = dir.resolve("big.png");
+        final Path big = dir.resolve("big.png");
         try (RandomAccessFile f = new RandomAccessFile(big.toFile(), "rw")) {
             f.setLength(LocalImages.MAX_BYTES + 1);
         }
@@ -218,8 +218,8 @@ class LocalImagesTest {
     /// server receives no request.
     @Test
     void anSvgLoadsWhatIsBesideItAndNothingFromTheNetwork() throws Exception {
-        List<String> requests = new CopyOnWriteArrayList<>();
-        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        final List<String> requests = new CopyOnWriteArrayList<>();
+        final HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/", exchange -> {
             requests.add(exchange.getRequestURI().getPath());
             exchange.sendResponseHeaders(404, -1);
@@ -227,9 +227,9 @@ class LocalImagesTest {
         });
         server.start();
         try {
-            String web = "http://127.0.0.1:" + server.getAddress().getPort();
+            final String web = "http://127.0.0.1:" + server.getAddress().getPort();
             png("beside.png", 10, 10);
-            Path page = svg("page.svg", """
+            final Path page = svg("page.svg", """
                     <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100">
                       <style>@import url(%1$s/imported.css);</style>
                       <image href="%1$s/remote.png" width="50" height="50"/>
@@ -247,15 +247,15 @@ class LocalImagesTest {
         }
     }
 
-    private static BufferedImage readImage(Path file) {
+    private static BufferedImage readImage(final Path file) {
         try {
             return ImageIO.read(file.toFile());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private static List<Path> pngsIn(Path dir) throws Exception {
+    private static List<Path> pngsIn(final Path dir) throws Exception {
         try (var files = Files.list(dir)) {
             return files.filter(f -> f.getFileName().toString().endsWith(".png")).toList();
         }

@@ -26,7 +26,7 @@ class ClipTest {
     /// [Clip] excludes the whole emoji when either end boundary would cut its UTF-16 surrogate pair.
     @Test
     void aClipNeverSplitsASurrogatePair() {
-        String face = "😀";
+        final String face = "😀";
         assertThat(Clip.keepStart("abc" + face + "def", 5)).isEqualTo("abc…");
         assertThat(Clip.keepEnd("abc" + face + "def", 5)).isEqualTo("…def");
         assertThat(Clip.keepEnd("abcd" + face + "ef", 4)).isEqualTo("…ef");

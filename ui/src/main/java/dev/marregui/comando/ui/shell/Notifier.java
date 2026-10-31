@@ -1,9 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.view.Clip;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-
 import java.awt.AWTException;
 import java.awt.SystemTray;
 import java.awt.Taskbar;
@@ -14,6 +10,10 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 /**
  * Desktop notifications for work that finished while the user looked elsewhere, shown only while the window is not
@@ -30,11 +30,11 @@ final class Notifier {
 
     private final Window window;
 
-    Notifier(Window window) {
+    Notifier(final Window window) {
         this.window = window;
     }
 
-    void notify(String title, String text) {
+    void notify(final String title, final String text) {
         if (window.isActive()) {
             return;
         }
@@ -42,7 +42,7 @@ final class Notifier {
             tray(title, text);
             return;
         }
-        String script = "display notification \"" + escape(text) + "\" with title \"comando\" subtitle \"" + escape(title) + "\"";
+        final String script = "display notification \"" + escape(text) + "\" with title \"comando\" subtitle \"" + escape(title) + "\"";
         UiErrands.start("notify", () -> run(List.of("osascript", "-e", script), TIMEOUT));
     }
 
@@ -50,9 +50,9 @@ final class Notifier {
      * Runs {@code command} with no input and its output discarded, for at most {@code bound}, then stops it; true when
      * it ended within the bound.
      */
-    static boolean run(List<String> command, Duration bound) {
+    static boolean run(final List<String> command, final Duration bound) {
         try {
-            Process p = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            final Process p = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
             p.getOutputStream().close();
             if (!p.waitFor(bound.toMillis(), TimeUnit.MILLISECONDS)) {
                 p.destroyForcibly();
@@ -60,10 +60,10 @@ final class Notifier {
                 return false;
             }
             return true;
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "notification failed [cause=" + e.getMessage() + ']');
             return false;
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;
         }
@@ -76,11 +76,11 @@ final class Notifier {
         if (window.isActive() || !Taskbar.isTaskbarSupported()) {
             return;
         }
-        Taskbar taskbar = Taskbar.getTaskbar();
+        final Taskbar taskbar = Taskbar.getTaskbar();
         if (taskbar.isSupported(Taskbar.Feature.USER_ATTENTION)) {
             try {
                 taskbar.requestUserAttention(true, true);
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.DEBUG, "attention request failed [cause=" + e.getMessage() + ']');
             }
         }
@@ -89,13 +89,13 @@ final class Notifier {
     private TrayIcon trayIcon;
 
     /** Elsewhere: a tray balloon, where the desktop has a tray; nothing otherwise. */
-    private void tray(String title, String text) {
+    private void tray(final String title, final String text) {
         if (!SystemTray.isSupported()) {
             return;
         }
         try {
             if (trayIcon == null) {
-                BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                final BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
                 trayIcon = new TrayIcon(image, "comando");
                 trayIcon.setImageAutoSize(true);
                 SystemTray.getSystemTray().add(trayIcon);
@@ -107,7 +107,7 @@ final class Notifier {
     }
 
     /** {@code s} cut to its first 200 characters and escaped for an AppleScript string, on one line. */
-    static String escape(String s) {
+    static String escape(final String s) {
         return Clip.keepStart(s, MAX_CHARS).replace("\\", "\\\\").replace("\"", "\\\"").replace('\n', ' ');
     }
 }

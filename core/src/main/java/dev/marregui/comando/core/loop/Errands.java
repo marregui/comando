@@ -23,16 +23,16 @@ public final class Errands implements AutoCloseable {
     private final Object lock = new Object();
     private boolean closed;
 
-    public Errands(String owner) {
+    public Errands(final String owner) {
         this.owner = owner;
     }
 
     /** Runs {@code task} on a virtual thread named {@code name}; returns it, or null when the owner has closed. */
-    public Thread start(String name, Runnable task) {
-        Thread t = Threads.virtual(name, () -> {
+    public Thread start(final String name, final Runnable task) {
+        final Thread t = Threads.virtual(name, () -> {
             try {
                 task.run();
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "an errand failed [owner=" + owner + ", errand=" + Thread.currentThread().getName() + ']', e);
             } finally {
                 running.remove(Thread.currentThread());
@@ -61,18 +61,18 @@ public final class Errands implements AutoCloseable {
             closed = true;
             stopping = List.copyOf(running);
         }
-        long deadline = System.nanoTime() + CLOSE_WAIT.toNanos();
-        for (Thread t : stopping) {
+        final long deadline = System.nanoTime() + CLOSE_WAIT.toNanos();
+        for (final Thread t : stopping) {
             t.interrupt();
         }
-        for (Thread t : stopping) {
-            long left = deadline - System.nanoTime();
+        for (final Thread t : stopping) {
+            final long left = deadline - System.nanoTime();
             if (left <= 0) {
                 break;
             }
             try {
                 t.join(Duration.ofNanos(left));
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }

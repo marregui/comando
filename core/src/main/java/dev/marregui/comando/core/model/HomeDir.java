@@ -25,7 +25,7 @@ public final class HomeDir {
     }
 
     /** {@code ~} as the home folder and {@code ~/x} under it; any other text unchanged. */
-    public static String expand(String path) {
+    public static String expand(final String path) {
         if (path.equals("~")) {
             return home();
         }
@@ -33,8 +33,8 @@ public final class HomeDir {
     }
 
     /** {@code ~/x} for a path under the home folder, {@code ~} for the home folder itself; any other path unchanged. */
-    public static String shorten(String path) {
-        String home = home();
+    public static String shorten(final String path) {
+        final String home = home();
         if (path.equals(home)) {
             return "~";
         }

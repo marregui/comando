@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import org.junit.jupiter.api.Test;
-
 import java.awt.event.InputEvent;
 import java.io.File;
 import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,7 +36,7 @@ class PlatformTest {
     /// null path.
     @Test
     void aProgramOnThePathIsLookedForInThePathsOrderSkippingEmptyEntries() {
-        String path = String.join(File.pathSeparator, "/opt/a", "", " ", "/usr/bin");
+        final String path = String.join(File.pathSeparator, "/opt/a", "", " ", "/usr/bin");
         assertThat(Platform.onPath("mmdc", path)).containsExactly(Path.of("/opt/a/mmdc"), Path.of("/usr/bin/mmdc"));
         assertThat(Platform.onPath("mmdc", null)).isEmpty();
     }

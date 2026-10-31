@@ -1,10 +1,10 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.HomeDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+
+import dev.marregui.comando.core.model.HomeDir;
 
 /**
  * How comando runs Claude Code.
@@ -18,14 +18,14 @@ import java.util.List;
 public record ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions, RootLaunch launch) {
 
     /** Every process on the environment comando was started with ({@link RootLaunch#INHERIT}); for tests. */
-    public ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions) {
+    public ClaudeSettings(final String executable, final Path runDir, final Path projectsDir, final String uiInstructions) {
         this(executable, runDir, projectsDir, uiInstructions, RootLaunch.INHERIT);
     }
 
     /** Finds {@code claude}: a GUI app launched from Finder has a short PATH, so known install paths come first. */
     public static String findExecutable() {
-        String home = System.getProperty("user.home");
-        for (String candidate : List.of(home + "/.local/bin/claude", home + "/.claude/local/claude", "/opt/homebrew/bin/claude",
+        final String home = System.getProperty("user.home");
+        for (final String candidate : List.of(home + "/.local/bin/claude", home + "/.claude/local/claude", "/opt/homebrew/bin/claude",
                 "/usr/local/bin/claude")) {
             if (Files.isExecutable(Path.of(candidate))) {
                 return candidate;

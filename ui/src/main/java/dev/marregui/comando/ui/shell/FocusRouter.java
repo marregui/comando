@@ -1,5 +1,11 @@
 package dev.marregui.comando.ui.shell;
 
+import java.awt.Component;
+import java.awt.KeyboardFocusManager;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.SwingUtilities;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.AppState;
@@ -9,12 +15,6 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
-
-import javax.swing.SwingUtilities;
-import java.awt.Component;
-import java.awt.KeyboardFocusManager;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Where the keyboard is and where it goes: the view a command means, and the keyboard given back to where it was when
@@ -44,7 +44,7 @@ final class FocusRouter {
     /** Where the keyboard goes back to after this render; null when nothing closed. */
     private FocusOrigins.Origin back;
 
-    FocusRouter(ComandoUi.Dependencies deps, ShellParts parts, LayoutKeeper layout) {
+    FocusRouter(final ComandoUi.Dependencies deps, final ShellParts parts, final LayoutKeeper layout) {
         this.deps = deps;
         this.parts = parts;
         this.layout = layout;
@@ -59,9 +59,9 @@ final class FocusRouter {
      * Before the panes change at a render: what just opened remembers where the keyboard was, what just closed gives it
      * back after the render ({@link #afterRender}).
      */
-    void beforeRender(AppState s) {
-        Component keyboard = focusOwnerInFrame();
-        Set<String> openNow = openKeys(s);
+    void beforeRender(final AppState s) {
+        final Component keyboard = focusOwnerInFrame();
+        final Set<String> openNow = openKeys(s);
         back = focusOrigins.onRender(openNow, originAt(keyboard, renderedFront), placeOf(s, keyboard),
                 o -> o.owner().isDisplayable() && (o.ownerKey() == null ? !inLower(o.owner()) || o.front() == null || openNow.contains(o.front())
                         : openNow.contains(o.ownerKey())));
@@ -69,13 +69,13 @@ final class FocusRouter {
     }
 
     /** After the panes changed at a render: the keyboard goes where the render left it to go. */
-    void afterRender(AppState s) {
-        LowerPanel lower = parts.lower();
+    void afterRender(final AppState s) {
+        final LowerPanel lower = parts.lower();
         // the last card answered: the Session tab came forward, and the keyboard the inbox held goes with it
-        Component owner = focusOwnerInFrame();
+        final Component owner = focusOwnerInFrame();
         if (renderedLowerTab.equals(LowerTab.APPROVALS) && s.lowerTab().equals(LowerTab.SESSION)
                 && owner != null && SwingUtilities.isDescendingFrom(owner, lower.inbox().component())) {
-            Component canvas = lower.transcript().canvas();
+            final Component canvas = lower.transcript().canvas();
             focusAfterRender = new FocusAfterRender(canvas, canvas::requestFocusInWindow);
         }
         renderedLowerTab = s.lowerTab();
@@ -85,7 +85,7 @@ final class FocusRouter {
         }
         if (focusBack != null) {
             if (focusBack.isShowing()) {
-                Component c = focusBack;
+                final Component c = focusBack;
                 focusBack = null;
                 Edt.later(c::requestFocusInWindow);
             } else if (--focusBackRenders <= 0) {
@@ -93,14 +93,14 @@ final class FocusRouter {
             }
         }
         if (focusAfterRender != null && focusAfterRender.shown().isShowing()) {
-            Runnable focus = focusAfterRender.focus();
+            final Runnable focus = focusAfterRender.focus();
             focusAfterRender = null;
             Edt.later(focus);
         }
     }
 
     /** Remembers that the panel or view {@code key} opened from {@code from}. */
-    void opened(String key, FocusOrigins.Origin from) {
+    void opened(final String key, final FocusOrigins.Origin from) {
         focusOrigins.opened(key, from);
     }
 
@@ -116,10 +116,10 @@ final class FocusRouter {
      * Where the keyboard at {@code c} is, with {@code front} the panel in front: a keyboard left in a panel that is not
      * in front, or nowhere, counts as that panel, whose text or page takes it back.
      */
-    private FocusOrigins.Origin originAt(Component c, String front) {
+    private FocusOrigins.Origin originAt(Component c, final String front) {
         String key = keyOf(c);
         if (c == null || key != null && key.startsWith("panel:") && !key.equals(front)) {
-            EditorPanel p = front == null ? null : parts.workspace().panel(new PanelId(front.substring("panel:".length())));
+            final EditorPanel p = front == null ? null : parts.workspace().panel(new PanelId(front.substring("panel:".length())));
             if (p == null) {
                 return null;
             }
@@ -130,25 +130,25 @@ final class FocusRouter {
     }
 
     /** The place the user is at: a view the keyboard is in, else the panel in front. */
-    private String placeOf(AppState s, Component keyboard) {
-        String key = keyOf(keyboard);
+    private String placeOf(final AppState s, final Component keyboard) {
+        final String key = keyOf(keyboard);
         return key != null && key.startsWith("view:") ? key : "panel:" + s.focused().value();
     }
 
-    private boolean inLower(Component c) {
+    private boolean inLower(final Component c) {
         return SwingUtilities.isDescendingFrom(c, parts.lower().component());
     }
 
     /** The panels and views open, as {@link FocusOrigins} keys them. */
-    private static Set<String> openKeys(AppState s) {
-        Set<String> keys = new HashSet<>();
+    private static Set<String> openKeys(final AppState s) {
+        final Set<String> keys = new HashSet<>();
         s.panels().forEach(p -> keys.add("panel:" + p.id().value()));
         s.views().forEach(v -> keys.add("view:" + v.id()));
         return keys;
     }
 
     /** The panel or view that holds {@code c}, as {@link FocusOrigins} keys it; null outside both. */
-    private String keyOf(Component c) {
+    private String keyOf(final Component c) {
         if (c == null) {
             return null;
         }
@@ -167,18 +167,18 @@ final class FocusRouter {
      * in, else the panel in front then, whose session the lower tabs (Session, Approvals, Terminal, Results) showed,
      * comes forward; then that lower tab or view; and the component takes the keyboard once it shows.
      */
-    private void giveKeyboardBack(FocusOrigins.Origin back, AppState s) {
-        String key = back.ownerKey();
-        String panel = key != null && key.startsWith("panel:") ? key : back.front();
+    private void giveKeyboardBack(final FocusOrigins.Origin back, final AppState s) {
+        final String key = back.ownerKey();
+        final String panel = key != null && key.startsWith("panel:") ? key : back.front();
         if (panel != null && panel.startsWith("panel:")) {
-            PanelId id = new PanelId(panel.substring("panel:".length()));
+            final PanelId id = new PanelId(panel.substring("panel:".length()));
             if (!s.focused().equals(id) && s.panel(id).isPresent()) {
                 deps.intents().dispatch(new Intent.FocusPanel(id));
             }
         }
         if (key != null && key.startsWith("view:")) {
-            long id = Long.parseLong(key.substring("view:".length()));
-            boolean lowerView = s.views().stream().anyMatch(v -> v.id() == id && v.placement() == Placement.LOWER);
+            final long id = Long.parseLong(key.substring("view:".length()));
+            final boolean lowerView = s.views().stream().anyMatch(v -> v.id() == id && v.placement() == Placement.LOWER);
             if (lowerView && !s.lowerTab().equals(LowerTab.view(id))) {
                 deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.view(id)));
             }
@@ -193,7 +193,7 @@ final class FocusRouter {
 
     /** The component with the keyboard in the main window; while a popup or the palette has it, the last one it had. */
     Component focusOwnerInFrame() {
-        Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        final Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
         if (c != null && SwingUtilities.getWindowAncestor(c) == parts.frame()) {
             return c;
         }
@@ -201,13 +201,13 @@ final class FocusRouter {
     }
 
     boolean editorFocused() {
-        EditorPanel p = parts.workspace().focused();
-        Component c = focusOwnerInFrame();
+        final EditorPanel p = parts.workspace().focused();
+        final Component c = focusOwnerInFrame();
         return p != null && c != null && SwingUtilities.isDescendingFrom(c, p.editor().area());
     }
 
     Component editorArea() {
-        EditorPanel p = parts.workspace().focused();
+        final EditorPanel p = parts.workspace().focused();
         return p == null ? null : p.editor().area();
     }
 
@@ -215,18 +215,18 @@ final class FocusRouter {
      * The capability of the view the user means: the one holding the focus, else the lower tab in front, so ⌘F, ⌘⇧C
      * and zoom work on the results or transcript while the editor has the keyboard.
      */
-    <T> T capability(Class<T> type) {
-        T t = Capabilities.at(focusOwnerInFrame(), type);
+    <T> T capability(final Class<T> type) {
+        final T t = Capabilities.at(focusOwnerInFrame(), type);
         return t != null ? t : Capabilities.within(parts.lower().selected(), type);
     }
 
     /** The placed view that holds the focus, in the lower panel or the side pane; -1 when the focus is elsewhere. */
     long focusedView() {
-        Component c = focusOwnerInFrame();
+        final Component c = focusOwnerInFrame();
         if (c == null) {
             return -1;
         }
-        long id = parts.lower().viewHolding(c);
+        final long id = parts.lower().viewHolding(c);
         return id >= 0 ? id : parts.side().viewHolding(c);
     }
 
@@ -234,7 +234,7 @@ final class FocusRouter {
      * Selects a lower tab and gives {@code target} the keyboard once the tab shows: a component in a hidden tab
      * refuses focus, so the request waits for the render that switches the tab.
      */
-    void showLowerAndFocus(LowerTab tab, Component target) {
+    void showLowerAndFocus(final LowerTab tab, final Component target) {
         showLowerAndFocus(tab, target, target::requestFocusInWindow);
     }
 
@@ -242,7 +242,7 @@ final class FocusRouter {
      * Selects {@code tab} and runs {@code focus} once {@code shown} is on screen: a component in a tab that is not
      * showing yet refuses the keyboard, so the focus waits for the render that shows the tab.
      */
-    void showLowerAndFocus(LowerTab tab, Component shown, Runnable focus) {
+    void showLowerAndFocus(final LowerTab tab, final Component shown, final Runnable focus) {
         layout.lowerFor(deps.state().get(), true);
         if (deps.state().get().lowerTab().equals(tab) && shown.isShowing()) {
             focus.run();

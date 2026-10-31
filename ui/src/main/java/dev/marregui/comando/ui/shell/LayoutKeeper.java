@@ -1,22 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.core.view.Layout;
-import dev.marregui.comando.core.view.Placement;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.JPanel;
-import javax.swing.JSplitPane;
-import javax.swing.RootPaneContainer;
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import java.awt.AWTEvent;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -31,6 +14,23 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import javax.swing.BorderFactory;
+import javax.swing.JPanel;
+import javax.swing.JSplitPane;
+import javax.swing.RootPaneContainer;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.view.Layout;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The window's panes and how they are laid out: the splits, the sidebar, the side pane and the lower area; their
@@ -87,7 +87,7 @@ final class LayoutKeeper {
     /** The client property macOS reads for a window's title bar, its own appearance rather than the application's. */
     static final String WINDOW_APPEARANCE = "apple.awt.windowAppearance";
 
-    LayoutKeeper(ComandoUi.Dependencies deps, WindowLayout windowLayout, ShellParts parts, Runnable render) {
+    LayoutKeeper(final ComandoUi.Dependencies deps, final WindowLayout windowLayout, final ShellParts parts, final Runnable render) {
         this.deps = deps;
         this.windowLayout = windowLayout;
         this.parts = parts;
@@ -115,7 +115,7 @@ final class LayoutKeeper {
             }
         });
         // the session bar closes the column of the panels and the lower panel; the window's status bar runs under all
-        JPanel column = new JPanel(new BorderLayout());
+        final JPanel column = new JPanel(new BorderLayout());
         column.add(vertical, BorderLayout.CENTER);
         column.add(parts.sessionBar().component(), BorderLayout.SOUTH);
         outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, parts.sidebar().component(), column);
@@ -140,12 +140,12 @@ final class LayoutKeeper {
         layoutSaver.setRepeats(false);
         parts.frame().addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentResized(ComponentEvent e) {
+            public void componentResized(final ComponentEvent e) {
                 layoutSaver.restart();
             }
 
             @Override
-            public void componentMoved(ComponentEvent e) {
+            public void componentMoved(final ComponentEvent e) {
                 layoutSaver.restart();
             }
         });
@@ -169,22 +169,22 @@ final class LayoutKeeper {
      * transcript, the tab card, rendered Markdown) lays itself out or recolours in it, and the rest (icons, the Files
      * tab, About) read it as they repaint.
      */
-    static void paintIn(NamedTheme theme) {
+    static void paintIn(final NamedTheme theme) {
         recolour(theme);
         titleBars();
     }
 
     /** Every window in {@code theme}, but for its title bar. */
-    private static void recolour(NamedTheme theme) {
+    private static void recolour(final NamedTheme theme) {
         Theme.choose(theme.ground, theme.tint);
-        for (Window w : Window.getWindows()) {
+        for (final Window w : Window.getWindows()) {
             w.repaint();
         }
     }
 
     /** Every window's title bar in the mode of the theme chosen. */
     private static void titleBars() {
-        for (Window w : Window.getWindows()) {
+        for (final Window w : Window.getWindows()) {
             appearance(w);
         }
     }
@@ -193,7 +193,7 @@ final class LayoutKeeper {
      * {@code w}'s title bar in the mode of the theme chosen (record 127): light over a light theme, dark over a dark
      * one. The application starts dark, which its menus and the native file dialogs keep; each window takes its own.
      */
-    static void appearance(Window w) {
+    static void appearance(final Window w) {
         if (w instanceof RootPaneContainer r) {
             r.getRootPane().putClientProperty(WINDOW_APPEARANCE, Theme.light() ? "NSAppearanceNameAqua" : "NSAppearanceNameDarkAqua");
         }
@@ -206,9 +206,9 @@ final class LayoutKeeper {
      * change mode halfway, when the window is midway between the two themes, rather than at the start, when it still
      * shows the theme before. The theme chosen already is applied without a fade. EDT only.
      */
-    static void fadeTo(NamedTheme theme, Runnable recolour) {
-        boolean change = Theme.groundChosen() != theme.ground || Theme.tint() != theme.tint;
-        Runnable apply = () -> {
+    static void fadeTo(final NamedTheme theme, final Runnable recolour) {
+        final boolean change = Theme.groundChosen() != theme.ground || Theme.tint() != theme.tint;
+        final Runnable apply = () -> {
             recolour(theme);
             recolour.run();
         };
@@ -242,13 +242,13 @@ final class LayoutKeeper {
      * of the user's or of the focused panel's session; another session's view, an update of a view, or only a change
      * of focus leaves it hidden; the user's own commands that show a side view reveal the pane themselves.
      */
-    void sidePane(AppState s, boolean hasSide) {
-        String mine = s.focusedPanel().session();
-        Map<Long, Long> versions = new HashMap<>();
-        for (var v : s.views()) {
+    void sidePane(final AppState s, final boolean hasSide) {
+        final String mine = s.focusedPanel().session();
+        final Map<Long, Long> versions = new HashMap<>();
+        for (final var v : s.views()) {
             if (v.placement() == Placement.SIDE) {
                 versions.put(v.id(), v.version());
-                Long before = sideVersions.get(v.id());
+                final Long before = sideVersions.get(v.id());
                 // a new view only: an update of a view the user has (a schema reloaded after a DDL) leaves it hidden
                 if (before == null && (v.session().isEmpty() || v.session().equals(mine))) {
                     sidePaneHidden = false;
@@ -256,13 +256,13 @@ final class LayoutKeeper {
             }
         }
         sideVersions = versions;
-        boolean show = hasSide && !sidePaneHidden;
+        final boolean show = hasSide && !sidePaneHidden;
         if (show != sidePaneShown) {
             showSidePane(show);
         }
     }
 
-    private void showSidePane(boolean show) {
+    private void showSidePane(final boolean show) {
         sidePaneShown = show;
         top.removeAll();
         if (show) {
@@ -271,8 +271,8 @@ final class LayoutKeeper {
             top.add(editorAndSide, BorderLayout.CENTER);
             // place the divider once the split has a size; a stored position that would hide either side is ignored
             Edt.later(() -> {
-                int width = editorAndSide.getWidth();
-                int saved = windowLayout.sideDivider();
+                final int width = editorAndSide.getWidth();
+                final int saved = windowLayout.sideDivider();
                 if (width > 0 && saved >= 200 && saved <= width - 200) {
                     editorAndSide.setDividerLocation(saved);
                 } else {
@@ -299,7 +299,7 @@ final class LayoutKeeper {
      * Shows the sidebar at its saved width, or collapses it to its rail with no divider to drag. The split keeps
      * both sides visible: a hidden side keeps its old width when the split's size changes in the same layout.
      */
-    private void showSidebar(boolean shown) {
+    private void showSidebar(final boolean shown) {
         parts.sidebar().show(shown);
         outer.setDividerSize(shown ? outerDividerSize : 0);
         outer.setDividerLocation(shown ? windowLayout.sidebarDivider() : parts.sidebar().railWidth());
@@ -314,14 +314,14 @@ final class LayoutKeeper {
      * chosen, ⌃1–⌃4, a request waiting in Approvals); then it shows for that document for the rest of the window's
      * life. Any other panel shows it, at the height it had when that panel was last in front.
      */
-    void lowerFor(AppState s, boolean asked) {
-        PanelState front = s.focusedPanel();
-        boolean reading = front.document() && front.session().isEmpty();
+    void lowerFor(final AppState s, final boolean asked) {
+        final PanelState front = s.focusedPanel();
+        final boolean reading = front.document() && front.session().isEmpty();
         if (reading && asked) {
             lowerAskedFor.add(front.id());
         }
-        boolean shown = !reading || lowerAskedFor.contains(front.id());
-        Component lower = parts.lower().component();
+        final boolean shown = !reading || lowerAskedFor.contains(front.id());
+        final Component lower = parts.lower().component();
         if (shown != lower.isVisible()) {
             lower.setVisible(shown);
             vertical.setDividerSize(shown ? verticalDividerSize : 0);
@@ -343,7 +343,7 @@ final class LayoutKeeper {
      * front; a panel never in front keeps the divider as it is, or takes the last one shown when the lower area was
      * hidden.
      */
-    private void lowerDividerOf(PanelId front) {
+    private void lowerDividerOf(final PanelId front) {
         if (front.equals(dividerPanel)) {
             return;
         }
@@ -362,15 +362,15 @@ final class LayoutKeeper {
     // ---- a session's arrangement
 
     /** Applies a session's layout once the user has not typed for two seconds, so panes never move under the keys. */
-    void arrangeWhenIdle(Layout layout) {
-        long idle = (System.nanoTime() - lastKeyNanos) / 1_000_000;
+    void arrangeWhenIdle(final Layout layout) {
+        final long idle = (System.nanoTime() - lastKeyNanos) / 1_000_000;
         if (lastKeyNanos != 0 && idle < TYPING_PAUSE_MILLIS) {
             // one layout waits for the pause: a newer one replaces it, so an older never lands after it
-            boolean waiting = pendingLayout != null;
+            final boolean waiting = pendingLayout != null;
             pendingLayout = layout;
             if (!waiting) {
-                Timer later = new Timer((int) (TYPING_PAUSE_MILLIS - idle) + 50, e -> {
-                    Layout next = pendingLayout;
+                final Timer later = new Timer((int) (TYPING_PAUSE_MILLIS - idle) + 50, e -> {
+                    final Layout next = pendingLayout;
                     pendingLayout = null;
                     if (next != null) {
                         arrangeWhenIdle(next);
@@ -390,7 +390,7 @@ final class LayoutKeeper {
         applyLayout(layout);
     }
 
-    private void applyLayout(Layout layout) {
+    private void applyLayout(final Layout layout) {
         if (layout.sidebar() != Layout.Toggle.KEEP && parts.sidebar().isShown() != (layout.sidebar() == Layout.Toggle.SHOW)) {
             toggleSidebar();
         }
@@ -413,7 +413,7 @@ final class LayoutKeeper {
 
     /** Puts the panes back as they were before a session last arranged them. */
     void restoreArranged() {
-        LayoutSnapshot b = beforeArrange;
+        final LayoutSnapshot b = beforeArrange;
         if (b == null) {
             return;
         }
@@ -431,10 +431,10 @@ final class LayoutKeeper {
 
     /** Puts back the window's bounds, its dividers, the sidebar, the side pane, the theme and Linear's site. */
     void restore() {
-        int h = windowLayout.restoreBounds(parts.frame());
+        final int h = windowLayout.restoreBounds(parts.frame());
         parts.sidebar().selectTab(windowLayout.sidebarTab());
         parts.sidebar().manualOrder(windowLayout.manualOrder());
-        NamedTheme theme = windowLayout.theme();
+        final NamedTheme theme = windowLayout.theme();
         paintIn(theme);
         parts.workspace().linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
@@ -446,8 +446,8 @@ final class LayoutKeeper {
 
     private void save() {
         // the dividers of panels that are open or can be reopened; a panel gone for good takes its own with it
-        AppState s = deps.state().get();
-        Map<PanelId, Integer> kept = new HashMap<>(panelDividers);
+        final AppState s = deps.state().get();
+        final Map<PanelId, Integer> kept = new HashMap<>(panelDividers);
         kept.keySet().removeIf(id -> s.panel(id).isEmpty() && s.closedPanel(id).isEmpty());
         windowLayout.panelDividers(kept);
         windowLayout.save(parts.frame(), new WindowLayout.Saved(parts.sidebar().isShown(),
@@ -459,7 +459,7 @@ final class LayoutKeeper {
     void saveQuietly() {
         try {
             save();
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot save the window layout", e);
         }
     }

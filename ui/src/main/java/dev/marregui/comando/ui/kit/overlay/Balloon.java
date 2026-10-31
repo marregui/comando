@@ -1,8 +1,11 @@
 package dev.marregui.comando.ui.kit.overlay;
 
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
+import java.awt.AWTEvent;
+import java.awt.Point;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -10,12 +13,9 @@ import javax.swing.Popup;
 import javax.swing.PopupFactory;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import java.awt.AWTEvent;
-import java.awt.Point;
-import java.awt.Toolkit;
-import java.awt.event.AWTEventListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseEvent;
+
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * A short message beside a component that asks for nothing: it goes after a few seconds, or at the next click or key.
@@ -34,15 +34,15 @@ public final class Balloon {
     }
 
     /** Shows {@code text} at {@code at}, in {@code owner}'s coordinates. */
-    public static void show(JComponent owner, Point at, String text) {
+    public static void show(final JComponent owner, final Point at, final String text) {
         hide();
-        JLabel label = new JLabel(Plain.text(text));
+        final JLabel label = new JLabel(Plain.text(text));
         label.setOpaque(true);
         label.setBackground(Theme.CARD);
         label.setForeground(Theme.MUTED_STRONG);
         label.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M)));
-        Point p = new Point(at);
+        final Point p = new Point(at);
         SwingUtilities.convertPointToScreen(p, owner);
         shown = PopupFactory.getSharedInstance().getPopup(owner, label, p.x, p.y);
         shown.show();

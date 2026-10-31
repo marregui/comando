@@ -11,14 +11,14 @@ public final class Fixtures {
     private Fixtures() {
     }
 
-    public static List<String> stream(String name) {
-        String path = "/fixtures/stream/" + name + ".jsonl";
+    public static List<String> stream(final String name) {
+        final String path = "/fixtures/stream/" + name + ".jsonl";
         try (InputStream in = Fixtures.class.getResourceAsStream(path)) {
             if (in == null) {
                 throw new IllegalArgumentException("no fixture " + path);
             }
             return new String(in.readAllBytes(), StandardCharsets.UTF_8).lines().filter(l -> !l.isBlank()).toList();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new IllegalStateException("cannot read fixture " + path, e);
         }
     }

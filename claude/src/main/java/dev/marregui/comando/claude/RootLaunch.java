@@ -1,16 +1,17 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.KitRoot;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.model.KitRoot;
 
 /**
  * What every {@code claude} comando starts gets from the kit root: {@code CLAUDE_CONFIG_DIR=<root>} when the root is
@@ -51,8 +52,8 @@ public final class RootLaunch {
     /** comando runs the session's checkpoint at the context threshold. */
     private final boolean checkpointByComando;
 
-    private RootLaunch(Path configDir, Optional<KitRoot> root, boolean usersOwn, Optional<Path> memory, String createdBy,
-                       boolean checkpointByComando) {
+    private RootLaunch(final Path configDir, final Optional<KitRoot> root, final boolean usersOwn, final Optional<Path> memory, final String createdBy,
+                       final boolean checkpointByComando) {
         this.configDir = configDir;
         this.root = root;
         this.usersOwn = usersOwn;
@@ -62,7 +63,7 @@ public final class RootLaunch {
     }
 
     /** Every {@code claude} on {@code root}. */
-    public static RootLaunch on(KitRoot root) {
+    public static RootLaunch on(final KitRoot root) {
         return new RootLaunch(root.own() ? null : root.dir(), Optional.of(root), false, root.memory(), "", false);
     }
 
@@ -70,7 +71,7 @@ public final class RootLaunch {
      * The session {@code name} in {@code workDir}: the root's, but for the session that upgrades a kit at or inside the
      * user's own folder.
      */
-    public RootLaunch forSession(String name, String workDir) {
+    public RootLaunch forSession(final String name, final String workDir) {
         if (root.isPresent() && name.equals(KitRoot.UPGRADE_SESSION) && root.get().isRoot(workDir)
                 && root.get().dir().startsWith(root.get().userDir())) {
             return new RootLaunch(null, root, true, Optional.empty(), createdBy, checkpointByComando);
@@ -79,13 +80,13 @@ public final class RootLaunch {
     }
 
     /** This launch for a session {@code createdBy} made, an agent's name; empty for a person's session. */
-    public RootLaunch madeBy(String createdBy) {
-        String by = createdBy == null ? "" : createdBy.strip();
+    public RootLaunch madeBy(final String createdBy) {
+        final String by = createdBy == null ? "" : createdBy.strip();
         return by.equals(this.createdBy) ? this : new RootLaunch(configDir, root, usersOwn, memory, by, checkpointByComando);
     }
 
     /** This launch for a session whose checkpoint comando runs at the context threshold, or not. */
-    public RootLaunch checkpointBy(boolean comando) {
+    public RootLaunch checkpointBy(final boolean comando) {
         return comando == checkpointByComando ? this : new RootLaunch(configDir, root, usersOwn, memory, createdBy, comando);
     }
 
@@ -93,12 +94,12 @@ public final class RootLaunch {
      * {@code argv} with the kit's settings merged into a {@code --settings} it already has, else added after the
      * executable.
      */
-    public List<String> argv(List<String> argv) {
+    public List<String> argv(final List<String> argv) {
         if (memory.isEmpty()) {
             return argv;
         }
-        List<String> out = new ArrayList<>(argv);
-        int at = out.indexOf(SETTINGS);
+        final List<String> out = new ArrayList<>(argv);
+        final int at = out.indexOf(SETTINGS);
         if (at >= 0 && at + 1 < out.size()) {
             out.set(at + 1, merged(out.get(at + 1)));
         } else {
@@ -109,15 +110,15 @@ public final class RootLaunch {
     }
 
     /** The settings given, as JSON, with the kit's memory; a value that is no JSON object (a file) is replaced. */
-    private String merged(String given) {
+    private String merged(final String given) {
         ObjectNode settings = JSON.createObjectNode();
         if (given.strip().startsWith("{")) {
             try {
-                JsonNode read = JSON.readTree(given);
+                final JsonNode read = JSON.readTree(given);
                 if (read instanceof ObjectNode o) {
                     settings = o;
                 }
-            } catch (JacksonException e) {
+            } catch (final JacksonException e) {
                 // not JSON: the kit's settings alone
             }
         }
@@ -129,7 +130,7 @@ public final class RootLaunch {
      * Sets the process's environment: the root's folder, or the user's own for the upgrade; the session's maker; who
      * runs the checkpoint at the context threshold.
      */
-    public void environment(Map<String, String> env) {
+    public void environment(final Map<String, String> env) {
         if (usersOwn) {
             env.remove(CONFIG_DIR);
         } else if (configDir != null) {
@@ -154,8 +155,8 @@ public final class RootLaunch {
      */
     @Override
     public String toString() {
-        String dir = usersOwn ? "-" + CONFIG_DIR : configDir != null ? CONFIG_DIR + '=' + configDir : "inherit";
-        String by = createdBy.isEmpty() ? dir : dir + ' ' + CREATED_BY + '=' + createdBy;
+        final String dir = usersOwn ? "-" + CONFIG_DIR : configDir != null ? CONFIG_DIR + '=' + configDir : "inherit";
+        final String by = createdBy.isEmpty() ? dir : dir + ' ' + CREATED_BY + '=' + createdBy;
         return checkpointByComando ? by + ' ' + CHECKPOINT_BY + '=' + COMANDO : by;
     }
 }

@@ -1,14 +1,5 @@
 package dev.marregui.comando.ui.kit.tabs;
 
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.theme.SidebarLook;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.ButtonGroup;
-import javax.swing.JComponent;
-import javax.swing.JPanel;
-import javax.swing.JToggleButton;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.FlowLayout;
@@ -17,6 +8,15 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
+import javax.swing.BorderFactory;
+import javax.swing.ButtonGroup;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.JToggleButton;
+
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Tabs in one row that never moves: a header per tab, drawn as a tab with its icon alone (the selected one underlined),
@@ -36,7 +36,7 @@ public final class TabStrip {
     };
     private int selected = -1;
 
-    public TabStrip(String accessibleName) {
+    public TabStrip(final String accessibleName) {
         root.getAccessibleContext().setAccessibleName(accessibleName);
         row.setOpaque(false);
         SidebarLook.ground(strip);
@@ -50,9 +50,9 @@ public final class TabStrip {
     }
 
     /** Adds a tab with the icon of that name, after the others; {@code title} is its name for tooltips and readers. */
-    public void add(String title, String icon, String tip, JComponent body) {
-        int index = headers.size();
-        JToggleButton b = new JToggleButton(Icons.get(icon));
+    public void add(final String title, final String icon, final String tip, final JComponent body) {
+        final int index = headers.size();
+        final JToggleButton b = new JToggleButton(Icons.get(icon));
         b.putClientProperty("JButton.buttonType", "tab");
         // the tab in front underlined in the tint, as every "where I am" mark is (record 100)
         SidebarLook.whileShown(b, () -> b.putClientProperty("FlatLaf.style", "tab.underlineHeight: 2; tab.underlineColor: "
@@ -63,16 +63,16 @@ public final class TabStrip {
         b.addActionListener(e -> select(index));
         b.addMouseListener(new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 popup(e);
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 popup(e);
             }
 
-            private void popup(MouseEvent e) {
+            private void popup(final MouseEvent e) {
                 if (e.isPopupTrigger()) {
                     select(index);
                     menu.accept(index, e);
@@ -89,8 +89,8 @@ public final class TabStrip {
     }
 
     /** The component at the row's end, such as the button that hides the sidebar. */
-    public void trailing(JComponent trailing) {
-        JPanel corner = new JPanel(new BorderLayout());
+    public void trailing(final JComponent trailing) {
+        final JPanel corner = new JPanel(new BorderLayout());
         corner.setOpaque(false);
         corner.add(trailing, BorderLayout.NORTH);
         strip.add(corner, BorderLayout.EAST);
@@ -105,7 +105,7 @@ public final class TabStrip {
         return selected;
     }
 
-    public void select(int index) {
+    public void select(final int index) {
         if (index < 0 || index >= headers.size()) {
             return;
         }
@@ -115,12 +115,12 @@ public final class TabStrip {
     }
 
     /** Asked, with the tab's index and the mouse event, when a header is right-clicked; the tab is selected first. */
-    public void onMenu(BiConsumer<Integer, MouseEvent> menu) {
+    public void onMenu(final BiConsumer<Integer, MouseEvent> menu) {
         this.menu = menu;
     }
 
     /** The header of tab {@code index}; for tests and accessibility. */
-    public JToggleButton header(int index) {
+    public JToggleButton header(final int index) {
         return headers.get(index);
     }
 }

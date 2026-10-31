@@ -1,30 +1,29 @@
 package dev.marregui.comando.ui.widgets.approval;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.Approval;
-import dev.marregui.comando.core.model.ApprovalDecision;
-import dev.marregui.comando.core.model.ApprovalKind;
-import dev.marregui.comando.core.model.PermissionRules;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.ShownTimer;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.format.Json;
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.overlay.Overlay;
-import dev.marregui.comando.ui.kit.text.DiffPane;
-import dev.marregui.comando.ui.kit.text.Diffs;
-import dev.marregui.comando.ui.kit.text.Editors;
-import dev.marregui.comando.ui.kit.text.HtmlPane;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.FocusRing;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.widget.Widget;
-import dev.marregui.comando.ui.widget.WidgetContext;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import tools.jackson.databind.JsonNode;
-
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.KeyboardFocusManager;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.event.ActionEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
 import javax.swing.AbstractAction;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
@@ -50,30 +49,32 @@ import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.KeyboardFocusManager;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.event.ActionEvent;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.LongSupplier;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import tools.jackson.databind.JsonNode;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.Json;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.overlay.Overlay;
+import dev.marregui.comando.ui.kit.text.DiffPane;
+import dev.marregui.comando.ui.kit.text.Diffs;
+import dev.marregui.comando.ui.kit.text.Editors;
+import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widget.Widget;
+import dev.marregui.comando.ui.widget.WidgetContext;
 
 /**
  * Every pending approval of every session as a card. The keys act while the focus is anywhere in a card: Enter or A
@@ -117,7 +118,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             }
 
             @Override
-            public void request(Component c) {
+            public void request(final Component c) {
                 c.requestFocusInWindow();
             }
         };
@@ -135,16 +136,16 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     private final Set<Long> answered = new HashSet<>();
     private final ShownTimer ages = new ShownTimer(overlay, AGE_TICK_MILLIS, this::tick);
 
-    public ApprovalInbox(WidgetContext context) {
+    public ApprovalInbox(final WidgetContext context) {
         this(context, System::currentTimeMillis, Focus.WINDOW);
     }
 
-    ApprovalInbox(WidgetContext context, LongSupplier clock, Focus focus) {
+    ApprovalInbox(final WidgetContext context, final LongSupplier clock, final Focus focus) {
         this(context, clock, focus, PermissionRules::rules);
     }
 
-    ApprovalInbox(WidgetContext context, LongSupplier clock, Focus focus,
-                  BiFunction<String, Function<String, String>, PermissionRules.Rules> ruleSource) {
+    ApprovalInbox(final WidgetContext context, final LongSupplier clock, final Focus focus,
+                  final BiFunction<String, Function<String, String>, PermissionRules.Rules> ruleSource) {
         this.context = context;
         this.clock = clock;
         this.focus = focus;
@@ -165,15 +166,15 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     }
 
     @Override
-    public void render(List<Approval> approvals) {
-        List<Card> before = new ArrayList<>(cards.values());
-        Set<Long> answeredHere = new HashSet<>(answered);
-        Card holding = cardOf(focus.owner());
-        Set<Long> ids = new HashSet<>();
-        for (Approval a : approvals) {
+    public void render(final List<Approval> approvals) {
+        final List<Card> before = new ArrayList<>(cards.values());
+        final Set<Long> answeredHere = new HashSet<>(answered);
+        final Card holding = cardOf(focus.owner());
+        final Set<Long> ids = new HashSet<>();
+        for (final Approval a : approvals) {
             ids.add(a.id());
             if (!cards.containsKey(a.id())) {
-                Card c = new Card(a);
+                final Card c = new Card(a);
                 cards.put(a.id(), c);
                 list.add(c);
                 list.add(Box.createVerticalStrut(Theme.GAP));
@@ -183,7 +184,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             if (ids.contains(c.approval.id())) {
                 return false;
             }
-            int i = indexOf(c);
+            final int i = indexOf(c);
             list.remove(c);
             if (i >= 0 && i < list.getComponentCount()) {
                 list.remove(i); // the strut after the card
@@ -201,7 +202,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         list.repaint();
         if (holding != null && !cards.containsValue(holding)) {
             if (answeredHere.contains(holding.approval.id())) {
-                Card next = successor(before, holding);
+                final Card next = successor(before, holding);
                 if (next != null) {
                     focus.request(next);
                 }
@@ -257,8 +258,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
 
     /** Refreshes each card's age. */
     void tick() {
-        long now = clock.getAsLong();
-        for (Card c : cards.values()) {
+        final long now = clock.getAsLong();
+        for (final Card c : cards.values()) {
             c.age.setText(age(c.approval.createdMillis(), now));
         }
     }
@@ -273,8 +274,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     }
 
     /** The card that took the place of {@code gone} in view order: the next remaining one, else the previous one. */
-    private Card successor(List<Card> before, Card gone) {
-        int at = before.indexOf(gone);
+    private Card successor(final List<Card> before, final Card gone) {
+        final int at = before.indexOf(gone);
         for (int i = at + 1; i < before.size(); i++) {
             if (cards.containsValue(before.get(i))) {
                 return before.get(i);
@@ -288,7 +289,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return null;
     }
 
-    private Card cardOf(Component c) {
+    private Card cardOf(final Component c) {
         for (Component x = c; x != null; x = x.getParent()) {
             if (x instanceof Card card && cards.containsValue(card)) {
                 return card;
@@ -297,15 +298,15 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return null;
     }
 
-    private void neighbour(Card from, int step) {
-        List<Card> order = new ArrayList<>(cards.values());
-        int i = order.indexOf(from) + step;
+    private void neighbour(final Card from, final int step) {
+        final List<Card> order = new ArrayList<>(cards.values());
+        final int i = order.indexOf(from) + step;
         if (i >= 0 && i < order.size()) {
             focus.request(order.get(i));
         }
     }
 
-    private int indexOf(Component c) {
+    private int indexOf(final Component c) {
         for (int i = 0; i < list.getComponentCount(); i++) {
             if (list.getComponent(i) == c) {
                 return i;
@@ -314,13 +315,13 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return -1;
     }
 
-    private void answer(Approval a, ApprovalDecision d) {
+    private void answer(final Approval a, final ApprovalDecision d) {
         answered.add(a.id());
         context.intents().dispatch(new Intent.ApprovalAnswered(a.id(), d));
     }
 
-    static String age(long createdMillis, long now) {
-        String ago = Labels.ago(createdMillis, now);
+    static String age(final long createdMillis, final long now) {
+        final String ago = Labels.ago(createdMillis, now);
         return ago.isEmpty() || ago.equals("now") ? ago : ago + " ago";
     }
 
@@ -347,9 +348,9 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         private boolean armedByClick;
         private Timer disarm;
 
-        Card(Approval a) {
+        Card(final Approval a) {
             this.approval = a;
-            JsonNode in = Json.parse(a.inputJson());
+            final JsonNode in = Json.parse(a.inputJson());
             this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asString("")) : null;
             setLayout(new BorderLayout(0, Theme.GAP));
             setBorder(border(Theme.CARD_BORDER));
@@ -364,10 +365,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             updateReady();
         }
 
-        private JComponent header(Approval a) {
-            JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        private JComponent header(final Approval a) {
+            final JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             p.setOpaque(false);
-            JLabel head = new JLabel("<html><b>" + MarkdownHtml.escape(a.session()) + "</b>&nbsp;&nbsp;" + MarkdownHtml.escape(title(a)) + "&nbsp;&nbsp;</html>");
+            final JLabel head = new JLabel("<html><b>" + MarkdownHtml.escape(a.session()) + "</b>&nbsp;&nbsp;" + MarkdownHtml.escape(title(a)) + "&nbsp;&nbsp;</html>");
             head.setIcon(Icons.get(switch (a.kind()) {
                 case QUESTION -> "question";
                 case PLAN -> "plan";
@@ -382,19 +383,19 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             return p;
         }
 
-        private JComponent body(Approval a, JsonNode in) {
+        private JComponent body(final Approval a, final JsonNode in) {
             return switch (a.kind()) {
                 case QUESTION -> questionsPanel(in);
                 case PLAN -> {
-                    HtmlPane plan = new HtmlPane();
+                    final HtmlPane plan = new HtmlPane();
                     plan.setMarkdown(in.path("plan").asString(""));
-                    JScrollPane sp = new JScrollPane(plan);
+                    final JScrollPane sp = new JScrollPane(plan);
                     sp.setPreferredSize(new Dimension(400, 260));
                     yield sp;
                 }
                 case SQL_WRITE -> code(in.path("sql").asString(""), "sql", 8);
                 case TOOL -> {
-                    Diffs.Edit edit = Diffs.edit(a.toolName(), in);
+                    final Diffs.Edit edit = Diffs.edit(a.toolName(), in);
                     if (edit != null) {
                         yield diff(edit.path(), edit.before(), edit.after());
                     }
@@ -403,27 +404,27 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             };
         }
 
-        private static String describe(JsonNode in) {
-            String d = in.path("description").asString("");
+        private static String describe(final JsonNode in) {
+            final String d = in.path("description").asString("");
             return d.isEmpty() ? "" : "\n# " + d;
         }
 
-        private JComponent questionsPanel(JsonNode in) {
-            JPanel p = new JPanel();
+        private JComponent questionsPanel(final JsonNode in) {
+            final JPanel p = new JPanel();
             p.setOpaque(false);
             p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-            for (JsonNode q : in.path("questions")) {
-                String question = q.path("question").asString("");
-                JLabel label = new JLabel("<html><b>" + MarkdownHtml.escape(question) + "</b></html>");
+            for (final JsonNode q : in.path("questions")) {
+                final String question = q.path("question").asString("");
+                final JLabel label = new JLabel("<html><b>" + MarkdownHtml.escape(question) + "</b></html>");
                 label.setAlignmentX(Component.LEFT_ALIGNMENT);
                 p.add(label);
-                boolean multi = q.path("multiSelect").asBoolean(false);
-                ButtonGroup group = new ButtonGroup();
-                List<AbstractButton> buttons = new ArrayList<>();
-                for (JsonNode o : q.path("options")) {
-                    String option = o.path("label").asString("");
+                final boolean multi = q.path("multiSelect").asBoolean(false);
+                final ButtonGroup group = new ButtonGroup();
+                final List<AbstractButton> buttons = new ArrayList<>();
+                for (final JsonNode o : q.path("options")) {
+                    final String option = o.path("label").asString("");
                     // option labels and descriptions come from Claude: shown as text, never as HTML
-                    AbstractButton b = Plain.only(multi ? new JCheckBox() : new JRadioButton());
+                    final AbstractButton b = Plain.only(multi ? new JCheckBox() : new JRadioButton());
                     b.setText(option); // after the guard: Swing decides on HTML when the text is set
                     b.setActionCommand(option);
                     b.setOpaque(false);
@@ -434,39 +435,39 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                     }
                     buttons.add(b);
                     p.add(b);
-                    String description = o.path("description").asString("");
+                    final String description = o.path("description").asString("");
                     if (!description.isBlank()) {
-                        JTextArea d = muted(description);
+                        final JTextArea d = muted(description);
                         d.setName("description");
                         // indented under the option's text, past the radio or check mark
                         d.setBorder(BorderFactory.createEmptyBorder(0, 24, 2, 0));
                         p.add(d);
                     }
                 }
-                JLabel otherLabel = Plain.only(new JLabel("Other answer"));
+                final JLabel otherLabel = Plain.only(new JLabel("Other answer"));
                 otherLabel.setForeground(Theme.MUTED);
                 otherLabel.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, 0, 2, 0));
                 otherLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 p.add(otherLabel);
-                JTextArea free = Editors.plain(OTHER_ROWS, OTHER_COLUMNS);
+                final JTextArea free = Editors.plain(OTHER_ROWS, OTHER_COLUMNS);
                 free.setName("other");
                 free.getDocument().addDocumentListener(new DocumentListener() {
                     @Override
-                    public void insertUpdate(DocumentEvent e) {
+                    public void insertUpdate(final DocumentEvent e) {
                         updateReady();
                     }
 
                     @Override
-                    public void removeUpdate(DocumentEvent e) {
+                    public void removeUpdate(final DocumentEvent e) {
                         updateReady();
                     }
 
                     @Override
-                    public void changedUpdate(DocumentEvent e) {
+                    public void changedUpdate(final DocumentEvent e) {
                         updateReady();
                     }
                 });
-                JScrollPane editor = new JScrollPane(free);
+                final JScrollPane editor = new JScrollPane(free);
                 editor.setAlignmentX(Component.LEFT_ALIGNMENT);
                 // its columns wide and its rows tall, scrolling past them; narrower only when the card is
                 editor.setMaximumSize(editor.getPreferredSize());
@@ -477,11 +478,11 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             return p;
         }
 
-        private JComponent footer(Approval a) {
-            JPanel p = new JPanel();
+        private JComponent footer(final Approval a) {
+            final JPanel p = new JPanel();
             p.setOpaque(false);
             p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-            JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+            final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
             buttons.setOpaque(false);
             buttons.setAlignmentX(Component.LEFT_ALIGNMENT);
             switch (a.kind()) {
@@ -492,7 +493,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 }
                 case PLAN -> {
                     buttons.add(button("Approve plan  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
-                    JButton edits = button("Approve, auto-accept edits", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
+                    final JButton edits = button("Approve, auto-accept edits", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
                     edits.setToolTipText("Approve the plan and accept file edits for the rest of this session");
                     buttons.add(edits);
                     buttons.add(button("Keep planning", "deny", this::deny, false));
@@ -503,12 +504,12 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 }
                 case TOOL -> {
                     buttons.add(button("Allow once  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
-                    JButton session = button("For session  S", null, () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
+                    final JButton session = button("For session  S", null, () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
                     session.setName("session");
                     session.setToolTipText(Plain.text("Adds " + rules.text() + " for the rest of this session"));
                     buttons.add(session);
                     if (rules.persistable()) {
-                        JButton always = button("Always  L", null, this::alwaysClicked, false);
+                        final JButton always = button("Always  L", null, this::alwaysClicked, false);
                         always.setName("always");
                         always.setToolTipText(Plain.text("Adds " + rules.text() + " to this project's .claude/settings.local.json"));
                         buttons.add(always);
@@ -522,7 +523,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             p.add(buttons);
             confirm.setVisible(false); // shown by a first L or a click on Always; Escape reads it
             if (a.kind() == ApprovalKind.TOOL) {
-                JTextArea scope = muted((rules.persistable() ? "Always: " : "For session: ") + rules.text());
+                final JTextArea scope = muted((rules.persistable() ? "Always: " : "For session: ") + rules.text());
                 scope.setName("rule");
                 p.add(scope);
             }
@@ -533,13 +534,13 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 confirm.setAlignmentX(Component.LEFT_ALIGNMENT);
                 confirm.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, 0, 0, 0));
                 confirm.add(confirmText);
-                JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+                final JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
                 row.setOpaque(false);
                 row.setAlignmentX(Component.LEFT_ALIGNMENT);
-                JButton yes = button("Always allow", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)), false);
+                final JButton yes = button("Always allow", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)), false);
                 yes.setName("confirm-always");
                 row.add(yes);
-                JButton cancel = button("Cancel", null, this::disarm, false);
+                final JButton cancel = button("Cancel", null, this::disarm, false);
                 cancel.setName("confirm-cancel");
                 row.add(cancel);
                 confirm.add(row);
@@ -553,16 +554,16 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             return p;
         }
 
-        private String noteOr(String fallback) {
-            String n = note.getText().strip();
+        private String noteOr(final String fallback) {
+            final String n = note.getText().strip();
             return n.isEmpty() ? fallback : n;
         }
 
         /** Whether every question has a chosen option or an answer of its own. */
         private boolean ready() {
-            for (var e : questions.entrySet()) {
+            for (final var e : questions.entrySet()) {
                 boolean chosen = !other.get(e.getKey()).getText().isBlank();
-                for (AbstractButton b : e.getValue()) {
+                for (final AbstractButton b : e.getValue()) {
                     chosen |= b.isSelected();
                 }
                 if (!chosen) {
@@ -576,7 +577,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             if (approval.kind() != ApprovalKind.QUESTION) {
                 return;
             }
-            boolean ready = ready();
+            final boolean ready = ready();
             choose.setVisible(!ready);
             if (primaryButton != null) {
                 primaryButton.setEnabled(ready);
@@ -587,14 +588,14 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             if (!ready()) {
                 return;
             }
-            Map<String, String> answers = new LinkedHashMap<>();
-            for (var e : questions.entrySet()) {
-                String free = other.get(e.getKey()).getText().strip();
+            final Map<String, String> answers = new LinkedHashMap<>();
+            for (final var e : questions.entrySet()) {
+                final String free = other.get(e.getKey()).getText().strip();
                 if (!free.isEmpty()) {
                     answers.put(e.getKey(), free);
                 } else {
                     // several chosen options of a multi-select question go back as one comma-separated answer
-                    String chosen = String.join(", ", e.getValue().stream().filter(AbstractButton::isSelected)
+                    final String chosen = String.join(", ", e.getValue().stream().filter(AbstractButton::isSelected)
                             .map(AbstractButton::getActionCommand).toList());
                     if (!chosen.isEmpty()) {
                         answers.put(e.getKey(), chosen);
@@ -606,7 +607,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
 
         /** A first L asks for a second within {@link #CONFIRM_MILLIS}; a local settings rule outlives the session. */
         private void alwaysKey() {
-            long now = clock.getAsLong();
+            final long now = clock.getAsLong();
             if (armedByClick || (armedAt >= 0 && now - armedAt <= CONFIRM_MILLIS)) {
                 answer(approval, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
                 return;
@@ -630,7 +631,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             showConfirm("Always allow " + rules.text() + " in this project?");
         }
 
-        private void showConfirm(String text) {
+        private void showConfirm(final String text) {
             confirmText.setText(text);
             confirm.setVisible(true);
             revalidate();
@@ -673,7 +674,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         }
 
         private void deny() {
-            String fallback = switch (approval.kind()) {
+            final String fallback = switch (approval.kind()) {
                 case QUESTION -> "The user skipped the questions.";
                 case PLAN -> "Keep planning.";
                 default -> "";
@@ -682,8 +683,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         }
 
         /** A key of the card, wherever in the card the focus is. */
-        private void bind(int key, Runnable r) {
-            String id = "approval-" + key;
+        private void bind(final int key, final Runnable r) {
+            final String id = "approval-" + key;
             getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke(key, 0), id);
             getActionMap().put(id, keyAction(r));
         }
@@ -693,10 +694,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
          * answers on Enter; a read-only viewer passes Enter and Escape to the card; a press on anything that is not
          * a control focuses the card; the border shows the focus anywhere inside.
          */
-        private void wire(Container root) {
-            FocusAdapter border = new FocusAdapter() {
+        private void wire(final Container root) {
+            final FocusAdapter border = new FocusAdapter() {
                 @Override
-                public void focusGained(FocusEvent e) {
+                public void focusGained(final FocusEvent e) {
                     setBorder(border(Theme.tint().body));
                     if (e.getComponent() == Card.this) {
                         scrollRectToVisible(new Rectangle(0, 0, getWidth(), getHeight()));
@@ -704,22 +705,22 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 }
 
                 @Override
-                public void focusLost(FocusEvent e) {
-                    Component to = e.getOppositeComponent();
+                public void focusLost(final FocusEvent e) {
+                    final Component to = e.getOppositeComponent();
                     if (to == null || !SwingUtilities.isDescendingFrom(to, Card.this)) {
                         setBorder(border(Theme.CARD_BORDER));
                     }
                 }
             };
-            MouseAdapter press = new MouseAdapter() {
+            final MouseAdapter press = new MouseAdapter() {
                 @Override
-                public void mousePressed(MouseEvent e) {
+                public void mousePressed(final MouseEvent e) {
                     focus.request(Card.this);
                 }
             };
-            List<Component> all = new ArrayList<>();
+            final List<Component> all = new ArrayList<>();
             collect(root, all);
-            for (Component c : all) {
+            for (final Component c : all) {
                 if (c.isFocusable() && (c == this || c instanceof JTextComponent || c instanceof AbstractButton)) {
                     c.addFocusListener(border);
                 }
@@ -728,7 +729,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 } else if (c instanceof JTextComponent t && t.isEditable() && t.isFocusable()) {
                     fieldKeys(t);
                 } else if (c instanceof JTextComponent t && t.isFocusable()) {
-                    InputMap m = t.getInputMap(JComponent.WHEN_FOCUSED);
+                    final InputMap m = t.getInputMap(JComponent.WHEN_FOCUSED);
                     m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "none");
                     m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "none");
                 } else if (!(c instanceof AbstractButton) && !(c instanceof JScrollBar)) {
@@ -737,8 +738,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             }
         }
 
-        private void fieldKeys(JTextComponent field) {
-            InputMap m = typesLetters(field);
+        private void fieldKeys(final JTextComponent field) {
+            final InputMap m = typesLetters(field);
             m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "approval-enter");
             field.getActionMap().put("approval-enter", keyAction(() -> {
                 if (field == note && !note.getText().isBlank()) {
@@ -757,8 +758,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
          * The Other answer keeps its own keys, Enter's new line and the edit keys included; no key in it answers, so
          * a paragraph is never sent half written. Escape returns to the card.
          */
-        private void answerKeys(JTextComponent area) {
-            InputMap m = typesLetters(area);
+        private void answerKeys(final JTextComponent area) {
+            final InputMap m = typesLetters(area);
             // the card's menu key with Enter (deny with the note) does not reach past the box either
             m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, MENU), "approval-type");
             m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "approval-card");
@@ -766,10 +767,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         }
 
         /** The card's letters type in {@code field}: their press stops there; the typed character still reaches it. */
-        private InputMap typesLetters(JTextComponent field) {
-            InputMap m = field.getInputMap(JComponent.WHEN_FOCUSED);
+        private InputMap typesLetters(final JTextComponent field) {
+            final InputMap m = field.getInputMap(JComponent.WHEN_FOCUSED);
             field.getActionMap().put("approval-type", keyAction(() -> { }));
-            for (int letter : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_L, KeyEvent.VK_D}) {
+            for (final int letter : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_L, KeyEvent.VK_D}) {
                 m.put(KeyStroke.getKeyStroke(letter, 0), "approval-type");
             }
             return m;
@@ -781,39 +782,39 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         }
     }
 
-    private static void collect(Component c, List<Component> out) {
+    private static void collect(final Component c, final List<Component> out) {
         out.add(c);
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 collect(child, out);
             }
         }
     }
 
-    private static AbstractAction keyAction(Runnable r) {
+    private static AbstractAction keyAction(final Runnable r) {
         return new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 r.run();
             }
         };
     }
 
-    private static Border border(Color line) {
+    private static Border border(final Color line) {
         return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line, 1, true),
                 BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
     }
 
     /** Wrapped, read-only text in the theme's text colour, for the Always confirmation. */
     private static JTextArea wrapped() {
-        JTextArea t = muted("");
+        final JTextArea t = muted("");
         t.setForeground(null); // the look and feel's, which follows a theme change
         return t;
     }
 
     /** Muted, wrapped, read-only text; a text area never renders HTML, so text from Claude stays text. */
-    private static JTextArea muted(String text) {
-        JTextArea t = new JTextArea(text);
+    private static JTextArea muted(final String text) {
+        final JTextArea t = new JTextArea(text);
         t.setEditable(false);
         t.setFocusable(false);
         t.setOpaque(false);
@@ -826,21 +827,21 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return t;
     }
 
-    static String title(Approval a) {
+    static String title(final Approval a) {
         return switch (a.kind()) {
             case QUESTION -> "asks";
             case PLAN -> "presents a plan";
             case SQL_WRITE -> {
                 // the connection the statement would change is part of the question, not only of the status bar
-                String connection = Json.parse(a.inputJson()).path("connection").asString("");
+                final String connection = Json.parse(a.inputJson()).path("connection").asString("");
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
             case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();
         };
     }
 
-    private static JButton button(String text, String icon, Runnable action, boolean primary) {
-        JButton b = new JButton(text, icon == null ? null : Icons.get(icon));
+    private static JButton button(final String text, final String icon, final Runnable action, final boolean primary) {
+        final JButton b = new JButton(text, icon == null ? null : Icons.get(icon));
         b.setFocusable(false);
         if (primary) {
             b.putClientProperty("JButton.buttonType", "default");
@@ -849,21 +850,21 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return b;
     }
 
-    private static JComponent code(String text, String syntax, int maxLines) {
-        RSyntaxTextArea area = Editors.viewer(syntax);
+    private static JComponent code(final String text, final String syntax, final int maxLines) {
+        final RSyntaxTextArea area = Editors.viewer(syntax);
         area.setText(text);
         area.setCaretPosition(0);
         area.setLineWrap(true);
-        int lines = Math.min(maxLines, Math.max(1, area.getLineCount()));
-        JScrollPane sp = new JScrollPane(area);
+        final int lines = Math.min(maxLines, Math.max(1, area.getLineCount()));
+        final JScrollPane sp = new JScrollPane(area);
         sp.setPreferredSize(new Dimension(400, lines * area.getLineHeight() + 12));
         return sp;
     }
 
-    private static JComponent diff(String path, String before, String after) {
-        DiffPane d = new DiffPane();
+    private static JComponent diff(final String path, final String before, final String after) {
+        final DiffPane d = new DiffPane();
         d.show(path, before, after);
-        JComponent c = d.component();
+        final JComponent c = d.component();
         c.setPreferredSize(new Dimension(400, Math.min(320, d.area().getLineCount() * d.area().getLineHeight() + 12)));
         return c;
     }
@@ -875,12 +876,12 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         }
 
         @Override
-        public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+        public int getScrollableUnitIncrement(final Rectangle visible, final int orientation, final int direction) {
             return 24;
         }
 
         @Override
-        public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+        public int getScrollableBlockIncrement(final Rectangle visible, final int orientation, final int direction) {
             return Math.max(24, visible.height - 48);
         }
 

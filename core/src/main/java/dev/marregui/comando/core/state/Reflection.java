@@ -18,7 +18,7 @@ public record Reflection(boolean due, boolean armed) {
     public static final Reflection FRESH = new Reflection(false, true);
 
     /** A turn ended with {@code tokens} of context in a window of {@code window}; an unknown window changes nothing. */
-    public Reflection afterTurn(long tokens, long window) {
+    public Reflection afterTurn(final long tokens, final long window) {
         if (window <= 0L || tokens < 0L) {
             return this;
         }
@@ -29,11 +29,11 @@ public record Reflection(boolean due, boolean armed) {
     }
 
     /** The checkpoint command was sent while the context held {@code tokens} of {@code window}. */
-    public static Reflection checkpointed(long tokens, long window) {
+    public static Reflection checkpointed(final long tokens, final long window) {
         return new Reflection(false, window <= 0L || !above(tokens, window));
     }
 
-    private static boolean above(long tokens, long window) {
+    private static boolean above(final long tokens, final long window) {
         return tokens >= THRESHOLD * window;
     }
 }

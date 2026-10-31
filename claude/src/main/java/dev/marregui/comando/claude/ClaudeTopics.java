@@ -1,15 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.loop.ExecutorStop;
-import dev.marregui.comando.core.loop.Processes;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.Topic;
-import dev.marregui.comando.core.port.TopicPort;
-import dev.marregui.comando.core.view.Clip;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,6 +12,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Processes;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.Topic;
+import dev.marregui.comando.core.port.TopicPort;
+import dev.marregui.comando.core.view.Clip;
 
 /**
  * Reads panels' topics with Haiku through Claude Code: {@code claude --safe-mode -p --model haiku} with no tools, no
@@ -58,18 +59,18 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     private String lastProblem = "";
     private volatile boolean closed;
 
-    public ClaudeTopics(String executable, RootLaunch launch, Path workDir) {
+    public ClaudeTopics(final String executable, final RootLaunch launch, final Path workDir) {
         this(source -> read(executable, launch, workDir, new ObjectMapper(), source, TIMEOUT));
     }
 
     /** With the read itself; tests count and pace reads. */
-    ClaudeTopics(Function<String, Topic> reader) {
+    ClaudeTopics(final Function<String, Topic> reader) {
         this.reader = reader;
     }
 
     @Override
-    public void read(String key, String source, boolean urgent, Consumer<Topic> done) {
-        Ask ask = new Ask(key, source, done);
+    public void read(final String key, final String source, final boolean urgent, final Consumer<Topic> done) {
+        final Ask ask = new Ask(key, source, done);
         boolean added;
         synchronized (lock) {
             if (closed) {
@@ -86,7 +87,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
             // one task per waiting key: a task reads whichever ask is first when it runs
             try {
                 worker.execute(this::readFirst);
-            } catch (RejectedExecutionException e) {
+            } catch (final RejectedExecutionException e) {
                 // closed meanwhile; the ask is dropped with the others
             }
         }
@@ -95,7 +96,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     private void readFirst() {
         Ask ask;
         synchronized (lock) {
-            Map.Entry<String, Ask> first = waiting.pollFirstEntry();
+            final Map.Entry<String, Ask> first = waiting.pollFirstEntry();
             if (first == null) {
                 return;
             }
@@ -104,7 +105,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
         Topic topic;
         try {
             topic = reader.apply(ask.source());
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.ERROR, "topic read failed", e);
             topic = Topic.failed("the read failed: " + e.getMessage(), System.currentTimeMillis());
         }
@@ -118,22 +119,22 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     }
 
     /** Runs one read; blocks up to {@code timeout}. */
-    static Topic read(String executable, RootLaunch launch, Path workDir, ObjectMapper json, String source, Duration timeout) {
+    static Topic read(final String executable, final RootLaunch launch, final Path workDir, final ObjectMapper json, final String source, final Duration timeout) {
         try {
-            Processes.Result r = Processes.run(launch.argv(List.of(executable, "--safe-mode", "-p", "--model", MODEL, "--effort", "low",
+            final Processes.Result r = Processes.run(launch.argv(List.of(executable, "--safe-mode", "-p", "--model", MODEL, "--effort", "low",
                     "--tools", "", "--system-prompt", SYSTEM, "--no-session-persistence", "--output-format", "json")), env -> {
                 launch.environment(env);
                 env.put("MAX_THINKING_TOKENS", "0");
             }, workDir != null && Files.isDirectory(workDir) ? workDir : null, source.getBytes(StandardCharsets.UTF_8), timeout, MAX_OUT);
             if (r.timedOut()) {
-                long ms = timeout.toMillis();
+                final long ms = timeout.toMillis();
                 return Topic.failed("Haiku did not answer within " + (ms % 1_000 == 0 ? ms / 1_000 + " s" : ms + " ms"),
                         System.currentTimeMillis());
             }
             return parse(r.out(), System.currentTimeMillis(), json);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return Topic.failed("cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return Topic.failed("interrupted", System.currentTimeMillis());
         }
@@ -143,26 +144,26 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     static final int MAX_OUT = 1 << 20;
 
     /** The topic in the command's JSON result, or why there is none. */
-    static Topic parse(String output, long readAtMillis, ObjectMapper json) {
+    static Topic parse(final String output, final long readAtMillis, final ObjectMapper json) {
         JsonNode root;
         try {
             root = json.readTree(output == null ? "" : output.strip());
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return Topic.failed("unreadable answer from Haiku", readAtMillis);
         }
         if (root == null || !root.isObject()) {
             return Topic.failed("no answer from Haiku", readAtMillis);
         }
-        String text = root.path("result").asString("");
+        final String text = root.path("result").asString("");
         if (root.path("is_error").asBoolean(false)) {
             return Topic.failed(text.isBlank() ? "Haiku failed" : Clip.keepStart(firstLine(text), 200), readAtMillis);
         }
-        String summary = clean(text.strip().replaceAll("\\s+", " "));
+        final String summary = clean(text.strip().replaceAll("\\s+", " "));
         return summary.isEmpty() ? Topic.failed("an empty answer from Haiku", readAtMillis) : new Topic(Clip.keepStart(summary, MAX_TEXT), readAtMillis, "");
     }
 
-    private static String firstLine(String text) {
-        for (String line : text.split("\\R")) {
+    private static String firstLine(final String text) {
+        for (final String line : text.split("\\R")) {
             if (!line.isBlank()) {
                 return line.strip();
             }
@@ -171,7 +172,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     }
 
     /** Without the quotes, backticks or "Summary:" heading a model adds against its instructions. */
-    static String clean(String text) {
+    static String clean(final String text) {
         String s = text.strip();
         if (s.regionMatches(true, 0, "summary:", 0, 8)) {
             s = s.substring(8).strip();

@@ -17,10 +17,10 @@ public final class Tooltips {
      * its text; a word longer than a line (a path) is broken, as Swing's HTML never breaks inside a word. The text is
      * escaped, so nothing in it is markup (a notice can hold text from a database or from Claude).
      */
-    public static String wrapped(String text) {
-        String broken = LONG_WORD.matcher(text).replaceAll("$0\n");
-        String body = MarkdownHtml.escape(broken).replace("\n", "<br>");
-        boolean wraps = broken.lines().anyMatch(l -> l.length() > LINE);
+    public static String wrapped(final String text) {
+        final String broken = LONG_WORD.matcher(text).replaceAll("$0\n");
+        final String body = MarkdownHtml.escape(broken).replace("\n", "<br>");
+        final boolean wraps = broken.lines().anyMatch(l -> l.length() > LINE);
         return wraps ? "<html><div style='width:520px'>" + body + "</div></html>" : "<html>" + body + "</html>";
     }
 }

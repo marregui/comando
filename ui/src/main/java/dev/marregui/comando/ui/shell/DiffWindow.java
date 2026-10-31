@@ -1,20 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.model.ChangeAsk;
-import dev.marregui.comando.core.model.ChangeTexts;
-import dev.marregui.comando.core.model.RepoStatus;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.text.SplitDiff;
-import dev.marregui.comando.ui.widgets.changes.ChangeEditor;
-
-import javax.swing.AbstractAction;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.Rectangle;
@@ -29,6 +14,21 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
+import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.text.SplitDiff;
+import dev.marregui.comando.ui.widgets.changes.ChangeEditor;
 
 /**
  * A changed file compared with its {@code HEAD} version, side by side ({@link ChangeEditor}), in a window of its own
@@ -57,7 +57,7 @@ final class DiffWindow {
      * {@code reread} asks for the file shown again, every {@link #REREAD_MILLIS} while the window shows;
      * {@code writer} writes the file edited.
      */
-    DiffWindow(Window owner, Runnable reread, IntentSink intents, ChangeEditor.Writer writer, ResourceActions.Questions questions) {
+    DiffWindow(final Window owner, final Runnable reread, final IntentSink intents, final ChangeEditor.Writer writer, final ResourceActions.Questions questions) {
         this.owner = owner;
         this.editor = new ChangeEditor(intents, writer, questions);
         editor.onGone(this::close);
@@ -80,7 +80,7 @@ final class DiffWindow {
     }
 
     /** Whether the comparison on screen is of {@code path} in {@code root}. */
-    boolean shows(String root, String path) {
+    boolean shows(final String root, final String path) {
         return isShowing() && Objects.equals(editor.root(), root) && editor.change() != null && editor.change().path().equals(path);
     }
 
@@ -101,7 +101,7 @@ final class DiffWindow {
     }
 
     /** Whether {@code c} is in this window. */
-    boolean holds(Component c) {
+    boolean holds(final Component c) {
         return dialog != null && SwingUtilities.getWindowAncestor(c) == dialog;
     }
 
@@ -110,8 +110,8 @@ final class DiffWindow {
      * selection moved to shows in place, after the one shown is saved; a file read again shows only while the window
      * still shows it, so a read asked for before the selection moved never takes the window back.
      */
-    void show(ChangeTexts texts, ChangeAsk ask) {
-        RepoStatus.FileChange c = texts.change();
+    void show(final ChangeTexts texts, final ChangeAsk ask) {
+        final RepoStatus.FileChange c = texts.change();
         if (ask == ChangeAsk.REFRESH && !shows(texts.root(), c.path())) {
             return;
         }
@@ -122,7 +122,7 @@ final class DiffWindow {
             return;
         }
         editor.show(texts, shows(texts.root(), c.path()));
-        JDialog d = dialog();
+        final JDialog d = dialog();
         d.setTitle(c.path() + " — compared with HEAD");
         if (!d.isVisible()) {
             place(d);
@@ -143,7 +143,7 @@ final class DiffWindow {
     }
 
     /** Drops the window's edits and closes it when it shows one of {@code paths} in {@code root}, changed elsewhere. */
-    void drop(String root, Collection<String> paths) {
+    void drop(final String root, final Collection<String> paths) {
         if (editor.change() != null && Objects.equals(editor.root(), root) && paths.contains(editor.change().path())) {
             editor.discard();
             close();
@@ -153,11 +153,11 @@ final class DiffWindow {
     /** Writes the window's edits, waiting at most {@link #SAVE_AT_QUIT}; for quitting. */
     void saveNow() {
         try {
-            String reason = editor.save().get(SAVE_AT_QUIT.toMillis(), TimeUnit.MILLISECONDS);
+            final String reason = editor.save().get(SAVE_AT_QUIT.toMillis(), TimeUnit.MILLISECONDS);
             if (reason != null) {
                 LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits [reason=" + reason + ']');
             }
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits in time", e);
@@ -177,18 +177,18 @@ final class DiffWindow {
         if (dialog != null) {
             return dialog;
         }
-        JDialog d = new JDialog(owner, "", Dialog.ModalityType.MODELESS);
+        final JDialog d = new JDialog(owner, "", Dialog.ModalityType.MODELESS);
         d.setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
         d.addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentHidden(ComponentEvent e) {
+            public void componentHidden(final ComponentEvent e) {
                 reread.stop();
                 editor.save();
             }
         });
         d.setContentPane(editor.component());
-        JComponent root = d.getRootPane();
-        int shortcut = Platform.menuShortcutMask();
+        final JComponent root = d.getRootPane();
+        final int shortcut = Platform.menuShortcutMask();
         bind(root, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "close", this::close);
         bind(root, KeyStroke.getKeyStroke(KeyEvent.VK_W, shortcut), "close", this::close);
         bind(root, KeyStroke.getKeyStroke(KeyEvent.VK_S, shortcut), "save", editor::save);
@@ -199,24 +199,24 @@ final class DiffWindow {
         return d;
     }
 
-    private static void bind(JComponent c, KeyStroke key, String name, Runnable r) {
+    private static void bind(final JComponent c, final KeyStroke key, final String name, final Runnable r) {
         c.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(key, name);
         c.getActionMap().put(name, new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 r.run();
             }
         });
     }
 
     /** The first time: most of comando's window, centred on it. Later the user's own size and place stay. */
-    private void place(JDialog d) {
+    private void place(final JDialog d) {
         if (d.getWidth() > 0) {
             return;
         }
-        Rectangle o = owner.getBounds();
-        int w = Math.max(800, (int) (o.width * 0.9));
-        int h = Math.max(500, (int) (o.height * 0.85));
+        final Rectangle o = owner.getBounds();
+        final int w = Math.max(800, (int) (o.width * 0.9));
+        final int h = Math.max(500, (int) (o.height * 0.85));
         d.setBounds(o.x + (o.width - w) / 2, o.y + (o.height - h) / 2, w, h);
     }
 }

@@ -1,23 +1,28 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.desktop.Links;
-import dev.marregui.comando.ui.kit.text.TextLinks;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Highlighter;
-import javax.swing.text.JTextComponent;
-import javax.swing.text.LayeredHighlighter;
-import javax.swing.text.Position;
-import javax.swing.text.View;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.Shape;
-import dev.marregui.comando.core.model.LinearTickets;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.ui.kit.desktop.Browser;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.kit.theme.TintTitle;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.font.TextAttribute;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -31,28 +36,23 @@ import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Cursor;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Insets;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.font.TextAttribute;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Highlighter;
+import javax.swing.text.JTextComponent;
+import javax.swing.text.LayeredHighlighter;
+import javax.swing.text.Position;
+import javax.swing.text.View;
+
+import dev.marregui.comando.core.model.LinearTickets;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.text.TextLinks;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.kit.theme.TintTitle;
 
 /**
  * A tab's card, in place of its tooltip, and a session row's in the sidebar, the same card: laid out as a turn's report
@@ -87,8 +87,8 @@ public final class TabCard {
     private Runnable stopHearingTint;
     private final JPanel card = new JPanel() {
         @Override
-        protected void paintComponent(Graphics g0) {
-            Graphics2D g = (Graphics2D) g0.create();
+        protected void paintComponent(final Graphics g0) {
+            final Graphics2D g = (Graphics2D) g0.create();
             try {
                 g.setColor(Theme.ground());
                 g.fillRect(0, 0, getWidth(), getHeight());
@@ -120,15 +120,15 @@ public final class TabCard {
     /** Hears the pointer on the card and every part of it: entering, and leaving the card as a whole. */
     private final MouseAdapter pointer = new MouseAdapter() {
         @Override
-        public void mouseEntered(MouseEvent e) {
+        public void mouseEntered(final MouseEvent e) {
             pointerIn = true;
             onPointerIn.run();
         }
 
         @Override
-        public void mouseExited(MouseEvent e) {
+        public void mouseExited(final MouseEvent e) {
             // leaving a part for another part, or for the card's own ground, is not leaving the card
-            Point at = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), card);
+            final Point at = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), card);
             if (!new Rectangle(card.getSize()).contains(at)) {
                 pointerIn = false;
                 hide(e.getLocationOnScreen());
@@ -138,7 +138,7 @@ public final class TabCard {
     /** A press on the card closes it; its parts that take presses themselves hear it too. */
     private final MouseAdapter closeOnPress = new MouseAdapter() {
         @Override
-        public void mousePressed(MouseEvent e) {
+        public void mousePressed(final MouseEvent e) {
             hide();
         }
     };
@@ -170,14 +170,14 @@ public final class TabCard {
         this(key -> { });
     }
 
-    TabCard(Consumer<String> onRefresh) {
+    TabCard(final Consumer<String> onRefresh) {
         leave.setRepeats(false);
         card.setName("tab-card");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
         card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(Theme.SPACE_M, Theme.SPACE_M + BAR + Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_M)));
-        Font tip = UIManager.getFont("ToolTip.font");
+        final Font tip = UIManager.getFont("ToolTip.font");
         font = tip == null ? new Font(Font.DIALOG, Font.PLAIN, 12) : tip;
         // the report's first heading: the card's name
         title = new TintTitle("", Theme.TextSize.TITLE.pt);
@@ -198,7 +198,7 @@ public final class TabCard {
         topic.setLineWrap(true);
         topic.setWrapStyleWord(true);
         topic.setBorder(BorderFactory.createEmptyBorder());
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        final JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         actions.setOpaque(false);
         actions.add(refresh);
         actions.add(close);
@@ -208,7 +208,7 @@ public final class TabCard {
             }
         });
         close.addActionListener(e -> hide());
-        for (JComponent c : new JComponent[]{title, facts, heading, topic, actions}) {
+        for (final JComponent c : new JComponent[]{title, facts, heading, topic, actions}) {
             c.setAlignmentX(Component.LEFT_ALIGNMENT);
         }
         card.add(title);
@@ -219,9 +219,9 @@ public final class TabCard {
         agents.setAlignmentX(Component.LEFT_ALIGNMENT);
         agents.setVisible(false);
         card.add(agents);
-        Component aboveHeading = Box.createVerticalStrut(Theme.SPACE_M);
-        Component underHeading = Box.createVerticalStrut(Theme.SPACE_XS);
-        Component aboveActions = Box.createVerticalStrut(Theme.SPACE_S);
+        final Component aboveHeading = Box.createVerticalStrut(Theme.SPACE_M);
+        final Component underHeading = Box.createVerticalStrut(Theme.SPACE_XS);
+        final Component aboveActions = Box.createVerticalStrut(Theme.SPACE_S);
         card.add(aboveHeading);
         card.add(heading);
         card.add(underHeading);
@@ -236,24 +236,24 @@ public final class TabCard {
         card.addMouseListener(closeOnPress);
         // the summary is a text area, which takes the press itself: a press closes the card as on the rest, but on a
         // link, which a double click follows (record 94)
-        MouseAdapter summaryLinks = new MouseAdapter() {
+        final MouseAdapter summaryLinks = new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 if (topicLinkAt(e.getPoint()) == null) {
                     hide();
                 }
             }
 
             @Override
-            public void mouseClicked(MouseEvent e) {
-                TextLinks.Ref link = topicLinkAt(e.getPoint());
+            public void mouseClicked(final MouseEvent e) {
+                final TextLinks.Ref link = topicLinkAt(e.getPoint());
                 if (link != null && e.getClickCount() == 2) {
                     follow(link.href());
                 }
             }
 
             @Override
-            public void mouseMoved(MouseEvent e) {
+            public void mouseMoved(final MouseEvent e) {
                 topic.setCursor(topicLinkAt(e.getPoint()) == null ? Cursor.getDefaultCursor() : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             }
         };
@@ -265,8 +265,8 @@ public final class TabCard {
         heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
     }
 
-    private static JButton button(String icon, String name, String tip, String accessible) {
-        JButton b = new JButton(Icons.get(icon, 14));
+    private static JButton button(final String icon, final String name, final String tip, final String accessible) {
+        final JButton b = new JButton(Icons.get(icon, 14));
         b.setName(name);
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setToolTipText(tip);
@@ -277,17 +277,17 @@ public final class TabCard {
     }
 
     /** {@code c} and every part of it tell the card where the pointer is. */
-    private void hearPointer(Component c) {
+    private void hearPointer(final Component c) {
         c.addMouseListener(pointer);
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 hearPointer(child);
             }
         }
     }
 
     /** {@code r} runs when the pointer comes onto the card. */
-    void onPointerIn(Runnable r) {
+    void onPointerIn(final Runnable r) {
         onPointerIn = r;
     }
 
@@ -295,11 +295,11 @@ public final class TabCard {
      * {@code r} hears the card close: the component it hung under, and the point on the screen the pointer left it for,
      * or null when it closed otherwise.
      */
-    void onHidden(BiConsumer<JComponent, Point> r) {
+    void onHidden(final BiConsumer<JComponent, Point> r) {
         onHidden = r;
     }
 
-    void browseWith(Consumer<String> opener) {
+    void browseWith(final Consumer<String> opener) {
         browse = opener;
     }
 
@@ -311,8 +311,8 @@ public final class TabCard {
      * The session's sub-agents to outline under the facts (record 109), each a link that a double click follows to its
      * tab through {@code open}, given the Agent call's id; none hides the outline.
      */
-    void agents(List<Delegation.Line> list, Consumer<String> open) {
-        List<String> now = list.stream().map(Delegation.Line::text).toList();
+    void agents(final List<Delegation.Line> list, final Consumer<String> open) {
+        final List<String> now = list.stream().map(Delegation.Line::text).toList();
         if (now.equals(agentTexts)) {
             agentOpen = open;
             return;
@@ -320,16 +320,16 @@ public final class TabCard {
         agentTexts = now;
         agentOpen = open;
         agents.removeAll();
-        Font font = topic.getFont();
+        final Font font = topic.getFont();
         if (!list.isEmpty()) {
             agents.add(Box.createVerticalStrut(Theme.SPACE_S));
-            JLabel head = Plain.only(new JLabel("Sub-agents"));
+            final JLabel head = Plain.only(new JLabel("Sub-agents"));
             head.setFont(font);
             head.setForeground(Theme.MUTED);
             agents.add(head);
         }
-        for (Delegation.Line line : list) {
-            JLabel link = Plain.only(new JLabel(line.text()));
+        for (final Delegation.Line line : list) {
+            final JLabel link = Plain.only(new JLabel(line.text()));
             link.setName("tab-card-agent");
             link.setFont(font.deriveFont(Map.of(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON)));
             link.setForeground(line.status() == Block.ToolStatus.ERROR ? Theme.DANGER : Theme.LINK);
@@ -337,7 +337,7 @@ public final class TabCard {
             link.setToolTipText("Double click to open the sub-agent's tab");
             link.addMouseListener(new MouseAdapter() {
                 @Override
-                public void mouseClicked(MouseEvent e) {
+                public void mouseClicked(final MouseEvent e) {
                     if (e.getClickCount() == 2) {
                         agentOpen.accept(line.toolUseId());
                     }
@@ -345,7 +345,7 @@ public final class TabCard {
             });
             agents.add(link);
         }
-        for (Component c : agents.getComponents()) {
+        for (final Component c : agents.getComponents()) {
             c.addMouseListener(pointer);
         }
         agents.setVisible(!list.isEmpty());
@@ -365,18 +365,18 @@ public final class TabCard {
     }
 
     /** The tickets to show under the heading, the newest command's first; none hides the row. */
-    void tickets(List<LinearTickets.Ticket> list) {
+    void tickets(final List<LinearTickets.Ticket> list) {
         tickets.removeAll();
-        Font font = topic.getFont();
+        final Font font = topic.getFont();
         for (int i = 0; i < list.size(); i++) {
-            LinearTickets.Ticket t = list.get(i);
+            final LinearTickets.Ticket t = list.get(i);
             if (i > 0) {
-                JLabel dot = Plain.only(new JLabel(" · "));
+                final JLabel dot = Plain.only(new JLabel(" · "));
                 dot.setFont(font);
                 dot.setForeground(Theme.MUTED);
                 tickets.add(dot);
             }
-            JLabel link = Plain.only(new JLabel(t.id()));
+            final JLabel link = Plain.only(new JLabel(t.id()));
             link.setName("tab-card-ticket");
             link.setFont(font.deriveFont(Map.of(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON)));
             link.setForeground(Theme.LINK);
@@ -384,7 +384,7 @@ public final class TabCard {
             link.setToolTipText("Double click to open " + t.id() + " in the browser");
             link.addMouseListener(new MouseAdapter() {
                 @Override
-                public void mouseClicked(MouseEvent e) {
+                public void mouseClicked(final MouseEvent e) {
                     if (e.getClickCount() == 2) {
                         browse.accept(t.url());
                     }
@@ -392,7 +392,7 @@ public final class TabCard {
             });
             tickets.add(link);
         }
-        for (Component c : tickets.getComponents()) {
+        for (final Component c : tickets.getComponents()) {
             c.addMouseListener(pointer);
         }
         tickets.setVisible(!list.isEmpty());
@@ -406,14 +406,14 @@ public final class TabCard {
     /** The links in the summary shown: web addresses, notes, Markdown links, as {@link TextLinks} finds them. */
     private List<TextLinks.Ref> topicLinks = List.of();
 
-    private void underlineLinks(String text) {
+    private void underlineLinks(final String text) {
         topicLinks = TextLinks.refs(text, true);
-        Highlighter h = topic.getHighlighter();
+        final Highlighter h = topic.getHighlighter();
         h.removeAllHighlights();
-        for (TextLinks.Ref r : topicLinks) {
+        for (final TextLinks.Ref r : topicLinks) {
             try {
                 h.addHighlight(r.start(), r.end(), UNDERLINE);
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 // the text changed under it: the next update underlines again
             }
         }
@@ -422,28 +422,28 @@ public final class TabCard {
     /** Underlines a link in the summary in the links' colour. */
     private static final Highlighter.HighlightPainter UNDERLINE = new LayeredHighlighter.LayerPainter() {
         @Override
-        public void paint(Graphics g, int p0, int p1, Shape bounds, JTextComponent c) {
+        public void paint(final Graphics g, final int p0, final int p1, final Shape bounds, final JTextComponent c) {
             paintLayer(g, p0, p1, bounds, c, null);
         }
 
         @Override
-        public Shape paintLayer(Graphics g, int p0, int p1, Shape bounds, JTextComponent c, View view) {
+        public Shape paintLayer(final Graphics g, final int p0, final int p1, final Shape bounds, final JTextComponent c, final View view) {
             try {
-                Rectangle r = view == null ? bounds.getBounds() : view.modelToView(p0, Position.Bias.Forward, p1, Position.Bias.Backward, bounds).getBounds();
+                final Rectangle r = view == null ? bounds.getBounds() : view.modelToView(p0, Position.Bias.Forward, p1, Position.Bias.Backward, bounds).getBounds();
                 g.setColor(Theme.LINK);
-                int y = r.y + r.height - 2;
+                final int y = r.y + r.height - 2;
                 g.drawLine(r.x, y, r.x + r.width - 1, y);
                 return r;
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 return null;
             }
         }
     };
 
     /** The link in the summary under {@code p}, in the summary's coordinates; null when there is none. */
-    TextLinks.Ref topicLinkAt(Point p) {
-        int at = topic.viewToModel2D(p);
-        for (TextLinks.Ref r : topicLinks) {
+    TextLinks.Ref topicLinkAt(final Point p) {
+        final int at = topic.viewToModel2D(p);
+        for (final TextLinks.Ref r : topicLinks) {
             if (at >= r.start() && at < r.end()) {
                 return r;
             }
@@ -452,7 +452,7 @@ public final class TabCard {
     }
 
     /** Follows a link of the card: a web page in the browser, a file in a panel. */
-    private void follow(String href) {
+    private void follow(final String href) {
         if (Browser.isWebLink(href)) {
             browse.accept(href);
         } else {
@@ -471,7 +471,7 @@ public final class TabCard {
     }
 
     /** Shows the card of {@code key} under {@code tab}, a rectangle of {@code over}, replacing any card shown. */
-    void show(String key, JComponent over, Rectangle tab, CardFacts head, String topicText, boolean muted, boolean reading) {
+    void show(final String key, final JComponent over, final Rectangle tab, final CardFacts head, final String topicText, final boolean muted, final boolean reading) {
         show(key, over, tab, -1, head, topicText, muted, reading);
     }
 
@@ -480,13 +480,13 @@ public final class TabCard {
      * rows, its left edge at {@code beside} and its top at the row's, when the window has room; under the row
      * otherwise, or when {@code beside} is negative.
      */
-    void show(String key, JComponent over, Rectangle row, int beside, CardFacts head, String topicText, boolean muted, boolean reading) {
+    void show(final String key, final JComponent over, final Rectangle row, final int beside, final CardFacts head, final String topicText, final boolean muted, final boolean reading) {
         summarised(true, SUMMARY);
         open(key, over, row, beside, head, topicText, muted, reading);
     }
 
     /** As {@link #show}, a card of its title and facts alone: a connection's. Its tickets are cleared. */
-    void showFacts(String key, JComponent over, Rectangle row, int beside, CardFacts head) {
+    void showFacts(final String key, final JComponent over, final Rectangle row, final int beside, final CardFacts head) {
         summarised(false, SUMMARY);
         tickets(List.of());
         agents(List.of(), id -> { });
@@ -497,7 +497,7 @@ public final class TabCard {
      * As {@link #showFacts}, a card of another instance or one of its sessions (record 124): its facts, then under
      * {@code heading} the {@code text}, when there is any, which is not read again.
      */
-    void showOther(String key, JComponent over, Rectangle row, int beside, CardFacts head, String heading, String text) {
+    void showOther(final String key, final JComponent over, final Rectangle row, final int beside, final CardFacts head, final String heading, final String text) {
         summarised(!text.isEmpty(), heading);
         tickets(List.of());
         agents(List.of(), id -> { });
@@ -505,7 +505,7 @@ public final class TabCard {
     }
 
     /** New facts and text for the card of another instance shown now, as {@link #showOther} shows them. */
-    void updateOther(CardFacts head, String heading, String text) {
+    void updateOther(final CardFacts head, final String heading, final String text) {
         if (shown == null) {
             return;
         }
@@ -517,7 +517,7 @@ public final class TabCard {
      * A card that explains {@code name} in {@code text} under {@code anchor}, a rectangle of {@code over}: its title,
      * "What it is", the text and the close button; no facts, no tickets, nothing to read again.
      */
-    public void explain(String key, JComponent over, Rectangle anchor, String name, String text) {
+    public void explain(final String key, final JComponent over, final Rectangle anchor, final String name, final String text) {
         summarised(true, EXPLAINED);
         tickets(List.of());
         agents(List.of(), id -> { });
@@ -544,7 +544,7 @@ public final class TabCard {
     }
 
     /** Shows the summary's parts or hides them; {@code title} heads the text, and only a summary is read again. */
-    private void summarised(boolean on, String title) {
+    private void summarised(final boolean on, final String title) {
         summarised = on;
         summaryParts.forEach(c -> c.setVisible(on));
         heading.setText(title);
@@ -556,8 +556,8 @@ public final class TabCard {
         return summarised;
     }
 
-    private void open(String key, JComponent over, Rectangle tab, int beside, CardFacts head, String topicText, boolean muted, boolean reading) {
-        JRootPane root = SwingUtilities.getRootPane(over);
+    private void open(final String key, final JComponent over, final Rectangle tab, final int beside, final CardFacts head, final String topicText, final boolean muted, final boolean reading) {
+        final JRootPane root = SwingUtilities.getRootPane(over);
         if (root == null) {
             return;
         }
@@ -587,11 +587,11 @@ public final class TabCard {
     private List<Object> lastText;
 
     /** New text for the card shown, sized and placed again when it changed; nothing when none shows. */
-    void update(CardFacts head, String topicText, boolean muted, boolean reading) {
+    void update(final CardFacts head, final String topicText, final boolean muted, final boolean reading) {
         if (shown == null) {
             return;
         }
-        List<Object> text = List.of(head, topicText, muted, reading);
+        final List<Object> text = List.of(head, topicText, muted, reading);
         if (text.equals(lastText)) {
             return;
         }
@@ -603,7 +603,7 @@ public final class TabCard {
         this.head = head;
         topic.setText(topicText);
         underlineLinks(topicText);
-        Font f = topic.getFont();
+        final Font f = topic.getFont();
         topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.PLAIN));
         this.muted = muted;
         paintTint();
@@ -615,18 +615,18 @@ public final class TabCard {
      * The facts as rows: the label in a quiet grey, a step below, the value in the transcript's ivory, clipped at the
      * card's edge rather than wrapped.
      */
-    private void fill(List<CardFacts.Fact> list) {
+    private void fill(final List<CardFacts.Fact> list) {
         facts.removeAll();
-        Font label = Theme.font(font, Theme.TextSize.SMALL).deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
-        GridBagConstraints at = new GridBagConstraints();
+        final Font label = Theme.font(font, Theme.TextSize.SMALL).deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
+        final GridBagConstraints at = new GridBagConstraints();
         at.anchor = GridBagConstraints.BASELINE_LEADING;
         at.insets = new Insets(1, 0, 1, 0);
         for (int i = 0; i < list.size(); i++) {
-            CardFacts.Fact f = list.get(i);
-            JLabel name = Plain.only(new JLabel(f.label()));
+            final CardFacts.Fact f = list.get(i);
+            final JLabel name = Plain.only(new JLabel(f.label()));
             name.setFont(label);
             name.setForeground(Theme.MUTED);
-            JLabel value = Plain.only(new JLabel(Plain.text(f.value())));
+            final JLabel value = Plain.only(new JLabel(Plain.text(f.value())));
             value.setName("tab-card-fact");
             value.setFont(font);
             value.setForeground(Theme.TRANSCRIPT_TEXT);
@@ -642,7 +642,7 @@ public final class TabCard {
             at.insets = new Insets(1, 0, 1, 0);
             facts.add(value, at);
         }
-        for (Component c : facts.getComponents()) {
+        for (final Component c : facts.getComponents()) {
             c.addMouseListener(pointer);
             c.addMouseListener(closeOnPress);
         }
@@ -651,7 +651,7 @@ public final class TabCard {
     }
 
     private void paintTint() {
-        Tint tint = Theme.tint();
+        final Tint tint = Theme.tint();
         heading.setForeground(tint.body);
         heading.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, tint.headingRule()),
@@ -661,11 +661,11 @@ public final class TabCard {
     }
 
     /** Puts the card shown under {@code tab} again, a rectangle of the tabs it was shown over: the tab moved. */
-    void moveUnder(Rectangle tab) {
+    void moveUnder(final Rectangle tab) {
         if (shown == null) {
             return;
         }
-        Point now = new Point(tab.x, tab.y + tab.height + 2);
+        final Point now = new Point(tab.x, tab.y + tab.height + 2);
         if (!now.equals(anchor)) {
             anchor = now;
             place();
@@ -677,22 +677,22 @@ public final class TabCard {
      * the summary wraps to that width, the facts clip at it, and the card is as tall as their lines.
      */
     private void place() {
-        Point at = SwingUtilities.convertPoint(tabs, anchor, layer);
-        int room = Math.max(160, layer.getWidth() - 2 * MARGIN);
-        Insets in = card.getInsets();
+        final Point at = SwingUtilities.convertPoint(tabs, anchor, layer);
+        final int room = Math.max(160, layer.getWidth() - 2 * MARGIN);
+        final Insets in = card.getInsets();
         // a card of facts is as wide as they are; a summary takes its own width
-        int widest = Math.max(Math.max(title.getPreferredSize().width, facts.isVisible() ? facts.getPreferredSize().width : 0),
+        final int widest = Math.max(Math.max(title.getPreferredSize().width, facts.isVisible() ? facts.getPreferredSize().width : 0),
                 summarised ? SUMMARY_WIDTH : 0);
-        int inner = Math.min(widest, Math.min(MAX_WIDTH, room) - in.left - in.right);
+        final int inner = Math.min(widest, Math.min(MAX_WIDTH, room) - in.left - in.right);
         wrapTo(topic, inner);
-        int w = inner + in.left + in.right;
+        final int w = inner + in.left + in.right;
         card.invalidate(); // the box layout keeps its children's sizes until told: the summary's lines changed
-        int h = card.getPreferredSize().height;
+        final int h = card.getPreferredSize().height;
         int x = Math.max(MARGIN, Math.min(at.x, layer.getWidth() - w - MARGIN));
         int y = at.y;
         if (besideAt != null) {
             // beside the rows when it fits there whole, its top at the row's, raised to stay in the window
-            Point b = SwingUtilities.convertPoint(tabs, besideAt, layer);
+            final Point b = SwingUtilities.convertPoint(tabs, besideAt, layer);
             if (b.x + w <= layer.getWidth() - MARGIN) {
                 x = b.x;
                 y = Math.max(MARGIN, Math.min(b.y, layer.getHeight() - h - MARGIN));
@@ -704,11 +704,11 @@ public final class TabCard {
     }
 
     /** {@code area} wraps to {@code width} and is as tall as its lines. */
-    private static void wrapTo(JTextArea area, int width) {
+    private static void wrapTo(final JTextArea area, final int width) {
         area.setPreferredSize(null);
         area.setMaximumSize(null);
         area.setSize(width, Short.MAX_VALUE);
-        int height = area.getPreferredSize().height;
+        final int height = area.getPreferredSize().height;
         area.setPreferredSize(new Dimension(width, height));
         area.setMaximumSize(new Dimension(width, height));
     }
@@ -718,7 +718,7 @@ public final class TabCard {
     }
 
     /** Closes the card; {@code at}, the point on the screen the pointer left it for, or null. */
-    private void hide(Point at) {
+    private void hide(final Point at) {
         if (shown == null) {
             return;
         }
@@ -730,7 +730,7 @@ public final class TabCard {
             stopHearingTint = null;
         }
         if (layer != null && card.getParent() == layer) {
-            Rectangle was = card.getBounds();
+            final Rectangle was = card.getBounds();
             layer.remove(card);
             layer.repaint(was);
         }

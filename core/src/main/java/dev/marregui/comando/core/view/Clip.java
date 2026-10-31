@@ -12,7 +12,7 @@ public final class Clip {
     }
 
     /** {@code text}, or its start and an ellipsis when it is longer than {@code max}: for names and messages. */
-    public static String keepStart(String text, int max) {
+    public static String keepStart(final String text, final int max) {
         check(max);
         if (text.length() <= max) {
             return text;
@@ -25,7 +25,7 @@ public final class Clip {
     }
 
     /** {@code text}, or an ellipsis and its end when it is longer than {@code max}: for paths, whose end names them. */
-    public static String keepEnd(String text, int max) {
+    public static String keepEnd(final String text, final int max) {
         check(max);
         if (text.length() <= max) {
             return text;
@@ -37,7 +37,7 @@ public final class Clip {
         return ELLIPSIS + text.substring(start);
     }
 
-    private static void check(int max) {
+    private static void check(final int max) {
         if (max < 1) {
             throw new IllegalArgumentException("a clip keeps at least the ellipsis [max=" + max + ']');
         }

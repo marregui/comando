@@ -1,23 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import com.github.difflib.DiffUtils;
-import com.github.difflib.algorithm.DiffAlgorithmListener;
-import com.github.difflib.algorithm.myers.MyersDiff;
-import com.github.difflib.patch.AbstractDelta;
-import com.github.difflib.patch.Patch;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rtextarea.RTextScrollPane;
-
-import javax.swing.BorderFactory;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JViewport;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DefaultHighlighter;
-import javax.swing.text.Highlighter;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -34,6 +16,25 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JViewport;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.Highlighter;
+
+import com.github.difflib.DiffUtils;
+import com.github.difflib.algorithm.DiffAlgorithmListener;
+import com.github.difflib.algorithm.myers.MyersDiff;
+import com.github.difflib.patch.AbstractDelta;
+import com.github.difflib.patch.Patch;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextScrollPane;
+
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Two versions of a text side by side, as IDEs compare them: each in an editor with its syntax colours and
@@ -90,18 +91,18 @@ public final class SplitDiff {
     private Model model = new Model("", "", List.of(), List.of(), List.of(), "", true);
 
     public SplitDiff() {
-        for (JLabel l : List.of(leftTitle, rightTitle)) {
+        for (final JLabel l : List.of(leftTitle, rightTitle)) {
             l.setForeground(Theme.MUTED_STRONG);
             l.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         }
-        GridBagConstraints c = new GridBagConstraints();
+        final GridBagConstraints c = new GridBagConstraints();
         c.fill = GridBagConstraints.BOTH;
         c.gridy = 0;
         c.weightx = 1;
         c.gridx = 0;
         panel.add(leftTitle, c);
         c.gridx = 2;
-        JPanel rightHead = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
+        final JPanel rightHead = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
         rightHead.add(rightTitle);
         rightHead.add(rightStatus);
         panel.add(rightHead, c);
@@ -163,51 +164,51 @@ public final class SplitDiff {
      * {@link #MAX_LINE_CHARS} are not compared: the editors lay such a line out in time that grows with its square.
      * Pure and thread-safe: run it off the EDT.
      */
-    public static Model compute(String before, String after, long budgetMillis) {
+    public static Model compute(final String before, final String after, final long budgetMillis) {
         if (longestLine(before) > MAX_LINE_CHARS || longestLine(after) > MAX_LINE_CHARS) {
             return new Model("", "", List.of(), List.of(), List.of(),
                     "a line longer than " + MAX_LINE_CHARS + " characters (minified?): not compared", false);
         }
-        List<String> a = lines(before);
-        List<String> b = lines(after);
-        long deadline = System.nanoTime() + budgetMillis * 1_000_000L;
+        final List<String> a = lines(before);
+        final List<String> b = lines(after);
+        final long deadline = System.nanoTime() + budgetMillis * 1_000_000L;
         List<Chunk> chunks;
         try {
             chunks = chunks(a, b, deadline);
-        } catch (OutOfTime e) {
-            List<Chunk> whole = a.equals(b) ? List.of() : List.of(new Chunk(0, a.size(), 0, b.size()));
+        } catch (final OutOfTime e) {
+            final List<Chunk> whole = a.equals(b) ? List.of() : List.of(new Chunk(0, a.size(), 0, b.size()));
             return new Model(before, after, whole, List.of(), List.of(), "too many differences to match line by line: compared as a whole", true);
         }
-        int[] la = lineStarts(before);
-        int[] lb = lineStarts(after);
-        List<int[]> lw = new ArrayList<>();
-        List<int[]> rw = new ArrayList<>();
+        final int[] la = lineStarts(before);
+        final int[] lb = lineStarts(after);
+        final List<int[]> lw = new ArrayList<>();
+        final List<int[]> rw = new ArrayList<>();
         try {
-            for (Chunk c : chunks) {
+            for (final Chunk c : chunks) {
                 if (c.inserted() || c.deleted()) {
                     continue;
                 }
-                int l0 = la[c.leftStart()];
-                int l1 = c.leftEnd() < la.length ? la[c.leftEnd()] : before.length();
-                int r0 = lb[c.rightStart()];
-                int r1 = c.rightEnd() < lb.length ? lb[c.rightEnd()] : after.length();
+                final int l0 = la[c.leftStart()];
+                final int l1 = c.leftEnd() < la.length ? la[c.leftEnd()] : before.length();
+                final int r0 = lb[c.rightStart()];
+                final int r1 = c.rightEnd() < lb.length ? lb[c.rightEnd()] : after.length();
                 if (l1 - l0 > MAX_WORD_DIFF_CHARS || r1 - r0 > MAX_WORD_DIFF_CHARS) {
                     continue;
                 }
-                List<int[]> cl = new ArrayList<>();
-                List<int[]> cr = new ArrayList<>();
+                final List<int[]> cl = new ArrayList<>();
+                final List<int[]> cr = new ArrayList<>();
                 wordChanges(before.substring(l0, l1), after.substring(r0, r1), cl, cr, deadline);
                 cl.forEach(w -> lw.add(new int[]{l0 + w[0], l0 + w[1]}));
                 cr.forEach(w -> rw.add(new int[]{r0 + w[0], r0 + w[1]}));
             }
-        } catch (OutOfTime e) {
+        } catch (final OutOfTime e) {
             // the line colours stand; the word marks found so far are kept
         }
         return new Model(before, after, chunks, lw, rw, "", true);
     }
 
     /** The characters of the longest line of {@code text}. */
-    static int longestLine(String text) {
+    static int longestLine(final String text) {
         int longest = 0;
         int start = 0;
         for (int i = 0; i <= text.length(); i++) {
@@ -220,7 +221,7 @@ public final class SplitDiff {
     }
 
     /** Where each line of {@code text} starts, as the editor counts lines; none for an empty text. */
-    static int[] lineStarts(String text) {
+    static int[] lineStarts(final String text) {
         if (text.isEmpty()) {
             return new int[0];
         }
@@ -230,7 +231,7 @@ public final class SplitDiff {
                 n++;
             }
         }
-        int[] out = new int[n];
+        final int[] out = new int[n];
         int k = 1;
         for (int i = 0; i < text.length(); i++) {
             if (text.charAt(i) == '\n') {
@@ -245,9 +246,9 @@ public final class SplitDiff {
      * titles, scrolled to the first difference; with {@code keepPlace}, scrolled where it was, for new versions of the
      * texts shown.
      */
-    public void show(String path, String leftName, String rightName, Model model, boolean keepPlace) {
-        Point place = rightScroll.getViewport().getViewPosition();
-        String style = Editors.styleFor(Path.of(path.isEmpty() ? "text" : path));
+    public void show(final String path, final String leftName, final String rightName, final Model model, final boolean keepPlace) {
+        final Point place = rightScroll.getViewport().getViewPosition();
+        final String style = Editors.styleFor(Path.of(path.isEmpty() ? "text" : path));
         left.setSyntaxEditingStyle(style);
         right.setSyntaxEditingStyle(style);
         leftTitle.setText(Plain.text(leftName));
@@ -283,7 +284,7 @@ public final class SplitDiff {
     }
 
     /** Says {@code text} beside the right side's title, in {@code colour}; empty says nothing. */
-    public void rightStatus(String text, Color colour, String tip) {
+    public void rightStatus(final String text, final Color colour, final String tip) {
         rightStatus.setText(text);
         rightStatus.setForeground(colour);
         rightStatus.setToolTipText(text.isEmpty() ? null : tip);
@@ -295,7 +296,7 @@ public final class SplitDiff {
     }
 
     /** Whether the right side may be edited. */
-    public void editable(boolean on) {
+    public void editable(final boolean on) {
         right.setEditable(on);
     }
 
@@ -303,7 +304,7 @@ public final class SplitDiff {
      * Marks {@code model}'s differences on the texts shown, without setting them, so the right side keeps its caret,
      * scroll and undo history while it is edited; a model worked out for other texts than those shown is ignored.
      */
-    public void remark(Model model) {
+    public void remark(final Model model) {
         if (!model.compared() || !left.getText().equals(model.before()) || !right.getText().equals(model.after())) {
             return;
         }
@@ -315,40 +316,40 @@ public final class SplitDiff {
     }
 
     /** {@link #compute} without a deadline, then {@link #show}; for tests and small texts. */
-    void show(String path, String leftName, String before, String rightName, String after, boolean keepPlace) {
+    void show(final String path, final String leftName, final String before, final String rightName, final String after, final boolean keepPlace) {
         show(path, leftName, rightName, compute(before, after, Long.MAX_VALUE / 2_000_000L), keepPlace);
     }
 
     /** The lines of {@code text} as the editor counts them; none for an empty text. */
-    static List<String> lines(String text) {
+    static List<String> lines(final String text) {
         return text.isEmpty() ? List.of() : Arrays.asList(text.split("\n", -1));
     }
 
     /** The differences between two lists of lines, in order. */
-    static List<Chunk> chunks(List<String> a, List<String> b) {
+    static List<Chunk> chunks(final List<String> a, final List<String> b) {
         return chunks(a, b, Long.MAX_VALUE);
     }
 
-    private static List<Chunk> chunks(List<String> a, List<String> b, long deadline) {
-        Patch<String> patch = DiffUtils.diff(a, b, new MyersDiff<>(), until(deadline));
-        List<Chunk> out = new ArrayList<>(patch.getDeltas().size());
-        for (AbstractDelta<String> d : patch.getDeltas()) {
-            int ls = d.getSource().getPosition();
-            int rs = d.getTarget().getPosition();
+    private static List<Chunk> chunks(final List<String> a, final List<String> b, final long deadline) {
+        final Patch<String> patch = DiffUtils.diff(a, b, new MyersDiff<>(), until(deadline));
+        final List<Chunk> out = new ArrayList<>(patch.getDeltas().size());
+        for (final AbstractDelta<String> d : patch.getDeltas()) {
+            final int ls = d.getSource().getPosition();
+            final int rs = d.getTarget().getPosition();
             out.add(new Chunk(ls, ls + d.getSource().size(), rs, rs + d.getTarget().size()));
         }
         return out;
     }
 
     /** A progress listener that stops the diff once {@code deadline} (a {@link System#nanoTime} value) has passed. */
-    private static DiffAlgorithmListener until(long deadline) {
+    private static DiffAlgorithmListener until(final long deadline) {
         return new DiffAlgorithmListener() {
             @Override
             public void diffStart() {
             }
 
             @Override
-            public void diffStep(int value, int max) {
+            public void diffStep(final int value, final int max) {
                 if (System.nanoTime() - deadline > 0) {
                     throw new OutOfTime();
                 }
@@ -365,13 +366,13 @@ public final class SplitDiff {
      * {@code fromLeft}, else on the right: the same distance into an unchanged stretch, the same share of a changed
      * one.
      */
-    static double map(List<Chunk> chunks, double pos, boolean fromLeft) {
+    static double map(final List<Chunk> chunks, final double pos, final boolean fromLeft) {
         double shift = 0;
-        for (Chunk c : chunks) {
-            int s = fromLeft ? c.leftStart() : c.rightStart();
-            int e = fromLeft ? c.leftEnd() : c.rightEnd();
-            int os = fromLeft ? c.rightStart() : c.leftStart();
-            int oe = fromLeft ? c.rightEnd() : c.leftEnd();
+        for (final Chunk c : chunks) {
+            final int s = fromLeft ? c.leftStart() : c.rightStart();
+            final int e = fromLeft ? c.leftEnd() : c.rightEnd();
+            final int os = fromLeft ? c.rightStart() : c.leftStart();
+            final int oe = fromLeft ? c.rightEnd() : c.leftEnd();
             if (pos < s) {
                 return pos + (os - s);
             }
@@ -384,17 +385,17 @@ public final class SplitDiff {
     }
 
     /** Colours the lines each difference touches, then the words inside a changed stretch that differ. */
-    private void mark(Model model) {
+    private void mark(final Model model) {
         left.removeAllLineHighlights();
         right.removeAllLineHighlights();
         left.getHighlighter().removeAllHighlights();
         right.getHighlighter().removeAllHighlights();
-        Highlighter.HighlightPainter removed = new DefaultHighlighter.DefaultHighlightPainter(Theme.content().removedWord);
-        Highlighter.HighlightPainter added = new DefaultHighlighter.DefaultHighlightPainter(Theme.content().addedWord);
-        Color lost = Theme.content().removed;
-        Color gained = Theme.content().added;
+        final Highlighter.HighlightPainter removed = new DefaultHighlighter.DefaultHighlightPainter(Theme.content().removedWord);
+        final Highlighter.HighlightPainter added = new DefaultHighlighter.DefaultHighlightPainter(Theme.content().addedWord);
+        final Color lost = Theme.content().removed;
+        final Color gained = Theme.content().added;
         try {
-            for (Chunk c : chunks) {
+            for (final Chunk c : chunks) {
                 for (int i = c.leftStart(); i < c.leftEnd(); i++) {
                     left.addLineHighlight(i, lost);
                 }
@@ -402,13 +403,13 @@ public final class SplitDiff {
                     right.addLineHighlight(i, gained);
                 }
             }
-            for (int[] w : model.leftWords()) {
+            for (final int[] w : model.leftWords()) {
                 left.getHighlighter().addHighlight(w[0], w[1], removed);
             }
-            for (int[] w : model.rightWords()) {
+            for (final int[] w : model.rightWords()) {
                 right.getHighlighter().addHighlight(w[0], w[1], added);
             }
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -418,21 +419,21 @@ public final class SplitDiff {
      * {@code aSpans} and {@code bSpans}; none, and false, when more than half of either side's words differ, since
      * marking nearly all of a stretch tells nothing its line colour does not. Whitespace that differs is not marked.
      */
-    static boolean wordChanges(String a, String b, List<int[]> aSpans, List<int[]> bSpans) {
+    static boolean wordChanges(final String a, final String b, final List<int[]> aSpans, final List<int[]> bSpans) {
         return wordChanges(a, b, aSpans, bSpans, Long.MAX_VALUE);
     }
 
-    private static boolean wordChanges(String a, String b, List<int[]> aSpans, List<int[]> bSpans, long deadline) {
-        List<int[]> aPos = new ArrayList<>();
-        List<int[]> bPos = new ArrayList<>();
-        List<String> aw = words(a, aPos);
-        List<String> bw = words(b, bPos);
-        Patch<String> patch = DiffUtils.diff(aw, bw, new MyersDiff<>(), until(deadline));
+    private static boolean wordChanges(final String a, final String b, final List<int[]> aSpans, final List<int[]> bSpans, final long deadline) {
+        final List<int[]> aPos = new ArrayList<>();
+        final List<int[]> bPos = new ArrayList<>();
+        final List<String> aw = words(a, aPos);
+        final List<String> bw = words(b, bPos);
+        final Patch<String> patch = DiffUtils.diff(aw, bw, new MyersDiff<>(), until(deadline));
         int aChanged = 0;
         int bChanged = 0;
-        List<int[]> as = new ArrayList<>();
-        List<int[]> bs = new ArrayList<>();
-        for (AbstractDelta<String> d : patch.getDeltas()) {
+        final List<int[]> as = new ArrayList<>();
+        final List<int[]> bs = new ArrayList<>();
+        for (final AbstractDelta<String> d : patch.getDeltas()) {
             aChanged += collect(d.getSource().getPosition(), d.getSource().size(), aw, aPos, as);
             bChanged += collect(d.getTarget().getPosition(), d.getTarget().size(), bw, bPos, bs);
         }
@@ -444,7 +445,7 @@ public final class SplitDiff {
         return true;
     }
 
-    private static int collect(int from, int size, List<String> words, List<int[]> pos, List<int[]> out) {
+    private static int collect(final int from, final int size, final List<String> words, final List<int[]> pos, final List<int[]> out) {
         int n = 0;
         for (int i = from; i < from + size; i++) {
             if (!words.get(i).isBlank()) {
@@ -455,9 +456,9 @@ public final class SplitDiff {
         return n;
     }
 
-    private static int count(List<String> words) {
+    private static int count(final List<String> words) {
         int n = 0;
-        for (String w : words) {
+        for (final String w : words) {
             if (!w.isBlank()) {
                 n++;
             }
@@ -465,9 +466,9 @@ public final class SplitDiff {
         return n;
     }
 
-    private static List<String> words(String s, List<int[]> pos) {
-        List<String> out = new ArrayList<>();
-        Matcher m = WORDS.matcher(s);
+    private static List<String> words(final String s, final List<int[]> pos) {
+        final List<String> out = new ArrayList<>();
+        final Matcher m = WORDS.matcher(s);
         while (m.find()) {
             out.add(m.group());
             pos.add(new int[]{m.start(), m.end()});
@@ -476,7 +477,7 @@ public final class SplitDiff {
     }
 
     /** Scrolls {@code to} to the line of {@code from}'s top that matches, and sideways as far. */
-    private void follow(JViewport from, JViewport to, boolean fromLeft) {
+    private void follow(final JViewport from, final JViewport to, final boolean fromLeft) {
         connector.repaint();
         if (!revealing) {
             // the user scrolled: the next difference is found from where the view is
@@ -487,11 +488,11 @@ public final class SplitDiff {
         }
         syncing = true;
         try {
-            double lh = left.getLineHeight();
-            Point p = from.getViewPosition();
-            double line = map(chunks, p.y / lh, fromLeft);
-            int maxY = Math.max(0, to.getView().getHeight() - to.getExtentSize().height);
-            int maxX = Math.max(0, to.getView().getWidth() - to.getExtentSize().width);
+            final double lh = left.getLineHeight();
+            final Point p = from.getViewPosition();
+            final double line = map(chunks, p.y / lh, fromLeft);
+            final int maxY = Math.max(0, to.getView().getHeight() - to.getExtentSize().height);
+            final int maxX = Math.max(0, to.getView().getWidth() - to.getExtentSize().width);
             to.setViewPosition(new Point(Math.min(p.x, maxX), (int) Math.max(0, Math.min(Math.round(line * lh), maxY))));
         } finally {
             syncing = false;
@@ -505,7 +506,7 @@ public final class SplitDiff {
     public boolean next() {
         int i = current;
         if (i < 0) {
-            int top = topLine();
+            final int top = topLine();
             i = chunks.size();
             for (int k = 0; k < chunks.size(); k++) {
                 if (chunks.get(k).rightStart() > top) {
@@ -530,7 +531,7 @@ public final class SplitDiff {
     public boolean previous() {
         int i = current;
         if (i < 0) {
-            int top = topLine();
+            final int top = topLine();
             i = -1;
             for (int k = chunks.size() - 1; k >= 0; k--) {
                 if (chunks.get(k).rightStart() < top) {
@@ -559,18 +560,18 @@ public final class SplitDiff {
     }
 
     /** Puts difference {@code i} a few lines below the top of the right side; the left follows. */
-    private void reveal(int i) {
-        Chunk c = chunks.get(i);
+    private void reveal(final int i) {
+        final Chunk c = chunks.get(i);
         revealing = true;
         try {
-            JViewport v = rightScroll.getViewport();
-            int y = Math.max(0, (c.rightStart() - REVEAL_LINES) * right.getLineHeight());
-            int maxY = Math.max(0, v.getView().getHeight() - v.getExtentSize().height);
+            final JViewport v = rightScroll.getViewport();
+            final int y = Math.max(0, (c.rightStart() - REVEAL_LINES) * right.getLineHeight());
+            final int maxY = Math.max(0, v.getView().getHeight() - v.getExtentSize().height);
             v.setViewPosition(new Point(0, Math.min(y, maxY)));
             if (y > maxY) {
                 // the right side ends before the difference can reach the top: the left is placed on its own
-                JViewport lv = leftScroll.getViewport();
-                int ly = Math.max(0, (c.leftStart() - REVEAL_LINES) * left.getLineHeight());
+                final JViewport lv = leftScroll.getViewport();
+                final int ly = Math.max(0, (c.leftStart() - REVEAL_LINES) * left.getLineHeight());
                 syncing = true;
                 try {
                     lv.setViewPosition(new Point(0, Math.min(ly, Math.max(0, lv.getView().getHeight() - lv.getExtentSize().height))));
@@ -596,27 +597,27 @@ public final class SplitDiff {
         }
 
         @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
+        protected void paintComponent(final Graphics g) {
+            final Graphics2D g2 = (Graphics2D) g.create();
             try {
                 g2.setColor(left.getBackground());
                 g2.fillRect(0, 0, getWidth(), getHeight());
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 // the editors sit below their titles: the band's lines are measured from the editors' tops
-                int top = leftScroll.getY() - getY();
-                double lh = left.getLineHeight();
-                int ly = leftScroll.getViewport().getViewPosition().y;
-                int ry = rightScroll.getViewport().getViewPosition().y;
-                int w = getWidth();
-                for (Chunk c : chunks) {
-                    int l0 = top + (int) (c.leftStart() * lh) - ly;
-                    int l1 = top + (int) (c.leftEnd() * lh) - ly;
-                    int r0 = top + (int) (c.rightStart() * lh) - ry;
-                    int r1 = top + (int) (c.rightEnd() * lh) - ry;
+                final int top = leftScroll.getY() - getY();
+                final double lh = left.getLineHeight();
+                final int ly = leftScroll.getViewport().getViewPosition().y;
+                final int ry = rightScroll.getViewport().getViewPosition().y;
+                final int w = getWidth();
+                for (final Chunk c : chunks) {
+                    final int l0 = top + (int) (c.leftStart() * lh) - ly;
+                    final int l1 = top + (int) (c.leftEnd() * lh) - ly;
+                    final int r0 = top + (int) (c.rightStart() * lh) - ry;
+                    final int r1 = top + (int) (c.rightEnd() * lh) - ry;
                     if (Math.max(l1, r1) < 0 || Math.min(l0, r0) > getHeight()) {
                         continue;
                     }
-                    Color color = c.inserted() ? Theme.VCS_ADDED : c.deleted() ? Theme.DANGER : Theme.VCS_MODIFIED;
+                    final Color color = c.inserted() ? Theme.VCS_ADDED : c.deleted() ? Theme.DANGER : Theme.VCS_MODIFIED;
                     g2.setColor(Theme.withAlpha(color, 90));
                     g2.fillPolygon(new Polygon(new int[]{0, w, w, 0}, new int[]{l0, r0, r1, l1}, 4));
                     g2.setColor(color);

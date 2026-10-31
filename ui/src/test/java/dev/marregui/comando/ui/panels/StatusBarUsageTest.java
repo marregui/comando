@@ -1,12 +1,13 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.model.PlanUsage;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.junit.jupiter.api.Test;
-
+import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
-import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,9 +37,9 @@ class StatusBarUsageTest {
     /// the failure, HTML-escaped, to the tooltip.
     @Test
     void aFailedReadKeepsTheLastNumbersMutedAndSaysWhy() throws Exception {
-        StatusBar bar = new StatusBar(intent -> {
+        final StatusBar bar = new StatusBar(intent -> {
         });
-        JLabel label = bar.usageLabel();
+        final JLabel label = bar.usageLabel();
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed("not logged in", 2L)));
         assertThat(label.isVisible()).as("nothing to show yet").isFalse();
 
@@ -57,9 +58,9 @@ class StatusBarUsageTest {
     /// its source in the tooltip; its later failure keeps its last text muted and adds no failure to the first label.
     @Test
     void codexHasALabelOfItsOwnAfterClaudes() throws Exception {
-        StatusBar bar = new StatusBar(intent -> {
+        final StatusBar bar = new StatusBar(intent -> {
         });
-        PlanUsage codex = new PlanUsage(PlanUsage.CODEX, List.of(new PlanUsage.Window("Session", 4, "Oct 27 at 12:06"),
+        final PlanUsage codex = new PlanUsage(PlanUsage.CODEX, List.of(new PlanUsage.Window("Session", 4, "Oct 27 at 12:06"),
                 new PlanUsage.Window("Week", 92, "Nov 2 at 14:15")), 1L, "");
         SwingUtilities.invokeAndWait(() -> bar.planUsage(READ));
         SwingUtilities.invokeAndWait(() -> bar.planUsage(codex));
@@ -70,7 +71,7 @@ class StatusBarUsageTest {
         assertThat(bar.codexUsageLabel().getToolTipText()).contains("Week: 92% used, resets Nov 2 at 14:15").contains("from codex app-server");
         assertThat(bar.usageLabel().getText()).as("Claude's label keeps its own read").isEqualTo("Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.MUTED);
-        int[] order = {bar.usageLabel().getParent().getComponentZOrder(bar.usageLabel()),
+        final int[] order = {bar.usageLabel().getParent().getComponentZOrder(bar.usageLabel()),
                 bar.usageLabel().getParent().getComponentZOrder(bar.codexUsageLabel())};
         assertThat(order[0]).as("Claude's first, then Codex's").isLessThan(order[1]);
 
@@ -83,7 +84,7 @@ class StatusBarUsageTest {
     /// A first read of the second plan that fails because its CLI cannot run leaves its label hidden.
     @Test
     void withoutCodexItsLabelNeverShows() throws Exception {
-        StatusBar bar = new StatusBar(intent -> {
+        final StatusBar bar = new StatusBar(intent -> {
         });
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed(PlanUsage.CODEX, "cannot run 'codex'", 2L)));
         assertThat(bar.codexUsageLabel().isVisible()).isFalse();
@@ -92,7 +93,7 @@ class StatusBarUsageTest {
     /// A window at 80% turns the label to [Theme#ATTENTION], one at 95% to [Theme#DANGER].
     @Test
     void aWindowNearItsLimitTurnsTheLabelToAWarningThenADanger() throws Exception {
-        StatusBar bar = new StatusBar(intent -> {
+        final StatusBar bar = new StatusBar(intent -> {
         });
         SwingUtilities.invokeAndWait(() -> bar.planUsage(new PlanUsage(List.of(new PlanUsage.Window("Week", 80, "")), 1L, "")));
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.ATTENTION);

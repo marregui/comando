@@ -1,5 +1,17 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.event.HierarchyEvent;
+import java.util.List;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.state.BackgroundTask;
@@ -19,18 +31,6 @@ import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 import dev.marregui.comando.ui.widgets.transcript.render.Style;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
-
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JPanel;
-import javax.swing.JScrollBar;
-import javax.swing.JScrollPane;
-import javax.swing.SwingUtilities;
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.event.HierarchyEvent;
-import java.util.List;
 
 /**
  * A session's transcript as structured blocks, painted by {@link TranscriptCanvas}. Holds the last
@@ -71,7 +71,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private List<Approval> waiting = List.of();
     private List<BackgroundTask> tasks = List.of();
 
-    public TranscriptWidget(WidgetContext context) {
+    public TranscriptWidget(final WidgetContext context) {
         this.context = context;
         FocusRing.install(scroll);
         // the canvas paints no ground of its own: the viewport's shows through it
@@ -85,7 +85,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         latest.setToolTipText("Scroll to the latest block and follow it");
         latest.setFocusable(false);
         latest.addActionListener(e -> followLatest());
-        JPanel north = new JPanel();
+        final JPanel north = new JPanel();
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
         north.setOpaque(false);
         strip.setAlignmentX(0f);
@@ -124,7 +124,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
      * The approval cards waiting on the session this tab shows: the tool calls they hold up read "waiting for your
      * approval" instead of "running". Does nothing when the list equals the last one.
      */
-    public void setWaiting(List<Approval> waiting) {
+    public void setWaiting(final List<Approval> waiting) {
         if (waiting.equals(this.waiting)) {
             return;
         }
@@ -136,7 +136,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
      * The background work of the session this tab shows: its sub-agents without a running card get a chip in the
      * strip. Does nothing when the list equals the last one.
      */
-    public void setBackgroundTasks(List<BackgroundTask> tasks) {
+    public void setBackgroundTasks(final List<BackgroundTask> tasks) {
         if (tasks.equals(this.tasks)) {
             return;
         }
@@ -151,7 +151,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     private void updateStrip() {
-        boolean shown = strip.isVisible();
+        final boolean shown = strip.isVisible();
         strip.show(transcript == null ? List.of() : canvas.runningAgents(), tasks);
         if (shown != strip.isVisible() && following) {
             // the strip took or gave back a line of the view: a transcript that followed its end still shows it
@@ -163,7 +163,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private String whenEmpty = "";
 
     /** Says {@code text} over a transcript with no blocks yet, not a session's (a sub-agent's tab, record 109). */
-    public void whenEmpty(String text) {
+    public void whenEmpty(final String text) {
         whenEmpty = text;
     }
 
@@ -173,7 +173,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     @Override
-    public void render(TranscriptView view) {
+    public void render(final TranscriptView view) {
         if (view == null || view.transcript() == null) {
             transcript = null;
             session = "";
@@ -197,7 +197,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         sync();
     }
 
-    private void reset(int start) {
+    private void reset(final int start) {
         canvas.clear();
         canvas.setWaiting(waiting);
         canvas.setBackgroundTasks(tasks);
@@ -214,15 +214,15 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
             following = atEnd();
         }
         boolean follow = following;
-        int n = transcript.size();
+        final int n = transcript.size();
         for (int i = windowStart; i < built; i++) {
-            Block b = transcript.get(i);
+            final Block b = transcript.get(i);
             if (b != null && canvas.blockAt(i) != b) {
                 canvas.update(i, b);
             }
         }
         for (int i = built; i < n; i++) {
-            Block b = transcript.get(i);
+            final Block b = transcript.get(i);
             if (b != null) {
                 canvas.append(i, b);
                 if (b instanceof Block.UserPrompt p && !p.origin().isEmpty() && p.parent().isEmpty()) {
@@ -242,8 +242,8 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
 
     /** A change of the bar's value alone is the user scrolling; a change of its range is content or the viewport. */
     private void barChanged() {
-        JScrollBar bar = scroll.getVerticalScrollBar();
-        boolean ranged = bar.getMaximum() != barMaximum || bar.getVisibleAmount() != barExtent;
+        final JScrollBar bar = scroll.getVerticalScrollBar();
+        final boolean ranged = bar.getMaximum() != barMaximum || bar.getVisibleAmount() != barExtent;
         barMaximum = bar.getMaximum();
         barExtent = bar.getVisibleAmount();
         if (ranged || !scroll.isShowing()) {
@@ -254,7 +254,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     private void updateLatest() {
-        boolean show = !following && transcript != null && transcript.size() > 0;
+        final boolean show = !following && transcript != null && transcript.size() > 0;
         if (latest.isVisible() != show) {
             latest.setVisible(show);
         }
@@ -267,11 +267,11 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     private void showEarlier() {
-        int from = Math.max(0, windowStart - WINDOW);
-        int end = built;
+        final int from = Math.max(0, windowStart - WINDOW);
+        final int end = built;
         reset(from);
         for (int i = from; i < end; i++) {
-            Block b = transcript.get(i);
+            final Block b = transcript.get(i);
             if (b != null) {
                 canvas.append(i, b);
             }
@@ -288,7 +288,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     /** Follows a link in the transcript; package-private for tests. */
-    void openLink(String href) {
+    void openLink(final String href) {
         if (href.startsWith(SourceLinks.SCHEME)) {
             context.intents().dispatch(new Intent.OpenFile(session, SourceLinks.path(href), SourceLinks.line(href)));
         } else if (href.startsWith(TranscriptCanvas.SUBAGENT_SCHEME)) {
@@ -299,14 +299,14 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     private boolean atEnd() {
-        JScrollBar bar = scroll.getVerticalScrollBar();
+        final JScrollBar bar = scroll.getVerticalScrollBar();
         return bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 40;
     }
 
     /** Lays the pane out first, so the bar's maximum covers blocks appended since the last layout. */
     private void scrollToEnd() {
         scroll.validate();
-        JScrollBar bar = scroll.getVerticalScrollBar();
+        final JScrollBar bar = scroll.getVerticalScrollBar();
         bar.setValue(bar.getMaximum());
     }
 
@@ -319,7 +319,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     // ---- capabilities
 
     @Override
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return canvas.find(text, forward);
     }
 
@@ -336,7 +336,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     /** The selection when there is one, else the loaded blocks as Markdown. */
     @Override
     public String copyText() {
-        String selected = canvas.selectionText();
+        final String selected = canvas.selectionText();
         return selected.isEmpty() ? canvas.markdown() : selected;
     }
 
@@ -347,7 +347,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     @Override
-    public void zoom(int steps) {
+    public void zoom(final int steps) {
         canvas.setZoom(Style.clampZoom(canvas.zoom() + steps));
     }
 
@@ -361,7 +361,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         private final JScrollPane scroll;
         private final JButton button;
 
-        Layered(JScrollPane scroll, JButton button) {
+        Layered(final JScrollPane scroll, final JButton button) {
             super(null);
             this.scroll = scroll;
             this.button = button;
@@ -384,9 +384,9 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         @Override
         public void doLayout() {
             scroll.setBounds(0, 0, getWidth(), getHeight());
-            Dimension d = button.getPreferredSize();
-            JScrollBar bar = scroll.getVerticalScrollBar();
-            int barWidth = bar.isVisible() ? bar.getPreferredSize().width : 0;
+            final Dimension d = button.getPreferredSize();
+            final JScrollBar bar = scroll.getVerticalScrollBar();
+            final int barWidth = bar.isVisible() ? bar.getPreferredSize().width : 0;
             button.setBounds(Math.max(0, getWidth() - d.width - barWidth - Theme.PAD), Math.max(0, getHeight() - d.height - Theme.PAD), d.width, d.height);
         }
     }

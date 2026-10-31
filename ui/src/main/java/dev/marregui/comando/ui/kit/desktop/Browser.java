@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import dev.marregui.comando.ui.kit.async.UiErrands;
-
 import java.awt.Desktop;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.function.Consumer;
+
+import dev.marregui.comando.ui.kit.async.UiErrands;
 
 /**
  * Opens web links, and files such as HTML pages, in the user's browser. The browser call can block, so it runs on the
@@ -20,21 +20,21 @@ public final class Browser {
     }
 
     /** True for an {@code http} or {@code https} link, in any letter case; false for null. */
-    public static boolean isWebLink(String href) {
+    public static boolean isWebLink(final String href) {
         if (href == null) {
             return false;
         }
-        String h = href.toLowerCase(Locale.ROOT);
+        final String h = href.toLowerCase(Locale.ROOT);
         return h.startsWith("http://") || h.startsWith("https://");
     }
 
     /** Opens {@code href} in the browser when it is a web link and the desktop can browse; returns at once. */
-    public static void open(String href) {
+    public static void open(final String href) {
         if (Desktop.isDesktopSupported()) {
             open(href, uri -> {
                 try {
                     Desktop.getDesktop().browse(uri);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOG.log(System.Logger.Level.WARNING, "cannot open [uri=" + uri + ']', e);
                 }
             });
@@ -42,27 +42,27 @@ public final class Browser {
     }
 
     /** Opens a local file, such as an HTML page, in the browser when the desktop can browse; returns at once. */
-    public static void openFile(Path file) {
+    public static void openFile(final Path file) {
         if (Desktop.isDesktopSupported()) {
-            URI uri = file.toAbsolutePath().toUri();
+            final URI uri = file.toAbsolutePath().toUri();
             UiErrands.start("open-link", () -> {
                 try {
                     Desktop.getDesktop().browse(uri);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOG.log(System.Logger.Level.WARNING, "cannot open [uri=" + uri + ']', e);
                 }
             });
         }
     }
 
-    static void open(String href, Consumer<URI> browse) {
+    static void open(final String href, final Consumer<URI> browse) {
         if (!isWebLink(href)) {
             return;
         }
         URI uri;
         try {
             uri = URI.create(href);
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot open [href=" + href + ", cause=" + e.getMessage() + ']');
             return;
         }

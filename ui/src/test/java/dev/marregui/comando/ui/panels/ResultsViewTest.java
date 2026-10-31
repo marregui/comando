@@ -1,5 +1,13 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Optional;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.SqlRun;
@@ -7,13 +15,6 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
-import java.awt.Component;
-import java.awt.Container;
-import java.lang.reflect.InvocationTargetException;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,8 +32,8 @@ class ResultsViewTest {
     @Test
     void theTickDoesNotPaintARunThePanelDoesNotHave() {
         onEdt(() -> {
-            ResultsView rv = new ResultsView(new ResultRegistry());
-            SqlRun running = SqlRun.queued(7, PanelId.random(), "tutorial", "select 1").started(System.currentTimeMillis() - 42_000);
+            final ResultsView rv = new ResultsView(new ResultRegistry());
+            final SqlRun running = SqlRun.queued(7, PanelId.random(), "tutorial", "select 1").started(System.currentTimeMillis() - 42_000);
             rv.render(Optional.of(running));
             assertThat(overlay(rv).messageText()).startsWith("Running on tutorial");
             rv.render(Optional.empty());
@@ -46,9 +47,9 @@ class ResultsViewTest {
     @Test
     void aFailedRunShowsTheErrorWithoutAClaimAboutTheEditor() {
         onEdt(() -> {
-            ResultsView rv = new ResultsView(new ResultRegistry());
-            String error = "ERROR: table does not exist [table=nope]\n  Position: 16";
-            SqlRun failed = SqlRun.queued(8, PanelId.random(), "tutorial", "insert into t1 values (99); select * From nope")
+            final ResultsView rv = new ResultsView(new ResultRegistry());
+            final String error = "ERROR: table does not exist [table=nope]\n  Position: 16";
+            final SqlRun failed = SqlRun.queued(8, PanelId.random(), "tutorial", "insert into t1 values (99); select * From nope")
                     .started(System.currentTimeMillis()).failed(error, 5);
             rv.render(Optional.of(failed));
             assertThat(overlay(rv).errorText()).isEqualTo(error);
@@ -60,11 +61,11 @@ class ResultsViewTest {
     @Test
     void theResultsTabCopiesTheErrorOfAFailedRun() {
         onEdt(() -> {
-            ResultsView rv = new ResultsView(new ResultRegistry());
-            Copyable copy = Capabilities.at(rv.component(), Copyable.class);
+            final ResultsView rv = new ResultsView(new ResultRegistry());
+            final Copyable copy = Capabilities.at(rv.component(), Copyable.class);
             assertThat(copy).isNotNull();
-            String error = "ERROR: table does not exist [table=nope]";
-            SqlRun run = SqlRun.queued(9, PanelId.random(), "tutorial", "select * From nope").started(System.currentTimeMillis());
+            final String error = "ERROR: table does not exist [table=nope]";
+            final SqlRun run = SqlRun.queued(9, PanelId.random(), "tutorial", "select * From nope").started(System.currentTimeMillis());
             rv.render(Optional.of(run.failed(error, 5)));
             assertThat(copy.copyText()).isEqualTo(error);
             rv.render(Optional.of(run.completed(0, 0, false, 1, 1, 2)));
@@ -77,11 +78,11 @@ class ResultsViewTest {
     @Test
     void anEmptyResultsTabHasNothingToCopy() {
         onEdt(() -> {
-            ResultsView rv = new ResultsView(new ResultRegistry());
-            Copyable copy = Capabilities.at(rv.component(), Copyable.class);
+            final ResultsView rv = new ResultsView(new ResultRegistry());
+            final Copyable copy = Capabilities.at(rv.component(), Copyable.class);
             rv.render(Optional.empty());
             assertThat(copy.canCopy()).isFalse();
-            SqlRun run = SqlRun.queued(3, PanelId.random(), "tutorial", "select 1").started(System.currentTimeMillis());
+            final SqlRun run = SqlRun.queued(3, PanelId.random(), "tutorial", "select 1").started(System.currentTimeMillis());
             rv.render(Optional.of(run));
             assertThat(copy.canCopy()).as("running, no rows yet").isFalse();
             rv.render(Optional.of(run.failed("ERROR: boom", 5)));
@@ -89,17 +90,17 @@ class ResultsViewTest {
         });
     }
 
-    private static Overlay overlay(ResultsView rv) {
+    private static Overlay overlay(final ResultsView rv) {
         return find(rv.component(), Overlay.class);
     }
 
-    private static <T> T find(Component root, Class<T> type) {
+    private static <T> T find(final Component root, final Class<T> type) {
         if (type.isInstance(root)) {
             return type.cast(root);
         }
         if (root instanceof Container k) {
-            for (Component x : k.getComponents()) {
-                T t = find(x, type);
+            for (final Component x : k.getComponents()) {
+                final T t = find(x, type);
                 if (t != null) {
                     return t;
                 }
@@ -108,10 +109,10 @@ class ResultsViewTest {
         return null;
     }
 
-    private static void onEdt(Runnable r) {
+    private static void onEdt(final Runnable r) {
         try {
             SwingUtilities.invokeAndWait(r);
-        } catch (InvocationTargetException e) {
+        } catch (final InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException x) {
                 throw x;
             }
@@ -119,7 +120,7 @@ class ResultsViewTest {
                 throw x;
             }
             throw new IllegalStateException(e.getCause());
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);
         }

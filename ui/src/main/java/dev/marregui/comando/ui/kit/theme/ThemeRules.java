@@ -15,19 +15,19 @@ public final class ThemeRules {
     }
 
     /** What in {@code tint} on {@code ground} reads below its floor, one line each; empty when the theme reads. */
-    public static List<String> problems(Ground ground, Tint tint) {
-        List<String> out = new ArrayList<>();
-        Color g = ground.color;
+    public static List<String> problems(final Ground ground, final Tint tint) {
+        final List<String> out = new ArrayList<>();
+        final Color g = ground.color;
         floor(out, "the transcript's text on the ground", Theme.fixed(Theme.TRANSCRIPT_TEXT, ground.light), g, 12);
         floor(out, "a card on the ground", ((OnGround) Theme.CARD).on(ground), g, 1.2);
         floor(out, "the tint's body on the ground", tint.body, g, 7.5);
         floor(out, "the tint's shade on the ground", tint.shade, g, 4);
         floor(out, "the tint's highlight on a table's head", tint.highlight, Tint.over(g, tint.shade, 0.22f), 7);
-        ContentPalette p = ContentPalette.of(tint, ground);
+        final ContentPalette p = ContentPalette.of(tint, ground);
         floor(out, "code on the ground", p.ink, g, 12);
         floor(out, "keywords on the ground", p.keyword, g, 7.5);
         floor(out, "comments on the ground", p.comment, g, 4.5);
-        Color[] cats = p.categories();
+        final Color[] cats = p.categories();
         for (int i = 0; i < cats.length; i++) {
             floor(out, "syntax colour " + (i + 1) + " on the ground", cats[i], g, 6.5);
         }
@@ -39,25 +39,25 @@ public final class ThemeRules {
     }
 
     /** WCAG's contrast ratio of {@code a} over {@code b}, 1 to 21. */
-    public static double contrast(Color a, Color b) {
-        double la = luminance(a);
-        double lb = luminance(b);
+    public static double contrast(final Color a, final Color b) {
+        final double la = luminance(a);
+        final double lb = luminance(b);
         return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
     }
 
-    private static void floor(List<String> out, String what, Color c, Color on, double min) {
-        double r = contrast(c, on);
+    private static void floor(final List<String> out, final String what, final Color c, final Color on, final double min) {
+        final double r = contrast(c, on);
         if (r <= min) {
             out.add(String.format("%s reads at %.1f:1, below %s:1", what, r, min % 1 == 0 ? String.valueOf((int) min) : String.valueOf(min)));
         }
     }
 
-    private static double luminance(Color c) {
+    private static double luminance(final Color c) {
         return 0.2126 * linear(c.getRed()) + 0.7152 * linear(c.getGreen()) + 0.0722 * linear(c.getBlue());
     }
 
-    private static double linear(int channel) {
-        double v = channel / 255.0;
+    private static double linear(final int channel) {
+        final double v = channel / 255.0;
         return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     }
 }

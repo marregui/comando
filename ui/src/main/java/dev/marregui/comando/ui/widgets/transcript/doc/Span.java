@@ -19,11 +19,11 @@ public record Span(String text, int style, String href) {
         Objects.requireNonNull(href, "href");
     }
 
-    public static Span plain(String text) {
+    public static Span plain(final String text) {
         return new Span(text, 0, "");
     }
 
-    public boolean has(int bit) {
+    public boolean has(final int bit) {
         return (style & bit) != 0;
     }
 

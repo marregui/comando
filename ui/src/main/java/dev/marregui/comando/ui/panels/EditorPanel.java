@@ -1,5 +1,43 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.Rectangle2D;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import javax.swing.text.Element;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Status;
@@ -30,43 +68,6 @@ import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.text.TextLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
-import javax.swing.JViewport;
-import javax.swing.SwingUtilities;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Element;
-import javax.swing.text.Document;
-import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.FlowLayout;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.geom.Rectangle2D;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * One editor panel: a header with its connection and its controls, and the command editor; its session is shown in the
@@ -153,7 +154,7 @@ public final class EditorPanel extends JPanel {
     private JViewport watched;
     private long pendingEntryUntil;
 
-    public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
+    public EditorPanel(final PanelState panel, final IntentSink intents, final SchemaRegistry schemas) {
         super(new BorderLayout(0, 0));
         this.panel = panel;
         this.intents = intents;
@@ -166,11 +167,11 @@ public final class EditorPanel extends JPanel {
         clear.getAccessibleContext().setAccessibleName("Clear");
         browser.setIcon(Icons.get("browser"));
         connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
-        JPanel header = new JPanel(new BorderLayout());
+        final JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.GAP, 4, Theme.GAP));
         // the tools at the right, the connection first: its icon connects or disconnects and shows the state, its name
         // binds another; icons close together
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        final JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         right.add(connectionToggle);
         right.add(connection);
         run.setToolTipText(KeyText.of("Run the selection or block (⌘⏎); to Claude ⌘⇧⏎, as SQL ⌥⏎"));
@@ -213,7 +214,7 @@ public final class EditorPanel extends JPanel {
         // a link in the text itself, double-clicked as in the rendered page (record 94)
         editor.area().addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
+            public void mouseClicked(final MouseEvent e) {
                 if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
                     followLinkAt(editor.area().viewToModel2D(e.getPoint()));
                 }
@@ -222,14 +223,14 @@ public final class EditorPanel extends JPanel {
         // a panel opened for a link to one of its headings is laid out after it is made
         renderedScroll.addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentResized(ComponentEvent e) {
+            public void componentResized(final ComponentEvent e) {
                 scrollToPendingHeading();
             }
         });
         // a log opened for one of its entries is laid out after it is made
         editor.component().addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentResized(ComponentEvent e) {
+            public void componentResized(final ComponentEvent e) {
                 showPendingEntry();
             }
         });
@@ -258,19 +259,19 @@ public final class EditorPanel extends JPanel {
         });
         editor.area().getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(DocumentEvent e) {
+            public void insertUpdate(final DocumentEvent e) {
                 showClear();
                 outlineSoon();
             }
 
             @Override
-            public void removeUpdate(DocumentEvent e) {
+            public void removeUpdate(final DocumentEvent e) {
                 showClear();
                 outlineSoon();
             }
 
             @Override
-            public void changedUpdate(DocumentEvent e) {
+            public void changedUpdate(final DocumentEvent e) {
                 // attributes only: the text is the same
             }
         });
@@ -289,7 +290,7 @@ public final class EditorPanel extends JPanel {
      * sentences addressed to Claude dropped, nothing of its own added but the questions the text leaves open; then a
      * few lines on what changed beyond wording.
      */
-    static String polishPrompt(String title, String text) {
+    static String polishPrompt(final String title, final String text) {
         return "Rewrite the text below, the whole text of the comando panel \"" + title + "\", as a professional Markdown "
                 + "document, and replace the panel's text with it (comando's ui_set_editor, panel \"" + title + "\"). Keep the "
                 + "author's intent and every fact; correct spelling and names, checking them where you can; give it a title "
@@ -306,22 +307,22 @@ public final class EditorPanel extends JPanel {
      * The last {@code max} characters of the text, read without copying the rest: where the user writes what a session
      * is asked, the newest at the end.
      */
-    String textEnd(int max) {
-        Document d = editor.area().getDocument();
-        int from = Math.max(0, d.getLength() - max);
+    String textEnd(final int max) {
+        final Document d = editor.area().getDocument();
+        final int from = Math.max(0, d.getLength() - max);
         try {
             return d.getText(from, d.getLength() - from);
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return "";
         }
     }
 
     /** The first {@code max} characters of the text, read without copying the rest: a log's text may be large. */
-    String textStart(int max) {
-        Document d = editor.area().getDocument();
+    String textStart(final int max) {
+        final Document d = editor.area().getDocument();
         try {
             return d.getText(0, Math.min(max, d.getLength()));
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return "";
         }
     }
@@ -334,11 +335,11 @@ public final class EditorPanel extends JPanel {
      * the panel's own. A document is coloured as its language and, when Markdown, shows rendered first; the panel's
      * own text stays SQL and prompts, in the editor. A Markdown file offers the Edit switch, any other file does not.
      */
-    public void file(Path file, boolean document) {
+    public void file(final Path file, final boolean document) {
         if (Objects.equals(file, this.file) && document == this.document) {
             return;
         }
-        boolean opened = document && !(this.document && Objects.equals(file, this.file));
+        final boolean opened = document && !(this.document && Objects.equals(file, this.file));
         this.file = file;
         this.document = document;
         editor.syntax(document && file != null ? Editors.styleFor(file) : CommandEditor.PANEL_STYLE);
@@ -351,7 +352,7 @@ public final class EditorPanel extends JPanel {
         }
         showClear();
         showLocate();
-        boolean renders = rendersAsPage();
+        final boolean renders = rendersAsPage();
         mode.setVisible(renders);
         outlineButton.setVisible(renders);
         if (opened || renders != outlineShows()) {
@@ -392,13 +393,13 @@ public final class EditorPanel extends JPanel {
      * scroll stay as they were; while the view shows the end it stays at the end. A file that did not grow from the
      * text shown (rolled over, truncated) replaces it.
      */
-    private void reloadLog(String text) {
-        RSyntaxTextArea area = editor.area();
-        boolean follow = followsEnd;
-        boolean selecting = area.getSelectionStart() != area.getSelectionEnd();
+    private void reloadLog(final String text) {
+        final RSyntaxTextArea area = editor.area();
+        final boolean follow = followsEnd;
+        final boolean selecting = area.getSelectionStart() != area.getSelectionEnd();
         reloading = true;
         try {
-            String shown = editor.text();
+            final String shown = editor.text();
             if (text.length() >= shown.length() && text.startsWith(shown)) {
                 if (text.length() > shown.length()) {
                     editor.grow(text.substring(shown.length()));
@@ -419,21 +420,21 @@ public final class EditorPanel extends JPanel {
 
     /** Scrolls the log's view to its last line, the caret and the selection left where they are. */
     private void showEnd() {
-        JViewport v = viewport();
+        final JViewport v = viewport();
         if (v == null || v.getView() == null) {
             return;
         }
         // the text grew: the view takes its new height now, laid out directly (validate waits for a window on screen)
         v.doLayout();
-        int bottom = Math.max(0, v.getView().getHeight() - v.getExtentSize().height);
+        final int bottom = Math.max(0, v.getView().getHeight() - v.getExtentSize().height);
         if (v.getViewPosition().y != bottom) {
             v.setViewPosition(new Point(v.getViewPosition().x, bottom));
         }
     }
 
     /** Whether the view shows the text's last line. */
-    private boolean viewAtEnd(JViewport v) {
-        Rectangle seen = v.getViewRect();
+    private boolean viewAtEnd(final JViewport v) {
+        final Rectangle seen = v.getViewRect();
         return seen.y + seen.height >= v.getView().getHeight() - editor.area().getLineHeight();
     }
 
@@ -446,14 +447,14 @@ public final class EditorPanel extends JPanel {
      * comes back to the front while following shows its end, as it grew while hidden.
      */
     private void watchView() {
-        JViewport v = viewport();
+        final JViewport v = viewport();
         if (v == null || v == watched) {
             return;
         }
         watched = v;
-        java.awt.Dimension[] extent = {v.getExtentSize()};
+        final java.awt.Dimension[] extent = {v.getExtentSize()};
         v.addChangeListener(e -> {
-            java.awt.Dimension now = v.getExtentSize();
+            final java.awt.Dimension now = v.getExtentSize();
             // laid out with a size: a tab never shown has none, and nothing scrolls it
             if (reloading || !isLog() || now.height <= 0) {
                 return;
@@ -498,7 +499,7 @@ public final class EditorPanel extends JPanel {
      * The outline as the user wants it in panels opened from now: shown or not, and {@code keep} hears each change of
      * it in this panel (record 113).
      */
-    public void outline(boolean wanted, Consumer<Boolean> keep) {
+    public void outline(final boolean wanted, final Consumer<Boolean> keep) {
         outlineWanted = wanted;
         outlineKept = keep;
         layOutBody();
@@ -521,7 +522,7 @@ public final class EditorPanel extends JPanel {
 
     /** Puts the outline beside the text or the preview when wanted and the text renders as a page, else removes it. */
     private void layOutBody() {
-        boolean on = outlineWanted && rendersAsPage();
+        final boolean on = outlineWanted && rendersAsPage();
         showOutlineButton();
         if (on == outlineShows()) {
             return;
@@ -548,7 +549,7 @@ public final class EditorPanel extends JPanel {
         }
         split.addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentResized(ComponentEvent e) {
+            public void componentResized(final ComponentEvent e) {
                 if (split.getWidth() > 0) {
                     split.removeComponentListener(this);
                     placeDivider();
@@ -570,10 +571,10 @@ public final class EditorPanel extends JPanel {
 
     /** Reads the headings off the EDT and lists them, unless the text changed again meanwhile. */
     private void readOutline() {
-        String text = editor.text();
+        final String text = editor.text();
         outlineText = text;
         UiErrands.start("outline", () -> {
-            List<MarkdownHtml.Section> sections = MarkdownHtml.sections(text);
+            final List<MarkdownHtml.Section> sections = MarkdownHtml.sections(text);
             Edt.later(() -> {
                 if (text.equals(outlineText)) {
                     outline.show(sections);
@@ -586,22 +587,22 @@ public final class EditorPanel extends JPanel {
      * Goes to {@code section}: the preview scrolls its heading to the top, the text puts its line at the top with the
      * caret at its start; the keyboard goes there.
      */
-    void goTo(MarkdownHtml.Section section) {
+    void goTo(final MarkdownHtml.Section section) {
         if (previewing) {
             showHeading(section.id());
             rendered.requestFocusInWindow();
             return;
         }
-        RSyntaxTextArea area = editor.area();
+        final RSyntaxTextArea area = editor.area();
         try {
-            int at = area.getLineStartOffset(Math.min(section.line(), Math.max(0, area.getLineCount() - 1)));
+            final int at = area.getLineStartOffset(Math.min(section.line(), Math.max(0, area.getLineCount() - 1)));
             area.setCaretPosition(at);
-            Rectangle2D r = area.modelToView2D(at);
+            final Rectangle2D r = area.modelToView2D(at);
             if (r != null && SwingUtilities.getAncestorOfClass(JViewport.class, area) instanceof JViewport port) {
-                int max = Math.max(0, area.getHeight() - port.getExtentSize().height);
+                final int max = Math.max(0, area.getHeight() - port.getExtentSize().height);
                 port.setViewPosition(new Point(port.getViewPosition().x, Math.min(max, (int) r.getY())));
             }
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return;
         }
         area.requestFocusInWindow();
@@ -616,18 +617,18 @@ public final class EditorPanel extends JPanel {
         return file != null && htmlName(file);
     }
 
-    private static boolean markdownName(Path file) {
-        String n = lowerName(file);
+    private static boolean markdownName(final Path file) {
+        final String n = lowerName(file);
         return n.endsWith(".md") || n.endsWith(".markdown");
     }
 
-    private static boolean htmlName(Path file) {
-        String n = lowerName(file);
+    private static boolean htmlName(final Path file) {
+        final String n = lowerName(file);
         return n.endsWith(".html") || n.endsWith(".htm");
     }
 
-    private static String lowerName(Path file) {
-        Path name = file.getFileName();
+    private static String lowerName(final Path file) {
+        final Path name = file.getFileName();
         return name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
     }
 
@@ -635,7 +636,7 @@ public final class EditorPanel extends JPanel {
      * How a followed link opens its file: the shell opens it in a panel, or brings forward the panel that has it; with
      * the heading the link names after {@code #}, or null.
      */
-    public void onOpenFile(BiConsumer<Path, String> open) {
+    public void onOpenFile(final BiConsumer<Path, String> open) {
         opener = open;
     }
 
@@ -643,7 +644,7 @@ public final class EditorPanel extends JPanel {
      * Scrolls the preview to the heading whose id is {@code fragment}: now when it is laid out, else once it is. A
      * panel showing its text, not the preview, stays as it is.
      */
-    public void showHeading(String fragment) {
+    public void showHeading(final String fragment) {
         if (!previewing) {
             return;
         }
@@ -655,7 +656,7 @@ public final class EditorPanel extends JPanel {
         if (pendingHeading == null || !previewing || renderedScroll.getHeight() <= 0) {
             return;
         }
-        String heading = pendingHeading;
+        final String heading = pendingHeading;
         pendingHeading = null;
         rendered.scrollToHeading(heading);
     }
@@ -665,7 +666,7 @@ public final class EditorPanel extends JPanel {
      * directory; else none.
      */
     Path linkFolder() {
-        Path folder = folder();
+        final Path folder = folder();
         if (folder != null || state == null) {
             return folder;
         }
@@ -676,19 +677,19 @@ public final class EditorPanel extends JPanel {
      * Follows the link in the text at {@code offset}, if there is one there: a web address, a {@code [[name]]} note, a
      * Markdown link or a {@code path:line} reference, as the transcript finds them. Reads only the line it is on.
      */
-    boolean followLinkAt(int offset) {
-        Element root = editor.area().getDocument().getDefaultRootElement();
+    boolean followLinkAt(final int offset) {
+        final Element root = editor.area().getDocument().getDefaultRootElement();
         if (offset < 0) {
             return false;
         }
-        Element line = root.getElement(root.getElementIndex(offset));
+        final Element line = root.getElement(root.getElementIndex(offset));
         String text;
         try {
             text = editor.area().getText(line.getStartOffset(), line.getEndOffset() - line.getStartOffset());
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return false;
         }
-        TextLinks.Ref ref = TextLinks.at(text, offset - line.getStartOffset(), true);
+        final TextLinks.Ref ref = TextLinks.at(text, offset - line.getStartOffset(), true);
         if (ref == null) {
             return false;
         }
@@ -731,7 +732,7 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    private void showPreview(boolean on) {
+    private void showPreview(final boolean on) {
         previewing = on;
         showMode();
         if (on) {
@@ -764,8 +765,8 @@ public final class EditorPanel extends JPanel {
 
     /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else none. */
     private void showLocate() {
-        boolean isFile = document && file != null;
-        boolean isSession = panel != null && !panel.session().isEmpty();
+        final boolean isFile = document && file != null;
+        final boolean isSession = panel != null && !panel.session().isEmpty();
         locate.setVisible(isFile || isSession);
         locate.setIcon(Icons.locate(isFile ? "files" : "session"));
         locate.setToolTipText(isFile ? "Show the file in the Files tab" : "Show the session in the Sessions tab");
@@ -773,7 +774,7 @@ public final class EditorPanel extends JPanel {
     }
 
     /** Where the Locate button shows a document's file, or the panel's session, in the sidebar. */
-    public void onLocate(BiConsumer<Path, String> locate) {
+    public void onLocate(final BiConsumer<Path, String> locate) {
         locator = locate;
     }
 
@@ -793,7 +794,7 @@ public final class EditorPanel extends JPanel {
     }
 
     private void showMode() {
-        String label = previewing ? "Edit" : "Preview";
+        final String label = previewing ? "Edit" : "Preview";
         mode.setIcon(Icons.get(previewing ? "edit" : "preview"));
         mode.setToolTipText(KeyText.of(previewing ? "Edit the Markdown (⌘⇧M)" : "Show the Markdown rendered (⌘⇧M)"));
         mode.getAccessibleContext().setAccessibleName(label);
@@ -803,7 +804,7 @@ public final class EditorPanel extends JPanel {
      * The file changed outside comando: the editor takes the text, and the preview shows it when it is on. A log whose
      * caret was at its end stays at the end.
      */
-    public void reload(String text) {
+    public void reload(final String text) {
         if (isLog()) {
             reloadLog(text);
             showPendingEntry();
@@ -812,7 +813,7 @@ public final class EditorPanel extends JPanel {
         editor.reload(text);
         showPendingEntry();
         if (previewing()) {
-            int at = rendered.getCaretPosition();
+            final int at = rendered.getCaretPosition();
             rendered.setMarkdown(text, folder());
             rendered.setCaretPosition(Math.min(at, rendered.getDocument().getLength()));
         }
@@ -824,7 +825,7 @@ public final class EditorPanel extends JPanel {
      * (the file is read again after the entry is written) or the panel is not laid out, it waits, for
      * {@link #ENTRY_WAIT_MILLIS}.
      */
-    public void showLogEntry(long atMillis) {
+    public void showLogEntry(final long atMillis) {
         pendingEntry = atMillis;
         pendingEntryUntil = System.currentTimeMillis() + ENTRY_WAIT_MILLIS;
         showPendingEntry();
@@ -838,22 +839,22 @@ public final class EditorPanel extends JPanel {
             pendingEntry = Long.MIN_VALUE;
             return;
         }
-        RSyntaxTextArea area = editor.area();
-        JViewport port = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, area);
+        final RSyntaxTextArea area = editor.area();
+        final JViewport port = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, area);
         if (port == null || port.getHeight() <= 0) {
             return;
         }
-        int at = LogLines.offsetOf(editor.text(), pendingEntry);
+        final int at = LogLines.offsetOf(editor.text(), pendingEntry);
         if (at < 0) {
             return;
         }
         pendingEntry = Long.MIN_VALUE;
         area.setCaretPosition(at);
         try {
-            Rectangle2D line = area.modelToView2D(at);
-            int height = port.getExtentSize().height;
+            final Rectangle2D line = area.modelToView2D(at);
+            final int height = port.getExtentSize().height;
             area.scrollRectToVisible(new Rectangle(0, Math.max(0, (int) line.getY() - height / 3), 1, height));
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return; // the offset was just found in this text
         }
         Flash.line(area, at);
@@ -866,28 +867,28 @@ public final class EditorPanel extends JPanel {
         return panel;
     }
 
-    public void runSelection(Target target) {
+    public void runSelection(final Target target) {
         run(editor.runText(), target);
     }
 
-    private void run(String text, Target target) {
+    private void run(final String text, final Target target) {
         if (!text.isBlank() && !locked) {
             intents.dispatch(new Intent.RunText(panel.id(), text, target));
         }
     }
 
-    public void render(PanelState p, AppState s) {
+    public void render(final PanelState p, final AppState s) {
         panel = p;
         state = s;
         showLocate();
-        Optional<ConnectionState> c = p.connection().isEmpty() ? Optional.empty() : s.connection(p.connection());
-        Optional<SessionState> x = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
+        final Optional<ConnectionState> c = p.connection().isEmpty() ? Optional.empty() : s.connection(p.connection());
+        final Optional<SessionState> x = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
         // the connection: one icon in the state's colour, a click connects or disconnects; the name beside it binds
         // another
         if (c.isPresent()) {
-            ConnectionState cs = c.get();
+            final ConnectionState cs = c.get();
             connectionToggle.setIcon(Icons.get(connectionIcon(cs.status())));
-            String name = cut(cs.name(), NAME_CHARS);
+            final String name = cut(cs.name(), NAME_CHARS);
             connectionToggle.setToolTipText(cut(name + " " + statusWord(cs.status()) + "; click to " + (cs.status().isUsable() ? "disconnect" : "connect")
                     + "; its name binds another" + (cs.error().isEmpty() ? "" : " · " + cs.error()), TIP_CHARS));
             connection.setVisible(true);
@@ -903,12 +904,12 @@ public final class EditorPanel extends JPanel {
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
         // with no open database, the text is prompts and notes: nothing is coloured as SQL
         editor.sqlLive(c.map(cs -> cs.status().isUsable()).orElse(false));
-        boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);
+        final boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);
         stop.setEnabled(running);
         lock(x.map(SessionState::isCheckpointing).orElse(false));
         s.runOf(p.id()).filter(r -> r.status() == RunStatus.FAILED && r.requestId() != errorMarked).ifPresent(r -> {
             errorMarked = r.requestId();
-            int position = errorPosition(r.error());
+            final int position = errorPosition(r.error());
             if (position > 0) {
                 editor.markError(r.sql(), position);
             }
@@ -938,21 +939,21 @@ public final class EditorPanel extends JPanel {
     private static final Pattern POSITION = Pattern.compile("Position: (\\d+)");
 
     /** The 1-based position a database error names ("Position: 38"), or 0. */
-    static int errorPosition(String error) {
-        Matcher m = POSITION.matcher(error == null ? "" : error);
+    static int errorPosition(final String error) {
+        final Matcher m = POSITION.matcher(error == null ? "" : error);
         if (!m.find()) {
             return 0;
         }
         try {
             return Integer.parseInt(m.group(1));
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             return 0;
         }
     }
 
     /** Connects or disconnects the panel's connection; without one, opens the menu that binds one. */
     private void toggleConnection() {
-        Optional<ConnectionState> c = panel.connection().isEmpty() ? Optional.empty() : state.connection(panel.connection());
+        final Optional<ConnectionState> c = panel.connection().isEmpty() ? Optional.empty() : state.connection(panel.connection());
         if (c.isEmpty()) {
             connectionMenu().show(connectionToggle, 0, connectionToggle.getHeight());
             return;
@@ -961,12 +962,12 @@ public final class EditorPanel extends JPanel {
     }
 
     /** {@code text}, ending in "…" when it is longer than {@code most} characters. */
-    static String cut(String text, int most) {
+    static String cut(final String text, final int most) {
         return text.length() <= most ? text : text.substring(0, most - 1) + "…";
     }
 
     /** The database icon in the colour of {@code s}: blue open, amber on its way, red failed, grey closed. */
-    static String connectionIcon(Status s) {
+    static String connectionIcon(final Status s) {
         return switch (s) {
             case OPEN -> "database";
             case OPENING, CLOSING -> "database-starting";
@@ -975,7 +976,7 @@ public final class EditorPanel extends JPanel {
         };
     }
 
-    static String statusWord(Status s) {
+    static String statusWord(final Status s) {
         return switch (s) {
             case OPEN -> "connected";
             case OPENING -> "connecting";
@@ -986,15 +987,15 @@ public final class EditorPanel extends JPanel {
     }
 
     private JPopupMenu connectionMenu() {
-        JPopupMenu m = new JPopupMenu();
-        for (ConnectionState c : state.connections()) {
-            JMenuItem item = new JMenuItem(Plain.text(c.name() + "  " + c.spec().label()), Icons.get("database"));
+        final JPopupMenu m = new JPopupMenu();
+        for (final ConnectionState c : state.connections()) {
+            final JMenuItem item = new JMenuItem(Plain.text(c.name() + "  " + c.spec().label()), Icons.get("database"));
             item.addActionListener(e -> intents.dispatch(new Intent.BindConnection(panel.id(), c.name())));
             m.add(item);
         }
         if (!panel.connection().isEmpty()) {
             m.addSeparator();
-            JMenuItem none = new JMenuItem("Unbind");
+            final JMenuItem none = new JMenuItem("Unbind");
             none.addActionListener(e -> intents.dispatch(new Intent.BindConnection(panel.id(), "")));
             m.add(none);
         }
@@ -1004,7 +1005,7 @@ public final class EditorPanel extends JPanel {
         return m;
     }
 
-    static Color color(Status s) {
+    static Color color(final Status s) {
         return switch (s) {
             case OPEN -> Theme.OK;
             case OPENING, CLOSING -> Theme.ATTENTION;
@@ -1015,14 +1016,14 @@ public final class EditorPanel extends JPanel {
 
     /** A chip: a name with an icon, a button that opens its menu; the session bar's too. */
     static JButton chip() {
-        JButton b = new JButton();
+        final JButton b = new JButton();
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setFocusable(false);
         return b;
     }
 
     static JButton iconButton() {
-        JButton b = new JButton();
+        final JButton b = new JButton();
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setFocusable(false);
         return b;

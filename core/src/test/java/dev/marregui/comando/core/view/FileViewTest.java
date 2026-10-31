@@ -1,12 +1,12 @@
 package dev.marregui.comando.core.view;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,7 +22,7 @@ class FileViewTest {
     /// path unchanged.
     @Test
     void aPathAsTypedIsUnderHomeOrTheBaseFolder() {
-        String home = System.getProperty("user.home");
+        final String home = System.getProperty("user.home");
         assertThat(FileView.resolve("~/notes/a.md", "/w")).isEqualTo(Path.of(home, "notes/a.md"));
         assertThat(FileView.resolve("src/A.java", "/w")).isEqualTo(Path.of("/w/src/A.java"));
         assertThat(FileView.resolve("/abs/B.java", "/w")).isEqualTo(Path.of("/abs/B.java"));
@@ -31,29 +31,29 @@ class FileViewTest {
     /// [FileView#read] renders `PLAN.md` as Markdown at line zero, but returns text with its extension and requested
     /// line for Markdown at line three and Java source at line one.
     @Test
-    void markdownRendersAtNoLineAndAnyTextFileIsTextAtItsLine(@TempDir Path dir) throws IOException {
-        Path md = Files.writeString(Files.createDirectories(dir.resolve("docs")).resolve("PLAN.md"), "# plan");
-        FileView rendered = FileView.read(md, 0);
+    void markdownRendersAtNoLineAndAnyTextFileIsTextAtItsLine(@TempDir final Path dir) throws IOException {
+        final Path md = Files.writeString(Files.createDirectories(dir.resolve("docs")).resolve("PLAN.md"), "# plan");
+        final FileView rendered = FileView.read(md, 0);
         assertThat(rendered.title()).isEqualTo("docs/PLAN.md");
         assertThat(rendered.spec()).isEqualTo(new ViewSpec.Markdown("# plan"));
         assertThat(rendered.binary()).isFalse();
         assertThat(FileView.read(md, 3).spec()).isEqualTo(new ViewSpec.Text(md.toString(), "# plan", "md", 3));
-        Path java = Files.writeString(dir.resolve("A.java"), "class A {}");
+        final Path java = Files.writeString(dir.resolve("A.java"), "class A {}");
         assertThat(FileView.read(java, 1).spec()).isEqualTo(new ViewSpec.Text(java.toString(), "class A {}", "java", 1));
     }
 
     /// [FileView#read] identifies invalid UTF-8 bytes as a binary six-byte file and rejects missing, directory, and
     /// over-four-megabyte inputs with reasons that omit the input path.
     @Test
-    void aBinaryFileIsSaidToBeOneAndEveryRefusalSaysWhyWithoutThePath(@TempDir Path dir) throws IOException {
-        Path png = Files.write(dir.resolve("shot.png"), new byte[]{(byte) 0x89, 'P', 'N', 'G', 0, (byte) 0xff});
-        FileView binary = FileView.read(png, 0);
+    void aBinaryFileIsSaidToBeOneAndEveryRefusalSaysWhyWithoutThePath(@TempDir final Path dir) throws IOException {
+        final Path png = Files.write(dir.resolve("shot.png"), new byte[]{(byte) 0x89, 'P', 'N', 'G', 0, (byte) 0xff});
+        final FileView binary = FileView.read(png, 0);
         assertThat(binary.binary()).isTrue();
         assertThat(((ViewSpec.Text) binary.spec()).text()).isEqualTo("shot.png is a binary file of 6 bytes; only text files are shown.");
 
         assertThatThrownBy(() -> FileView.read(dir.resolve("nope.md"), 0)).hasMessage("no such file");
         assertThatThrownBy(() -> FileView.read(dir, 0)).hasMessage("not a file");
-        Path big = dir.resolve("big.log");
+        final Path big = dir.resolve("big.log");
         try (RandomAccessFile f = new RandomAccessFile(big.toFile(), "rw")) {
             f.setLength(FileView.MAX_BYTES + 1);
         }

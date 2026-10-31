@@ -10,7 +10,7 @@ final class Fold {
     private boolean userToggled;
     private boolean revealed;
 
-    Fold(boolean open) {
+    Fold(final boolean open) {
         this.open = open;
     }
 
@@ -33,7 +33,7 @@ final class Fold {
     }
 
     /** Opens when {@code want} and the user has not chosen; never closes. */
-    void openIf(boolean want) {
+    void openIf(final boolean want) {
         if (want && !userToggled) {
             open = true;
             revealed = false;
@@ -41,7 +41,7 @@ final class Fold {
     }
 
     /** Opens or closes to {@code want} unless the user has chosen. */
-    void follow(boolean want) {
+    void follow(final boolean want) {
         if (!userToggled) {
             open = want;
             revealed = false;
@@ -62,7 +62,7 @@ final class Fold {
      * Ends a find's hold on the item: closes it unless {@code keep}, when it stays open as if never found.
      * False when nothing changed: the find did not open it, or the user toggled it since.
      */
-    boolean conceal(boolean keep) {
+    boolean conceal(final boolean keep) {
         if (!revealed) {
             return false;
         }

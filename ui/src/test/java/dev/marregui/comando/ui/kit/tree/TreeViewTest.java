@@ -1,20 +1,21 @@
 package dev.marregui.comando.ui.kit.tree;
 
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JLabel;
-import javax.swing.JTree;
-import javax.swing.SwingUtilities;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.TreePath;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JLabel;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.TreePath;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,11 +25,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Rows are plain labels, never HTML, with a muted detail and errors in red; the tree names a node by its label.
 class TreeViewTest {
 
-    private static ViewSpec.TreeNode leaf(String label) {
+    private static ViewSpec.TreeNode leaf(final String label) {
         return new ViewSpec.TreeNode(label, "", List.of());
     }
 
-    private static ViewSpec.TreeNode dir(String label, ViewSpec.TreeNode... children) {
+    private static ViewSpec.TreeNode dir(final String label, final ViewSpec.TreeNode... children) {
         return new ViewSpec.TreeNode(label, "", List.of(children));
     }
 
@@ -36,8 +37,8 @@ class TreeViewTest {
     /// the selected leaf stays selected at its new row; an update without it selects nothing.
     @Test
     void anUpdateKeepsWhatTheUserOpenedAndSelected() throws Exception {
-        TreeView view = new TreeView();
-        JTree tree = view.tree();
+        final TreeView view = new TreeView();
+        final JTree tree = view.tree();
         SwingUtilities.invokeAndWait(() -> {
             view.setRoot(dir("root", dir("a/", leaf("a1")), dir("b/", leaf("b1"), leaf("b2"))), 1);
             tree.expandRow(2); // b/
@@ -59,9 +60,9 @@ class TreeViewTest {
     /// and the toggle click count is 2.
     @Test
     void onlyADoubleClickOpensALeafOrAFolder() throws Exception {
-        TreeView view = new TreeView();
-        JTree tree = view.tree();
-        List<String> opened = new ArrayList<>();
+        final TreeView view = new TreeView();
+        final JTree tree = view.tree();
+        final List<String> opened = new ArrayList<>();
         view.onActivate(n -> opened.add(n.label()));
         SwingUtilities.invokeAndWait(() -> {
             view.setRoot(dir("root", dir("a/", leaf("a1")), leaf("notes.md")), 1);
@@ -82,21 +83,21 @@ class TreeViewTest {
     /// label starts with `<html>`, and [JTree#convertValueToText] gives the node's label, not its record's text.
     @Test
     void aRowIsPlainLabelsNeverHtmlAndTheTreeNamesANodeByItsLabel() throws Exception {
-        TreeView view = new TreeView();
-        JTree tree = view.tree();
+        final TreeView view = new TreeView();
+        final JTree tree = view.tree();
         SwingUtilities.invokeAndWait(() -> view.setRoot(dir("root", new ViewSpec.TreeNode("notes.md", "3 kB", List.of()), leaf("✗ unreadable"), leaf("plain")), 1));
         SwingUtilities.invokeAndWait(() -> {
-            Component withDetail = tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 1), false, false, true, 1, false);
-            List<JLabel> labels = new ArrayList<>();
-            for (Component c : ((Container) withDetail).getComponents()) {
+            final Component withDetail = tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 1), false, false, true, 1, false);
+            final List<JLabel> labels = new ArrayList<>();
+            for (final Component c : ((Container) withDetail).getComponents()) {
                 labels.add((JLabel) c);
             }
             assertThat(labels).extracting(JLabel::getText).as("the name, then the detail in a label of its own").containsExactly("notes.md", "3 kB");
             assertThat(labels.get(1).getForeground()).isEqualTo(Theme.MUTED);
-            JLabel failed = (JLabel) tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 2), true, false, true, 2, false);
+            final JLabel failed = (JLabel) tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 2), true, false, true, 2, false);
             assertThat(failed.getText()).isEqualTo("✗ unreadable");
             assertThat(failed.getForeground()).as("an error reads red, selected or not").isEqualTo(Theme.DANGER);
-            JLabel plain = (JLabel) tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 3), false, false, true, 3, false);
+            final JLabel plain = (JLabel) tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 3), false, false, true, 3, false);
             assertThat(List.of(labels.get(0).getText(), labels.get(1).getText(), failed.getText(), plain.getText()))
                     .as("no label parses HTML at every paint").noneMatch(text -> text.startsWith("<html>"));
             assertThat(tree.convertValueToText(node(tree, 0), false, true, false, 0, false))
@@ -104,27 +105,27 @@ class TreeViewTest {
         });
     }
 
-    private static DefaultMutableTreeNode node(JTree tree, int row) {
+    private static DefaultMutableTreeNode node(final JTree tree, final int row) {
         return (DefaultMutableTreeNode) tree.getPathForRow(row).getLastPathComponent();
     }
 
     /**
      * A left click of {@code count} on row {@code row}; the press before it needs a display, which tests do without.
      */
-    private static void click(JTree tree, int row, int count) {
-        Rectangle r = tree.getRowBounds(row);
+    private static void click(final JTree tree, final int row, final int count) {
+        final Rectangle r = tree.getRowBounds(row);
         tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, r.x + r.width / 2,
                 r.y + r.height / 2, count, false, MouseEvent.BUTTON1));
     }
 
-    private static TreePath path(JTree tree, String... labels) {
+    private static TreePath path(final JTree tree, final String... labels) {
         for (int i = 0; i < tree.getRowCount(); i++) {
-            TreePath p = tree.getPathForRow(i);
-            Object[] nodes = p.getPath();
+            final TreePath p = tree.getPathForRow(i);
+            final Object[] nodes = p.getPath();
             if (nodes.length == labels.length) {
                 boolean match = true;
                 for (int k = 0; k < nodes.length && match; k++) {
-                    Object u = ((DefaultMutableTreeNode) nodes[k]).getUserObject();
+                    final Object u = ((DefaultMutableTreeNode) nodes[k]).getUserObject();
                     match = u instanceof ViewSpec.TreeNode n && n.label().equals(labels[k]);
                 }
                 if (match) {

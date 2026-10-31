@@ -26,8 +26,8 @@ public sealed interface Para {
         }
 
         public String plain() {
-            StringBuilder sb = new StringBuilder();
-            for (Span s : spans) {
+            final StringBuilder sb = new StringBuilder();
+            for (final Span s : spans) {
                 sb.append(s.text());
             }
             return sb.toString();

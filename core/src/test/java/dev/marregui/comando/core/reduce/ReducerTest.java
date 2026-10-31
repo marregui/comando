@@ -1,5 +1,10 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.EditMode;
@@ -30,10 +35,6 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.States;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
 
 import static dev.marregui.comando.testkit.States.P1;
 import static dev.marregui.comando.testkit.States.P2;
@@ -54,13 +55,13 @@ class ReducerTest {
     private AppState state = States.twoPanels();
     private List<Effect> effects = List.of();
 
-    private void apply(Intent intent) {
-        Transition t = reducer.apply(state, intent);
+    private void apply(final Intent intent) {
+        final Transition t = reducer.apply(state, intent);
         state = t.state();
         effects = t.effects();
     }
 
-    private SqlRun run(PanelId panel) {
+    private SqlRun run(final PanelId panel) {
         return state.runOf(panel).orElseThrow();
     }
 
@@ -105,24 +106,24 @@ class ReducerTest {
     /// is unchanged.
     @Test
     void foldersAreReadAndWatchedByNameInTheirOrderAndShownWithoutTouchingTheState() {
-        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
-        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
+        final FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
         state = state.withFolders(List.of(kb, notes));
-        AppState before = state;
+        final AppState before = state;
         apply(new Intent.BrowseFolders(List.of("Notes", "gone", "KB")));
         assertThat(effects).as("configured order; an unknown name is dropped").containsExactly(new Effect.ReadFolders(List.of(kb, notes)));
         apply(new Intent.WatchFolders(List.of("Notes")));
         assertThat(effects).containsExactly(new Effect.WatchFolders(List.of(notes)));
         apply(new Intent.WatchFolders(List.of()));
         assertThat(effects).as("none open: none watched").containsExactly(new Effect.WatchFolders(List.of()));
-        ViewSpec.TreeNode tree = new ViewSpec.TreeNode("KB", "/kb", List.of());
+        final ViewSpec.TreeNode tree = new ViewSpec.TreeNode("KB", "/kb", List.of());
         apply(new Intent.FolderLoaded(kb, tree));
         assertThat(effects).containsExactly(new Effect.ShowFolder(kb, tree));
         apply(new Intent.FolderLoaded(new FolderRoot("KB", "/old", "ALPHA.md", List.of()), tree));
         assertThat(effects).as("read with settings since edited: dropped").isEmpty();
         apply(new Intent.FolderLoaded(new FolderRoot("Gone", "/g", "", List.of()), tree));
         assertThat(effects).as("a folder since removed: dropped").isEmpty();
-        PlanUsage usage = new PlanUsage(List.of(new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm")), 1L, "");
+        final PlanUsage usage = new PlanUsage(List.of(new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm")), 1L, "");
         apply(new Intent.PlanUsageRead(usage));
         assertThat(effects).containsExactly(new Effect.ShowPlanUsage(usage));
         assertThat(state).isSameAs(before);
@@ -132,14 +133,14 @@ class ReducerTest {
     /// watched and browsed by that name, its tree shown; it is no configured folder, so the state is unchanged.
     @Test
     void aGroupsRowIsReadAsAFolderOfItsOwn() {
-        FolderRoot memory = new FolderRoot("Memory", "/b/MEMORY", "", List.of(), "memory", false, "", "Brain");
-        FolderRoot kb = new FolderRoot("KB", "/b/KB", "", List.of(), "knowledge", false, "", "Brain");
+        final FolderRoot memory = new FolderRoot("Memory", "/b/MEMORY", "", List.of(), "memory", false, "", "Brain");
+        final FolderRoot kb = new FolderRoot("KB", "/b/KB", "", List.of(), "knowledge", false, "", "Brain");
         state = state.withFolders(List.of(memory, kb));
-        FolderRoot brain = new FolderRoot("BRAIN", "/b", "", List.of("MEMORY", "KB"), "folder", false, "", "Brain");
-        AppState before = state;
+        final FolderRoot brain = new FolderRoot("BRAIN", "/b", "", List.of("MEMORY", "KB"), "folder", false, "", "Brain");
+        final AppState before = state;
         apply(new Intent.WatchFolders(List.of("BRAIN", "Memory")));
         assertThat(effects).containsExactly(new Effect.WatchFolders(List.of(memory, brain)));
-        ViewSpec.TreeNode tree = new ViewSpec.TreeNode("BRAIN", "/b", List.of());
+        final ViewSpec.TreeNode tree = new ViewSpec.TreeNode("BRAIN", "/b", List.of());
         apply(new Intent.FolderLoaded(brain, tree));
         assertThat(effects).containsExactly(new Effect.ShowFolder(brain, tree));
         assertThat(state).isSameAs(before);
@@ -149,8 +150,8 @@ class ReducerTest {
     /// notice and nothing saved.
     @Test
     void aFolderIsAddedAfterTheOthersAndSavedUnlessOneHasItsName() {
-        FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
-        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        final FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
         apply(new Intent.AddFolder(kb));
         apply(new Intent.AddFolder(notes));
         assertThat(state.folders()).containsExactly(kb, notes);
@@ -167,8 +168,8 @@ class ReducerTest {
     /// outside it and an unknown folder each move nothing and say why.
     @Test
     void entriesGoToTheTrashOnlyFromADeletableFolderAndNeverTheFolderItselfOrAPathOutside() {
-        FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
-        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
+        final FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
         state = state.withFolders(List.of(pad, kb));
         apply(new Intent.DeleteFiles("Scratchpad", List.of("/s/2026-10-18/a.md", "/s/2026-10-17")));
         assertThat(effects).containsExactly(new Effect.DeleteFiles(pad, List.of("/s/2026-10-18/a.md", "/s/2026-10-17")));
@@ -195,12 +196,12 @@ class ReducerTest {
     /// same folders change nothing.
     @Test
     void foldersJsonReadAgainReplacesTheFoldersAndWritesNothing() {
-        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
         apply(new Intent.FoldersRead(List.of(kb)));
         assertThat(state.folders()).containsExactly(kb);
         assertThat(effects).as("the file is the user's: not written back; its repositories are read")
                 .containsExactly(new Effect.WatchRepos(List.of(kb), false));
-        AppState before = state;
+        final AppState before = state;
         apply(new Intent.FoldersRead(List.of(kb)));
         assertThat(state).as("the same folders change nothing").isSameAs(before);
     }
@@ -325,7 +326,7 @@ class ReducerTest {
     void aStartReportedAfterTheStopLeavesTheSessionStopped() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.StopSession("work"));
-        Status stopped = state.session("work").orElseThrow().status();
+        final Status stopped = state.session("work").orElseThrow().status();
         apply(new Intent.SessionStarted("work"));
         assertThat(state.session("work").orElseThrow().status()).isEqualTo(stopped).isNotEqualTo(Status.OPEN);
     }
@@ -334,7 +335,7 @@ class ReducerTest {
     /// closed panel keeps its title taken.
     @Test
     void anAddedPanelNeverSharesATitleInAnyCase() {
-        PanelId readme = new PanelId("readme");
+        final PanelId readme = new PanelId("readme");
         apply(new Intent.AddPanel(readme, "One"));
         assertThat(state.panel(readme).orElseThrow().title()).isEqualTo("One 2");
         apply(new Intent.RenamePanel(P2, "ONE"));
@@ -369,12 +370,12 @@ class ReducerTest {
     /// extra result after the report notifies nothing.
     @Test
     void aSessionWaitsOnBackgroundWorkUntilItEndsAndTheTurnItStartsCountsAsRunning() {
-        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        final BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
         apply(new Intent.RunText(P1, "review it in the background", Target.CLAUDE));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.SessionTasksChanged("work", List.of(agent)));
         apply(new Intent.SessionTurnEnded("work", 0, 0.12, 40_000L, 200_000L, false, ""));
-        SessionState waiting = state.session("work").orElseThrow();
+        final SessionState waiting = state.session("work").orElseThrow();
         assertThat(waiting.isBusy()).isFalse();
         assertThat(waiting.isWaiting()).isTrue();
         assertThat(waiting.waitingFor()).isEqualTo("review agent");
@@ -383,11 +384,11 @@ class ReducerTest {
         // the agent ends; Claude Code starts a turn of its own to read its report
         clock.advance(60_000);
         apply(new Intent.SessionTasksChanged("work", List.of()));
-        SessionState returned = state.session("work").orElseThrow();
+        final SessionState returned = state.session("work").orElseThrow();
         assertThat(returned.isWaiting()).isFalse();
         assertThat(returned.isReturning(clock.millis() + 1_000, 15_000)).as("returned, the reading turn not started yet").isTrue();
         apply(new Intent.SessionTurnRunning("work"));
-        SessionState reading = state.session("work").orElseThrow();
+        final SessionState reading = state.session("work").orElseThrow();
         assertThat(reading.isBusy()).as("a turn comando did not send runs too").isTrue();
         assertThat(reading.isReturning(clock.millis(), 15_000)).isFalse();
         assertThat(reading.turnStartedMillis()).isEqualTo(clock.millis());
@@ -405,7 +406,7 @@ class ReducerTest {
     /// session still waits on the build.
     @Test
     void aLaterTurnThatEndsWhileOlderBackgroundWorkRunsOnIsFinished() {
-        BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
+        final BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
         apply(new Intent.RunText(P1, "start the build in the background", Target.CLAUDE));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.SessionTasksChanged("work", List.of(build)));
@@ -430,12 +431,12 @@ class ReducerTest {
         apply(new Intent.SessionTurnRunning("work"));
         assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(2);
 
-        BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
-        long first = clock.millis();
+        final BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
+        final long first = clock.millis();
         apply(new Intent.SessionTasksChanged("work", List.of(build)));
         clock.advance(5_000);
         apply(new Intent.SessionTasksChanged("work", List.of(build, new BackgroundTask("b2", "local_bash", "", 0L))));
-        SessionState two = state.session("work").orElseThrow();
+        final SessionState two = state.session("work").orElseThrow();
         assertThat(two.tasks()).extracting(BackgroundTask::startedMillis).as("a task keeps the time it was first heard of")
                 .containsExactly(first, first + 5_000);
         assertThat(two.waitingFor()).isEqualTo("2 background tasks");
@@ -452,22 +453,22 @@ class ReducerTest {
     void whatATurnRunsAtShowsUntilItEndsAndItsFirstMessageGivesTheSessionsOwn() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionInit("work", new SessionInfo("abc", "claude-opus-5-5", "/tmp", "2.1.310", "default", List.of(), "medium")));
-        long activity = state.session("work").orElseThrow().lastActivityMillis();
+        final long activity = state.session("work").orElseThrow().lastActivityMillis();
         clock.advance(5_000);
 
         apply(new Intent.SessionRanAt("work", "claude-sonnet-5-5", "low", true));
-        SessionInfo first = state.session("work").orElseThrow().info();
+        final SessionInfo first = state.session("work").orElseThrow().info();
         assertThat(List.of(first.model(), first.reportedEffort(), first.turnModel(), first.turnEffort()))
                 .containsExactly("claude-sonnet-5-5", "low", "claude-sonnet-5-5", "low");
         assertThat(first.effort()).as("the settings' base stays").isEqualTo("medium");
         assertThat(state.session("work").orElseThrow().lastActivityMillis()).isEqualTo(activity);
 
         apply(new Intent.SessionRanAt("work", "claude-sonnet-5-5", "high", false));
-        SessionInfo raised = state.session("work").orElseThrow().info();
+        final SessionInfo raised = state.session("work").orElseThrow().info();
         assertThat(List.of(raised.reportedEffort(), raised.turnEffort())).as("raised for the turn only").containsExactly("low", "high");
 
         apply(new Intent.SessionTurnEnded("work", 0, 0.12, 40_000L, 200_000L, false, ""));
-        SessionInfo ended = state.session("work").orElseThrow().info();
+        final SessionInfo ended = state.session("work").orElseThrow().info();
         assertThat(List.of(ended.model(), ended.reportedEffort(), ended.turnModel(), ended.turnEffort()))
                 .containsExactly("claude-sonnet-5-5", "low", "", "");
     }
@@ -480,7 +481,7 @@ class ReducerTest {
         apply(new Intent.SessionInit("work", new SessionInfo("abc-123", "claude-haiku-5-5", "/tmp", "2.1.296", "default",
                 List.of("interrupt_receipt_v1"))));
 
-        SessionSpec spec = state.session("work").orElseThrow().spec();
+        final SessionSpec spec = state.session("work").orElseThrow().spec();
         assertThat(spec.claudeSessionId()).isEqualTo("abc-123");
         assertThat(spec.startMode()).isEqualTo(StartMode.RESUME);
         assertThat(state.session("work").orElseThrow().status()).isEqualTo(Status.OPEN);
@@ -497,7 +498,7 @@ class ReducerTest {
     @Test
     void aPromptToASessionGoesToItsOwnPanelWhateverIsFocused() {
         apply(new Intent.SaveSession("", SessionSpec.fresh("alpha", "/tmp").withCreatedBy("lead")));
-        PanelId own = state.homePanel("alpha").orElseThrow().id();
+        final PanelId own = state.homePanel("alpha").orElseThrow().id();
         apply(new Intent.FocusPanel(P1));
         apply(new Intent.PromptSession("alpha", "[from session lead]\nwrite it", "lead"));
         assertThat(effects).anySatisfy(e -> assertThat(e).isInstanceOfSatisfying(Effect.EditPanelText.class,
@@ -521,7 +522,7 @@ class ReducerTest {
         apply(new Intent.StartSession("old"));
         apply(new Intent.SessionInit("old", new SessionInfo("fork-2", "claude-haiku-5-5", "/tmp", "2.1.296", "default", List.of())));
 
-        SessionSpec spec = state.session("old").orElseThrow().spec();
+        final SessionSpec spec = state.session("old").orElseThrow().spec();
         assertThat(spec.claudeSessionId()).isEqualTo("fork-2");
         assertThat(spec.startMode()).isEqualTo(StartMode.RESUME);
     }
@@ -539,7 +540,7 @@ class ReducerTest {
     void unexpectedExitFailsTheSessionAndDeniesItsApprovals() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
-        Approval a = new Approval(7L, "work", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 1L);
+        final Approval a = new Approval(7L, "work", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 1L);
         apply(new Intent.ApprovalRequested(a));
         apply(new Intent.SessionExited("work", 1, "boom"));
 
@@ -579,7 +580,7 @@ class ReducerTest {
     void removingASessionDeniesItsWaitingApprovals() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
-        Approval a = new Approval(8L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
+        final Approval a = new Approval(8L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
         apply(new Intent.ApprovalRequested(a));
         apply(new Intent.RemoveSession("work"));
         assertThat(state.approvals()).isEmpty();
@@ -594,7 +595,7 @@ class ReducerTest {
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.SessionTasksChanged("work", List.of(new BackgroundTask("a1", "local_agent", "review agent", 0L))));
         // the background agent asks to write while the turn that started it ends
-        Approval write = new Approval(9L, "work", ApprovalKind.SQL_WRITE, "db_run_sql", "{}", "DELETE", 1L);
+        final Approval write = new Approval(9L, "work", ApprovalKind.SQL_WRITE, "db_run_sql", "{}", "DELETE", 1L);
         apply(new Intent.ApprovalRequested(write));
         apply(new Intent.SessionTurnEnded("work", 0, 0.40, 30_000L, 200_000L, false, ""));
         assertThat(state.approvals()).as("the work that may have asked still runs: no card is missed").containsExactly(write);
@@ -610,9 +611,9 @@ class ReducerTest {
         apply(new Intent.RunText(P1, "delete the rows", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.40, 30_000L, 200_000L, false, ""));
         apply(new Intent.RunText(P1, "again", Target.CLAUDE));
-        Approval a = new Approval(9L, "work", ApprovalKind.SQL_WRITE, "db_run_sql", "{}", "DELETE", 1L);
+        final Approval a = new Approval(9L, "work", ApprovalKind.SQL_WRITE, "db_run_sql", "{}", "DELETE", 1L);
         apply(new Intent.ApprovalRequested(a));
-        Approval background = new Approval(10L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
+        final Approval background = new Approval(10L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
         apply(new Intent.ApprovalRequested(background));
 
         // interrupted: the result arrives with nothing queued while the cards still wait; the statement card goes, a
@@ -654,7 +655,7 @@ class ReducerTest {
         apply(new Intent.StopSession("work"));
         apply(new Intent.SessionExited("work", 0, ""));
         apply(new Intent.StartFresh("work"));
-        SessionSpec spec = state.session("work").orElseThrow().spec();
+        final SessionSpec spec = state.session("work").orElseThrow().spec();
         assertThat(spec.claudeSessionId()).isEmpty();
         assertThat(spec.startMode()).isEqualTo(StartMode.NEW);
         assertThat(state.session("work").orElseThrow().status()).isEqualTo(Status.OPENING);
@@ -689,7 +690,7 @@ class ReducerTest {
         assertThat(effects).as("its own panel closed: it runs from there").contains(new Effect.SendToClaude("work", "/reflect", "one"));
         apply(new Intent.ReopenPanel(P1));
         apply(new Intent.SaveSession("work", state.session("work").orElseThrow().spec().restarted()));
-        SessionSpec silent = new SessionSpec("work", state.session("work").orElseThrow().spec().workDir(), "", "", "", List.of(), 0.0, "",
+        final SessionSpec silent = new SessionSpec("work", state.session("work").orElseThrow().spec().workDir(), "", "", "", List.of(), 0.0, "",
                 StartMode.NEW, "", "");
         apply(new Intent.SaveSession("work", silent));
         apply(new Intent.Checkpoint("work"));
@@ -767,7 +768,7 @@ class ReducerTest {
 
         // /clear: the same process reports a new conversation
         apply(new Intent.SessionInit("work", new SessionInfo("conv-2", "opus", "/w", "2.1", "", List.of())));
-        SessionState x = state.session("work").orElseThrow();
+        final SessionState x = state.session("work").orElseThrow();
         assertThat(x.spec().claudeSessionId()).isEqualTo("conv-2");
         assertThat(x.spec().startMode()).isEqualTo(StartMode.RESUME);
         assertThat(x.reflection()).as("a new conversation has nothing to reflect on").isEqualTo(Reflection.FRESH);
@@ -780,8 +781,8 @@ class ReducerTest {
     /// and the compaction's end notifies once.
     @Test
     void theCheckpointButtonCompactsTheConversationOnceItsTurnHasFinished() {
-        String title = state.panel(P1).orElseThrow().title();
-        String summary = "## Reflected\nSession log and memory written.";
+        final String title = state.panel(P1).orElseThrow().title();
+        final String summary = "## Reflected\nSession log and memory written.";
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.SessionInit("work", new SessionInfo("conv-1", "opus", "/w", "2.1", "", List.of())));
@@ -790,7 +791,7 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().checkpointCompacts()).isTrue();
 
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, "", "  " + summary + "\n"));
-        SessionState x = state.session("work").orElseThrow();
+        final SessionState x = state.session("work").orElseThrow();
         assertThat(x.checkpointCompacts()).isFalse();
         assertThat(x.spec().carried()).as("nothing carried: the compaction keeps the conversation").isEmpty();
         assertThat(x.pendingTurns()).as("the compaction is a turn").isEqualTo(1);
@@ -864,12 +865,12 @@ class ReducerTest {
     /// takes it with it once.
     @Test
     void aCarriedSummaryOutlivesTheSessionFormAndACheckpointBeforeTheNextPrompt() {
-        String title = state.panel(P1).orElseThrow().title();
+        final String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         state = state.withSession(state.session("work").orElseThrow().withSpec(state.session("work").orElseThrow().spec().withCarried("the summary")));
 
-        SessionSpec edited = SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(state.session("work").orElseThrow().spec()
+        final SessionSpec edited = SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(state.session("work").orElseThrow().spec()
                 .withModel("opus")));
         assertThat(edited.carried()).as("the form has no such field").isEmpty();
         apply(new Intent.SaveSession("work", edited));
@@ -883,7 +884,7 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().spec().carried()).isEqualTo("the summary");
 
         apply(new Intent.RunText(P1, "go on", Target.CLAUDE));
-        SessionSpec spec = state.session("work").orElseThrow().spec();
+        final SessionSpec spec = state.session("work").orElseThrow().spec();
         assertThat(spec.carried()).isEmpty();
         assertThat(effects).containsExactly(new Effect.SendToClaude("work", "go on", title, Reducer.preface("the summary")),
                 new Effect.SaveSessions(List.of(spec)));
@@ -895,7 +896,7 @@ class ReducerTest {
     @Test
     void aTurnThatEndsAtTheThresholdRunsTheCheckpointThenCompactsOncePerCrossing() {
         reducer = new Reducer(clock, () -> 400_000L);
-        String title = state.panel(P1).orElseThrow().title();
+        final String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.RunText(P1, "go", Target.CLAUDE));
@@ -906,7 +907,7 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 400_000L, 1_000_000L, false, "", "at it"));
         assertThat(effects).as("at the threshold: the checkpoint, and no notice of the turn yet")
                 .containsExactly(new Effect.SendToClaude("work", "/reflect", title));
-        SessionState x = state.session("work").orElseThrow();
+        final SessionState x = state.session("work").orElseThrow();
         assertThat(List.of(x.pendingTurns(), x.checkpointCompacts(), x.checkpointArmed())).containsExactly(1, true, false);
 
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", "## Reflected"));
@@ -939,7 +940,7 @@ class ReducerTest {
     @Test
     void theAutomaticCheckpointWaitsForTheSessionsOwnTurnToFinishAndNeedsACommand() {
         reducer = new Reducer(clock, () -> 400_000L);
-        String title = state.panel(P1).orElseThrow().title();
+        final String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
 
@@ -962,7 +963,7 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, true, "interrupted"));
         assertThat(effects).as("an interrupted turn").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
 
-        BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
+        final BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
         apply(new Intent.RunText(P1, "hand it off", Target.CLAUDE));
         apply(new Intent.SessionTasksChanged("work", List.of(build)));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, "", "started a build"));
@@ -973,7 +974,7 @@ class ReducerTest {
         assertThat(effects).as("the work back").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 505_000L, 1_000_000L, true, "interrupted"));
 
-        SessionSpec silent = state.session("work").orElseThrow().spec().withCheckpoint("");
+        final SessionSpec silent = state.session("work").orElseThrow().spec().withCheckpoint("");
         state = state.withSession(state.session("work").orElseThrow().withSpec(silent).withCheckpointArmed(true));
         apply(new Intent.RunText(P1, "no command", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 600_000L, 1_000_000L, false, "", "big"));
@@ -1159,7 +1160,7 @@ class ReducerTest {
         apply(new Intent.StartSession("work"));
         assertThat(state.session("work").orElseThrow().startedMillis()).as("not yet").isZero();
         apply(new Intent.SessionStarted("work"));
-        long started = clock.millis();
+        final long started = clock.millis();
         assertThat(state.session("work").orElseThrow().startedMillis()).isEqualTo(started);
         clock.advance(5_000);
         apply(new Intent.SessionStarted("work"));
@@ -1263,7 +1264,7 @@ class ReducerTest {
     void changingAnOpenConnectionClosesIt() {
         apply(new Intent.OpenConnection("local"));
         apply(new Intent.ConnectionOpened("local"));
-        ConnectionSpec moved = new ConnectionSpec("local", "lab-host", 8812, "qdb", "admin", "quest", false);
+        final ConnectionSpec moved = new ConnectionSpec("local", "lab-host", 8812, "qdb", "admin", "quest", false);
         apply(new Intent.SaveConnection("local", moved));
         assertThat(effects).first().isEqualTo(new Effect.CloseDb("local"));
         assertThat(state.connection("local").orElseThrow().status()).isEqualTo(Status.CLOSED);
@@ -1328,7 +1329,7 @@ class ReducerTest {
     /// A new panel is titled by its number, takes the focused panel's connection but no session, and takes the focus.
     @Test
     void newPanelTakesTheFocusedConnectionNoSessionAndFocus() {
-        PanelId p3 = new PanelId("p3");
+        final PanelId p3 = new PanelId("p3");
         apply(new Intent.AddPanel(p3, ""));
         assertThat(state.focused()).isEqualTo(p3);
         assertThat(state.panel(p3).orElseThrow()).satisfies(p -> {
@@ -1405,7 +1406,7 @@ class ReducerTest {
     /// before the start or past the end clamps, a panel already in place or an unknown panel saves nothing.
     @Test
     void aMovedPanelTakesItsNewPlaceTheOthersKeepTheirOrderAndTheOrderIsSaved() {
-        PanelId p3 = new PanelId("p3");
+        final PanelId p3 = new PanelId("p3");
         apply(new Intent.AddPanel(p3, "three"));
         apply(new Intent.FocusPanel(P2));
         assertThat(state.panels()).extracting(PanelState::id).containsExactly(P1, P2, p3);
@@ -1430,7 +1431,7 @@ class ReducerTest {
     /// title.
     @Test
     void aPanelIsNotRenamedToAnotherPanelsTitle() {
-        String taken = state.panel(P2).orElseThrow().title();
+        final String taken = state.panel(P2).orElseThrow().title();
         apply(new Intent.RenamePanel(P1, taken));
         assertThat(state.panel(P1).orElseThrow().title()).isNotEqualTo(taken);
         assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SavePanels.class);
@@ -1451,7 +1452,7 @@ class ReducerTest {
         assertThat(state.focused()).isEqualTo(P2);
 
         apply(new Intent.SaveSession("", SessionSpec.fresh("fresh", "/w/f")));
-        PanelState own = state.homePanel("fresh").orElseThrow();
+        final PanelState own = state.homePanel("fresh").orElseThrow();
         assertThat(own.title()).as("a new session comes with its own panel").isEqualTo("fresh");
         assertThat(state.focused()).isEqualTo(own.id());
 
@@ -1460,7 +1461,7 @@ class ReducerTest {
         apply(new Intent.RenamePanel(P3, "Edge"));
         assertThat(state.notice().text()).isEqualTo("A session called Edge exists; its panel is its own");
 
-        PanelId doc = new PanelId("doc");
+        final PanelId doc = new PanelId("doc");
         apply(new Intent.AddPanel(doc, "PLAN.md", true));
         apply(new Intent.SaveSession("", SessionSpec.fresh("plan.md", "/w")));
         assertThat(state.notice().text()).as("a document's title is not a session's panel")
@@ -1481,8 +1482,8 @@ class ReducerTest {
         assertThat(state.panel(P1).orElseThrow().session()).as("its own panel is never detached").isEqualTo("work");
         assertThat(state.notice().text()).isEqualTo("work is its session's own panel; removing the session removes both");
 
-        PanelId doc = new PanelId("doc");
-        PanelId spec = new PanelId("spec");
+        final PanelId doc = new PanelId("doc");
+        final PanelId spec = new PanelId("spec");
         apply(new Intent.AddPanel(doc, "PLAN.md", true));
         apply(new Intent.AddPanel(spec, "SPEC.md", true));
         apply(new Intent.BindSession(doc, "work"));
@@ -1522,7 +1523,7 @@ class ReducerTest {
     /// focused.
     @Test
     void removingTheLastOpenPanelLeavesAnEmptyOneInItsPlace() {
-        PanelId doc = new PanelId("doc");
+        final PanelId doc = new PanelId("doc");
         state = AppState.initial(List.of(new PanelState(doc, "PLAN", "local", "", true)), List.of(ConnectionState.closed(States.LOCAL)), List.of());
         apply(new Intent.RemovePanel(doc));
         assertThat(state.panels()).singleElement().satisfies(p -> {
@@ -1538,7 +1539,7 @@ class ReducerTest {
     @Test
     void theEmptyPanelThatReplacesTheLastNeverTakesAClosedPanelsId() {
         // nextId starts at 1 every run, while closed panels from an earlier run keep their ids
-        PanelId open = new PanelId("o");
+        final PanelId open = new PanelId("o");
         state = AppState.initial(List.of(new PanelState(open, "open", "", "")), List.of(), List.of())
                 .withClosed(List.of(new PanelState(new PanelId("p-1"), "kept", "", "")));
         apply(new Intent.RemovePanel(open));
@@ -1560,7 +1561,7 @@ class ReducerTest {
     @Test
     void aDocumentClosesForGoodAndARemovedPanelLosesItsFile() {
         state = onePanelPerSession();
-        PanelId doc = new PanelId("doc");
+        final PanelId doc = new PanelId("doc");
         apply(new Intent.AddPanel(doc, "PLAN.md", true));
         apply(new Intent.ClosePanel(doc));
         assertThat(state.closed()).as("a document is not kept").isEmpty();
@@ -1606,10 +1607,10 @@ class ReducerTest {
     /// nothing.
     @Test
     void answeredApprovalIsRemovedAndResolved() {
-        Approval a = new Approval(3L, "work", ApprovalKind.QUESTION, "AskUserQuestion", "{}", "colour?", 1L);
+        final Approval a = new Approval(3L, "work", ApprovalKind.QUESTION, "AskUserQuestion", "{}", "colour?", 1L);
         apply(new Intent.ApprovalRequested(a));
         assertThat(state.pendingApprovals("work")).isEqualTo(1);
-        ApprovalDecision answer = new ApprovalDecision.Answer(Map.of("colour?", "Red"));
+        final ApprovalDecision answer = new ApprovalDecision.Answer(Map.of("colour?", "Red"));
         apply(new Intent.ApprovalAnswered(3L, answer));
         assertThat(state.approvals()).isEmpty();
         assertThat(effects).containsExactly(new Effect.ResolveApproval(a, answer));
@@ -1657,10 +1658,10 @@ class ReducerTest {
     /// raising its version; a pinned view is not replaced, so a second one is added.
     @Test
     void sameTitleFromSameSessionReplacesUnlessPinned() {
-        ViewSpec first = new ViewSpec.Markdown("# one");
-        ViewSpec second = new ViewSpec.Markdown("# two");
+        final ViewSpec first = new ViewSpec.Markdown("# one");
+        final ViewSpec second = new ViewSpec.Markdown("# two");
         apply(new Intent.ShowView("work", "notes", first, Placement.LOWER));
-        long id = state.views().getFirst().id();
+        final long id = state.views().getFirst().id();
         assertThat(state.lowerTab()).isEqualTo(LowerTab.view(id));
 
         apply(new Intent.SelectLowerTab(LowerTab.SESSION));
@@ -1681,7 +1682,7 @@ class ReducerTest {
     @Test
     void theUsersOwnViewShowsAgainButARefreshDoesNotMoveTheUser() {
         apply(new Intent.ShowView("", "plot · one", new ViewSpec.Markdown("a"), Placement.LOWER));
-        long id = state.views().getFirst().id();
+        final long id = state.views().getFirst().id();
         apply(new Intent.SelectLowerTab(LowerTab.SESSION));
         apply(new Intent.ShowView("", "plot · one", new ViewSpec.Markdown("b"), Placement.LOWER)); // ⌘J again
         assertThat(state.lowerTab()).isEqualTo(LowerTab.view(id));
@@ -1696,7 +1697,7 @@ class ReducerTest {
     @Test
     void aLateRefreshNeverReplacesTheUsersNewerStatement() {
         apply(new Intent.RunText(P1, "SELECT * FROM t", Target.SQL));
-        long first = run(P1).requestId();
+        final long first = run(P1).requestId();
         apply(new Intent.SqlCompleted(first, 1, -1, false, 1, 1, 2));
         apply(new Intent.RunText(P1, "SELECT 2", Target.SQL));
         apply(new Intent.RefreshSql(P1, "SELECT * FROM t"));
@@ -1724,7 +1725,7 @@ class ReducerTest {
 
     // ---- development tools
 
-    private ViewSpec.Console console(String title) {
+    private ViewSpec.Console console(final String title) {
         return (ViewSpec.Console) state.views().stream().filter(v -> v.title().equals(title)).findFirst().orElseThrow().spec();
     }
 
@@ -1733,7 +1734,7 @@ class ReducerTest {
     @Test
     void gradleRunsInTheSessionDirectoryAndShowsAConsole() {
         apply(new Intent.RunGradle(null, " :db:test "));
-        String dir = state.session("work").orElseThrow().spec().workDir();
+        final String dir = state.session("work").orElseThrow().spec().workDir();
         assertThat(effects).containsExactly(new Effect.RunGradle(1L, dir, ":db:test"));
         assertThat(console("gradle :db:test").state()).isEqualTo(ViewSpec.RunState.RUNNING);
         assertThat(state.lowerTab().kind()).isEqualTo(LowerTab.Kind.VIEW);
@@ -1741,7 +1742,7 @@ class ReducerTest {
         clock.advance(1);
         apply(new Intent.CommandFinished(1L, 1, 20_000L, false,
                 new ViewSpec.TreeNode("tests", "1 failed", List.of()), Map.of("LaneTest.cancel", "expected 1")));
-        ViewSpec.Console done = console("gradle :db:test");
+        final ViewSpec.Console done = console("gradle :db:test");
         assertThat(done.state()).isEqualTo(ViewSpec.RunState.FAILED);
         assertThat(done.failures()).containsKey("LaneTest.cancel");
         assertThat(effects).containsExactly(new Effect.DesktopNotify("gradle :db:test", "failed in 20 s"));
@@ -1766,7 +1767,7 @@ class ReducerTest {
     void closingARunningConsoleStopsItAndFreesItsOutput() {
         apply(new Intent.RunGradle(P1, "build"));
         assertThat(effects).singleElement().isInstanceOf(Effect.RunGradle.class);
-        long view = state.views().getFirst().id();
+        final long view = state.views().getFirst().id();
         apply(new Intent.CloseView(view));
         assertThat(effects).containsExactly(new Effect.CancelCommand(1L), new Effect.ForgetCommand(1L));
         apply(new Intent.CommandFinished(1L, 143, 10L, true, ViewSpec.TreeNode.NONE, Map.of()));

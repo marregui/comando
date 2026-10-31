@@ -24,7 +24,7 @@ public interface TableSource {
     /** A sortable number for numeric columns, NaN otherwise. */
     double numeric(int row, int column);
 
-    static TableSource of(ResultView r) {
+    static TableSource of(final ResultView r) {
         return new TableSource() {
             @Override
             public int rowCount() {
@@ -37,44 +37,44 @@ public interface TableSource {
             }
 
             @Override
-            public String columnName(int column) {
+            public String columnName(final int column) {
                 return r.columnName(column);
             }
 
             @Override
-            public String typeName(int column) {
+            public String typeName(final int column) {
                 return r.typeName(column);
             }
 
             @Override
-            public boolean isNumeric(int column) {
+            public boolean isNumeric(final int column) {
                 return r.isNumeric(column);
             }
 
             @Override
-            public boolean isNull(int row, int column) {
+            public boolean isNull(final int row, final int column) {
                 return r.isNull(row, column);
             }
 
             @Override
-            public void format(int row, int column, StringBuilder sink) {
+            public void format(final int row, final int column, final StringBuilder sink) {
                 r.format(row, column, sink);
             }
 
             @Override
-            public double numeric(int row, int column) {
+            public double numeric(final int row, final int column) {
                 return r.numeric(row, column);
             }
         };
     }
 
-    static TableSource of(ViewSpec.Table t) {
-        int n = t.columns().size();
-        boolean[] numeric = new boolean[n];
+    static TableSource of(final ViewSpec.Table t) {
+        final int n = t.columns().size();
+        final boolean[] numeric = new boolean[n];
         for (int c = 0; c < n; c++) {
             boolean all = !t.rows().isEmpty();
-            for (var row : t.rows()) {
-                String v = row.get(c);
+            for (final var row : t.rows()) {
+                final String v = row.get(c);
                 if (!v.equals("null") && !isNumber(v)) {
                     all = false;
                     break;
@@ -94,32 +94,32 @@ public interface TableSource {
             }
 
             @Override
-            public String columnName(int column) {
+            public String columnName(final int column) {
                 return t.columns().get(column);
             }
 
             @Override
-            public String typeName(int column) {
+            public String typeName(final int column) {
                 return numeric[column] ? "number" : "text";
             }
 
             @Override
-            public boolean isNumeric(int column) {
+            public boolean isNumeric(final int column) {
                 return numeric[column];
             }
 
             @Override
-            public boolean isNull(int row, int column) {
+            public boolean isNull(final int row, final int column) {
                 return t.rows().get(row).get(column).equals("null");
             }
 
             @Override
-            public void format(int row, int column, StringBuilder sink) {
+            public void format(final int row, final int column, final StringBuilder sink) {
                 sink.append(t.rows().get(row).get(column));
             }
 
             @Override
-            public double numeric(int row, int column) {
+            public double numeric(final int row, final int column) {
                 if (!numeric[column] || isNull(row, column)) {
                     return Double.NaN;
                 }

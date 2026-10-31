@@ -1,15 +1,50 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.HeadlessException;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.awt.geom.Rectangle2D;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JLayeredPane;
+import javax.swing.JList;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.JRootPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
-import dev.marregui.comando.ui.kit.text.TextLinks;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.PlainDocument;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.TopicPort;
@@ -26,43 +61,9 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
-import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.kit.text.TextLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JLayeredPane;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
-import javax.swing.JList;
-import javax.swing.JRootPane;
-import javax.swing.JTabbedPane;
-import javax.swing.JViewport;
-import javax.swing.SwingUtilities;
-import javax.swing.event.HyperlinkEvent;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.PlainDocument;
-import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.HeadlessException;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.awt.event.MouseMotionListener;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -88,26 +89,26 @@ class WorkspaceTest {
         Consumer<Deleted> deletions;
 
         @Override
-        public void onDeleted(Consumer<Deleted> listener) {
+        public void onDeleted(final Consumer<Deleted> listener) {
             this.deletions = listener;
         }
 
         @Override
-        public String load(PanelId panel) {
+        public String load(final PanelId panel) {
             return "SELECT 1;";
         }
 
         @Override
-        public void changed(PanelId panel, String text) {
+        public void changed(final PanelId panel, final String text) {
             changes.incrementAndGet();
         }
 
         @Override
-        public void forget(PanelId panel) {
+        public void forget(final PanelId panel) {
         }
 
         @Override
-        public void onOutsideChange(Consumer<Outside> listener) {
+        public void onOutsideChange(final Consumer<Outside> listener) {
             this.listener = listener;
         }
     }
@@ -115,9 +116,9 @@ class WorkspaceTest {
     /// A log panel reloaded from outside takes the new text without posting a notice.
     @Test
     void aLogFollowingItsGrowthPostsNoNotice() throws Exception {
-        Texts texts = new Texts();
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        Workspace[] w = new Workspace[1];
+        final Texts texts = new Texts();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
             w[0].render(AppState.initial(List.of(new PanelState(P, "comando-0", "", "", true)), List.of(), List.of()));
@@ -132,9 +133,9 @@ class WorkspaceTest {
     /// to save, with one "Reloaded" notice.
     @Test
     void aFileChangedOutsideShowsInItsPanelUnlessThePanelHasUnsavedEdits() throws Exception {
-        Texts texts = new Texts();
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        Workspace[] w = new Workspace[1];
+        final Texts texts = new Texts();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
             w[0].render(AppState.initial(List.of(new PanelState(P, "spec", "", "")), List.of(), List.of()));
@@ -155,11 +156,11 @@ class WorkspaceTest {
     /// panel's file deleted outside removes that panel too.
     @Test
     void aDeletedFileRemovesItsPanelWithNothingToReopen() throws Exception {
-        PanelId doc = new PanelId("d");
-        Texts texts = new Texts();
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        PanelState spec = new PanelState(P, "spec", "", "");
-        Workspace[] w = new Workspace[1];
+        final PanelId doc = new PanelId("d");
+        final Texts texts = new Texts();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final PanelState spec = new PanelState(P, "spec", "", "");
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
             w[0].render(AppState.initial(List.of(spec, new PanelState(doc, "ALPHA", "", "")), List.of(), List.of()));
@@ -176,7 +177,7 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md", () -> true)));
         assertThat(intents).as("a panel already gone is not removed twice").filteredOn(Intent.RemovePanel.class::isInstance).hasSize(1);
 
-        PanelId shut = new PanelId("c");
+        final PanelId shut = new PanelId("c");
         SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(spec), List.of(), List.of())
                 .withClosed(List.of(new PanelState(shut, "old", "", "")))));
         SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(shut, "old.md", () -> true)));
@@ -187,17 +188,17 @@ class WorkspaceTest {
     /// written again and a notice says why.
     @Test
     void aSessionsOwnPanelWhoseFileWasDeletedKeepsItsSessionAndWritesItsTextAgain() throws Exception {
-        Texts texts = new Texts();
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w")).withStatus(Status.OPEN, "");
-        PanelState own = new PanelState(P, "work", "", "work");
-        Workspace[] w = new Workspace[1];
+        final Texts texts = new Texts();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w")).withStatus(Status.OPEN, "");
+        final PanelState own = new PanelState(P, "work", "", "work");
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
             w[0].render(AppState.initial(List.of(own), List.of(), List.of(work)));
             w[0].panel(P).editor().area().setText("my notes");
         });
-        int before = texts.changes.get();
+        final int before = texts.changes.get();
         SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(P, "work.md", () -> true)));
         assertThat(intents).as("removing it would remove and stop the session").doesNotHaveAnyElementsOfTypes(Intent.RemovePanel.class);
         assertThat(texts.changes.get()).as("its text is written again").isGreaterThan(before);
@@ -209,11 +210,11 @@ class WorkspaceTest {
     /// write the file again.
     @Test
     void aDeletedFileWhosePanelGotEditsSinceTheReportKeepsThePanel() throws Exception {
-        Texts texts = new Texts();
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        PanelState spec = new PanelState(P, "spec", "", "");
-        PanelId other = new PanelId("o");
-        Workspace[] w = new Workspace[1];
+        final Texts texts = new Texts();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final PanelState spec = new PanelState(P, "spec", "", "");
+        final PanelId other = new PanelId("o");
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
             w[0].render(AppState.initial(List.of(spec, new PanelState(other, "other", "", "")), List.of(), List.of()));
@@ -231,21 +232,21 @@ class WorkspaceTest {
     /// supersedes it. The icon alone carries the status: the title never changes.
     @Test
     void aTabFollowsItsSessionAndMarksAnOutcomeUntilLookedAt() throws Exception {
-        PanelId other = new PanelId("o");
-        PanelState work = new PanelState(P, "work", "", "s");
-        PanelState notes = new PanelState(other, "notes", "", "");
-        SessionState session = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        AtomicInteger attention = new AtomicInteger();
-        Workspace[] w = new Workspace[1];
-        AppState[] s = new AppState[1];
+        final PanelId other = new PanelId("o");
+        final PanelState work = new PanelState(P, "work", "", "s");
+        final PanelState notes = new PanelState(other, "notes", "", "");
+        final SessionState session = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final AtomicInteger attention = new AtomicInteger();
+        final Workspace[] w = new Workspace[1];
+        final AppState[] s = new AppState[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
             w[0].onAttention(attention::incrementAndGet);
             s[0] = AppState.initial(List.of(work, notes), List.of(), List.of(session)).withFocused(other);
             w[0].render(s[0]);
         });
-        JTabbedPane tabs = (JTabbedPane) w[0].component();
+        final JTabbedPane tabs = (JTabbedPane) w[0].component();
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.IDLE).containsEntry(other, TabStatus.NONE);
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
 
@@ -298,13 +299,13 @@ class WorkspaceTest {
     /// [TabStatus#REPORT_GRACE_MILLIS], the tick marks it done without a state change.
     @Test
     void returnedBackgroundWorkMarksTheTabFinishedOnlyWhenNoReadingTurnFollows() throws Exception {
-        PanelId other = new PanelId("o");
-        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
-        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
-        SessionState waiting = open.withTurns(1, 1_000L).withTasks(List.of(agent), 2_000L).withTurns(0, 3_000L);
-        long[] now = {3_000L};
-        Workspace[] w = new Workspace[1];
-        AppState[] s = new AppState[1];
+        final PanelId other = new PanelId("o");
+        final SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        final BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        final SessionState waiting = open.withTurns(1, 1_000L).withTasks(List.of(agent), 2_000L).withTurns(0, 3_000L);
+        final long[] now = {3_000L};
+        final Workspace[] w = new Workspace[1];
+        final AppState[] s = new AppState[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> now[0]);
             w[0].onAttention(() -> { });
@@ -328,18 +329,18 @@ class WorkspaceTest {
     /// A background tab whose hand-off turn failed shows `ERROR` while its background task still runs.
     @Test
     void aHandOffTurnThatFailsShowsItsErrorWhileItsWorkRunsOn() throws Exception {
-        PanelId other = new PanelId("o");
-        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
-        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
-        Workspace[] w = new Workspace[1];
-        AppState[] s = new AppState[1];
+        final PanelId other = new PanelId("o");
+        final SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        final BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        final Workspace[] w = new Workspace[1];
+        final AppState[] s = new AppState[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
             w[0].onAttention(() -> { });
             s[0] = AppState.initial(List.of(new PanelState(P, "work", "", "s"), new PanelState(other, "notes", "", "")), List.of(),
                     List.of(open.withTurns(1, 1_000L))).withFocused(other);
             w[0].render(s[0]);
-            SessionState failed = open.withTurns(1, 1_000L).withTasks(List.of(agent), 1_500L).withTurns(0, 2_000L).withLastTurnError("rate limited");
+            final SessionState failed = open.withTurns(1, 1_000L).withTasks(List.of(agent), 1_500L).withTurns(0, 2_000L).withLastTurnError("rate limited");
             w[0].render(s[0] = s[0].withSession(failed));
         });
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
@@ -350,20 +351,20 @@ class WorkspaceTest {
     /// is the tab's own close.
     @Test
     void aTabsMenuClosesTheOthersOrThoseToOneSideAndKeepsTabsWaitingForTheUserOrRunningAProgram() throws Exception {
-        PanelId a = new PanelId("a");
-        PanelId b = new PanelId("b");
-        PanelId c = new PanelId("c");
-        PanelId d = new PanelId("d");
-        PanelId e = new PanelId("e");
-        SessionState session = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        final PanelId a = new PanelId("a");
+        final PanelId b = new PanelId("b");
+        final PanelId c = new PanelId("c");
+        final PanelId d = new PanelId("d");
+        final PanelId e = new PanelId("e");
+        final SessionState session = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
         // a and b are plain; c's session waits for an approval; d's shell runs a program; e's session is mid-turn
-        AppState s = AppState.initial(List.of(new PanelState(a, "a", "", ""), new PanelState(b, "b", "", ""),
+        final AppState s = AppState.initial(List.of(new PanelState(a, "a", "", ""), new PanelState(b, "b", "", ""),
                         new PanelState(c, "c", "", "s"), new PanelState(d, "d", "", ""), new PanelState(e, "e", "", "busy")), List.of(),
                 List.of(session, SessionState.closed(SessionSpec.fresh("busy", "/tmp")).withStatus(Status.OPEN, "").withTurns(1, 1L)))
                 .withApprovals(List.of(new Approval(1L, "s", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        List<PanelId> closedOne = new CopyOnWriteArrayList<>();
-        Workspace[] w = new Workspace[1];
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final List<PanelId> closedOne = new CopyOnWriteArrayList<>();
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
             w[0].onClose(closedOne::add);
@@ -372,10 +373,10 @@ class WorkspaceTest {
         });
         assertThat(w[0].statuses()).containsEntry(c, TabStatus.NEEDS_YOU).containsEntry(e, TabStatus.WORKING);
 
-        List<String> labels = new CopyOnWriteArrayList<>();
-        List<Boolean> enabled = new CopyOnWriteArrayList<>();
+        final List<String> labels = new CopyOnWriteArrayList<>();
+        final List<Boolean> enabled = new CopyOnWriteArrayList<>();
         SwingUtilities.invokeAndWait(() -> {
-            for (Component item : w[0].tabMenu(0).getComponents()) {
+            for (final Component item : w[0].tabMenu(0).getComponents()) {
                 if (item instanceof JMenuItem m) {
                     labels.add(m.getText());
                     enabled.add(m.isEnabled());
@@ -390,7 +391,7 @@ class WorkspaceTest {
                 .as("b in front, then the others but the one waiting and the one running a program")
                 .containsExactly(new Intent.FocusPanel(b), new Intent.ClosePanel(a), new Intent.ClosePanel(e));
         assertThat(intents).as("no notice until the tabs are gone").noneMatch(Intent.Notify.class::isInstance);
-        AppState after = s.withPanels(s.panels().stream().filter(p -> !p.id().equals(a) && !p.id().equals(e)).toList(), b);
+        final AppState after = s.withPanels(s.panels().stream().filter(p -> !p.id().equals(a) && !p.id().equals(e)).toList(), b);
         SwingUtilities.invokeAndWait(() -> w[0].render(after));
         assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
                 .as("one notice for the close, none per tab")
@@ -398,7 +399,7 @@ class WorkspaceTest {
 
         // b c d now; a menu opened on d, then b closes elsewhere: the menu still closes only what was left of d
         intents.clear();
-        JPopupMenu[] menu = new JPopupMenu[1];
+        final JPopupMenu[] menu = new JPopupMenu[1];
         SwingUtilities.invokeAndWait(() -> menu[0] = w[0].tabMenu(2));
         SwingUtilities.invokeAndWait(() -> w[0].render(after.withPanels(after.panels().stream().filter(p -> !p.id().equals(b)).toList(), c)));
         SwingUtilities.invokeAndWait(() -> menuItem(menu[0], "Close to the left").doClick());
@@ -418,7 +419,7 @@ class WorkspaceTest {
         final List<Ask> asks = new CopyOnWriteArrayList<>();
 
         @Override
-        public void read(String key, String source, boolean urgent, Consumer<Topic> done) {
+        public void read(final String key, final String source, final boolean urgent, final Consumer<Topic> done) {
             asks.add(new Ask(key, source, urgent, done));
         }
     }
@@ -427,8 +428,8 @@ class WorkspaceTest {
     /// running in the background until it ends; a double click on one sends `OpenSubagent`, a single click nothing.
     @Test
     void aSessionsCardOutlinesItsSubagentsAndADoubleClickOpensOnesTab() throws Exception {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
-        Transcript t = transcripts.of("idle");
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
+        final Transcript t = transcripts.of("idle");
         t.append(new Block.UserPrompt("review it", "x", ""));
         t.append(new Block.ToolCall("a1", "Agent", "{\"description\":\"Review the diff\",\"prompt\":\"…\"}", "found 2", Block.ToolStatus.DONE, ""));
         t.append(new Block.ToolCall("r1", "Read", "{\"file_path\":\"/w/a\"}", "ok", Block.ToolStatus.DONE, "a1"));
@@ -437,13 +438,13 @@ class WorkspaceTest {
         t.append(new Block.ToolCall("a2", "Agent", "{\"description\":\"Run the tests\"}", "", Block.ToolStatus.RUNNING, ""));
         t.append(new Block.ToolCall("a3", "Agent", "{\"description\":\"Watch CI\"}", "Async agent launched successfully. agentId: bg7", Block.ToolStatus.DONE, ""));
         t.append(new Block.ToolCall("a4", "Agent", "{\"description\":\"Broken\"}", "boom", Block.ToolStatus.ERROR, ""));
-        SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w/idle")).withStatus(Status.OPEN, "")
+        final SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w/idle")).withStatus(Status.OPEN, "")
                 .withTasks(List.of(new BackgroundTask("bg7", "local_agent", "Watch CI", 0L)), 0L);
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of(idle));
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
-        JList<String> rows = new JList<>(new String[]{"idle"});
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of(idle));
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
+        final JList<String> rows = new JList<>(new String[]{"idle"});
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
             w[0].topics(new Asks(), transcripts::of);
@@ -454,12 +455,12 @@ class WorkspaceTest {
             layOut(root, 900, 600);
             w[0].rowCards().show("idle", rows, rows.getCellBounds(0, 0), 200);
         });
-        TabCard card = w[0].card();
-        List<JLabel> links = card.agentLinks();
+        final TabCard card = w[0].card();
+        final List<JLabel> links = card.agentLinks();
         assertThat(links).extracting(JLabel::getText).as("each own sub-agent, its state and the tool calls inside it at any depth")
                 .containsExactly("✓ Review the diff · done · 3 tools", "▸ Run the tests · running",
                         "▸ Watch CI · running in background", "✗ Broken · failed");
-        JLabel first = links.getFirst();
+        final JLabel first = links.getFirst();
         SwingUtilities.invokeAndWait(() -> {
             first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 1, false, MouseEvent.BUTTON1));
         });
@@ -482,10 +483,10 @@ class WorkspaceTest {
     /// and the last exchange shows under its heading.
     @Test
     void anotherInstancesCardOutlivesTheRendersAndTakesItsOwnersUpdates() throws Exception {
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of());
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
-        JList<String> rows = new JList<>(new String[]{"Comando Expert"});
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of());
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
+        final JList<String> rows = new JList<>(new String[]{"Comando Expert"});
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
             w[0].render(s);
@@ -498,8 +499,8 @@ class WorkspaceTest {
             w[0].render(s.withSessions(List.of(SessionState.closed(SessionSpec.fresh("other", "/w")))));
             w[0].render(AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of()));
         });
-        TabCard card = w[0].card();
-        SessionsSidebar.Cards cards = w[0].rowCards();
+        final TabCard card = w[0].card();
+        final SessionsSidebar.Cards cards = w[0].rowCards();
         assertThat(cards.showing("instance:comando-expert")).as("a render keeps it").isTrue();
         assertThat(List.of(card.statusText(), card.detailsText())).containsExactly("Comando Expert", "State: idle");
 
@@ -516,17 +517,17 @@ class WorkspaceTest {
     /// end of its conversation; the card closes on ✕, on leaving, after the grace, and when the session is removed.
     @Test
     void aSessionRowShowsItsPanelsCardWithTheSessionsDetailsAndAHeadlessSessionACardOfItsOwn() throws Exception {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
         transcripts.of("idle").append(new Block.UserPrompt("tidy the imports", "x", ""));
         transcripts.of("idle").append(new Block.AssistantText("m1", 0, "Imports tidied.", false, ""));
-        Asks asks = new Asks();
-        SessionState work = SessionState.closed(SessionSpec.fresh("s", "/w/s").resumable("conv-1")).withStatus(Status.OPEN, "").withBranch("main");
-        SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w/idle"));
-        PanelState sql = new PanelState(new PanelId("q"), "query", "", "");
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s"), sql), List.of(), List.of(work, idle));
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
-        JList<String> rows = new JList<>(new String[]{"s", "idle"});
+        final Asks asks = new Asks();
+        final SessionState work = SessionState.closed(SessionSpec.fresh("s", "/w/s").resumable("conv-1")).withStatus(Status.OPEN, "").withBranch("main");
+        final SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w/idle"));
+        final PanelState sql = new PanelState(new PanelId("q"), "query", "", "");
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s"), sql), List.of(), List.of(work, idle));
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
+        final JList<String> rows = new JList<>(new String[]{"s", "idle"});
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 100_000L);
             w[0].topics(asks, transcripts::of);
@@ -537,18 +538,18 @@ class WorkspaceTest {
             layOut(root, 900, 600);
             w[0].showCard(0);
         });
-        TabCard card = w[0].card();
-        String details = card.detailsText();
+        final TabCard card = w[0].card();
+        final String details = card.detailsText();
         assertThat(card.statusText()).as("the panel's title").isEqualTo("work");
         assertThat(details).as("a session panel's card has the session's facts, each once")
                 .startsWith("State: running\nModel: default · effort default\nFolder: /w/s · main\nConversation: conv-1\nSession: s")
                 .doesNotContain("Status:", "Path:", "unknown");
         asks.asks.getFirst().done().accept(new Topic("Working on the tab card", 1L, ""));
         SwingUtilities.invokeAndWait(() -> { });
-        String status = card.statusText();
+        final String status = card.statusText();
 
         // the sidebar hears a row's card close, and where the pointer left it for; a tab's card is not a row's
-        List<String> closed = new CopyOnWriteArrayList<>();
+        final List<String> closed = new CopyOnWriteArrayList<>();
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().onClose(at -> closed.add(at == null ? "closed" : "left for a point")));
         SwingUtilities.invokeAndWait(() -> card.closeButton().doClick());
         assertThat(closed).as("a tab's card").isEmpty();
@@ -559,15 +560,15 @@ class WorkspaceTest {
         assertThat(card.component().getParent()).isSameAs(root.getLayeredPane());
         assertThat(List.of(card.statusText(), card.detailsText(), card.topicText())).containsExactly(status, details, "Working on the tab card");
         assertThat(asks.asks).hasSize(1);
-        int below = SwingUtilities.convertRectangle(rows, rows.getCellBounds(0, 0), root.getLayeredPane()).y + rows.getCellBounds(0, 0).height;
+        final int below = SwingUtilities.convertRectangle(rows, rows.getCellBounds(0, 0), root.getLayeredPane()).y + rows.getCellBounds(0, 0).height;
         assertThat(card.component().getY()).as("under the row").isGreaterThanOrEqualTo(below);
         SwingUtilities.invokeAndWait(() -> w[0].tick());
         assertThat(card.component().getY()).as("a tick leaves it under its row, not its tab").isGreaterThanOrEqualTo(below);
 
         // beside the rows when the window has room: its left edge where the sidebar says, its top at the row's
-        int beside = rows.getWidth() - 4;
+        final int beside = rows.getWidth() - 4;
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("s", rows, rows.getCellBounds(0, 0), beside));
-        Point besideAt = SwingUtilities.convertPoint(rows, new Point(beside, rows.getCellBounds(0, 0).y), root.getLayeredPane());
+        final Point besideAt = SwingUtilities.convertPoint(rows, new Point(beside, rows.getCellBounds(0, 0).y), root.getLayeredPane());
         assertThat(card.component().getX()).as("beside the rows, over their last pixels").isEqualTo(besideAt.x);
         assertThat(card.component().getY()).as("its top at the row's, within the window's margin").isEqualTo(Math.max(8, besideAt.y));
         // no room beside them: under the row, as before
@@ -595,7 +596,7 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> card.closeButton().doClick());
         assertThat(closed).containsExactly("closed");
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));
-        JComponent c = card.component();
+        final JComponent c = card.component();
         SwingUtilities.invokeAndWait(() -> {
             c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0, false));
             c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_EXITED, 0, 0, -5, 5, 0, false));
@@ -624,13 +625,13 @@ class WorkspaceTest {
     /// than a summary card, follows the connection's state and closes when the connection is removed.
     @Test
     void aConnectionsRowShowsACardOfItsFactsWithoutASummaryThatFollowsItsState() throws Exception {
-        Asks asks = new Asks();
-        ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "local", ""), new PanelState(new PanelId("q"), "query", "", "")),
+        final Asks asks = new Asks();
+        final ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "local", ""), new PanelState(new PanelId("q"), "query", "", "")),
                 List.of(local), List.of());
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
-        JList<String> rows = new JList<>(new String[]{"local"});
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
+        final JList<String> rows = new JList<>(new String[]{"local"});
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 100_000L);
             w[0].topics(asks, name -> null);
@@ -641,7 +642,7 @@ class WorkspaceTest {
             layOut(root, 900, 600);
             w[0].rowCards().showConnection("local", rows, rows.getCellBounds(0, 0));
         });
-        TabCard card = w[0].card();
+        final TabCard card = w[0].card();
         assertThat(card.shown()).isEqualTo(Workspace.CONNECTION_KEY + "local");
         assertThat(w[0].cardShown()).as("no panel's").isNull();
         assertThat(card.statusText()).isEqualTo("local");
@@ -670,12 +671,12 @@ class WorkspaceTest {
     /// reads it again.
     @Test
     void aNewConversationDropsTheTopicOfItsSessionsPanelsAndTheNextShowReadsItAgain() throws Exception {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
-        Asks asks = new Asks();
-        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp").resumable("conv-1")).withStatus(Status.OPEN, "");
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
+        final Asks asks = new Asks();
+        final SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp").resumable("conv-1")).withStatus(Status.OPEN, "");
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 100_000L);
             w[0].topics(asks, transcripts::of);
@@ -686,7 +687,7 @@ class WorkspaceTest {
         });
         asks.asks.getFirst().done().accept(new Topic("Reflecting on the session", 1L, ""));
         SwingUtilities.invokeAndWait(() -> { });
-        TabCard card = w[0].card();
+        final TabCard card = w[0].card();
         assertThat(card.topicText()).isEqualTo("Reflecting on the session");
 
         SwingUtilities.invokeAndWait(() -> w[0].render(s.withSession(open.withSpec(open.spec().withModel("opus")))));
@@ -705,15 +706,15 @@ class WorkspaceTest {
     /// grace, on a press or on ✕.
     @Test
     void aTabShowsACardWithItsTopicReadOnceAndAgainOnlyOnAskOrWhenThePanelsTextChangedAndItClosesWhenLeft() throws Exception {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
-        Transcript t = transcripts.of("s");
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
+        final Transcript t = transcripts.of("s");
         t.append(new Block.UserPrompt("make the tab card sticky", "p", ""));
-        Asks asks = new Asks();
-        long[] now = {100_000L};
-        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
+        final Asks asks = new Asks();
+        final long[] now = {100_000L};
+        final SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> now[0]);
             w[0].topics(asks, transcripts::of);
@@ -722,7 +723,7 @@ class WorkspaceTest {
             layOut(root, 900, 600);
             w[0].showCard(0);
         });
-        TabCard card = w[0].card();
+        final TabCard card = w[0].card();
         assertThat(w[0].cardShown()).isEqualTo(P);
         assertThat(card.component().getParent()).isSameAs(root.getLayeredPane());
         assertThat(JLayeredPane.getLayer(card.component())).isEqualTo(JLayeredPane.POPUP_LAYER.intValue());
@@ -755,10 +756,10 @@ class WorkspaceTest {
         // the buttons sit at the bottom left, the refresh first, the close beside it; a card never shown lays out by
         // hand
         SwingUtilities.invokeAndWait(() -> layOut(card.component()));
-        Rectangle cardBounds = card.component().getBounds();
-        Point refreshAt = SwingUtilities.convertPoint(card.refreshButton().getParent(), card.refreshButton().getLocation(), card.component());
-        Point closeAt = SwingUtilities.convertPoint(card.closeButton().getParent(), card.closeButton().getLocation(), card.component());
-        Point summaryAt = SwingUtilities.convertPoint(card.topicArea().getParent(), card.topicArea().getLocation(), card.component());
+        final Rectangle cardBounds = card.component().getBounds();
+        final Point refreshAt = SwingUtilities.convertPoint(card.refreshButton().getParent(), card.refreshButton().getLocation(), card.component());
+        final Point closeAt = SwingUtilities.convertPoint(card.closeButton().getParent(), card.closeButton().getLocation(), card.component());
+        final Point summaryAt = SwingUtilities.convertPoint(card.topicArea().getParent(), card.topicArea().getLocation(), card.component());
         assertThat(refreshAt.y).as("below the summary").isGreaterThan(summaryAt.y);
         assertThat(refreshAt.x).as("at the left").isLessThan(cardBounds.width / 4);
         assertThat(closeAt.x).as("next to the refresh").isGreaterThan(refreshAt.x).isLessThan(refreshAt.x + 3 * card.refreshButton().getWidth());
@@ -799,7 +800,7 @@ class WorkspaceTest {
         assertThat(card.topicText()).isEqualTo("No summary: Not logged in");
 
         // a long summary wraps to a few lines, and the card grows to hold them
-        int oneLine = card.component().getHeight();
+        final int oneLine = card.component().getHeight();
         asks.asks.get(3).done().accept(new Topic("In comando, the tab card: " + "a summary of several clauses, ".repeat(8), 4L, ""));
         SwingUtilities.invokeAndWait(() -> { });
         assertThat(card.component().getHeight()).as("taller for the wrapped summary").isGreaterThan(oneLine);
@@ -807,7 +808,7 @@ class WorkspaceTest {
 
         // the pointer leaving the tabs and going on into the card keeps it; leaving the card closes it
         SwingUtilities.invokeAndWait(() -> {
-            for (MouseListener l : w[0].component().getMouseListeners()) {
+            for (final MouseListener l : w[0].component().getMouseListeners()) {
                 l.mouseExited(mouse(w[0].component(), MouseEvent.MOUSE_EXITED, 1, 1));
             }
             card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_ENTERED, 5, 5));
@@ -821,7 +822,7 @@ class WorkspaceTest {
         // leaving the tab without reaching the card closes it once the grace is over
         SwingUtilities.invokeAndWait(() -> {
             w[0].showCard(0);
-            for (MouseListener l : w[0].component().getMouseListeners()) {
+            for (final MouseListener l : w[0].component().getMouseListeners()) {
                 l.mouseExited(mouse(w[0].component(), MouseEvent.MOUSE_EXITED, 1, 1));
             }
         });
@@ -847,14 +848,14 @@ class WorkspaceTest {
     /// the card.
     @Test
     void aCardLinksTheLinearTicketsThePanelNamesNewestFirstLearningTheirAddressFromLinearsLinks() throws Exception {
-        TranscriptRegistry transcripts = new TranscriptRegistry();
+        final TranscriptRegistry transcripts = new TranscriptRegistry();
         transcripts.of("s").append(new Block.AssistantText("m", 0, "Opened https://linear.app/acme/issue/OPS-3/x for it.", false, ""));
-        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
-        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
-        Workspace[] w = new Workspace[1];
-        List<LinearTickets.Site> kept = new CopyOnWriteArrayList<>();
-        List<String> opened = new CopyOnWriteArrayList<>();
-        JRootPane root = new JRootPane();
+        final SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        final AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
+        final Workspace[] w = new Workspace[1];
+        final List<LinearTickets.Site> kept = new CopyOnWriteArrayList<>();
+        final List<String> opened = new CopyOnWriteArrayList<>();
+        final JRootPane root = new JRootPane();
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 0L);
             w[0].topics(new Asks(), transcripts::of);
@@ -866,11 +867,11 @@ class WorkspaceTest {
             w[0].panel(P).editor().area().setText("ENG-7 and OPS-3 and UTF-8 earlier\n\nnow fix ENG-1125 then ENG-8");
             w[0].showCard(0);
         });
-        TabCard card = w[0].card();
+        final TabCard card = w[0].card();
         assertThat(card.ticketLinks()).extracting(JLabel::getText).containsExactly("ENG-1125", "ENG-8", "OPS-3");
         assertThat(kept).as("OPS learnt from the session's conversation, and kept")
                 .containsExactly(new LinearTickets.Site("acme", Set.of("ENG", "OPS")));
-        JLabel first = card.ticketLinks().getFirst();
+        final JLabel first = card.ticketLinks().getFirst();
         SwingUtilities.invokeAndWait(() -> first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 1, false, MouseEvent.BUTTON1)));
         assertThat(opened).as("one click opens nothing").isEmpty();
         SwingUtilities.invokeAndWait(() -> first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 2, false, MouseEvent.BUTTON1)));
@@ -889,11 +890,11 @@ class WorkspaceTest {
     /// earlier tab closes, and a summary that looks like HTML is shown as plain text.
     @Test
     void aPressOrTheCloseButtonShowsNoCardAndACardFollowsItsTabAndShowsHtmlAsText() throws Exception {
-        PanelId a = new PanelId("a");
-        PanelId b = new PanelId("b");
-        Asks asks = new Asks();
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
+        final PanelId a = new PanelId("a");
+        final PanelId b = new PanelId("b");
+        final Asks asks = new Asks();
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
             w[0].topics(asks, name -> null);
@@ -901,15 +902,15 @@ class WorkspaceTest {
             root.getContentPane().add(w[0].component());
             layOut(root, 900, 600);
         });
-        JTabbedPane tabs = (JTabbedPane) w[0].component();
-        Rectangle first = tabs.getUI().getTabBounds(tabs, 0);
-        Rectangle second = tabs.getUI().getTabBounds(tabs, 1);
+        final JTabbedPane tabs = (JTabbedPane) w[0].component();
+        final Rectangle first = tabs.getUI().getTabBounds(tabs, 0);
+        final Rectangle second = tabs.getUI().getTabBounds(tabs, 1);
 
         // a press selects the tab: the pointer resting there afterwards shows no card
         SwingUtilities.invokeAndWait(() -> {
             mouseMoved(tabs, first.x + 4, first.y + 4);
             assertThat(w[0].hoverWaiting()).isTrue();
-            for (MouseListener l : tabs.getMouseListeners()) {
+            for (final MouseListener l : tabs.getMouseListeners()) {
                 l.mousePressed(mouse(tabs, MouseEvent.MOUSE_PRESSED, first.x + 4, first.y + 4));
             }
         });
@@ -926,7 +927,7 @@ class WorkspaceTest {
         });
         assertThat(w[0].cardShown()).isEqualTo(b);
         SwingUtilities.invokeAndWait(() -> {
-            for (MouseListener l : tabs.getMouseListeners()) {
+            for (final MouseListener l : tabs.getMouseListeners()) {
                 l.mousePressed(mouse(tabs, MouseEvent.MOUSE_PRESSED, second.x + 4, second.y + 4));
             }
         });
@@ -951,7 +952,7 @@ class WorkspaceTest {
 
         // the second tab's card moves left with it when the first tab closes
         SwingUtilities.invokeAndWait(() -> w[0].showCard(1));
-        int before = w[0].card().component().getX();
+        final int before = w[0].card().component().getX();
         SwingUtilities.invokeAndWait(() -> {
             w[0].render(AppState.initial(List.of(new PanelState(b, "second", "", "")), List.of(), List.of()));
             layOut(root, 900, 600);
@@ -972,11 +973,11 @@ class WorkspaceTest {
     /// A URL in the summary opens at a double click and keeps the card; a press elsewhere on the summary closes it.
     @Test
     void aLinkInTheCardsSummaryOpensAtADoubleClickAndKeepsTheCard() throws Exception {
-        PanelId a = new PanelId("a");
-        Asks asks = new Asks();
-        Workspace[] w = new Workspace[1];
-        List<String> opened = new CopyOnWriteArrayList<>();
-        JRootPane root = new JRootPane();
+        final PanelId a = new PanelId("a");
+        final Asks asks = new Asks();
+        final Workspace[] w = new Workspace[1];
+        final List<String> opened = new CopyOnWriteArrayList<>();
+        final JRootPane root = new JRootPane();
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
             w[0].topics(asks, name -> null);
@@ -988,16 +989,16 @@ class WorkspaceTest {
         });
         asks.asks.getLast().done().accept(new Topic("Reviewing https://example.org/pr/7 against the plan.", 1L, ""));
         SwingUtilities.invokeAndWait(() -> layOut(w[0].card().component()));
-        TabCard card = w[0].card();
+        final TabCard card = w[0].card();
         assertThat(card.topicLinks()).extracting(TextLinks.Ref::href).containsExactly("https://example.org/pr/7");
-        JTextArea topic = card.topicArea();
-        int at = card.topicLinks().getFirst().start() + 3;
-        Point[] p = new Point[1];
+        final JTextArea topic = card.topicArea();
+        final int at = card.topicLinks().getFirst().start() + 3;
+        final Point[] p = new Point[1];
         SwingUtilities.invokeAndWait(() -> {
             try {
-                Rectangle2D r = topic.modelToView2D(at);
+                final Rectangle2D r = topic.modelToView2D(at);
                 p[0] = new Point((int) r.getCenterX(), (int) r.getCenterY());
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 throw new IllegalStateException(e);
             }
         });
@@ -1014,9 +1015,9 @@ class WorkspaceTest {
         assertThat(w[0].cardShown()).as("a press elsewhere on the summary closes it").isNull();
     }
 
-    private static void mouseMoved(Component c, int x, int y) {
-        MouseEvent e = mouse(c, MouseEvent.MOUSE_MOVED, x, y);
-        for (MouseMotionListener l : c.getMouseMotionListeners()) {
+    private static void mouseMoved(final Component c, final int x, final int y) {
+        final MouseEvent e = mouse(c, MouseEvent.MOUSE_MOVED, x, y);
+        for (final MouseMotionListener l : c.getMouseMotionListeners()) {
             l.mouseMoved(e);
         }
     }
@@ -1025,11 +1026,11 @@ class WorkspaceTest {
     /// first, and closing a tab closes its card, also when a late summary arrives.
     @Test
     void aTabWithoutASessionTakesItsTopicFromItsTextAndAClosedTabTakesItsCardWithIt() throws Exception {
-        PanelId other = new PanelId("o");
-        Asks asks = new Asks();
-        AppState s = AppState.initial(List.of(new PanelState(P, "query", "lab", ""), new PanelState(other, "notes", "", "")), List.of(), List.of());
-        Workspace[] w = new Workspace[1];
-        JRootPane root = new JRootPane();
+        final PanelId other = new PanelId("o");
+        final Asks asks = new Asks();
+        final AppState s = AppState.initial(List.of(new PanelState(P, "query", "lab", ""), new PanelState(other, "notes", "", "")), List.of(), List.of());
+        final Workspace[] w = new Workspace[1];
+        final JRootPane root = new JRootPane();
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
             w[0].topics(asks, name -> null);
@@ -1052,8 +1053,8 @@ class WorkspaceTest {
         assertThat(w[0].cardShown()).isNull();
     }
 
-    private static JMenuItem menuItem(JPopupMenu menu, String text) {
-        for (Component item : menu.getComponents()) {
+    private static JMenuItem menuItem(final JPopupMenu menu, final String text) {
+        for (final Component item : menu.getComponents()) {
             if (item instanceof JMenuItem m && m.getText().equals(text)) {
                 return m;
             }
@@ -1065,25 +1066,25 @@ class WorkspaceTest {
     /// the moved panel stays in front.
     @Test
     void aTabDraggedAlongTheRowMovesItsPanelAndTheTabsFollowTheStatesOrder() throws Exception {
-        PanelId b = new PanelId("b");
-        PanelId c = new PanelId("c");
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        Workspace[] w = new Workspace[1];
-        AppState[] s = new AppState[1];
+        final PanelId b = new PanelId("b");
+        final PanelId c = new PanelId("c");
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final Workspace[] w = new Workspace[1];
+        final AppState[] s = new AppState[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
             s[0] = AppState.initial(List.of(new PanelState(P, "one", "", ""), new PanelState(b, "two", "", ""),
                     new PanelState(c, "three", "", "")), List.of(), List.of()).withFocused(P);
             w[0].render(s[0]);
-            JTabbedPane tabs = (JTabbedPane) w[0].component();
+            final JTabbedPane tabs = (JTabbedPane) w[0].component();
             tabs.setSize(900, 400);
             tabs.doLayout();
-            Rectangle from = tabs.getBoundsAt(0);
-            Rectangle last = tabs.getBoundsAt(2);
-            int y = from.y + from.height / 2;
+            final Rectangle from = tabs.getBoundsAt(0);
+            final Rectangle last = tabs.getBoundsAt(2);
+            final int y = from.y + from.height / 2;
             try {
                 tabs.dispatchEvent(mouse(tabs, MouseEvent.MOUSE_PRESSED, from.x + from.width / 2, y));
-            } catch (HeadlessException e) {
+            } catch (final HeadlessException e) {
                 // the look's own press handler may ask the toolkit for more than headless has; the drag saw the press
                 // first
             }
@@ -1094,7 +1095,7 @@ class WorkspaceTest {
 
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0].withPanels(List.of(s[0].panels().get(1), s[0].panels().get(2),
                 s[0].panels().get(0)), s[0].focused())));
-        JTabbedPane tabs = (JTabbedPane) w[0].component();
+        final JTabbedPane tabs = (JTabbedPane) w[0].component();
         assertThat(List.of(tabs.getTitleAt(0), tabs.getTitleAt(1), tabs.getTitleAt(2))).containsExactly("two", "three", "one");
         assertThat(w[0].focused().panel().id()).as("the moved panel stays in front").isEqualTo(P);
     }
@@ -1104,32 +1105,32 @@ class WorkspaceTest {
         private final Map<PanelId, Path> files;
         private final Map<PanelId, String> texts;
 
-        Documents(Map<PanelId, Path> files, Map<PanelId, String> texts) {
+        Documents(final Map<PanelId, Path> files, final Map<PanelId, String> texts) {
             this.files = files;
             this.texts = texts;
         }
 
         @Override
-        public String load(PanelId panel) {
+        public String load(final PanelId panel) {
             return texts.getOrDefault(panel, "");
         }
 
         @Override
-        public Optional<Path> file(PanelId panel) {
+        public Optional<Path> file(final PanelId panel) {
             return Optional.ofNullable(files.get(panel));
         }
 
         @Override
-        public boolean document(PanelId panel) {
+        public boolean document(final PanelId panel) {
             return files.containsKey(panel);
         }
 
         @Override
-        public void changed(PanelId panel, String text) {
+        public void changed(final PanelId panel, final String text) {
         }
 
         @Override
-        public void forget(PanelId panel) {
+        public void forget(final PanelId panel) {
         }
     }
 
@@ -1137,8 +1138,8 @@ class WorkspaceTest {
     /// heading; with the panel already open and scrolled away, the link scrolls it back.
     @Test
     void aLinkToAHeadingOfAnotherDocumentOpensItThereOrScrollsItsOpenPanelThere() throws Exception {
-        PanelId setupId = new PanelId("setup");
-        StringBuilder setup = new StringBuilder("# Setup\n\n");
+        final PanelId setupId = new PanelId("setup");
+        final StringBuilder setup = new StringBuilder("# Setup\n\n");
         for (int i = 0; i < 80; i++) {
             setup.append("Step ").append(i).append(" of the preparation.\n\n");
         }
@@ -1146,11 +1147,11 @@ class WorkspaceTest {
         for (int i = 0; i < 40; i++) {
             setup.append("Check ").append(i).append(" after the install.\n\n");
         }
-        Documents texts = new Documents(Map.of(P, Path.of("/docs/guide.md"), setupId, Path.of("/docs/setup.md")),
+        final Documents texts = new Documents(Map.of(P, Path.of("/docs/guide.md"), setupId, Path.of("/docs/setup.md")),
                 Map.of(P, "# Guide\n\nSee [the install](setup.md#2-install).\n", setupId, setup.toString()));
-        List<Path> opened = new CopyOnWriteArrayList<>();
-        Workspace[] w = new Workspace[1];
-        AppState[] s = new AppState[1];
+        final List<Path> opened = new CopyOnWriteArrayList<>();
+        final Workspace[] w = new Workspace[1];
+        final AppState[] s = new AppState[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intent -> {
             }, texts, new SchemaRegistry());
@@ -1167,9 +1168,9 @@ class WorkspaceTest {
             w[0].render(s[0]);
             layOut(w[0].component(), 900, 500);
         });
-        EditorPanel setupPanel = w[0].focused();
+        final EditorPanel setupPanel = w[0].focused();
         assertThat(setupPanel.previewing()).isTrue();
-        int install = headingY(setupPanel, "2. Install");
+        final int install = headingY(setupPanel, "2. Install");
         assertThat(install).as("well below the first screen").isGreaterThan(1000);
         assertThat(top(setupPanel)).as("opened at the heading").isEqualTo(install);
         assertThat(install + ((JViewport) setupPanel.rendered().getParent()).getHeight()).as("not the end of the page")
@@ -1188,18 +1189,18 @@ class WorkspaceTest {
     /// the view; for an open log the entry not yet written is reached on the reload that brings it, instead of the end.
     @Test
     void aLogOpenedForAnEntryScrollsToItsLineAndAnOpenOneWaitsForTheEntryToBeWritten() throws Exception {
-        Path file = Path.of("/home/.comando/logs/comando-0.log");
-        long base = Instant.parse("2026-10-20T10:00:00Z").toEpochMilli();
-        StringBuilder log = new StringBuilder();
+        final Path file = Path.of("/home/.comando/logs/comando-0.log");
+        final long base = Instant.parse("2026-10-20T10:00:00Z").toEpochMilli();
+        final StringBuilder log = new StringBuilder();
         for (int i = 0; i < 300; i++) {
             log.append(Instant.ofEpochMilli(base + i * 1_000L)).append(" INFO StateLoop line ").append(i).append('\n');
             if (i == 120) {
                 log.append("\tat dev.marregui.comando.Hang.here(Hang.java:7)\n");
             }
         }
-        long hang = base + 120_000 - 3; // read just before the entry was written
-        Documents texts = new Documents(Map.of(P, file), Map.of(P, log.toString()));
-        Workspace[] w = new Workspace[1];
+        final long hang = base + 120_000 - 3; // read just before the entry was written
+        final Documents texts = new Documents(Map.of(P, file), Map.of(P, log.toString()));
+        final Workspace[] w = new Workspace[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(intent -> {
             }, texts, new SchemaRegistry());
@@ -1207,60 +1208,60 @@ class WorkspaceTest {
             w[0].render(AppState.initial(List.of(new PanelState(P, "comando-0.log", "", "", true)), List.of(), List.of()));
             layOut(w[0].component(), 900, 500);
         });
-        EditorPanel panel = w[0].focused();
-        int entry = log.indexOf(Instant.ofEpochMilli(base + 120_000L) + " INFO");
+        final EditorPanel panel = w[0].focused();
+        final int entry = log.indexOf(Instant.ofEpochMilli(base + 120_000L) + " INFO");
         assertThat(caret(panel)).as("at the entry's line, not the log's end").isEqualTo(entry);
         assertThat(lineShown(panel, entry)).as("in the upper part of the view").isBetween(0, 250);
 
         // open, following its end: an entry not written yet is shown once the file is read again with it
-        long later = base + 400_000;
+        final long later = base + 400_000;
         SwingUtilities.invokeAndWait(() -> {
             panel.editor().area().setCaretPosition(panel.editor().area().getDocument().getLength());
             w[0].entryWhenOpen(file, later);
         });
         assertThat(caret(panel)).as("still at the end").isEqualTo(log.length());
-        String grown = log.toString() + Instant.ofEpochMilli(later + 2) + " WARNING ComandoUi the EDT has not answered\n"
+        final String grown = log.toString() + Instant.ofEpochMilli(later + 2) + " WARNING ComandoUi the EDT has not answered\n"
                 + Instant.ofEpochMilli(later + 900) + " INFO StateLoop after\n";
         SwingUtilities.invokeAndWait(() -> panel.reload(grown));
         assertThat(caret(panel)).as("at the new entry, which starts where the old text ended; not following to the end")
                 .isEqualTo(log.length()).isLessThan(grown.length());
     }
 
-    private static int caret(EditorPanel p) throws Exception {
-        int[] at = new int[1];
+    private static int caret(final EditorPanel p) throws Exception {
+        final int[] at = new int[1];
         SwingUtilities.invokeAndWait(() -> at[0] = p.editor().area().getCaretPosition());
         return at[0];
     }
 
     /** How far below the top of the view the line at {@code offset} is drawn. */
-    private static int lineShown(EditorPanel p, int offset) throws Exception {
-        int[] y = new int[1];
+    private static int lineShown(final EditorPanel p, final int offset) throws Exception {
+        final int[] y = new int[1];
         SwingUtilities.invokeAndWait(() -> {
             try {
-                JViewport port = (JViewport) p.editor().area().getParent();
+                final JViewport port = (JViewport) p.editor().area().getParent();
                 y[0] = (int) p.editor().area().modelToView2D(offset).getY() - port.getViewPosition().y;
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 throw new IllegalStateException(e);
             }
         });
         return y[0];
     }
 
-    private static HyperlinkEvent link(EditorPanel p, String href) {
-        MouseEvent click = new MouseEvent(p.rendered(), MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, 2, false,
+    private static HyperlinkEvent link(final EditorPanel p, final String href) {
+        final MouseEvent click = new MouseEvent(p.rendered(), MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, 2, false,
                 MouseEvent.BUTTON1);
         return new HyperlinkEvent(p.rendered(), HyperlinkEvent.EventType.ACTIVATED, null, href, null, click);
     }
 
     /** Sizes and lays out a tree never shown, where validate() lays out nothing. */
-    private static void layOut(Container c, int width, int height) {
+    private static void layOut(final Container c, final int width, final int height) {
         c.setSize(width, height);
         layOut(c);
     }
 
-    private static void layOut(Container c) {
+    private static void layOut(final Container c) {
         c.doLayout();
-        for (Component child : c.getComponents()) {
+        for (final Component child : c.getComponents()) {
             if (child instanceof Container inner) {
                 layOut(inner);
             }
@@ -1268,8 +1269,8 @@ class WorkspaceTest {
     }
 
     /** The preview's top, once the events the layout posted have run. */
-    private static int top(EditorPanel p) throws Exception {
-        int[] y = new int[1];
+    private static int top(final EditorPanel p) throws Exception {
+        final int[] y = new int[1];
         for (int i = 0; i < 4; i++) {
             SwingUtilities.invokeAndWait(() -> {
             });
@@ -1278,21 +1279,21 @@ class WorkspaceTest {
         return y[0];
     }
 
-    private static int headingY(EditorPanel p, String text) throws Exception {
-        int[] y = new int[1];
+    private static int headingY(final EditorPanel p, final String text) throws Exception {
+        final int[] y = new int[1];
         SwingUtilities.invokeAndWait(() -> {
             try {
-                String all = p.rendered().getDocument().getText(0, p.rendered().getDocument().getLength());
+                final String all = p.rendered().getDocument().getText(0, p.rendered().getDocument().getLength());
                 y[0] = (int) p.rendered().modelToView2D(all.indexOf(text)).getY();
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 throw new IllegalStateException(e);
             }
         });
         return y[0];
     }
 
-    private static MouseEvent mouse(Component c, int id, int x, int y) {
-        boolean button = id == MouseEvent.MOUSE_PRESSED || id == MouseEvent.MOUSE_RELEASED;
+    private static MouseEvent mouse(final Component c, final int id, final int x, final int y) {
+        final boolean button = id == MouseEvent.MOUSE_PRESSED || id == MouseEvent.MOUSE_RELEASED;
         return new MouseEvent(c, id, System.currentTimeMillis(), MouseEvent.BUTTON1_DOWN_MASK, x, y, button ? 1 : 0, false,
                 button ? MouseEvent.BUTTON1 : MouseEvent.NOBUTTON);
     }

@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.util.List;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

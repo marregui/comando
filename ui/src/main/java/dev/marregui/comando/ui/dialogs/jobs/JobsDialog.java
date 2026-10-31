@@ -1,18 +1,5 @@
 package dev.marregui.comando.ui.dialogs.jobs;
 
-import dev.marregui.comando.core.model.KitJob;
-import dev.marregui.comando.core.model.KitJobs;
-import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.WindowConstants;
 import java.awt.BorderLayout;
 import java.awt.Dialog;
 import java.awt.FlowLayout;
@@ -25,6 +12,19 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.WindowConstants;
+
+import dev.marregui.comando.core.model.KitJob;
+import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The kit's scheduled jobs in a window over comando's (record 117): the {@link JobsEditor}, Cancel and Save. Save hands
@@ -51,7 +51,7 @@ public final class JobsDialog {
     private final ResourceActions.Questions questions;
     private boolean saving;
 
-    JobsDialog(Window owner, KitJobs jobs, Path root, JobsEditor.Actions actions, Saver saver, ResourceActions.Questions questions) {
+    JobsDialog(final Window owner, final KitJobs jobs, final Path root, final JobsEditor.Actions actions, final Saver saver, final ResourceActions.Questions questions) {
         this.saver = saver;
         this.questions = questions;
         editor = new JobsEditor(jobs.jobs(), root, actions);
@@ -59,7 +59,7 @@ public final class JobsDialog {
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         dialog.addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(WindowEvent e) {
+            public void windowClosing(final WindowEvent e) {
                 cancel();
             }
         });
@@ -69,21 +69,21 @@ public final class JobsDialog {
         save.addActionListener(e -> save());
         editor.onChange(this::enable);
         enable();
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
+        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
         buttons.add(cancel);
         buttons.add(save);
-        JPanel south = new JPanel(new BorderLayout());
+        final JPanel south = new JPanel(new BorderLayout());
         south.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
         south.add(buttons, BorderLayout.EAST);
-        JPanel content = new JPanel(new BorderLayout());
+        final JPanel content = new JPanel(new BorderLayout());
         content.add(editor.component(), BorderLayout.CENTER);
         content.add(south, BorderLayout.SOUTH);
         dialog.setContentPane(content);
-        JComponent pane = dialog.getRootPane();
+        final JComponent pane = dialog.getRootPane();
         pane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
         pane.getActionMap().put("cancel", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 cancel();
             }
         });
@@ -92,8 +92,8 @@ public final class JobsDialog {
     }
 
     /** Opens the window over {@code owner}, {@code select} selected when named; returns when it closes. */
-    public static void show(Window owner, KitJobs jobs, Path root, JobsEditor.Actions actions, Saver saver, String select) {
-        JobsDialog d = new JobsDialog(owner, jobs, root, actions, saver, ResourceActions.Questions.MODAL);
+    public static void show(final Window owner, final KitJobs jobs, final Path root, final JobsEditor.Actions actions, final Saver saver, final String select) {
+        final JobsDialog d = new JobsDialog(owner, jobs, root, actions, saver, ResourceActions.Questions.MODAL);
         if (select != null) {
             d.editor.select(select);
         }
@@ -118,7 +118,7 @@ public final class JobsDialog {
     }
 
     void save() {
-        Optional<List<KitJob>> jobs = editor.jobs();
+        final Optional<List<KitJob>> jobs = editor.jobs();
         if (jobs.isEmpty() || saving) {
             return;
         }
@@ -142,7 +142,7 @@ public final class JobsDialog {
             return;
         }
         if (editor.dirty()) {
-            Object[] options = {"Discard", "Keep editing"};
+            final Object[] options = {"Discard", "Keep editing"};
             if (questions.ask(dialog, "Discard the changes to the kit jobs?", TITLE, options) != 0) {
                 return;
             }

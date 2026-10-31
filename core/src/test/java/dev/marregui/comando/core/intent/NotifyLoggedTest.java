@@ -1,12 +1,13 @@
 package dev.marregui.comando.core.intent;
 
-import dev.marregui.comando.core.state.Notice;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.state.Notice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,17 +31,17 @@ class NotifyLoggedTest {
         }
 
         @Override
-        public boolean isLoggable(Level level) {
+        public boolean isLoggable(final Level level) {
             return true;
         }
 
         @Override
-        public void log(Level level, ResourceBundle bundle, String msg, Throwable thrown) {
+        public void log(final Level level, final ResourceBundle bundle, final String msg, final Throwable thrown) {
             entries.add(new Entry(level, msg, thrown, System.currentTimeMillis()));
         }
 
         @Override
-        public void log(Level level, ResourceBundle bundle, String format, Object... params) {
+        public void log(final Level level, final ResourceBundle bundle, final String format, final Object... params) {
             entries.add(new Entry(level, format, null, System.currentTimeMillis()));
         }
     }
@@ -49,21 +50,21 @@ class NotifyLoggedTest {
     /// record without a cause.
     @Test
     void aLoggedFailureNamesItsLogEntryWhichHoldsTheNoticeAndItsCause() {
-        Recording log = new Recording();
-        IOException cause = new IOException("Permission denied");
-        Intent.Notify n = Intent.Notify.logged(log, Notice.Level.ERROR, "Cannot export to /r/x.csv: Permission denied", cause);
+        final Recording log = new Recording();
+        final IOException cause = new IOException("Permission denied");
+        final Intent.Notify n = Intent.Notify.logged(log, Notice.Level.ERROR, "Cannot export to /r/x.csv: Permission denied", cause);
         assertThat(log.entries).hasSize(1);
-        Entry e = log.entries.getFirst();
+        final Entry e = log.entries.getFirst();
         assertThat(e.level()).isEqualTo(System.Logger.Level.ERROR);
         assertThat(e.message()).isEqualTo(n.text());
         assertThat(e.cause()).isSameAs(cause);
         assertThat(n.desktop()).isFalse();
-        Notice notice = new Notice(n.level(), n.text(), 1L, n.subject());
+        final Notice notice = new Notice(n.level(), n.text(), 1L, n.subject());
         assertThat(notice.kind()).isEqualTo("log");
         assertThat(Long.parseLong(notice.key())).as("read before the entry").isLessThanOrEqualTo(e.atMillis())
                 .isGreaterThan(e.atMillis() - 1_000);
 
-        Intent.Notify warn = Intent.Notify.logged(log, Notice.Level.WARN, "Cannot save the panels: disk full", null);
+        final Intent.Notify warn = Intent.Notify.logged(log, Notice.Level.WARN, "Cannot save the panels: disk full", null);
         assertThat(log.entries.get(1).level()).isEqualTo(System.Logger.Level.WARNING);
         assertThat(log.entries.get(1).cause()).isNull();
         assertThat(warn.subject()).startsWith("log:");

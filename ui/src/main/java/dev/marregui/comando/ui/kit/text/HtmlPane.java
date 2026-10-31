@@ -1,24 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.async.Debouncer;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.desktop.Links;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-
-import javax.swing.JEditorPane;
-import javax.swing.JViewport;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import javax.swing.event.HyperlinkEvent;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Element;
-import javax.swing.text.ElementIterator;
-import javax.swing.text.html.HTML;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.StyleSheet;
 import java.awt.Font;
 import java.awt.Insets;
 import java.awt.Point;
@@ -39,6 +20,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.JEditorPane;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
+import javax.swing.text.ElementIterator;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
+
+import dev.marregui.comando.ui.kit.async.Debouncer;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 /**
  * A read-only HTML pane styled from the theme, for rendered Markdown. Every link is followed at a double click
@@ -60,7 +60,7 @@ public final class HtmlPane extends JEditorPane {
 
     private LinkHandler links = href -> Links.open(href, this.folder);
 
-    public void setLinkHandler(LinkHandler handler) {
+    public void setLinkHandler(final LinkHandler handler) {
         links = handler;
     }
 
@@ -73,7 +73,7 @@ public final class HtmlPane extends JEditorPane {
 
     public HtmlPane() {
         setContentType("text/html");
-        OwnStyles kit = new OwnStyles();
+        final OwnStyles kit = new OwnStyles();
         kit.setStyleSheet(styles());
         setEditorKit(kit);
         setEditable(false);
@@ -85,7 +85,7 @@ public final class HtmlPane extends JEditorPane {
         // heading and not scrolled since stays at the heading
         addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentResized(ComponentEvent e) {
+            public void componentResized(final ComponentEvent e) {
                 if (anchored != null && getParent() instanceof JViewport vp && vp.getViewPosition().y == anchoredY) {
                     scrollToHeading(anchored);
                 }
@@ -98,17 +98,17 @@ public final class HtmlPane extends JEditorPane {
             if (e.getEventType() != HyperlinkEvent.EventType.ACTIVATED) {
                 return;
             }
-            String href = e.getURL() != null ? e.getURL().toString() : e.getDescription();
+            final String href = e.getURL() != null ? e.getURL().toString() : e.getDescription();
             if (href == null) {
                 return;
             }
             // the pane activates a link at every click of a double click; a keyboard activation has no clicks. A link,
             // to a page or a file, is followed at the double click, as everywhere in comando (record 94)
-            int clicks = e.getInputEvent() instanceof MouseEvent m ? m.getClickCount() : 0;
+            final int clicks = e.getInputEvent() instanceof MouseEvent m ? m.getClickCount() : 0;
             if (clicks != 0 && clicks != 2) {
                 return;
             }
-            String raw = e.getDescription();
+            final String raw = e.getDescription();
             if (raw != null && raw.startsWith("#")) {
                 scrollToHeading(raw.substring(1));
             } else {
@@ -122,11 +122,11 @@ public final class HtmlPane extends JEditorPane {
      * in case) to the top of the view; the top of the page for an empty fragment. The caret goes there too, so a
      * render of a new version of the text keeps the reader there. False when the page has no such heading.
      */
-    public boolean scrollToHeading(String fragment) {
-        String wanted = decoded(fragment);
+    public boolean scrollToHeading(final String fragment) {
+        final String wanted = decoded(fragment);
         int at = wanted.isEmpty() ? 0 : -1;
         int loose = -1;
-        ElementIterator it = new ElementIterator(getDocument());
+        final ElementIterator it = new ElementIterator(getDocument());
         for (Element e = it.next(); e != null && at < 0; e = it.next()) {
             if (e.getAttributes().getAttribute(HTML.Attribute.ID) instanceof String id) {
                 if (id.equals(wanted)) {
@@ -149,23 +149,23 @@ public final class HtmlPane extends JEditorPane {
         }
         setCaretPosition(at);
         try {
-            Rectangle2D r = modelToView2D(at);
+            final Rectangle2D r = modelToView2D(at);
             if (r != null) {
-                Rectangle visible = getVisibleRect();
+                final Rectangle visible = getVisibleRect();
                 scrollRectToVisible(new Rectangle(visible.x, at == 0 ? 0 : (int) r.getY(), 1, visible.height));
             }
             anchored = fragment;
             anchoredY = getParent() instanceof JViewport vp ? vp.getViewPosition().y : -1;
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return false;
         }
         return true;
     }
 
-    private static String decoded(String fragment) {
+    private static String decoded(final String fragment) {
         try {
             return URLDecoder.decode(fragment.replace("+", "%2B"), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             return fragment;
         }
     }
@@ -191,8 +191,8 @@ public final class HtmlPane extends JEditorPane {
 
     /** The page drawn again under its rules and the tint chosen. */
     private void restyle() {
-        String html = markdown == null ? getText() : null;
-        HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
+        final String html = markdown == null ? getText() : null;
+        final HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
         kit.setStyleSheet(styles());
         // setText fills the document it has, which keeps its first style sheet: a new document takes the new rules
         setDocument(kit.createDefaultDocument());
@@ -210,17 +210,17 @@ public final class HtmlPane extends JEditorPane {
      * content palette (record 101), quotes beside a tinted bar.
      */
     static StyleSheet styles() {
-        StyleSheet css = new StyleSheet();
+        final StyleSheet css = new StyleSheet();
         css.addStyleSheet(new HTMLEditorKit().getStyleSheet());
-        String fg = Theme.hex(Theme.TRANSCRIPT_TEXT);
-        String border = Theme.hex(Theme.CARD_BORDER);
-        String muted = Theme.hex(Theme.MUTED);
-        String link = Theme.hex(Theme.LINK);
-        String mono = Theme.mono().getFamily();
-        String serif = Theme.serif().getFamily();
-        Tint tint = Theme.tint();
-        int size = UIManager.getFont("Label.font").getSize();
-        float[] scale = Theme.HEADING_SCALE;
+        final String fg = Theme.hex(Theme.TRANSCRIPT_TEXT);
+        final String border = Theme.hex(Theme.CARD_BORDER);
+        final String muted = Theme.hex(Theme.MUTED);
+        final String link = Theme.hex(Theme.LINK);
+        final String mono = Theme.mono().getFamily();
+        final String serif = Theme.serif().getFamily();
+        final Tint tint = Theme.tint();
+        final int size = UIManager.getFont("Label.font").getSize();
+        final float[] scale = Theme.HEADING_SCALE;
         css.addRule("body { font-family: sans-serif; font-size: " + size + "pt; color: " + fg + "; margin: 0; }");
         css.addRule("p { margin-top: 2px; margin-bottom: 6px; }");
         css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(tint.body) + "; }");
@@ -264,7 +264,7 @@ public final class HtmlPane extends JEditorPane {
         }
 
         @Override
-        public void setStyleSheet(StyleSheet s) {
+        public void setStyleSheet(final StyleSheet s) {
             styles = s;
         }
     }
@@ -305,11 +305,11 @@ public final class HtmlPane extends JEditorPane {
     /**
      * Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them.
      */
-    public void setMarkdown(String markdown) {
+    public void setMarkdown(final String markdown) {
         this.markdown = markdown;
         sizedFor = -1;
         waitingFor.clear();
-        String html = MarkdownHtml.render(markdown, this::diagram, this::picture, marks);
+        final String html = MarkdownHtml.render(markdown, this::diagram, this::picture, marks);
         setHtml(fallBackInHeadings(html, Theme.serif()));
     }
 
@@ -317,12 +317,12 @@ public final class HtmlPane extends JEditorPane {
      * Shows {@code markdown}, the text of a file in {@code folder}: an image link to a picture on this machine, beside
      * the file or by its full path, shows the picture.
      */
-    public void setMarkdown(String markdown, Path folder) {
+    public void setMarkdown(final String markdown, final Path folder) {
         setMarkdown(markdown, folder, MarkdownHtml.Marks.NONE);
     }
 
     /** As {@link #setMarkdown(String, Path)}, what {@code marks} names shaded as changed, in the theme's colours. */
-    public void setMarkdown(String markdown, Path folder, MarkdownHtml.Marks marks) {
+    public void setMarkdown(final String markdown, final Path folder, final MarkdownHtml.Marks marks) {
         this.folder = folder;
         this.marks = marks;
         anchored = null;
@@ -340,20 +340,20 @@ public final class HtmlPane extends JEditorPane {
     }
 
     /** The HTML of an image link: its picture when it names one on this machine, else null for its alt text. */
-    private String picture(String destination, String alt) {
-        Optional<Path> found = LocalImages.resolve(folder, destination);
+    private String picture(final String destination, final String alt) {
+        final Optional<Path> found = LocalImages.resolve(folder, destination);
         if (found.isEmpty()) {
             return null;
         }
-        Path file = found.get();
-        LocalImages.Picture p = LocalImages.current().picture(file, arrived);
+        final Path file = found.get();
+        final LocalImages.Picture p = LocalImages.current().picture(file, arrived);
         sizedFor = getWidth();
-        String html = pictureHtml(p, alt, file, pictureWidth());
+        final String html = pictureHtml(p, alt, file, pictureWidth());
         if (!(p instanceof LocalImages.Picture.Pending)) {
             return html;
         }
-        String id = waiting(() -> {
-            LocalImages.Picture now = LocalImages.current().picture(file, arrived);
+        final String id = waiting(() -> {
+            final LocalImages.Picture now = LocalImages.current().picture(file, arrived);
             return now instanceof LocalImages.Picture.Pending ? null : pictureHtml(now, alt, file, pictureWidth());
         });
         // inline: the picture may sit in a line of text
@@ -362,14 +362,14 @@ public final class HtmlPane extends JEditorPane {
 
     /** The widest a picture or diagram is shown, in points; zero or less when the pane has no width yet. */
     private int pictureWidth() {
-        Insets in = getInsets();
+        final Insets in = getInsets();
         return getWidth() - in.left - in.right - 8;
     }
 
     /** Records what stands in for a diagram or picture not ready yet; returns the id of the element standing in. */
-    private String waiting(Supplier<String> ready) {
+    private String waiting(final Supplier<String> ready) {
         // a heading's id is GitHub's slug, which has no colon: the two cannot meet
-        String id = "comando:waiting:" + waitingIds++;
+        final String id = "comando:waiting:" + waitingIds++;
         waitingFor.put(id, ready);
         return id;
     }
@@ -381,10 +381,10 @@ public final class HtmlPane extends JEditorPane {
      */
     private void fill() {
         fillPosted.set(false);
-        Map<String, String> ready = new LinkedHashMap<>();
+        final Map<String, String> ready = new LinkedHashMap<>();
         for (Iterator<Map.Entry<String, Supplier<String>>> it = waitingFor.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<String, Supplier<String>> w = it.next();
-            String html = w.getValue().get();
+            final Map.Entry<String, Supplier<String>> w = it.next();
+            final String html = w.getValue().get();
             if (html != null) {
                 ready.put(w.getKey(), html);
                 it.remove();
@@ -394,8 +394,8 @@ public final class HtmlPane extends JEditorPane {
             return;
         }
         keepingView(() -> {
-            for (Map.Entry<String, String> r : ready.entrySet()) {
-                Element stand = doc.getElement(r.getKey());
+            for (final Map.Entry<String, String> r : ready.entrySet()) {
+                final Element stand = doc.getElement(r.getKey());
                 if (stand == null) {
                     continue;
                 }
@@ -404,7 +404,7 @@ public final class HtmlPane extends JEditorPane {
                 } catch (BadLocationException | IOException e) {
                     // not expected of Swing's own document; the whole page drawn again shows it all the same
                     LOG.log(System.Logger.Level.DEBUG, "cannot put a picture in place [id=" + r.getKey() + ']', e);
-                    String shown = markdown;
+                    final String shown = markdown;
                     Edt.later(() -> redraw(shown));
                     return;
                 }
@@ -413,7 +413,7 @@ public final class HtmlPane extends JEditorPane {
     }
 
     /** {@code html} inside the link the element standing for it is in, if any: replacing the element drops its link. */
-    private static String inItsLink(Element stand, String html) {
+    private static String inItsLink(final Element stand, final String html) {
         if (stand.getAttributes().getAttribute(HTML.Tag.A) instanceof AttributeSet a
                 && a.getAttribute(HTML.Attribute.HREF) instanceof String href) {
             return "<a href=\"" + attribute(href) + "\">" + html + "</a>";
@@ -422,7 +422,7 @@ public final class HtmlPane extends JEditorPane {
     }
 
     /** {@code text} as an attribute's value: escaped, quotes included, so it cannot end the attribute. */
-    static String attribute(String text) {
+    static String attribute(final String text) {
         return MarkdownHtml.escape(text).replace("\"", "&quot;").replace("'", "&#39;");
     }
 
@@ -430,7 +430,7 @@ public final class HtmlPane extends JEditorPane {
      * The HTML of a picture: the image, no wider than {@code maxWidth} points when that is positive; while it is read,
      * a muted note; when it cannot be shown, its alt text and why.
      */
-    static String pictureHtml(LocalImages.Picture p, String alt, Path file, int maxWidth) {
+    static String pictureHtml(final LocalImages.Picture p, final String alt, final Path file, final int maxWidth) {
         return switch (p) {
             case LocalImages.Picture.Ready r -> img(r.file(), r.width(), r.height(), maxWidth, alt);
             case LocalImages.Picture.Pending ignored -> "<font color=\"" + Theme.hex(Theme.MUTED) + "\"><i>"
@@ -440,37 +440,37 @@ public final class HtmlPane extends JEditorPane {
         };
     }
 
-    private String diagram(String source) {
-        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, arrived);
+    private String diagram(final String source) {
+        final MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, arrived);
         sizedFor = getWidth();
-        String html = diagramHtml(source, d, pictureWidth());
+        final String html = diagramHtml(source, d, pictureWidth());
         if (!(d instanceof MermaidDiagrams.Diagram.Pending)) {
             return html;
         }
-        String id = waiting(() -> {
-            MermaidDiagrams.Diagram now = MermaidDiagrams.current().diagram(source, arrived);
+        final String id = waiting(() -> {
+            final MermaidDiagrams.Diagram now = MermaidDiagrams.current().diagram(source, arrived);
             return now instanceof MermaidDiagrams.Diagram.Pending ? null : diagramHtml(source, now, pictureWidth());
         });
         return "<div id=\"" + id + "\">" + html + "</div>";
     }
 
     /** The same text again, at a new width or in new colours, with the view where the reader left it. */
-    private void redraw(String shown) {
+    private void redraw(final String shown) {
         if (shown == null || !shown.equals(markdown)) {
             return;
         }
         keepingView(() -> {
-            int caret = getCaretPosition();
+            final int caret = getCaretPosition();
             setMarkdown(shown);
             setCaretPosition(Math.min(caret, getDocument().getLength()));
         });
     }
 
     /** Runs {@code change} to the page, then puts the view back where the reader left it. */
-    private void keepingView(Runnable change) {
-        Point at = getParent() instanceof JViewport vp ? vp.getViewPosition() : null;
+    private void keepingView(final Runnable change) {
+        final Point at = getParent() instanceof JViewport vp ? vp.getViewPosition() : null;
         // taken to a heading and not scrolled since: the heading, wherever the new pictures put it
-        String heading = at != null && anchored != null && at.y == anchoredY ? anchored : null;
+        final String heading = at != null && anchored != null && at.y == anchoredY ? anchored : null;
         change.run();
         if (heading != null) {
             SwingUtilities.invokeLater(() -> scrollToHeading(heading));
@@ -483,7 +483,7 @@ public final class HtmlPane extends JEditorPane {
      * The HTML of a Mermaid block: its picture, no wider than {@code maxWidth} points when that is positive; else its
      * source as code under a muted note saying why there is no picture yet.
      */
-    static String diagramHtml(String source, MermaidDiagrams.Diagram d, int maxWidth) {
+    static String diagramHtml(final String source, final MermaidDiagrams.Diagram d, final int maxWidth) {
         return switch (d) {
             case MermaidDiagrams.Diagram.Ready r -> "<p>" + img(r.png(), r.width(), r.height(), maxWidth, "diagram") + "</p>";
             case MermaidDiagrams.Diagram.Pending p -> note("drawing the diagram…") + code(source);
@@ -492,7 +492,7 @@ public final class HtmlPane extends JEditorPane {
     }
 
     /** An image of a file, no wider than {@code maxWidth} points when that is positive, its height scaled with it. */
-    private static String img(Path file, int width, int height, int maxWidth, String alt) {
+    private static String img(final Path file, final int width, final int height, final int maxWidth, final String alt) {
         int w = width;
         int h = height;
         if (maxWidth > 0 && w > maxWidth) {
@@ -502,11 +502,11 @@ public final class HtmlPane extends JEditorPane {
         return "<img src=\"" + attribute(file.toUri().toString()) + "\" width=\"" + w + "\" height=\"" + h + "\" alt=\"" + attribute(alt) + "\">";
     }
 
-    private static String note(String text) {
+    private static String note(final String text) {
         return "<p><font color=\"" + Theme.hex(Theme.MUTED) + "\"><i>" + MarkdownHtml.escape(text) + "</i></font></p>";
     }
 
-    private static String code(String source) {
+    private static String code(final String source) {
         return "<pre class=\"code\"><code>" + MarkdownHtml.escape(source) + "</code></pre>";
     }
 
@@ -517,26 +517,26 @@ public final class HtmlPane extends JEditorPane {
      * Java's logical sans serif, as the transcript does: Swing's HTML draws a glyph its font lacks as nothing, and New
      * York lacks the arrow. Tags, entities and code inside a heading are left as they are.
      */
-    static String fallBackInHeadings(String html, Font serif) {
-        Matcher m = HEADING.matcher(html);
-        StringBuilder out = new StringBuilder(html.length() + 64);
+    static String fallBackInHeadings(final String html, final Font serif) {
+        final Matcher m = HEADING.matcher(html);
+        final StringBuilder out = new StringBuilder(html.length() + 64);
         while (m.find()) {
-            String inner = m.group(2);
-            StringBuilder h = new StringBuilder(inner.length() + 32);
+            final String inner = m.group(2);
+            final StringBuilder h = new StringBuilder(inner.length() + 32);
             int code = 0;
             int i = 0;
             while (i < inner.length()) {
-                char c = inner.charAt(i);
+                final char c = inner.charAt(i);
                 if (c == '<' || c == '&') {
                     int end = inner.indexOf(c == '<' ? '>' : ';', i);
                     end = end < 0 ? inner.length() - 1 : end;
-                    String piece = inner.substring(i, end + 1);
+                    final String piece = inner.substring(i, end + 1);
                     code += piece.startsWith("<code") ? 1 : piece.startsWith("</code") ? -1 : 0;
                     h.append(piece);
                     i = end + 1;
                     continue;
                 }
-                int cp = inner.codePointAt(i);
+                final int cp = inner.codePointAt(i);
                 if (code > 0 || serif.canDisplay(cp)) {
                     h.appendCodePoint(cp);
                     i += Character.charCount(cp);
@@ -556,7 +556,7 @@ public final class HtmlPane extends JEditorPane {
     }
 
     /** Shows {@code bodyHtml} as the page's body; text from outside must be escaped by the caller. */
-    public void setHtml(String bodyHtml) {
+    public void setHtml(final String bodyHtml) {
         setText("<html><body>" + bodyHtml + "</body></html>");
     }
 

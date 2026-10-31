@@ -1,46 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.port.InstancesPort;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.InstancesState;
-import dev.marregui.comando.core.state.InstancesState.Consult;
-import dev.marregui.comando.core.state.InstancesState.Instance;
-import dev.marregui.comando.core.state.InstancesState.Member;
-import dev.marregui.comando.core.view.Placement;
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.async.Debouncer;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.theme.FocusRing;
-import dev.marregui.comando.ui.kit.theme.SidebarLook;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.Icon;
-import javax.swing.JButton;
-import javax.swing.JCheckBoxMenuItem;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTree;
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
-import javax.swing.event.AncestorEvent;
-import javax.swing.event.AncestorListener;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -72,6 +31,47 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.Icon;
+import javax.swing.JButton;
+import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.event.AncestorEvent;
+import javax.swing.event.AncestorListener;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeCellRenderer;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.port.InstancesPort;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.InstancesState;
+import dev.marregui.comando.core.state.InstancesState.Consult;
+import dev.marregui.comando.core.state.InstancesState.Instance;
+import dev.marregui.comando.core.state.InstancesState.Member;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.async.Debouncer;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The sidebar's Instances tab (record 124): what the other comando instances are doing, from their presence on the
@@ -149,12 +149,12 @@ final class InstancesTab {
     private AppState state;
     private InstancesState shown;
 
-    InstancesTab(IntentSink intents, Supplier<InstancesPort> port, Supplier<SessionsSidebar.Cards> cards) {
+    InstancesTab(final IntentSink intents, final Supplier<InstancesPort> port, final Supplier<SessionsSidebar.Cards> cards) {
         this.intents = intents;
         this.port = port;
         this.cards = cards;
         SidebarLook.ground(root);
-        JPanel head = new JPanel(new BorderLayout());
+        final JPanel head = new JPanel(new BorderLayout());
         head.setOpaque(false);
         head.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S));
         status.setForeground(Theme.MUTED_STRONG);
@@ -162,7 +162,7 @@ final class InstancesTab {
         start.setIcon(Icons.get("edge-start"));
         start.setToolTipText("Start the comando Edge, one per machine; every instance connects to it");
         start.addActionListener(e -> edge.start());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setOpaque(false);
         buttons.add(start);
         head.add(status, BorderLayout.CENTER);
@@ -175,20 +175,20 @@ final class InstancesTab {
         SidebarLook.tree(tree);
         tree.addMouseListener(new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 menu(e);
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 menu(e);
             }
 
             @Override
-            public void mouseClicked(MouseEvent e) {
+            public void mouseClicked(final MouseEvent e) {
                 // a click shows the row's card, which then follows the pointer; a double click does nothing more
                 if (e.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(e)) {
-                    Row r = rowAt(e);
+                    final Row r = rowAt(e);
                     if (r != null) {
                         following = true;
                         cardWait.stop();
@@ -198,7 +198,7 @@ final class InstancesTab {
             }
 
             @Override
-            public void mouseExited(MouseEvent e) {
+            public void mouseExited(final MouseEvent e) {
                 // off the rows the card closes, unless the pointer goes on into it
                 cardWait.stop();
                 resting = null;
@@ -209,7 +209,7 @@ final class InstancesTab {
         });
         tree.addMouseMotionListener(new MouseAdapter() {
             @Override
-            public void mouseMoved(MouseEvent e) {
+            public void mouseMoved(final MouseEvent e) {
                 restOn(rowUnder(e.getX(), e.getY()));
             }
         });
@@ -218,26 +218,26 @@ final class InstancesTab {
         SidebarLook.list(consults);
         consults.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                int i = consults.locationToIndex(e.getPoint());
+            public void mouseClicked(final MouseEvent e) {
+                final int i = consults.locationToIndex(e.getPoint());
                 if (e.getClickCount() == 2 && i >= 0 && consults.getCellBounds(i, i).contains(e.getPoint())) {
                     open(consultModel.get(i));
                 }
             }
         });
 
-        JPanel lower = new JPanel(new BorderLayout());
+        final JPanel lower = new JPanel(new BorderLayout());
         SidebarLook.ground(lower);
         lower.add(SidebarLook.header("Questions"), BorderLayout.NORTH);
         lower.add(scroll(consults), BorderLayout.CENTER);
-        JPanel upper = new JPanel(new BorderLayout());
+        final JPanel upper = new JPanel(new BorderLayout());
         SidebarLook.ground(upper);
         upper.add(head, BorderLayout.NORTH);
         upper.add(scroll(tree), BorderLayout.CENTER);
         // the instances over the questions, 3 to 2; no split pane: the window finds its own panes by orientation
-        JPanel both = new JPanel(new GridBagLayout());
+        final JPanel both = new JPanel(new GridBagLayout());
         both.setOpaque(false);
-        GridBagConstraints c = new GridBagConstraints();
+        final GridBagConstraints c = new GridBagConstraints();
         c.gridx = 0;
         c.fill = GridBagConstraints.BOTH;
         c.weightx = 1;
@@ -248,18 +248,18 @@ final class InstancesTab {
         root.add(both, BorderLayout.CENTER);
         root.addAncestorListener(new AncestorListener() {
             @Override
-            public void ancestorAdded(AncestorEvent e) {
+            public void ancestorAdded(final AncestorEvent e) {
                 header();
                 header.start();
             }
 
             @Override
-            public void ancestorRemoved(AncestorEvent e) {
+            public void ancestorRemoved(final AncestorEvent e) {
                 header.stop();
             }
 
             @Override
-            public void ancestorMoved(AncestorEvent e) {
+            public void ancestorMoved(final AncestorEvent e) {
             }
         });
         header();
@@ -270,20 +270,20 @@ final class InstancesTab {
     }
 
     /** The Edge's toggle, set once the window has it. */
-    void edge(Edge e) {
+    void edge(final Edge e) {
         edge = e == null ? Edge.NONE : e;
         header();
     }
 
-    void render(AppState s) {
+    void render(final AppState s) {
         state = s;
-        InstancesState i = s.instances();
+        final InstancesState i = s.instances();
         if (i.equals(shown)) {
             return;
         }
         shown = i;
         rebuild(i);
-        List<Consult> newest = i.consults().reversed();
+        final List<Consult> newest = i.consults().reversed();
         if (!newest.equals(Collections.list(consultModel.elements()))) {
             consultModel.clear();
             newest.forEach(consultModel::addElement);
@@ -293,10 +293,10 @@ final class InstancesTab {
     }
 
     /** The tree again, keeping the instances the user opened open and the selected one selected. */
-    private void rebuild(InstancesState i) {
-        Set<String> open = new HashSet<>();
+    private void rebuild(final InstancesState i) {
+        final Set<String> open = new HashSet<>();
         String selected = null;
-        Enumeration<TreePath> expanded = tree.getExpandedDescendants(new TreePath(top));
+        final Enumeration<TreePath> expanded = tree.getExpandedDescendants(new TreePath(top));
         while (expanded != null && expanded.hasMoreElements()) {
             if (expanded.nextElement().getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row r) {
                 open.add(r.instance().slug());
@@ -312,9 +312,9 @@ final class InstancesTab {
         i.others().forEach(o -> top.add(node(o, false)));
         model.reload();
         for (int k = 0; k < top.getChildCount(); k++) {
-            DefaultMutableTreeNode n = (DefaultMutableTreeNode) top.getChildAt(k);
-            Row r = (Row) n.getUserObject();
-            TreePath path = new TreePath(n.getPath());
+            final DefaultMutableTreeNode n = (DefaultMutableTreeNode) top.getChildAt(k);
+            final Row r = (Row) n.getUserObject();
+            final TreePath path = new TreePath(n.getPath());
             if (open.contains(r.instance().slug())) {
                 tree.expandPath(path);
             }
@@ -323,7 +323,7 @@ final class InstancesTab {
                     tree.setSelectionPath(path);
                 }
                 for (int m = 0; m < n.getChildCount(); m++) {
-                    DefaultMutableTreeNode c = (DefaultMutableTreeNode) n.getChildAt(m);
+                    final DefaultMutableTreeNode c = (DefaultMutableTreeNode) n.getChildAt(m);
                     if (selected.equals(r.instance().slug() + "/" + ((Row) c.getUserObject()).member().name())) {
                         tree.setSelectionPath(new TreePath(c.getPath()));
                     }
@@ -332,16 +332,16 @@ final class InstancesTab {
         }
     }
 
-    private static DefaultMutableTreeNode node(Instance in, boolean self) {
-        DefaultMutableTreeNode n = new DefaultMutableTreeNode(new Row(in, null, self));
+    private static DefaultMutableTreeNode node(final Instance in, final boolean self) {
+        final DefaultMutableTreeNode n = new DefaultMutableTreeNode(new Row(in, null, self));
         in.sessions().forEach(m -> n.add(new DefaultMutableTreeNode(new Row(in, m, self))));
         return n;
     }
 
     /** The header says something only while this instance is not connected: why, and the Edge's start. */
     private void header() {
-        InstancesState i = shown == null ? InstancesState.NONE : shown;
-        Edge e = edge;
+        final InstancesState i = shown == null ? InstancesState.NONE : shown;
+        final Edge e = edge;
         String text;
         if (i.connected()) {
             text = "";
@@ -360,15 +360,15 @@ final class InstancesTab {
             status.setVisible(!text.isEmpty());
             root.revalidate();
         }
-        boolean offer = !i.connected() && !e.running() && !e.busy() && e != Edge.NONE;
+        final boolean offer = !i.connected() && !e.running() && !e.busy() && e != Edge.NONE;
         if (start.isVisible() != offer) {
             start.setVisible(offer);
             root.revalidate();
         }
     }
 
-    private Row rowAt(MouseEvent e) {
-        TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+    private Row rowAt(final MouseEvent e) {
+        final TreePath path = tree.getPathForLocation(e.getX(), e.getY());
         if (path == null || !(path.getLastPathComponent() instanceof DefaultMutableTreeNode n) || !(n.getUserObject() instanceof Row r)) {
             return null;
         }
@@ -376,11 +376,11 @@ final class InstancesTab {
         return r;
     }
 
-    private void menu(MouseEvent e) {
+    private void menu(final MouseEvent e) {
         if (!e.isPopupTrigger()) {
             return;
         }
-        Row r = rowAt(e);
+        final Row r = rowAt(e);
         if (r == null) {
             return;
         }
@@ -391,36 +391,36 @@ final class InstancesTab {
      * A row's menu: another instance present, ask it, refuse its questions; one that left, forget it; this instance,
      * set its role; then copy the id. A session's row has none: the tab shows, and asking is the instance's.
      */
-    JPopupMenu menuFor(Row r) {
-        Instance in = r.instance();
-        JPopupMenu m = new JPopupMenu();
+    JPopupMenu menuFor(final Row r) {
+        final Instance in = r.instance();
+        final JPopupMenu m = new JPopupMenu();
         if (r.member() != null) {
             return m;
         }
         if (r.self()) {
-            JMenuItem role = new JMenuItem("Set the role…");
+            final JMenuItem role = new JMenuItem("Set the role…");
             role.setToolTipText("What this instance is for, as the others see it: instance.json in its data root");
             role.addActionListener(a -> setRole(in));
             m.add(role);
             m.addSeparator();
         } else if (!in.present()) {
-            JMenuItem forget = new JMenuItem("Forget " + in.name());
+            final JMenuItem forget = new JMenuItem("Forget " + in.name());
             forget.setToolTipText("List it no more; it comes back when it is present again");
             forget.addActionListener(a -> port.get().forget(in.slug()));
             m.add(forget);
             m.addSeparator();
         } else {
-            JMenuItem ask = new JMenuItem("Ask " + in.name() + "…");
+            final JMenuItem ask = new JMenuItem("Ask " + in.name() + "…");
             ask.addActionListener(a -> ask(in));
             m.add(ask);
-            boolean denied = shown != null && shown.denied().contains(in.slug());
-            JCheckBoxMenuItem refuse = new JCheckBoxMenuItem("Refuse questions from " + in.name(), denied);
+            final boolean denied = shown != null && shown.denied().contains(in.slug());
+            final JCheckBoxMenuItem refuse = new JCheckBoxMenuItem("Refuse questions from " + in.name(), denied);
             refuse.setToolTipText("agents.json peers.deny in this instance's data root");
             refuse.addActionListener(a -> port.get().deny(in.slug(), refuse.isSelected()));
             m.add(refuse);
             m.addSeparator();
         }
-        JMenuItem copy = new JMenuItem("Copy the instance id (" + in.slug() + ")");
+        final JMenuItem copy = new JMenuItem("Copy the instance id (" + in.slug() + ")");
         copy.setName("instances-copy-id");
         copy.addActionListener(a -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(in.slug()), null));
         m.add(copy);
@@ -428,8 +428,8 @@ final class InstancesTab {
     }
 
     /** Asks the user what this instance is for, and sets it. */
-    private void setRole(Instance in) {
-        Object typed = JOptionPane.showInputDialog(root, "What " + in.name() + " is for, as the other instances see it:", "Set the role",
+    private void setRole(final Instance in) {
+        final Object typed = JOptionPane.showInputDialog(root, "What " + in.name() + " is for, as the other instances see it:", "Set the role",
                 JOptionPane.PLAIN_MESSAGE, null, null, in.role());
         if (typed instanceof String text) {
             port.get().role(text.strip());
@@ -437,8 +437,8 @@ final class InstancesTab {
     }
 
     /** The row under {@code (x, y)}, its icon or text, or null; the selection stays. */
-    private Row rowUnder(int x, int y) {
-        TreePath path = tree.getPathForLocation(x, y);
+    private Row rowUnder(final int x, final int y) {
+        final TreePath path = tree.getPathForLocation(x, y);
         return path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row r ? r : null;
     }
 
@@ -447,7 +447,7 @@ final class InstancesTab {
      * card follows, that row's card shows after the rest; off every row, the card closes unless the pointer goes on into
      * it.
      */
-    private void restOn(Row over) {
+    private void restOn(final Row over) {
         if (carded != null && !cards.get().showing(key(carded))) {
             // closed otherwise: its ✕, a click on it, the pointer leaving it for elsewhere
             carded = null;
@@ -479,36 +479,36 @@ final class InstancesTab {
         }
     }
 
-    private static String key(Row r) {
+    private static String key(final Row r) {
         return "instance:" + r.instance().slug() + (r.member() == null ? "" : "/" + r.member().name());
     }
 
-    private static boolean same(Row a, Row b) {
+    private static boolean same(final Row a, final Row b) {
         return b != null && a.instance().slug().equals(b.instance().slug()) && a.self() == b.self()
                 && Objects.equals(a.member() == null ? null : a.member().name(), b.member() == null ? null : b.member().name());
     }
 
     /** {@code r}'s card, beside the rows at its row's height, as the Sessions tab shows its rows' cards. */
-    private void card(Row r) {
-        Rectangle bounds = boundsOf(r);
+    private void card(final Row r) {
+        final Rectangle bounds = boundsOf(r);
         if (bounds == null) {
             return;
         }
         carded = r;
         resting = null;
-        Card c = cardOf(r);
+        final Card c = cardOf(r);
         cards.get().showFacts(key(r), c.title(), c.facts(), c.heading(), c.text(), tree, bounds, beside());
     }
 
-    private Card cardOf(Row r) {
+    private Card cardOf(final Row r) {
         return cardOf(r, shown == null ? "" : shown.self().version(), shown != null && shown.denied().contains(r.instance().slug()),
                 System.currentTimeMillis(), ZoneId.systemDefault());
     }
 
     /** {@code r}'s row in the tree as it is now, or null when it is gone. */
-    private Rectangle boundsOf(Row r) {
+    private Rectangle boundsOf(final Row r) {
         for (int i = 0; i < tree.getRowCount(); i++) {
-            TreePath path = tree.getPathForRow(i);
+            final TreePath path = tree.getPathForRow(i);
             if (path.getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row x && same(r, x)) {
                 return tree.getPathBounds(path);
             }
@@ -520,11 +520,11 @@ final class InstancesTab {
     int beside() {
         int widest = 0;
         for (int i = 0; i < tree.getRowCount(); i++) {
-            Rectangle b = tree.getRowBounds(i);
+            final Rectangle b = tree.getRowBounds(i);
             widest = Math.max(widest, b.x + b.width);
         }
-        Rectangle seen = tree.getVisibleRect();
-        int right = seen.isEmpty() ? tree.getWidth() : seen.x + seen.width;
+        final Rectangle seen = tree.getVisibleRect();
+        final int right = seen.isEmpty() ? tree.getWidth() : seen.x + seen.width;
         return Math.max(0, Math.min(widest, right) - SessionsSidebar.OVERLAP);
     }
 
@@ -542,7 +542,7 @@ final class InstancesTab {
         }
         if (now != null) {
             carded = now;
-            Card c = cardOf(now);
+            final Card c = cardOf(now);
             cards.get().updateFacts(key(now), c.title(), c.facts(), c.heading(), c.text());
         }
     }
@@ -551,11 +551,11 @@ final class InstancesTab {
     record Card(String title, List<Map.Entry<String, String>> facts, String heading, String text) {
     }
 
-    static Card cardOf(Row r, String myVersion, boolean denied, long now, ZoneId zone) {
-        Instance in = r.instance();
-        List<Map.Entry<String, String>> f = new ArrayList<>();
+    static Card cardOf(final Row r, final String myVersion, final boolean denied, final long now, final ZoneId zone) {
+        final Instance in = r.instance();
+        final List<Map.Entry<String, String>> f = new ArrayList<>();
         if (r.member() != null) {
-            Member m = r.member();
+            final Member m = r.member();
             f.add(Map.entry("State", memberState(m, now)));
             if (!m.model().isEmpty() || !m.effort().isEmpty()) {
                 f.add(Map.entry("Model", (m.model().isEmpty() ? "default" : m.model()) + (m.effort().isEmpty() ? "" : " · effort " + m.effort())));
@@ -570,7 +570,7 @@ final class InstancesTab {
                 f.add(Map.entry("Background", String.join("; ", m.tasks())));
             }
             f.add(Map.entry("Instance", in.name()));
-            StringBuilder text = new StringBuilder();
+            final StringBuilder text = new StringBuilder();
             if (!m.prompt().isEmpty()) {
                 text.append("Asked: ").append(m.prompt());
             }
@@ -586,7 +586,7 @@ final class InstancesTab {
         f.add(Map.entry("comando", (in.version().isEmpty() ? "?" : in.version())
                 + (!r.self() && !in.version().equals(myVersion) ? " · this one runs " + myVersion : "")));
         f.add(Map.entry("Kit", in.kit().isEmpty() ? "?" : in.kit()));
-        String up = since(in.started(), Instant.ofEpochMilli(now));
+        final String up = since(in.started(), Instant.ofEpochMilli(now));
         if (in.present() && !up.isEmpty()) {
             f.add(Map.entry("Up", up));
         }
@@ -601,19 +601,19 @@ final class InstancesTab {
     }
 
     /** An instance's state: busy and how many of its sessions run a turn, idle, or when it was last seen. */
-    static String instanceState(Instance in, boolean self, long now, ZoneId zone) {
+    static String instanceState(final Instance in, final boolean self, final long now, final ZoneId zone) {
         if (!in.present()) {
             return self ? "not connected to the comando Edge"
                     : in.lastSeen() > 0 ? "left; last seen " + when(in.lastSeen(), now, zone) : "not reachable: this instance is not on the Edge";
         }
-        long busy = in.sessions().stream().filter(Member::busy).count();
-        int all = in.sessions().size();
+        final long busy = in.sessions().stream().filter(Member::busy).count();
+        final int all = in.sessions().size();
         return (busy > 0 ? "busy: " + busy + " of " + all + " session" + (all == 1 ? "" : "s") + " running a turn"
                 : "idle: no session running a turn" + (all == 0 ? "" : ", " + all + " session" + (all == 1 ? "" : "s")));
     }
 
     /** A session's state: what its turn is doing and for how long, or idle, or its process's state. */
-    static String memberState(Member m, long now) {
+    static String memberState(final Member m, final long now) {
         if (m.busy()) {
             return "busy" + (m.activity().isEmpty() ? "" : ": " + m.activity()) + (m.turnStarted() > 0 ? " · " + span(Duration.ofMillis(now - m.turnStarted())) : "");
         }
@@ -624,7 +624,7 @@ final class InstancesTab {
      * A session's dot, as the Sessions tab colours its icon: Claude's orange while a turn runs, green while it runs idle,
      * grey while it is stopped, red when it failed.
      */
-    static Color dot(Member m) {
+    static Color dot(final Member m) {
         if (m.busy()) {
             return Theme.CLAUDE;
         }
@@ -636,23 +636,23 @@ final class InstancesTab {
     }
 
     /** {@code at} as the time of day when it is today, else with its date. */
-    static String when(long at, long now, ZoneId zone) {
-        ZonedDateTime t = Instant.ofEpochMilli(at).atZone(zone);
-        LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
+    static String when(final long at, final long now, final ZoneId zone) {
+        final ZonedDateTime t = Instant.ofEpochMilli(at).atZone(zone);
+        final LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
         return t.format(DateTimeFormatter.ofPattern(t.toLocalDate().equals(today) ? "HH:mm" : "yyyy-MM-dd HH:mm"));
     }
 
     /** Asks {@code in} a question the user types: it lands in that instance's {@code consult-<this>} session. */
-    private void ask(Instance in) {
-        JTextArea text = new JTextArea(8, 48);
+    private void ask(final Instance in) {
+        final JTextArea text = new JTextArea(8, 48);
         text.setLineWrap(true);
         text.setWrapStyleWord(true);
-        JPanel p = new JPanel(new BorderLayout(0, Theme.SPACE_XS));
+        final JPanel p = new JPanel(new BorderLayout(0, Theme.SPACE_XS));
         p.add(new JLabel("Your question to " + in.name() + (in.role().isEmpty() ? "" : " (" + in.role() + ")")
                 + "; it answers in its session consult-" + (shown == null ? "" : shown.self().slug()) + ":"), BorderLayout.NORTH);
         p.add(new JScrollPane(text), BorderLayout.CENTER);
         SwingUtilities.invokeLater(text::requestFocusInWindow);
-        int chosen = JOptionPane.showConfirmDialog(root, p, "Ask " + in.name(), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        final int chosen = JOptionPane.showConfirmDialog(root, p, "Ask " + in.name(), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (chosen == JOptionPane.OK_OPTION && !text.getText().isBlank()) {
             port.get().ask(in.slug(), text.getText().strip());
         }
@@ -662,26 +662,26 @@ final class InstancesTab {
      * A question asked: the question and its reply in a side view. A question answered: the session here that answered
      * it, in its panel.
      */
-    void open(Consult c) {
+    void open(final Consult c) {
         if (c.direction() == InstancesState.Direction.ANSWERED && state != null && state.session(c.session()).isPresent()) {
             intents.dispatch(new Intent.OpenSession(c.session(), state.focused(), PanelId.random()));
             return;
         }
-        String md = "## " + (c.direction() == InstancesState.Direction.ASKED ? "Question to " : "Question from ") + c.peerName() + "\n\n"
+        final String md = "## " + (c.direction() == InstancesState.Direction.ASKED ? "Question to " : "Question from ") + c.peerName() + "\n\n"
                 + "*" + (c.session().isEmpty() ? "you, from the Instances tab" : "session " + c.session()) + " · " + label(c.status()) + "*\n\n"
                 + c.question() + "\n\n## Reply\n\n" + (c.reply().isEmpty() ? "(none yet)" : c.reply()) + "\n";
         intents.dispatch(new Intent.ShowView("", "Question to " + c.peerName(), new ViewSpec.Markdown(md), Placement.SIDE));
     }
 
-    private static JScrollPane scroll(JComponent c) {
-        JScrollPane sp = new JScrollPane(c);
+    private static JScrollPane scroll(final JComponent c) {
+        final JScrollPane sp = new JScrollPane(c);
         sp.setBorder(BorderFactory.createEmptyBorder());
         FocusRing.install(sp);
         SidebarLook.ground(sp);
         return sp;
     }
 
-    static String label(InstancesState.Status s) {
+    static String label(final InstancesState.Status s) {
         return switch (s) {
             case WAITING -> "waiting";
             case OK -> "answered";
@@ -692,7 +692,7 @@ final class InstancesTab {
     }
 
     /** How long since {@code started} (ISO-8601), as "3 min", "2 h", "1 d"; empty when unreadable. */
-    static String since(String started, Instant now) {
+    static String since(final String started, final Instant now) {
         try {
             return span(Duration.between(Instant.parse(started), now));
         } catch (DateTimeParseException | NullPointerException e) {
@@ -700,8 +700,8 @@ final class InstancesTab {
         }
     }
 
-    static String span(Duration d) {
-        long s = Math.max(0, d.toSeconds());
+    static String span(final Duration d) {
+        final long s = Math.max(0, d.toSeconds());
         return s < 60 ? s + " s" : s < 3_600 ? s / 60 + " min" : s < 86_400 ? s / 3_600 + " h" : s / 86_400 + " d";
     }
 
@@ -709,8 +709,8 @@ final class InstancesTab {
      * One line for an instance: name, what it is for, its version when it differs from this one's, and for one that
      * left, when it was last seen.
      */
-    static String line(Instance in, boolean self, String myVersion, long now, ZoneId zone) {
-        StringBuilder b = new StringBuilder(in.name());
+    static String line(final Instance in, final boolean self, final String myVersion, final long now, final ZoneId zone) {
+        final StringBuilder b = new StringBuilder(in.name());
         if (self) {
             b.append(" (this one)");
         }
@@ -727,15 +727,15 @@ final class InstancesTab {
     }
 
     /** One line for a session: its name, and what its turn is doing when it runs one. */
-    static String line(Member m) {
+    static String line(final Member m) {
         return m.name() + (m.busy() && !m.activity().isEmpty() ? " · " + m.activity() : "");
     }
 
     /** One line for a question: its direction, the peer, who asked, where it stands, how long, its first words. */
-    static String line(Consult c, long now) {
-        String who = c.session().isEmpty() ? "you" : c.session();
-        String first = c.question().lines().findFirst().orElse("").strip();
-        long end = c.endedAt() > 0 ? c.endedAt() : now;
+    static String line(final Consult c, final long now) {
+        final String who = c.session().isEmpty() ? "you" : c.session();
+        final String first = c.question().lines().findFirst().orElse("").strip();
+        final long end = c.endedAt() > 0 ? c.endedAt() : now;
         return (c.direction() == InstancesState.Direction.ASKED ? "→ " + c.peerName() + " · " + who : "← " + c.peerName() + " · " + who)
                 + " · " + label(c.status()) + " · " + span(Duration.ofMillis(end - c.askedAt())) + " — " + first;
     }
@@ -746,13 +746,13 @@ final class InstancesTab {
      */
     record Dot(Icon icon, Color color, Icon mark) implements Icon {
         @Override
-        public void paintIcon(Component c, Graphics g0, int x, int y) {
+        public void paintIcon(final Component c, final Graphics g0, final int x, final int y) {
             if (icon != null) {
                 icon.paintIcon(c, g0, x, y);
             }
-            int at = icon == null ? 4 : icon.getIconWidth() + 3;
+            final int at = icon == null ? 4 : icon.getIconWidth() + 3;
             if (color != null) {
-                Graphics2D g = (Graphics2D) g0.create();
+                final Graphics2D g = (Graphics2D) g0.create();
                 try {
                     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                     g.setColor(color);
@@ -779,23 +779,23 @@ final class InstancesTab {
 
     private final class RowRenderer extends DefaultTreeCellRenderer {
         @Override
-        public Component getTreeCellRendererComponent(JTree t, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean focus) {
+        public Component getTreeCellRendererComponent(final JTree t, final Object value, final boolean sel, final boolean expanded, final boolean leaf, final int row, final boolean focus) {
             super.getTreeCellRendererComponent(t, value, sel, expanded, leaf, row, focus);
             setBackgroundNonSelectionColor(Theme.ground());
             if (!(value instanceof DefaultMutableTreeNode n) || !(n.getUserObject() instanceof Row r)) {
                 return this;
             }
-            String mine = shown == null ? "" : shown.self().version();
-            boolean denied = shown != null && shown.denied().contains(r.instance().slug());
+            final String mine = shown == null ? "" : shown.self().version();
+            final boolean denied = shown != null && shown.denied().contains(r.instance().slug());
             // the card, at a click, says what the row only marks
             setToolTipText(null);
             if (r.member() != null) {
                 setText(line(r.member()));
                 setIcon(new Dot(Icons.get("session"), dot(r.member()), null));
             } else {
-                Instance in = r.instance();
+                final Instance in = r.instance();
                 setText(line(in, r.self(), mine, System.currentTimeMillis(), ZoneId.systemDefault()));
-                Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
+                final Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
                 setIcon(new Dot(Icons.get("instances"), dot, in.edge() ? Icons.get("edge") : null));
             }
             if (!sel) {
@@ -808,7 +808,7 @@ final class InstancesTab {
 
     private static final class ConsultRenderer extends DefaultListCellRenderer {
         @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean sel, boolean focus) {
+        public Component getListCellRendererComponent(final JList<?> list, final Object value, final int index, final boolean sel, final boolean focus) {
             super.getListCellRendererComponent(list, value, index, sel, focus);
             if (value instanceof Consult c) {
                 setText(line(c, System.currentTimeMillis()));

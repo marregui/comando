@@ -1,5 +1,15 @@
 package dev.marregui.comando.ui.panels;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.AppState;
@@ -11,15 +21,6 @@ import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,7 +40,7 @@ class ViewTabsTest {
         }
 
         @Override
-        public void render(V view) {
+        public void render(final V view) {
             rendered.add(view);
         }
 
@@ -54,41 +55,41 @@ class ViewTabsTest {
     /// twice creates no second widget.
     @Test
     void aViewReplacedInPlaceByAnotherTypeRendersInTheSameTab() throws Exception {
-        Reducer reducer = new Reducer(new FakeClock());
-        AppState first = reducer.apply(States.twoPanels(),
+        final Reducer reducer = new Reducer(new FakeClock());
+        final AppState first = reducer.apply(States.twoPanels(),
                 new Intent.ShowView("work", "Results", new ViewSpec.Markdown("# first"), Placement.LOWER)).state();
-        ViewSpec.Table table = new ViewSpec.Table(List.of("a"), List.of(List.of("1")));
-        AppState second = reducer.apply(first, new Intent.ShowView("work", "Results", table, Placement.LOWER)).state();
+        final ViewSpec.Table table = new ViewSpec.Table(List.of("a"), List.of(List.of("1")));
+        final AppState second = reducer.apply(first, new Intent.ShowView("work", "Results", table, Placement.LOWER)).state();
         assertThat(second.views()).hasSize(1);
         assertThat(second.views().getFirst().id()).isEqualTo(first.views().getFirst().id());
 
-        List<Recording<ViewSpec.Markdown>> markdowns = new ArrayList<>();
-        List<Recording<ViewSpec.Table>> tables = new ArrayList<>();
-        AtomicReference<Throwable> thrown = new AtomicReference<>();
-        AtomicReference<JTabbedPane> pane = new AtomicReference<>();
+        final List<Recording<ViewSpec.Markdown>> markdowns = new ArrayList<>();
+        final List<Recording<ViewSpec.Table>> tables = new ArrayList<>();
+        final AtomicReference<Throwable> thrown = new AtomicReference<>();
+        final AtomicReference<JTabbedPane> pane = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
-            WidgetRegistry registry = new WidgetRegistry();
+            final WidgetRegistry registry = new WidgetRegistry();
             registry.register("markdown", ViewSpec.Markdown.class, c -> {
-                Recording<ViewSpec.Markdown> w = new Recording<>();
+                final Recording<ViewSpec.Markdown> w = new Recording<>();
                 markdowns.add(w);
                 return w;
             });
             registry.register("table", ViewSpec.Table.class, c -> {
-                Recording<ViewSpec.Table> w = new Recording<>();
+                final Recording<ViewSpec.Table> w = new Recording<>();
                 tables.add(w);
                 return w;
             });
-            JTabbedPane tabs = new JTabbedPane();
+            final JTabbedPane tabs = new JTabbedPane();
             tabs.addTab("fixed", new JLabel());
             pane.set(tabs);
-            ViewTabs views = new ViewTabs(tabs, 1, Placement.LOWER, registry,
+            final ViewTabs views = new ViewTabs(tabs, 1, Placement.LOWER, registry,
                     new WidgetContext(intent -> { }, new ActionRegistry()));
             try {
                 views.render(first.views());
                 tabs.setSelectedIndex(1);
                 views.render(second.views());
                 views.render(second.views());
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 thrown.set(e);
             }
         });
@@ -98,7 +99,7 @@ class ViewTabsTest {
         assertThat(markdowns.getFirst().unmounted).isTrue();
         assertThat(tables).hasSize(1);
         assertThat(tables.getFirst().rendered).containsExactly(table);
-        JTabbedPane tabs = pane.get();
+        final JTabbedPane tabs = pane.get();
         assertThat(tabs.getTabCount()).isEqualTo(2);
         assertThat(tabs.getComponentAt(1)).isSameAs(tables.getFirst().label);
         assertThat(tabs.getSelectedIndex()).isEqualTo(1);

@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.widget;
 
-import dev.marregui.comando.core.view.ViewSpec;
-
-import javax.swing.JComponent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import javax.swing.JComponent;
+
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * View type to widget factory. A view placed by Claude or the user resolves here; adding a widget adds one
@@ -15,8 +15,8 @@ import java.util.function.Function;
 public final class WidgetRegistry {
 
     private record Entry<V extends ViewSpec>(Class<V> type, Function<WidgetContext, Widget<V>> factory) {
-        Widget<ViewSpec> create(WidgetContext ctx) {
-            Widget<V> w = factory.apply(ctx);
+        Widget<ViewSpec> create(final WidgetContext ctx) {
+            final Widget<V> w = factory.apply(ctx);
             return new Widget<>() {
                 @Override
                 public JComponent component() {
@@ -24,7 +24,7 @@ public final class WidgetRegistry {
                 }
 
                 @Override
-                public void render(ViewSpec view) {
+                public void render(final ViewSpec view) {
                     w.render(type.cast(view));
                 }
 
@@ -38,14 +38,14 @@ public final class WidgetRegistry {
 
     private final Map<String, Entry<?>> entries = new LinkedHashMap<>();
 
-    public <V extends ViewSpec> void register(String viewType, Class<V> type, Function<WidgetContext, Widget<V>> factory) {
+    public <V extends ViewSpec> void register(final String viewType, final Class<V> type, final Function<WidgetContext, Widget<V>> factory) {
         if (entries.putIfAbsent(viewType, new Entry<>(type, factory)) != null) {
             throw new IllegalArgumentException("view type registered twice: " + viewType);
         }
     }
 
-    public Widget<ViewSpec> create(String viewType, WidgetContext ctx) {
-        Entry<?> e = entries.get(viewType);
+    public Widget<ViewSpec> create(final String viewType, final WidgetContext ctx) {
+        final Entry<?> e = entries.get(viewType);
         if (e == null) {
             throw new IllegalArgumentException("no widget for view type " + viewType);
         }

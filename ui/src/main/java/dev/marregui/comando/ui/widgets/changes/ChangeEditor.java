@@ -1,5 +1,38 @@
 package dev.marregui.comando.ui.widgets.changes;
 
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.BoundedRangeModel;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
+import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.RepoStatus;
@@ -21,38 +54,6 @@ import dev.marregui.comando.ui.kit.text.SplitDiff;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import dev.marregui.comando.ui.widget.Unmountable;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.BoundedRangeModel;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
-import javax.swing.Timer;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * A changed file beside its {@code HEAD} version, the comparison window's body: the two texts side by side with their
@@ -130,7 +131,7 @@ public final class ChangeEditor implements Unmountable {
     private long asked;
     private String counted = "";
 
-    public ChangeEditor(IntentSink intents, Writer writer, ResourceActions.Questions questions) {
+    public ChangeEditor(final IntentSink intents, final Writer writer, final ResourceActions.Questions questions) {
         this.intents = intents;
         this.writer = writer;
         this.questions = questions;
@@ -156,7 +157,7 @@ public final class ChangeEditor implements Unmountable {
     }
 
     /** What runs when the file shown goes: removed, or rolled back out of the working tree; the window closes. */
-    public void onGone(Runnable gone) {
+    public void onGone(final Runnable gone) {
         this.gone = gone;
     }
 
@@ -196,7 +197,7 @@ public final class ChangeEditor implements Unmountable {
     }
 
     /** For tests: whether the switch to the rendered sides is offered, and whether Roll back and Remove are on. */
-    boolean offered(String action) {
+    boolean offered(final String action) {
         return switch (action) {
             case "rendered" -> mode.isVisible();
             case "rollback" -> rollBack.isEnabled();
@@ -211,7 +212,7 @@ public final class ChangeEditor implements Unmountable {
     }
 
     /** Hears whether edits wait to be written. */
-    public void onModified(Consumer<Boolean> modified) {
+    public void onModified(final Consumer<Boolean> modified) {
         this.modified = modified;
     }
 
@@ -232,15 +233,15 @@ public final class ChangeEditor implements Unmountable {
      * is left unshown while edits wait to be written; else another file, whose edits are written first. The comparison
      * is worked out off the event thread, at most {@link #DIFF_MILLIS} for the line match.
      */
-    public void show(ChangeTexts texts, boolean again) {
+    public void show(final ChangeTexts texts, final boolean again) {
         if (again && edited) {
             return;
         }
         if (!again) {
             save();
         }
-        RepoStatus.FileChange c = texts.change();
-        boolean same = again && texts.note().isEmpty() && diff.left().getText().equals(texts.before())
+        final RepoStatus.FileChange c = texts.change();
+        final boolean same = again && texts.note().isEmpty() && diff.left().getText().equals(texts.before())
                 && diff.right().getText().equals(texts.after());
         shown = texts;
         root = texts.root();
@@ -272,11 +273,11 @@ public final class ChangeEditor implements Unmountable {
         }
         counted = "comparing…";
         updateButtons();
-        long mine = ++asked;
-        String before = texts.before();
-        String after = texts.after();
+        final long mine = ++asked;
+        final String before = texts.before();
+        final String after = texts.after();
         UiErrands.start("diff-compute", () -> {
-            SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
+            final SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
             Edt.later(() -> {
                 if (mine == asked) {
                     apply(c, m, again);
@@ -286,7 +287,7 @@ public final class ChangeEditor implements Unmountable {
     }
 
     /** Shows a comparison worked out for {@code c}. */
-    private void apply(RepoStatus.FileChange c, SplitDiff.Model m, boolean again) {
+    private void apply(final RepoStatus.FileChange c, final SplitDiff.Model m, final boolean again) {
         if (!m.compared()) {
             note.setText(Plain.text(m.note()));
             counted = "";
@@ -313,8 +314,8 @@ public final class ChangeEditor implements Unmountable {
         updateButtons();
     }
 
-    private void count(SplitDiff.Model m) {
-        int n = m.chunks().size();
+    private void count(final SplitDiff.Model m) {
+        final int n = m.chunks().size();
         counted = (n == 0 ? "no differences" : n == 1 ? "1 difference" : n + " differences") + (m.note().isEmpty() ? "" : " · " + m.note());
     }
 
@@ -323,11 +324,11 @@ public final class ChangeEditor implements Unmountable {
         if (shown == null || !shown.note().isEmpty()) {
             return;
         }
-        long mine = ++asked;
-        String before = diff.left().getText();
-        String after = diff.right().getText();
+        final long mine = ++asked;
+        final String before = diff.left().getText();
+        final String after = diff.right().getText();
         UiErrands.start("diff-compute", () -> {
-            SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
+            final SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
             Edt.later(() -> {
                 if (mine == asked) {
                     diff.remark(m);
@@ -350,23 +351,23 @@ public final class ChangeEditor implements Unmountable {
         if (!editable || !edited || change == null) {
             return CompletableFuture.completedFuture(null);
         }
-        String text = diff.right().getText();
+        final String text = diff.right().getText();
         edited = false;
         updateButtons();
         if (text.equals(saved) || !onDisk && text.isEmpty()) {
             say(text.equals(saved) ? Said.SAVED : Said.NOTHING);
             return CompletableFuture.completedFuture(null);
         }
-        String r = root;
-        RepoStatus.FileChange c = change;
+        final String r = root;
+        final RepoStatus.FileChange c = change;
         return writer.write(file(), text).thenApply(reason -> {
             Edt.later(() -> saved(r, c, text, reason));
             return reason;
         });
     }
 
-    private void saved(String r, RepoStatus.FileChange c, String text, String reason) {
-        boolean here = Objects.equals(root, r) && change != null && change.path().equals(c.path());
+    private void saved(final String r, final RepoStatus.FileChange c, final String text, final String reason) {
+        final boolean here = Objects.equals(root, r) && change != null && change.path().equals(c.path());
         if (reason != null) {
             intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot save " + Path.of(c.path()).getFileName() + ": " + reason, null));
             if (here) {
@@ -396,7 +397,7 @@ public final class ChangeEditor implements Unmountable {
     /** What the working tree's side says of its edits. */
     private enum Said { NOTHING, EDITED, SAVED, FAILED }
 
-    private void say(Said said) {
+    private void say(final Said said) {
         switch (said) {
             case NOTHING -> diff.rightStatus("", Theme.MUTED, SAVE_TIP);
             case EDITED -> diff.rightStatus("● edited", Theme.ATTENTION, SAVE_TIP);
@@ -407,7 +408,7 @@ public final class ChangeEditor implements Unmountable {
     }
 
     void undo() {
-        RSyntaxTextArea r = diff.right();
+        final RSyntaxTextArea r = diff.right();
         if (editable && r.canUndo()) {
             r.undoLastAction();
         }
@@ -415,7 +416,7 @@ public final class ChangeEditor implements Unmountable {
     }
 
     void redo() {
-        RSyntaxTextArea r = diff.right();
+        final RSyntaxTextArea r = diff.right();
         if (editable && r.canRedo()) {
             r.redoLastAction();
         }
@@ -431,9 +432,9 @@ public final class ChangeEditor implements Unmountable {
         if (change == null) {
             return;
         }
-        RepoStatus.Kind kind = change.kind();
+        final RepoStatus.Kind kind = change.kind();
         if (editable && (kind == RepoStatus.Kind.MODIFIED || kind == RepoStatus.Kind.DELETED)) {
-            RSyntaxTextArea r = diff.right();
+            final RSyntaxTextArea r = diff.right();
             r.beginAtomicEdit();
             try {
                 r.replaceRange(diff.left().getText(), 0, r.getDocument().getLength());
@@ -447,9 +448,9 @@ public final class ChangeEditor implements Unmountable {
             intents.dispatch(new Intent.Unstage(root, List.of(change.path())));
             return;
         }
-        String name = Path.of(change.path()).getFileName().toString();
-        boolean leaves = kind != RepoStatus.Kind.MODIFIED && kind != RepoStatus.Kind.DELETED && kind != RepoStatus.Kind.CONFLICTED;
-        String question = kind == RepoStatus.Kind.UNTRACKED || kind == RepoStatus.Kind.ADDED
+        final String name = Path.of(change.path()).getFileName().toString();
+        final boolean leaves = kind != RepoStatus.Kind.MODIFIED && kind != RepoStatus.Kind.DELETED && kind != RepoStatus.Kind.CONFLICTED;
+        final String question = kind == RepoStatus.Kind.UNTRACKED || kind == RepoStatus.Kind.ADDED
                 ? name + " is not in HEAD: rolling it back moves it to the Trash."
                 : "Roll back " + name + " to HEAD? The version you have goes to the Trash.";
         if (questions.ask(body, question, "Roll back", new Object[] {"Roll back", "Cancel"}) != 0) {
@@ -467,7 +468,7 @@ public final class ChangeEditor implements Unmountable {
         if (change == null || change.kind() == RepoStatus.Kind.DELETED) {
             return;
         }
-        String name = Path.of(change.path()).getFileName().toString();
+        final String name = Path.of(change.path()).getFileName().toString();
         if (questions.ask(body, "Move " + name + " to the Trash? It can be put back from there.", "Remove",
                 new Object[] {"Move to Trash", "Cancel"}) != 0) {
             return;
@@ -505,19 +506,19 @@ public final class ChangeEditor implements Unmountable {
      * the texts shown shades nothing.
      */
     private void renderSides() {
-        Path folder = file().getParent();
-        String before = diff.left().getText();
-        String after = diff.right().getText();
-        SplitDiff.Model m = diff.model();
-        boolean current = m.compared() && m.before().equals(before) && m.after().equals(after);
+        final Path folder = file().getParent();
+        final String before = diff.left().getText();
+        final String after = diff.right().getText();
+        final SplitDiff.Model m = diff.model();
+        final boolean current = m.compared() && m.before().equals(before) && m.after().equals(after);
         headRendered.show(before, folder, current ? marks(m, false) : MarkdownHtml.Marks.NONE);
         treeRendered.show(after, folder, current ? marks(m, true) : MarkdownHtml.Marks.NONE);
     }
 
     /** The lines and words of one side that {@code m} found changed: the newer side's when {@code gained}. */
-    static MarkdownHtml.Marks marks(SplitDiff.Model m, boolean gained) {
-        Set<Integer> lines = new HashSet<>();
-        for (SplitDiff.Chunk c : m.chunks()) {
+    static MarkdownHtml.Marks marks(final SplitDiff.Model m, final boolean gained) {
+        final Set<Integer> lines = new HashSet<>();
+        for (final SplitDiff.Chunk c : m.chunks()) {
             for (int i = gained ? c.rightStart() : c.leftStart(); i < (gained ? c.rightEnd() : c.leftEnd()); i++) {
                 lines.add(i);
             }
@@ -528,13 +529,13 @@ public final class ChangeEditor implements Unmountable {
     private void showMode() {
         mode.setVisible(markdown && shown != null && shown.note().isEmpty());
         mode.setIcon(Icons.get(rendering ? "edit" : "preview"));
-        String tip = KeyText.of(rendering ? "Compare and edit the texts (⌘⇧M)" : "Show both sides rendered (⌘⇧M)");
+        final String tip = KeyText.of(rendering ? "Compare and edit the texts (⌘⇧M)" : "Show both sides rendered (⌘⇧M)");
         mode.setToolTipText(tip);
         mode.getAccessibleContext().setAccessibleName(rendering ? "Compare the texts" : "Show rendered");
     }
 
     private void updateButtons() {
-        boolean text = shown != null && shown.note().isEmpty() && !renderedShown();
+        final boolean text = shown != null && shown.note().isEmpty() && !renderedShown();
         previous.setEnabled(text);
         next.setEnabled(text);
         rollBack.setEnabled(change != null);
@@ -542,23 +543,23 @@ public final class ChangeEditor implements Unmountable {
         count.setText(counted);
     }
 
-    private static boolean isMarkdown(String path) {
-        String p = path.toLowerCase(Locale.ROOT);
+    private static boolean isMarkdown(final String path) {
+        final String p = path.toLowerCase(Locale.ROOT);
         return p.endsWith(".md") || p.endsWith(".markdown");
     }
 
     // ---- the parts
 
     private void build() {
-        JPanel top = new JPanel(new BorderLayout());
+        final JPanel top = new JPanel(new BorderLayout());
         top.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_S));
         title.setFont(title.getFont().deriveFont(Font.BOLD));
         top.add(title, BorderLayout.CENTER);
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         count.setForeground(Theme.MUTED_STRONG);
         count.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, Theme.SPACE_S));
         buttons.add(count);
-        for (JButton b : List.of(previous, next, mode)) {
+        for (final JButton b : List.of(previous, next, mode)) {
             buttons.add(b);
         }
         top.add(buttons, BorderLayout.EAST);
@@ -571,26 +572,26 @@ public final class ChangeEditor implements Unmountable {
 
         diff.right().getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(DocumentEvent e) {
+            public void insertUpdate(final DocumentEvent e) {
                 typed();
             }
 
             @Override
-            public void removeUpdate(DocumentEvent e) {
+            public void removeUpdate(final DocumentEvent e) {
                 typed();
             }
 
             @Override
-            public void changedUpdate(DocumentEvent e) {
+            public void changedUpdate(final DocumentEvent e) {
             }
         });
-        JPopupMenu menu = diff.right().getPopupMenu();
+        final JPopupMenu menu = diff.right().getPopupMenu();
         if (menu != null) {
             menu.addSeparator();
             menu.add(rollBack);
             menu.add(remove);
         }
-        int shortcut = Platform.menuShortcutMask();
+        final int shortcut = Platform.menuShortcutMask();
         bind(diff.right(), KeyStroke.getKeyStroke(KeyEvent.VK_Z, shortcut), "comando-undo", this::undo);
         bind(diff.right(), KeyStroke.getKeyStroke(KeyEvent.VK_Z, shortcut | KeyEvent.SHIFT_DOWN_MASK), "comando-redo", this::redo);
         bind(diff.right(), KeyStroke.getKeyStroke(KeyEvent.VK_Y, shortcut), "comando-redo", this::redo);
@@ -610,39 +611,39 @@ public final class ChangeEditor implements Unmountable {
 
     /** The two rendered sides, each titled, scrolled together by the share of their length. */
     private JComponent rendered() {
-        JPanel sides = new JPanel(new GridLayout(1, 2, 1, 0));
+        final JPanel sides = new JPanel(new GridLayout(1, 2, 1, 0));
         sides.setBackground(Theme.CARD_BORDER);
         sides.add(titled("HEAD", headRendered.component()));
         sides.add(titled("Working tree", treeRendered.component()));
-        BoundedRangeModel a = headRendered.scroll().getVerticalScrollBar().getModel();
-        BoundedRangeModel b = treeRendered.scroll().getVerticalScrollBar().getModel();
+        final BoundedRangeModel a = headRendered.scroll().getVerticalScrollBar().getModel();
+        final BoundedRangeModel b = treeRendered.scroll().getVerticalScrollBar().getModel();
         a.addChangeListener(e -> follow(a, b));
         b.addChangeListener(e -> follow(b, a));
         return sides;
     }
 
-    private void follow(BoundedRangeModel from, BoundedRangeModel to) {
+    private void follow(final BoundedRangeModel from, final BoundedRangeModel to) {
         if (following) {
             return;
         }
         following = true;
         try {
-            int span = from.getMaximum() - from.getExtent() - from.getMinimum();
-            double share = span <= 0 ? 0 : (from.getValue() - from.getMinimum()) / (double) span;
+            final int span = from.getMaximum() - from.getExtent() - from.getMinimum();
+            final double share = span <= 0 ? 0 : (from.getValue() - from.getMinimum()) / (double) span;
             to.setValue(to.getMinimum() + (int) Math.round(share * (to.getMaximum() - to.getExtent() - to.getMinimum())));
         } finally {
             following = false;
         }
     }
 
-    private static JMenuItem menuItem(String text, String icon, Runnable r) {
-        JMenuItem i = new JMenuItem(text, Icons.get(icon));
+    private static JMenuItem menuItem(final String text, final String icon, final Runnable r) {
+        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(e -> r.run());
         return i;
     }
 
-    private static JButton arrow(String text, String tip, Runnable r) {
-        JButton b = new JButton(text);
+    private static JButton arrow(final String text, final String tip, final Runnable r) {
+        final JButton b = new JButton(text);
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setToolTipText(tip);
         b.getAccessibleContext().setAccessibleName(tip);
@@ -651,9 +652,9 @@ public final class ChangeEditor implements Unmountable {
         return b;
     }
 
-    private static JComponent titled(String name, JComponent c) {
-        JPanel p = new JPanel(new BorderLayout());
-        JLabel l = new JLabel(name);
+    private static JComponent titled(final String name, final JComponent c) {
+        final JPanel p = new JPanel(new BorderLayout());
+        final JLabel l = new JLabel(name);
         l.setForeground(Theme.MUTED_STRONG);
         l.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         p.add(l, BorderLayout.NORTH);
@@ -661,11 +662,11 @@ public final class ChangeEditor implements Unmountable {
         return p;
     }
 
-    private static void bind(JComponent c, KeyStroke key, String name, Runnable r) {
+    private static void bind(final JComponent c, final KeyStroke key, final String name, final Runnable r) {
         c.getInputMap(JComponent.WHEN_FOCUSED).put(key, name);
         c.getActionMap().put(name, new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 r.run();
             }
         });

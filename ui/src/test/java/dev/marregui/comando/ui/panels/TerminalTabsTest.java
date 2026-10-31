@@ -1,15 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.SwingUtilities;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -17,6 +7,17 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,24 +35,24 @@ class TerminalTabsTest {
     /// A terminal without a shell starts at home, then follows its panel's binding on each render, also when another
     /// panel is focused.
     @Test
-    void aTerminalNotStartedTakesItsPanelsCurrentDirectoryOnEveryRender(@TempDir Path root) throws Exception {
-        Path edge = Files.createDirectory(root.resolve("edge"));
-        Path lane2 = Files.createDirectory(root.resolve("lane2"));
-        List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
+    void aTerminalNotStartedTakesItsPanelsCurrentDirectoryOnEveryRender(@TempDir final Path root) throws Exception {
+        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path lane2 = Files.createDirectory(root.resolve("lane2"));
+        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
                 SessionState.closed(SessionSpec.fresh("lane2", lane2.toString())));
-        TerminalTabs tabs = new TerminalTabs();
+        final TerminalTabs tabs = new TerminalTabs();
 
-        AppState unbound = AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "")), List.of(), sessions);
+        final AppState unbound = AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "")), List.of(), sessions);
         tabs.render(unbound, false);
         assertThat(tabs.terminal(P1).directory()).isEqualTo(HOME);
 
-        AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge"), new PanelState(P2, "two", "", "")), List.of(), sessions);
+        final AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge"), new PanelState(P2, "two", "", "")), List.of(), sessions);
         tabs.render(bound, false);
         assertThat(tabs.terminal(P1).directory()).as("bound after the terminal was created").isEqualTo(edge);
 
-        AppState focusTwo = bound.withFocused(P2);
+        final AppState focusTwo = bound.withFocused(P2);
         tabs.render(focusTwo, false);
-        AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2"), new PanelState(P2, "two", "", "")), List.of(), sessions)
+        final AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2"), new PanelState(P2, "two", "", "")), List.of(), sessions)
                 .withFocused(P2);
         tabs.render(rebound, false);
         assertThat(tabs.terminal(P1).directory()).as("not only the shown terminal").isEqualTo(lane2);
@@ -62,16 +63,16 @@ class TerminalTabsTest {
     /// A running shell keeps its directory when the panel is rebound; once it exits, with nothing rendered since, the
     /// exit bar and Restart use the directory the panel is bound to now.
     @Test
-    void anExitedShellRestartsWhereItsPanelIsBoundNow(@TempDir Path root) throws Exception {
-        Path edge = Files.createDirectory(root.resolve("edge"));
-        Path lane2 = Files.createDirectory(root.resolve("lane2"));
-        List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
+    void anExitedShellRestartsWhereItsPanelIsBoundNow(@TempDir final Path root) throws Exception {
+        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final Path lane2 = Files.createDirectory(root.resolve("lane2"));
+        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
                 SessionState.closed(SessionSpec.fresh("lane2", lane2.toString())));
-        AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge")), List.of(), sessions);
-        AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2")), List.of(), sessions);
-        TerminalTabs tabs = new TerminalTabs(dir -> new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 1")));
-        AtomicBoolean runningAtRebind = new AtomicBoolean();
-        AtomicReference<Path> atRebind = new AtomicReference<>();
+        final AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge")), List.of(), sessions);
+        final AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2")), List.of(), sessions);
+        final TerminalTabs tabs = new TerminalTabs(dir -> new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 1")));
+        final AtomicBoolean runningAtRebind = new AtomicBoolean();
+        final AtomicReference<Path> atRebind = new AtomicReference<>();
         try {
             SwingUtilities.invokeAndWait(() -> {
                 tabs.render(bound, true);
@@ -82,10 +83,10 @@ class TerminalTabsTest {
             assertThat(runningAtRebind).as("the shell ran when the panel was rebound").isTrue();
             assertThat(atRebind.get()).as("a running shell keeps its directory").isEqualTo(edge);
 
-            TerminalWidget t = tabs.terminal(P1);
-            AtomicReference<Path> dir = new AtomicReference<>(edge);
-            AtomicBoolean running = new AtomicBoolean(true);
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
+            final TerminalWidget t = tabs.terminal(P1);
+            final AtomicReference<Path> dir = new AtomicReference<>(edge);
+            final AtomicBoolean running = new AtomicBoolean(true);
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
             while (System.nanoTime() < deadline && (running.get() || !dir.get().equals(lane2))) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> {
@@ -111,7 +112,7 @@ class TerminalTabsTest {
     /// A panel bound to a session whose directory is missing gets the user's home.
     @Test
     void aSessionDirectoryThatDoesNotExistFallsBackToHome() {
-        AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", "gone")), List.of(),
+        final AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", "gone")), List.of(),
                 List.of(SessionState.closed(SessionSpec.fresh("gone", "/no/such/dir"))));
         assertThat(TerminalTabs.directory(s)).isEqualTo(HOME);
     }
@@ -120,12 +121,12 @@ class TerminalTabsTest {
     /// asynchronous check answers at once, empty, when there is no shell to ask.
     @Test
     void terminalsWithoutShellsRunNoJobs() {
-        TerminalTabs tabs = new TerminalTabs();
-        AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", "")), List.of(), List.of());
+        final TerminalTabs tabs = new TerminalTabs();
+        final AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", "")), List.of(), List.of());
         tabs.render(s, false);
         assertThat(tabs.hasRunningJob(P1)).isFalse();
         assertThat(tabs.hasRunningJob(P2)).isFalse();
-        AtomicReference<Map<PanelId, String>> answered = new AtomicReference<>();
+        final AtomicReference<Map<PanelId, String>> answered = new AtomicReference<>();
         tabs.checkAllJobs(answered::set);
         assertThat(answered.get()).as("answered at once, with no shell to ask").isEmpty();
     }

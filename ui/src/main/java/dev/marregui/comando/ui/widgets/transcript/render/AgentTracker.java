@@ -1,9 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.model.Approval;
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.transcript.Block;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,6 +12,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.LongSupplier;
 import java.util.function.UnaryOperator;
+
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.transcript.Block;
 
 /**
  * The transcript's tool cards by id and what they run: the running cards, the running top-level sub-agents, the
@@ -51,7 +51,7 @@ final class AgentTracker {
     private final Runnable runningChanged;
     private final Runnable repaint;
 
-    AgentTracker(LongSupplier clock, UnaryOperator<Item> parentOf, Runnable runningChanged, Runnable repaint) {
+    AgentTracker(final LongSupplier clock, final UnaryOperator<Item> parentOf, final Runnable runningChanged, final Runnable repaint) {
         this.clock = clock;
         this.parentOf = parentOf;
         this.runningChanged = runningChanged;
@@ -68,19 +68,19 @@ final class AgentTracker {
     }
 
     /** A new card for {@code call}, at transcript index {@code index}, with the times its id had before a rebuild. */
-    Items.ToolItem newCard(Block.ToolCall call, int index) {
+    Items.ToolItem newCard(final Block.ToolCall call, final int index) {
         return new Items.ToolItem(call, index, times.getOrDefault(call.toolUseId(), Items.ToolItem.newTimes()));
     }
 
     /** The card {@code card} was appended. */
-    void added(Items.ToolItem card) {
+    void added(final Items.ToolItem card) {
         cards.put(card.call().toolUseId(), card);
         track(card);
     }
 
     /** {@code card} was appended inside {@code parent}: it counts in every card it sits in, up to the top level. */
-    void nested(Items.ToolItem parent, Items.ToolItem card) {
-        String label = Items.ToolItem.lastLabel(card.call());
+    void nested(final Items.ToolItem parent, final Items.ToolItem card) {
+        final String label = Items.ToolItem.lastLabel(card.call());
         for (Item p = parent; p != null; p = parentOf.apply(p)) {
             if (p instanceof Items.ToolItem t) {
                 t.toolAdded(card.call().toolUseId(), label);
@@ -89,7 +89,7 @@ final class AgentTracker {
     }
 
     /** The block of {@code card} was replaced. */
-    void updated(Items.ToolItem card) {
+    void updated(final Items.ToolItem card) {
         track(card);
         lastToolChanged(card);
         if (!waitingFor.isEmpty() || !waitingCards.isEmpty()) {
@@ -104,7 +104,7 @@ final class AgentTracker {
         }
     }
 
-    Items.ToolItem card(String toolUseId) {
+    Items.ToolItem card(final String toolUseId) {
         return cards.get(toolUseId);
     }
 
@@ -123,8 +123,8 @@ final class AgentTracker {
      * Keeps the set of active cards, which drives the elapsed-time repaint, the running top-level sub-agents, and the
      * cards that launched a sub-agent into the background.
      */
-    private void track(Items.ToolItem card) {
-        long now = clock.getAsLong();
+    private void track(final Items.ToolItem card) {
+        final long now = clock.getAsLong();
         card.launchSeen(now);
         if (!card.launchedAgent().isEmpty()) {
             launched.add(card);
@@ -136,7 +136,7 @@ final class AgentTracker {
         if (card.call().isSubagent() && card.runningSince() >= 0) {
             times.putIfAbsent(card.call().toolUseId(), card.times());
         }
-        boolean agent = card.call().isSubagent() && card.call().parent().isEmpty();
+        final boolean agent = card.call().isSubagent() && card.call().parent().isEmpty();
         if (card.isActive()) {
             running.add(card);
             if (agent) {
@@ -154,8 +154,8 @@ final class AgentTracker {
      * reach the canvas before the list that holds it: a launch seen live counts as working for
      * {@link TranscriptCanvas#LAUNCH_GRACE_MILLIS}, unless the list already held it and let it go.
      */
-    private boolean inBackground(Items.ToolItem card, long now) {
-        String id = card.launchedAgent();
+    private boolean inBackground(final Items.ToolItem card, final long now) {
+        final String id = card.launchedAgent();
         if (openTasks.contains(id)) {
             return true;
         }
@@ -163,9 +163,9 @@ final class AgentTracker {
     }
 
     /** The session's open background tasks: a card whose result launched one runs until it leaves the list. */
-    void setBackgroundTasks(List<BackgroundTask> tasks) {
-        Set<String> open = new HashSet<>();
-        for (BackgroundTask t : tasks) {
+    void setBackgroundTasks(final List<BackgroundTask> tasks) {
+        final Set<String> open = new HashSet<>();
+        for (final BackgroundTask t : tasks) {
             if (t.kind().equals(LOCAL_AGENT)) {
                 open.add(t.id());
             }
@@ -181,8 +181,8 @@ final class AgentTracker {
     /** Re-reads whether each launched sub-agent still works; repaints, and tells the listener, when one changed. */
     private void retrackLaunched() {
         boolean changed = false;
-        for (Items.ToolItem card : List.copyOf(launched)) {
-            boolean was = card.isActive();
+        for (final Items.ToolItem card : List.copyOf(launched)) {
+            final boolean was = card.isActive();
             track(card);
             changed |= was != card.isActive();
         }
@@ -192,21 +192,21 @@ final class AgentTracker {
         }
     }
 
-    void onAgentsChanged(Runnable listener) {
+    void onAgentsChanged(final Runnable listener) {
         agentsChanged = listener;
     }
 
     private static <V> Map<String, V> bounded() {
         return new LinkedHashMap<>(16, 0.75f, false) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<String, V> eldest) {
+            protected boolean removeEldestEntry(final Map.Entry<String, V> eldest) {
                 return size() > KEPT_IDS;
             }
         };
     }
 
     /** A nested call changed (its input arrived): the cards showing it as their latest call show the new summary. */
-    private void lastToolChanged(Items.ToolItem card) {
+    private void lastToolChanged(final Items.ToolItem card) {
         String label = null;
         for (Item p = parentOf.apply(card); p != null; p = parentOf.apply(p)) {
             if (p instanceof Items.ToolItem t && t.isLastTool(card.call().toolUseId())) {
@@ -220,9 +220,9 @@ final class AgentTracker {
 
     /** The running top-level sub-agent cards, in the order they started. */
     List<TranscriptCanvas.RunningAgent> runningAgents() {
-        List<TranscriptCanvas.RunningAgent> out = new ArrayList<>(runningAgents.size());
-        for (Items.ToolItem card : runningAgents) {
-            Block.ToolCall c = card.call();
+        final List<TranscriptCanvas.RunningAgent> out = new ArrayList<>(runningAgents.size());
+        for (final Items.ToolItem card : runningAgents) {
+            final Block.ToolCall c = card.call();
             out.add(new TranscriptCanvas.RunningAgent(c.toolUseId(), card.summary(), card.runningSince(), card.launchedAgent()));
         }
         return out;
@@ -231,19 +231,19 @@ final class AgentTracker {
     // ---- approvals
 
     /** The approval cards that hold up this session's tool calls. */
-    void setWaiting(List<Approval> approvals) {
+    void setWaiting(final List<Approval> approvals) {
         waitingFor = List.copyOf(approvals);
         resolveWaiting();
     }
 
     private void resolveWaiting() {
-        Set<Items.ToolItem> now = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Approval a : waitingFor) {
+        final Set<Items.ToolItem> now = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (final Approval a : waitingFor) {
             Items.ToolItem card = null;
             if (!a.toolUseId().isEmpty()) {
                 card = cards.get(a.toolUseId());
             } else {
-                for (Items.ToolItem c : running) {
+                for (final Items.ToolItem c : running) {
                     if (isTool(c.call().name(), a.toolName()) && (card == null || c.order() > card.order())) {
                         card = c;
                     }
@@ -256,17 +256,17 @@ final class AgentTracker {
         if (now.equals(waitingCards)) {
             return;
         }
-        for (Items.ToolItem c : waitingCards) {
+        for (final Items.ToolItem c : waitingCards) {
             c.setWaiting(now.contains(c));
         }
-        for (Items.ToolItem c : now) {
+        for (final Items.ToolItem c : now) {
             c.setWaiting(true);
         }
         waitingCards = now;
         repaint.run();
     }
 
-    private static boolean isTool(String callName, String toolName) {
+    private static boolean isTool(final String callName, final String toolName) {
         return !toolName.isEmpty() && (callName.equals(toolName) || callName.endsWith("__" + toolName));
     }
 }

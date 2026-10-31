@@ -1,9 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +9,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.imageio.ImageIO;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,10 +33,10 @@ class MermaidDiagramsTest {
     /**
      * A stand-in for mmdc: counts its runs, then copies a picture to the -o path, or fails as mmdc does on bad text.
      */
-    private Path fakeMmdc(boolean fails) throws Exception {
-        Path picture = dir.resolve("picture.png");
+    private Path fakeMmdc(final boolean fails) throws Exception {
+        final Path picture = dir.resolve("picture.png");
         ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
-        Path exe = dir.resolve("bin").resolve("mmdc");
+        final Path exe = dir.resolve("bin").resolve("mmdc");
         Files.createDirectories(exe.getParent());
         Files.writeString(exe, """
                 #!/bin/sh
@@ -55,7 +55,7 @@ class MermaidDiagramsTest {
     }
 
     private long runs() throws Exception {
-        Path runs = dir.resolve("runs");
+        final Path runs = dir.resolve("runs");
         return Files.exists(runs) ? Files.readAllLines(runs).size() : 0;
     }
 
@@ -63,13 +63,13 @@ class MermaidDiagramsTest {
     /// picture's size, `mmdc` ran once, and the cache holds only the PNG.
     @Test
     void aDiagramIsDrawnOnceThenShownFromTheCacheAtHalfItsPixels() throws Exception {
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(false));
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(false));
         try {
-            CountDownLatch drawn = new CountDownLatch(1);
+            final CountDownLatch drawn = new CountDownLatch(1);
             assertThat(diagrams.diagram(FLOW, drawn::countDown)).isInstanceOf(MermaidDiagrams.Diagram.Pending.class);
             assertThat(drawn.await(10, TimeUnit.SECONDS)).as("the asker hears when it is drawn").isTrue();
 
-            MermaidDiagrams.Diagram again = diagrams.diagram(FLOW, () -> { });
+            final MermaidDiagrams.Diagram again = diagrams.diagram(FLOW, () -> { });
             assertThat(again).isEqualTo(new MermaidDiagrams.Diagram.Ready(
                     dir.resolve("cache").resolve(MermaidDiagrams.key(FLOW) + ".png"), 200, 60));
             assertThat(runs()).as("drawn once").isEqualTo(1);
@@ -86,10 +86,10 @@ class MermaidDiagramsTest {
     /// it calls back, the shared callback has run exactly once.
     @Test
     void theSameCallbackHandedInAgainWhileTheDiagramIsDrawnRunsOnce() throws Exception {
-        Path picture = dir.resolve("picture.png");
+        final Path picture = dir.resolve("picture.png");
         ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
-        Path gate = dir.resolve("gate");
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+        final Path gate = dir.resolve("gate");
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
                 out=""
                 while [ $# -gt 0 ]; do
                   if [ "$1" = "-o" ]; then out="$2"; fi
@@ -99,12 +99,12 @@ class MermaidDiagramsTest {
                 cp '%s' "$out"
                 """.formatted(gate, picture)));
         try {
-            AtomicInteger told = new AtomicInteger();
-            Runnable preview = told::incrementAndGet;
+            final AtomicInteger told = new AtomicInteger();
+            final Runnable preview = told::incrementAndGet;
             for (int i = 0; i < 3; i++) {
                 assertThat(diagrams.diagram(FLOW, preview)).as("held at the gate").isInstanceOf(MermaidDiagrams.Diagram.Pending.class);
             }
-            CountDownLatch other = new CountDownLatch(1);
+            final CountDownLatch other = new CountDownLatch(1);
             diagrams.diagram("flowchart LR\n    X --> Y\n", other::countDown);
             Files.createFile(gate);
             // one drawing at a time: once the next is heard, every callback of the first has run
@@ -119,9 +119,9 @@ class MermaidDiagramsTest {
     /// a second ask runs no second process.
     @Test
     void aDiagramMmdcRejectsSaysWhyAndIsNotDrawnAgain() throws Exception {
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(true));
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(true));
         try {
-            CountDownLatch done = new CountDownLatch(1);
+            final CountDownLatch done = new CountDownLatch(1);
             diagrams.diagram("flowchart LR\n  A -->", done::countDown);
             assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
             assertThat(diagrams.diagram("flowchart LR\n  A -->", () -> { }))
@@ -133,8 +133,8 @@ class MermaidDiagramsTest {
     }
 
     /** A stand-in for mmdc that runs {@code body} as a shell script. */
-    private Path script(String body) throws Exception {
-        Path exe = dir.resolve("bin").resolve("mmdc");
+    private Path script(final String body) throws Exception {
+        final Path exe = dir.resolve("bin").resolve("mmdc");
         Files.createDirectories(exe.getParent());
         Files.writeString(exe, "#!/bin/sh\n" + body);
         exe.toFile().setExecutable(true);
@@ -144,9 +144,9 @@ class MermaidDiagramsTest {
     /// `mmdc` is called with `-t dark`.
     @Test
     void aDiagramIsDrawnInMermaidsDarkTheme() throws Exception {
-        Path picture = dir.resolve("picture.png");
+        final Path picture = dir.resolve("picture.png");
         ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
                 out=""
                 while [ $# -gt 0 ]; do
                   if [ "$1" = "-o" ]; then out="$2"; fi
@@ -156,7 +156,7 @@ class MermaidDiagramsTest {
                 cp '%s' "$out"
                 """.formatted(dir.resolve("themes"), picture)));
         try {
-            CountDownLatch dark = new CountDownLatch(1);
+            final CountDownLatch dark = new CountDownLatch(1);
             diagrams.diagram(FLOW, dark::countDown);
             assertThat(dark.await(10, TimeUnit.SECONDS)).isTrue();
             assertThat(Files.readAllLines(dir.resolve("themes"))).containsExactly("dark");
@@ -169,7 +169,7 @@ class MermaidDiagramsTest {
     /// told once with no drawing queued after it, and the unreadable file is removed.
     @Test
     void aPictureThatCannotBeReadIsShownAsAFailureNotAnnouncedAgainAndAgain() throws Exception {
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
                 out=""
                 while [ $# -gt 0 ]; do
                   if [ "$1" = "-o" ]; then out="$2"; fi
@@ -178,11 +178,11 @@ class MermaidDiagramsTest {
                 printf 'not a png' > "$out"
                 """));
         try {
-            AtomicInteger told = new AtomicInteger();
-            AtomicReference<MermaidDiagrams.Diagram> afterReady = new AtomicReference<>();
-            CountDownLatch ready = new CountDownLatch(1);
+            final AtomicInteger told = new AtomicInteger();
+            final AtomicReference<MermaidDiagrams.Diagram> afterReady = new AtomicReference<>();
+            final CountDownLatch ready = new CountDownLatch(1);
             // as the preview does: told it is ready, it asks again
-            Runnable redraw = () -> {
+            final Runnable redraw = () -> {
                 told.incrementAndGet();
                 afterReady.set(diagrams.diagram(FLOW, () -> told.incrementAndGet()));
                 ready.countDown();
@@ -202,20 +202,20 @@ class MermaidDiagramsTest {
     /// started is no longer alive.
     @Test
     void mmdcThatDoesNotFinishIsStoppedWithWhatItStarted() throws Exception {
-        Path child = dir.resolve("child.pid");
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+        final Path child = dir.resolve("child.pid");
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
                 sleep 60 &
                 echo $! > '%s'
                 wait
                 """.formatted(child)), Duration.ofMillis(500));
         try {
-            CountDownLatch done = new CountDownLatch(1);
+            final CountDownLatch done = new CountDownLatch(1);
             diagrams.diagram(FLOW, done::countDown);
             assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
             assertThat(diagrams.diagram(FLOW, () -> { })).isInstanceOfSatisfying(MermaidDiagrams.Diagram.Unavailable.class,
                     u -> assertThat(u.why()).startsWith("mmdc did not finish within"));
-            long pid = Long.parseLong(Files.readString(child).strip());
-            Optional<ProcessHandle> sleeper = ProcessHandle.of(pid);
+            final long pid = Long.parseLong(Files.readString(child).strip());
+            final Optional<ProcessHandle> sleeper = ProcessHandle.of(pid);
             if (sleeper.isPresent()) {
                 sleeper.get().onExit().get(5, TimeUnit.SECONDS);
             }
@@ -229,7 +229,7 @@ class MermaidDiagramsTest {
     /// With no executable the diagram is unavailable at once, and the reason names the `npm install` command.
     @Test
     void withoutMmdcTheSourceShowsWithHowToGetIt() {
-        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), null);
+        final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), null);
         assertThat(diagrams.diagram(FLOW, () -> { })).isInstanceOfSatisfying(MermaidDiagrams.Diagram.Unavailable.class,
                 u -> assertThat(u.why()).contains("npm install -g @mermaid-js/mermaid-cli"));
     }
@@ -249,8 +249,8 @@ class MermaidDiagramsTest {
     /// or renders them as code without one.
     @Test
     void thePreviewShowsThePictureNoWiderThanThePaneElseTheSourceUnderANote() {
-        Path png = dir.resolve("d.png");
-        String ready = HtmlPane.diagramHtml(FLOW, new MermaidDiagrams.Diagram.Ready(png, 800, 100), 400);
+        final Path png = dir.resolve("d.png");
+        final String ready = HtmlPane.diagramHtml(FLOW, new MermaidDiagrams.Diagram.Ready(png, 800, 100), 400);
         assertThat(ready).contains("<img src=\"" + png.toUri() + "\" width=\"400\" height=\"50\"");
         assertThat(HtmlPane.diagramHtml("A --> <b>", new MermaidDiagrams.Diagram.Pending(), 400))
                 .contains("drawing the diagram…").contains("A --&gt; &lt;b&gt;").doesNotContain("<b>");

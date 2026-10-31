@@ -1,5 +1,9 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.AppState;
@@ -7,9 +11,6 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.States;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,8 +24,8 @@ class ReducerSubagentTest {
     private AppState state = States.twoPanels();
     private List<Effect> effects = List.of();
 
-    private void apply(Intent intent) {
-        Transition t = reducer.apply(state, intent);
+    private void apply(final Intent intent) {
+        final Transition t = reducer.apply(state, intent);
         state = t.state();
         effects = t.effects();
     }

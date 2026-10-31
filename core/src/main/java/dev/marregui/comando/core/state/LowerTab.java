@@ -10,7 +10,7 @@ public record LowerTab(Kind kind, long viewId) {
     public static final LowerTab APPROVALS = new LowerTab(Kind.APPROVALS, 0L);
     public static final LowerTab TERMINAL = new LowerTab(Kind.TERMINAL, 0L);
 
-    public static LowerTab view(long viewId) {
+    public static LowerTab view(final long viewId) {
         return new LowerTab(Kind.VIEW, viewId);
     }
 }

@@ -4,8 +4,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -53,17 +53,17 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     }
 
     /** A folder in no group. */
-    public FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn) {
+    public FolderRoot(final String name, final String path, final String index, final List<String> excludes, final String icon, final boolean deletable, final String listedIn) {
         this(name, path, index, excludes, icon, deletable, listedIn, "");
     }
 
     /** A folder whose entries stay where they are. */
-    public FolderRoot(String name, String path, String index, List<String> excludes, String icon) {
+    public FolderRoot(final String name, final String path, final String index, final List<String> excludes, final String icon) {
         this(name, path, index, excludes, icon, false, "");
     }
 
     /** A folder with the plain icon. */
-    public FolderRoot(String name, String path, String index, List<String> excludes) {
+    public FolderRoot(final String name, final String path, final String index, final List<String> excludes) {
         this(name, path, index, excludes, FOLDER);
     }
 
@@ -79,13 +79,13 @@ public record FolderRoot(String name, String path, String index, List<String> ex
      * A user who never configured a folder sees Claude Code's own ({@link HomeDir#claudeDir}), opening its
      * {@code CLAUDE.md}.
      */
-    public static List<FolderRoot> defaults(Path claudeDir) {
+    public static List<FolderRoot> defaults(final Path claudeDir) {
         return List.of(new FolderRoot("Claude", claudeDir.toString(), "CLAUDE.md", CLAUDE_STATE));
     }
 
     /** Whether an entry called {@code entry} is left out of the tree. */
-    public boolean excludes(String entry) {
-        String lower = entry.toLowerCase(Locale.ROOT);
+    public boolean excludes(final String entry) {
+        final String lower = entry.toLowerCase(Locale.ROOT);
         return ALWAYS_EXCLUDED.contains(lower) || excludes.stream().anyMatch(e -> e.toLowerCase(Locale.ROOT).equals(lower));
     }
 
@@ -95,7 +95,7 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     }
 
     /** Whether {@code file}, a full path, is in this folder. */
-    public boolean contains(Path file) {
+    public boolean contains(final Path file) {
         return !path.isEmpty() && file.normalize().startsWith(Path.of(path).normalize());
     }
 
@@ -105,36 +105,36 @@ public record FolderRoot(String name, String path, String index, List<String> ex
      * folders beside them. None for a group of one folder, which is its folder's row, nor when the name is a configured
      * folder's.
      */
-    public static List<FolderRoot> groupRoots(List<FolderRoot> folders) {
-        Map<String, List<FolderRoot>> groups = new LinkedHashMap<>();
+    public static List<FolderRoot> groupRoots(final List<FolderRoot> folders) {
+        final Map<String, List<FolderRoot>> groups = new LinkedHashMap<>();
         folders.stream().filter(f -> !f.group().isEmpty() && !f.path().isEmpty()).forEach(f -> groups.computeIfAbsent(f.group(), g -> new ArrayList<>()).add(f));
-        List<FolderRoot> out = new ArrayList<>();
+        final List<FolderRoot> out = new ArrayList<>();
         groups.forEach((group, members) -> {
-            String name = group.toUpperCase(Locale.ROOT);
-            Path parent = members.size() < 2 ? null : Path.of(members.getFirst().path()).normalize().getParent();
+            final String name = group.toUpperCase(Locale.ROOT);
+            final Path parent = members.size() < 2 ? null : Path.of(members.getFirst().path()).normalize().getParent();
             if (parent == null || folders.stream().anyMatch(f -> f.name().equals(name))
                     || !members.stream().allMatch(m -> parent.equals(Path.of(m.path()).normalize().getParent()))) {
                 return;
             }
-            List<String> inside = members.stream().map(m -> Path.of(m.path()).normalize().getFileName().toString()).toList();
+            final List<String> inside = members.stream().map(m -> Path.of(m.path()).normalize().getFileName().toString()).toList();
             out.add(new FolderRoot(name, parent.toString(), "", inside, FOLDER, false, "", group));
         });
         return out;
     }
 
     /** {@code folders} and their {@link #groupRoots}: every folder the Files tab reads. */
-    public static List<FolderRoot> withGroupRoots(List<FolderRoot> folders) {
-        List<FolderRoot> out = new ArrayList<>(folders);
+    public static List<FolderRoot> withGroupRoots(final List<FolderRoot> folders) {
+        final List<FolderRoot> out = new ArrayList<>(folders);
         out.addAll(groupRoots(folders));
         return List.copyOf(out);
     }
 
-    public FolderRoot withName(String newName) {
+    public FolderRoot withName(final String newName) {
         return new FolderRoot(newName, path, index, excludes, icon, deletable, listedIn, group);
     }
 
     /** A folder whose entries go to the Trash from the Files tab, each leaving its lines in {@code listing}, if set. */
-    public FolderRoot withTrash(String listing) {
+    public FolderRoot withTrash(final String listing) {
         return new FolderRoot(name, path, index, excludes, icon, true, listing, group);
     }
 }

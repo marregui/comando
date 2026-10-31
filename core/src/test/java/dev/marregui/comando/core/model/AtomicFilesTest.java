@@ -1,8 +1,5 @@
 package dev.marregui.comando.core.model;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -14,6 +11,9 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,7 +40,7 @@ class AtomicFilesTest {
     /// the content rather than appending; non-ASCII text round-trips.
     @Test
     void theContentIsWrittenAndReplaced() throws IOException {
-        Path target = dir.resolve("settings.json");
+        final Path target = dir.resolve("settings.json");
         AtomicFiles.writeString(target, "first ✓");
         assertThat(Files.readString(target, StandardCharsets.UTF_8)).isEqualTo("first ✓");
         AtomicFiles.write(target, "2".getBytes(StandardCharsets.UTF_8));
@@ -50,7 +50,7 @@ class AtomicFilesTest {
     /// After two successful writes the folder holds only the target: the temporary file was moved, not copied.
     @Test
     void noTemporaryFileIsLeftAfterAWrite() throws IOException {
-        Path target = dir.resolve("opened-files");
+        final Path target = dir.resolve("opened-files");
         AtomicFiles.writeString(target, "a\n");
         AtomicFiles.writeString(target, "a\nb\n");
         assertThat(names()).containsExactly("opened-files");
@@ -60,7 +60,7 @@ class AtomicFilesTest {
     /// holds stay, and no temporary file is left beside it.
     @Test
     void aFailingWriteLeavesNoTemporaryFileAndTheTargetUnchanged() throws IOException {
-        Path target = Files.createDirectory(dir.resolve("taken"));
+        final Path target = Files.createDirectory(dir.resolve("taken"));
         Files.writeString(target.resolve("inside.txt"), "kept");
         assertThatThrownBy(() -> AtomicFiles.writeString(target, "new")).isInstanceOf(IOException.class);
         assertThat(Files.isDirectory(target)).isTrue();
@@ -72,8 +72,8 @@ class AtomicFilesTest {
     /// `REPLACE_EXISTING` alone, the file is written, and no temporary file is left.
     @Test
     void withoutAtomicMovesAPlainReplacingMoveWritesTheFile() throws IOException {
-        Path target = dir.resolve("tutorial.md");
-        List<List<CopyOption>> moves = new ArrayList<>();
+        final Path target = dir.resolve("tutorial.md");
+        final List<List<CopyOption>> moves = new ArrayList<>();
         AtomicFiles.write(target, "# t".getBytes(StandardCharsets.UTF_8), (from, to, options) -> {
             moves.add(List.of(options));
             if (List.of(options).contains(StandardCopyOption.ATOMIC_MOVE)) {
@@ -90,8 +90,8 @@ class AtomicFilesTest {
     /// [AtomicFiles#move] puts a file written elsewhere in the folder over an existing target, which takes its content.
     @Test
     void aFileAnotherProgramWroteIsMovedOverTheTarget() throws IOException {
-        Path target = Files.writeString(dir.resolve("d.png"), "old");
-        Path drawn = Files.writeString(dir.resolve(".d.tmp.png"), "new");
+        final Path target = Files.writeString(dir.resolve("d.png"), "old");
+        final Path drawn = Files.writeString(dir.resolve(".d.tmp.png"), "new");
         AtomicFiles.move(drawn, target);
         assertThat(Files.readString(target)).isEqualTo("new");
         assertThat(names()).containsExactly("d.png");
@@ -101,7 +101,7 @@ class AtomicFilesTest {
     /// temporary file it came from was made `rw-------`.
     @Test
     void aReplacedFileKeepsItsPermissions() throws IOException {
-        Path target = Files.writeString(dir.resolve("INDEX.md"), "old");
+        final Path target = Files.writeString(dir.resolve("INDEX.md"), "old");
         Files.setPosixFilePermissions(target, PosixFilePermissions.fromString("rw-r--r--"));
         AtomicFiles.writeString(target, "new");
         assertThat(Files.readString(target)).isEqualTo("new");

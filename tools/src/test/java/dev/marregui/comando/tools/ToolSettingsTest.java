@@ -1,12 +1,12 @@
 package dev.marregui.comando.tools;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,13 +20,13 @@ class ToolSettingsTest {
     /// [ToolSettings#of] skips empty and non-executable path entries, selects the first executable `gradle-serial`,
     /// and returns no wrapper when the path is missing or null.
     @Test
-    void gradleRunsThroughTheWrapperOnThePathWhenItIsThereElseGradlew(@TempDir Path dir) throws Exception {
-        Path first = Files.createDirectories(dir.resolve("first"));
-        Path second = Files.createDirectories(dir.resolve("second"));
-        Path notRunnable = Files.writeString(first.resolve("gradle-serial"), "#!/bin/sh\n");
-        Path serial = Files.writeString(second.resolve("gradle-serial"), "#!/bin/sh\n");
+    void gradleRunsThroughTheWrapperOnThePathWhenItIsThereElseGradlew(@TempDir final Path dir) throws Exception {
+        final Path first = Files.createDirectories(dir.resolve("first"));
+        final Path second = Files.createDirectories(dir.resolve("second"));
+        final Path notRunnable = Files.writeString(first.resolve("gradle-serial"), "#!/bin/sh\n");
+        final Path serial = Files.writeString(second.resolve("gradle-serial"), "#!/bin/sh\n");
         Files.setPosixFilePermissions(serial, PosixFilePermissions.fromString("rwxr-xr-x"));
-        String path = String.join(File.pathSeparator, "", dir.resolve("none").toString(), first.toString(), second.toString());
+        final String path = String.join(File.pathSeparator, "", dir.resolve("none").toString(), first.toString(), second.toString());
 
         assertThat(ToolSettings.of(path).gradleSerial()).as("the first that runs").contains(serial);
         Files.setPosixFilePermissions(notRunnable, PosixFilePermissions.fromString("rwxr-xr-x"));

@@ -12,7 +12,7 @@ final class SessionIcons {
     private SessionIcons() {
     }
 
-    static String of(Status status) {
+    static String of(final Status status) {
         return switch (status) {
             case OPEN -> "claude";
             case OPENING, CLOSING -> "claude-starting";

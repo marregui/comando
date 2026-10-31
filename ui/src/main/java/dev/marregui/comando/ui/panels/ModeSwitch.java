@@ -1,13 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-
-import javax.accessibility.AccessibleContext;
-import javax.accessibility.AccessibleRole;
-import javax.swing.JComponent;
-import javax.swing.Timer;
-import javax.swing.UIManager;
 import java.awt.BasicStroke;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -22,6 +14,14 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.RoundRectangle2D;
 import java.util.function.Consumer;
+import javax.accessibility.AccessibleContext;
+import javax.accessibility.AccessibleRole;
+import javax.swing.JComponent;
+import javax.swing.Timer;
+import javax.swing.UIManager;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 /**
  * The theme chooser's Dark | Light switch (record 128): a pill with a knob of polished metal, the tint's ramp, that
@@ -43,7 +43,7 @@ final class ModeSwitch extends JComponent {
     private Timer slide;
     private Consumer<Boolean> changed = b -> { };
 
-    ModeSwitch(boolean light) {
+    ModeSwitch(final boolean light) {
         this.light = light;
         this.at = light ? 1f : 0f;
         setFocusable(false);
@@ -52,8 +52,8 @@ final class ModeSwitch extends JComponent {
         describe();
         addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                int track = trackX();
+            public void mouseClicked(final MouseEvent e) {
+                final int track = trackX();
                 if (e.getX() < track) {
                     go(false);
                 } else if (e.getX() > track + TRACK_W) {
@@ -80,7 +80,7 @@ final class ModeSwitch extends JComponent {
     }
 
     /** {@code changed} hears the mode each time the knob reaches one it was sent to. */
-    void onChange(Consumer<Boolean> changed) {
+    void onChange(final Consumer<Boolean> changed) {
         this.changed = changed;
     }
 
@@ -89,7 +89,7 @@ final class ModeSwitch extends JComponent {
     }
 
     /** Sends the knob to {@code toLight}; nothing when it is there or on its way. */
-    void go(boolean toLight) {
+    void go(final boolean toLight) {
         if (toLight == light) {
             return;
         }
@@ -98,12 +98,12 @@ final class ModeSwitch extends JComponent {
         if (slide != null) {
             slide.stop();
         }
-        float from = at;
-        long start = System.nanoTime();
+        final float from = at;
+        final long start = System.nanoTime();
         slide = new Timer(STEP_MILLIS, e -> {
-            float t = Math.min(1f, (System.nanoTime() - start) / 1_000_000f / SLIDE_MILLIS);
+            final float t = Math.min(1f, (System.nanoTime() - start) / 1_000_000f / SLIDE_MILLIS);
             // eased: quick away, gentle on arrival
-            float eased = 1f - (1f - t) * (1f - t);
+            final float eased = 1f - (1f - t) * (1f - t);
             at = from + ((toLight ? 1f : 0f) - from) * eased;
             repaint();
             if (t >= 1f) {
@@ -126,8 +126,8 @@ final class ModeSwitch extends JComponent {
 
     @Override
     public Dimension getPreferredSize() {
-        FontMetrics m = getFontMetrics(labelFont());
-        int w = m.stringWidth("Light") + Theme.SPACE_S + TRACK_W + Theme.SPACE_S + m.stringWidth("Light");
+        final FontMetrics m = getFontMetrics(labelFont());
+        final int w = m.stringWidth("Light") + Theme.SPACE_S + TRACK_W + Theme.SPACE_S + m.stringWidth("Light");
         return new Dimension(w, Math.max(TRACK_H, m.getHeight()) + 2);
     }
 
@@ -137,22 +137,22 @@ final class ModeSwitch extends JComponent {
     }
 
     @Override
-    protected void paintComponent(Graphics g0) {
-        Graphics2D g = (Graphics2D) g0.create();
+    protected void paintComponent(final Graphics g0) {
+        final Graphics2D g = (Graphics2D) g0.create();
         try {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            Tint tint = Theme.tint();
-            int tx = trackX();
-            int ty = (getHeight() - TRACK_H) / 2;
-            RoundRectangle2D track = new RoundRectangle2D.Float(tx + 0.5f, ty + 0.5f, TRACK_W - 1, TRACK_H - 1, TRACK_H, TRACK_H);
+            final Tint tint = Theme.tint();
+            final int tx = trackX();
+            final int ty = (getHeight() - TRACK_H) / 2;
+            final RoundRectangle2D track = new RoundRectangle2D.Float(tx + 0.5f, ty + 0.5f, TRACK_W - 1, TRACK_H - 1, TRACK_H, TRACK_H);
             g.setColor(Theme.CARD);
             g.fill(track);
             g.setColor(tint.shade);
             g.draw(track);
-            float r = TRACK_H / 2f - 3f;
-            float cx = tx + 3f + r + at * (TRACK_W - 6f - 2 * r);
-            float cy = ty + TRACK_H / 2f;
+            final float r = TRACK_H / 2f - 3f;
+            final float cx = tx + 3f + r + at * (TRACK_W - 6f - 2 * r);
+            final float cy = ty + TRACK_H / 2f;
             g.setPaint(tint.ramp(cy - r, cy + r, false));
             g.fill(new Ellipse2D.Float(cx - r, cy - r, 2 * r, 2 * r));
             g.setColor(Theme.ground());
@@ -161,10 +161,10 @@ final class ModeSwitch extends JComponent {
             } else {
                 moon(g, cx, cy, r * 0.5f);
             }
-            Font f = labelFont();
+            final Font f = labelFont();
             g.setFont(f);
-            FontMetrics m = g.getFontMetrics();
-            int base = (getHeight() + m.getAscent() - m.getDescent()) / 2;
+            final FontMetrics m = g.getFontMetrics();
+            final int base = (getHeight() + m.getAscent() - m.getDescent()) / 2;
             g.setColor(light ? Theme.MUTED : tint.body);
             g.drawString("Dark", tx - Theme.SPACE_S - m.stringWidth("Dark"), base);
             g.setColor(light ? tint.body : Theme.MUTED);
@@ -174,18 +174,18 @@ final class ModeSwitch extends JComponent {
         }
     }
 
-    private static void moon(Graphics2D g, float cx, float cy, float r) {
-        Area crescent = new Area(new Ellipse2D.Float(cx - r, cy - r, 2 * r, 2 * r));
+    private static void moon(final Graphics2D g, final float cx, final float cy, final float r) {
+        final Area crescent = new Area(new Ellipse2D.Float(cx - r, cy - r, 2 * r, 2 * r));
         crescent.subtract(new Area(new Ellipse2D.Float(cx - r + r * 0.6f, cy - r - r * 0.2f, 2 * r, 2 * r)));
         g.fill(crescent);
     }
 
-    private static void sun(Graphics2D g, float cx, float cy, float r) {
-        float core = r * 0.55f;
+    private static void sun(final Graphics2D g, final float cx, final float cy, final float r) {
+        final float core = r * 0.55f;
         g.fill(new Ellipse2D.Float(cx - core, cy - core, 2 * core, 2 * core));
         g.setStroke(new BasicStroke(Math.max(1f, r * 0.18f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         for (int k = 0; k < 8; k++) {
-            double a = k * Math.PI / 4;
+            final double a = k * Math.PI / 4;
             g.draw(new Line2D.Double(cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8, cx + Math.cos(a) * r * 1.1,
                     cy + Math.sin(a) * r * 1.1));
         }

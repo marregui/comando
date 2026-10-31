@@ -23,13 +23,13 @@ public record SessionInfo(String claudeSessionId, String model, String cwd, Stri
     public static final SessionInfo NONE = new SessionInfo("", "", "", "", "", List.of(), "");
 
     /** What the event reported, with no base effort known. */
-    public SessionInfo(String claudeSessionId, String model, String cwd, String cliVersion, String permissionMode, List<String> capabilities) {
+    public SessionInfo(final String claudeSessionId, final String model, final String cwd, final String cliVersion, final String permissionMode, final List<String> capabilities) {
         this(claudeSessionId, model, cwd, cliVersion, permissionMode, capabilities, "");
     }
 
     /** What the event reported and the settings' base effort; no message has run yet. */
-    public SessionInfo(String claudeSessionId, String model, String cwd, String cliVersion, String permissionMode, List<String> capabilities,
-                       String effort) {
+    public SessionInfo(final String claudeSessionId, final String model, final String cwd, final String cliVersion, final String permissionMode, final List<String> capabilities,
+                       final String effort) {
         this(claudeSessionId, model, cwd, cliVersion, permissionMode, capabilities, effort, "", "", "");
     }
 
@@ -50,9 +50,9 @@ public record SessionInfo(String claudeSessionId, String model, String cwd, Stri
      * A message of the running turn ran at {@code runModel} and {@code runEffort} (either empty when unknown); the
      * first of a turn also gives the session's own model and effort.
      */
-    public SessionInfo ranAt(String runModel, String runEffort, boolean firstOfTurn) {
-        String m = runModel == null ? "" : runModel;
-        String e = runEffort == null ? "" : runEffort;
+    public SessionInfo ranAt(final String runModel, final String runEffort, final boolean firstOfTurn) {
+        final String m = runModel == null ? "" : runModel;
+        final String e = runEffort == null ? "" : runEffort;
         return new SessionInfo(claudeSessionId, firstOfTurn && !m.isEmpty() ? m : model, cwd, cliVersion, permissionMode, capabilities,
                 effort, firstOfTurn && !e.isEmpty() ? e : reportedEffort, m.isEmpty() ? turnModel : m, e.isEmpty() ? turnEffort : e);
     }

@@ -1,10 +1,5 @@
 package dev.marregui.comando.ui.widget.capability;
 
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.desktop.FileChoosers;
-
-import javax.swing.JComponent;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.KeyboardFocusManager;
@@ -20,6 +15,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.WeakHashMap;
 import java.util.function.BiConsumer;
+import javax.swing.JComponent;
+
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 
 /**
  * The one implementation of each capability's user side: the shell wires the same keys and menu items for
@@ -34,12 +34,12 @@ public final class Capabilities {
     }
 
     /** The nearest capability owner of type {@code type} at or above the focused component. */
-    public static <T> T focused(Class<T> type) {
+    public static <T> T focused(final Class<T> type) {
         return at(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner(), type);
     }
 
     /** The nearest capability owner of type {@code type} at or above {@code c}; null when there is none. */
-    public static <T> T at(Component c, Class<T> type) {
+    public static <T> T at(Component c, final Class<T> type) {
         for (; c != null; c = c.getParent()) {
             if (c instanceof JComponent jc && type.isInstance(jc.getClientProperty(OWNER))) {
                 return type.cast(jc.getClientProperty(OWNER));
@@ -52,13 +52,13 @@ public final class Capabilities {
      * The first capability owner of type {@code type} at or below {@code root}, breadth first, among the
      * showing components; null when there is none. Lets a key act on the view in front when the focus is elsewhere.
      */
-    public static <T> T within(Component root, Class<T> type) {
-        ArrayDeque<Component> queue = new ArrayDeque<>();
+    public static <T> T within(final Component root, final Class<T> type) {
+        final ArrayDeque<Component> queue = new ArrayDeque<>();
         if (root != null) {
             queue.add(root);
         }
         while (!queue.isEmpty()) {
-            Component c = queue.poll();
+            final Component c = queue.poll();
             if (!c.isShowing()) {
                 continue;
             }
@@ -77,20 +77,20 @@ public final class Capabilities {
             Collections.synchronizedMap(new WeakHashMap<>());
 
     /** Makes {@code owner} the capability owner of {@code root} and everything under it. */
-    public static void mark(JComponent root, Object owner) {
+    public static void mark(final JComponent root, final Object owner) {
         root.putClientProperty(OWNER, owner);
         ROOTS.put(owner, new WeakReference<>(root));
     }
 
     /** The component {@code owner} marked, or null. */
-    public static JComponent rootOf(Object owner) {
-        WeakReference<JComponent> r = ROOTS.get(owner);
+    public static JComponent rootOf(final Object owner) {
+        final WeakReference<JComponent> r = ROOTS.get(owner);
         return r == null ? null : r.get();
     }
 
     /** Copies the owner's text; false when there was none, so nothing was copied. */
-    public static boolean copy(Copyable c) {
-        String text = c.copyText();
+    public static boolean copy(final Copyable c) {
+        final String text = c.copyText();
         if (text != null && !text.isEmpty()) {
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
             return true;
@@ -103,13 +103,13 @@ public final class Capabilities {
      * {@code export} errand; {@code outcome} then gets the file and null, or the file and the error, on the EDT.
      * Nothing happens when the user cancels.
      */
-    public static void export(Component parent, Exportable e, Path dir, BiConsumer<Path, String> outcome) {
-        Optional<Path> chosen = FileChoosers.save(parent, "Export", dir, e.exportName());
+    public static void export(final Component parent, final Exportable e, final Path dir, final BiConsumer<Path, String> outcome) {
+        final Optional<Path> chosen = FileChoosers.save(parent, "Export", dir, e.exportName());
         if (chosen.isEmpty()) {
             return;
         }
-        Path file = chosen.get();
-        Exportable.Export export = e.prepare();
+        final Path file = chosen.get();
+        final Exportable.Export export = e.prepare();
         UiErrands.start("export", () -> {
             String error = null;
             try {
@@ -117,7 +117,7 @@ public final class Capabilities {
             } catch (IOException | RuntimeException ex) {
                 error = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
             }
-            String failed = error;
+            final String failed = error;
             Edt.later(() -> outcome.accept(file, failed));
         });
     }

@@ -21,12 +21,12 @@ final class InputGate {
     private long startedNanos;
     private boolean open = true;
 
-    InputGate(Consumer<String> writer) {
+    InputGate(final Consumer<String> writer) {
         this.writer = writer;
     }
 
     /** A shell started at {@code nowNanos}: text waits until it is ready. */
-    void started(long nowNanos) {
+    void started(final long nowNanos) {
         startedNanos = nowNanos;
         open = false;
     }
@@ -36,13 +36,13 @@ final class InputGate {
      * lastOutputNanos} is when the shell last wrote, or {@link #NO_OUTPUT}. Returns whether text still waits, so the
      * caller polls again.
      */
-    boolean send(String text, long nowNanos, long lastOutputNanos) {
+    boolean send(final String text, final long nowNanos, final long lastOutputNanos) {
         pending.addLast(text);
         return poll(nowNanos, lastOutputNanos);
     }
 
     /** Opens the gate when the shell is ready and writes what waits; returns whether text still waits. */
-    boolean poll(long nowNanos, long lastOutputNanos) {
+    boolean poll(final long nowNanos, final long lastOutputNanos) {
         if (!open && ((lastOutputNanos != NO_OUTPUT && nowNanos - lastOutputNanos >= SETTLE_NANOS) || nowNanos - startedNanos >= LIMIT_NANOS)) {
             open = true;
         }

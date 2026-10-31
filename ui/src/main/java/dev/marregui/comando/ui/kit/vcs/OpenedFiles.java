@@ -1,8 +1,5 @@
 package dev.marregui.comando.ui.kit.vcs;
 
-import dev.marregui.comando.core.model.AtomicFiles;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,6 +11,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
+
+import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 
 /**
  * The files the user opened in comando, by absolute path: a new file opened once is no longer marked new in the Files
@@ -33,20 +33,20 @@ public final class OpenedFiles {
     private final List<Runnable> listeners = new ArrayList<>();
     private CompletableFuture<Void> written = CompletableFuture.completedFuture(null);
 
-    private OpenedFiles(Path file) {
+    private OpenedFiles(final Path file) {
         this.file = file;
     }
 
     /** The paths kept in {@code file}; none when it is missing or cannot be read, which the log says. */
-    public static OpenedFiles load(Path file) {
-        OpenedFiles o = new OpenedFiles(file);
+    public static OpenedFiles load(final Path file) {
+        final OpenedFiles o = new OpenedFiles(file);
         try {
-            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+            for (final String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                 if (!line.isBlank()) {
                     o.keep(Path.of(line));
                 }
             }
-        } catch (NoSuchFileException e) {
+        } catch (final NoSuchFileException e) {
             // nothing opened yet
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the opened files [file=" + file + ']', e);
@@ -60,28 +60,28 @@ public final class OpenedFiles {
     }
 
     /** Whether the file at {@code path} was opened. */
-    public boolean contains(Path path) {
+    public boolean contains(final Path path) {
         return paths.contains(path.toAbsolutePath().normalize());
     }
 
     /**
      * Records that the file at {@code path} was opened; when it is new, listeners hear of it and the file is written.
      */
-    public void add(Path path) {
+    public void add(final Path path) {
         if (!keep(path)) {
             return;
         }
-        for (Runnable l : List.copyOf(listeners)) {
+        for (final Runnable l : List.copyOf(listeners)) {
             l.run();
         }
         if (file != null) {
-            List<String> lines = paths.stream().map(Path::toString).toList();
+            final List<String> lines = paths.stream().map(Path::toString).toList();
             written = written.thenRunAsync(() -> write(lines), WRITER);
         }
     }
 
     /** Calls {@code listener} after each path added; the returned action removes it. */
-    public Runnable listen(Runnable listener) {
+    public Runnable listen(final Runnable listener) {
         listeners.add(listener);
         return () -> listeners.remove(listener);
     }
@@ -91,7 +91,7 @@ public final class OpenedFiles {
         return written;
     }
 
-    private boolean keep(Path path) {
+    private boolean keep(final Path path) {
         if (!paths.add(path.toAbsolutePath().normalize())) {
             return false;
         }
@@ -101,7 +101,7 @@ public final class OpenedFiles {
         return true;
     }
 
-    private void write(List<String> lines) {
+    private void write(final List<String> lines) {
         try {
             Files.createDirectories(file.getParent());
             AtomicFiles.writeString(file, lines.stream().map(l -> l + System.lineSeparator()).collect(Collectors.joining()));

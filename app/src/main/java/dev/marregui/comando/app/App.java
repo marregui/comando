@@ -1,11 +1,26 @@
 package dev.marregui.comando.app;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+
 import dev.marregui.comando.claude.ClaudeAdapter;
-import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.ClaudeSettings;
-import dev.marregui.comando.claude.MetricsLog;
 import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
+import dev.marregui.comando.claude.MetricsLog;
+import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.SessionCatalogue;
 import dev.marregui.comando.claude.UiInstructions;
 import dev.marregui.comando.core.console.ConsoleRegistry;
@@ -13,6 +28,7 @@ import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.HomeDir;
@@ -28,7 +44,6 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.db.DbAdapter;
 import dev.marregui.comando.db.DbSettings;
@@ -46,20 +61,6 @@ import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.kit.text.MermaidDiagrams;
 import dev.marregui.comando.ui.shell.ComandoUi;
 import dev.marregui.comando.ui.shell.Setup;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: this instance's
@@ -101,39 +102,39 @@ public final class App implements AutoCloseable {
     private final ScheduledExecutorService kitCheck = Threads.timedStrand("kit-check");
     private volatile boolean closed;
 
-    public App(AppConfig config, String version, Runnable onQuit) {
+    public App(final AppConfig config, final String version, final Runnable onQuit) {
         claudeExecutable = config.claudeExecutable();
         root = config.root();
         launch = RootLaunch.on(root);
         try {
             // what reads HomeDir.claudeDir without being handed the root reads this one, until this closes
-            KitRoot before = KitRoot.current();
+            final KitRoot before = KitRoot.current();
             KitRoot.use(root);
             // the New session dialog names the kit's defaults beside Model, Effort and Permission mode (record 125)
             SessionKind.INSTANCE.defaults(sessionDefaults(root.dir()));
             own(() -> KitRoot.use(before));
             own(() -> ExecutorStop.now("app", kitCheck));
-            KitGit git = own(new KitGit());
+            final KitGit git = own(new KitGit());
             setup = new RootSetup(root, git);
-            Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));
+            final Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));
             // the start-up checks run as errands, closed just before the store
             errands = own(new Errands("app"));
-            Store.Loaded loaded = store.load();
-            AppState initial = AppState.initial(loaded.panels(),
+            final Store.Loaded loaded = store.load();
+            final AppState initial = AppState.initial(loaded.panels(),
                     loaded.connections().stream().map(ConnectionState::closed).toList(),
                     loaded.sessions().stream().map(SessionState::closed).toList(),
                     store.withKitFolders(store.loadFolders(root.dir()), root)).withClosed(loaded.closed());
 
             transcripts = new TranscriptRegistry();
-            ResultRegistry results = new ResultRegistry();
-            ConsoleRegistry consoles = new ConsoleRegistry();
-            SchemaRegistry schemas = new SchemaRegistry();
-            DeferredEffects effects = new DeferredEffects();
+            final ResultRegistry results = new ResultRegistry();
+            final ConsoleRegistry consoles = new ConsoleRegistry();
+            final SchemaRegistry schemas = new SchemaRegistry();
+            final DeferredEffects effects = new DeferredEffects();
             // the log is owned before the loop, so it closes after it and records the intents of the shutdown
-            IntentLog log = config.recordIntents() ? own(new IntentLog(config.logDir(), initial)) : null;
+            final IntentLog log = config.recordIntents() ? own(new IntentLog(config.logDir(), initial)) : null;
             // the checkpoint threshold (record 129): the window's setting, read by the reducer at each turn's end and by
             // the adapter at each launch
-            AtomicLong checkpointThreshold = new AtomicLong(Reducer.CHECKPOINT_THRESHOLD_TOKENS);
+            final AtomicLong checkpointThreshold = new AtomicLong(Reducer.CHECKPOINT_THRESHOLD_TOKENS);
             loop = new StateLoop(initial, new Reducer(Clock.SYSTEM, checkpointThreshold::get), effects);
             owned.push(loop);
             store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
@@ -149,7 +150,7 @@ public final class App implements AutoCloseable {
                 }
             });
 
-            DbAdapter db = own(new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS));
+            final DbAdapter db = own(new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS));
             // the previews draw Mermaid diagrams with mmdc into a cache, once per diagram text
             MermaidDiagrams.install(config.home().resolve("cache").resolve("mermaid"));
             own(MermaidDiagrams::shutdown);
@@ -164,20 +165,20 @@ public final class App implements AutoCloseable {
                 // the user's grants to callers: who may run destructive actions (record 121)
                 mcpTools.agentsFile(config.home().resolve("agents.json"));
                 mcp = own(McpServer.start(mcpTools, 0, version));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new UncheckedIOException("cannot start the MCP server", e);
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
             claude.metrics(new MetricsLog(config.metricsDir()));
             claude.checkpointThreshold(checkpointThreshold::get);
-            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
+            final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
-            EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
-            EmbeddedEdge edge = new EmbeddedEdge(config.edgeRoot(), config.home(), InstanceName.current(), loop);
+            final EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
+            final EmbeddedEdge edge = new EmbeddedEdge(config.edgeRoot(), config.home(), InstanceName.current(), loop);
             // agents start and stop them as the toggles do (record 121)
             mcpTools.servers(List.of(edge, questDb));
-            SessionCatalogue catalogue = new SessionCatalogue(root.projects());
+            final SessionCatalogue catalogue = new SessionCatalogue(root.projects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
@@ -189,7 +190,7 @@ public final class App implements AutoCloseable {
             // the instances consult each other through the comando Edge while it runs, whichever instance started it
             // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
             if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {
-                Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
+                final Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
                 peerBroker = own(new MqttPeerBroker(me.clientId(), EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
@@ -231,14 +232,14 @@ public final class App implements AutoCloseable {
         // the Files tab's open folders stay in sync whether the tab shows or not; closed ones are not read
         tools.pollFolders(FOLDERS_EVERY);
         claude.watchPlanUsage(PLAN_USAGE_EVERY);
-        List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
+        final List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
                 .filter(s -> !s.claudeSessionId().isEmpty()).toList();
-        for (SessionSpec s : withHistory) {
+        for (final SessionSpec s : withHistory) {
             claude.loadHistory(s);
         }
-        String executable = claudeExecutable;
+        final String executable = claudeExecutable;
         errands.start("claude-version", () -> {
-            String problem = ClaudeVersion.check(executable, launch);
+            final String problem = ClaudeVersion.check(executable, launch);
             if (!problem.isEmpty()) {
                 LOG.log(System.Logger.Level.WARNING, "claude version check failed [problem=" + problem + ']');
                 loop.dispatch(new Intent.Notify(Notice.Level.WARN, problem, false));
@@ -258,16 +259,16 @@ public final class App implements AutoCloseable {
      * What a session gets when it names no model, effort or permission mode: the root's {@code settings.json}
      * ({@code model}, {@code effortLevel}, {@code permissions.defaultMode}); none when it is missing or unreadable.
      */
-    static SessionKind.Defaults sessionDefaults(Path root) {
-        Path file = root.resolve("settings.json");
+    static SessionKind.Defaults sessionDefaults(final Path root) {
+        final Path file = root.resolve("settings.json");
         if (!Files.isRegularFile(file)) {
             return SessionKind.Defaults.NONE;
         }
         try {
-            JsonNode s = JsonFile.JSON.readTree(file.toFile());
+            final JsonNode s = JsonFile.JSON.readTree(file.toFile());
             return new SessionKind.Defaults(s.path("model").asString(""), s.path("effortLevel").asString(""),
                     s.path("permissions").path("defaultMode").asString(""));
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the kit's settings [file=" + file + ", cause=" + e.getMessage() + ']');
             return SessionKind.Defaults.NONE;
         }
@@ -277,13 +278,13 @@ public final class App implements AutoCloseable {
     private void checkKit() {
         // an exception escaping a periodic task cancels every later run
         try {
-            Setup.Status status = setup.status();
+            final Setup.Status status = setup.status();
             ui.kitStatus(status);
             if (peers != null) {
                 // the kit's commit travels in this instance's presence
                 peers.kit(status.version().described());
             }
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the kit's version", e);
         }
     }
@@ -305,7 +306,7 @@ public final class App implements AutoCloseable {
     /** A part closing this long or longer is named in the log. */
     static final long SLOW_CLOSE_MILLIS = 100;
 
-    private <T extends AutoCloseable> T own(T resource) {
+    private <T extends AutoCloseable> T own(final T resource) {
         owned.push(resource);
         return resource;
     }
@@ -317,16 +318,16 @@ public final class App implements AutoCloseable {
             return;
         }
         closed = true;
-        long start = System.nanoTime();
+        final long start = System.nanoTime();
         while (!owned.isEmpty()) {
-            AutoCloseable c = owned.pop();
-            long partStart = System.nanoTime();
+            final AutoCloseable c = owned.pop();
+            final long partStart = System.nanoTime();
             try {
                 c.close();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOG.log(System.Logger.Level.WARNING, "close failed [part=" + c.getClass().getSimpleName() + ']', e);
             }
-            long millis = (System.nanoTime() - partStart) / 1_000_000;
+            final long millis = (System.nanoTime() - partStart) / 1_000_000;
             if (millis >= SLOW_CLOSE_MILLIS) {
                 // a quit that takes long says which part held it
                 LOG.log(System.Logger.Level.INFO, "closed slowly [part=" + c.getClass().getSimpleName() + ", millis=" + millis + ']');
@@ -340,8 +341,8 @@ public final class App implements AutoCloseable {
         volatile StateLoop.EffectHandler target;
 
         @Override
-        public void handle(Effect effect) {
-            StateLoop.EffectHandler t = target;
+        public void handle(final Effect effect) {
+            final StateLoop.EffectHandler t = target;
             if (t != null) {
                 t.handle(effect);
             }

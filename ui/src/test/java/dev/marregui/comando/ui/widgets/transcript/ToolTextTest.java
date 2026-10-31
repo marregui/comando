@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,7 +31,7 @@ class ToolTextTest {
     /// [ToolText#skillFile] finds `<name>/SKILL.md`, also with a leading slash, and returns null for a missing skill, a
     /// plugin-qualified name and `..`.
     @Test
-    void aSkillLinksItsSkillFileWhenItIsThere(@TempDir Path root) throws Exception {
+    void aSkillLinksItsSkillFileWhenItIsThere(@TempDir final Path root) throws Exception {
         Files.createDirectories(root.resolve("deep"));
         Files.writeString(root.resolve("deep/SKILL.md"), "---\nname: deep\n---\n");
         assertThat(ToolText.skillFile("deep", root)).isEqualTo(root.resolve("deep/SKILL.md"));

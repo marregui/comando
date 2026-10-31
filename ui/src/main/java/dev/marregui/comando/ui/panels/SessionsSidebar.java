@@ -1,5 +1,49 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.BorderLayout;
+import java.awt.Cursor;
+import java.awt.Graphics;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.DefaultListModel;
+import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JViewport;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -31,51 +75,6 @@ import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
-
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBoxMenuItem;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JMenu;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JScrollPane;
-import javax.swing.JViewport;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
-import javax.swing.TransferHandler;
-import javax.swing.event.ListDataEvent;
-import javax.swing.event.ListDataListener;
-import java.awt.BorderLayout;
-import java.awt.Cursor;
-import java.awt.Graphics;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.nio.file.Path;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.BiConsumer;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 
 /**
  * The left column, three tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
@@ -109,11 +108,11 @@ public final class SessionsSidebar {
         void openFile(Path file);
 
         /** The session dialog on a new session named {@code name}: "New session ‹title›…" of a panel without one. */
-        default void newSession(String name) {
+        default void newSession(final String name) {
         }
 
         /** As {@link #openFile}, showing the file's text to edit rather than rendered. */
-        default void editFile(Path file) {
+        default void editFile(final Path file) {
             openFile(file);
         }
     }
@@ -127,7 +126,7 @@ public final class SessionsSidebar {
     public interface Cards {
         Cards NONE = new Cards() {
             @Override
-            public void show(String session, JComponent over, Rectangle row) {
+            public void show(final String session, final JComponent over, final Rectangle row) {
             }
 
             @Override
@@ -138,16 +137,16 @@ public final class SessionsSidebar {
         void show(String session, JComponent over, Rectangle row);
 
         /** As {@link #show(String, JComponent, Rectangle)}, beside the rows from {@code beside} when there is room. */
-        default void show(String session, JComponent over, Rectangle row, int beside) {
+        default void show(final String session, final JComponent over, final Rectangle row, final int beside) {
             show(session, over, row);
         }
 
         /** A connection row's card, of its facts alone (record 92). */
-        default void showConnection(String connection, JComponent over, Rectangle row) {
+        default void showConnection(final String connection, final JComponent over, final Rectangle row) {
         }
 
         /** As {@link #showConnection(String, JComponent, Rectangle)}, beside the rows from {@code beside} if room. */
-        default void showConnection(String connection, JComponent over, Rectangle row, int beside) {
+        default void showConnection(final String connection, final JComponent over, final Rectangle row, final int beside) {
             showConnection(connection, over, row);
         }
 
@@ -156,16 +155,16 @@ public final class SessionsSidebar {
          * the {@code facts} as label and value, then under {@code heading} the {@code text} when there is any; under
          * {@code row}, a rectangle of {@code over}, or beside the rows from {@code beside}. Known by {@code key}.
          */
-        default void showFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text, JComponent over,
-                               Rectangle row, int beside) {
+        default void showFacts(final String key, final String title, final List<Map.Entry<String, String>> facts, final String heading, final String text, final JComponent over,
+                               final Rectangle row, final int beside) {
         }
 
         /** New facts and text for the card {@link #showFacts} shows under {@code key}, while it shows. */
-        default void updateFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text) {
+        default void updateFacts(final String key, final String title, final List<Map.Entry<String, String>> facts, final String heading, final String text) {
         }
 
         /** Whether the card {@link #showFacts} showed under {@code key} still shows. */
-        default boolean showing(String key) {
+        default boolean showing(final String key) {
             return false;
         }
 
@@ -179,7 +178,7 @@ public final class SessionsSidebar {
          * {@code r} hears a row's card close: with the point on the screen the pointer left the card for, or null when
          * it closed otherwise (its ✕, a click on it, the pointer off its row).
          */
-        default void onClose(Consumer<Point> r) {
+        default void onClose(final Consumer<Point> r) {
         }
     }
 
@@ -194,16 +193,16 @@ public final class SessionsSidebar {
     /** Panel texts kept nowhere, for a sidebar built without the store. */
     private static final PanelTexts NO_TEXTS = new PanelTexts() {
         @Override
-        public String load(PanelId panel) {
+        public String load(final PanelId panel) {
             return "";
         }
 
         @Override
-        public void changed(PanelId panel, String text) {
+        public void changed(final PanelId panel, final String text) {
         }
 
         @Override
-        public void forget(PanelId panel) {
+        public void forget(final PanelId panel) {
         }
     };
 
@@ -272,19 +271,19 @@ public final class SessionsSidebar {
     Consumer<String> clipboard = text -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
 
     /** {@code toggle} hides or shows the sidebar, as ⌘B does; the owner calls {@link #show}. */
-    public SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle) {
+    public SessionsSidebar(final IntentSink intents, final Dialogs dialogs, final PanelTexts texts, final Runnable toggle) {
         this(intents, dialogs, texts, toggle, ResourceActions.Questions.MODAL);
     }
 
-    SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
+    SessionsSidebar(final IntentSink intents, final Dialogs dialogs, final Runnable toggle) {
         this(intents, dialogs, NO_TEXTS, toggle, ResourceActions.Questions.MODAL);
     }
 
-    SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle, ResourceActions.Questions questions) {
+    SessionsSidebar(final IntentSink intents, final Dialogs dialogs, final Runnable toggle, final ResourceActions.Questions questions) {
         this(intents, dialogs, NO_TEXTS, toggle, questions);
     }
 
-    SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle, ResourceActions.Questions questions) {
+    SessionsSidebar(final IntentSink intents, final Dialogs dialogs, final PanelTexts texts, final Runnable toggle, final ResourceActions.Questions questions) {
         this.intents = intents;
         this.dialogs = dialogs;
         this.toggle = toggle;
@@ -295,7 +294,7 @@ public final class SessionsSidebar {
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sessions.setCellRenderer((list, s, index, selected, focus) -> {
-            SessionRow r = row(s).show(s, state != null && state.homePanel(s.name()).isPresent(),
+            final SessionRow r = row(s).show(s, state != null && state.homePanel(s.name()).isPresent(),
                     boundToFocused(s),
                     state == null ? 0 : state.pendingApprovals(s.name()), selected,
                     selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
@@ -306,19 +305,19 @@ public final class SessionsSidebar {
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
         sessions.setTransferHandler(new TransferHandler() {
             @Override
-            public int getSourceActions(JComponent c) {
+            public int getSourceActions(final JComponent c) {
                 return COPY;
             }
 
             @Override
-            protected Transferable createTransferable(JComponent c) {
-                SessionState s = sessions.getSelectedValue();
+            protected Transferable createTransferable(final JComponent c) {
+                final SessionState s = sessions.getSelectedValue();
                 return s == null ? null : new StringSelection(details(s));
             }
         });
         // one line, as a session's (record 92): the state icon, which connects and disconnects, and the name
         connections.setCellRenderer((list, c, index, selected, focus) -> {
-            ConnectionRow r = connectionRow.show(c, usedByFocused(c), selected,
+            final ConnectionRow r = connectionRow.show(c, usedByFocused(c), selected,
                     selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground());
             r.hovered(index == hoveredConnection);
             return r;
@@ -326,24 +325,24 @@ public final class SessionsSidebar {
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected connection's details
         connections.setTransferHandler(new TransferHandler() {
             @Override
-            public int getSourceActions(JComponent c) {
+            public int getSourceActions(final JComponent c) {
                 return COPY;
             }
 
             @Override
-            protected Transferable createTransferable(JComponent c) {
-                ConnectionState x = connections.getSelectedValue();
+            protected Transferable createTransferable(final JComponent c) {
+                final ConnectionState x = connections.getSelectedValue();
                 return x == null ? null : new StringSelection(ConnectionRow.details(x));
             }
         });
         sessions.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                SessionState s = at(sessions, e);
+            public void mouseClicked(final MouseEvent e) {
+                final SessionState s = at(sessions, e);
                 if (s == null || !SwingUtilities.isLeftMouseButton(e)) {
                     return;
                 }
-                Optional<SessionRow.Control> control = control(s, e);
+                final Optional<SessionRow.Control> control = control(s, e);
                 if (control.isPresent()) {
                     if (e.getClickCount() == 1) {
                         act(s, control.get());
@@ -356,17 +355,17 @@ public final class SessionsSidebar {
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 popup(e);
             }
 
             @Override
-            public void mouseEntered(MouseEvent e) {
+            public void mouseEntered(final MouseEvent e) {
                 pointerOnList = true;
             }
 
             @Override
-            public void mouseExited(MouseEvent e) {
+            public void mouseExited(final MouseEvent e) {
                 pointerOnList = false;
                 hoveredSession = hover(sessions, hoveredSession, -1);
                 restOn(null);
@@ -377,14 +376,14 @@ public final class SessionsSidebar {
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 // a press acts on the row: its click decides the card
                 cardWait.stop();
                 popup(e);
             }
 
-            private void popup(MouseEvent e) {
-                SessionState s = at(sessions, e);
+            private void popup(final MouseEvent e) {
+                final SessionState s = at(sessions, e);
                 if (e.isPopupTrigger() && s != null) {
                     leaveCard(); // the menu, not the card
                     sessions.setSelectedValue(s, false);
@@ -394,10 +393,10 @@ public final class SessionsSidebar {
         });
         sessions.addMouseMotionListener(new MouseAdapter() {
             @Override
-            public void mouseMoved(MouseEvent e) {
-                SessionState s = at(sessions, e);
+            public void mouseMoved(final MouseEvent e) {
+                final SessionState s = at(sessions, e);
                 hoveredSession = hover(sessions, hoveredSession, s == null ? -1 : sessions.locationToIndex(e.getPoint()));
-                boolean onControl = s != null && control(s, e).isPresent();
+                final boolean onControl = s != null && control(s, e).isPresent();
                 sessions.setCursor(onControl ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
                 // over a row's text its card, once an ⓘ opened one; over a control the control's own tip
                 restOn(s == null || onControl ? null : new Rest(false, s.name()));
@@ -405,8 +404,8 @@ public final class SessionsSidebar {
         });
         connections.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                ConnectionState c = at(connections, e);
+            public void mouseClicked(final MouseEvent e) {
+                final ConnectionState c = at(connections, e);
                 if (c == null || !SwingUtilities.isLeftMouseButton(e)) {
                     return;
                 }
@@ -426,25 +425,25 @@ public final class SessionsSidebar {
             }
 
             @Override
-            public void mouseExited(MouseEvent e) {
+            public void mouseExited(final MouseEvent e) {
                 hoveredConnection = hover(connections, hoveredConnection, -1);
                 restOn(null);
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 // a press acts on the row: its click decides the card
                 cardWait.stop();
                 popup(e);
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 popup(e);
             }
 
-            private void popup(MouseEvent e) {
-                ConnectionState c = at(connections, e);
+            private void popup(final MouseEvent e) {
+                final ConnectionState c = at(connections, e);
                 if (e.isPopupTrigger() && c != null) {
                     leaveCard(); // the menu, not the card
                     connections.setSelectedValue(c, false);
@@ -454,10 +453,10 @@ public final class SessionsSidebar {
         });
         connections.addMouseMotionListener(new MouseAdapter() {
             @Override
-            public void mouseMoved(MouseEvent e) {
-                ConnectionState c = at(connections, e);
+            public void mouseMoved(final MouseEvent e) {
+                final ConnectionState c = at(connections, e);
                 hoveredConnection = hover(connections, hoveredConnection, c == null ? -1 : connections.locationToIndex(e.getPoint()));
-                boolean onIcon = c != null && (onIcon(c, e) || onInfo(c, e));
+                final boolean onIcon = c != null && (onIcon(c, e) || onInfo(c, e));
                 connections.setCursor(onIcon ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
                 restOn(c == null || onIcon ? null : new Rest(true, c.name()));
             }
@@ -474,7 +473,7 @@ public final class SessionsSidebar {
         // one row of icons: the resources, then the documents; a click moves nothing. No bar of
         // buttons: a tab's menu adds, a row's menu edits, clones and removes. A session and its own panel are one row,
         // so the panels have no tab of their own: those without a session sit under the sessions (record 91)
-        JPanel sessionsTab = section(new JScrollPane(sessions));
+        final JPanel sessionsTab = section(new JScrollPane(sessions));
         sessionsTab.add(loosePanels.component(), BorderLayout.SOUTH);
         tabs.add("Sessions", "session", "Claude Code sessions and panels; right-click to add, import or sort", sessionsTab);
         tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections)));
@@ -490,13 +489,13 @@ public final class SessionsSidebar {
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
         // under the button that shows the sidebar, one per tab: a click shows the sidebar at that tab
-        JPanel railButtons = new JPanel();
+        final JPanel railButtons = new JPanel();
         railButtons.setLayout(new BoxLayout(railButtons, BoxLayout.Y_AXIS));
         railButtons.setOpaque(false);
         railButtons.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle));
-        String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"}, {"Instances", "instances"}};
+        final String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"}, {"Instances", "instances"}};
         for (int i = 0; i < railTabs.length; i++) {
-            int tab = i;
+            final int tab = i;
             railButtons.add(Box.createVerticalStrut(Theme.SPACE_XS));
             railButtons.add(ToolButton.of(railTabs[i][1], "Show the sidebar at " + railTabs[i][0], () -> {
                 selectTab(tab);
@@ -519,7 +518,7 @@ public final class SessionsSidebar {
     }
 
     /** Shows the tabs, or hides them behind the rail. */
-    public void show(boolean shown) {
+    public void show(final boolean shown) {
         tabs.component().setVisible(shown);
         rail.setVisible(!shown);
         root.revalidate();
@@ -531,23 +530,23 @@ public final class SessionsSidebar {
         return tabs.selectedIndex();
     }
 
-    public void selectTab(int tab) {
+    public void selectTab(final int tab) {
         tabs.select(tab);
     }
 
     /** A folder of the Files tab as read; a later read keeps the tree as the user left it. */
-    public void showFolder(FolderRoot folder, ViewSpec.TreeNode tree) {
+    public void showFolder(final FolderRoot folder, final ViewSpec.TreeNode tree) {
         files.show(folder, tree);
     }
 
     /** Shows {@code file} in the Files tab, in front, its folders open and the file selected (record 119). */
-    public void revealFile(Path file) {
+    public void revealFile(final Path file) {
         selectTab(FILES);
         files.reveal(file);
     }
 
     /** Brings the Sessions tab to the front with session {@code name} selected and in view (record 119). */
-    public void revealSession(String name) {
+    public void revealSession(final String name) {
         selectTab(SESSIONS);
         for (int i = 0; i < sessionModel.size(); i++) {
             if (sessionModel.get(i).name().equals(name)) {
@@ -560,37 +559,37 @@ public final class SessionsSidebar {
     }
 
     /** The kit's root and its newer release, "" when none: the Files tab's KIT row says it (record 119). */
-    public void kitRelease(Path dir, String newer) {
+    public void kitRelease(final Path dir, final String newer) {
         files.kitRelease(dir, newer);
     }
 
     /** The watched git repositories as read: the Files tab colours their files. */
-    public void showRepos(List<RepoStatus> repos) {
+    public void showRepos(final List<RepoStatus> repos) {
         files.showRepos(repos);
     }
 
     /** The files the user opens: a new file opened once is no longer marked in the Files tab. */
-    public void watchOpened(OpenedFiles opened) {
+    public void watchOpened(final OpenedFiles opened) {
         files.watchOpened(opened);
     }
 
     /** Adds the window's own commands to each tab's menu: {@code more} gets the tab and the menu built so far. */
-    public void onTabMenu(BiConsumer<Integer, JPopupMenu> more) {
+    public void onTabMenu(final BiConsumer<Integer, JPopupMenu> more) {
         moreForTab = more;
     }
 
     /** What a folder row's menu in the Files tab gains from the window, after its own items. */
-    public void onFolderMenu(BiConsumer<FolderRoot, JPopupMenu> extra) {
+    public void onFolderMenu(final BiConsumer<FolderRoot, JPopupMenu> extra) {
         files.onFolderMenu(extra);
     }
 
     /** The kit's jobs as read, on the Files tab's Jobs row; {@link KitJobs#NONE} takes the row away. */
-    public void showJobs(KitJobs jobs) {
+    public void showJobs(final KitJobs jobs) {
         files.showJobs(jobs);
     }
 
     /** What the Jobs row does: open the window that edits the jobs; apply what the scheduler has not taken yet. */
-    public void onJobs(Runnable configure, Runnable apply) {
+    public void onJobs(final Runnable configure, final Runnable apply) {
         files.onJobs(configure, apply);
     }
 
@@ -604,13 +603,13 @@ public final class SessionsSidebar {
      * conversations, sorting the sessions while a drag ordered them by hand), then the window's commands for it, with
      * their keys (a new or reopened panel; the Files tab's two configuration windows). Hiding the sidebar is ⌘B or ⋯.
      */
-    JPopupMenu tabMenu(int tab) {
-        JPopupMenu menu = new JPopupMenu();
+    JPopupMenu tabMenu(final int tab) {
+        final JPopupMenu menu = new JPopupMenu();
         switch (tab) {
             case SESSIONS -> {
                 menu.add(menuItem("New session…", "add", sessionActions::addNew));
                 menu.add(menuItem("Import stored conversations…", "import", dialogs::importSessions));
-                JMenuItem sorting = menuItem(SORT_TIP, "sort", () -> order(false));
+                final JMenuItem sorting = menuItem(SORT_TIP, "sort", () -> order(false));
                 sorting.setEnabled(manualOrder); // sorted already: nothing to do until a drag orders them by hand
                 menu.add(sorting);
             }
@@ -622,8 +621,8 @@ public final class SessionsSidebar {
         return menu;
     }
 
-    private static JMenuItem menuItem(String text, String icon, Runnable r) {
-        JMenuItem i = new JMenuItem(text, Icons.get(icon));
+    private static JMenuItem menuItem(final String text, final String icon, final Runnable r) {
+        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(a -> r.run());
         return i;
     }
@@ -646,12 +645,12 @@ public final class SessionsSidebar {
     /** The newest Claude Code version the rows were last painted against. */
     private String paintedNewestCli = "";
 
-    public void render(AppState s) {
+    public void render(final AppState s) {
         state = s;
         sync(sessionModel, pointerOnList ? held(shownSessions(), s.sessions()) : ordered(s.sessions(), manualOrder), sessions);
         spinWhileWorking();
         // a session reporting a newer CLI version changes the other rows too: theirs is older now
-        String newest = newestCli();
+        final String newest = newestCli();
         if (!newest.equals(paintedNewestCli)) {
             paintedNewestCli = newest;
             sessions.repaint();
@@ -667,7 +666,7 @@ public final class SessionsSidebar {
      * What the Instances tab acts through: the other instances ({@code port}) and the comando Edge's toggle, which it
      * offers to start while the Edge is down.
      */
-    public void instances(InstancesPort port, BooleanSupplier edgeRunning, BooleanSupplier edgeBusy, Runnable startEdge) {
+    public void instances(final InstancesPort port, final BooleanSupplier edgeRunning, final BooleanSupplier edgeBusy, final Runnable startEdge) {
         instancesPort = port == null ? InstancesPort.NONE : port;
         instances.edge(new InstancesTab.Edge() {
             @Override
@@ -695,11 +694,11 @@ public final class SessionsSidebar {
     }
 
     /** Lists the sessions in their stored order, or running first, then by name. */
-    public void manualOrder(boolean manual) {
+    public void manualOrder(final boolean manual) {
         order(manual);
     }
 
-    private void order(boolean manual) {
+    private void order(final boolean manual) {
         manualOrder = manual;
         if (state != null) {
             sync(sessionModel, ordered(state.sessions(), manual), sessions);
@@ -721,12 +720,12 @@ public final class SessionsSidebar {
      * {@code stored} in the order of {@code shown}, the rows as they are: each kept session where it is, with its new
      * state; a new session last; a removed one gone.
      */
-    static List<SessionState> held(List<SessionState> shown, List<SessionState> stored) {
-        Map<String, SessionState> byName = new LinkedHashMap<>();
+    static List<SessionState> held(final List<SessionState> shown, final List<SessionState> stored) {
+        final Map<String, SessionState> byName = new LinkedHashMap<>();
         stored.forEach(x -> byName.put(x.name(), x));
-        List<SessionState> out = new ArrayList<>();
-        for (SessionState x : shown) {
-            SessionState now = byName.remove(x.name());
+        final List<SessionState> out = new ArrayList<>();
+        for (final SessionState x : shown) {
+            final SessionState now = byName.remove(x.name());
             if (now != null) {
                 out.add(now);
             }
@@ -736,7 +735,7 @@ public final class SessionsSidebar {
     }
 
     /** {@code stored} as the list shows it: as stored, or running first, then by name. */
-    static List<SessionState> ordered(List<SessionState> stored, boolean manual) {
+    static List<SessionState> ordered(final List<SessionState> stored, final boolean manual) {
         return manual ? stored : stored.stream()
                 .sorted(Comparator.comparing((SessionState x) -> !x.status().isUsable())
                         .thenComparing(SessionState::name, String.CASE_INSENSITIVE_ORDER))
@@ -747,12 +746,12 @@ public final class SessionsSidebar {
      * The session at {@code from} dropped into the gap before {@code gap} (the list's size for after the last): the
      * list as shown, with that move, becomes the stored order, and the user's order stands from then on.
      */
-    void drop(int from, int gap) {
+    void drop(final int from, final int gap) {
         if (from < 0 || from >= sessionModel.size() || gap < 0 || gap > sessionModel.size() || gap == from || gap == from + 1) {
             return;
         }
-        List<SessionState> shown = new ArrayList<>(Collections.list(sessionModel.elements()));
-        SessionState moved = shown.remove(from);
+        final List<SessionState> shown = new ArrayList<>(Collections.list(sessionModel.elements()));
+        final SessionState moved = shown.remove(from);
         shown.add(gap > from ? gap - 1 : gap, moved);
         order(true);
         // shown at once; the stored order follows when the state comes back
@@ -762,7 +761,7 @@ public final class SessionsSidebar {
     }
 
     /** What a session's copy puts on the clipboard. */
-    private String details(SessionState s) {
+    private String details(final SessionState s) {
         return SessionRow.details(s, System.currentTimeMillis(), ZoneId.systemDefault(), newestCli());
     }
 
@@ -773,15 +772,15 @@ public final class SessionsSidebar {
 
 
     /** The row control under a mouse event on {@code s}'s cell, if any. */
-    private Optional<SessionRow.Control> control(SessionState s, MouseEvent e) {
-        int i = sessions.locationToIndex(e.getPoint());
-        Rectangle cell = sessions.getCellBounds(i, i);
+    private Optional<SessionRow.Control> control(final SessionState s, final MouseEvent e) {
+        final int i = sessions.locationToIndex(e.getPoint());
+        final Rectangle cell = sessions.getCellBounds(i, i);
         return layOutRow(s, i).hit(cell, e.getPoint());
     }
 
-    private SessionRow row(SessionState s) {
+    private SessionRow row(final SessionState s) {
         return rows.computeIfAbsent(s.name(), name -> {
-            SessionRow r = new SessionRow();
+            final SessionRow r = new SessionRow();
             r.working(spinner);
             return r;
         });
@@ -800,51 +799,51 @@ public final class SessionsSidebar {
     }
 
     /** The row at {@code index}, filled as it was painted, so its controls sit where they were drawn. */
-    private SessionRow layOutRow(SessionState s, int index) {
+    private SessionRow layOutRow(final SessionState s, final int index) {
         return (SessionRow) sessions.getCellRenderer().getListCellRendererComponent(sessions, s, index, sessions.isSelectedIndex(index), false);
     }
 
     /** Where a row's control is, in the list's coordinates; for tests. */
-    Rectangle controlBounds(int index, SessionRow.Control control) {
+    Rectangle controlBounds(final int index, final SessionRow.Control control) {
         return layOutRow(sessionModel.get(index), index).bounds(sessions.getCellBounds(index, index), control);
     }
 
     /** What a click on a row's control does. */
-    private void act(SessionState s, SessionRow.Control control) {
+    private void act(final SessionState s, final SessionRow.Control control) {
         switch (control) {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
             case INFO -> openCard(new Rest(false, s.name()));
         }
     }
 
-    private static JMenuItem tipped(JMenuItem i, String tip) {
+    private static JMenuItem tipped(final JMenuItem i, final String tip) {
         i.setToolTipText(Plain.text(tip));
         return i;
     }
 
     /** One item per model, the session's own checked; a choice applies now to a running session and is saved. */
-    List<JMenuItem> modelItems(SessionState s) {
+    List<JMenuItem> modelItems(final SessionState s) {
         return modelItems(s, intents);
     }
 
-    List<JMenuItem> effortItems(SessionState s) {
+    List<JMenuItem> effortItems(final SessionState s) {
         return effortItems(s, intents);
     }
 
     /** The model menu's items, the sidebar's and the session bar's. */
-    static List<JMenuItem> modelItems(SessionState s, IntentSink intents) {
-        String current = SessionRow.modelName(s);
+    static List<JMenuItem> modelItems(final SessionState s, final IntentSink intents) {
+        final String current = SessionRow.modelName(s);
         return SessionSpec.MODELS.stream().map(m -> choice(m, m.equals(current), () -> intents.dispatch(new Intent.SetSessionModel(s.name(), m)))).toList();
     }
 
     /** The effort menu's items, the sidebar's and the session bar's. */
-    static List<JMenuItem> effortItems(SessionState s, IntentSink intents) {
-        String current = SessionRow.effortName(s);
+    static List<JMenuItem> effortItems(final SessionState s, final IntentSink intents) {
+        final String current = SessionRow.effortName(s);
         return SessionSpec.EFFORTS.stream().map(e -> choice(e, e.equals(current), () -> intents.dispatch(new Intent.SetSessionEffort(s.name(), e)))).toList();
     }
 
-    private static JMenuItem choice(String text, boolean current, Runnable r) {
-        JCheckBoxMenuItem i = new JCheckBoxMenuItem(text, current);
+    private static JMenuItem choice(final String text, final boolean current, final Runnable r) {
+        final JCheckBoxMenuItem i = new JCheckBoxMenuItem(text, current);
         i.addActionListener(e -> r.run());
         return i;
     }
@@ -863,7 +862,7 @@ public final class SessionsSidebar {
         /** A drop just ended: a click the platform sends for the same press and release is not a click on a control. */
         private boolean dropped;
 
-        SessionList(DefaultListModel<SessionState> model) {
+        SessionList(final DefaultListModel<SessionState> model) {
             super(model);
             setToolTipText("");
         }
@@ -875,7 +874,7 @@ public final class SessionsSidebar {
         }
 
         @Override
-        protected void processMouseEvent(MouseEvent e) {
+        protected void processMouseEvent(final MouseEvent e) {
             if (e.getID() == MouseEvent.MOUSE_CLICKED && dropped) {
                 dropped = false;
                 e.consume();
@@ -883,13 +882,13 @@ public final class SessionsSidebar {
             }
             if (e.getID() == MouseEvent.MOUSE_PRESSED) {
                 dropped = false;
-                SessionState s = at(this, e);
-                boolean onText = s != null && SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger() && control(s, e).isEmpty();
+                final SessionState s = at(this, e);
+                final boolean onText = s != null && SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger() && control(s, e).isEmpty();
                 pressed = onText ? locationToIndex(e.getPoint()) : -1;
                 pressedAt = e.getPoint();
             } else if (e.getID() == MouseEvent.MOUSE_RELEASED) {
-                int from = pressed;
-                int to = gap;
+                final int from = pressed;
+                final int to = gap;
                 pressed = -1;
                 if (to >= 0) {
                     endDrag();
@@ -902,12 +901,12 @@ public final class SessionsSidebar {
         }
 
         @Override
-        protected void processMouseMotionEvent(MouseEvent e) {
+        protected void processMouseMotionEvent(final MouseEvent e) {
             if (e.getID() == MouseEvent.MOUSE_DRAGGED && pressed >= 0) {
                 if (gap < 0 && e.getPoint().distance(pressedAt) < DRAG_SLOP) {
                     return;
                 }
-                int next = gapAt(e.getPoint().y);
+                final int next = gapAt(e.getPoint().y);
                 if (next != gap) {
                     gap = next;
                     setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
@@ -926,10 +925,10 @@ public final class SessionsSidebar {
         }
 
         /** The gap nearest {@code y}: before the row whose upper half holds it, after the last row below them all. */
-        private int gapAt(int y) {
-            int n = getModel().getSize();
+        private int gapAt(final int y) {
+            final int n = getModel().getSize();
             for (int i = 0; i < n; i++) {
-                Rectangle r = getCellBounds(i, i);
+                final Rectangle r = getCellBounds(i, i);
                 if (y < r.y + r.height / 2) {
                     return i;
                 }
@@ -938,45 +937,45 @@ public final class SessionsSidebar {
         }
 
         @Override
-        protected void paintComponent(Graphics g) {
+        protected void paintComponent(final Graphics g) {
             super.paintComponent(g);
             // the report's bar down the left edge of the selected row (record 98)
-            for (int i : getSelectedIndices()) {
-                Rectangle r = getCellBounds(i, i);
+            for (final int i : getSelectedIndices()) {
+                final Rectangle r = getCellBounds(i, i);
                 if (r != null) {
                     SidebarLook.bar(g, r);
                 }
             }
-            int n = getModel().getSize();
+            final int n = getModel().getSize();
             if (gap < 0 || n == 0) {
                 return;
             }
-            Rectangle r = getCellBounds(Math.min(gap, n - 1), Math.min(gap, n - 1));
-            int y = gap < n ? r.y : r.y + r.height;
+            final Rectangle r = getCellBounds(Math.min(gap, n - 1), Math.min(gap, n - 1));
+            final int y = gap < n ? r.y : r.y + r.height;
             g.setColor(Theme.tint().body);
             g.fillRect(0, Math.max(0, y - 1), getWidth(), 2);
         }
 
         @Override
-        public String getToolTipText(MouseEvent e) {
-            int i = locationToIndex(e.getPoint());
+        public String getToolTipText(final MouseEvent e) {
+            final int i = locationToIndex(e.getPoint());
             if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) {
                 return null;
             }
-            SessionState s = getModel().getElementAt(i);
+            final SessionState s = getModel().getElementAt(i);
             // over a control its tip; over the text no tooltip: the row's card follows there
             return layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint()).map(Plain::text).orElse(null);
         }
     }
 
     /** The workspace's card, which the session rows show in place of a tooltip. */
-    public void cards(Cards c) {
+    public void cards(final Cards c) {
         cards = c;
         c.onClose(this::cardClosed);
     }
 
     /** A click on {@code row}'s ⓘ: its card shows now and follows the pointer onto other rows' names until closed. */
-    private void openCard(Rest row) {
+    private void openCard(final Rest row) {
         following = true;
         cardRow = row;
         showCardNow();
@@ -997,7 +996,7 @@ public final class SessionsSidebar {
      * new row starts the wait for its card, which takes the place of the one shown; off every row's name, the card
      * shown is told, and closes unless the pointer goes on into it.
      */
-    private void restOn(Rest row) {
+    private void restOn(final Rest row) {
         if (Objects.equals(row, cardRow)) {
             return;
         }
@@ -1017,7 +1016,7 @@ public final class SessionsSidebar {
      * The row's card closed. Left by the pointer for {@code at}, a point on the screen over another row's name, it goes
      * on following: that row's card shows after the wait. Closed any other way, a click on an ⓘ opens the next.
      */
-    private void cardClosed(Point at) {
+    private void cardClosed(final Point at) {
         cardShown = false;
         cardRow = null;
         cardWait.stop();
@@ -1025,23 +1024,23 @@ public final class SessionsSidebar {
     }
 
     /** The row whose name is at {@code screen}, a point on the screen, in {@code list}; null off its names. */
-    private Rest nameAt(JList<?> list, Point screen) {
+    private Rest nameAt(final JList<?> list, final Point screen) {
         if (!list.isShowing()) {
             return null;
         }
-        Point p = new Point(screen);
+        final Point p = new Point(screen);
         SwingUtilities.convertPointFromScreen(p, list);
-        int i = list.locationToIndex(p);
+        final int i = list.locationToIndex(p);
         if (i < 0 || !list.getCellBounds(i, i).contains(p)) {
             return null;
         }
-        Rectangle cell = list.getCellBounds(i, i);
+        final Rectangle cell = list.getCellBounds(i, i);
         if (list == sessions) {
-            SessionState s = sessionModel.get(i);
+            final SessionState s = sessionModel.get(i);
             return layOutRow(s, i).hit(cell, p).isPresent() ? null : new Rest(false, s.name());
         }
-        ConnectionState c = connectionModel.get(i);
-        ConnectionRow r = layOutConnection(c, i);
+        final ConnectionState c = connectionModel.get(i);
+        final ConnectionRow r = layOutConnection(c, i);
         return r.hit(cell, p) || r.onInfo(cell, p) ? null : new Rest(true, c.name());
     }
 
@@ -1073,15 +1072,15 @@ public final class SessionsSidebar {
      * Where a card beside {@code list}'s rows starts, in its coordinates: after the widest row's icon, name and marks,
      * reaching {@link #OVERLAP} back over them, and within the rows shown.
      */
-    int beside(JList<?> list) {
+    int beside(final JList<?> list) {
         int widest = 0;
         for (int i = 0; i < list.getModel().getSize(); i++) {
-            IconRow r = list == sessions ? layOutRow(sessionModel.get(i), i) : layOutConnection(connectionModel.get(i), i);
+            final IconRow r = list == sessions ? layOutRow(sessionModel.get(i), i) : layOutConnection(connectionModel.get(i), i);
             widest = Math.max(widest, r.getPreferredSize().width);
         }
         // the rows shown; a list laid out in no window shows its whole width
-        Rectangle shown = list.getVisibleRect();
-        int right = shown.isEmpty() ? list.getWidth() : shown.x + shown.width;
+        final Rectangle shown = list.getVisibleRect();
+        final int right = shown.isEmpty() ? list.getWidth() : shown.x + shown.width;
         return Math.max(0, Math.min(widest, right) - OVERLAP);
     }
 
@@ -1101,8 +1100,8 @@ public final class SessionsSidebar {
         return following;
     }
 
-    private static <T> void sync(DefaultListModel<T> model, List<T> items, JList<T> list) {
-        T selected = list.getSelectedValue();
+    private static <T> void sync(final DefaultListModel<T> model, final List<T> items, final JList<T> list) {
+        final T selected = list.getSelectedValue();
         if (model.size() != items.size()) {
             model.clear();
             model.addAll(items);
@@ -1123,12 +1122,12 @@ public final class SessionsSidebar {
         }
     }
 
-    private static String name(Object o) {
+    private static String name(final Object o) {
         return o instanceof SessionState s ? s.name() : o instanceof ConnectionState c ? c.name() : String.valueOf(o);
     }
 
-    JPopupMenu sessionMenu(SessionState s) {
-        JPopupMenu m = new JPopupMenu();
+    JPopupMenu sessionMenu(final SessionState s) {
+        final JPopupMenu m = new JPopupMenu();
         // the session runs its checkpoint: what acts on it waits, but a stop or an interrupt (record 130)
         final boolean free = !s.isCheckpointing();
         m.add(item("Open in a panel", "claude", () -> intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()))));
@@ -1157,12 +1156,12 @@ public final class SessionsSidebar {
         }
         m.addSeparator();
         // the menus name what the session runs at, as the row's chips did (record 89)
-        JMenu models = new JMenu("Model: " + SessionRow.modelName(s));
+        final JMenu models = new JMenu("Model: " + SessionRow.modelName(s));
         models.setToolTipText(SessionRow.modelTip(s));
         modelItems(s).forEach(models::add);
         models.setEnabled(free);
         m.add(models);
-        JMenu efforts = new JMenu("Effort: " + SessionRow.effortName(s));
+        final JMenu efforts = new JMenu("Effort: " + SessionRow.effortName(s));
         efforts.setToolTipText(SessionRow.effortTip(s));
         effortItems(s).forEach(efforts::add);
         efforts.setEnabled(free);
@@ -1181,15 +1180,15 @@ public final class SessionsSidebar {
      * text: the focused panel when it is the session's, else the first of its panels. None for a session without an
      * open panel; disabled while that panel's text is blank or the session runs its checkpoint.
      */
-    private Optional<JMenuItem> rewriteItem(SessionState s) {
-        List<PanelState> bound = state.panelsBoundToSession(s.name());
+    private Optional<JMenuItem> rewriteItem(final SessionState s) {
+        final List<PanelState> bound = state.panelsBoundToSession(s.name());
         if (bound.isEmpty()) {
             return Optional.empty();
         }
-        PanelState panel = bound.stream().filter(p -> p.id().equals(state.focused())).findFirst().orElse(bound.getFirst());
-        String text = texts.load(panel.id());
-        JMenuItem i = item(Plain.text("Rewrite " + panel.title() + " as a document"), "markdown", () -> {
-            String now = texts.load(panel.id());
+        final PanelState panel = bound.stream().filter(p -> p.id().equals(state.focused())).findFirst().orElse(bound.getFirst());
+        final String text = texts.load(panel.id());
+        final JMenuItem i = item(Plain.text("Rewrite " + panel.title() + " as a document"), "markdown", () -> {
+            final String now = texts.load(panel.id());
             if (!now.isBlank()) {
                 intents.dispatch(new Intent.RunText(panel.id(), EditorPanel.polishPrompt(panel.title(), now), Target.CLAUDE));
             }
@@ -1199,8 +1198,8 @@ public final class SessionsSidebar {
         return Optional.of(i);
     }
 
-    JPopupMenu connectionMenu(ConnectionState c) {
-        JPopupMenu m = new JPopupMenu();
+    JPopupMenu connectionMenu(final ConnectionState c) {
+        final JPopupMenu m = new JPopupMenu();
         m.add(item("Bind to the focused panel", "database", () -> intents.dispatch(new Intent.BindConnection(state.focused(), c.name()))));
         m.addSeparator();
         if (c.status().isUsable()) {
@@ -1220,28 +1219,28 @@ public final class SessionsSidebar {
     }
 
     /** A list that says what to do while it is empty. */
-    private static <T> JList<T> emptyText(JList<T> list, String text) {
-        JLabel hint = new JLabel("<html><div style='width:180px'>" + MarkdownHtml.escape(text) + "</div></html>");
+    private static <T> JList<T> emptyText(final JList<T> list, final String text) {
+        final JLabel hint = new JLabel("<html><div style='width:180px'>" + MarkdownHtml.escape(text) + "</div></html>");
         hint.setForeground(Theme.MUTED_STRONG);
         hint.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M));
-        JPanel overlay = new JPanel(new BorderLayout());
+        final JPanel overlay = new JPanel(new BorderLayout());
         overlay.setOpaque(false);
         overlay.add(hint, BorderLayout.NORTH);
         list.setLayout(new BorderLayout());
         list.add(overlay, BorderLayout.CENTER);
         list.getModel().addListDataListener(new ListDataListener() {
             @Override
-            public void intervalAdded(ListDataEvent e) {
+            public void intervalAdded(final ListDataEvent e) {
                 overlay.setVisible(list.getModel().getSize() == 0);
             }
 
             @Override
-            public void intervalRemoved(ListDataEvent e) {
+            public void intervalRemoved(final ListDataEvent e) {
                 overlay.setVisible(list.getModel().getSize() == 0);
             }
 
             @Override
-            public void contentsChanged(ListDataEvent e) {
+            public void contentsChanged(final ListDataEvent e) {
                 overlay.setVisible(list.getModel().getSize() == 0);
             }
         });
@@ -1249,22 +1248,22 @@ public final class SessionsSidebar {
     }
 
 
-    private boolean boundToFocused(SessionState s) {
+    private boolean boundToFocused(final SessionState s) {
         return state != null && state.focusedPanel().session().equals(s.name());
     }
 
-    private boolean usedByFocused(ConnectionState c) {
+    private boolean usedByFocused(final ConnectionState c) {
         return state != null && state.focusedPanel().connection().equals(c.name());
     }
 
     /** Whether a mouse event on {@code c}'s cell is on its ⓘ. */
-    private boolean onInfo(ConnectionState c, MouseEvent e) {
-        int i = connections.locationToIndex(e.getPoint());
+    private boolean onInfo(final ConnectionState c, final MouseEvent e) {
+        final int i = connections.locationToIndex(e.getPoint());
         return layOutConnection(c, i).onInfo(connections.getCellBounds(i, i), e.getPoint());
     }
 
     /** Where a connection row's ⓘ is, in the list's coordinates; for tests. */
-    Rectangle connectionInfoBounds(int index) {
+    Rectangle connectionInfoBounds(final int index) {
         return layOutConnection(connectionModel.get(index), index).infoBounds(connections.getCellBounds(index, index));
     }
 
@@ -1272,11 +1271,11 @@ public final class SessionsSidebar {
      * The row the pointer is over in {@code list} is now {@code now} (-1 for none), was {@code was}: both rows repaint,
      * the ⓘ moving from one to the other; returns {@code now}.
      */
-    private static int hover(JList<?> list, int was, int now) {
+    private static int hover(final JList<?> list, final int was, final int now) {
         if (was != now) {
-            for (int i : new int[] {was, now}) {
+            for (final int i : new int[] {was, now}) {
                 if (i >= 0 && i < list.getModel().getSize()) {
-                    Rectangle r = list.getCellBounds(i, i);
+                    final Rectangle r = list.getCellBounds(i, i);
                     if (r != null) {
                         list.repaint(r);
                     }
@@ -1287,34 +1286,34 @@ public final class SessionsSidebar {
     }
 
     /** Whether a mouse event on {@code c}'s cell is on its state icon. */
-    private boolean onIcon(ConnectionState c, MouseEvent e) {
-        int i = connections.locationToIndex(e.getPoint());
+    private boolean onIcon(final ConnectionState c, final MouseEvent e) {
+        final int i = connections.locationToIndex(e.getPoint());
         return layOutConnection(c, i).hit(connections.getCellBounds(i, i), e.getPoint());
     }
 
     /** The connection row at {@code index}, filled as it was painted, so its icon sits where it was drawn. */
-    private ConnectionRow layOutConnection(ConnectionState c, int index) {
+    private ConnectionRow layOutConnection(final ConnectionState c, final int index) {
         return (ConnectionRow) connections.getCellRenderer().getListCellRendererComponent(connections, c, index, connections.isSelectedIndex(index), false);
     }
 
     /** Where a connection row's state icon is, in the list's coordinates; for tests. */
-    Rectangle connectionIconBounds(int index) {
+    Rectangle connectionIconBounds(final int index) {
         return layOutConnection(connectionModel.get(index), index).iconBounds(connections.getCellBounds(index, index));
     }
 
     /** The connection list: over a row's icon or ⓘ its tip; over its text no tooltip, the row's card follows there. */
     private final class ConnectionList extends JList<ConnectionState> {
-        ConnectionList(DefaultListModel<ConnectionState> model) {
+        ConnectionList(final DefaultListModel<ConnectionState> model) {
             super(model);
             setToolTipText("");
         }
 
         /** The report's bar down the left edge of the selected row (record 98). */
         @Override
-        protected void paintComponent(Graphics g) {
+        protected void paintComponent(final Graphics g) {
             super.paintComponent(g);
-            for (int i : getSelectedIndices()) {
-                Rectangle r = getCellBounds(i, i);
+            for (final int i : getSelectedIndices()) {
+                final Rectangle r = getCellBounds(i, i);
                 if (r != null) {
                     SidebarLook.bar(g, r);
                 }
@@ -1328,8 +1327,8 @@ public final class SessionsSidebar {
         }
 
         @Override
-        public String getToolTipText(MouseEvent e) {
-            int i = locationToIndex(e.getPoint());
+        public String getToolTipText(final MouseEvent e) {
+            final int i = locationToIndex(e.getPoint());
             if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) {
                 return null;
             }
@@ -1337,31 +1336,31 @@ public final class SessionsSidebar {
         }
     }
 
-    private static <T> T at(JList<T> list, MouseEvent e) {
-        int i = list.locationToIndex(e.getPoint());
+    private static <T> T at(final JList<T> list, final MouseEvent e) {
+        final int i = list.locationToIndex(e.getPoint());
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
     /** Whether {@code list}'s rows, at their widest, fit its tab: it then fills the tab, else it scrolls. */
-    private static boolean fitsTab(JList<?> list) {
+    private static boolean fitsTab(final JList<?> list) {
         return !(list.getParent() instanceof JViewport v) || v.getWidth() >= list.getPreferredSize().width;
     }
 
     /** A tab's content, filling it, on the sidebar's ground; a name wider than the tab scrolls into view. */
-    private static JPanel section(JComponent content) {
+    private static JPanel section(final JComponent content) {
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             FocusRing.install(sp);
             SidebarLook.ground(sp);
         }
-        JPanel p = new JPanel(new BorderLayout());
+        final JPanel p = new JPanel(new BorderLayout());
         SidebarLook.ground(p);
         p.add(content, BorderLayout.CENTER);
         return p;
     }
 
-    private static JMenuItem item(String text, String icon, Runnable r) {
-        JMenuItem i = new JMenuItem(text, Icons.get(icon));
+    private static JMenuItem item(final String text, final String icon, final Runnable r) {
+        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(e -> r.run());
         return i;
     }

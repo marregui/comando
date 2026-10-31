@@ -28,37 +28,37 @@ public final class TestReport {
             "<testsuite name=\"([^\"]*)\" tests=\"(\\d+)\" skipped=\"(\\d+)\" failures=\"(\\d+)\" errors=\"(\\d+)\"");
     private static final Pattern CASE = Pattern.compile("<testcase name=\"([^\"]*)\" classname=\"([^\"]*)\"[^>]*>\\s*<skipped");
 
-    public static void main(String[] args) throws IOException {
-        Map<String, long[]> modules = new TreeMap<>();
-        List<String> skipped = new ArrayList<>();
-        Path root = Path.of("");
+    public static void main(final String[] args) throws IOException {
+        final Map<String, long[]> modules = new TreeMap<>();
+        final List<String> skipped = new ArrayList<>();
+        final Path root = Path.of("");
         List<Path> reports;
         try (Stream<Path> files = Files.walk(root, 6)) {
             reports = files.filter(p -> RESULTS.matcher("/" + p.toString().replace('\\', '/')).find()).sorted().toList();
         }
-        for (Path report : reports) {
-            String xml = Files.readString(report, StandardCharsets.UTF_8);
-            Matcher suite = SUITE.matcher(xml);
+        for (final Path report : reports) {
+            final String xml = Files.readString(report, StandardCharsets.UTF_8);
+            final Matcher suite = SUITE.matcher(xml);
             if (!suite.find()) {
                 continue;
             }
-            Path relative = root.toAbsolutePath().relativize(report.toAbsolutePath());
-            String task = relative.getName(3).toString();
-            String module = relative.getName(0) + (task.equals("test") ? "" : " (" + task + ")");
-            long[] counts = modules.computeIfAbsent(module, m -> new long[4]);
+            final Path relative = root.toAbsolutePath().relativize(report.toAbsolutePath());
+            final String task = relative.getName(3).toString();
+            final String module = relative.getName(0) + (task.equals("test") ? "" : " (" + task + ")");
+            final long[] counts = modules.computeIfAbsent(module, m -> new long[4]);
             for (int i = 0; i < 4; i++) {
                 counts[i] += Long.parseLong(suite.group(i + 2));
             }
-            Matcher c = CASE.matcher(xml);
+            final Matcher c = CASE.matcher(xml);
             while (c.find()) {
                 skipped.add(c.group(2) + " > " + c.group(1));
             }
         }
-        StringBuilder md = new StringBuilder("### Tests\n\n| Module | Tests | Skipped | Failures | Errors |\n"
+        final StringBuilder md = new StringBuilder("### Tests\n\n| Module | Tests | Skipped | Failures | Errors |\n"
                 + "|---|---:|---:|---:|---:|\n");
-        long[] total = new long[4];
-        for (Map.Entry<String, long[]> e : modules.entrySet()) {
-            long[] v = e.getValue();
+        final long[] total = new long[4];
+        for (final Map.Entry<String, long[]> e : modules.entrySet()) {
+            final long[] v = e.getValue();
             md.append("| ").append(e.getKey()).append(" | ").append(v[0]).append(" | ").append(v[1]).append(" | ")
                     .append(v[2]).append(" | ").append(v[3]).append(" |\n");
             for (int i = 0; i < 4; i++) {
@@ -69,12 +69,12 @@ public final class TestReport {
                 .append(" | ").append(total[3]).append(" |\n");
         if (!skipped.isEmpty()) {
             md.append("\nSkipped:\n\n");
-            for (String s : skipped) {
+            for (final String s : skipped) {
                 md.append("- `").append(s).append("`\n");
             }
         }
         System.out.print(md);
-        String summary = System.getenv("GITHUB_STEP_SUMMARY");
+        final String summary = System.getenv("GITHUB_STEP_SUMMARY");
         if (summary != null && !summary.isEmpty()) {
             Files.writeString(Path.of(summary), md + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE,
                     StandardOpenOption.APPEND);

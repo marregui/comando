@@ -1,19 +1,18 @@
 package dev.marregui.comando.ui.dialogs.sessions;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.result.Formats;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.overlay.Overlay;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Window;
+import java.awt.event.KeyEvent;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -29,19 +28,20 @@ import javax.swing.ListSelectionModel;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Window;
-import java.awt.event.KeyEvent;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.function.Supplier;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.result.Formats;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.overlay.Overlay;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Lists the conversations stored on disk, newest first, and imports the selected ones as sessions that
@@ -66,13 +66,13 @@ public final class ImportSessionsDialog {
     private Set<String> known = Set.of();
     private Set<String> knownNames = Set.of();
 
-    public ImportSessionsDialog(Window owner, IntentSink intents, Supplier<List<StoredConversation>> catalogue) {
+    public ImportSessionsDialog(final Window owner, final IntentSink intents, final Supplier<List<StoredConversation>> catalogue) {
         this.intents = intents;
         this.catalogue = catalogue;
         this.owner = owner;
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         // titles and prompts come from stored conversations: shown as text, never as HTML
-        for (Class<?> type : new Class<?>[]{Object.class, String.class}) {
+        for (final Class<?> type : new Class<?>[]{Object.class, String.class}) {
             if (table.getDefaultRenderer(type) instanceof JComponent r) {
                 Plain.only(r);
             }
@@ -82,29 +82,29 @@ public final class ImportSessionsDialog {
         filter.putClientProperty("JTextField.placeholderText", "Filter by title, directory, branch or prompt");
         filter.getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(DocumentEvent e) {
+            public void insertUpdate(final DocumentEvent e) {
                 applyFilter();
             }
 
             @Override
-            public void removeUpdate(DocumentEvent e) {
+            public void removeUpdate(final DocumentEvent e) {
                 applyFilter();
             }
 
             @Override
-            public void changedUpdate(DocumentEvent e) {
+            public void changedUpdate(final DocumentEvent e) {
                 applyFilter();
             }
         });
         importButton.putClientProperty("JButton.buttonType", "default");
         importButton.addActionListener(e -> importSelected());
-        JButton close = new JButton("Close");
+        final JButton close = new JButton("Close");
         close.addActionListener(e -> hide());
-        JPanel top = new JPanel(new BorderLayout(Theme.GAP, 0));
+        final JPanel top = new JPanel(new BorderLayout(Theme.GAP, 0));
         top.add(filter, BorderLayout.CENTER);
-        JPanel south = new JPanel(new BorderLayout());
+        final JPanel south = new JPanel(new BorderLayout());
         info.setForeground(Theme.MUTED);
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttons.add(close);
         buttons.add(importButton);
         south.add(info, BorderLayout.CENTER);
@@ -114,14 +114,14 @@ public final class ImportSessionsDialog {
         content.add(overlay, BorderLayout.CENTER);
         content.add(south, BorderLayout.SOUTH);
         content.setPreferredSize(new Dimension(1100, 560));
-        int[] widths = {220, 220, 120, 360, 80, 60};
+        final int[] widths = {220, 220, 120, 360, 80, 60};
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
     }
 
     /** ⏎ imports the selection (or the only row the filter leaves); Esc closes. */
-    void install(JRootPane rootPane) {
+    void install(final JRootPane rootPane) {
         rootPane.setDefaultButton(importButton);
         rootPane.registerKeyboardAction(e -> hide(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
     }
@@ -133,7 +133,7 @@ public final class ImportSessionsDialog {
     }
 
     /** Opens the dialog and reads the stored conversations off the EDT; those already imported are marked ✓. */
-    public void show(AppState s) {
+    public void show(final AppState s) {
         if (dialog == null) {
             dialog = new JDialog(owner, "Import stored conversations");
             dialog.setContentPane(content);
@@ -142,7 +142,7 @@ public final class ImportSessionsDialog {
         }
         known = new HashSet<>();
         knownNames = new HashSet<>();
-        for (SessionState x : s.sessions()) {
+        for (final SessionState x : s.sessions()) {
             known.add(x.spec().claudeSessionId());
             knownNames.add(x.name());
         }
@@ -153,7 +153,7 @@ public final class ImportSessionsDialog {
         dialog.setVisible(true);
         UiErrands.start("read-conversations", () -> {
             try {
-                List<StoredConversation> read = catalogue.get();
+                final List<StoredConversation> read = catalogue.get();
                 Edt.later(() -> {
                     all = read;
                     applyFilter();
@@ -164,16 +164,16 @@ public final class ImportSessionsDialog {
                         overlay.showContent();
                     }
                 });
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 Edt.later(() -> overlay.showError("Cannot read the conversations: " + e.getMessage()));
             }
         });
     }
 
     private void applyFilter() {
-        String q = filter.getText().strip().toLowerCase(Locale.ROOT);
-        List<StoredConversation> rows = new ArrayList<>();
-        for (StoredConversation c : all) {
+        final String q = filter.getText().strip().toLowerCase(Locale.ROOT);
+        final List<StoredConversation> rows = new ArrayList<>();
+        for (final StoredConversation c : all) {
             if (q.isEmpty() || (c.title() + ' ' + c.cwd() + ' ' + c.branch() + ' ' + c.lastPrompt()).toLowerCase(Locale.ROOT).contains(q)) {
                 rows.add(c);
             }
@@ -188,12 +188,12 @@ public final class ImportSessionsDialog {
         if (selected.length == 0 && table.getRowCount() == 1) {
             selected = new int[]{0};
         }
-        List<SessionSpec> specs = new ArrayList<>();
+        final List<SessionSpec> specs = new ArrayList<>();
         // a title equal to an existing session's name gets a number, so the import is not skipped as a duplicate
-        Set<String> names = new HashSet<>(knownNames);
-        for (int viewRow : selected) {
-            StoredConversation c = model.rows.get(table.convertRowIndexToModel(viewRow));
-            String name = uniqueName(nameFor(c), names);
+        final Set<String> names = new HashSet<>(knownNames);
+        for (final int viewRow : selected) {
+            final StoredConversation c = model.rows.get(table.convertRowIndexToModel(viewRow));
+            final String name = uniqueName(nameFor(c), names);
             names.add(name);
             specs.add(SessionSpec.imported(name, c.cwd(), c.sessionId()));
         }
@@ -204,23 +204,23 @@ public final class ImportSessionsDialog {
     }
 
     /** The session name of {@code c}: its title, else its folder and the first 8 characters of its id; at most 48. */
-    static String nameFor(StoredConversation c) {
-        String base = c.title().isBlank() ? folderName(c.cwd()) + " " + c.sessionId().substring(0, Math.min(8, c.sessionId().length()))
+    static String nameFor(final StoredConversation c) {
+        final String base = c.title().isBlank() ? folderName(c.cwd()) + " " + c.sessionId().substring(0, Math.min(8, c.sessionId().length()))
                 : c.title().strip();
         return base.length() > 48 ? base.substring(0, 48).strip() : base;
     }
 
     /** The last name of a conversation's folder; "session" for the root, an empty folder or one that is no path. */
-    private static String folderName(String cwd) {
+    private static String folderName(final String cwd) {
         try {
-            Path name = Path.of(cwd).getFileName();
+            final Path name = Path.of(cwd).getFileName();
             return name == null || name.toString().isBlank() ? "session" : name.toString();
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             return "session";
         }
     }
 
-    private static String uniqueName(String base, Set<String> taken) {
+    private static String uniqueName(final String base, final Set<String> taken) {
         String name = base;
         for (int i = 2; taken.contains(name); i++) {
             name = base + " " + i;
@@ -242,13 +242,13 @@ public final class ImportSessionsDialog {
         }
 
         @Override
-        public String getColumnName(int c) {
+        public String getColumnName(final int c) {
             return COLUMNS[c];
         }
 
         @Override
-        public Object getValueAt(int r, int c) {
-            StoredConversation x = rows.get(r);
+        public Object getValueAt(final int r, final int c) {
+            final StoredConversation x = rows.get(r);
             return switch (c) {
                 case 0 -> (known.contains(x.sessionId()) ? "✓ " : "") + (x.title().isEmpty() ? x.sessionId() : x.title());
                 case 1 -> Labels.shortPath(x.cwd());
@@ -260,7 +260,7 @@ public final class ImportSessionsDialog {
         }
 
         @Override
-        public Class<?> getColumnClass(int c) {
+        public Class<?> getColumnClass(final int c) {
             return c >= 4 ? Sortable.class : String.class;
         }
     }
@@ -268,7 +268,7 @@ public final class ImportSessionsDialog {
     /** A cell shown as text and sorted by its number: "3 h" before "2 d", "900 KB" before "2 MB". */
     record Sortable(long key, String text) implements Comparable<Sortable> {
         @Override
-        public int compareTo(Sortable o) {
+        public int compareTo(final Sortable o) {
             return Long.compare(key, o.key);
         }
 

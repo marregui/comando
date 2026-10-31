@@ -2,16 +2,6 @@ package dev.marregui.comando.mcp;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import dev.marregui.comando.core.model.Approval;
-import dev.marregui.comando.core.model.ApprovalDecision;
-import dev.marregui.comando.core.port.ApprovalPort;
-import dev.marregui.comando.core.port.McpGateway;
-import dev.marregui.comando.core.loop.ExecutorStop;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,6 +14,17 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.port.ApprovalPort;
+import dev.marregui.comando.core.port.McpGateway;
 
 /**
  * comando's MCP server: streamable HTTP on 127.0.0.1, one JSON response per request, no server-initiated
@@ -48,7 +49,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     private final String version;
     private volatile boolean closed;
 
-    private McpServer(McpTools tools, HttpServer http, String version) {
+    private McpServer(final McpTools tools, final HttpServer http, final String version) {
         this.tools = tools;
         this.http = http;
         this.version = version;
@@ -59,9 +60,9 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
      * Starts on {@code port} of {@code 127.0.0.1}, the address {@link #url} names; 0 picks a free port. Named rather
      * than the JVM's loopback address, which is {@code ::1} when IPv6 addresses are preferred.
      */
-    public static McpServer start(McpTools tools, int port, String version) throws IOException {
-        HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), port), 64);
-        McpServer server = new McpServer(tools, http, version);
+    public static McpServer start(final McpTools tools, final int port, final String version) throws IOException {
+        final HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), port), 64);
+        final McpServer server = new McpServer(tools, http, version);
         http.createContext(PATH, server::handle);
         http.setExecutor(server.executor);
         http.start();
@@ -74,21 +75,21 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     @Override
-    public Ticket register(String session) {
+    public Ticket register(final String session) {
         if (closed) {
             return null;
         }
         // a fresh token per process: a late revocation of an earlier process's token cannot reach this one
-        byte[] b = new byte[32];
+        final byte[] b = new byte[32];
         random.nextBytes(b);
-        String token = HexFormat.of().formatHex(b);
+        final String token = HexFormat.of().formatHex(b);
         sessionByToken.put(token, session);
         tokenBySession.put(session, token);
         return new Ticket(url(), token);
     }
 
     @Override
-    public void unregister(String session, Ticket ticket) {
+    public void unregister(final String session, final Ticket ticket) {
         if (ticket == null) {
             return;
         }
@@ -100,13 +101,13 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     @Override
-    public void resolve(Approval approval, ApprovalDecision decision) {
+    public void resolve(final Approval approval, final ApprovalDecision decision) {
         tools.resolve(approval, decision);
     }
 
-    private void handle(HttpExchange ex) throws IOException {
+    private void handle(final HttpExchange ex) throws IOException {
         try (ex) {
-            String session = authenticate(ex);
+            final String session = authenticate(ex);
             if (session == null) {
                 send(ex, 401, null);
                 return;
@@ -120,13 +121,13 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
                 case "DELETE" -> send(ex, 200, null);
                 default -> send(ex, 405, null); // no server-initiated stream
             }
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.ERROR, "cannot answer an MCP request [method=" + ex.getRequestMethod() + ", path=" + ex.getRequestURI().getPath() + ']', e);
         }
     }
 
-    private String authenticate(HttpExchange ex) {
-        String auth = ex.getRequestHeaders().getFirst("Authorization");
+    private String authenticate(final HttpExchange ex) {
+        final String auth = ex.getRequestHeaders().getFirst("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) {
             return null;
         }
@@ -138,22 +139,22 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
      * a browser sends none. {@code null} is a browser's opaque origin (a sandboxed frame, a {@code file:} page, a
      * redirect across sites): a page, and not a loopback one, so it is refused.
      */
-    static boolean originAllowed(String origin) {
+    static boolean originAllowed(final String origin) {
         if (origin == null || origin.isBlank()) {
             return true;
         }
         try {
-            String host = URI.create(origin).getHost();
+            final String host = URI.create(origin).getHost();
             return host != null && (host.equals("localhost") || host.equals("127.0.0.1") || host.equals("[::1]") || host.equals("::1"));
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             return false;
         }
     }
 
-    private void post(HttpExchange ex, String session) throws IOException {
+    private void post(final HttpExchange ex, final String session) throws IOException {
         JsonNode request;
         try (InputStream in = ex.getRequestBody()) {
-            byte[] body = in.readNBytes(MAX_BODY + 1);
+            final byte[] body = in.readNBytes(MAX_BODY + 1);
             if (body.length > MAX_BODY) {
                 send(ex, 413, null);
                 return;
@@ -174,14 +175,14 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
             send(ex, 202, null); // a notification or a response; nothing to answer
             return;
         }
-        JsonNode id = request.get("id");
-        String method = request.path("method").asString("");
-        JsonNode params = request.path("params");
-        ObjectNode response = switch (method) {
+        final JsonNode id = request.get("id");
+        final String method = request.path("method").asString("");
+        final JsonNode params = request.path("params");
+        final ObjectNode response = switch (method) {
             case "initialize" -> result(id, initialize(params));
             case "ping" -> result(id, json.createObjectNode());
             case "tools/list" -> {
-                ObjectNode r = json.createObjectNode();
+                final ObjectNode r = json.createObjectNode();
                 r.set("tools", tools.definitions());
                 yield result(id, r);
             }
@@ -191,12 +192,12 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         send(ex, 200, response);
     }
 
-    private ObjectNode initialize(JsonNode params) {
-        String asked = params.path("protocolVersion").asString("");
-        ObjectNode r = json.createObjectNode();
+    private ObjectNode initialize(final JsonNode params) {
+        final String asked = params.path("protocolVersion").asString("");
+        final ObjectNode r = json.createObjectNode();
         r.put("protocolVersion", PROTOCOLS.contains(asked) ? asked : DEFAULT_PROTOCOL);
         r.putObject("capabilities").putObject("tools").put("listChanged", false);
-        ObjectNode info = r.putObject("serverInfo");
+        final ObjectNode info = r.putObject("serverInfo");
         info.put("name", "comando");
         info.put("version", version);
         r.put("instructions", "comando's UI and database tools. Views replace earlier views with the same title unless the user pinned them.");
@@ -204,16 +205,16 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     /** A JSON-RPC request id is unique per client; the session's token tells the clients apart. */
-    private static String callKey(String session, JsonNode requestId) {
+    private static String callKey(final String session, final JsonNode requestId) {
         return requestId == null || requestId.isMissingNode() || requestId.isNull() ? null : session + '#' + requestId;
     }
 
-    private ObjectNode call(String session, JsonNode params, String callKey) {
-        String name = params.path("name").asString("");
-        JsonNode args = params.path("arguments");
-        McpTools.Outcome out = tools.call(session, name, args.isObject() ? args : json.createObjectNode(), callKey);
-        ObjectNode r = json.createObjectNode();
-        ObjectNode text = r.putArray("content").addObject();
+    private ObjectNode call(final String session, final JsonNode params, final String callKey) {
+        final String name = params.path("name").asString("");
+        final JsonNode args = params.path("arguments");
+        final McpTools.Outcome out = tools.call(session, name, args.isObject() ? args : json.createObjectNode(), callKey);
+        final ObjectNode r = json.createObjectNode();
+        final ObjectNode text = r.putArray("content").addObject();
         text.put("type", "text");
         text.put("text", out.text());
         if (out.error()) {
@@ -222,30 +223,30 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         return r;
     }
 
-    private ObjectNode result(JsonNode id, JsonNode result) {
-        ObjectNode r = json.createObjectNode();
+    private ObjectNode result(final JsonNode id, final JsonNode result) {
+        final ObjectNode r = json.createObjectNode();
         r.put("jsonrpc", "2.0");
         r.set("id", id);
         r.set("result", result);
         return r;
     }
 
-    private ObjectNode error(JsonNode id, int code, String message) {
-        ObjectNode r = json.createObjectNode();
+    private ObjectNode error(final JsonNode id, final int code, final String message) {
+        final ObjectNode r = json.createObjectNode();
         r.put("jsonrpc", "2.0");
         r.set("id", id);
-        ObjectNode e = r.putObject("error");
+        final ObjectNode e = r.putObject("error");
         e.put("code", code);
         e.put("message", message);
         return r;
     }
 
-    private void send(HttpExchange ex, int status, JsonNode body) throws IOException {
+    private void send(final HttpExchange ex, final int status, final JsonNode body) throws IOException {
         if (body == null) {
             ex.sendResponseHeaders(status, -1);
             return;
         }
-        byte[] bytes = json.writeValueAsBytes(body);
+        final byte[] bytes = json.writeValueAsBytes(body);
         ex.getResponseHeaders().set("Content-Type", "application/json");
         ex.sendResponseHeaders(status, bytes.length);
         try (OutputStream out = ex.getResponseBody()) {

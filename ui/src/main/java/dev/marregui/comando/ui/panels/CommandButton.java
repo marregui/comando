@@ -1,14 +1,14 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.action.Command;
-import dev.marregui.comando.ui.kit.icon.Icons;
-
-import javax.swing.JButton;
-import javax.swing.Timer;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import javax.swing.JButton;
+import javax.swing.Timer;
+
+import dev.marregui.comando.ui.kit.action.Command;
+import dev.marregui.comando.ui.kit.icon.Icons;
 
 /**
  * A toolbar button beside the theme's swatch for one or two commands, such as start and stop: it shows the first of
@@ -25,12 +25,12 @@ public final class CommandButton extends JButton {
     private Command shown;
 
     /** {@code tips} gives each command's tooltip by its id; its label when it gives none. */
-    public CommandButton(List<Command> commands, Function<String, String> tips) {
+    public CommandButton(final List<Command> commands, final Function<String, String> tips) {
         this(commands, tips, () -> "");
     }
 
     /** As above, with {@code status} read at each refresh and added to the tooltip when not empty. */
-    public CommandButton(List<Command> commands, Function<String, String> tips, Supplier<String> status) {
+    public CommandButton(final List<Command> commands, final Function<String, String> tips, final Supplier<String> status) {
         this.commands = List.copyOf(commands);
         this.tips = tips;
         this.status = status;
@@ -48,17 +48,17 @@ public final class CommandButton extends JButton {
 
     /** Shows the first command that can run now; when none can, the one shown before (first, the first), disabled. */
     public void refresh() {
-        Command now = commands.stream().filter(c -> c.enabled().getAsBoolean()).findFirst().orElse(null);
-        Command face = now != null ? now : shown != null ? shown : commands.getFirst();
+        final Command now = commands.stream().filter(c -> c.enabled().getAsBoolean()).findFirst().orElse(null);
+        final Command face = now != null ? now : shown != null ? shown : commands.getFirst();
         if (face != shown) {
             shown = face;
             setIcon(face.icon() == null ? null : Icons.get(face.icon()));
             getAccessibleContext().setAccessibleName(face.label());
         }
         setEnabled(now != null);
-        String tip = tips.apply(face.id());
+        final String tip = tips.apply(face.id());
         String line = tip == null ? face.label() : face.label() + ": " + tip;
-        String more = status.get();
+        final String more = status.get();
         line = more == null || more.isEmpty() ? line : line + " (" + more + ")";
         if (!Objects.equals(line, getToolTipText())) {
             setToolTipText(line);

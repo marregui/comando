@@ -1,13 +1,13 @@
 package dev.marregui.comando.claude;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,14 +27,14 @@ class RunSettingsTest {
     /// gives the session's.
     @Test
     void aMessagesLineGivesItsModelAndItsPerTurnEffort() throws IOException {
-        Path file = transcript("conv-1", """
+        final Path file = transcript("conv-1", """
                 {"type":"user","message":{"role":"user","content":"go"}}
                 {"type":"assistant","effort":"medium","perTurnEffort":"medium","message":{"id":"m1","model":"claude-opus-5-5","content":[]}}
                 {"type":"attachment","attachment":{"model":"claude-haiku-5-5"}}
                 {"type":"assistant","effort":"medium","perTurnEffort":"high","message":{"id":"m2","model":"claude-opus-5-5","content":[]}}
                 {"type":"assistant","effort":"low","message":{"id":"m3","model":"claude-sonnet-5-5","content":[]}}
                 """);
-        RunSettings settings = new RunSettings(projects, json);
+        final RunSettings settings = new RunSettings(projects, json);
 
         assertThat(settings.of("conv-1", "m1")).contains(new RunSettings.Ran("claude-opus-5-5", "medium"));
         assertThat(settings.of("conv-1", "m2")).contains(new RunSettings.Ran("claude-opus-5-5", "high"));
@@ -46,10 +46,10 @@ class RunSettingsTest {
     /// empty id give nothing.
     @Test
     void aMessageNotYetWrittenGivesNothingUntilItsLineIsThere() throws IOException {
-        Path file = transcript("conv-2", """
+        final Path file = transcript("conv-2", """
                 {"type":"assistant","perTurnEffort":"low","message":{"id":"m1","model":"claude-opus-5-5","content":[]}}
                 """);
-        RunSettings settings = new RunSettings(projects, json);
+        final RunSettings settings = new RunSettings(projects, json);
         assertThat(settings.of("conv-2", "m2")).isEmpty();
 
         Files.writeString(file, Files.readString(file)
@@ -62,8 +62,8 @@ class RunSettingsTest {
     /// In a file twice the tail's size, the last message is found from the tail alone, its line whole.
     @Test
     void theLatestMessageIsFoundInTheTailOfALargeFile() throws IOException {
-        StringBuilder big = new StringBuilder();
-        String filler = "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"" + "x".repeat(1_000) + "\"}}\n";
+        final StringBuilder big = new StringBuilder();
+        final String filler = "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"" + "x".repeat(1_000) + "\"}}\n";
         while (big.length() < RunSettings.TAIL * 2) {
             big.append(filler);
         }
@@ -73,8 +73,8 @@ class RunSettingsTest {
         assertThat(new RunSettings(projects, json).of("conv-3", "last")).contains(new RunSettings.Ran("claude-opus-5-5", "high"));
     }
 
-    private Path transcript(String conversation, String lines) throws IOException {
-        Path dir = Files.createDirectories(projects.resolve("-Users-me-work"));
+    private Path transcript(final String conversation, final String lines) throws IOException {
+        final Path dir = Files.createDirectories(projects.resolve("-Users-me-work"));
         return Files.writeString(dir.resolve(conversation + ".jsonl"), lines);
     }
 }

@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.kit.async;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,7 +21,7 @@ class EdtTest {
     /// A task on a free EDT runs there, and the wait returns true.
     @Test
     void aBoundedWaitRunsTheTaskOnTheEdtAndSaysItRan() {
-        AtomicBoolean onEdt = new AtomicBoolean();
+        final AtomicBoolean onEdt = new AtomicBoolean();
         assertThat(Edt.runAndWait(() -> onEdt.set(SwingUtilities.isEventDispatchThread()), Duration.ofSeconds(5))).isTrue();
         assertThat(onEdt).isTrue();
     }
@@ -30,20 +30,20 @@ class EdtTest {
     /// by the bound, is dropped rather than run once the EDT frees.
     @Test
     void aBoundedWaitOnAnEdtThatDoesNotAnswerEndsAndTheTaskNeverRuns() throws Exception {
-        CountDownLatch release = new CountDownLatch(1);
-        CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final CountDownLatch held = new CountDownLatch(1);
         SwingUtilities.invokeLater(() -> {
             held.countDown();
             try {
                 release.await(10, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         });
         assertThat(held.await(5, TimeUnit.SECONDS)).isTrue();
-        AtomicBoolean ran = new AtomicBoolean();
+        final AtomicBoolean ran = new AtomicBoolean();
         try {
-            boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
+            final boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
                     () -> Edt.runAndWait(() -> ran.set(true), Duration.ofMillis(200)));
             assertThat(done).isFalse();
         } finally {

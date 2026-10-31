@@ -1,7 +1,11 @@
 package dev.marregui.comando.ui.widgets.editor;
 
-import dev.marregui.comando.core.dispatch.Classifier;
-import dev.marregui.comando.core.dispatch.Target;
+import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
+import javax.swing.text.Element;
+import javax.swing.text.Segment;
+
 import org.fife.ui.rsyntaxtextarea.OccurrenceMarker;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Token;
@@ -10,11 +14,8 @@ import org.fife.ui.rsyntaxtextarea.TokenMakerBase;
 import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 
-import javax.swing.text.Element;
-import javax.swing.text.Segment;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TreeMap;
+import dev.marregui.comando.core.dispatch.Classifier;
+import dev.marregui.comando.core.dispatch.Target;
 
 /**
  * Colours a panel's own text block by block, as the block will be run: the same blocks ({@link
@@ -42,7 +43,7 @@ final class PanelTokenMaker extends TokenMakerBase {
     private final TreeMap<Integer, Span> spans = new TreeMap<>();
     private long version = -1;
 
-    PanelTokenMaker(PanelDocument doc) {
+    PanelTokenMaker(final PanelDocument doc) {
         this.doc = doc;
     }
 
@@ -59,7 +60,7 @@ final class PanelTokenMaker extends TokenMakerBase {
         final int[] ends;
         int known;
 
-        Span(int first, int last, Kind kind, int marker, int command) {
+        Span(final int first, final int last, final Kind kind, final int marker, final int command) {
             this.first = first;
             this.last = last;
             this.kind = kind;
@@ -70,14 +71,14 @@ final class PanelTokenMaker extends TokenMakerBase {
     }
 
     @Override
-    public Token getTokenList(Segment text, int initialTokenType, int startOffset) {
-        Element root = doc.getDefaultRootElement();
-        int line = root.getElementIndex(startOffset);
+    public Token getTokenList(final Segment text, final int initialTokenType, final int startOffset) {
+        final Element root = doc.getDefaultRootElement();
+        final int line = root.getElementIndex(startOffset);
         if (root.getElement(line).getStartOffset() != startOffset || isBlank(text)) {
             // not one of the document's lines as they stand, or a blank line between blocks
             return prose.getTokenList(text, TokenTypes.NULL, startOffset);
         }
-        Span span = span(line);
+        final Span span = span(line);
         if (line == span.marker) {
             return whole(text, startOffset, TokenTypes.COMMENT_EOL);
         }
@@ -92,46 +93,46 @@ final class PanelTokenMaker extends TokenMakerBase {
      * not used.
      */
     @Override
-    public int getLastTokenTypeOnLine(Segment text, int initialTokenType) {
+    public int getLastTokenTypeOnLine(final Segment text, final int initialTokenType) {
         return TokenTypes.NULL;
     }
 
     /** The kind of the block holding {@code line}; for tests. */
-    Kind kindOf(int line) {
+    Kind kindOf(final int line) {
         return span(line).kind;
     }
 
-    private Span span(int line) {
+    private Span span(final int line) {
         if (doc.version() != version) {
             spans.clear();
             version = doc.version();
         }
-        Map.Entry<Integer, Span> e = spans.floorEntry(line);
+        final Map.Entry<Integer, Span> e = spans.floorEntry(line);
         if (e != null && e.getValue().last >= line) {
             return e.getValue();
         }
-        int first = doc.firstLineOfBlock(line);
-        int last = doc.lastLineOfBlock(line);
-        String block = doc.linesText(first, last);
-        Classifier.Classification c = Classifier.classify(block);
-        boolean marked = isMarker(block);
-        int marker = marked ? first : -1;
+        final int first = doc.firstLineOfBlock(line);
+        final int last = doc.lastLineOfBlock(line);
+        final String block = doc.linesText(first, last);
+        final Classifier.Classification c = Classifier.classify(block);
+        final boolean marked = isMarker(block);
+        final int marker = marked ? first : -1;
         int command = -1;
         if (c.target() == Target.CLAUDE && c.text().length() > 1 && c.text().charAt(0) == '/' && Character.isLetter(c.text().charAt(1))) {
             command = marked ? first + 1 : first;
         }
-        Kind kind = c.target() == Target.SQL && doc.sqlLive() ? Kind.SQL : Kind.PROSE;
-        Span s = new Span(first, last, kind, kind == Kind.SQL ? -1 : marker, command > last ? -1 : command);
+        final Kind kind = c.target() == Target.SQL && doc.sqlLive() ? Kind.SQL : Kind.PROSE;
+        final Span s = new Span(first, last, kind, kind == Kind.SQL ? -1 : marker, command > last ? -1 : command);
         spans.put(first, s);
         return s;
     }
 
     /** The state {@code line} starts in: what the line above it in the same block ended in, tokenized in order. */
-    private int stateBefore(Span s, int line) {
-        int index = line - s.first;
+    private int stateBefore(final Span s, final int line) {
+        final int index = line - s.first;
         while (s.known < index) {
-            int at = s.first + s.known;
-            int start = s.known == 0 ? TokenTypes.NULL : s.ends[s.known - 1];
+            final int at = s.first + s.known;
+            final int start = s.known == 0 ? TokenTypes.NULL : s.ends[s.known - 1];
             int end;
             if (at == s.marker || at == s.command) {
                 end = TokenTypes.NULL;
@@ -144,14 +145,14 @@ final class PanelTokenMaker extends TokenMakerBase {
         return index == 0 ? TokenTypes.NULL : s.ends[index - 1];
     }
 
-    private TokenMaker maker(Kind kind) {
+    private TokenMaker maker(final Kind kind) {
         return kind == Kind.SQL ? sql : prose;
     }
 
     /** The line as one token of {@code type}, after its leading whitespace. */
-    private Token whole(Segment text, int startOffset, int type) {
+    private Token whole(final Segment text, final int startOffset, final int type) {
         resetTokenList();
-        int i = leadingWhitespace(text);
+        final int i = leadingWhitespace(text);
         addSpan(text, text.offset, i, TokenTypes.WHITESPACE, startOffset);
         addSpan(text, i, text.offset + text.count, type, startOffset);
         addNullToken();
@@ -159,10 +160,10 @@ final class PanelTokenMaker extends TokenMakerBase {
     }
 
     /** {@code /reflect now}: the command marked, its arguments plain. */
-    private Token command(Segment text, int startOffset) {
+    private Token command(final Segment text, final int startOffset) {
         resetTokenList();
-        int i = leadingWhitespace(text);
-        int end = text.offset + text.count;
+        final int i = leadingWhitespace(text);
+        final int end = text.offset + text.count;
         int word = i + 1;
         while (word < end && !Character.isWhitespace(text.array[word])) {
             word++;
@@ -175,41 +176,41 @@ final class PanelTokenMaker extends TokenMakerBase {
     }
 
     /** Adds {@code text.array[from, to)} as one token; nothing when empty. */
-    private void addSpan(Segment text, int from, int to, int type, int startOffset) {
+    private void addSpan(final Segment text, final int from, final int to, final int type, final int startOffset) {
         if (to > from) {
             addToken(text.array, from, to - 1, type, startOffset + from - text.offset);
         }
     }
 
-    private static int leadingWhitespace(Segment text) {
+    private static int leadingWhitespace(final Segment text) {
         int i = text.offset;
-        int end = text.offset + text.count;
+        final int end = text.offset + text.count;
         while (i < end && Character.isWhitespace(text.array[i])) {
             i++;
         }
         return i;
     }
 
-    private static boolean isBlank(Segment text) {
+    private static boolean isBlank(final Segment text) {
         return leadingWhitespace(text) == text.offset + text.count;
     }
 
-    private static boolean isMarker(String block) {
-        String text = block.strip();
-        int eol = text.indexOf('\n');
-        String first = (eol < 0 ? text : text.substring(0, eol)).strip().toLowerCase(Locale.ROOT);
+    private static boolean isMarker(final String block) {
+        final String text = block.strip();
+        final int eol = text.indexOf('\n');
+        final String first = (eol < 0 ? text : text.substring(0, eol)).strip().toLowerCase(Locale.ROOT);
         return first.equals(Classifier.SQL_MARKER) || first.equals(Classifier.CLAUDE_MARKER);
     }
 
     // ---- the editor's per-language questions are SQL's: comments toggle as "--", identifiers are marked
 
     @Override
-    public String[] getLineCommentStartAndEnd(int languageIndex) {
+    public String[] getLineCommentStartAndEnd(final int languageIndex) {
         return sql.getLineCommentStartAndEnd(languageIndex);
     }
 
     @Override
-    public boolean getMarkOccurrencesOfTokenType(int type) {
+    public boolean getMarkOccurrencesOfTokenType(final int type) {
         return sql.getMarkOccurrencesOfTokenType(type);
     }
 
@@ -220,7 +221,7 @@ final class PanelTokenMaker extends TokenMakerBase {
 
     /** SQL's token types are all standard; Markdown keeps its line states in internal ones. */
     @Override
-    public int getClosestStandardTokenTypeForInternalType(int type) {
+    public int getClosestStandardTokenTypeForInternalType(final int type) {
         return prose.getClosestStandardTokenTypeForInternalType(type);
     }
 }

@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
+import java.util.Optional;
+
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
@@ -7,8 +9,6 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.kit.format.Labels;
-
-import java.util.Optional;
 
 /**
  * What a panel's tab says about its work, so the user knows from the tab bar which panel to look at. One status per
@@ -40,9 +40,9 @@ enum TabStatus {
      * The status of {@code p}'s tab in {@code s}; {@code unread} says its last work ended while another tab was in
      * front and the user has not looked since.
      */
-    static TabStatus of(PanelState p, AppState s, boolean unread) {
-        Optional<SessionState> session = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
-        Optional<RunStatus> run = s.runOf(p.id()).map(SqlRun::status);
+    static TabStatus of(final PanelState p, final AppState s, final boolean unread) {
+        final Optional<SessionState> session = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
+        final Optional<RunStatus> run = s.runOf(p.id()).map(SqlRun::status);
         if (session.isPresent() && s.pendingApprovals(session.get().name()) > 0) {
             return NEEDS_YOU;
         }
@@ -75,36 +75,36 @@ enum TabStatus {
      * handed it off is not the outcome. A later turn that ends while older work runs on is, and so is a hand-off turn
      * that failed.
      */
-    static boolean active(PanelState p, AppState s, long nowMillis) {
-        boolean session = !p.session().isEmpty() && s.session(p.session()).map(x -> x.isBusy()
+    static boolean active(final PanelState p, final AppState s, final long nowMillis) {
+        final boolean session = !p.session().isEmpty() && s.session(p.session()).map(x -> x.isBusy()
                 || (x.isAwaitingHandOff() || x.isReturning(nowMillis, REPORT_GRACE_MILLIS)) && x.lastTurnError().isEmpty()).orElse(false);
         return session || s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false);
     }
 
-    private static boolean failed(SessionState ss) {
+    private static boolean failed(final SessionState ss) {
         return ss.status() == Status.FAILED || !ss.lastTurnError().isEmpty();
     }
 
     /** The tab's tooltip suffix, with the reason; empty for IDLE and NONE. */
-    static String describe(PanelState p, AppState s, TabStatus status, long nowMillis) {
-        Optional<SessionState> session = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
+    static String describe(final PanelState p, final AppState s, final TabStatus status, final long nowMillis) {
+        final Optional<SessionState> session = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
         return switch (status) {
             case NEEDS_YOU -> {
-                int n = s.pendingApprovals(session.orElseThrow().name());
+                final int n = s.pendingApprovals(session.orElseThrow().name());
                 yield " · needs you: " + n + (n == 1 ? " request" : " requests");
             }
             case ERROR -> " · failed" + session.map(ss -> ss.status() == Status.FAILED ? ": " + ss.error() : ": " + ss.lastTurnError())
                     .filter(m -> m.length() > 2).orElse("");
             case DONE -> " · finished";
             case WORKING -> {
-                String what = session.filter(SessionState::isBusy).map(TabStatus::working)
+                final String what = session.filter(SessionState::isBusy).map(TabStatus::working)
                         .orElse("running");
-                long since = session.map(SessionState::turnStartedMillis).orElse(0L);
+                final long since = session.map(SessionState::turnStartedMillis).orElse(0L);
                 yield " · " + what + (since > 0 ? " " + Labels.elapsed(nowMillis - since) : "");
             }
             case WAITING -> {
-                SessionState ss = session.orElseThrow();
-                long since = ss.waitingSinceMillis();
+                final SessionState ss = session.orElseThrow();
+                final long since = ss.waitingSinceMillis();
                 yield " · " + waiting(ss) + (since > 0 ? " " + Labels.elapsed(nowMillis - since) : "");
             }
             case IDLE, NONE -> "";
@@ -112,12 +112,12 @@ enum TabStatus {
     }
 
     /** What a session in a turn does, for every place that shows it: its tool's activity, else "working". */
-    static String working(SessionState ss) {
+    static String working(final SessionState ss) {
         return ss.activity().isEmpty() ? "working" : ss.activity();
     }
 
     /** What a waiting session waits on, for every place that shows it: "waiting on review agent". */
-    static String waiting(SessionState ss) {
+    static String waiting(final SessionState ss) {
         return "waiting on " + ss.waitingFor();
     }
 }

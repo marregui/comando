@@ -1,15 +1,15 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.widget.capability.Zoomable;
-import dev.marregui.comando.ui.widgets.transcript.doc.Span;
-
-import javax.swing.UIManager;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.font.FontRenderContext;
 import java.awt.font.LineMetrics;
+import javax.swing.UIManager;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.widget.capability.Zoomable;
+import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
 /**
  * Fonts, colours and spacing of the transcript at one zoom level. Immutable; a zoom change makes a new
@@ -75,11 +75,11 @@ public final class Style {
      */
     private final Style outsideStyle;
 
-    Style(Font base, Font monoBase, int zoom) {
+    Style(final Font base, final Font monoBase, final int zoom) {
         this(base, monoBase, zoom, color("Label.foreground", Theme.TEXT_FALLBACK), Theme.MUTED, false, Theme.tint());
     }
 
-    private Style(Font base, Font monoBase, int zoom, Color text, Color muted, boolean answer, Tint tint) {
+    private Style(final Font base, final Font monoBase, final int zoom, final Color text, final Color muted, final boolean answer, final Tint tint) {
         this.base = base;
         this.monoBase = monoBase;
         this.text = text;
@@ -106,9 +106,9 @@ public final class Style {
             tableHeadBackground = codeBackground;
             headingRule = Theme.withAlpha(muted, 80);
         }
-        float size = Zoomable.clampSize(base.getSize2D() + zoom);
+        final float size = Zoomable.clampSize(base.getSize2D() + zoom);
         // code a step below the text, its notes and small text a step below that (record 102)
-        float monoSize = Zoomable.clampSize(Theme.size(monoBase.getSize2D(), Theme.TextSize.SMALL) + zoom);
+        final float monoSize = Zoomable.clampSize(Theme.size(monoBase.getSize2D(), Theme.TextSize.SMALL) + zoom);
         body = base.deriveFont(Font.PLAIN, size);
         bold = base.deriveFont(Font.BOLD, size);
         italic = base.deriveFont(Font.ITALIC, size);
@@ -117,12 +117,12 @@ public final class Style {
         monoSmall = monoBase.deriveFont(Font.PLAIN, Math.max(8f, Theme.size(monoBase.getSize2D(), Theme.TextSize.CAPTION) + zoom));
         small = base.deriveFont(Font.PLAIN, Math.max(8f, Theme.size(base.getSize2D(), Theme.TextSize.SMALL) + zoom));
         // the first three levels in the serif, set apart from the text as a title is; the smaller ones bold
-        Font serif = Theme.serif();
-        float[] scale = Theme.HEADING_SCALE;
+        final Font serif = Theme.serif();
+        final float[] scale = Theme.HEADING_SCALE;
         headings = new Font[]{
                 serif.deriveFont(Font.BOLD, size * scale[0]), serif.deriveFont(Font.BOLD, size * scale[1]), serif.deriveFont(Font.BOLD, size * scale[2]),
                 bold, bold, bold};
-        LineMetrics m = body.getLineMetrics("Xg", FRC);
+        final LineMetrics m = body.getLineMetrics("Xg", FRC);
         lineGap = Math.max(2f, m.getHeight() * 0.22f);
         paraGap = Math.round(m.getHeight() * 0.55f);
         indent = Math.round(m.getHeight() * 1.3f);
@@ -131,7 +131,7 @@ public final class Style {
     }
 
     /** The style for the look and feel's default font and the theme's monospaced font. */
-    public static Style of(int zoom) {
+    public static Style of(final int zoom) {
         return new Style(baseFont(), Theme.mono(), zoom);
     }
 
@@ -139,8 +139,8 @@ public final class Style {
      * {@code zoom} kept to the steps that move the body text between 8 and 40 pt: a step past either end changes
      * nothing.
      */
-    public static int clampZoom(int zoom) {
-        float base = baseFont().getSize2D();
+    public static int clampZoom(final int zoom) {
+        final float base = baseFont().getSize2D();
         return Math.round(Zoomable.clampSize(base + zoom) - base);
     }
 
@@ -163,21 +163,21 @@ public final class Style {
         return outsideStyle;
     }
 
-    Font font(int spanStyle, boolean code) {
+    Font font(final int spanStyle, final boolean code) {
         if (code) {
             return mono;
         }
-        boolean b = (spanStyle & Span.BOLD) != 0;
-        boolean i = (spanStyle & Span.ITALIC) != 0;
+        final boolean b = (spanStyle & Span.BOLD) != 0;
+        final boolean i = (spanStyle & Span.ITALIC) != 0;
         return b && i ? boldItalic : b ? bold : i ? italic : body;
     }
 
-    float height(Font f) {
+    float height(final Font f) {
         return f.getLineMetrics("Xg", FRC).getHeight() + lineGap;
     }
 
-    private static Color color(String key, Color fallback) {
-        Color c = UIManager.getColor(key);
+    private static Color color(final String key, final Color fallback) {
+        final Color c = UIManager.getColor(key);
         return c == null ? fallback : c;
     }
 }

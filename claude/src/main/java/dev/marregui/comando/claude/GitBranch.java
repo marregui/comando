@@ -11,29 +11,29 @@ public final class GitBranch {
     }
 
     /** The branch of the repository holding {@code dir}, a short commit id when detached, or empty. */
-    public static String of(Path dir) {
+    public static String of(final Path dir) {
         for (Path d = dir.toAbsolutePath(); d != null; d = d.getParent()) {
-            Path git = d.resolve(".git");
+            final Path git = d.resolve(".git");
             try {
                 if (Files.isDirectory(git)) {
                     return parseHead(Files.readString(git.resolve("HEAD")));
                 }
                 if (Files.isRegularFile(git)) { // a worktree or submodule: "gitdir: <path>"
-                    String pointer = Files.readString(git).strip();
+                    final String pointer = Files.readString(git).strip();
                     if (pointer.startsWith("gitdir:")) {
-                        Path gitDir = d.resolve(pointer.substring("gitdir:".length()).strip());
+                        final Path gitDir = d.resolve(pointer.substring("gitdir:".length()).strip());
                         return parseHead(Files.readString(gitDir.resolve("HEAD")));
                     }
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 return "";
             }
         }
         return "";
     }
 
-    static String parseHead(String head) {
-        String h = head.strip();
+    static String parseHead(final String head) {
+        final String h = head.strip();
         if (h.startsWith("ref: refs/heads/")) {
             return h.substring("ref: refs/heads/".length());
         }

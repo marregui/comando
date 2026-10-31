@@ -1,5 +1,8 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -7,9 +10,6 @@ import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Helpers the rules of more than one domain use: notices, the panels' and sessions' saved lists, fresh panel ids.
@@ -22,11 +22,11 @@ final class Shared {
     private Shared() {
     }
 
-    static Effect savePanels(AppState s) {
+    static Effect savePanels(final AppState s) {
         return new Effect.SavePanels(s.panels(), s.closed());
     }
 
-    static List<SessionSpec> sessionSpecs(AppState s) {
+    static List<SessionSpec> sessionSpecs(final AppState s) {
         return s.sessions().stream().map(SessionState::spec).toList();
     }
 
@@ -46,7 +46,7 @@ final class Shared {
         return new Fresh(s, fresh);
     }
 
-    static AppState notice(Clock clock, AppState s, Notice.Level level, String text) {
+    static AppState notice(final Clock clock, final AppState s, final Notice.Level level, final String text) {
         return notice(clock, s, level, text, "");
     }
 
@@ -54,21 +54,21 @@ final class Shared {
      * Records a notice in the history and shows it unless an error stands: an error stays on the status bar until
      * the user dismisses it, a newer error replaces it, or a notice about the same subject replaces it.
      */
-    static AppState notice(Clock clock, AppState s, Notice.Level level, String text, String subject) {
-        Notice n = new Notice(level, text, clock.millis(), subject);
-        List<Notice> history = new ArrayList<>(s.notices().size() + 1);
-        int from = Math.max(0, s.notices().size() + 1 - AppState.NOTICE_HISTORY);
+    static AppState notice(final Clock clock, final AppState s, final Notice.Level level, final String text, final String subject) {
+        final Notice n = new Notice(level, text, clock.millis(), subject);
+        final List<Notice> history = new ArrayList<>(s.notices().size() + 1);
+        final int from = Math.max(0, s.notices().size() + 1 - AppState.NOTICE_HISTORY);
         history.addAll(s.notices().subList(from, s.notices().size()));
         history.add(n);
-        Notice standing = s.notice();
-        boolean replaces = standing.isEmpty() || standing.level() != Notice.Level.ERROR || level == Notice.Level.ERROR
+        final Notice standing = s.notice();
+        final boolean replaces = standing.isEmpty() || standing.level() != Notice.Level.ERROR || level == Notice.Level.ERROR
                 || !subject.isEmpty() && subject.equals(standing.subject());
         return s.withNotices(replaces ? n : standing, history);
     }
 
     /** Clears the status bar's notice when it is about {@code subject}: the thing it reported on has moved on. */
-    static AppState clear(AppState s, String subject) {
-        Notice n = s.notice();
+    static AppState clear(final AppState s, final String subject) {
+        final Notice n = s.notice();
         return !n.isEmpty() && !subject.isEmpty() && subject.equals(n.subject()) ? s.withNotice(Notice.NONE) : s;
     }
 }

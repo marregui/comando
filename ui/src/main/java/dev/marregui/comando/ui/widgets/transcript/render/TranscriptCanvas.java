@@ -1,20 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.Approval;
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.ui.kit.async.ShownTimer;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.AbstractAction;
-import javax.swing.JComponent;
-import javax.swing.JViewport;
-import javax.swing.KeyStroke;
-import javax.swing.Scrollable;
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -41,6 +26,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JViewport;
+import javax.swing.KeyStroke;
+import javax.swing.Scrollable;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The transcript painted directly: one {@link Item} per block, laid out once per width and style and
@@ -102,39 +102,39 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     /** Find: its matches, the current one, and the items it opened. */
     private final Finder finder = new Finder(new FindHost());
 
-    public TranscriptCanvas(Consumer<String> links) {
+    public TranscriptCanvas(final Consumer<String> links) {
         this.links = links;
         setFocusable(true);
         setOpaque(false);
-        MouseAdapter mouse = new MouseAdapter() {
+        final MouseAdapter mouse = new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 pressed(e);
             }
 
             @Override
-            public void mouseDragged(MouseEvent e) {
+            public void mouseDragged(final MouseEvent e) {
                 dragged(e);
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 released(e);
             }
 
             @Override
-            public void mouseMoved(MouseEvent e) {
+            public void mouseMoved(final MouseEvent e) {
                 moved(e);
             }
         };
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
-        int menu = Platform.menuShortcutMask();
+        final int menu = Platform.menuShortcutMask();
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), "copy-selection");
         getActionMap().put("copy-selection", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
-                String s = selectionText();
+            public void actionPerformed(final ActionEvent e) {
+                final String s = selectionText();
                 if (!s.isEmpty()) {
                     Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(s), null);
                 }
@@ -143,7 +143,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_A, menu), "select-all");
         getActionMap().put("select-all", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 selectAll();
             }
         });
@@ -172,8 +172,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * Adds the block at transcript index {@code index}; a sub-agent's block goes inside its call's card, and a hook
      * note right after another joins its group.
      */
-    public void append(int index, Block b) {
-        Item item = switch (b) {
+    public void append(final int index, final Block b) {
+        final Item item = switch (b) {
             case Block.ToolCall call -> agents.newCard(call, index);
             case Block.Note n when n.kind() == Block.NoteKind.HOOK -> new Items.NoteItem(n, true);
             default -> Items.of(b);
@@ -182,8 +182,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (item instanceof Items.ToolItem card) {
             agents.added(card);
         }
-        Items.ToolItem parent = b.parent().isEmpty() ? null : agents.card(b.parent());
-        List<Item> siblings = parent != null ? parent.children() : items;
+        final Items.ToolItem parent = b.parent().isEmpty() ? null : agents.card(b.parent());
+        final List<Item> siblings = parent != null ? parent.children() : items;
         Item shown = item;
         if (item instanceof Items.NoteItem hook && hook.isHook()) {
             if (!siblings.isEmpty() && siblings.getLast() instanceof Items.HookGroupItem group) {
@@ -194,7 +194,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 changed();
                 return;
             }
-            Items.HookGroupItem group = new Items.HookGroupItem(hook);
+            final Items.HookGroupItem group = new Items.HookGroupItem(hook);
             parentOf.put(hook, group);
             shown = group;
         }
@@ -234,7 +234,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      */
     private void frameReport() {
         for (int i = items.size() - 2; i >= 0; i--) {
-            Item item = items.get(i);
+            final Item item = items.get(i);
             if (item instanceof Items.TextItem text) {
                 text.report(true);
                 return;
@@ -246,18 +246,18 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /** True when the selection starts or ends in {@code item}'s text. */
-    private boolean selects(Item item) {
+    private boolean selects(final Item item) {
         if (anchorBox == null && focusBox == null || !item.laidOut()) {
             return false; // nothing selected, or never laid out, so never selected
         }
-        List<Placed> boxes = new ArrayList<>();
+        final List<Placed> boxes = new ArrayList<>();
         item.collect(0, 0, boxes);
         return boxes.stream().anyMatch(p -> p.box() == anchorBox || p.box() == focusBox);
     }
 
     /** The writer replaced the block at {@code index}. */
-    public void update(int index, Block b) {
-        Item item = byIndex.get(index);
+    public void update(final int index, final Block b) {
+        final Item item = byIndex.get(index);
         if (item == null || item.block == b) {
             return;
         }
@@ -274,12 +274,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * The session's open background tasks, from Claude Code's task list: a card whose result launched one of its
      * {@code local_agent} tasks reads as running in the background until the task leaves the list.
      */
-    public void setBackgroundTasks(List<BackgroundTask> tasks) {
+    public void setBackgroundTasks(final List<BackgroundTask> tasks) {
         agents.setBackgroundTasks(tasks);
     }
 
     /** Runs when the running sub-agents change without a block change: a launch's grace ending, a task list. */
-    public void onAgentsChanged(Runnable listener) {
+    public void onAgentsChanged(final Runnable listener) {
         agents.onAgentsChanged(listener);
     }
 
@@ -296,20 +296,20 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /** The tool calls nested in the card {@code toolUseId}, at any depth; -1 when there is no such card. For tests. */
-    int toolCount(String toolUseId) {
-        Items.ToolItem card = agents.card(toolUseId);
+    int toolCount(final String toolUseId) {
+        final Items.ToolItem card = agents.card(toolUseId);
         return card == null ? -1 : card.toolCount();
     }
 
     /** The latest tool call nested in the card {@code toolUseId}, as its status shows it. For tests. */
-    String lastTool(String toolUseId) {
-        Items.ToolItem card = agents.card(toolUseId);
+    String lastTool(final String toolUseId) {
+        final Items.ToolItem card = agents.card(toolUseId);
         return card == null ? "" : card.lastTool();
     }
 
     /** Whether the card {@code toolUseId} is open. */
-    public boolean isCardOpen(String toolUseId) {
-        Items.ToolItem card = agents.card(toolUseId);
+    public boolean isCardOpen(final String toolUseId) {
+        final Items.ToolItem card = agents.card(toolUseId);
         return card != null && card.isOpen();
     }
 
@@ -317,7 +317,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * The top of the top-level item holding the card {@code toolUseId}; -1 when there is none or it has no position.
      * For tests.
      */
-    int topOf(String toolUseId) {
+    int topOf(final String toolUseId) {
         Item item = agents.card(toolUseId);
         if (item == null) {
             return -1;
@@ -325,7 +325,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         while (parentOf.get(item) != null) {
             item = parentOf.get(item);
         }
-        int index = items.indexOf(item);
+        final int index = items.indexOf(item);
         return index < 0 || index >= tops.length ? -1 : tops[index];
     }
 
@@ -333,8 +333,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * Opens the card {@code toolUseId} and the cards around it, and scrolls its top-level item to the top of the view;
      * false when there is no such card.
      */
-    public boolean reveal(String toolUseId) {
-        Items.ToolItem card = agents.card(toolUseId);
+    public boolean reveal(final String toolUseId) {
+        final Items.ToolItem card = agents.card(toolUseId);
         if (card == null) {
             return false;
         }
@@ -348,7 +348,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         while (parentOf.get(top) != null) {
             top = parentOf.get(top);
         }
-        int index = items.indexOf(top);
+        final int index = items.indexOf(top);
         if (index < 0) {
             return false;
         }
@@ -358,14 +358,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (getParent() instanceof JViewport v) {
             v.setViewSize(new Dimension(Math.max(getWidth(), 1), total));
         }
-        Rectangle visible = getVisibleRect();
+        final Rectangle visible = getVisibleRect();
         scrollRectToVisible(new Rectangle(0, tops[index], 1, Math.max(1, visible.height)));
         repaint();
         return true;
     }
 
-    public Block blockAt(int index) {
-        Item item = byIndex.get(index);
+    public Block blockAt(final int index) {
+        final Item item = byIndex.get(index);
         return item == null ? null : item.block;
     }
 
@@ -377,20 +377,20 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * The link at {@code (x, y)}, in a card's header or in its text, as a double click there follows; null when none;
      * for tests.
      */
-    String linkAt(int x, int y) {
-        int i = firstAt(y);
+    String linkAt(final int x, final int y) {
+        final int i = firstAt(y);
         if (i < items.size() && y >= tops[i] && items.get(i).laidOut()) {
-            String header = items.get(i).headerLinkAt(x - PAD_X, y - tops[i]);
+            final String header = items.get(i).headerLinkAt(x - PAD_X, y - tops[i]);
             if (header != null) {
                 return header;
             }
         }
-        Placed p = boxAt(x, y, false);
+        final Placed p = boxAt(x, y, false);
         return p == null || !p.contains(x, y) ? null : p.box().linkAt(x - p.x(), y - p.y());
     }
 
     /** The item of the block at {@code index}; for tests. */
-    Item itemAt(int index) {
+    Item itemAt(final int index) {
         return byIndex.get(index);
     }
 
@@ -411,7 +411,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * call marks that call; one without an id marks the last running call of its tool, by plain name or as an
      * MCP tool ({@code mcp__server__name}).
      */
-    public void setWaiting(List<Approval> approvals) {
+    public void setWaiting(final List<Approval> approvals) {
         agents.setWaiting(approvals);
     }
 
@@ -419,8 +419,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * The status a card shows beside its title ({@code running · 12 s}, the wait for an approval); empty when done or
      * unknown.
      */
-    public String cardStatus(String toolUseId) {
-        Items.ToolItem card = agents.card(toolUseId);
+    public String cardStatus(final String toolUseId) {
+        final Items.ToolItem card = agents.card(toolUseId);
         return card == null ? "" : card.statusText(nowMillis());
     }
 
@@ -430,7 +430,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /** For tests: the clock running cards are timed by. */
-    void clock(LongSupplier millis) {
+    void clock(final LongSupplier millis) {
         clock = millis;
     }
 
@@ -463,7 +463,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         repaint();
     }
 
-    public void setZoom(int steps) {
+    public void setZoom(final int steps) {
         zoom = steps;
         style = null;
         structureChanged = true;
@@ -516,21 +516,21 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * change, and for blocks never laid out (a session's history when the view is rebuilt). Cost per call is bounded
      * by what is visible, not by the session length.
      */
-    public void ensureLayout(int w) {
+    public void ensureLayout(final int w) {
         layout(w, false);
     }
 
     /** Lays out every item exactly at width {@code w}; find, select-all and measurements need exact positions. */
-    public void layoutFully(int w) {
+    public void layoutFully(final int w) {
         layout(w, true);
     }
 
-    private void layout(int w, boolean exact) {
-        int inner = Math.max(80, w - 2 * PAD_X);
-        Style s = style();
+    private void layout(final int w, final boolean exact) {
+        final int inner = Math.max(80, w - 2 * PAD_X);
+        final Style s = style();
         boolean any = inner != laidWidth || structureChanged || tops.length != items.size() || (exact && estimated);
         if (!any) {
-            for (Item item : items) {
+            for (final Item item : items) {
                 if (item.isDirty() && item.laidOut()) { // a block never laid out is the idle pass's
                     any = true;
                     break;
@@ -549,13 +549,13 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (exact) {
             layOutInParallel(inner, s);
         }
-        Rectangle vis = getVisibleRect();
-        int lo = vis.y;
-        int hi = vis.y + vis.height;
+        final Rectangle vis = getVisibleRect();
+        final int lo = vis.y;
+        final int hi = vis.y + vis.height;
         boolean guessed = false;
         int y = PAD_Y;
         for (int i = 0; i < items.size(); i++) {
-            Item item = items.get(i);
+            final Item item = items.get(i);
             tops[i] = y;
             int h;
             if (!item.needsLayout(inner, s)) {
@@ -585,9 +585,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * by the one item each may still be laying out. The latch orders the forks' layouts before the caller reads the
      * heights; the first failure is thrown on the caller once all have stopped.
      */
-    private void layOutInParallel(int inner, Style s) {
-        List<Item> stale = new ArrayList<>();
-        for (Item item : items) {
+    private void layOutInParallel(final int inner, final Style s) {
+        final List<Item> stale = new ArrayList<>();
+        for (final Item item : items) {
             if (item.needsLayout(inner, s)) {
                 stale.add(item);
             }
@@ -595,19 +595,19 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (stale.size() < PARALLEL_FROM) {
             return;
         }
-        int forks = Math.min(Runtime.getRuntime().availableProcessors() - 1, stale.size() / ITEMS_PER_FORK);
-        AtomicInteger next = new AtomicInteger();
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
-        Runnable work = () -> {
+        final int forks = Math.min(Runtime.getRuntime().availableProcessors() - 1, stale.size() / ITEMS_PER_FORK);
+        final AtomicInteger next = new AtomicInteger();
+        final AtomicReference<RuntimeException> failure = new AtomicReference<>();
+        final Runnable work = () -> {
             for (int i; failure.get() == null && (i = next.getAndIncrement()) < stale.size(); ) {
                 try {
                     stale.get(i).layout(inner, s);
-                } catch (RuntimeException e) {
+                } catch (final RuntimeException e) {
                     failure.compareAndSet(null, e);
                 }
             }
         };
-        CountDownLatch done = new CountDownLatch(forks);
+        final CountDownLatch done = new CountDownLatch(forks);
         for (int f = 0; f < forks; f++) {
             Threads.fork("transcript-layout-" + f, () -> {
                 try {
@@ -623,7 +623,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             try {
                 done.await();
                 break;
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 interrupted = true; // the forks touch the items still: the caller may not read them before they stop
             }
         }
@@ -649,17 +649,17 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * Lays out stale items inside {@code clip} before they are painted; true when positions moved. A view that showed
      * the end keeps showing it: the next slice of the idle pass puts it back at the end the grown content has.
      */
-    private boolean layoutVisible(Rectangle clip) {
+    private boolean layoutVisible(final Rectangle clip) {
         if (!estimated) {
             return false;
         }
-        View before = view();
+        final View before = view();
         boolean moved = false;
-        Style s = style();
+        final Style s = style();
         for (int round = 0; round < 3; round++) {
             boolean changed = false;
             for (int i = firstAt(clip.y); i < items.size() && tops[i] <= clip.y + clip.height; i++) {
-                Item item = items.get(i);
+                final Item item = items.get(i);
                 if (item.needsLayout(laidWidth, s)) {
                     heights[i] = item.layout(laidWidth, s);
                     changed = true;
@@ -682,18 +682,18 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /** One slice of the idle pass: lays out stale items nearest the view for up to 8 ms, keeping the view in place. */
     private void refine() {
-        Style s = style();
-        long deadline = System.nanoTime() + 8_000_000L;
-        View before = view();
-        int first = before.item();
+        final Style s = style();
+        final long deadline = System.nanoTime() + 8_000_000L;
+        final View before = view();
+        final int first = before.item();
         boolean left = false;
         boolean changed = false;
         for (int d = 0; d < items.size() * 2 + 2; d++) {
-            int i = first + (d % 2 == 0 ? d / 2 : -(d / 2 + 1));
+            final int i = first + (d % 2 == 0 ? d / 2 : -(d / 2 + 1));
             if (i < 0 || i >= items.size()) {
                 continue;
             }
-            Item item = items.get(i);
+            final Item item = items.get(i);
             if (item.needsLayout(laidWidth, s)) {
                 if (System.nanoTime() > deadline) {
                     left = true;
@@ -726,21 +726,21 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (tops.length != items.size() && laidWidth >= 0) {
             ensureLayout(Math.max(getWidth(), 1)); // blocks appended since the last layout get their positions first
         }
-        Rectangle vis = getVisibleRect();
-        boolean atEnd = (endKeptAt >= 0 && vis.y == endKeptAt) || vis.y + vis.height >= total - 40;
+        final Rectangle vis = getVisibleRect();
+        final boolean atEnd = (endKeptAt >= 0 && vis.y == endKeptAt) || vis.y + vis.height >= total - 40;
         if (items.isEmpty() || tops.length != items.size()) {
             return new View(atEnd, 0, 0, vis.height); // never laid out: nothing shown yet
         }
-        int first = Math.min(firstAt(vis.y), items.size() - 1);
+        final int first = Math.min(firstAt(vis.y), items.size() - 1);
         return new View(atEnd, first, vis.y - tops[first], vis.height);
     }
 
     /** Sizes the canvas to its content and shows what {@code before} showed; the end when it showed the end. */
-    private void restore(View before) {
+    private void restore(final View before) {
         endKeptAt = -1;
         if (getParent() instanceof JViewport v) {
             v.setViewSize(new Dimension(getWidth(), total));
-            int y = before.atEnd() || before.item() >= items.size() ? Math.max(0, total - before.height())
+            final int y = before.atEnd() || before.item() >= items.size() ? Math.max(0, total - before.height())
                     : Math.max(0, tops[before.item()] + before.offset());
             v.setViewPosition(new Point(0, y));
         }
@@ -760,13 +760,13 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     private int viewportWidth() {
-        Component p = getParent();
+        final Component p = getParent();
         return p instanceof JViewport v ? v.getWidth() : getWidth();
     }
 
     @Override
     public Dimension getPreferredSize() {
-        int w = viewportWidth();
+        final int w = viewportWidth();
         if (w <= 0) {
             return new Dimension(400, 100);
         }
@@ -777,9 +777,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     // ---- painting
 
     @Override
-    protected void paintComponent(Graphics g0) {
+    protected void paintComponent(final Graphics g0) {
         ensureLayout(getWidth());
-        Graphics2D g = (Graphics2D) g0.create();
+        final Graphics2D g = (Graphics2D) g0.create();
         try {
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
@@ -791,11 +791,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             layoutVisible(clip);
             ensurePlaced();
             for (int i = firstAt(clip.y); i < items.size(); i++) {
-                int top = tops[i];
+                final int top = tops[i];
                 if (top > clip.y + clip.height) {
                     break;
                 }
-                Item item = items.get(i);
+                final Item item = items.get(i);
                 if (!item.laidOut()) {
                     continue; // estimated past the visible pass; the idle pass lays it out and repaints
                 }
@@ -810,7 +810,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * The first item whose bottom is below {@code y}; {@code items.size()} when none. A block appended since
      * the last layout has no position yet, so a mouse event lays out first instead of indexing past it.
      */
-    private int firstAt(int y) {
+    private int firstAt(final int y) {
         if (tops.length != items.size()) {
             ensureLayout(Math.max(getWidth(), 1));
         }
@@ -818,7 +818,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         int hi = items.size() - 1;
         int found = items.size();
         while (lo <= hi) {
-            int mid = (lo + hi) >>> 1;
+            final int mid = (lo + hi) >>> 1;
             if (tops[mid] + heights[mid] >= y) {
                 found = mid;
                 hi = mid - 1;
@@ -832,21 +832,21 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     // ---- Marks
 
     @Override
-    public int[] selection(TextBox box) {
+    public int[] selection(final TextBox box) {
         if (anchorBox == null || focusBox == null || boxIndex == null) {
             return NONE;
         }
-        Integer i = boxIndex.get(box);
-        Integer a = boxIndex.get(anchorBox);
-        Integer f = boxIndex.get(focusBox);
+        final Integer i = boxIndex.get(box);
+        final Integer a = boxIndex.get(anchorBox);
+        final Integer f = boxIndex.get(focusBox);
         if (i == null || a == null || f == null) {
             return NONE;
         }
-        boolean forward = a < f || (a.equals(f) && anchorChar <= focusChar);
-        int startBox = forward ? a : f;
-        int endBox = forward ? f : a;
-        int startChar = forward ? anchorChar : focusChar;
-        int endChar = forward ? focusChar : anchorChar;
+        final boolean forward = a < f || (a.equals(f) && anchorChar <= focusChar);
+        final int startBox = forward ? a : f;
+        final int endBox = forward ? f : a;
+        final int startChar = forward ? anchorChar : focusChar;
+        final int endChar = forward ? focusChar : anchorChar;
         if (i < startBox || i > endBox) {
             return NONE;
         }
@@ -854,12 +854,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     @Override
-    public List<int[]> finds(TextBox box) {
+    public List<int[]> finds(final TextBox box) {
         return finder.finds(box);
     }
 
     @Override
-    public int currentFind(TextBox box) {
+    public int currentFind(final TextBox box) {
         return finder.currentFind(box, placed);
     }
 
@@ -896,7 +896,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * since the last layout too. A canvas never laid out (its tab not yet shown) has nothing shown to keep.
      */
     private void ensureExact() {
-        int w = getWidth() > 0 ? getWidth() : viewportWidth();
+        final int w = getWidth() > 0 ? getWidth() : viewportWidth();
         if (laidWidth < 0) {
             layoutFully(w); // never laid out: nothing shown yet to keep
         } else if (estimated || tops.length != items.size()) {
@@ -905,8 +905,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /** Lays out every item exactly at {@code w}, keeping the view and sizing the canvas to the content. */
-    private void relayoutKeepingView(int w) {
-        View before = view();
+    private void relayoutKeepingView(final int w) {
+        final View before = view();
         layoutFully(w);
         refiner.stop();
         restore(before);
@@ -915,12 +915,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     // ---- mouse
 
     /** The box at {@code (x, y)}; only what is shown is laid out for it, the rest stays with the idle pass. */
-    private Placed boxAt(int x, int y, boolean nearest) {
+    private Placed boxAt(final int x, final int y, final boolean nearest) {
         ensureLayout(getWidth());
         layoutVisible(getVisibleRect());
         ensurePlaced();
         Placed best = null;
-        for (Placed p : placed) {
+        for (final Placed p : placed) {
             if (p.contains(x, y) && x >= p.x() - 4 && x <= p.x() + p.box().width() + 4) {
                 return p;
             }
@@ -931,14 +931,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return best;
     }
 
-    private void pressed(MouseEvent e) {
+    private void pressed(final MouseEvent e) {
         requestFocusInWindow();
         if (!SwingUtilities.isLeftMouseButton(e)) {
             return;
         }
-        int i = firstAt(e.getY());
+        final int i = firstAt(e.getY());
         if (i < items.size() && e.getY() >= tops[i] && items.get(i).laidOut()) {
-            String link = items.get(i).headerLinkAt(e.getX() - PAD_X, e.getY() - tops[i]);
+            final String link = items.get(i).headerLinkAt(e.getX() - PAD_X, e.getY() - tops[i]);
             if (link != null) {
                 // followed on the double click's release, as a link in text is
                 clearSelection();
@@ -947,7 +947,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 repaint();
                 return;
             }
-            Item toggle = items.get(i).toggleAt(e.getX() - PAD_X, e.getY() - tops[i]);
+            final Item toggle = items.get(i).toggleAt(e.getX() - PAD_X, e.getY() - tops[i]);
             if (toggle != null && toggle.toggle()) {
                 invalidateAncestors(parentOf.get(toggle));
                 structureChanged = true;
@@ -955,7 +955,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 return;
             }
         }
-        Placed p = boxAt(e.getX(), e.getY(), true);
+        final Placed p = boxAt(e.getX(), e.getY(), true);
         pressedLink = null;
         if (p == null) {
             clearSelection();
@@ -979,11 +979,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         repaint();
     }
 
-    private void dragged(MouseEvent e) {
+    private void dragged(final MouseEvent e) {
         if (anchorBox == null) {
             return;
         }
-        Placed p = boxAt(e.getX(), e.getY(), true);
+        final Placed p = boxAt(e.getX(), e.getY(), true);
         if (p != null) {
             focusBox = p.box();
             focusChar = p.box().indexAt(e.getX() - p.x(), e.getY() - p.y());
@@ -993,22 +993,22 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         scrollRectToVisible(new Rectangle(e.getX(), e.getY(), 1, 1));
     }
 
-    private void released(MouseEvent e) {
+    private void released(final MouseEvent e) {
         if (pressedLink != null && pressedClicks == 2 && anchorBox == focusBox && anchorChar == focusChar) {
-            String href = pressedLink;
+            final String href = pressedLink;
             pressedLink = null;
             links.accept(href);
         }
     }
 
-    private void moved(MouseEvent e) {
-        int i = firstAt(e.getY());
+    private void moved(final MouseEvent e) {
+        final int i = firstAt(e.getY());
         if (i < items.size() && e.getY() >= tops[i] && items.get(i).laidOut()
                 && items.get(i).toggleAt(e.getX() - PAD_X, e.getY() - tops[i]) != null) {
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             return;
         }
-        Placed p = boxAt(e.getX(), e.getY(), false);
+        final Placed p = boxAt(e.getX(), e.getY(), false);
         if (p == null) {
             setCursor(Cursor.getDefaultCursor());
         } else if (p.box().linkAt(e.getX() - p.x(), e.getY() - p.y()) != null) {
@@ -1018,8 +1018,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
     }
 
-    private void selectWord(Placed p, int at) {
-        String t = p.box().text();
+    private void selectWord(final Placed p, final int at) {
+        final String t = p.box().text();
         int s = Math.min(at, t.length());
         int e = s;
         while (s > 0 && Character.isLetterOrDigit(t.charAt(s - 1)) || s > 0 && t.charAt(s - 1) == '_') {
@@ -1061,9 +1061,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
         ensureExact();
         ensurePlaced();
-        StringBuilder sb = new StringBuilder();
-        for (Placed p : placed) {
-            int[] r = selection(p.box());
+        final StringBuilder sb = new StringBuilder();
+        for (final Placed p : placed) {
+            final int[] r = selection(p.box());
             if (r[0] < r[1]) {
                 if (!sb.isEmpty()) {
                     sb.append('\n');
@@ -1080,7 +1080,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * Finds {@code text}, opening the closed items that hold it; returns the number of matches. A new text first
      * closes what the previous one opened.
      */
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return finder.find(text, forward);
     }
 
@@ -1114,7 +1114,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
 
         @Override
-        public Item parentOf(Item item) {
+        public Item parentOf(final Item item) {
             return parentOf.get(item);
         }
 
@@ -1126,7 +1126,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
 
         @Override
-        public void foldChanged(Item item) {
+        public void foldChanged(final Item item) {
             item.foldChanged();
             invalidateAncestors(parentOf.get(item));
             structureChanged = true;
@@ -1145,8 +1145,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
 
         @Override
-        public void scrollTo(int y) {
-            Rectangle visible = getVisibleRect();
+        public void scrollTo(final int y) {
+            final Rectangle visible = getVisibleRect();
             scrollRectToVisible(new Rectangle(0, Math.max(0, y - visible.height / 3), 1, visible.height / 2));
         }
 
@@ -1161,9 +1161,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * input and result fenced, notes in italics, each turn's duration as an italic footer; thinking stays out.
      */
     public String markdown() {
-        StringBuilder sb = new StringBuilder();
-        for (Item item : items) {
-            String m = item.markdown();
+        final StringBuilder sb = new StringBuilder();
+        for (final Item item : items) {
+            final String m = item.markdown();
             if (!m.isEmpty()) {
                 sb.append(m).append("\n\n");
             }
@@ -1183,12 +1183,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     @Override
-    public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+    public int getScrollableUnitIncrement(final Rectangle visible, final int orientation, final int direction) {
         return 24;
     }
 
     @Override
-    public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+    public int getScrollableBlockIncrement(final Rectangle visible, final int orientation, final int direction) {
         return Math.max(visible.height - 48, 24);
     }
 

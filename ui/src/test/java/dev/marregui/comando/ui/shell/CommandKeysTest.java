@@ -1,15 +1,16 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.action.Command;
-import org.junit.jupiter.api.Test;
-
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.text.DefaultEditorKit;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
-import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.action.Command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,8 +26,8 @@ class CommandKeysTest {
     /// itself, as the terminal does, and no component both return false.
     @Test
     void anEditKeyRunsTheFocusedComponentsOwnBindingAndPassesWhenThereIsNone() {
-        JTextField field = new JTextField("hello");
-        KeyStroke selectAll = KeyStroke.getKeyStroke(KeyEvent.VK_A, CMD);
+        final JTextField field = new JTextField("hello");
+        final KeyStroke selectAll = KeyStroke.getKeyStroke(KeyEvent.VK_A, CMD);
         field.getInputMap().put(selectAll, DefaultEditorKit.selectAllAction);
         assertThat(Keys.forward(field, selectAll, false)).isTrue();
         assertThat(Keys.forward(field, selectAll, true)).isTrue();
@@ -40,7 +41,7 @@ class CommandKeysTest {
     /// no key.
     @Test
     void theKeyTableListsEveryCommandWithAKeyByMenu() {
-        String md = Keys.markdown(List.of(
+        final String md = Keys.markdown(List.of(
                 Command.of("a", "Run | block", null, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, CMD), "Run", () -> { }),
                 Command.of("b", "No key", null, null, "Run", () -> { })));
         assertThat(md).contains("| Where | Command | Keys |", "| Run | Run \\| block |").doesNotContain("No key");
@@ -49,8 +50,8 @@ class CommandKeysTest {
     /// Commands of interleaved places come out grouped, the first place first, keeping their order within each place.
     @Test
     void theKeyTableGroupsCommandsWhereTheyBelongInTheOrderEachPlaceFirstAppears() {
-        KeyStroke k = KeyStroke.getKeyStroke(KeyEvent.VK_1, CMD);
-        String md = Keys.markdown(List.of(
+        final KeyStroke k = KeyStroke.getKeyStroke(KeyEvent.VK_1, CMD);
+        final String md = Keys.markdown(List.of(
                 Command.of("a", "New panel", null, k, "Panels", () -> { }),
                 Command.of("b", "Open file…", null, k, "Files", () -> { }),
                 Command.of("c", "Close", null, k, "Panels", () -> { }),

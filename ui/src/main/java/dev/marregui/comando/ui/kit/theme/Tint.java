@@ -37,7 +37,7 @@ public final class Tint {
     public final boolean light;
     private final String name;
 
-    Tint(String name, String label, Color highlight, Color body, Color shade, boolean light) {
+    Tint(final String name, final String label, final Color highlight, final Color body, final Color shade, final boolean light) {
         this.name = name;
         this.light = light;
         this.label = label;
@@ -46,8 +46,8 @@ public final class Tint {
         this.shade = shade;
     }
 
-    private static Tint builtIn(String name, String theme) {
-        ThemeSpec s = BuiltInThemes.spec(theme);
+    private static Tint builtIn(final String name, final String theme) {
+        final ThemeSpec s = BuiltInThemes.spec(theme);
         return new Tint(name, s.tintLabel(), s.highlight(), s.body(), s.shade(), s.light());
     }
 
@@ -67,15 +67,15 @@ public final class Tint {
     }
 
     /** The tint named {@code name}: a built-in one, else one of the themes offered; {@link #TREASURE} for no tint's. */
-    public static Tint named(String name) {
+    public static Tint named(final String name) {
         return Arrays.stream(BUILT_IN).filter(t -> t.name.equals(name)).findFirst()
                 .or(() -> Arrays.stream(NamedTheme.values()).map(t -> t.tint).filter(t -> t.name.equals(name)).findFirst())
                 .orElse(TREASURE);
     }
 
     /** The ramp at {@code t}, 0 the highlight, 1 the shade: highlight to body in the first 45 %, then to the shade. */
-    public Color at(float t) {
-        float u = Math.clamp(t, 0f, 1f);
+    public Color at(final float t) {
+        final float u = Math.clamp(t, 0f, 1f);
         return u < 0.45f ? mix(highlight, body, u / 0.45f) : mix(body, shade, (u - 0.45f) / 0.55f);
     }
 
@@ -83,7 +83,7 @@ public final class Tint {
      * The paint of polished metal from {@code top} to {@code bottom} (y, in the space it fills): highlight, then body
      * at 45 %, then the shade, or for letters the ramp at 85 %, whose bottom would read too dark at small sizes.
      */
-    public LinearGradientPaint ramp(float top, float bottom, boolean letters) {
+    public LinearGradientPaint ramp(final float top, final float bottom, final boolean letters) {
         return new LinearGradientPaint(0, top, 0, Math.max(top + 1, bottom), new float[]{0f, 0.45f, 1f},
                 new Color[]{highlight, body, letters ? at(0.85f) : shade});
     }
@@ -99,11 +99,11 @@ public final class Tint {
     }
 
     /** {@code c} laid over {@code ground} at {@code amount} (0 to 1): a tinted band or rule on a dark ground. */
-    public static Color over(Color ground, Color c, float amount) {
+    public static Color over(final Color ground, final Color c, final float amount) {
         return mix(ground, c, amount);
     }
 
-    private static Color mix(Color a, Color b, float t) {
+    private static Color mix(final Color a, final Color b, final float t) {
         return new Color(Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
                 Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
                 Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t));

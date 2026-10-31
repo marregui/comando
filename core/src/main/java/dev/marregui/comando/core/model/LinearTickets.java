@@ -43,18 +43,18 @@ public final class LinearTickets {
      * {@code known} with the workspace and team keys of the Linear links in {@code text}; the last link's workspace
      * wins.
      */
-    public static Site learn(Site known, String text) {
+    public static Site learn(final Site known, final String text) {
         if (text.indexOf("linear.app/") < 0) {
             return known;
         }
         String workspace = known.workspace();
-        Set<String> teams = new TreeSet<>(known.teams());
-        Matcher m = LINK.matcher(text);
+        final Set<String> teams = new TreeSet<>(known.teams());
+        final Matcher m = LINK.matcher(text);
         while (m.find()) {
             workspace = m.group(1);
             teams.add(m.group(2));
         }
-        Site learnt = new Site(workspace, teams);
+        final Site learnt = new Site(workspace, teams);
         return learnt.equals(known) ? known : learnt;
     }
 
@@ -62,24 +62,24 @@ public final class LinearTickets {
      * The tickets {@code text} names, at most {@code max}: those of its last paragraph first, in the order written,
      * then the others from the newest back; each once. None while {@code site} is not {@link Site#known()}.
      */
-    public static List<Ticket> in(String text, Site site, int max) {
+    public static List<Ticket> in(final String text, final Site site, final int max) {
         if (!site.known()) {
             return List.of();
         }
         int cut = 0;
-        Matcher blank = BLANK_LINE.matcher(text);
+        final Matcher blank = BLANK_LINE.matcher(text);
         while (blank.find()) {
             cut = blank.end();
         }
-        List<String> last = new ArrayList<>();
-        List<String> earlier = new ArrayList<>();
-        Matcher m = ID.matcher(text);
+        final List<String> last = new ArrayList<>();
+        final List<String> earlier = new ArrayList<>();
+        final Matcher m = ID.matcher(text);
         while (m.find()) {
             if (site.teams().contains(m.group(1))) {
                 (m.start() >= cut ? last : earlier).add(m.group());
             }
         }
-        Set<String> ids = new LinkedHashSet<>(last);
+        final Set<String> ids = new LinkedHashSet<>(last);
         for (int i = earlier.size() - 1; i >= 0; i--) {
             ids.add(earlier.get(i));
         }

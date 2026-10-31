@@ -13,7 +13,7 @@ final class GradleBuild {
     }
 
     /** The nearest directory at or above {@code dir} with an executable {@code gradlew}. */
-    static Optional<Path> root(Path dir) {
+    static Optional<Path> root(final Path dir) {
         for (Path d = dir.toAbsolutePath().normalize(); d != null; d = d.getParent()) {
             if (Files.isExecutable(d.resolve("gradlew"))) {
                 return Optional.of(d);
@@ -26,8 +26,8 @@ final class GradleBuild {
      * {@code <gradle-serial> <root> <tasks>} when the wrapper is there, else {@code <root>/gradlew --console=plain
      * <tasks>}; the tasks split as {@link Args} splits them.
      */
-    static List<String> command(Path root, String tasks, Optional<Path> gradleSerial) {
-        List<String> cmd = new ArrayList<>();
+    static List<String> command(final Path root, final String tasks, final Optional<Path> gradleSerial) {
+        final List<String> cmd = new ArrayList<>();
         if (gradleSerial.isPresent()) {
             cmd.add(gradleSerial.get().toString());
             cmd.add(root.toString());

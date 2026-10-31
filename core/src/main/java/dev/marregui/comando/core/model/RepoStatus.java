@@ -28,7 +28,7 @@ public record RepoStatus(String root, String branch, List<FileChange> changes, b
     }
 
     /** A status whose commit is unknown. */
-    public RepoStatus(String root, String branch, List<FileChange> changes, boolean truncated, String error) {
+    public RepoStatus(final String root, final String branch, final List<FileChange> changes, final boolean truncated, final String error) {
         this(root, branch, changes, truncated, error, "");
     }
 
@@ -37,13 +37,13 @@ public record RepoStatus(String root, String branch, List<FileChange> changes, b
         return head.length() > 7 ? head.substring(0, 7) : head;
     }
 
-    public static RepoStatus failed(String root, String error) {
+    public static RepoStatus failed(final String root, final String error) {
         return new RepoStatus(root, "", List.of(), false, error);
     }
 
     /** The repository's folder name. */
     public String name() {
-        int slash = root.lastIndexOf('/');
+        final int slash = root.lastIndexOf('/');
         return slash < 0 || slash == root.length() - 1 ? root : root.substring(slash + 1);
     }
 

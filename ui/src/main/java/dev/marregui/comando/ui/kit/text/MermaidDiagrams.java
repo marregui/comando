@@ -1,14 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.AtomicFiles;
-import dev.marregui.comando.core.loop.ExecutorStop;
-import dev.marregui.comando.core.view.Clip;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +19,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 /**
  * Mermaid diagrams drawn by {@code mmdc} (the Mermaid command-line renderer) into a cache folder, once per diagram
@@ -74,11 +74,11 @@ public final class MermaidDiagrams {
     private final ExecutorService drawer;
     private volatile Process drawing;
 
-    MermaidDiagrams(Path cache, Path mmdc) {
+    MermaidDiagrams(final Path cache, final Path mmdc) {
         this(cache, mmdc, TIMEOUT);
     }
 
-    MermaidDiagrams(Path cache, Path mmdc, Duration timeout) {
+    MermaidDiagrams(final Path cache, final Path mmdc, final Duration timeout) {
         this.cache = cache;
         this.mmdc = mmdc;
         this.timeout = timeout;
@@ -92,8 +92,8 @@ public final class MermaidDiagrams {
     }
 
     /** Draws diagrams into {@code cache} from now on, with the {@code mmdc} found on this machine, if any. */
-    public static void install(Path cache) {
-        Optional<Path> found = findMmdc();
+    public static void install(final Path cache) {
+        final Optional<Path> found = findMmdc();
         if (found.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "mmdc not found; Mermaid diagrams show as their source");
         }
@@ -101,7 +101,7 @@ public final class MermaidDiagrams {
     }
 
     /** Draws diagrams into {@code cache} with {@code mmdc} from now on; none without it. For tests. */
-    static void install(Path cache, Path mmdc) {
+    static void install(final Path cache, final Path mmdc) {
         installed.close();
         installed = new MermaidDiagrams(cache, mmdc);
     }
@@ -116,29 +116,29 @@ public final class MermaidDiagrams {
      * {@code whenReady} runs, on the drawing thread, once it is drawn or rejected: once, however often the same
      * callback is handed in meanwhile.
      */
-    public Diagram diagram(String source, Runnable whenReady) {
+    public Diagram diagram(final String source, final Runnable whenReady) {
         if (drawer == null) {
             return new Diagram.Unavailable(mmdc == null && cache != null
                     ? "install mermaid-cli (npm install -g @mermaid-js/mermaid-cli) to see this diagram drawn"
                     : "diagrams are not drawn here");
         }
-        String key = key(source);
-        String failed = failures.get(key);
+        final String key = key(source);
+        final String failed = failures.get(key);
         if (failed != null) {
             return new Diagram.Unavailable(failed);
         }
-        Path png = cache.resolve(key + ".png");
+        final Path png = cache.resolve(key + ".png");
         if (Files.isRegularFile(png)) {
-            int[] size = sizes.computeIfAbsent(key, k -> size(png));
+            final int[] size = sizes.computeIfAbsent(key, k -> size(png));
             if (size[0] > 0) {
                 return new Diagram.Ready(png, Math.max(1, size[0] / SCALE), Math.max(1, size[1] / SCALE));
             }
             // drawn, but not a picture: shown as a failure, not drawn and announced again and again
             return new Diagram.Unavailable(unreadable(key, png));
         }
-        boolean[] first = new boolean[1];
+        final boolean[] first = new boolean[1];
         waiting.compute(key, (k, list) -> {
-            List<Runnable> l = list == null ? new ArrayList<>() : list;
+            final List<Runnable> l = list == null ? new ArrayList<>() : list;
             first[0] = list == null;
             // a preview rendered again while it waits hands in the same callback: told once, not once per render
             if (!l.contains(whenReady)) {
@@ -149,7 +149,7 @@ public final class MermaidDiagrams {
         if (first[0]) {
             try {
                 drawer.execute(() -> draw(key, source, png));
-            } catch (RejectedExecutionException e) {
+            } catch (final RejectedExecutionException e) {
                 waiting.remove(key);
                 return new Diagram.Unavailable("comando is closing");
             }
@@ -157,7 +157,7 @@ public final class MermaidDiagrams {
         return new Diagram.Pending();
     }
 
-    private void draw(String key, String source, Path png) {
+    private void draw(final String key, final String source, final Path png) {
         if (Files.isRegularFile(png)) {
             // asked again while the last drawing of it finished: it is there
             finish(key);
@@ -166,12 +166,12 @@ public final class MermaidDiagrams {
         Process p = null;
         try {
             Files.createDirectories(cache);
-            Path in = Files.createTempFile(cache, "." + key, ".mmd");
-            Path out = cache.resolve("." + key + ".tmp.png");
-            Path err = Files.createTempFile(cache, "." + key, ".err");
+            final Path in = Files.createTempFile(cache, "." + key, ".mmd");
+            final Path out = cache.resolve("." + key + ".tmp.png");
+            final Path err = Files.createTempFile(cache, "." + key, ".err");
             try {
                 Files.writeString(in, source, StandardCharsets.UTF_8);
-                ProcessBuilder pb = new ProcessBuilder(mmdc.toString(), "-q", "-i", in.toString(), "-o", out.toString(),
+                final ProcessBuilder pb = new ProcessBuilder(mmdc.toString(), "-q", "-i", in.toString(), "-o", out.toString(),
                         "-t", "dark", "-b", "transparent", "-s", Integer.toString(SCALE))
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(err.toFile());
@@ -198,7 +198,7 @@ public final class MermaidDiagrams {
         } catch (IOException | RuntimeException e) {
             // any failure is the diagram's, told once: a key left waiting would show as drawing forever
             failures.put(key, "cannot draw it: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             if (p != null) {
                 // close interrupted the wait before it could see this process: it would outlive comando
@@ -207,7 +207,7 @@ public final class MermaidDiagrams {
             waiting.remove(key);
             return;
         }
-        String failed = failures.get(key);
+        final String failed = failures.get(key);
         if (failed != null) {
             LOG.log(System.Logger.Level.WARNING, "Mermaid diagram not drawn [key=" + key + "]: " + failed);
         }
@@ -215,13 +215,13 @@ public final class MermaidDiagrams {
     }
 
     /** Records that the cached picture of {@code key} cannot be read and removes it; returns why. */
-    private String unreadable(String key, Path png) {
-        String why = "mmdc drew a picture that cannot be read";
+    private String unreadable(final String key, final Path png) {
+        final String why = "mmdc drew a picture that cannot be read";
         failures.put(key, why);
         sizes.remove(key);
         try {
             Files.deleteIfExists(png);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot remove [file=" + png + ']', e);
         }
         LOG.log(System.Logger.Level.WARNING, "Mermaid diagram not shown [key=" + key + "]: " + why);
@@ -229,8 +229,8 @@ public final class MermaidDiagrams {
     }
 
     /** Tells whoever waits for {@code key} that it is drawn or rejected. */
-    private void finish(String key) {
-        List<Runnable> callbacks = waiting.remove(key);
+    private void finish(final String key) {
+        final List<Runnable> callbacks = waiting.remove(key);
         if (callbacks != null) {
             callbacks.forEach(Runnable::run);
         }
@@ -238,7 +238,7 @@ public final class MermaidDiagrams {
 
     void close() {
         if (drawer != null) {
-            Process p = drawing;
+            final Process p = drawing;
             if (p != null) {
                 stop(p);
             }
@@ -248,7 +248,7 @@ public final class MermaidDiagrams {
     }
 
     /** Stops {@code p} and every process it started; the children first, as they leave its tree when it ends. */
-    private static void stop(Process p) {
+    private static void stop(final Process p) {
         // only while it lives: the JDK finds descendants by pid, and an ended process's pid may be another's
         if (p.isAlive()) {
             p.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -257,33 +257,33 @@ public final class MermaidDiagrams {
     }
 
     /** The cache file name of a diagram: its text and how it is drawn, hashed. */
-    static String key(String source) {
+    static String key(final String source) {
         try {
-            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            final MessageDigest sha = MessageDigest.getInstance("SHA-256");
             sha.update(STYLE.getBytes(StandardCharsets.UTF_8));
             sha.update((byte) 0);
             sha.update(source.strip().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(sha.digest(), 0, 16);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (final NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is missing", e);
         }
     }
 
     /** A PNG's size in pixels from its header, or zeros when it cannot be read. */
-    private static int[] size(Path png) {
+    private static int[] size(final Path png) {
         try (ImageInputStream in = ImageIO.createImageInputStream(png.toFile())) {
-            Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
+            final Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
                 return new int[]{0, 0};
             }
-            ImageReader r = readers.next();
+            final ImageReader r = readers.next();
             try {
                 r.setInput(in);
                 return new int[]{r.getWidth(0), r.getHeight(0)};
             } finally {
                 r.dispose();
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return new int[]{0, 0};
         }
     }
@@ -293,13 +293,13 @@ public final class MermaidDiagrams {
      * {@code /usr/local}'s, as an app started from Finder has a short PATH.
      */
     static Optional<Path> findMmdc() {
-        List<Path> candidates = new ArrayList<>(Platform.onPath("mmdc"));
-        Path nvm = Path.of(System.getProperty("user.home"), ".nvm", "versions", "node");
+        final List<Path> candidates = new ArrayList<>(Platform.onPath("mmdc"));
+        final Path nvm = Path.of(System.getProperty("user.home"), ".nvm", "versions", "node");
         if (Files.isDirectory(nvm)) {
             try (Stream<Path> versions = Files.list(nvm)) {
                 versions.sorted((a, b) -> compareVersions(b.getFileName().toString(), a.getFileName().toString()))
                         .forEach(v -> candidates.add(v.resolve("bin").resolve("mmdc")));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 LOG.log(System.Logger.Level.DEBUG, "cannot list [dir=" + nvm + ']', e);
             }
         }
@@ -309,11 +309,11 @@ public final class MermaidDiagrams {
     }
 
     /** Compares "v22.20.0" and "v20.9.1" by their numbers. */
-    static int compareVersions(String a, String b) {
-        String[] x = a.replaceFirst("^v", "").split("\\.");
-        String[] y = b.replaceFirst("^v", "").split("\\.");
+    static int compareVersions(final String a, final String b) {
+        final String[] x = a.replaceFirst("^v", "").split("\\.");
+        final String[] y = b.replaceFirst("^v", "").split("\\.");
         for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            int c = Integer.compare(number(x, i), number(y, i));
+            final int c = Integer.compare(number(x, i), number(y, i));
             if (c != 0) {
                 return c;
             }
@@ -321,17 +321,17 @@ public final class MermaidDiagrams {
         return 0;
     }
 
-    private static int number(String[] parts, int i) {
+    private static int number(final String[] parts, final int i) {
         try {
             return i < parts.length ? Integer.parseInt(parts[i]) : 0;
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             return 0;
         }
     }
 
-    private static String firstLine(String text) {
-        String s = text == null ? "" : text.strip();
-        for (String line : s.split("\\R")) {
+    private static String firstLine(final String text) {
+        final String s = text == null ? "" : text.strip();
+        for (final String line : s.split("\\R")) {
             if (!line.isBlank()) {
                 return Clip.keepStart(line.strip(), MAX_REASON_CHARS);
             }

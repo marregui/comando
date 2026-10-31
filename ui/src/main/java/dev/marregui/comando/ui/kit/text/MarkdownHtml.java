@@ -1,6 +1,15 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.regex.Pattern;
+
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableCell;
 import org.commonmark.ext.gfm.tables.TablesExtension;
@@ -26,15 +35,7 @@ import org.commonmark.renderer.html.HtmlNodeRendererContext;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.commonmark.renderer.html.HtmlWriter;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.regex.Pattern;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Markdown to HTML for Swing's HTML 3.2 renderer. Raw HTML in the source is escaped, not rendered. An image is
@@ -84,8 +85,8 @@ public final class MarkdownHtml {
         }
 
         /** Whether one of {@code node}'s source lines changed. */
-        boolean touches(Node node) {
-            for (SourceSpan span : node.getSourceSpans()) {
+        boolean touches(final Node node) {
+            for (final SourceSpan span : node.getSourceSpans()) {
                 if (lines.contains(span.getLineIndex())) {
                     return true;
                 }
@@ -119,7 +120,7 @@ public final class MarkdownHtml {
     }
 
     /** Markdown to HTML, a Mermaid block shown as code. */
-    public static String render(String markdown) {
+    public static String render(final String markdown) {
         return render(markdown, null);
     }
 
@@ -127,19 +128,19 @@ public final class MarkdownHtml {
      * Markdown to HTML; a {@code mermaid} code block becomes what {@code mermaid} makes of its text, the picture or
      * the source with a note. Without it, a Mermaid block shows as code.
      */
-    public static String render(String markdown, Function<String, String> mermaid) {
+    public static String render(final String markdown, final Function<String, String> mermaid) {
         return render(markdown, mermaid, Pictures.NONE);
     }
 
     /** As {@link #render(String, Function)}, an image link shown as {@code pictures} makes it. */
-    public static String render(String markdown, Function<String, String> mermaid, Pictures pictures) {
+    public static String render(final String markdown, final Function<String, String> mermaid, final Pictures pictures) {
         return render(markdown, mermaid, pictures, Marks.NONE);
     }
 
     /** As {@link #render(String, Function, Pictures)}, what {@code marks} names shaded as changed. */
-    public static String render(String markdown, Function<String, String> mermaid, Pictures pictures, Marks marks) {
-        boolean marked = marks.any();
-        HtmlRenderer.Builder b = HtmlRenderer.builder()
+    public static String render(final String markdown, final Function<String, String> mermaid, final Pictures pictures, final Marks marks) {
+        final boolean marked = marks.any();
+        final HtmlRenderer.Builder b = HtmlRenderer.builder()
                 .extensions(EXTENSIONS)
                 .escapeHtml(true)
                 .sanitizeUrls(true)
@@ -151,11 +152,11 @@ public final class MarkdownHtml {
         if (marked) {
             b.attributeProviderFactory(c -> new ShadedBlocks(marks)).nodeRendererFactory(c -> new ShadedWords(c, marks));
         }
-        HtmlRenderer renderer = mermaid == null && pictures == Pictures.NONE && !marked ? RENDERER : b.build();
-        FrontMatter.Split front = FrontMatter.split(markdown);
-        Node document = (marked ? SPANNING : PARSER).parse(front.body());
+        final HtmlRenderer renderer = mermaid == null && pictures == Pictures.NONE && !marked ? RENDERER : b.build();
+        final FrontMatter.Split front = FrontMatter.split(markdown);
+        final Node document = (marked ? SPANNING : PARSER).parse(front.body());
         linkText(document);
-        String html = (front.any() ? facts(front.facts()) : "") + renderer.render(document);
+        final String html = (front.any() ? facts(front.facts()) : "") + renderer.render(document);
         // Swing's renderer does not know <del>, and draws <pre><code> with a wrapping paragraph margin
         return html.replace("<pre><code", "<pre class=\"code\"><code").replace("<del>", "<strike>").replace("</del>", "</strike>");
     }
@@ -171,18 +172,18 @@ public final class MarkdownHtml {
      * The headings of {@code markdown}, in order, with the ids {@link #render} gives them: front matter is no heading,
      * nor is a {@code #} in a code block.
      */
-    public static List<Section> sections(String markdown) {
-        Node document = SPANNING.parse(FrontMatter.split(markdown).body());
+    public static List<Section> sections(final String markdown) {
+        final Node document = SPANNING.parse(FrontMatter.split(markdown).body());
         linkText(document);
-        HeadingIds ids = new HeadingIds();
-        List<Section> out = new ArrayList<>();
+        final HeadingIds ids = new HeadingIds();
+        final List<Section> out = new ArrayList<>();
         document.accept(new AbstractVisitor() {
             @Override
-            public void visit(Heading heading) {
-                StringBuilder text = new StringBuilder();
+            public void visit(final Heading heading) {
+                final StringBuilder text = new StringBuilder();
                 HeadingIds.headingText(heading, text);
-                List<SourceSpan> spans = heading.getSourceSpans();
-                int line = spans.isEmpty() ? 0 : spans.getFirst().getLineIndex();
+                final List<SourceSpan> spans = heading.getSourceSpans();
+                final int line = spans.isEmpty() ? 0 : spans.getFirst().getLineIndex();
                 out.add(new Section(heading.getLevel(), text.toString().strip(), ids.unique(slug(text.toString())), line));
             }
         });
@@ -198,25 +199,25 @@ public final class MarkdownHtml {
         private final Map<String, Integer> seen = new HashMap<>();
 
         @Override
-        public void setAttributes(Node node, String tagName, Map<String, String> attributes) {
+        public void setAttributes(final Node node, final String tagName, final Map<String, String> attributes) {
             if (node instanceof Heading) {
-                StringBuilder text = new StringBuilder();
+                final StringBuilder text = new StringBuilder();
                 headingText(node, text);
                 attributes.put("id", unique(slug(text.toString())));
             }
         }
 
-        private String unique(String slug) {
+        private String unique(final String slug) {
             String id = slug;
             while (seen.containsKey(id)) {
-                int n = seen.merge(slug, 1, Integer::sum);
+                final int n = seen.merge(slug, 1, Integer::sum);
                 id = slug + "-" + n;
             }
             seen.put(id, 0);
             return id;
         }
 
-        private static void headingText(Node node, StringBuilder out) {
+        private static void headingText(final Node node, final StringBuilder out) {
             for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
                 if (c instanceof Text t) {
                     out.append(t.getLiteral());
@@ -235,15 +236,15 @@ public final class MarkdownHtml {
     private static final class ShadedBlocks implements AttributeProvider {
         private final Marks marks;
 
-        ShadedBlocks(Marks marks) {
+        ShadedBlocks(final Marks marks) {
             this.marks = marks;
         }
 
         @Override
-        public void setAttributes(Node node, String tagName, Map<String, String> attributes) {
-            boolean block = node instanceof Paragraph || node instanceof Heading || node instanceof TableCell || node instanceof ThematicBreak
+        public void setAttributes(final Node node, final String tagName, final Map<String, String> attributes) {
+            final boolean block = node instanceof Paragraph || node instanceof Heading || node instanceof TableCell || node instanceof ThematicBreak
                     || node instanceof IndentedCodeBlock && tagName.equals("pre");
-            boolean changed = block ? marks.touches(node) : node instanceof ListItem && node.getFirstChild() instanceof Paragraph p && marks.touches(p);
+            final boolean changed = block ? marks.touches(node) : node instanceof ListItem && node.getFirstChild() instanceof Paragraph p && marks.touches(p);
             if (changed) {
                 attributes.merge("style", "background-color: " + marks.lineColour(), (a, b) -> a + "; " + b);
             }
@@ -255,7 +256,7 @@ public final class MarkdownHtml {
         private final HtmlNodeRendererContext context;
         private final Marks marks;
 
-        ShadedWords(HtmlNodeRendererContext context, Marks marks) {
+        ShadedWords(final HtmlNodeRendererContext context, final Marks marks) {
             this.context = context;
             this.marks = marks;
         }
@@ -266,19 +267,19 @@ public final class MarkdownHtml {
         }
 
         @Override
-        public void render(Node node) {
-            String text = ((Text) node).getLiteral();
-            HtmlWriter w = context.getWriter();
-            List<SourceSpan> spans = node.getSourceSpans();
+        public void render(final Node node) {
+            final String text = ((Text) node).getLiteral();
+            final HtmlWriter w = context.getWriter();
+            final List<SourceSpan> spans = node.getSourceSpans();
             if (marks.words().isEmpty() || spans.size() != 1 || spans.getFirst().getLength() != text.length()) {
                 w.text(text);
                 return;
             }
-            int at = spans.getFirst().getInputIndex();
+            final int at = spans.getFirst().getInputIndex();
             int done = 0;
-            for (int[] word : marks.words()) {
-                int from = Math.max(word[0], at) - at;
-                int to = Math.min(word[1], at + text.length()) - at;
+            for (final int[] word : marks.words()) {
+                final int from = Math.max(word[0], at) - at;
+                final int to = Math.min(word[1], at + text.length()) - at;
                 if (from >= to || from < done) {
                     continue;
                 }
@@ -293,9 +294,9 @@ public final class MarkdownHtml {
     }
 
     /** The front matter's facts as a table: the key muted, the value with its links. */
-    static String facts(List<FrontMatter.Fact> facts) {
-        StringBuilder out = new StringBuilder("<table class=\"front\" cellspacing=\"0\">");
-        for (FrontMatter.Fact f : facts) {
+    static String facts(final List<FrontMatter.Fact> facts) {
+        final StringBuilder out = new StringBuilder("<table class=\"front\" cellspacing=\"0\">");
+        for (final FrontMatter.Fact f : facts) {
             out.append("<tr><td class=\"front-key\" valign=\"top\">").append(escape(f.key()))
                     .append("</td><td class=\"front-value\">").append(linkedHtml(f.value())).append("</td></tr>");
         }
@@ -303,10 +304,10 @@ public final class MarkdownHtml {
     }
 
     /** {@code text} escaped, its web addresses and wiki links as links. */
-    static String linkedHtml(String text) {
-        StringBuilder out = new StringBuilder();
+    static String linkedHtml(final String text) {
+        final StringBuilder out = new StringBuilder();
         int at = 0;
-        for (TextLinks.Ref r : rendered(text)) {
+        for (final TextLinks.Ref r : rendered(text)) {
             out.append(escape(text.substring(at, r.start())));
             out.append("<a href=\"").append(escape(r.href()).replace("\"", "&quot;")).append("\">").append(escape(r.label())).append("</a>");
             at = r.end();
@@ -315,7 +316,7 @@ public final class MarkdownHtml {
     }
 
     /** The links of a text that rendered Markdown shows as links: web addresses and wiki links. */
-    private static List<TextLinks.Ref> rendered(String text) {
+    private static List<TextLinks.Ref> rendered(final String text) {
         return TextLinks.refs(text, false).stream().filter(r -> !r.href().startsWith(SourceLinks.SCHEME)).toList();
     }
 
@@ -324,36 +325,36 @@ public final class MarkdownHtml {
      * it is. A wiki link becomes a {@link NoteLink}, which {@link NoteLinkHtml} writes, as the renderer would drop its
      * {@code comando-note:} address.
      */
-    static void linkText(Node document) {
-        List<Text> texts = new ArrayList<>();
+    static void linkText(final Node document) {
+        final List<Text> texts = new ArrayList<>();
         document.accept(new AbstractVisitor() {
             @Override
-            public void visit(Text text) {
+            public void visit(final Text text) {
                 texts.add(text);
             }
 
             @Override
-            public void visit(Link link) {
+            public void visit(final Link link) {
                 // its text is the link's already
             }
 
             @Override
-            public void visit(Image image) {
+            public void visit(final Image image) {
                 // its text is its alt text
             }
         });
-        for (Text t : texts) {
-            String literal = t.getLiteral();
-            List<TextLinks.Ref> refs = rendered(literal);
+        for (final Text t : texts) {
+            final String literal = t.getLiteral();
+            final List<TextLinks.Ref> refs = rendered(literal);
             if (refs.isEmpty()) {
                 continue;
             }
             int at = 0;
-            for (TextLinks.Ref r : refs) {
+            for (final TextLinks.Ref r : refs) {
                 if (r.start() > at) {
                     t.insertBefore(new Text(literal.substring(at, r.start())));
                 }
-                Node link = NoteLinks.is(r.href()) ? new NoteLink(r.href()) : new Link(r.href(), null);
+                final Node link = NoteLinks.is(r.href()) ? new NoteLink(r.href()) : new Link(r.href(), null);
                 link.appendChild(new Text(r.label()));
                 t.insertBefore(link);
                 at = r.end();
@@ -369,7 +370,7 @@ public final class MarkdownHtml {
     static final class NoteLink extends CustomNode {
         final String href;
 
-        NoteLink(String href) {
+        NoteLink(final String href) {
             this.href = href;
         }
     }
@@ -378,7 +379,7 @@ public final class MarkdownHtml {
     private static final class NoteLinkHtml implements NodeRenderer {
         private final HtmlNodeRendererContext context;
 
-        NoteLinkHtml(HtmlNodeRendererContext context) {
+        NoteLinkHtml(final HtmlNodeRendererContext context) {
             this.context = context;
         }
 
@@ -388,8 +389,8 @@ public final class MarkdownHtml {
         }
 
         @Override
-        public void render(Node node) {
-            HtmlWriter w = context.getWriter();
+        public void render(final Node node) {
+            final HtmlWriter w = context.getWriter();
             w.tag("a", Map.of("href", ((NoteLink) node).href));
             for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
                 context.render(c);
@@ -402,7 +403,7 @@ public final class MarkdownHtml {
      * A heading's text as GitHub makes it an id: lower case, without punctuation or symbols but {@code _} and
      * {@code -}, each space a hyphen.
      */
-    static String slug(String text) {
+    static String slug(final String text) {
         return NOT_IN_SLUG.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("").replace(' ', '-');
     }
 
@@ -414,7 +415,7 @@ public final class MarkdownHtml {
         private final HtmlNodeRendererContext context;
         private final Pictures pictures;
 
-        ImageAsText(HtmlNodeRendererContext context, Pictures pictures) {
+        ImageAsText(final HtmlNodeRendererContext context, final Pictures pictures) {
             this.context = context;
             this.pictures = pictures;
         }
@@ -425,10 +426,10 @@ public final class MarkdownHtml {
         }
 
         @Override
-        public void render(Node node) {
-            StringBuilder alt = new StringBuilder();
+        public void render(final Node node) {
+            final StringBuilder alt = new StringBuilder();
             altText(node, alt);
-            String picture = pictures.html(((Image) node).getDestination(), alt.toString());
+            final String picture = pictures.html(((Image) node).getDestination(), alt.toString());
             if (picture != null) {
                 context.getWriter().raw(picture);
                 return;
@@ -438,7 +439,7 @@ public final class MarkdownHtml {
             context.getWriter().tag("/i");
         }
 
-        private static void altText(Node node, StringBuilder out) {
+        private static void altText(final Node node, final StringBuilder out) {
             for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
                 if (c instanceof Text t) {
                     out.append(t.getLiteral());
@@ -457,7 +458,7 @@ public final class MarkdownHtml {
         private final Function<String, String> mermaid;
         private final Marks marks;
 
-        ColouredCode(HtmlNodeRendererContext context, Function<String, String> mermaid, Marks marks) {
+        ColouredCode(final HtmlNodeRendererContext context, final Function<String, String> mermaid, final Marks marks) {
             this.context = context;
             this.mermaid = mermaid;
             this.marks = marks;
@@ -469,12 +470,12 @@ public final class MarkdownHtml {
         }
 
         @Override
-        public void render(Node node) {
-            FencedCodeBlock block = (FencedCodeBlock) node;
-            String code = block.getLiteral() == null ? "" : block.getLiteral();
-            String language = Fences.language(block.getInfo());
-            HtmlWriter w = context.getWriter();
-            String shade = marks.touches(block) ? " style=\"background-color: " + marks.lineColour() + "\"" : "";
+        public void render(final Node node) {
+            final FencedCodeBlock block = (FencedCodeBlock) node;
+            final String code = block.getLiteral() == null ? "" : block.getLiteral();
+            final String language = Fences.language(block.getInfo());
+            final HtmlWriter w = context.getWriter();
+            final String shade = marks.touches(block) ? " style=\"background-color: " + marks.lineColour() + "\"" : "";
             if (mermaid != null && language.equalsIgnoreCase("mermaid")) {
                 w.line();
                 w.raw(shade.isEmpty() ? mermaid.apply(code) : "<div" + shade + ">" + mermaid.apply(code) + "</div>");
@@ -490,11 +491,11 @@ public final class MarkdownHtml {
     }
 
     /** {@code code} as HTML, each token in its colour for {@code language}; escaped and uncoloured when unknown. */
-    static String coloured(String code, String language) {
-        List<Highlighter.Run> runs = language.isEmpty() ? List.of() : Highlighter.runs(code, language);
-        StringBuilder out = new StringBuilder(code.length() + runs.size() * 24);
+    static String coloured(final String code, final String language) {
+        final List<Highlighter.Run> runs = language.isEmpty() ? List.of() : Highlighter.runs(code, language);
+        final StringBuilder out = new StringBuilder(code.length() + runs.size() * 24);
         int at = 0;
-        for (Highlighter.Run r : runs) {
+        for (final Highlighter.Run r : runs) {
             if (r.start() < at) {
                 continue;
             }
@@ -508,7 +509,7 @@ public final class MarkdownHtml {
     }
 
     /** {@code text} with {@code &}, {@code <} and {@code >} escaped for HTML. */
-    public static String escape(String text) {
+    public static String escape(final String text) {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

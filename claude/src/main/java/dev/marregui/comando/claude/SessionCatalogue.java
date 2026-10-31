@@ -1,9 +1,5 @@
 package dev.marregui.comando.claude;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +9,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Lists the conversations Claude Code stored on disk, {@code <projects>/<project>/<session id>.jsonl}, for
@@ -38,12 +38,12 @@ public final class SessionCatalogue {
     private final Path projectsDir;
     private final ObjectMapper json = new ObjectMapper();
 
-    public SessionCatalogue(Path projectsDir) {
+    public SessionCatalogue(final Path projectsDir) {
         this.projectsDir = projectsDir;
     }
 
     /** Conversations newest first, at most {@code limit}. */
-    public List<Entry> scan(int limit) {
+    public List<Entry> scan(final int limit) {
         if (!Files.isDirectory(projectsDir)) {
             return List.of();
         }
@@ -54,13 +54,13 @@ public final class SessionCatalogue {
                     .sorted(Comparator.comparingLong(SessionCatalogue::modified).reversed())
                     .limit(limit)
                     .toList();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot list [dir=" + projectsDir + ']', e);
             return List.of();
         }
-        List<Entry> entries = new ArrayList<>(files.size());
-        for (Path f : files) {
-            Entry e = read(f);
+        final List<Entry> entries = new ArrayList<>(files.size());
+        for (final Path f : files) {
+            final Entry e = read(f);
             if (e != null) {
                 entries.add(e);
             }
@@ -68,25 +68,25 @@ public final class SessionCatalogue {
         return entries;
     }
 
-    private static Stream<Path> transcripts(Path project) {
+    private static Stream<Path> transcripts(final Path project) {
         try (Stream<Path> s = Files.list(project)) {
             return s.filter(p -> p.getFileName().toString().endsWith(".jsonl") && Files.isRegularFile(p)).toList().stream();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return Stream.empty();
         }
     }
 
-    private static long modified(Path p) {
+    private static long modified(final Path p) {
         try {
             return Files.getLastModifiedTime(p).toMillis();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return 0L;
         }
     }
 
-    Entry read(Path file) {
-        String name = file.getFileName().toString();
-        String id = name.substring(0, name.length() - ".jsonl".length());
+    Entry read(final Path file) {
+        final String name = file.getFileName().toString();
+        final String id = name.substring(0, name.length() - ".jsonl".length());
         String cwd = "";
         String branch = "";
         String title = "";
@@ -94,16 +94,16 @@ public final class SessionCatalogue {
         long size;
         try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
             size = raf.length();
-            for (String line : lines(raf, 0, (int) Math.min(size, HEAD_BYTES), false)) {
-                JsonNode n = parse(line);
+            for (final String line : lines(raf, 0, (int) Math.min(size, HEAD_BYTES), false)) {
+                final JsonNode n = parse(line);
                 if (n != null && cwd.isEmpty() && n.hasNonNull("cwd")) {
                     cwd = n.path("cwd").asString("");
                     branch = n.path("gitBranch").asString("");
                 }
             }
-            long tailStart = Math.max(0, size - TAIL_BYTES);
-            for (String line : lines(raf, tailStart, (int) (size - tailStart), tailStart > 0)) {
-                JsonNode n = parse(line);
+            final long tailStart = Math.max(0, size - TAIL_BYTES);
+            for (final String line : lines(raf, tailStart, (int) (size - tailStart), tailStart > 0)) {
+                final JsonNode n = parse(line);
                 if (n == null) {
                     continue;
                 }
@@ -115,7 +115,7 @@ public final class SessionCatalogue {
                         }
                     }
                     case "user" -> {
-                        JsonNode c = n.path("message").path("content");
+                        final JsonNode c = n.path("message").path("content");
                         if (c.isString() && "human".equals(n.path("origin").path("kind").asString("human"))
                                 && !c.asString("").startsWith("<")) {
                             lastPrompt = c.asString("");
@@ -129,7 +129,7 @@ public final class SessionCatalogue {
                     }
                 }
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + file + ']', e);
             return null;
         }
@@ -139,19 +139,19 @@ public final class SessionCatalogue {
         return new Entry(id, file, cwd, branch, title, StreamMapper.clip(lastPrompt.strip().replace('\n', ' '), 200), modified(file), size);
     }
 
-    private JsonNode parse(String line) {
+    private JsonNode parse(final String line) {
         try {
             return json.readTree(line);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return null;
         }
     }
 
-    private static List<String> lines(RandomAccessFile raf, long from, int length, boolean skipFirst) throws IOException {
-        byte[] buf = new byte[length];
+    private static List<String> lines(final RandomAccessFile raf, final long from, final int length, final boolean skipFirst) throws IOException {
+        final byte[] buf = new byte[length];
         raf.seek(from);
         raf.readFully(buf);
-        List<String> lines = new ArrayList<>(new String(buf, StandardCharsets.UTF_8).lines().toList());
+        final List<String> lines = new ArrayList<>(new String(buf, StandardCharsets.UTF_8).lines().toList());
         if (skipFirst && !lines.isEmpty()) {
             lines.removeFirst(); // the read started mid-line
         }

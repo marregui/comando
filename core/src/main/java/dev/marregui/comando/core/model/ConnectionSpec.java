@@ -32,7 +32,7 @@ public record ConnectionSpec(String name, String host, int port, String database
      */
     public static final List<String> SSL_MODES = List.of("prefer", "disable", "allow", "require", "verify-ca", "verify-full");
 
-    public ConnectionSpec(String name, String host, int port, String database, String user, String password, boolean prod) {
+    public ConnectionSpec(final String name, final String host, final int port, final String database, final String user, final String password, final boolean prod) {
         this(name, host, port, database, user, password, prod, "prefer");
     }
 
@@ -57,7 +57,7 @@ public record ConnectionSpec(String name, String host, int port, String database
     }
 
     /** The QuestDB defaults: localhost:8812, database qdb, admin/quest. */
-    public static ConnectionSpec questDbDefaults(String name) {
+    public static ConnectionSpec questDbDefaults(final String name) {
         return new ConnectionSpec(name, "localhost", DEFAULT_PORT, "qdb", "admin", "quest", false);
     }
 
@@ -69,15 +69,15 @@ public record ConnectionSpec(String name, String host, int port, String database
         return user + '@' + host + ':' + port + '/' + database;
     }
 
-    public ConnectionSpec withName(String newName) {
+    public ConnectionSpec withName(final String newName) {
         return new ConnectionSpec(newName, host, port, database, user, password, prod, sslMode);
     }
 
-    public ConnectionSpec withPassword(String newPassword) {
+    public ConnectionSpec withPassword(final String newPassword) {
         return new ConnectionSpec(name, host, port, database, user, newPassword, prod, sslMode);
     }
 
-    static void requireName(String name) {
+    static void requireName(final String name) {
         Objects.requireNonNull(name, "name");
         if (name.isBlank()) {
             throw new IllegalArgumentException("name is empty");

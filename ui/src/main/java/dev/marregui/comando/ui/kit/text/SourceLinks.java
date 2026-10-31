@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.core.view.ViewSpec;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * Finds {@code path/to/File.java:42} references in plain text, which the transcript shows as links that open the
@@ -27,9 +27,9 @@ public final class SourceLinks {
     }
 
     /** The file references in {@code text}, in order. */
-    public static List<Ref> refs(CharSequence text) {
-        Matcher m = REF.matcher(text);
-        List<Ref> out = new ArrayList<>();
+    public static List<Ref> refs(final CharSequence text) {
+        final Matcher m = REF.matcher(text);
+        final List<Ref> out = new ArrayList<>();
         while (m.find()) {
             if (m.group(2) != null) {
                 out.add(new Ref(m.start(), m.end(), SCHEME + m.group(1) + "#" + m.group(2)));
@@ -41,18 +41,18 @@ public final class SourceLinks {
     }
 
     /** Path of a {@code comando-file:} link. */
-    public static String path(String href) {
-        String rest = href.substring(SCHEME.length());
-        int hash = rest.lastIndexOf('#');
+    public static String path(final String href) {
+        final String rest = href.substring(SCHEME.length());
+        final int hash = rest.lastIndexOf('#');
         return hash < 0 ? rest : rest.substring(0, hash);
     }
 
     /** Line of a {@code comando-file:} link, 0 when none. */
-    public static int line(String href) {
-        int hash = href.lastIndexOf('#');
+    public static int line(final String href) {
+        final int hash = href.lastIndexOf('#');
         try {
             return hash < 0 ? 0 : Integer.parseInt(href.substring(hash + 1));
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             return 0;
         }
     }

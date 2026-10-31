@@ -34,14 +34,14 @@ public record KitVersion(String described, List<String> newer, String problem) {
     }
 
     /** The version read: {@code describe}'s output and {@code ls-remote --tags}'s, which may be empty. */
-    public static KitVersion of(String describe, String lsRemote) {
-        String d = describe == null ? "" : describe.strip();
+    public static KitVersion of(final String describe, final String lsRemote) {
+        final String d = describe == null ? "" : describe.strip();
         return new KitVersion(d, newerThan(release(d), lsRemote), "");
     }
 
     /** The release {@code described} is at or past, when it names one. */
-    public static Optional<String> release(String described) {
-        Matcher m = DESCRIBED.matcher(described == null ? "" : described.strip());
+    public static Optional<String> release(final String described) {
+        final Matcher m = DESCRIBED.matcher(described == null ? "" : described.strip());
         return m.matches() ? Optional.of(m.group(1)) : Optional.empty();
     }
 
@@ -49,10 +49,10 @@ public record KitVersion(String described, List<String> newer, String problem) {
      * The releases {@code git ls-remote --tags} lists that are newer than {@code current}, newest first, each once: a
      * line {@code <sha>\trefs/tags/v1.3.0}, or its peeled {@code ^{}} twin; any other tag is not a release.
      */
-    public static List<String> newerThan(Optional<String> current, String lsRemote) {
-        List<String> out = new ArrayList<>();
-        for (String line : (lsRemote == null ? "" : lsRemote).lines().toList()) {
-            int at = line.indexOf("refs/tags/");
+    public static List<String> newerThan(final Optional<String> current, final String lsRemote) {
+        final List<String> out = new ArrayList<>();
+        for (final String line : (lsRemote == null ? "" : lsRemote).lines().toList()) {
+            final int at = line.indexOf("refs/tags/");
             if (at < 0) {
                 continue;
             }
@@ -68,8 +68,8 @@ public record KitVersion(String described, List<String> newer, String problem) {
         return List.copyOf(out);
     }
 
-    private static int[] parts(String release) {
-        Matcher m = RELEASE.matcher(release);
+    private static int[] parts(final String release) {
+        final Matcher m = RELEASE.matcher(release);
         if (!m.matches()) {
             return new int[]{-1, -1, -1};
         }
@@ -77,7 +77,7 @@ public record KitVersion(String described, List<String> newer, String problem) {
     }
 
     /** The same version, with why the remote's releases are unknown. */
-    public KitVersion failedRemote(String why) {
+    public KitVersion failedRemote(final String why) {
         return new KitVersion(described, List.of(), why);
     }
 
@@ -92,8 +92,8 @@ public record KitVersion(String described, List<String> newer, String problem) {
     }
 
     /** "kit marregui v1.2.0", or "kit marregui v1.2.0 → v1.3.0 available" when a newer release is out. */
-    public String label(String name) {
-        String kit = "kit " + (name.isEmpty() ? "" : name + ' ') + shown();
+    public String label(final String name) {
+        final String kit = "kit " + (name.isEmpty() ? "" : name + ' ') + shown();
         return newest().map(n -> kit.strip() + " → " + n + " available").orElse(kit.strip());
     }
 }

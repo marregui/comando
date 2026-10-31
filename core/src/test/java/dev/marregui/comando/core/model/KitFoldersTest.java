@@ -1,11 +1,11 @@
 package dev.marregui.comando.core.model;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,19 +16,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - duplicate folder names exclude the kit entry
 class KitFoldersTest {
 
-    private static FolderRoot folder(String name, Path path) {
+    private static FolderRoot folder(final String name, final Path path) {
         return new FolderRoot(name, path.toString(), "", List.of());
     }
 
     /// Startup prepends kit folders only when none is already shown, retaining user folders and omitting kit names
     /// already taken.
     @Test
-    void atStartTheKitsFoldersGoFirstWhenTheTabShowsNoneOfThemAndTheUsersStay(@TempDir Path tmp) throws Exception {
-        Path root = Files.createDirectories(tmp.resolve("kit"));
-        FolderRoot memory = folder("Memory", Files.createDirectories(root.resolve("BRAIN/MEMORY")));
-        FolderRoot skills = folder("Skills", Files.createDirectories(root.resolve("skills")));
-        FolderRoot repo = folder("Plans", Files.createDirectories(root.resolve("plans")));
-        FolderRoot notes = folder("Notes", Files.createDirectories(tmp.resolve("notes")));
+    void atStartTheKitsFoldersGoFirstWhenTheTabShowsNoneOfThemAndTheUsersStay(@TempDir final Path tmp) throws Exception {
+        final Path root = Files.createDirectories(tmp.resolve("kit"));
+        final FolderRoot memory = folder("Memory", Files.createDirectories(root.resolve("BRAIN/MEMORY")));
+        final FolderRoot skills = folder("Skills", Files.createDirectories(root.resolve("skills")));
+        final FolderRoot repo = folder("Plans", Files.createDirectories(root.resolve("plans")));
+        final FolderRoot notes = folder("Notes", Files.createDirectories(tmp.resolve("notes")));
 
         assertThat(KitFolders.atStart(List.of(repo, notes), List.of(memory, skills))).containsExactly(memory, skills, repo, notes);
         assertThat(KitFolders.atStart(List.of(), List.of(memory, skills))).containsExactly(memory, skills);
@@ -39,12 +39,12 @@ class KitFoldersTest {
 
     /// A symbolic link to a kit directory counts as present, so `missing` and `use` add only the other kit folder.
     @Test
-    void aFolderShownThroughALinkIsTheKitsFolder(@TempDir Path tmp) throws Exception {
-        Path brainMemory = Files.createDirectories(tmp.resolve("claude/BRAIN/MEMORY"));
-        Path link = Files.createSymbolicLink(tmp.resolve("claude/MEMORY"), brainMemory);
-        FolderRoot mine = folder("My memory", link);
-        FolderRoot kit = folder("Memory", brainMemory);
-        FolderRoot kb = folder("KB", Files.createDirectories(tmp.resolve("claude/BRAIN/KB")));
+    void aFolderShownThroughALinkIsTheKitsFolder(@TempDir final Path tmp) throws Exception {
+        final Path brainMemory = Files.createDirectories(tmp.resolve("claude/BRAIN/MEMORY"));
+        final Path link = Files.createSymbolicLink(tmp.resolve("claude/MEMORY"), brainMemory);
+        final FolderRoot mine = folder("My memory", link);
+        final FolderRoot kit = folder("Memory", brainMemory);
+        final FolderRoot kb = folder("KB", Files.createDirectories(tmp.resolve("claude/BRAIN/KB")));
 
         assertThat(KitFolders.atStart(List.of(mine), List.of(kit, kb))).as("the link counts: nothing added").containsExactly(mine);
         assertThat(KitFolders.missing(List.of(mine), List.of(kit, kb))).containsExactly(kb);
@@ -54,10 +54,10 @@ class KitFoldersTest {
     /// A user folder with the kit folder's name blocks that kit entry, and path comparison ignores case after
     /// normalisation.
     @Test
-    void aNameTakenByAnotherFolderLeavesTheKitsFolderOut(@TempDir Path tmp) throws Exception {
-        FolderRoot elsewhere = folder("Memory", Files.createDirectories(tmp.resolve("elsewhere")));
-        FolderRoot kit = folder("Memory", Files.createDirectories(tmp.resolve("kit/BRAIN/MEMORY")));
-        FolderRoot kb = folder("KB", Files.createDirectories(tmp.resolve("kit/BRAIN/KB")));
+    void aNameTakenByAnotherFolderLeavesTheKitsFolderOut(@TempDir final Path tmp) throws Exception {
+        final FolderRoot elsewhere = folder("Memory", Files.createDirectories(tmp.resolve("elsewhere")));
+        final FolderRoot kit = folder("Memory", Files.createDirectories(tmp.resolve("kit/BRAIN/MEMORY")));
+        final FolderRoot kb = folder("KB", Files.createDirectories(tmp.resolve("kit/BRAIN/KB")));
 
         assertThat(KitFolders.atStart(List.of(elsewhere), List.of(kit, kb))).as("names are unique in folders.json").containsExactly(kb, elsewhere);
         assertThat(KitFolders.missing(List.of(folder("x", Path.of("/u/KIT/brain/memory"))), List.of(folder("Memory", Path.of("/u/kit/BRAIN/MEMORY")))))

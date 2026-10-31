@@ -1,9 +1,5 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.loop.Processes;
-import dev.marregui.comando.core.model.ChangeTexts;
-import dev.marregui.comando.core.model.RepoStatus;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +15,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
+
+import dev.marregui.comando.core.loop.Processes;
+import dev.marregui.comando.core.model.ChangeTexts;
+import dev.marregui.comando.core.model.RepoStatus;
 
 /**
  * The git command line: which repositories a folder belongs to, what {@code git status} says of one, a changed file's
@@ -60,7 +60,7 @@ final class Git implements AutoCloseable {
     }
 
     /** With the command to run; tests name a fake. */
-    Git(String git) {
+    Git(final String git) {
         this.git = git;
     }
 
@@ -71,8 +71,8 @@ final class Git implements AutoCloseable {
      * absent path: this runs on every poll, and the form without links threw a {@code NoSuchFileException} per
      * absent entry, about two a second on an idle comando (jfrq-live, 2026-10-29).
      */
-    static List<Path> repos(Path folder) {
-        Path start = folder.toAbsolutePath().normalize();
+    static List<Path> repos(final Path folder) {
+        final Path start = folder.toAbsolutePath().normalize();
         for (Path p = start; p != null; p = p.getParent()) {
             if (Files.exists(p.resolve(".git"))) {
                 return List.of(p);
@@ -90,15 +90,15 @@ final class Git implements AutoCloseable {
     }
 
     /** The repository at {@code root} as {@code git status} reads it; a failure is a status that says why. */
-    Read status(Path root) {
+    Read status(final Path root) {
         Run r;
         try {
             r = run(root, List.of("status", "--porcelain=v2", "-z", "--branch", "--ignored=matching", "--untracked-files=all"));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return new Read(RepoStatus.failed(root.toString(), e.getMessage() == null ? "git cannot be run" : e.getMessage()), Set.of());
         }
         if (r.exit() != 0) {
-            String why = r.exit() < 0 ? "git status took longer than " + TIMEOUT_MILLIS / 1000 + " s"
+            final String why = r.exit() < 0 ? "git status took longer than " + TIMEOUT_MILLIS / 1000 + " s"
                     : r.err().isBlank() ? "git status failed with exit code " + r.exit() : r.err().strip();
             return new Read(RepoStatus.failed(root.toString(), why), Set.of());
         }
@@ -110,15 +110,15 @@ final class Git implements AutoCloseable {
      * path and cut at {@link RepoStatus#MAX_CHANGES}, and the ignored entries as absolute paths. {@code cut} says the
      * output itself was cut, so the changes are not all there.
      */
-    static Read parse(Path root, byte[] out, boolean cut) {
-        String text = new String(out, StandardCharsets.UTF_8);
-        String[] records = text.split("\0", -1);
+    static Read parse(final Path root, final byte[] out, final boolean cut) {
+        final String text = new String(out, StandardCharsets.UTF_8);
+        final String[] records = text.split("\0", -1);
         String branch = "";
         String head = "";
-        List<RepoStatus.FileChange> changes = new ArrayList<>();
-        Set<Path> ignored = new HashSet<>();
+        final List<RepoStatus.FileChange> changes = new ArrayList<>();
+        final Set<Path> ignored = new HashSet<>();
         for (int i = 0; i < records.length; i++) {
-            String rec = records[i];
+            final String rec = records[i];
             if (rec.isEmpty()) {
                 continue;
             }
@@ -127,22 +127,22 @@ final class Git implements AutoCloseable {
                     if (rec.startsWith("# branch.head ")) {
                         branch = rec.substring("# branch.head ".length());
                     } else if (rec.startsWith("# branch.oid ")) {
-                        String oid = rec.substring("# branch.oid ".length());
+                        final String oid = rec.substring("# branch.oid ".length());
                         head = oid.equals("(initial)") ? "" : oid;
                     }
                 }
                 case '1' -> {
-                    String[] f = rec.split(" ", 9);
+                    final String[] f = rec.split(" ", 9);
                     if (f.length == 9) {
                         kind(f[1]).ifPresent(k -> changes.add(new RepoStatus.FileChange(f[8], "", k)));
                     }
                 }
                 case '2' -> {
-                    String[] f = rec.split(" ", 10);
+                    final String[] f = rec.split(" ", 10);
                     // the path it had follows as a record of its own
-                    String from = i + 1 < records.length ? records[++i] : "";
+                    final String from = i + 1 < records.length ? records[++i] : "";
                     if (f.length == 10) {
-                        boolean copied = f[1].charAt(0) == 'C';
+                        final boolean copied = f[1].charAt(0) == 'C';
                         if (f[1].length() > 1 && f[1].charAt(1) == 'D') {
                             // renamed in the index, then deleted: against HEAD the old path is gone, a copy's stays
                             if (!copied) {
@@ -154,7 +154,7 @@ final class Git implements AutoCloseable {
                     }
                 }
                 case 'u' -> {
-                    String[] f = rec.split(" ", 11);
+                    final String[] f = rec.split(" ", 11);
                     if (f.length == 11) {
                         changes.add(new RepoStatus.FileChange(f[10], "", RepoStatus.Kind.CONFLICTED));
                     }
@@ -166,7 +166,7 @@ final class Git implements AutoCloseable {
                 }
                 case '!' -> {
                     if (rec.length() > 2) {
-                        String p = rec.substring(2);
+                        final String p = rec.substring(2);
                         ignored.add(root.resolve(p.endsWith("/") ? p.substring(0, p.length() - 1) : p));
                     }
                 }
@@ -175,8 +175,8 @@ final class Git implements AutoCloseable {
             }
         }
         changes.sort(Comparator.comparing(RepoStatus.FileChange::path));
-        boolean truncated = cut || changes.size() > RepoStatus.MAX_CHANGES;
-        List<RepoStatus.FileChange> kept = changes.size() > RepoStatus.MAX_CHANGES ? changes.subList(0, RepoStatus.MAX_CHANGES) : changes;
+        final boolean truncated = cut || changes.size() > RepoStatus.MAX_CHANGES;
+        final List<RepoStatus.FileChange> kept = changes.size() > RepoStatus.MAX_CHANGES ? changes.subList(0, RepoStatus.MAX_CHANGES) : changes;
         return new Read(new RepoStatus(root.toString(), branch, kept, truncated, "", head), ignored);
     }
 
@@ -185,9 +185,9 @@ final class Git implements AutoCloseable {
      * a file added to the index and deleted from the tree, which {@code HEAD} never had. A file only meant to be added
      * ({@code git add -N}, {@code .A}) is added.
      */
-    static Optional<RepoStatus.Kind> kind(String xy) {
-        char x = xy.charAt(0);
-        char y = xy.length() > 1 ? xy.charAt(1) : '.';
+    static Optional<RepoStatus.Kind> kind(final String xy) {
+        final char x = xy.charAt(0);
+        final char y = xy.length() > 1 ? xy.charAt(1) : '.';
         if (x == 'A' || x == '.' && y == 'A') {
             return y == 'D' ? Optional.empty() : Optional.of(RepoStatus.Kind.ADDED);
         }
@@ -202,14 +202,14 @@ final class Git implements AutoCloseable {
      * or the tree no longer has, is empty on that side; a binary file, a version past {@link #MAX_FILE_BYTES} or one
      * that cannot be read gives a note instead.
      */
-    ChangeTexts texts(Path root, RepoStatus.FileChange change) {
-        String rootName = root.toString();
+    ChangeTexts texts(final Path root, final RepoStatus.FileChange change) {
+        final String rootName = root.toString();
         byte[] before = new byte[0];
         if (change.kind() != RepoStatus.Kind.ADDED && change.kind() != RepoStatus.Kind.UNTRACKED) {
             Run r;
             try {
                 r = run(root, List.of("cat-file", "-p", "HEAD:" + change.headPath()));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 return ChangeTexts.noted(rootName, change, "git cannot be run: " + e.getMessage());
             }
             if (r.cut() || r.out().length > MAX_FILE_BYTES) {
@@ -227,7 +227,7 @@ final class Git implements AutoCloseable {
         }
         byte[] after = new byte[0];
         if (change.kind() != RepoStatus.Kind.DELETED) {
-            Path file = root.resolve(change.path());
+            final Path file = root.resolve(change.path());
             try {
                 if (Files.isSymbolicLink(file)) {
                     // git stores a link as the path it points to, and so it is compared
@@ -239,14 +239,14 @@ final class Git implements AutoCloseable {
                 } else {
                     after = Files.readAllBytes(file);
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 return ChangeTexts.noted(rootName, change, "cannot be read: " + e.getMessage());
             }
         }
         if (binary(before) || binary(after)) {
             return ChangeTexts.noted(rootName, change, "a binary file: not compared");
         }
-        String b = new String(before, StandardCharsets.UTF_8);
+        final String b = new String(before, StandardCharsets.UTF_8);
         String a = new String(after, StandardCharsets.UTF_8);
         if (b.startsWith(LFS_POINTER)) {
             return ChangeTexts.noted(rootName, change, "stored in Git LFS: not compared");
@@ -261,7 +261,7 @@ final class Git implements AutoCloseable {
     private static final String LFS_POINTER = "version https://git-lfs.github.com/spec/";
 
     /** Whether a failed read of a {@code HEAD} path says only that {@code HEAD}, or the path in it, is not there. */
-    static boolean notInHead(String err) {
+    static boolean notInHead(final String err) {
         return err.contains("does not exist in 'HEAD'") || err.contains("invalid object name 'HEAD'")
                 || err.contains("exists on disk, but not in 'HEAD'");
     }
@@ -270,27 +270,27 @@ final class Git implements AutoCloseable {
      * Whether {@code path} is a submodule in {@code HEAD}: its entry there has mode 160000, a commit of another
      * repository.
      */
-    private boolean submodule(Path root, String path) {
+    private boolean submodule(final Path root, final String path) {
         try {
-            Run r = run(root, List.of("ls-tree", "HEAD", "--", path));
+            final Run r = run(root, List.of("ls-tree", "HEAD", "--", path));
             return r.exit() == 0 && new String(r.out(), StandardCharsets.UTF_8).startsWith("160000 ");
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return false;
         }
     }
 
     /** Whether the repository commits the tree's CRLF line ends as LF ({@code core.autocrlf} true or input). */
-    private boolean convertsLineEnds(Path root) {
+    private boolean convertsLineEnds(final Path root) {
         try {
-            Run r = run(root, List.of("config", "--get", "core.autocrlf"));
-            String v = new String(r.out(), StandardCharsets.UTF_8).strip();
+            final Run r = run(root, List.of("config", "--get", "core.autocrlf"));
+            final String v = new String(r.out(), StandardCharsets.UTF_8).strip();
             return r.exit() == 0 && (v.equalsIgnoreCase("true") || v.equalsIgnoreCase("input"));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return false;
         }
     }
 
-    static boolean binary(byte[] b) {
+    static boolean binary(final byte[] b) {
         for (int i = 0; i < Math.min(b.length, BINARY_PROBE); i++) {
             if (b[i] == 0) {
                 return true;
@@ -303,24 +303,24 @@ final class Git implements AutoCloseable {
      * Runs git in {@code dir} through {@link Processes}: its output goes to files, not a pipe a thread reads, and a run
      * past {@link #TIMEOUT_MILLIS} is killed.
      */
-    Run run(Path dir, List<String> args) throws IOException {
+    Run run(final Path dir, final List<String> args) throws IOException {
         return run(dir, args, TIMEOUT_MILLIS);
     }
 
     /** As {@link #run(Path, List)}, killed after {@code timeoutMillis}: a run that talks to a remote takes longer. */
-    Run run(Path dir, List<String> args, long timeoutMillis) throws IOException {
+    Run run(final Path dir, final List<String> args, final long timeoutMillis) throws IOException {
         if (closed) {
             throw new IOException("closed");
         }
-        List<String> cmd = new ArrayList<>(args.size() + 4);
+        final List<String> cmd = new ArrayList<>(args.size() + 4);
         cmd.add(git);
         cmd.add("--no-optional-locks");
         cmd.add("-C");
         cmd.add(dir.toString());
         cmd.addAll(args);
-        Process[] started = new Process[1];
+        final Process[] started = new Process[1];
         try {
-            Processes.Result r = Processes.run(cmd, env -> {
+            final Processes.Result r = Processes.run(cmd, env -> {
                 env.put("GIT_OPTIONAL_LOCKS", "0");
                 env.put("GIT_TERMINAL_PROMPT", "0");
                 // git's messages in English whatever the user's locale: notInHead reads them
@@ -330,7 +330,7 @@ final class Git implements AutoCloseable {
                 live.add(p);
             });
             return new Run(r.exitCode(), r.stdout(), r.stderr(), r.cut());
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return new Run(-1, new byte[0], "interrupted", false);
         } finally {

@@ -1,5 +1,17 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.FlowLayout;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.Placement;
@@ -10,18 +22,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
-
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTabbedPane;
-import java.awt.FlowLayout;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The view tabs of one placement inside a tabbed pane, after {@code fixedTabs} tabs the owner keeps.
@@ -40,7 +40,7 @@ final class ViewTabs {
     private final WidgetContext context;
     private final Map<Long, Tab> open = new LinkedHashMap<>();
 
-    ViewTabs(JTabbedPane tabs, int fixedTabs, Placement placement, WidgetRegistry registry, WidgetContext context) {
+    ViewTabs(final JTabbedPane tabs, final int fixedTabs, final Placement placement, final WidgetRegistry registry, final WidgetContext context) {
         this.tabs = tabs;
         this.fixedTabs = fixedTabs;
         this.placement = placement;
@@ -49,26 +49,26 @@ final class ViewTabs {
     }
 
     /** Syncs the tabs with the views of this placement; returns true when the set of tabs changed. */
-    boolean render(List<ViewState> views) {
+    boolean render(final List<ViewState> views) {
         boolean changed = false;
-        List<Long> ids = new ArrayList<>();
-        for (ViewState v : views) {
+        final List<Long> ids = new ArrayList<>();
+        for (final ViewState v : views) {
             if (v.placement() != placement) {
                 continue;
             }
             ids.add(v.id());
             Tab t = open.get(v.id());
             if (t == null) {
-                Widget<ViewSpec> w = registry.create(v.spec().type(), context);
+                final Widget<ViewSpec> w = registry.create(v.spec().type(), context);
                 w.render(v.spec());
-                JComponent header = header(v);
+                final JComponent header = header(v);
                 t = new Tab(v, w, header);
                 open.put(v.id(), t);
                 tabs.addTab(Plain.text(v.title()), w.component());
                 tabs.setTabComponentAt(tabs.getTabCount() - 1, header);
                 changed = true;
             } else if (t.view().version() != v.version() || t.view().pinned() != v.pinned()) {
-                int at = tabs.indexOfComponent(t.widget().component());
+                final int at = tabs.indexOfComponent(t.widget().component());
                 Widget<ViewSpec> w = t.widget();
                 if (!t.view().spec().type().equals(v.spec().type())) {
                     // replaced in place by a view of another type: a new widget in the same tab, selection kept
@@ -81,16 +81,16 @@ final class ViewTabs {
                 } else if (t.view().version() != v.version()) {
                     w.render(v.spec());
                 }
-                Tab updated = new Tab(v, w, header(v));
+                final Tab updated = new Tab(v, w, header(v));
                 open.put(v.id(), updated);
                 if (at >= 0) {
                     tabs.setTabComponentAt(at, updated.header());
                 }
             }
         }
-        for (Long id : new ArrayList<>(open.keySet())) {
+        for (final Long id : new ArrayList<>(open.keySet())) {
             if (!ids.contains(id)) {
-                Tab t = open.remove(id);
+                final Tab t = open.remove(id);
                 t.widget().unmount();
                 tabs.remove(t.widget().component());
                 changed = true;
@@ -100,17 +100,17 @@ final class ViewTabs {
     }
 
     /** The tab index of view {@code id}, or -1. */
-    int indexOf(long id) {
-        Tab t = open.get(id);
+    int indexOf(final long id) {
+        final Tab t = open.get(id);
         return t == null ? -1 : tabs.indexOfComponent(t.widget().component());
     }
 
     /** The view id of tab {@code index}, or -1 for a fixed tab. */
-    long viewAt(int index) {
+    long viewAt(final int index) {
         if (index < fixedTabs) {
             return -1;
         }
-        for (Tab t : open.values()) {
+        for (final Tab t : open.values()) {
             if (tabs.indexOfComponent(t.widget().component()) == index) {
                 return t.view().id();
             }
@@ -122,16 +122,16 @@ final class ViewTabs {
         return open.size();
     }
 
-    private JComponent header(ViewState v) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+    private JComponent header(final ViewState v) {
+        final JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         p.setOpaque(false);
-        JLabel title = new JLabel(Plain.text(v.title()), Icons.get(icon(v.spec().type()), 14), JLabel.LEFT);
+        final JLabel title = new JLabel(Plain.text(v.title()), Icons.get(icon(v.spec().type()), 14), JLabel.LEFT);
         title.setToolTipText(Plain.text(v.session().isEmpty() ? v.title() : v.title() + " · placed by " + v.session()));
-        JButton pin = small(v.pinned() ? "pin" : "pin", v.pinned() ? "Unpin: Claude may replace this view" : "Pin: Claude will not replace this view");
+        final JButton pin = small(v.pinned() ? "pin" : "pin", v.pinned() ? "Unpin: Claude may replace this view" : "Pin: Claude will not replace this view");
         pin.setForeground(v.pinned() ? Theme.tint().body : Theme.MUTED);
         pin.setBorder(v.pinned() ? BorderFactory.createMatteBorder(0, 0, 2, 0, Theme.tint().body) : BorderFactory.createEmptyBorder(0, 0, 2, 0));
         pin.addActionListener(e -> context.intents().dispatch(new Intent.PinView(v.id(), !v.pinned())));
-        JButton close = small("close", "Close the view");
+        final JButton close = small("close", "Close the view");
         close.addActionListener(e -> context.intents().dispatch(new Intent.CloseView(v.id())));
         p.add(title);
         p.add(pin);
@@ -139,8 +139,8 @@ final class ViewTabs {
         return p;
     }
 
-    private static JButton small(String icon, String tip) {
-        JButton b = new JButton(Icons.get(icon, 12));
+    private static JButton small(final String icon, final String tip) {
+        final JButton b = new JButton(Icons.get(icon, 12));
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setToolTipText(tip);
         b.getAccessibleContext().setAccessibleName(tip);
@@ -148,7 +148,7 @@ final class ViewTabs {
         return b;
     }
 
-    static String icon(String type) {
+    static String icon(final String type) {
         return switch (type) {
             case "table" -> "table";
             case "plot" -> "chart";

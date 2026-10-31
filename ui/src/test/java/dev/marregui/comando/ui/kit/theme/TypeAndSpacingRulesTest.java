@@ -1,7 +1,5 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +9,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,9 +39,9 @@ class TypeAndSpacingRulesTest {
     /// Scanning `src/main` for `deriveFont(12f)`-style literals and `getSize2D() ± n` on font-making lines finds none.
     @Test
     void everyTextSizeIsAStepOfTheScale() throws IOException {
-        List<String> off = new ArrayList<>();
+        final List<String> off = new ArrayList<>();
         scan((rel, n, line) -> {
-            boolean makesAFont = Stream.of("deriveFont(", "setFont(", "new Font(", "TintTitle(").anyMatch(line::contains);
+            final boolean makesAFont = Stream.of("deriveFont(", "setFont(", "new Font(", "TintTitle(").anyMatch(line::contains);
             if (makesAFont && SIZE_OFFSET.matcher(line).find() || SIZE_LITERAL.matcher(line).find()) {
                 off.add(rel + ":" + n + " " + line.strip());
             }
@@ -53,16 +53,16 @@ class TypeAndSpacingRulesTest {
     /// hint.
     @Test
     void everyInsetIsOnTheGrid() throws IOException {
-        List<String> off = new ArrayList<>();
+        final List<String> off = new ArrayList<>();
         scan((rel, n, line) -> {
-            Matcher m = INSETS.matcher(line);
+            final Matcher m = INSETS.matcher(line);
             while (m.find()) {
                 if (m.group().equals(ALIGNED.get(rel))) {
                     continue;
                 }
-                Matcher num = NUMBER.matcher(m.group(1));
+                final Matcher num = NUMBER.matcher(m.group(1));
                 while (num.find()) {
-                    int v = Integer.parseInt(num.group(1));
+                    final int v = Integer.parseInt(num.group(1));
                     if (v > 3 && v % 4 != 0) {
                         off.add(rel + ":" + n + " " + m.group());
                         break;
@@ -83,7 +83,7 @@ class TypeAndSpacingRulesTest {
         assertThat(Theme.HEADING_SCALE[0] * Theme.BASE_SIZE).isEqualTo(Theme.TextSize.TITLE.pt);
         assertThat(Theme.rowHeight(16)).isEqualTo(24);
         assertThat(Theme.rowHeight(17)).isEqualTo(28);
-        for (int space : new int[]{Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_L, Theme.GAP, Theme.PAD}) {
+        for (final int space : new int[]{Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_L, Theme.GAP, Theme.PAD}) {
             assertThat(space % 4).isZero();
         }
     }
@@ -92,14 +92,14 @@ class TypeAndSpacingRulesTest {
         void check(String rel, int n, String line);
     }
 
-    private static void scan(Line check) throws IOException {
+    private static void scan(final Line check) throws IOException {
         try (Stream<Path> files = Files.walk(SOURCES)) {
-            for (Path f : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
-                String rel = SOURCES.relativize(f).toString().replace('\\', '/');
+            for (final Path f : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+                final String rel = SOURCES.relativize(f).toString().replace('\\', '/');
                 if (OWN_DESIGN.stream().anyMatch(rel::startsWith)) {
                     continue;
                 }
-                List<String> lines = Files.readAllLines(f);
+                final List<String> lines = Files.readAllLines(f);
                 for (int i = 0; i < lines.size(); i++) {
                     check.check(rel, i + 1, lines.get(i));
                 }

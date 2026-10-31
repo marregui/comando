@@ -24,7 +24,7 @@ public final class DesktopTrash {
      * Moves {@code file}, a file or a folder, to the Trash; false when this desktop has none. A Trash that refuses the
      * file (locked, no permission) is a failure of that file, not a missing Trash.
      */
-    public static boolean moveToTrash(Path file) throws IOException {
+    public static boolean moveToTrash(final Path file) throws IOException {
         if (!available()) {
             return false;
         }

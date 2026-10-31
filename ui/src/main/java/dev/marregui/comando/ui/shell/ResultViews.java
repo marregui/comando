@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.shell;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import dev.marregui.comando.core.result.ColumnKind;
 import dev.marregui.comando.core.result.ResultView;
 import dev.marregui.comando.core.view.ViewSpec;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /** Views made from a result: a plot of its numeric columns, a table of its rows. */
 final class ResultViews {
@@ -21,7 +21,7 @@ final class ResultViews {
      *
      * @throws IllegalArgumentException with the reason when the result cannot be plotted
      */
-    static ViewSpec.Plot plot(ResultView r) {
+    static ViewSpec.Plot plot(final ResultView r) {
         if (r == null || r.rowCount() == 0) {
             throw new IllegalArgumentException("The panel has no rows to plot");
         }
@@ -39,15 +39,15 @@ final class ResultViews {
         if (x < 0) {
             throw new IllegalArgumentException("The result has no numeric or time column");
         }
-        int n = Math.min(r.rowCount(), MAX_PLOT_POINTS);
-        double[] xs = new double[n];
+        final int n = Math.min(r.rowCount(), MAX_PLOT_POINTS);
+        final double[] xs = new double[n];
         for (int i = 0; i < n; i++) {
             xs[i] = r.numeric(i, x);
         }
-        List<ViewSpec.Series> series = new ArrayList<>();
+        final List<ViewSpec.Series> series = new ArrayList<>();
         for (int c = 0; c < r.columnCount() && series.size() < 8; c++) {
             if (c != x && r.isNumeric(c) && r.kind(c) != ColumnKind.TIMESTAMP) {
-                double[] ys = new double[n];
+                final double[] ys = new double[n];
                 for (int i = 0; i < n; i++) {
                     ys[i] = r.numeric(i, c);
                 }
@@ -61,16 +61,16 @@ final class ResultViews {
     }
 
     /** The first {@link #MAX_TABLE_ROWS} rows as text. */
-    static ViewSpec.Table table(ResultView r) {
-        List<String> columns = new ArrayList<>(r.columnCount());
+    static ViewSpec.Table table(final ResultView r) {
+        final List<String> columns = new ArrayList<>(r.columnCount());
         for (int c = 0; c < r.columnCount(); c++) {
             columns.add(r.columnName(c));
         }
-        int n = Math.min(r.rowCount(), MAX_TABLE_ROWS);
-        List<List<String>> rows = new ArrayList<>(n);
-        StringBuilder sb = new StringBuilder();
+        final int n = Math.min(r.rowCount(), MAX_TABLE_ROWS);
+        final List<List<String>> rows = new ArrayList<>(n);
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) {
-            List<String> row = new ArrayList<>(columns.size());
+            final List<String> row = new ArrayList<>(columns.size());
             for (int c = 0; c < columns.size(); c++) {
                 sb.setLength(0);
                 r.format(i, c, sb);

@@ -35,19 +35,19 @@ public final class Ground {
     public final boolean light;
     private final String name;
 
-    Ground(String name, String label, Color color, boolean light) {
+    Ground(final String name, final String label, final Color color, final boolean light) {
         this.name = name;
         this.label = label;
         this.color = color;
         this.light = light;
     }
 
-    Ground(String name, String label, Color color) {
+    Ground(final String name, final String label, final Color color) {
         this(name, label, color, false);
     }
 
-    private static Ground builtIn(String name, String theme) {
-        ThemeSpec s = BuiltInThemes.spec(theme);
+    private static Ground builtIn(final String name, final String theme) {
+        final ThemeSpec s = BuiltInThemes.spec(theme);
         return new Ground(name, s.groundLabel(), s.ground(), s.light());
     }
 
@@ -67,13 +67,13 @@ public final class Ground {
     }
 
     /** The ground named {@code name}: a built-in one, else one of the themes offered. */
-    public static Optional<Ground> find(String name) {
+    public static Optional<Ground> find(final String name) {
         return Arrays.stream(BUILT_IN).filter(g -> g.name.equals(name)).findFirst()
                 .or(() -> Arrays.stream(NamedTheme.values()).map(t -> t.ground).filter(g -> g.name.equals(name)).findFirst());
     }
 
     /** The ground named {@code name}; {@link #GRAPHITE} for a name no ground has. */
-    public static Ground named(String name) {
+    public static Ground named(final String name) {
         return find(name).orElse(GRAPHITE);
     }
 }

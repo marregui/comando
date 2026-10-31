@@ -27,7 +27,7 @@ public record Approval(long id, String session, ApprovalKind kind, String toolNa
         toolUseId = toolUseId == null ? "" : toolUseId;
     }
 
-    public Approval(long id, String session, ApprovalKind kind, String toolName, String inputJson, String summary, long createdMillis) {
+    public Approval(final long id, final String session, final ApprovalKind kind, final String toolName, final String inputJson, final String summary, final long createdMillis) {
         this(id, session, kind, toolName, inputJson, summary, createdMillis, "");
     }
 }

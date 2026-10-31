@@ -1,5 +1,22 @@
 package dev.marregui.comando.db;
 
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
@@ -11,22 +28,6 @@ import dev.marregui.comando.core.schema.Schema;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -79,7 +80,7 @@ class DbAdapterTest {
     /// without opening the connection again, no view, notice or table is left, and only the user's Connect opened it.
     @Test
     void aSchemaLoadOvertakenByACloseNeitherReopensTheConnectionNorKeepsItsTables() throws Exception {
-        SchemaRegistry schemas = new SchemaRegistry();
+        final SchemaRegistry schemas = new SchemaRegistry();
         db.close();
         db = new DbAdapter(sink, results, schemas, new DbSettings(0, 1_000, 500, 60, 1_000L));
         db.query(spec, "CREATE TABLE IF NOT EXISTS overtaken_probe (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1).get();
@@ -89,7 +90,7 @@ class DbAdapterTest {
 
         db.open(spec);
         db.loadSchema(spec, true);
-        Thread lane = laneThread("local").orElseThrow();
+        final Thread lane = laneThread("local").orElseThrow();
         // the user points the connection elsewhere at once: the reducer sends CloseDb, then ForgetSchema
         db.close("local");
         db.forgetSchema("local");
@@ -108,9 +109,9 @@ class DbAdapterTest {
     void aBlockOfSeveralStatementsSaysThatOnlyTheFirstResultIsShown() {
         db.execute(1L, spec, "SELECT 1 a; SELECT 2 b");
 
-        Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
+        final Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
         assertThat(done.rows()).isEqualTo(1);
-        Intent.SqlWarning warning = sink.await(Intent.SqlWarning.class, WAIT);
+        final Intent.SqlWarning warning = sink.await(Intent.SqlWarning.class, WAIT);
         assertThat(warning.requestId()).isEqualTo(1L);
         assertThat(warning.failed()).isFalse();
         assertThat(warning.text()).startsWith("2 statements ran");
@@ -134,12 +135,12 @@ class DbAdapterTest {
                 + "timestamp_sequence(to_timestamp('2024-01-01T00:00:00', 'yyyy-MM-ddTHH:mm:ss'), 1000000) ts "
                 + "FROM long_sequence(3)");
 
-        Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
+        final Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
         assertThat(done.rows()).isEqualTo(3);
         assertThat(sink.of(Intent.ConnectionOpened.class)).hasSize(1);
         assertThat(sink.of(Intent.SqlStarted.class)).hasSize(1);
 
-        ResultView r = results.get(1L);
+        final ResultView r = results.get(1L);
         assertThat(r.columnCount()).isEqualTo(5);
         assertThat(r.kind(0)).isEqualTo(ColumnKind.LONG);
         assertThat(r.kind(1)).isEqualTo(ColumnKind.DOUBLE);
@@ -158,7 +159,7 @@ class DbAdapterTest {
     void nullsAreKeptPerCell() {
         db.execute(2L, spec, "SELECT CASE WHEN x = 2 THEN NULL ELSE x END n, CASE WHEN x = 1 THEN NULL ELSE 'v' END s FROM long_sequence(2)");
         sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 2L, WAIT);
-        ResultView r = results.get(2L);
+        final ResultView r = results.get(2L);
         assertThat(r.isNull(0, 0)).isFalse();
         assertThat(r.isNull(1, 0)).isTrue();
         assertThat(r.isNull(0, 1)).isTrue();
@@ -177,7 +178,7 @@ class DbAdapterTest {
     @Test
     void rowCapTruncates() {
         db.execute(3L, spec, "SELECT x FROM long_sequence(5000)");
-        Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 3L, WAIT);
+        final Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 3L, WAIT);
         assertThat(done.rows()).isEqualTo(1_000);
         assertThat(done.truncated()).isTrue();
         assertThat(sink.of(Intent.SqlRows.class)).isNotEmpty();
@@ -187,7 +188,7 @@ class DbAdapterTest {
     @Test
     void ddlReportsNoRows() {
         db.execute(4L, spec, "CREATE TABLE IF NOT EXISTS ddl_probe (ts TIMESTAMP, v LONG) TIMESTAMP(ts) PARTITION BY DAY");
-        Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 4L, WAIT);
+        final Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 4L, WAIT);
         assertThat(done.rows()).isZero();
         assertThat(results.get(4L)).isNull();
     }
@@ -196,7 +197,7 @@ class DbAdapterTest {
     @Test
     void errorsAreReportedWithTheServerMessage() {
         db.execute(5L, spec, "SELECT * FROM no_such_table");
-        Intent.SqlFailed failed = sink.await(Intent.SqlFailed.class, f -> f.requestId() == 5L, WAIT);
+        final Intent.SqlFailed failed = sink.await(Intent.SqlFailed.class, f -> f.requestId() == 5L, WAIT);
         assertThat(failed.message()).contains("no_such_table");
     }
 
@@ -207,14 +208,14 @@ class DbAdapterTest {
         db.execute(6L, spec, "SELECT sum(x) FROM long_sequence(100_000_000_000)");
         sink.await(Intent.SqlStarted.class, s -> s.requestId() == 6L, WAIT);
         sleep(300);
-        long start = System.nanoTime();
+        final long start = System.nanoTime();
         db.cancel(6L);
-        long callMillis = (System.nanoTime() - start) / 1_000_000L;
+        final long callMillis = (System.nanoTime() - start) / 1_000_000L;
         // a cancel made on the caller's thread waits for QuestDB's answer, about 1 000 ms; handed off it returns at
         // once, though a loaded CI runner, its cores busy with the query, took 125 ms: 500 ms tells them apart
         assertThat(callMillis).as("cancel() must not block its caller, the reducer thread; took %d ms", callMillis).isLessThan(500L);
         sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 6L, Duration.ofSeconds(5));
-        long tookMillis = (System.nanoTime() - start) / 1_000_000L;
+        final long tookMillis = (System.nanoTime() - start) / 1_000_000L;
         assertThat(tookMillis).as("cancel took %d ms", tookMillis).isLessThan(3_000L);
 
         // the lane keeps working afterwards
@@ -240,18 +241,18 @@ class DbAdapterTest {
     void aStatementQueuedWhenComandoQuitsDoesNotRun() throws Exception {
         // the lane is held by a connect to a server that accepts and never answers; behind it, a write to the real one
         try (ServerSocket silent = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            ConnectionSpec stuck = new ConnectionSpec("probe", "127.0.0.1", silent.getLocalPort(), "qdb", "admin", "quest", false);
-            ConnectionSpec real = new ConnectionSpec("probe", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
+            final ConnectionSpec stuck = new ConnectionSpec("probe", "127.0.0.1", silent.getLocalPort(), "qdb", "admin", "quest", false);
+            final ConnectionSpec real = new ConnectionSpec("probe", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
             db.execute(10L, stuck, "SELECT 1");
-            CompletableFuture<QueryPort.Rows> queued = db.query(real, "CREATE TABLE closing_probe (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1);
+            final CompletableFuture<QueryPort.Rows> queued = db.query(real, "CREATE TABLE closing_probe (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1);
             db.close();
             assertThatThrownBy(() -> queued.get(WAIT.toSeconds(), TimeUnit.SECONDS)).as("its caller is answered")
                     .hasMessageContaining("did not run");
         }
 
-        DbAdapter after = new DbAdapter(sink, results, new DbSettings(0, 1_000, 500, 60, 1_000L));
+        final DbAdapter after = new DbAdapter(sink, results, new DbSettings(0, 1_000, 500, 60, 1_000L));
         try {
-            QueryPort.Rows tables = after.query(spec, "SELECT count() FROM tables() WHERE table_name = 'closing_probe'", 1).get();
+            final QueryPort.Rows tables = after.query(spec, "SELECT count() FROM tables() WHERE table_name = 'closing_probe'", 1).get();
             assertThat(tables.rows().getFirst().getFirst()).as("the queued write never ran").isEqualTo("0");
         } finally {
             after.close();
@@ -261,7 +262,7 @@ class DbAdapterTest {
     /// A run on an unreachable connection reports the connection failed and the run failed.
     @Test
     void connectFailureIsReported() {
-        ConnectionSpec nowhere = new ConnectionSpec("nowhere", "127.0.0.1", 1, "qdb", "admin", "quest", false);
+        final ConnectionSpec nowhere = new ConnectionSpec("nowhere", "127.0.0.1", 1, "qdb", "admin", "quest", false);
         db.execute(10L, nowhere, "SELECT 1");
         sink.await(Intent.ConnectionFailed.class, f -> f.name().equals("nowhere"), WAIT);
         sink.await(Intent.SqlFailed.class, f -> f.requestId() == 10L, WAIT);
@@ -271,13 +272,13 @@ class DbAdapterTest {
     /// description lists each column with its type.
     @Test
     void queryForClaudeReturnsCappedTextRows() throws Exception {
-        var rows = db.query(spec, "SELECT x, x * 2 y FROM long_sequence(10)", 4).get();
+        final var rows = db.query(spec, "SELECT x, x * 2 y FROM long_sequence(10)", 4).get();
         assertThat(rows.columns()).containsExactly("x", "y");
         assertThat(rows.rows()).hasSize(4).first().isEqualTo(List.of("1", "2"));
         assertThat(rows.truncated()).isTrue();
 
         db.query(spec, "CREATE TABLE IF NOT EXISTS described (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1).get();
-        var described = db.describe(spec, "described").get();
+        final var described = db.describe(spec, "described").get();
         assertThat(described.columns()).contains("column", "type");
         assertThat(described.rows()).extracting(r -> r.getFirst()).containsExactly("ts", "v");
     }
@@ -286,17 +287,17 @@ class DbAdapterTest {
     /// tree whose table and column nodes insert a `SELECT … LIMIT 100` and the quoted column name.
     @Test
     void schemaListsTablesWithTheirColumnsAndShowsATree() throws Exception {
-        SchemaRegistry schemas = new SchemaRegistry();
+        final SchemaRegistry schemas = new SchemaRegistry();
         db.close();
         db = new DbAdapter(sink, results, schemas, new DbSettings(0, 1_000, 500, 60, 1_000L));
         db.query(spec, "CREATE TABLE IF NOT EXISTS schema_probe (ts TIMESTAMP, \"Mixed Case\" SYMBOL, v DOUBLE) TIMESTAMP(ts)", 1).get();
         db.loadSchema(spec, true);
-        Intent.ShowView view = sink.await(Intent.ShowView.class, WAIT);
-        Schema.Table probe = schemas.of("local").tables().stream().filter(t -> t.name().equals("schema_probe")).findFirst().orElseThrow();
+        final Intent.ShowView view = sink.await(Intent.ShowView.class, WAIT);
+        final Schema.Table probe = schemas.of("local").tables().stream().filter(t -> t.name().equals("schema_probe")).findFirst().orElseThrow();
         assertThat(probe.columns()).extracting(Schema.Column::name).containsExactly("ts", "Mixed Case", "v");
         // QuestDB's own type names, not the PostgreSQL names its information schema maps them to
         assertThat(probe.columns()).extracting(Schema.Column::type).containsExactly("TIMESTAMP", "SYMBOL", "DOUBLE");
-        ViewSpec.TreeNode table = ((ViewSpec.Tree) view.spec()).root().children().stream()
+        final ViewSpec.TreeNode table = ((ViewSpec.Tree) view.spec()).root().children().stream()
                 .filter(n -> n.label().equals("schema_probe")).findFirst().orElseThrow();
         assertThat(table.link()).isEqualTo("comando-insert:SELECT * FROM schema_probe LIMIT 100;");
         assertThat(table.children().get(1).link()).isEqualTo("comando-insert:\"Mixed Case\"");
@@ -306,14 +307,14 @@ class DbAdapterTest {
     /// `SYMBOL` type.
     @Test
     void aQuestDbWithMoreTablesThanTheLimitReadsTheInformationSchemaInstead() throws Exception {
-        SchemaRegistry schemas = new SchemaRegistry();
+        final SchemaRegistry schemas = new SchemaRegistry();
         db.close();
         db = new DbAdapter(sink, results, schemas, new DbSettings(0, 1_000, 500, 60, 1_000L), 0);
         db.query(spec, "CREATE TABLE IF NOT EXISTS wide_probe (ts TIMESTAMP, s SYMBOL) TIMESTAMP(ts)", 1).get();
         db.loadSchema(spec, true);
         sink.await(Intent.ShowView.class, WAIT);
 
-        Schema.Table probe = schemas.of("local").tables().stream().filter(t -> t.name().equals("wide_probe")).findFirst().orElseThrow();
+        final Schema.Table probe = schemas.of("local").tables().stream().filter(t -> t.name().equals("wide_probe")).findFirst().orElseThrow();
         assertThat(probe.columns()).extracting(Schema.Column::name).containsExactly("ts", "s");
         // the information schema's PostgreSQL names: one query, not one per table
         assertThat(probe.columns()).extracting(Schema.Column::type).doesNotContain("SYMBOL");
@@ -323,7 +324,7 @@ class DbAdapterTest {
     @Test
     void testerReportsReachability() {
         db.test(spec);
-        Intent.ConnectionTested ok = sink.await(Intent.ConnectionTested.class, WAIT);
+        final Intent.ConnectionTested ok = sink.await(Intent.ConnectionTested.class, WAIT);
         assertThat(ok.ok()).isTrue();
     }
 
@@ -339,12 +340,12 @@ class DbAdapterTest {
     /// The embedded server has no TLS: a connection that requires it fails both when opened and when tested.
     @Test
     void testAndOpenAgreeOnTheConnectionsTlsMode() {
-        ConnectionSpec tls = new ConnectionSpec("tls", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false, "require");
+        final ConnectionSpec tls = new ConnectionSpec("tls", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false, "require");
         db.open(tls);
-        Intent.ConnectionFailed failed = sink.await(Intent.ConnectionFailed.class, f -> f.name().equals("tls"), WAIT);
+        final Intent.ConnectionFailed failed = sink.await(Intent.ConnectionFailed.class, f -> f.name().equals("tls"), WAIT);
 
         db.test(tls);
-        Intent.ConnectionTested tested = sink.await(Intent.ConnectionTested.class, WAIT);
+        final Intent.ConnectionTested tested = sink.await(Intent.ConnectionTested.class, WAIT);
         assertThat(tested.ok()).as("the test must fail where open fails: " + failed.error()).isFalse();
     }
 
@@ -352,10 +353,10 @@ class DbAdapterTest {
     /// working connection that answers a query.
     @Test
     void closingAConnectionStopsItsLaneAndTheNameOpensAgain() throws Exception {
-        ConnectionSpec released = new ConnectionSpec("released", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
+        final ConnectionSpec released = new ConnectionSpec("released", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
         db.open(released);
         sink.await(Intent.ConnectionOpened.class, o -> o.name().equals("released"), WAIT);
-        Thread lane = laneThread("released").orElseThrow();
+        final Thread lane = laneThread("released").orElseThrow();
 
         db.close("released");
         sink.await(Intent.ConnectionClosed.class, c -> c.name().equals("released"), WAIT);
@@ -387,10 +388,10 @@ class DbAdapterTest {
     /// later close still reports it closed.
     @Test
     void aConnectionThatFailsToOpenKeepsNoLaneAndStillReportsItsClose() throws Exception {
-        ConnectionSpec nowhere = new ConnectionSpec("unreachable", "127.0.0.1", 1, "qdb", "admin", "quest", false);
+        final ConnectionSpec nowhere = new ConnectionSpec("unreachable", "127.0.0.1", 1, "qdb", "admin", "quest", false);
         db.open(nowhere);
         sink.await(Intent.ConnectionFailed.class, f -> f.name().equals("unreachable"), WAIT);
-        Optional<Thread> lane = laneThread("unreachable");
+        final Optional<Thread> lane = laneThread("unreachable");
         if (lane.isPresent()) {
             assertThat(lane.get().join(WAIT)).as("the failed connection's lane thread ends").isTrue();
         }
@@ -400,14 +401,14 @@ class DbAdapterTest {
         sink.await(Intent.ConnectionClosed.class, c -> c.name().equals("unreachable"), WAIT);
     }
 
-    private static Optional<Thread> laneThread(String connection) {
+    private static Optional<Thread> laneThread(final String connection) {
         return Threads.alive("db-" + connection).stream().findFirst();
     }
 
-    private static void sleep(long millis) {
+    private static void sleep(final long millis) {
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }

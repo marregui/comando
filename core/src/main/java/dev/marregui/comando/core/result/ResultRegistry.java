@@ -7,15 +7,15 @@ public final class ResultRegistry {
 
     private final ConcurrentHashMap<Long, ResultView> results = new ConcurrentHashMap<>();
 
-    public void put(ResultView result) {
+    public void put(final ResultView result) {
         results.put(result.requestId(), result);
     }
 
-    public ResultView get(long requestId) {
+    public ResultView get(final long requestId) {
         return results.get(requestId);
     }
 
-    public void release(long requestId) {
+    public void release(final long requestId) {
         results.remove(requestId);
     }
 

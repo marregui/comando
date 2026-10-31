@@ -15,18 +15,18 @@ public final class Statements {
     }
 
     /** The statements of {@code sql}, stripped, in order; empty for a blank or comment-only block. */
-    public static List<String> split(String sql) {
-        List<String> out = new ArrayList<>();
+    public static List<String> split(final String sql) {
+        final List<String> out = new ArrayList<>();
         if (sql == null) {
             return out;
         }
-        int n = sql.length();
+        final int n = sql.length();
         int start = 0;
         int i = 0;
         while (i < n) {
-            char c = sql.charAt(i);
+            final char c = sql.charAt(i);
             if (c == '\'' || c == '"') {
-                boolean escapes = c == '\'' && isEscapePrefix(sql, i);
+                final boolean escapes = c == '\'' && isEscapePrefix(sql, i);
                 int j = i + 1;
                 while (j < n) {
                     if (escapes && sql.charAt(j) == '\\') {
@@ -44,18 +44,18 @@ public final class Statements {
                 }
                 i = Math.min(n, j + 1);
             } else if (c == '$') {
-                int tagEnd = dollarTagEnd(sql, i);
+                final int tagEnd = dollarTagEnd(sql, i);
                 if (tagEnd < 0) {
                     i++;
                 } else {
-                    int close = sql.indexOf(sql.substring(i, tagEnd), tagEnd);
+                    final int close = sql.indexOf(sql.substring(i, tagEnd), tagEnd);
                     i = close < 0 ? n : close + tagEnd - i;
                 }
             } else if (c == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
-                int eol = sql.indexOf('\n', i);
+                final int eol = sql.indexOf('\n', i);
                 i = eol < 0 ? n : eol + 1;
             } else if (c == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
-                int end = sql.indexOf("*/", i + 2);
+                final int end = sql.indexOf("*/", i + 2);
                 i = end < 0 ? n : end + 2;
             } else if (c == ';') {
                 add(out, sql.substring(start, i));
@@ -70,11 +70,11 @@ public final class Statements {
     }
 
     /** An {@code E} or {@code e} right before the quote at {@code quote} that starts a word: an escape string. */
-    private static boolean isEscapePrefix(String sql, int quote) {
+    private static boolean isEscapePrefix(final String sql, final int quote) {
         if (quote < 1) {
             return false;
         }
-        char e = sql.charAt(quote - 1);
+        final char e = sql.charAt(quote - 1);
         return (e == 'E' || e == 'e') && (quote < 2 || !isIdentifierPart(sql.charAt(quote - 2)));
     }
 
@@ -82,7 +82,7 @@ public final class Statements {
      * The index after the opening dollar quote at {@code at} ({@code $$} or {@code $tag$}, the tag an identifier
      * that does not start with a digit), or -1: {@code $1} is a parameter and {@code a$b} an identifier.
      */
-    private static int dollarTagEnd(String sql, int at) {
+    private static int dollarTagEnd(final String sql, final int at) {
         if (at > 0 && isIdentifierPart(sql.charAt(at - 1))) {
             return -1;
         }
@@ -95,11 +95,11 @@ public final class Statements {
         return j < sql.length() && sql.charAt(j) == '$' ? j + 1 : -1;
     }
 
-    private static boolean isIdentifierPart(char c) {
+    private static boolean isIdentifierPart(final char c) {
         return Character.isLetterOrDigit(c) || c == '_' || c == '$';
     }
 
-    private static void add(List<String> out, String statement) {
+    private static void add(final List<String> out, final String statement) {
         if (!Classifier.isCommentOnly(statement)) {
             out.add(statement.strip());
         }

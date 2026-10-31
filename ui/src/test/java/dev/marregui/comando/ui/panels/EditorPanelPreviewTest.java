@@ -1,21 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.desktop.Links;
-import dev.marregui.comando.ui.kit.desktop.Browser;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.schema.SchemaRegistry;
-import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.ui.kit.text.LocalImages;
-import dev.marregui.comando.ui.widgets.editor.CommandEditor;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.imageio.ImageIO;
-import javax.swing.JViewport;
-import javax.swing.SwingUtilities;
-import javax.swing.event.HyperlinkEvent;
-import javax.swing.text.BadLocationException;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
@@ -27,6 +11,23 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
+
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.schema.SchemaRegistry;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.text.LocalImages;
+import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,16 +43,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the preview shows pictures beside the Markdown file and follows double-clicked links to files, headings and pages
 class EditorPanelPreviewTest {
 
-    private static String shown(EditorPanel p) {
+    private static String shown(final EditorPanel p) {
         try {
             return p.rendered().getDocument().getText(0, p.rendered().getDocument().getLength());
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private static EditorPanel panel(String title, Consumer<EditorPanel> setUp) throws Exception {
-        EditorPanel[] p = new EditorPanel[1];
+    private static EditorPanel panel(final String title, final Consumer<EditorPanel> setUp) throws Exception {
+        final EditorPanel[] p = new EditorPanel[1];
         SwingUtilities.invokeAndWait(() -> {
             p[0] = new EditorPanel(new PanelState(new PanelId(title), title, "", ""), intent -> {
             }, new SchemaRegistry());
@@ -64,7 +65,7 @@ class EditorPanelPreviewTest {
     /// and keeps a caret the reader moved up; a Markdown file stays editable.
     @Test
     void aLogIsReadOnlyAndFollowsItsEnd() throws Exception {
-        EditorPanel log = panel("comando-0.log", p -> {
+        final EditorPanel log = panel("comando-0.log", p -> {
             p.editor().load("one\ntwo\n");
             p.file(Path.of("/home/.comando/logs/comando-0.log"), true);
         });
@@ -74,7 +75,7 @@ class EditorPanelPreviewTest {
         SwingUtilities.invokeAndWait(() -> log.reload("one\ntwo\nthree\n"));
         assertThat(log.editor().area().getCaretPosition()).as("follows what was appended").isEqualTo(14);
 
-        EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
+        final EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
         assertThat(notes.editor().area().isEditable()).isTrue();
     }
 
@@ -83,18 +84,18 @@ class EditorPanelPreviewTest {
     /// still grows below; back at the end, the view follows again; a file rolled over replaces the text.
     @Test
     void aLogIsALiveViewThatKeepsTheReadersPlaceAndSelection() throws Exception {
-        StringBuilder lines = new StringBuilder();
+        final StringBuilder lines = new StringBuilder();
         for (int i = 0; i < 200; i++) {
             lines.append("line ").append(i).append('\n');
         }
-        String first = lines.toString();
-        EditorPanel log = panel("hivemq.log", p -> {
+        final String first = lines.toString();
+        final EditorPanel log = panel("hivemq.log", p -> {
             p.editor().load(first);
             p.file(Path.of("/home/.comando/edge/log/hivemq.log"), true);
             p.setSize(600, 300);
             layOut(p);
         });
-        JViewport v = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, log.editor().area());
+        final JViewport v = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, log.editor().area());
         SwingUtilities.invokeAndWait(() -> log.reload(first + "line 200\n"));
         SwingUtilities.invokeAndWait(() -> { });
         assertThat(log.followsEnd()).isTrue();
@@ -123,15 +124,15 @@ class EditorPanelPreviewTest {
         assertThat(log.editor().text()).as("a new file replaces the text").isEqualTo("rolled over\n");
     }
 
-    private static boolean atEnd(JViewport v) {
-        Rectangle seen = v.getViewRect();
+    private static boolean atEnd(final JViewport v) {
+        final Rectangle seen = v.getViewRect();
         return seen.y + seen.height >= v.getView().getHeight() - 20;
     }
 
-    private static void layOut(java.awt.Component c) {
+    private static void layOut(final java.awt.Component c) {
         c.doLayout();
         if (c instanceof java.awt.Container k) {
-            for (java.awt.Component child : k.getComponents()) {
+            for (final java.awt.Component child : k.getComponents()) {
                 layOut(child);
             }
         }
@@ -141,7 +142,7 @@ class EditorPanelPreviewTest {
     /// text; a JSON document is editable with no preview offered.
     @Test
     void aMarkdownDocumentOpensRenderedAndIsEditedLikeAnyOther() throws Exception {
-        EditorPanel memory = panel("MEMORY", p -> {
+        final EditorPanel memory = panel("MEMORY", p -> {
             p.editor().load("# Memory\n");
             p.file(Path.of("/m/MEMORY.md"), true);
         });
@@ -151,7 +152,7 @@ class EditorPanelPreviewTest {
         SwingUtilities.invokeAndWait(memory::edit);
         assertThat(memory.previewing()).as("asked to edit: the text").isFalse();
 
-        EditorPanel json = panel("agents", p -> p.file(Path.of("/m/agents.json"), true));
+        final EditorPanel json = panel("agents", p -> p.file(Path.of("/m/agents.json"), true));
         assertThat(json.editable()).isTrue();
         assertThat(json.previewOffered()).as("only Markdown renders").isFalse();
     }
@@ -160,7 +161,7 @@ class EditorPanelPreviewTest {
     /// panel's own `.html` text get no browser button.
     @Test
     void anHtmlDocumentOpensAsTextWithTheBrowserAtHand() throws Exception {
-        EditorPanel page = panel("report", p -> {
+        final EditorPanel page = panel("report", p -> {
             p.editor().load("<html><body><h1>Tests</h1></body></html>");
             p.file(Path.of("/build/reports/index.html"), true);
         });
@@ -169,9 +170,9 @@ class EditorPanelPreviewTest {
         assertThat(page.browserOffered()).isTrue();
         assertThat(page.editable()).isTrue();
 
-        EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
+        final EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
         assertThat(notes.browserOffered()).as("Markdown has no browser button").isFalse();
-        EditorPanel own = panel("own", p -> p.file(Path.of("/home/.comando/panels/own.html"), false));
+        final EditorPanel own = panel("own", p -> p.file(Path.of("/home/.comando/panels/own.html"), false));
         assertThat(own.browserOffered()).as("a panel's own text is never a page").isFalse();
     }
 
@@ -179,7 +180,7 @@ class EditorPanelPreviewTest {
     /// document of its own is never offered Clear.
     @Test
     void clearEmptiesThePanelsOwnTextButNeverADocument() throws Exception {
-        EditorPanel own = panel("notes", p -> {
+        final EditorPanel own = panel("notes", p -> {
             p.editor().load("select 1;\n");
             p.file(Path.of("/home/.comando/panels/notes.md"), false);
         });
@@ -191,7 +192,7 @@ class EditorPanelPreviewTest {
         assertThat(own.editor().text()).isEqualTo("select 1;\n");
         assertThat(own.clearOffered()).isTrue();
 
-        EditorPanel document = panel("PLAN", p -> {
+        final EditorPanel document = panel("PLAN", p -> {
             p.editor().load("# Plan\n");
             p.file(Path.of("/s/PLAN.md"), true);
         });
@@ -203,7 +204,7 @@ class EditorPanelPreviewTest {
     /// the editor.
     @Test
     void aMarkdownDocumentOpensRenderedAndEditSwitchesToTheText() throws Exception {
-        EditorPanel panel = panel("LANE-PLAN", p -> {
+        final EditorPanel panel = panel("LANE-PLAN", p -> {
             p.editor().load("# Lane\n\nThe **plan**.\n");
             p.file(Path.of("/s/LANE-PLAN.md"), true);
         });
@@ -229,7 +230,7 @@ class EditorPanelPreviewTest {
     /// renamed, and the toggle can still preview it.
     @Test
     void aPanelsOwnTextStaysInTheEditorAsSqlAndPrompts() throws Exception {
-        EditorPanel panel = panel("spec", p -> {
+        final EditorPanel panel = panel("spec", p -> {
             p.editor().load("# spec\n\nselect 1;\n");
             p.file(Path.of("/home/.comando/panels/spec.md"), false);
         });
@@ -248,7 +249,7 @@ class EditorPanelPreviewTest {
     /// A `.java` or `.py` file gets its language's syntax style, offers no preview and ignores a preview toggle.
     @Test
     void aSourceFileIsColouredAsItsLanguageAndStaysAsText() throws Exception {
-        EditorPanel java = panel("Red.java", p -> {
+        final EditorPanel java = panel("Red.java", p -> {
             p.file(Path.of("/s/work/Red.java"), true);
             p.togglePreview();
         });
@@ -256,26 +257,26 @@ class EditorPanelPreviewTest {
         assertThat(java.previewing()).isFalse();
         assertThat(java.editor().area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_JAVA);
 
-        EditorPanel python = panel("rig.py", p -> p.file(Path.of("/s/work/rig.py"), true));
+        final EditorPanel python = panel("rig.py", p -> p.file(Path.of("/s/work/rig.py"), true));
         assertThat(python.editor().area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_PYTHON);
     }
 
     /// A relative picture link resolves against the document's folder, also as `./images/…` after a reload; the panel's
     /// own text, whose folder has no such picture, shows "no such file".
     @Test
-    void aMarkdownFileShowsThePicturesBesideItAsItIsEditedAndReloaded(@TempDir Path dir) throws Exception {
-        Path doc = dir.resolve("SCRATCHPAD/2026-10-17/READ-01.md");
-        Path chart = doc.resolveSibling("images/chart.png");
+    void aMarkdownFileShowsThePicturesBesideItAsItIsEditedAndReloaded(@TempDir final Path dir) throws Exception {
+        final Path doc = dir.resolve("SCRATCHPAD/2026-10-17/READ-01.md");
+        final Path chart = doc.resolveSibling("images/chart.png");
         Files.createDirectories(chart.getParent());
         ImageIO.write(new BufferedImage(40, 20, BufferedImage.TYPE_INT_RGB), "png", chart.toFile());
         LocalImages.install(dir.resolve("cache"));
         try {
             // read once, so the panel finds it read
-            CountDownLatch read = new CountDownLatch(1);
+            final CountDownLatch read = new CountDownLatch(1);
             if (LocalImages.current().picture(chart, read::countDown) instanceof LocalImages.Picture.Pending) {
                 assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
             }
-            EditorPanel panel = panel("READ-01", p -> {
+            final EditorPanel panel = panel("READ-01", p -> {
                 p.editor().load("# Findings\n\n![chart](images/chart.png)\n");
                 p.file(doc, true);
             });
@@ -284,7 +285,7 @@ class EditorPanelPreviewTest {
             SwingUtilities.invokeAndWait(() -> panel.reload("# Findings v2\n\n![chart](./images/chart.png)\n"));
             assertThat(panel.rendered().getText()).contains("Findings v2").contains(chart.toUri().toString());
 
-            EditorPanel own = panel("spec", p -> {
+            final EditorPanel own = panel("spec", p -> {
                 p.editor().load("![chart](images/chart.png)\n");
                 p.file(dir.resolve("panels/spec.md"), false);
                 p.togglePreview();
@@ -299,11 +300,11 @@ class EditorPanelPreviewTest {
     /// browser only on a double click, and a `mailto` link does nothing.
     @Test
     void anyLinkDoubleClickedInThePreviewIsFollowed() throws Exception {
-        List<String> opened = new CopyOnWriteArrayList<>();
-        List<String> browsed = new CopyOnWriteArrayList<>();
+        final List<String> opened = new CopyOnWriteArrayList<>();
+        final List<String> browsed = new CopyOnWriteArrayList<>();
         Links.browseWith(browsed::add);
         try {
-            EditorPanel doc = panel("build", p -> {
+            final EditorPanel doc = panel("build", p -> {
                 p.editor().load("[build](build.gradle.kts), [site](https://example.com/x) and [mail](mailto:a@b.c)");
                 p.file(Path.of("/kb/claude/INTERNALS.md"), true);
                 p.onOpenFile((f, heading) -> opened.add(f.toString()));
@@ -324,17 +325,17 @@ class EditorPanelPreviewTest {
     /// In the editor text, a URL and a Markdown link with a heading anchor are followed; a position on no link is not.
     @Test
     void aLinkDoubleClickedInTheTextIsFollowedAsInThePreview() throws Exception {
-        List<String> opened = new CopyOnWriteArrayList<>();
-        List<String> browsed = new CopyOnWriteArrayList<>();
+        final List<String> opened = new CopyOnWriteArrayList<>();
+        final List<String> browsed = new CopyOnWriteArrayList<>();
         Links.browseWith(browsed::add);
         try {
-            String text = "SELECT 1;\n-- see https://example.org/q and [setup](setup.md#2-install) here\n";
-            EditorPanel own = panel("sql", p -> {
+            final String text = "SELECT 1;\n-- see https://example.org/q and [setup](setup.md#2-install) here\n";
+            final EditorPanel own = panel("sql", p -> {
                 p.editor().load(text);
                 p.file(Path.of("/docs/guide.sql"), true);
                 p.onOpenFile((f, heading) -> opened.add(f + (heading == null ? "" : " at " + heading)));
             });
-            boolean[] followed = new boolean[3];
+            final boolean[] followed = new boolean[3];
             SwingUtilities.invokeAndWait(() -> {
                 followed[0] = own.followLinkAt(text.indexOf("example.org"));
                 followed[1] = own.followLinkAt(text.indexOf("setup]"));
@@ -352,8 +353,8 @@ class EditorPanelPreviewTest {
     /// double click opens the file, at the heading the link names.
     @Test
     void aMarkdownLinkDoubleClickedInThePreviewOpensItsFile() throws Exception {
-        List<String> opened = new CopyOnWriteArrayList<>();
-        EditorPanel doc = panel("guide", p -> {
+        final List<String> opened = new CopyOnWriteArrayList<>();
+        final EditorPanel doc = panel("guide", p -> {
             p.editor().load("See [the setup](setup.md), [its install part](setup.md#2-install) and [this part](#part).");
             p.file(Path.of("/docs/guide.md"), true);
             p.onOpenFile((f, heading) -> opened.add(f + (heading == null ? "" : " at " + heading)));
@@ -371,8 +372,8 @@ class EditorPanelPreviewTest {
                 .containsExactly("/docs/setup.md", "/docs/setup.md at 2-install");
     }
 
-    private static HyperlinkEvent link(EditorPanel p, String href, int clicks) {
-        MouseEvent click = new MouseEvent(p.rendered(), MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, clicks, false,
+    private static HyperlinkEvent link(final EditorPanel p, final String href, final int clicks) {
+        final MouseEvent click = new MouseEvent(p.rendered(), MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, clicks, false,
                 MouseEvent.BUTTON1);
         return new HyperlinkEvent(p.rendered(), HyperlinkEvent.EventType.ACTIVATED, null, href, null, click);
     }

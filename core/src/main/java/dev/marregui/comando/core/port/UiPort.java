@@ -1,5 +1,7 @@
 package dev.marregui.comando.core.port;
 
+import java.util.List;
+
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
@@ -9,8 +11,6 @@ import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.ViewSpec;
-
-import java.util.List;
 
 /**
  * What the reducer asks of the UI beyond rendering the state: the editor text the UI owns, desktop notifications, the

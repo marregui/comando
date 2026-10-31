@@ -1,6 +1,20 @@
 package dev.marregui.comando.ui.kit.resource;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.DefaultListModel;
+import javax.swing.JList;
+import javax.swing.LookAndFeel;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+
 import com.formdev.flatlaf.FlatDarkLaf;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -8,19 +22,6 @@ import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.DefaultListModel;
-import javax.swing.JList;
-import javax.swing.LookAndFeel;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,12 +55,12 @@ class ResourceActionsTest {
         }
 
         @Override
-        public void edit(String name) {
+        public void edit(final String name) {
             opened.add("edit " + name);
         }
 
         @Override
-        public void cloneOf(String name) {
+        public void cloneOf(final String name) {
             opened.add("clone " + name);
         }
     };
@@ -67,7 +68,7 @@ class ResourceActionsTest {
     /// [ResourceActions#addNew] calls the editor's add once.
     @Test
     void addOpensTheEditorOnANewResource() throws Exception {
-        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of());
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of());
         actions(new JList<>(), state).addNew();
         assertThat(opened).containsExactly("new");
     }
@@ -76,11 +77,11 @@ class ResourceActionsTest {
     /// panel, offers `Stop and remove, Leave it`, and closing the dialog (-1) leaves it like `Leave it`.
     @Test
     void removeAsksFirstAndOffersToStopAResourceInUseOrLeaveIt() throws Exception {
-        SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
-        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
-        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
-        JList<SessionState> list = new JList<>(model(edge, work));
-        ResourceActions<SessionState> actions = actions(list, state);
+        final SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
+        final SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
+        final JList<SessionState> list = new JList<>(model(edge, work));
+        final ResourceActions<SessionState> actions = actions(list, state);
 
         answer.set(1);
         actions.remove(edge);
@@ -104,8 +105,8 @@ class ResourceActionsTest {
         assertThat(removed).containsExactly("work");
     }
 
-    private ResourceActions<SessionState> actions(JList<SessionState> list, AppState state) throws Exception {
-        AtomicReference<ResourceActions<SessionState>> a = new AtomicReference<>();
+    private ResourceActions<SessionState> actions(final JList<SessionState> list, final AppState state) throws Exception {
+        final AtomicReference<ResourceActions<SessionState>> a = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> a.set(new ResourceActions<>(list,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 editor, removed::add, (parent, text, title, options) -> {
@@ -115,8 +116,8 @@ class ResourceActionsTest {
         return a.get();
     }
 
-    private static DefaultListModel<SessionState> model(SessionState... items) {
-        DefaultListModel<SessionState> m = new DefaultListModel<>();
+    private static DefaultListModel<SessionState> model(final SessionState... items) {
+        final DefaultListModel<SessionState> m = new DefaultListModel<>();
         m.addAll(List.of(items));
         return m;
     }

@@ -1,5 +1,11 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import java.awt.BorderLayout;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -10,12 +16,6 @@ import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
-
-import javax.swing.BorderFactory;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import java.awt.BorderLayout;
 
 /**
  * A sub-agent's tab (record 109): its conversation as a session's transcript, the same cards, links and strip, read
@@ -33,7 +33,7 @@ public final class AgentWidget implements Widget<ViewSpec.Agent>, Searchable, Co
     private ViewSpec.Agent spec;
     private Transcript watched;
 
-    public AgentWidget(WidgetContext context, TranscriptRegistry transcripts) {
+    public AgentWidget(final WidgetContext context, final TranscriptRegistry transcripts) {
         this.transcripts = transcripts;
         this.transcript = new TranscriptWidget(context);
         transcript.whenEmpty("The sub-agent has written nothing yet.");
@@ -50,11 +50,11 @@ public final class AgentWidget implements Widget<ViewSpec.Agent>, Searchable, Co
     }
 
     @Override
-    public void render(ViewSpec.Agent view) {
+    public void render(final ViewSpec.Agent view) {
         spec = view;
         state.setText(view.state());
         state.setVisible(!view.state().isEmpty());
-        Transcript t = transcripts.of(TranscriptRegistry.subagentKey(view.session(), view.toolUseId()));
+        final Transcript t = transcripts.of(TranscriptRegistry.subagentKey(view.session(), view.toolUseId()));
         if (t != watched) {
             if (watched != null) {
                 watched.removeListener(listener);
@@ -87,7 +87,7 @@ public final class AgentWidget implements Widget<ViewSpec.Agent>, Searchable, Co
     }
 
     @Override
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return transcript.find(text, forward);
     }
 
@@ -112,7 +112,7 @@ public final class AgentWidget implements Widget<ViewSpec.Agent>, Searchable, Co
     }
 
     @Override
-    public void zoom(int steps) {
+    public void zoom(final int steps) {
         transcript.zoom(steps);
     }
 

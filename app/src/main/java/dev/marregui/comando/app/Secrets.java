@@ -1,8 +1,5 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.loop.Processes;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -11,6 +8,9 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+
+import dev.marregui.comando.core.loop.Processes;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 /**
  * Where connection passwords live. On macOS that is the login keychain, through the {@code security}
@@ -32,7 +32,7 @@ interface Secrets {
 
     /** The secret store did not answer; whether it holds a password is unknown. */
     final class Unreadable extends RuntimeException {
-        Unreadable(String message) {
+        Unreadable(final String message) {
             super(message);
         }
     }
@@ -49,22 +49,22 @@ interface Secrets {
         }
 
         @Override
-        public Optional<String> read(String name) {
+        public Optional<String> read(final String name) {
             return Optional.empty();
         }
 
         @Override
-        public boolean write(String name, String password) {
+        public boolean write(final String name, final String password) {
             return false;
         }
 
         @Override
-        public void delete(String name) {
+        public void delete(final String name) {
         }
     };
 
     static Secrets forPlatform() {
-        Path tool = Path.of("/usr/bin/security");
+        final Path tool = Path.of("/usr/bin/security");
         return Platform.isMac() && Files.isExecutable(tool) ? new Keychain(tool, "comando") : NONE;
     }
 
@@ -85,10 +85,10 @@ interface Secrets {
         }
 
         @Override
-        public Optional<String> read(String name) {
+        public Optional<String> read(final String name) {
             // -g, not -w: -w prints a password with non-ASCII bytes as bare hex, which cannot be told apart
             // from a password made of hex digits; -g marks the hex form with 0x
-            Result r = run(List.of(tool.toString(), "find-generic-password", "-s", service, "-a", name, "-g"));
+            final Result r = run(List.of(tool.toString(), "find-generic-password", "-s", service, "-a", name, "-g"));
             return switch (r.exit()) {
                 case 0 -> Optional.of(password(r.out()));
                 case ITEM_NOT_FOUND -> Optional.empty();
@@ -97,8 +97,8 @@ interface Secrets {
         }
 
         @Override
-        public boolean write(String name, String password) {
-            Result r = run(List.of(tool.toString(), "add-generic-password", "-U", "-s", service, "-a", name, "-w", password));
+        public boolean write(final String name, final String password) {
+            final Result r = run(List.of(tool.toString(), "add-generic-password", "-U", "-s", service, "-a", name, "-w", password));
             if (r.exit() != 0) {
                 LOG.log(System.Logger.Level.WARNING, "the keychain refused the password of " + name + " [exit=" + r.exit() + ']');
             }
@@ -106,7 +106,7 @@ interface Secrets {
         }
 
         @Override
-        public void delete(String name) {
+        public void delete(final String name) {
             run(List.of(tool.toString(), "delete-generic-password", "-s", service, "-a", name));
         }
 
@@ -118,18 +118,18 @@ interface Secrets {
          * answers ends in a timeout instead of blocking the caller (the store's thread, or startup) for as long as the
          * prompt stays open.
          */
-        private static Result run(List<String> cmd) {
+        private static Result run(final List<String> cmd) {
             try {
-                Processes.Result r = Processes.run(cmd, Duration.ofSeconds(TIMEOUT_SECONDS), MAX_OUT);
+                final Processes.Result r = Processes.run(cmd, Duration.ofSeconds(TIMEOUT_SECONDS), MAX_OUT);
                 if (r.timedOut()) {
                     LOG.log(System.Logger.Level.WARNING, "the keychain did not answer within " + TIMEOUT_SECONDS + " s [command=" + cmd.get(1) + ']');
                     return new Result(-1, "");
                 }
                 // -g writes the password line to standard error; the other commands write nothing needed there
                 return new Result(r.exitCode(), r.out() + r.stderr());
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 return new Result(-1, "");
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return new Result(-1, "");
             }
@@ -142,12 +142,12 @@ interface Secrets {
          * The password from {@code -g} output: {@code password: "text"} for printable ASCII, or
          * {@code password: 0x<hex>  "<escaped>"} for anything else, decoded as UTF-8.
          */
-        static String password(String output) {
-            for (String line : output.split("\n")) {
+        static String password(final String output) {
+            for (final String line : output.split("\n")) {
                 if (!line.startsWith("password: ")) {
                     continue;
                 }
-                String v = line.substring("password: ".length());
+                final String v = line.substring("password: ".length());
                 if (v.startsWith("0x")) {
                     int end = 2;
                     while (end < v.length() && Character.digit(v.charAt(end), 16) >= 0) {

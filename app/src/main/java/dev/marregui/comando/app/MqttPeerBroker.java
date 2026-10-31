@@ -1,19 +1,5 @@
 package dev.marregui.comando.app;
 
-import com.hivemq.client.mqtt.MqttClient;
-import com.hivemq.client.mqtt.MqttClientState;
-import com.hivemq.client.mqtt.MqttGlobalPublishFilter;
-import com.hivemq.client.mqtt.datatypes.MqttQos;
-import com.hivemq.client.mqtt.datatypes.MqttTopic;
-import com.hivemq.client.mqtt.datatypes.MqttTopicFilter;
-import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
-import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
-import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscribe;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.loop.ExecutorStop;
-import dev.marregui.comando.mcp.PeerBroker;
-import io.reactivex.schedulers.Schedulers;
-
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,6 +17,21 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+
+import com.hivemq.client.mqtt.MqttClient;
+import com.hivemq.client.mqtt.MqttClientState;
+import com.hivemq.client.mqtt.MqttGlobalPublishFilter;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import com.hivemq.client.mqtt.datatypes.MqttTopic;
+import com.hivemq.client.mqtt.datatypes.MqttTopicFilter;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
+import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
+import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscribe;
+import io.reactivex.schedulers.Schedulers;
+
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.mcp.PeerBroker;
 
 /**
  * The comando Edge as the instances' broker (record 123), on the HiveMQ MQTT client: MQTT 5 to {@code 127.0.0.1},
@@ -61,7 +62,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     private boolean closed;
 
     /** Client {@code clientId} on the Edge's MQTT {@code port}, connected while {@code edgeUp} says the Edge runs. */
-    MqttPeerBroker(String clientId, int port, BooleanSupplier edgeUp) {
+    MqttPeerBroker(final String clientId, final int port, final BooleanSupplier edgeUp) {
         this.clientId = clientId;
         this.port = port;
         this.edgeUp = edgeUp;
@@ -76,7 +77,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     void follow() {
         // an exception escaping a periodic task cancels every later run
         try {
-            boolean up = edgeUp.getAsBoolean();
+            final boolean up = edgeUp.getAsBoolean();
             synchronized (this) {
                 if (closed) {
                     return;
@@ -84,19 +85,19 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 if (up && client == null) {
                     client = connect();
                 } else if (!up && client != null) {
-                    Mqtt5AsyncClient gone = client;
+                    final Mqtt5AsyncClient gone = client;
                     client = null;
                     gone.disconnect().whenComplete((v, e) -> LOG.log(System.Logger.Level.INFO, "left the comando Edge: it no longer runs"));
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot follow the comando Edge", e);
         }
     }
 
     private Mqtt5AsyncClient connect() {
-        AtomicReference<Mqtt5AsyncClient> self = new AtomicReference<>();
-        Mqtt5AsyncClient c = MqttClient.builder().useMqttVersion5().identifier(clientId).serverHost(HOST).serverPort(port)
+        final AtomicReference<Mqtt5AsyncClient> self = new AtomicReference<>();
+        final Mqtt5AsyncClient c = MqttClient.builder().useMqttVersion5().identifier(clientId).serverHost(HOST).serverPort(port)
                 // one event loop thread, and the client's callbacks on a strand rather than RxJava's pool
                 .executorConfig().nettyThreads(1).applicationScheduler(Schedulers.from(messages)).applyExecutorConfig()
                 .addConnectedListener(context -> messages.execute(this::onConnect))
@@ -120,26 +121,26 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     }
 
     /** Whether {@code c} is still the client to keep connected: this broker is open and has not left the Edge since. */
-    private synchronized boolean wanted(Mqtt5AsyncClient c) {
+    private synchronized boolean wanted(final Mqtt5AsyncClient c) {
         return !closed && c != null && c == client;
     }
 
     /** 1 s after the first failure, doubling, at most {@link #FOLLOW_EVERY}. */
-    static long reconnectDelay(int attempts) {
+    static long reconnectDelay(final int attempts) {
         return Math.min(FOLLOW_EVERY.toMillis(), 1_000L << Math.min(Math.max(attempts, 0), 10));
     }
 
     /** Connected, first or again: the listeners first, then the subscriptions, whose retained messages follow. */
     private void onConnect() {
         LOG.log(System.Logger.Level.INFO, "connected to the comando Edge [client=" + clientId + ", port=" + port + ']');
-        for (Runnable l : listeners) {
+        for (final Runnable l : listeners) {
             try {
                 l.run();
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "a connect listener failed", e);
             }
         }
-        Mqtt5AsyncClient c = current();
+        final Mqtt5AsyncClient c = current();
         if (c == null) {
             return;
         }
@@ -147,12 +148,12 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         synchronized (handlers) {
             filters = List.copyOf(handlers.keySet());
         }
-        for (String f : filters) {
+        for (final String f : filters) {
             subscribe(c, f);
         }
     }
 
-    private static void subscribe(Mqtt5AsyncClient c, String filter) {
+    private static void subscribe(final Mqtt5AsyncClient c, final String filter) {
         c.subscribe(Mqtt5Subscribe.builder().topicFilter(filter).qos(MqttQos.AT_LEAST_ONCE).build()).whenComplete((ack, e) -> {
             if (e != null) {
                 LOG.log(System.Logger.Level.WARNING, "subscription failed [filter=" + filter + ']', e);
@@ -161,9 +162,9 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     }
 
     /** Hands a message to every handler whose filter matches its topic. */
-    void deliver(Mqtt5Publish p) {
-        Message m = message(p);
-        List<Consumer<Message>> matching = new ArrayList<>();
+    void deliver(final Mqtt5Publish p) {
+        final Message m = message(p);
+        final List<Consumer<Message>> matching = new ArrayList<>();
         synchronized (handlers) {
             handlers.forEach((filter, handler) -> {
                 if (MqttTopicFilter.of(filter).matches(p.getTopic())) {
@@ -171,29 +172,29 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 }
             });
         }
-        for (Consumer<Message> h : matching) {
+        for (final Consumer<Message> h : matching) {
             try {
                 h.accept(m);
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "a message handler failed [topic=" + m.topic() + ']', e);
             }
         }
     }
 
     /** A received publish as {@link PeerBroker} hands it on. */
-    static Message message(Mqtt5Publish p) {
+    static Message message(final Mqtt5Publish p) {
         return new Message(p.getTopic().toString(), p.getPayloadAsBytes(), p.getResponseTopic().map(MqttTopic::toString).orElse(null),
                 p.getCorrelationData().map(MqttPeerBroker::bytes).orElse(null));
     }
 
     /** What {@link #publish} sends: at least once, with the response topic and correlation data when given. */
-    static Mqtt5Publish publishOf(String topic, byte[] payload, boolean retained, String responseTopic, byte[] correlation) {
+    static Mqtt5Publish publishOf(final String topic, final byte[] payload, final boolean retained, final String responseTopic, final byte[] correlation) {
         return Mqtt5Publish.builder().topic(topic).payload(payload).qos(MqttQos.AT_LEAST_ONCE).retain(retained)
                 .responseTopic(responseTopic).correlationData(correlation).build();
     }
 
-    private static byte[] bytes(ByteBuffer b) {
-        byte[] out = new byte[b.remaining()];
+    private static byte[] bytes(final ByteBuffer b) {
+        final byte[] out = new byte[b.remaining()];
         b.duplicate().get(out);
         return out;
     }
@@ -204,23 +205,23 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
     @Override
     public boolean connected() {
-        Mqtt5AsyncClient c = current();
+        final Mqtt5AsyncClient c = current();
         return c != null && c.getState() == MqttClientState.CONNECTED;
     }
 
     @Override
-    public void onConnected(Runnable listener) {
+    public void onConnected(final Runnable listener) {
         listeners.add(listener);
     }
 
     @Override
-    public void will(String topic, byte[] payload, boolean retained) {
+    public void will(final String topic, final byte[] payload, final boolean retained) {
         will = publishOf(topic, payload, retained, null, null);
     }
 
     @Override
-    public CompletableFuture<Void> publish(String topic, byte[] payload, boolean retained, String responseTopic, byte[] correlation) {
-        Mqtt5AsyncClient c = current();
+    public CompletableFuture<Void> publish(final String topic, final byte[] payload, final boolean retained, final String responseTopic, final byte[] correlation) {
+        final Mqtt5AsyncClient c = current();
         if (c == null || c.getState() != MqttClientState.CONNECTED) {
             return CompletableFuture.failedFuture(new IllegalStateException("not connected to the comando Edge"));
         }
@@ -232,11 +233,11 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     }
 
     @Override
-    public void subscribe(String filter, Consumer<Message> handler) {
+    public void subscribe(final String filter, final Consumer<Message> handler) {
         synchronized (handlers) {
             handlers.put(filter, handler);
         }
-        Mqtt5AsyncClient c = current();
+        final Mqtt5AsyncClient c = current();
         if (c != null && c.getState() == MqttClientState.CONNECTED) {
             subscribe(c, filter);
         }
@@ -260,7 +261,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 c.disconnect().get(CLOSE_WAIT.toMillis(), TimeUnit.MILLISECONDS);
             } catch (ExecutionException | TimeoutException e) {
                 LOG.log(System.Logger.Level.DEBUG, "disconnect from the comando Edge incomplete [cause=" + e.getMessage() + ']');
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }

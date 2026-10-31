@@ -1,9 +1,9 @@
 package dev.marregui.comando.mcp;
 
-import tools.jackson.databind.JsonNode;
-
 import java.util.Iterator;
 import java.util.Map;
+
+import tools.jackson.databind.JsonNode;
 
 /** One line describing a permission request, for cards, lists and notifications. */
 final class Summaries {
@@ -13,7 +13,7 @@ final class Summaries {
     private Summaries() {
     }
 
-    static String of(String tool, JsonNode input) {
+    static String of(final String tool, final JsonNode input) {
         String s = switch (tool) {
             case "Bash" -> input.path("command").asString("");
             case "Edit", "MultiEdit", "Write", "NotebookEdit", "Read" -> tool + ' ' + input.path("file_path").asString(input.path("notebook_path").asString(""));
@@ -27,12 +27,12 @@ final class Summaries {
         return s.length() <= MAX ? s : s.substring(0, MAX) + '…';
     }
 
-    private static String firstArgument(JsonNode input) {
-        Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
+    private static String firstArgument(final JsonNode input) {
+        final Iterator<Map.Entry<String, JsonNode>> fields = input.properties().iterator();
         if (!fields.hasNext()) {
             return "";
         }
-        Map.Entry<String, JsonNode> f = fields.next();
+        final Map.Entry<String, JsonNode> f = fields.next();
         return " " + f.getKey() + '=' + (f.getValue().isValueNode() && !f.getValue().isNull() ? f.getValue().asString("") : f.getValue().toString());
     }
 }

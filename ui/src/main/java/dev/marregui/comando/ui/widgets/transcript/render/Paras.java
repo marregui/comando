@@ -1,10 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.ui.kit.text.Highlighter;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.widgets.transcript.doc.Para;
-import dev.marregui.comando.ui.widgets.transcript.doc.Span;
-
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -19,6 +14,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import dev.marregui.comando.ui.kit.text.Highlighter;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.widgets.transcript.doc.Para;
+import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
 /** Painters for the paragraphs of Markdown text. Each rebuilds its text only when the style changes. */
 final class Paras {
@@ -37,7 +37,7 @@ final class Paras {
         Para para();
     }
 
-    static View of(Para p) {
+    static View of(final Para p) {
         return switch (p) {
             case Para.Text t -> new TextView(t);
             case Para.Code c -> new CodeView(c);
@@ -46,16 +46,16 @@ final class Paras {
         };
     }
 
-    static Rich rich(List<Span> spans, Font base, Color color, Style s, boolean keepFont) {
-        Rich r = new Rich(base, color);
-        for (Span sp : spans) {
-            boolean code = sp.has(Span.CODE);
-            Font f = code ? s.mono : keepFont ? base : s.font(sp.style(), false);
-            Color c = sp.isLink() ? s.link
+    static Rich rich(final List<Span> spans, final Font base, final Color color, final Style s, final boolean keepFont) {
+        final Rich r = new Rich(base, color);
+        for (final Span sp : spans) {
+            final boolean code = sp.has(Span.CODE);
+            final Font f = code ? s.mono : keepFont ? base : s.font(sp.style(), false);
+            final Color c = sp.isLink() ? s.link
                     : code && s.codeText != null ? s.codeText
                     : !keepFont && sp.has(Span.BOLD) && color.equals(s.text) ? s.strong
                     : color;
-            int start = r.length();
+            final int start = r.length();
             r.append(sp.text(), f, c, code ? s.inlineCodeBackground : null, sp.isLink(), sp.has(Span.STRIKE));
             if (sp.isLink()) {
                 r.link(start, r.length(), sp.href());
@@ -64,8 +64,8 @@ final class Paras {
         return r;
     }
 
-    static void paintBox(Graphics2D g, TextBox b, int x, int y, Rectangle clip, Marks marks) {
-        int[] sel = marks.selection(b);
+    static void paintBox(final Graphics2D g, final TextBox b, final int x, final int y, final Rectangle clip, final Marks marks) {
+        final int[] sel = marks.selection(b);
         b.paint(g, x, y, clip.y - y, clip.y + clip.height - y, sel[0], sel[1], marks.finds(b), marks.currentFind(b));
     }
 
@@ -80,7 +80,7 @@ final class Paras {
         private int top;
         private int width;
 
-        TextView(Para.Text para) {
+        TextView(final Para.Text para) {
             this.para = para;
         }
 
@@ -90,15 +90,15 @@ final class Paras {
         }
 
         @Override
-        public int layout(int w, Style s) {
+        public int layout(final int w, final Style s) {
             if (s != built) {
                 built = s;
-                Font base = switch (para.kind()) {
+                final Font base = switch (para.kind()) {
                     case HEADING -> s.headings[Math.clamp(para.level() - 1, 0, 5)];
                     case QUOTE -> s.italic;
                     default -> s.body;
                 };
-                Color color = switch (para.kind()) {
+                final Color color = switch (para.kind()) {
                     case HEADING -> s.heading;
                     case QUOTE -> s.muted;
                     default -> s.text;
@@ -109,16 +109,16 @@ final class Paras {
             indent = para.depth() * s.indent + (para.kind() == Para.Kind.QUOTE ? s.indent : 0);
             top = para.kind() == Para.Kind.HEADING ? s.paraGap / 2 : 0;
             width = w;
-            int h = box.length() == 0 ? Math.round(s.height(s.body)) : box.layout(Math.max(40, w - indent), s);
+            final int h = box.length() == 0 ? Math.round(s.height(s.body)) : box.layout(Math.max(40, w - indent), s);
             return top + h + (para.kind() == Para.Kind.HEADING && para.level() <= 2 ? 6 : 0);
         }
 
         @Override
-        public void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
-            Style s = built;
+        public void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
+            final Style s = built;
             if (marker != null) {
                 g.setColor(s.mark);
-                float baseline = box.lines().isEmpty() ? y + top + marker.getAscent() : y + top + box.lines().getFirst().baseline();
+                final float baseline = box.lines().isEmpty() ? y + top + marker.getAscent() : y + top + box.lines().getFirst().baseline();
                 marker.draw(g, x + indent - marker.getAdvance() - 6, baseline);
             }
             if (para.kind() == Para.Kind.QUOTE) {
@@ -139,15 +139,15 @@ final class Paras {
          * Paints the glyphs of {@code b} at {@code (x, y)} again along the tint's ramp, highlight at the letters' tops
          * to shade at the baseline, as light runs down polished metal; the selection and find marks under them stay.
          */
-        private static void gild(Graphics2D g, TextBox b, int x, int y, Tint tint) {
-            for (TextBox.Line line : b.lines()) {
+        private static void gild(final Graphics2D g, final TextBox b, final int x, final int y, final Tint tint) {
+            for (final TextBox.Line line : b.lines()) {
                 if (line.layout() == null) {
                     continue;
                 }
-                float baseline = y + line.baseline();
-                float top = baseline - line.layout().getAscent() * 0.8f;
-                Shape glyphs = line.layout().getOutline(AffineTransform.getTranslateInstance(x, baseline));
-                Paint was = g.getPaint();
+                final float baseline = y + line.baseline();
+                final float top = baseline - line.layout().getAscent() * 0.8f;
+                final Shape glyphs = line.layout().getOutline(AffineTransform.getTranslateInstance(x, baseline));
+                final Paint was = g.getPaint();
                 g.setPaint(tint.ramp(top, baseline, true));
                 g.fill(glyphs);
                 g.setPaint(was);
@@ -155,7 +155,7 @@ final class Paras {
         }
 
         @Override
-        public void collect(int x, int y, Item owner, List<Placed> out) {
+        public void collect(final int x, final int y, final Item owner, final List<Placed> out) {
             if (box.length() > 0) {
                 out.add(new Placed(box, x + indent, y + top, owner));
             }
@@ -175,7 +175,7 @@ final class Paras {
         /** The view this one grew from while it streamed, until the first layout takes its line layouts. */
         private CodeView grewFrom;
 
-        CodeView(Para.Code para) {
+        CodeView(final Para.Code para) {
             this.para = para;
             this.text = Rich.detab(para.text());
             this.colors = Highlighter.runs(text, para.language());
@@ -186,8 +186,8 @@ final class Paras {
          * lines keep their layouts, which a code block streamed one delta at a time would otherwise lay out again each
          * time.
          */
-        void growFrom(List<View> previous) {
-            for (View v : previous) {
+        void growFrom(final List<View> previous) {
+            for (final View v : previous) {
                 if (v instanceof CodeView c && c.box != null && c.para.language().equals(para.language()) && text.startsWith(c.text)
                         && (grewFrom == null || c.text.length() > grewFrom.text.length())) {
                     grewFrom = c;
@@ -201,11 +201,11 @@ final class Paras {
         }
 
         @Override
-        public int layout(int w, Style s) {
+        public int layout(final int w, final Style s) {
             if (s != built) {
                 built = s;
-                Rich r = new Rich(s.mono, s.text).append(text);
-                for (Highlighter.Run c : colors) {
+                final Rich r = new Rich(s.mono, s.text).append(text);
+                for (final Highlighter.Run c : colors) {
                     r.color(c.start(), c.end(), c.color());
                 }
                 box = new TextBox(r);
@@ -220,7 +220,7 @@ final class Paras {
         }
 
         @Override
-        public void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
+        public void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
             g.setColor(built.codeBackground);
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.fillRoundRect(x + indent, y, box.width() + 2 * INSET, box.height() + 2 * INSET, 8, 8);
@@ -228,7 +228,7 @@ final class Paras {
         }
 
         @Override
-        public void collect(int x, int y, Item owner, List<Placed> out) {
+        public void collect(final int x, final int y, final Item owner, final List<Placed> out) {
             out.add(new Placed(box, x + indent + INSET, y + INSET, owner));
         }
     }
@@ -244,7 +244,7 @@ final class Paras {
         private int[] heights;
         private int indent;
 
-        TableView(Para.Table para) {
+        TableView(final Para.Table para) {
             this.para = para;
         }
 
@@ -254,26 +254,26 @@ final class Paras {
         }
 
         @Override
-        public int layout(int w, Style s) {
-            int columns = para.rows().stream().mapToInt(List::size).max().orElse(0);
+        public int layout(final int w, final Style s) {
+            final int columns = para.rows().stream().mapToInt(List::size).max().orElse(0);
             if (s != built) {
                 built = s;
                 cells = new TextBox[para.rows().size()][columns];
                 for (int r = 0; r < para.rows().size(); r++) {
-                    List<List<Span>> row = para.rows().get(r);
+                    final List<List<Span>> row = para.rows().get(r);
                     for (int c = 0; c < columns; c++) {
-                        List<Span> spans = c < row.size() ? row.get(c) : List.of();
+                        final List<Span> spans = c < row.size() ? row.get(c) : List.of();
                         cells[r][c] = new TextBox(rich(spans, r == 0 ? s.bold : s.body, r == 0 ? s.tableHead : s.text, s, r == 0));
                     }
                 }
             }
             indent = para.depth() * s.indent;
-            int avail = Math.max(80, w - indent);
+            final int avail = Math.max(80, w - indent);
             widths = new int[columns];
-            float[] natural = new float[columns];
+            final float[] natural = new float[columns];
             float total = 0;
             for (int c = 0; c < columns; c++) {
-                for (TextBox[] row : cells) {
+                for (final TextBox[] row : cells) {
                     natural[c] = Math.max(natural[c], row[c].naturalWidth() + 2 * CELL + 2);
                 }
                 total += natural[c];
@@ -295,9 +295,9 @@ final class Paras {
         }
 
         @Override
-        public void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
+        public void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
             int tableWidth = 0;
-            for (int w : widths) {
+            for (final int w : widths) {
                 tableWidth += w;
             }
             int ry = y;
@@ -317,7 +317,7 @@ final class Paras {
             }
             g.fillRect(x + indent, ry, tableWidth, 1);
             int cx = x + indent;
-            for (int width : widths) {
+            for (final int width : widths) {
                 g.fillRect(cx, y, 1, ry - y);
                 cx += width;
             }
@@ -325,7 +325,7 @@ final class Paras {
         }
 
         @Override
-        public void collect(int x, int y, Item owner, List<Placed> out) {
+        public void collect(final int x, final int y, final Item owner, final List<Placed> out) {
             int ry = y;
             for (int r = 0; r < cells.length; r++) {
                 int cx = x + indent;
@@ -345,7 +345,7 @@ final class Paras {
         private Style built;
         private int width;
 
-        RuleView(Para.Rule para) {
+        RuleView(final Para.Rule para) {
             this.para = para;
         }
 
@@ -355,34 +355,34 @@ final class Paras {
         }
 
         @Override
-        public int layout(int w, Style s) {
+        public int layout(final int w, final Style s) {
             built = s;
             width = w;
             return s.paraGap;
         }
 
         @Override
-        public void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
+        public void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
             g.setColor(built.muted);
             g.fillRect(x, y + built.paraGap / 2, width, 1);
         }
 
         @Override
-        public void collect(int x, int y, Item owner, List<Placed> out) {
+        public void collect(final int x, final int y, final Item owner, final List<Placed> out) {
             // nothing to select
         }
     }
 
     /** Reuses the views of paragraphs that did not change, so streaming relays out only the last one. */
-    static List<View> reuse(List<Para> next, List<View> previous) {
-        Map<Para, ArrayDeque<View>> old = new HashMap<>();
-        for (View v : previous) {
+    static List<View> reuse(final List<Para> next, final List<View> previous) {
+        final Map<Para, ArrayDeque<View>> old = new HashMap<>();
+        for (final View v : previous) {
             old.computeIfAbsent(v.para(), k -> new ArrayDeque<>()).add(v);
         }
-        List<View> out = new ArrayList<>(next.size());
-        for (Para p : next) {
-            ArrayDeque<View> same = old.get(p);
-            View v = same != null && !same.isEmpty() ? same.poll() : of(p);
+        final List<View> out = new ArrayList<>(next.size());
+        for (final Para p : next) {
+            final ArrayDeque<View> same = old.get(p);
+            final View v = same != null && !same.isEmpty() ? same.poll() : of(p);
             if (v instanceof CodeView c && c.box == null) {
                 c.growFrom(previous);
             }

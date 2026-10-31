@@ -7,11 +7,11 @@ public final class ConsoleRegistry {
 
     private final ConcurrentHashMap<Long, Console> consoles = new ConcurrentHashMap<>();
 
-    public Console of(long runId) {
+    public Console of(final long runId) {
         return consoles.computeIfAbsent(runId, k -> new Console());
     }
 
-    public void forget(long runId) {
+    public void forget(final long runId) {
         consoles.remove(runId);
     }
 

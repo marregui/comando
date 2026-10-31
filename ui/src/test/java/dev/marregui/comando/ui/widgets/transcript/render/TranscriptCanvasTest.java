@@ -1,23 +1,24 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.testkit.SyntheticSession;
-import dev.marregui.comando.ui.kit.async.OnEdt;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.kit.theme.Theme;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Graphics2D;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.event.InputEvent;
-import java.awt.event.MouseEvent;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.List;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.testkit.SyntheticSession;
+import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,9 +48,9 @@ class TranscriptCanvasTest {
         Theme.tint(Tint.TREASURE);
     }
 
-    private void load(List<SyntheticSession.Step> steps) {
+    private void load(final List<SyntheticSession.Step> steps) {
         int n = 0;
-        for (SyntheticSession.Step s : steps) {
+        for (final SyntheticSession.Step s : steps) {
             if (s.index() < 0) {
                 canvas.append(n++, s.block());
             } else {
@@ -58,12 +59,12 @@ class TranscriptCanvasTest {
         }
     }
 
-    private BufferedImage paint(int width, int height) {
+    private BufferedImage paint(final int width, final int height) {
         canvas.setSize(width, height);
         canvas.ensureLayout(width);
         canvas.setSize(width, canvas.contentHeight());
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
+        final BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        final Graphics2D g = img.createGraphics();
         // the canvas paints no ground of its own: the viewport under it does, and glyphs blend over it
         g.setColor(Theme.ground());
         g.fillRect(0, 0, width, height);
@@ -75,7 +76,7 @@ class TranscriptCanvasTest {
     }
 
     /** How many pixels of {@code img} are {@code color} itself: the cores of glyphs drawn in it. */
-    private static int pixels(BufferedImage img, Color color) {
+    private static int pixels(final BufferedImage img, final Color color) {
         int n = 0;
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
@@ -87,15 +88,15 @@ class TranscriptCanvasTest {
         return n;
     }
 
-    private static Block.Thinking thought(int index, String parent) {
+    private static Block.Thinking thought(final int index, final String parent) {
         return new Block.Thinking("m", index, "", 812, false, parent);
     }
 
-    private static Block.AssistantText text(String text) {
+    private static Block.AssistantText text(final String text) {
         return new Block.AssistantText("m", 0, text, false, "");
     }
 
-    private static Block.ToolCall call(String id, String parent) {
+    private static Block.ToolCall call(final String id, final String parent) {
         return new Block.ToolCall(id, "Bash", "{\"command\":\"ls\"}", "ok", Block.ToolStatus.DONE, parent);
     }
 
@@ -136,7 +137,7 @@ class TranscriptCanvasTest {
     /// and a card paint none of it, an answer and its time do, and a note adds more.
     @Test
     void everyTextOutsideABubbleOrACardReadsInOneColour() {
-        Style s = Style.of(0);
+        final Style s = Style.of(0);
         assertThat(s.outside().text).isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(s.outside().muted).as("quotes too").isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(s.outside()).as("made once, so its layouts stay valid").isSameAs(s.outside());
@@ -148,7 +149,7 @@ class TranscriptCanvasTest {
 
         canvas.append(2, text("Done: the store drops pending retries."));
         canvas.append(3, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
-        int answer = pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT);
+        final int answer = pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT);
         assertThat(answer).as("the turn's last answer and its time").isPositive();
         assertThat(((Items.TextItem) canvas.itemAt(2)).isReport()).as("the turn's last answer is its report").isTrue();
 
@@ -160,8 +161,8 @@ class TranscriptCanvasTest {
     /// cards they keep the text colour; a find match uses [Theme#FIND_MATCH]; h1 uses the shared heading scale.
     @Test
     void anAnswersHeadingsMarksAndTableHeadsAreTintedElsewhereTheTextsColour() {
-        Style s = Style.of(0);
-        Tint tint = Theme.tint();
+        final Style s = Style.of(0);
+        final Tint tint = Theme.tint();
         assertThat(s.outside().heading).isEqualTo(tint.body);
         assertThat(s.outside().mark).isEqualTo(tint.body);
         assertThat(s.outside().tableHead).isEqualTo(tint.highlight);
@@ -221,7 +222,7 @@ class TranscriptCanvasTest {
         paint(1000, 700);
         assertThat(canvas.contentHeight()).isGreaterThan(5000);
         // narrower means taller: the text wraps
-        int wide = canvas.contentHeight();
+        final int wide = canvas.contentHeight();
         canvas.layoutFully(500);
         assertThat(canvas.contentHeight()).isGreaterThan(wide);
     }
@@ -235,10 +236,10 @@ class TranscriptCanvasTest {
         canvas.layoutFully(1000);
         canvas.ensureLayout(600);
         assertThat(canvas.isEstimated()).isTrue();
-        int guessed = canvas.contentHeight();
+        final int guessed = canvas.contentHeight();
         canvas.refineAll();
         assertThat(canvas.isEstimated()).isFalse();
-        int exact = canvas.contentHeight();
+        final int exact = canvas.contentHeight();
         canvas.layoutFully(600);
         assertThat(canvas.contentHeight()).isEqualTo(exact);
         // the guess is in the right range: within a factor of two of the exact height
@@ -253,11 +254,11 @@ class TranscriptCanvasTest {
         load(SyntheticSession.steps(10_000));
         canvas.setSize(1000, 700);
         canvas.ensureLayout(1000);
-        List<Item> items = canvas.topLevel();
-        long laid = items.stream().filter(Item::laidOut).count();
+        final List<Item> items = canvas.topLevel();
+        final long laid = items.stream().filter(Item::laidOut).count();
         assertThat(laid).as("only the blocks in view are laid out now").isPositive().isLessThan(items.size() / 2);
         assertThat(canvas.isEstimated()).isTrue();
-        int guessed = canvas.contentHeight();
+        final int guessed = canvas.contentHeight();
 
         paint(1000, 700);
         assertThat(items.getLast().laidOut()).as("the end, where the view follows, is laid out when painted").isTrue();
@@ -265,10 +266,10 @@ class TranscriptCanvasTest {
         canvas.refineAll();
         assertThat(canvas.isEstimated()).isFalse();
         assertThat(items).as("the idle pass lays out the rest").allMatch(Item::laidOut);
-        int exact = canvas.contentHeight();
-        TranscriptCanvas whole = new TranscriptCanvas(opened::add);
+        final int exact = canvas.contentHeight();
+        final TranscriptCanvas whole = new TranscriptCanvas(opened::add);
         int n = 0;
-        for (SyntheticSession.Step st : SyntheticSession.steps(10_000)) {
+        for (final SyntheticSession.Step st : SyntheticSession.steps(10_000)) {
             if (st.index() < 0) {
                 whole.append(n++, st.block());
             } else {
@@ -285,11 +286,11 @@ class TranscriptCanvasTest {
     void theMarkdownOfASubagentCallQuotesItsSteps() {
         load(SyntheticSession.steps(10_000));
         canvas.ensureLayout(1000);
-        String md = canvas.markdown();
+        final String md = canvas.markdown();
         assertThat(md).as("its prompt is not quoted at the top level").doesNotContain("\n\n> List the classes.");
-        int call = md.indexOf("**Agent** · survey the module");
+        final int call = md.indexOf("**Agent** · survey the module");
         assertThat(call).isNotNegative();
-        String card = md.substring(call);
+        final String card = md.substring(call);
         assertThat(card).as("the subagent's prompt and answer, quoted under the call")
                 .contains("> > List the classes.")
                 .contains("> The module has **12 classes**; the entry point is `core/Reducer.java:42`.");
@@ -312,7 +313,7 @@ class TranscriptCanvasTest {
         load(SyntheticSession.steps(10_000));
         paint(1000, 700);
         // tool results are closed by default; the find opens the cards that hold the text
-        int matches = canvas.find("cancelSignalTimeout", true);
+        final int matches = canvas.find("cancelSignalTimeout", true);
         assertThat(matches).isGreaterThanOrEqualTo(8);
         canvas.clearFind();
         assertThat(canvas.find("no such text anywhere", true)).isZero();
@@ -324,18 +325,18 @@ class TranscriptCanvasTest {
     void typingOnInTheFindBarKeepsTheMatchUnderTheReader() {
         load(SyntheticSession.steps(10_000));
         paint(1000, 700);
-        int matches = canvas.find("cancelSignal", true);
+        final int matches = canvas.find("cancelSignal", true);
         assertThat(matches).isGreaterThanOrEqualTo(4);
         canvas.find("cancelSignal", true);
         canvas.find("cancelSignal", true);
-        int before = canvas.currentMatchY();
+        final int before = canvas.currentMatchY();
         canvas.rewindFind();
         canvas.find("cancelSignalT", true);
         assertThat(canvas.currentMatchY()).as("at or after the match the reader was on, not the first one")
                 .isGreaterThanOrEqualTo(before).isPositive();
         canvas.clearFind();
         canvas.find("cancelSignal", true);
-        int first = canvas.currentMatchY();
+        final int first = canvas.currentMatchY();
         assertThat(before).as("the third match is below the first").isGreaterThan(first);
     }
 
@@ -345,7 +346,7 @@ class TranscriptCanvasTest {
         load(SyntheticSession.steps(10_000));
         paint(1000, 700);
         canvas.selectAll();
-        String text = canvas.selectionText();
+        final String text = canvas.selectionText();
         assertThat(text).contains("Why does the cancel path take eleven seconds?").contains("## Finding 1".substring(3));
         canvas.clearSelection();
         assertThat(canvas.selectionText()).isEmpty();
@@ -356,7 +357,7 @@ class TranscriptCanvasTest {
     void streamingKeepsLayoutsOfFinishedParagraphs() {
         canvas.append(0, new Block.AssistantText("m", 0, "First paragraph.\n\nSecond", true, ""));
         canvas.ensureLayout(800);
-        int h1 = canvas.contentHeight();
+        final int h1 = canvas.contentHeight();
         for (int i = 0; i < 200; i++) {
             canvas.update(0, new Block.AssistantText("m", 0, "First paragraph.\n\nSecond" + " word".repeat(i), true, ""));
             canvas.ensureLayout(800);
@@ -369,7 +370,7 @@ class TranscriptCanvasTest {
     void zoomRelaysOutEverything() {
         load(SyntheticSession.steps(10_000));
         canvas.ensureLayout(1000);
-        int before = canvas.contentHeight();
+        final int before = canvas.contentHeight();
         canvas.setZoom(4);
         canvas.layoutFully(1000);
         assertThat(canvas.contentHeight()).isGreaterThan(before);
@@ -424,11 +425,11 @@ class TranscriptCanvasTest {
             }
         }
         paint(900, 200);
-        java.util.Set<String> found = new java.util.LinkedHashSet<>();
+        final java.util.Set<String> found = new java.util.LinkedHashSet<>();
         int[] input = null;
         for (int y = 0; y < canvas.contentHeight(); y += 2) {
             for (int x = 0; x < 900; x += 3) {
-                String link = canvas.linkAt(x, y);
+                final String link = canvas.linkAt(x, y);
                 if (link != null && found.add(link) && link.equals("comando-file:docs/adr/0108-links.md")) {
                     input = new int[]{x + 2, y};
                 }
@@ -449,9 +450,9 @@ class TranscriptCanvasTest {
     /// written.
     @Test
     void aToolsResultShowsItsLinks() {
-        Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)
+        final Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)
                 .append("wrote /tmp/x.md\nsee https://example.org/y, [[notes]] and [guide](docs/guide.md)").linked(Color.BLUE);
-        String text = r.text();
+        final String text = r.text();
         assertThat(r.linkAt(text.indexOf("example.org"))).isEqualTo("https://example.org/y");
         assertThat(r.linkAt(text.indexOf("notes"))).isEqualTo("comando-note:notes");
         assertThat(r.linkAt(text.indexOf("guide]"))).isEqualTo("docs/guide.md");

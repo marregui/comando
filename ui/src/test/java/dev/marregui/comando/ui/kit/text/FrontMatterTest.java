@@ -29,7 +29,7 @@ class FrontMatterTest {
     /// colon, and a timestamp is read whole.
     @Test
     void readsAMemoryFilesFactsWithNestedKeysByTheirPath() {
-        FrontMatter.Split split = FrontMatter.split(MEMORY);
+        final FrontMatter.Split split = FrontMatter.split(MEMORY);
         assertThat(split.facts()).extracting(FrontMatter.Fact::key)
                 .containsExactly("name", "description", "metadata.node_type", "metadata.type", "metadata.modified");
         assertThat(split.value("name")).isEqualTo("reference-video-transcripts");
@@ -41,7 +41,7 @@ class FrontMatterTest {
     /// offset in the file.
     @Test
     void theBodyKeepsEveryLineAndOffset() {
-        FrontMatter.Split split = FrontMatter.split(MEMORY);
+        final FrontMatter.Split split = FrontMatter.split(MEMORY);
         assertThat(split.body()).hasSameSizeAs(MEMORY);
         assertThat(split.body().lines().count()).isEqualTo(MEMORY.lines().count());
         assertThat(split.body().indexOf("Proven")).isEqualTo(MEMORY.indexOf("Proven"));
@@ -51,7 +51,7 @@ class FrontMatterTest {
     /// A block list and a flow list join their items with `, `, quotes dropped.
     @Test
     void listsJoinTheirItems() {
-        FrontMatter.Split split = FrontMatter.split("---\ntags:\n  - a\n  - 'b c'\naliases: [x, \"y\"]\n---\nText");
+        final FrontMatter.Split split = FrontMatter.split("---\ntags:\n  - a\n  - 'b c'\naliases: [x, \"y\"]\n---\nText");
         assertThat(split.value("tags")).isEqualTo("a, b c");
         assertThat(split.value("aliases")).isEqualTo("x, y");
     }

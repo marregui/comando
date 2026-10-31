@@ -1,10 +1,10 @@
 package dev.marregui.comando.core.action;
 
-import dev.marregui.comando.core.intent.Intent;
-
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+
+import dev.marregui.comando.core.intent.Intent;
 
 /**
  * One thing a person can do in comando's window, offered to agents as the MCP tool {@link #tool} (record 121). The
@@ -46,15 +46,15 @@ public record Action(String tool, Kind kind, String description, List<Arg> args,
             choices = choices == null ? List.of() : List.copyOf(choices);
         }
 
-        public static Arg required(String name, Type type, String description) {
+        public static Arg required(final String name, final Type type, final String description) {
             return new Arg(name, type, true, description, List.of());
         }
 
-        public static Arg optional(String name, Type type, String description) {
+        public static Arg optional(final String name, final Type type, final String description) {
             return new Arg(name, type, false, description, List.of());
         }
 
-        public Arg among(List<String> values) {
+        public Arg among(final List<String> values) {
             return new Arg(name, type, required, description, values);
         }
     }
@@ -69,7 +69,7 @@ public record Action(String tool, Kind kind, String description, List<Arg> args,
 
     /** The area of the window the action belongs to: the tool name's first word. */
     public String area() {
-        int cut = tool.indexOf('_');
+        final int cut = tool.indexOf('_');
         return cut < 0 ? tool : tool.substring(0, cut);
     }
 }

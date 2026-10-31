@@ -1,8 +1,8 @@
 package dev.marregui.comando.core.model;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

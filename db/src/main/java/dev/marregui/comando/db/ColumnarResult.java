@@ -1,8 +1,5 @@
 package dev.marregui.comando.db;
 
-import dev.marregui.comando.core.result.ColumnKind;
-import dev.marregui.comando.core.result.ResultView;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.sql.ResultSet;
@@ -14,6 +11,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+
+import dev.marregui.comando.core.result.ColumnKind;
+import dev.marregui.comando.core.result.ResultView;
 
 /**
  * Rows of one run stored by column in primitive chunks: no boxed value and no row object per cell.
@@ -45,13 +45,13 @@ public final class ColumnarResult implements ResultView {
     private final long[][][] nulls;      // [column][chunk][row / 64]; bit set for SQL NULL
     private volatile int rowCount;
 
-    private ColumnarResult(long requestId, String[] names, String[] typeNames, ColumnKind[] kinds, int[] sqlTypes) {
+    private ColumnarResult(final long requestId, final String[] names, final String[] typeNames, final ColumnKind[] kinds, final int[] sqlTypes) {
         this.requestId = requestId;
         this.names = names;
         this.typeNames = typeNames;
         this.kinds = kinds;
         this.sqlTypes = sqlTypes;
-        int n = names.length;
+        final int n = names.length;
         longs = new long[n][][];
         doubles = new double[n][][];
         texts = new String[n][][];
@@ -66,12 +66,12 @@ public final class ColumnarResult implements ResultView {
         }
     }
 
-    public static ColumnarResult of(long requestId, ResultSetMetaData md) throws SQLException {
-        int n = md.getColumnCount();
-        String[] names = new String[n];
-        String[] typeNames = new String[n];
-        ColumnKind[] kinds = new ColumnKind[n];
-        int[] sqlTypes = new int[n];
+    public static ColumnarResult of(final long requestId, final ResultSetMetaData md) throws SQLException {
+        final int n = md.getColumnCount();
+        final String[] names = new String[n];
+        final String[] typeNames = new String[n];
+        final ColumnKind[] kinds = new ColumnKind[n];
+        final int[] sqlTypes = new int[n];
         for (int c = 0; c < n; c++) {
             names[c] = md.getColumnLabel(c + 1);
             typeNames[c] = md.getColumnTypeName(c + 1);
@@ -81,7 +81,7 @@ public final class ColumnarResult implements ResultView {
         return new ColumnarResult(requestId, names, typeNames, kinds, sqlTypes);
     }
 
-    static ColumnKind kindOf(int sqlType) {
+    static ColumnKind kindOf(final int sqlType) {
         return switch (sqlType) {
             case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT -> ColumnKind.LONG;
             case Types.REAL, Types.FLOAT, Types.DOUBLE -> ColumnKind.DOUBLE;
@@ -92,41 +92,41 @@ public final class ColumnarResult implements ResultView {
     }
 
     /** Appends the result set's current row. Writer thread only. */
-    void append(ResultSet rs) throws SQLException {
-        int row = rowCount;
-        int chunk = row >>> CHUNK_BITS;
-        int at = row & MASK;
+    void append(final ResultSet rs) throws SQLException {
+        final int row = rowCount;
+        final int chunk = row >>> CHUNK_BITS;
+        final int at = row & MASK;
         for (int c = 0; c < names.length; c++) {
-            int col = c + 1;
+            final int col = c + 1;
             boolean isNull;
             switch (kinds[c]) {
                 case LONG -> {
-                    long v = rs.getLong(col);
+                    final long v = rs.getLong(col);
                     isNull = rs.wasNull();
                     longChunk(c, chunk)[at] = v;
                 }
                 case DOUBLE -> {
-                    double v = rs.getDouble(col);
+                    final double v = rs.getDouble(col);
                     isNull = rs.wasNull();
                     doubleChunk(c, chunk)[at] = v;
                 }
                 case BOOLEAN -> {
-                    boolean v = rs.getBoolean(col);
+                    final boolean v = rs.getBoolean(col);
                     isNull = rs.wasNull();
                     longChunk(c, chunk)[at] = v ? 1L : 0L;
                 }
                 case TIMESTAMP -> {
-                    long v = readMicros(rs, col, sqlTypes[c]);
+                    final long v = readMicros(rs, col, sqlTypes[c]);
                     isNull = rs.wasNull();
                     longChunk(c, chunk)[at] = v;
                 }
                 default -> {
-                    String v = rs.getString(col);
+                    final String v = rs.getString(col);
                     isNull = v == null;
                     textChunk(c, chunk)[at] = v;
                 }
             }
-            long[] bits = nullChunk(c, chunk);
+            final long[] bits = nullChunk(c, chunk);
             if (isNull) {
                 bits[at >>> 6] |= 1L << (at & 63);
             }
@@ -134,24 +134,24 @@ public final class ColumnarResult implements ResultView {
         rowCount = row + 1;
     }
 
-    private static long readMicros(ResultSet rs, int col, int sqlType) throws SQLException {
+    private static long readMicros(final ResultSet rs, final int col, final int sqlType) throws SQLException {
         switch (sqlType) {
             case Types.TIMESTAMP_WITH_TIMEZONE -> {
-                OffsetDateTime t = rs.getObject(col, OffsetDateTime.class);
+                final OffsetDateTime t = rs.getObject(col, OffsetDateTime.class);
                 return t == null ? 0L : t.toEpochSecond() * 1_000_000L + t.getNano() / 1_000;
             }
             case Types.DATE -> {
-                LocalDate d = rs.getObject(col, LocalDate.class);
+                final LocalDate d = rs.getObject(col, LocalDate.class);
                 return d == null ? 0L : d.toEpochDay() * 86_400_000_000L;
             }
             default -> {
-                LocalDateTime t = rs.getObject(col, LocalDateTime.class);
+                final LocalDateTime t = rs.getObject(col, LocalDateTime.class);
                 return t == null ? 0L : t.toEpochSecond(ZoneOffset.UTC) * 1_000_000L + t.getNano() / 1_000;
             }
         }
     }
 
-    private long[] longChunk(int c, int chunk) {
+    private long[] longChunk(final int c, final int chunk) {
         long[][] table = longs[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -165,7 +165,7 @@ public final class ColumnarResult implements ResultView {
         return a;
     }
 
-    private double[] doubleChunk(int c, int chunk) {
+    private double[] doubleChunk(final int c, final int chunk) {
         double[][] table = doubles[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -179,7 +179,7 @@ public final class ColumnarResult implements ResultView {
         return a;
     }
 
-    private String[] textChunk(int c, int chunk) {
+    private String[] textChunk(final int c, final int chunk) {
         String[][] table = texts[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -193,7 +193,7 @@ public final class ColumnarResult implements ResultView {
         return a;
     }
 
-    private long[] nullChunk(int c, int chunk) {
+    private long[] nullChunk(final int c, final int chunk) {
         long[][] table = nulls[c];
         if (chunk == table.length) {
             // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
@@ -220,17 +220,17 @@ public final class ColumnarResult implements ResultView {
     }
 
     @Override
-    public String columnName(int column) {
+    public String columnName(final int column) {
         return names[column];
     }
 
     @Override
-    public ColumnKind kind(int column) {
+    public ColumnKind kind(final int column) {
         return kinds[column];
     }
 
     @Override
-    public String typeName(int column) {
+    public String typeName(final int column) {
         return typeNames[column];
     }
 
@@ -240,20 +240,20 @@ public final class ColumnarResult implements ResultView {
     }
 
     @Override
-    public boolean isNull(int row, int column) {
+    public boolean isNull(final int row, final int column) {
         checkRow(row);
-        int at = row & MASK;
+        final int at = row & MASK;
         return (longTable(nulls, column)[row >>> CHUNK_BITS][at >>> 6] & (1L << (at & 63))) != 0;
     }
 
     @Override
-    public long getLong(int row, int column) {
+    public long getLong(final int row, final int column) {
         checkRow(row);
         return longTable(longs, column)[row >>> CHUNK_BITS][row & MASK];
     }
 
     @Override
-    public double getDouble(int row, int column) {
+    public double getDouble(final int row, final int column) {
         checkRow(row);
         if (kinds[column] != ColumnKind.DOUBLE) {
             return getLong(row, column);
@@ -262,15 +262,15 @@ public final class ColumnarResult implements ResultView {
     }
 
     @Override
-    public boolean getBoolean(int row, int column) {
+    public boolean getBoolean(final int row, final int column) {
         return getLong(row, column) != 0L;
     }
 
     @Override
-    public String getText(int row, int column) {
+    public String getText(final int row, final int column) {
         checkRow(row);
         if (kinds[column] != ColumnKind.TEXT) {
-            StringBuilder sb = new StringBuilder();
+            final StringBuilder sb = new StringBuilder();
             format(row, column, sb);
             return sb.toString();
         }
@@ -282,7 +282,7 @@ public final class ColumnarResult implements ResultView {
         return (long[][]) LONG_TABLE.getAcquire(tables, column);
     }
 
-    private void checkRow(int row) {
+    private void checkRow(final int row) {
         if (row < 0 || row >= rowCount) {
             throw new IndexOutOfBoundsException("row " + row + ", rows " + rowCount);
         }

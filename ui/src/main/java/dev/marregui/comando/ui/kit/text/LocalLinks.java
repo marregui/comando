@@ -18,24 +18,24 @@ public final class LocalLinks {
      * a {@code data:} or {@code mailto:} URI, a heading alone, a folder ({@code x/}), or a relative path with no
      * folder to read it from. A {@code #} or {@code ?} part after the name is dropped.
      */
-    public static Optional<Path> file(Path folder, String destination) {
+    public static Optional<Path> file(final Path folder, final String destination) {
         if (destination == null || destination.isBlank()) {
             return Optional.empty();
         }
-        String raw = destination.strip();
+        final String raw = destination.strip();
         String path;
         try {
-            URI uri = new URI(raw);
+            final URI uri = new URI(raw);
             if (uri.getScheme() != null && !uri.getScheme().equalsIgnoreCase("file") || uri.getRawAuthority() != null) {
                 return Optional.empty();
             }
             path = uri.getPath();
-        } catch (URISyntaxException e) {
+        } catch (final URISyntaxException e) {
             // a destination in angle brackets keeps its spaces, which a URI does not take
             if (raw.contains("://")) {
                 return Optional.empty();
             }
-            int cut = indexOfAny(raw, '#', '?');
+            final int cut = indexOfAny(raw, '#', '?');
             path = cut < 0 ? raw : raw.substring(0, cut);
         }
         if (path == null || path.isEmpty() || path.endsWith("/")) {
@@ -44,7 +44,7 @@ public final class LocalLinks {
         Path target;
         try {
             target = Path.of(path);
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             return Optional.empty();
         }
         if (!target.isAbsolute()) {
@@ -53,14 +53,14 @@ public final class LocalLinks {
             }
             target = folder.toAbsolutePath().resolve(target);
         }
-        Path file = target.normalize();
+        final Path file = target.normalize();
         // "/.." is the root, which names no file
         return file.getFileName() == null ? Optional.empty() : Optional.of(file);
     }
 
-    private static int indexOfAny(String s, char a, char b) {
-        int i = s.indexOf(a);
-        int j = s.indexOf(b);
+    private static int indexOfAny(final String s, final char a, final char b) {
+        final int i = s.indexOf(a);
+        final int j = s.indexOf(b);
         return i < 0 ? j : j < 0 ? i : Math.min(i, j);
     }
 }

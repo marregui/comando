@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.async;
 
+import java.awt.event.HierarchyEvent;
+import javax.swing.JPanel;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.swing.JPanel;
-import java.awt.event.HierarchyEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,7 +26,7 @@ class ShownTimerTest {
             return shown;
         }
 
-        void showing(boolean on) {
+        void showing(final boolean on) {
             shown = on;
             dispatchEvent(new HierarchyEvent(this, HierarchyEvent.HIERARCHY_CHANGED, this, null, HierarchyEvent.SHOWING_CHANGED));
         }
@@ -54,7 +54,7 @@ class ShownTimerTest {
         timer.want(true);
         owner.showing(true);
         assertThat(timer.running()).as("wanted, then shown").isTrue();
-        ShownTimer other = new ShownTimer(owner, 1_000, () -> { });
+        final ShownTimer other = new ShownTimer(owner, 1_000, () -> { });
         try {
             other.want(true);
             assertThat(other.running()).as("shown, then wanted").isTrue();

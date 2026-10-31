@@ -32,29 +32,29 @@ public final class Threads {
     }
 
     /** The live threads made here named {@code name}, virtual ones included; for tests. */
-    public static List<Thread> alive(String name) {
+    public static List<Thread> alive(final String name) {
         synchronized (MADE) {
             return MADE.keySet().stream().filter(t -> t.isAlive() && t.getName().equals(name)).toList();
         }
     }
 
     /** A virtual thread named {@code name}, not started, kept in the list {@link #alive} reads. */
-    static Thread virtual(String name, Runnable task) {
-        Thread t = Thread.ofVirtual().name(name).unstarted(task);
+    static Thread virtual(final String name, final Runnable task) {
+        final Thread t = Thread.ofVirtual().name(name).unstarted(task);
         made(t);
         return t;
     }
 
-    private static ThreadFactory virtualFactory(String name) {
-        ThreadFactory f = Thread.ofVirtual().name(name).factory();
+    private static ThreadFactory virtualFactory(final String name) {
+        final ThreadFactory f = Thread.ofVirtual().name(name).factory();
         return r -> {
-            Thread t = f.newThread(r);
+            final Thread t = f.newThread(r);
             made(t);
             return t;
         };
     }
 
-    private static void made(Thread t) {
+    private static void made(final Thread t) {
         synchronized (MADE) {
             MADE.put(t, Boolean.TRUE);
         }
@@ -64,8 +64,8 @@ public final class Threads {
      * A fork: a virtual thread its caller collects in the same call, with a bound (a process's output read while the
      * caller waits for the process). It needs no owner, since it cannot outlive the call that started it.
      */
-    public static Thread fork(String name, Runnable task) {
-        Thread t = virtual(name, task);
+    public static Thread fork(final String name, final Runnable task) {
+        final Thread t = virtual(name, task);
         t.start();
         return t;
     }
@@ -73,7 +73,7 @@ public final class Threads {
     /**
      * A strand: one virtual thread running its tasks in order, for one resource (a connection, the store, a renderer).
      */
-    public static ExecutorService strand(String name) {
+    public static ExecutorService strand(final String name) {
         return Executors.newSingleThreadExecutor(virtualFactory(name));
     }
 
@@ -82,8 +82,8 @@ public final class Threads {
      * holds no operating-system thread, and its timers are kept by the JDK's one delay thread. A task cancelled before
      * it runs leaves the queue at once.
      */
-    public static ScheduledExecutorService timedStrand(String name) {
-        ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, virtualFactory(name));
+    public static ScheduledExecutorService timedStrand(final String name) {
+        final ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, virtualFactory(name));
         e.setRemoveOnCancelPolicy(true);
         return e;
     }

@@ -1,11 +1,5 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
-import com.jediterm.core.util.TermSize;
-import com.jediterm.terminal.ProcessTtyConnector;
-import com.pty4j.PtyProcess;
-import com.pty4j.PtyProcessBuilder;
-import com.pty4j.WinSize;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,6 +11,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.jediterm.core.util.TermSize;
+import com.jediterm.terminal.ProcessTtyConnector;
+import com.pty4j.PtyProcess;
+import com.pty4j.PtyProcessBuilder;
+import com.pty4j.WinSize;
+
 /** A process on a pseudo-terminal, connected to the terminal emulator. */
 final class Pty extends ProcessTtyConnector {
 
@@ -24,7 +24,7 @@ final class Pty extends ProcessTtyConnector {
     /** When the shell last wrote, by {@link System#nanoTime()}; {@link InputGate#NO_OUTPUT} before its first output. */
     private volatile long lastOutputNanos = InputGate.NO_OUTPUT;
 
-    private Pty(PtyProcess process, List<String> command) {
+    private Pty(final PtyProcess process, final List<String> command) {
         super(process, StandardCharsets.UTF_8, command);
         this.process = process;
     }
@@ -52,7 +52,7 @@ final class Pty extends ProcessTtyConnector {
     }
 
     static Map<String, String> environment() {
-        Map<String, String> env = new HashMap<>(System.getenv());
+        final Map<String, String> env = new HashMap<>(System.getenv());
         env.put("TERM", "xterm-256color");
         env.put("COLORTERM", "truecolor");
         env.putIfAbsent("LANG", "en_US.UTF-8");
@@ -60,8 +60,8 @@ final class Pty extends ProcessTtyConnector {
         return env;
     }
 
-    static Pty start(List<String> command, Path directory, int columns, int rows) throws IOException {
-        PtyProcess p = new PtyProcessBuilder(command.toArray(String[]::new))
+    static Pty start(final List<String> command, final Path directory, final int columns, final int rows) throws IOException {
+        final PtyProcess p = new PtyProcessBuilder(command.toArray(String[]::new))
                 .setDirectory(directory.toString())
                 .setEnvironment(environment())
                 .setInitialColumns(columns)
@@ -73,8 +73,8 @@ final class Pty extends ProcessTtyConnector {
 
     /** Read by the emulator's thread; records when output arrives, so input can wait for the shell to settle. */
     @Override
-    public int read(char[] buf, int offset, int length) throws IOException {
-        int n = super.read(buf, offset, length);
+    public int read(final char[] buf, final int offset, final int length) throws IOException {
+        final int n = super.read(buf, offset, length);
         if (n > 0) {
             lastOutputNanos = System.nanoTime();
         }
@@ -86,7 +86,7 @@ final class Pty extends ProcessTtyConnector {
     }
 
     @Override
-    public void resize(TermSize size) {
+    public void resize(final TermSize size) {
         if (process.isAlive()) {
             process.setWinSize(new WinSize(size.getColumns(), size.getRows()));
         }

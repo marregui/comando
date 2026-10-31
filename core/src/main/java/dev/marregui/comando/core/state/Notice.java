@@ -21,7 +21,7 @@ public record Notice(Level level, String text, long atMillis, String subject) {
         subject = subject == null ? "" : subject;
     }
 
-    public Notice(Level level, String text, long atMillis) {
+    public Notice(final Level level, final String text, final long atMillis) {
         this(level, text, atMillis, "");
     }
 
@@ -30,27 +30,27 @@ public record Notice(Level level, String text, long atMillis, String subject) {
     }
 
     /** About a panel's run: refusals, SQL errors, its results. */
-    public static String panel(String panelId) {
+    public static String panel(final String panelId) {
         return "panel:" + panelId;
     }
 
     /** About a connection: open, failure, loss, test. */
-    public static String connection(String name) {
+    public static String connection(final String name) {
         return "connection:" + name;
     }
 
     /** About a session: start, turn errors, exit. */
-    public static String session(String name) {
+    public static String session(final String name) {
         return "session:" + name;
     }
 
     /** About a folder of the Files tab: saving it, reading it. */
-    public static String folder(String name) {
+    public static String folder(final String name) {
         return "folder:" + name;
     }
 
     /** About an approval card while it waits. */
-    public static String approval(long id) {
+    public static String approval(final long id) {
         return "approval:" + id;
     }
 
@@ -58,19 +58,19 @@ public record Notice(Level level, String text, long atMillis, String subject) {
      * About the entry of comando's log written at {@code atMillis} or within a second after it: the time is read just
      * before the entry is logged, so the entry's own time is never earlier.
      */
-    public static String log(long atMillis) {
+    public static String log(final long atMillis) {
         return "log:" + atMillis;
     }
 
     /** The kind of the subject, the part before its first {@code :}; empty for a general notice. */
     public String kind() {
-        int colon = subject.indexOf(':');
+        final int colon = subject.indexOf(':');
         return colon < 0 ? "" : subject.substring(0, colon);
     }
 
     /** What the subject names within its kind, the part after its first {@code :}; empty for a general notice. */
     public String key() {
-        int colon = subject.indexOf(':');
+        final int colon = subject.indexOf(':');
         return colon < 0 ? "" : subject.substring(colon + 1);
     }
 }

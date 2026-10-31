@@ -1,17 +1,18 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.widgets.markdown.MarkdownWidget;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JScrollPane;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Point;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.widgets.markdown.MarkdownWidget;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,17 +28,17 @@ class SubagentViewRefreshTest {
         System.setProperty("java.awt.headless", "true");
     }
 
-    private static void layoutTree(Component c) {
+    private static void layoutTree(final Component c) {
         if (c instanceof Container k) {
             k.doLayout();
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 layoutTree(child);
             }
         }
     }
 
-    private static String doc(String name) {
-        StringBuilder sb = new StringBuilder("# " + name + "\n\n");
+    private static String doc(final String name) {
+        final StringBuilder sb = new StringBuilder("# " + name + "\n\n");
         for (int i = 0; i < 200; i++) {
             sb.append("Paragraph ").append(i).append(" of ").append(name).append(".\n\n");
         }
@@ -47,19 +48,19 @@ class SubagentViewRefreshTest {
     /// A different document rendered into the widget while the reader is at y 2000 scrolls to y 0.
     @Test
     void anotherDocumentInTheSameViewStartsAtItsTop() throws Exception {
-        AtomicReference<MarkdownWidget> w = new AtomicReference<>();
-        AtomicInteger before = new AtomicInteger();
+        final AtomicReference<MarkdownWidget> w = new AtomicReference<>();
+        final AtomicInteger before = new AtomicInteger();
         SwingUtilities.invokeAndWait(() -> {
-            MarkdownWidget widget = new MarkdownWidget();
+            final MarkdownWidget widget = new MarkdownWidget();
             w.set(widget);
             widget.render(new ViewSpec.Markdown(doc("first")));
-            JScrollPane scroll = (JScrollPane) widget.component();
+            final JScrollPane scroll = (JScrollPane) widget.component();
             scroll.setSize(600, 300);
             layoutTree(scroll);
         });
         SwingUtilities.invokeAndWait(() -> { }); // the first render's caret scroll has run
         SwingUtilities.invokeAndWait(() -> {
-            JScrollPane scroll = (JScrollPane) w.get().component();
+            final JScrollPane scroll = (JScrollPane) w.get().component();
             scroll.getViewport().setViewPosition(new Point(0, 2000)); // the reader is in the middle of the first
             before.set(scroll.getViewport().getViewPosition().y);
         });
@@ -72,7 +73,7 @@ class SubagentViewRefreshTest {
         });
         SwingUtilities.invokeAndWait(() -> { }); // the widget's invokeLater has run
 
-        AtomicInteger y = new AtomicInteger();
+        final AtomicInteger y = new AtomicInteger();
         SwingUtilities.invokeAndWait(() -> y.set(((JScrollPane) w.get().component()).getViewport().getViewPosition().y));
         assertThat(y.get()).as("another document is read from its start").isZero();
     }
@@ -80,12 +81,12 @@ class SubagentViewRefreshTest {
     /// The same document with a line appended keeps the reader at y 2000.
     @Test
     void theSameDocumentGrownKeepsTheReadersPlace() throws Exception {
-        AtomicReference<MarkdownWidget> w = new AtomicReference<>();
+        final AtomicReference<MarkdownWidget> w = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
-            MarkdownWidget widget = new MarkdownWidget();
+            final MarkdownWidget widget = new MarkdownWidget();
             w.set(widget);
             widget.render(new ViewSpec.Markdown(doc("first")));
-            JScrollPane scroll = (JScrollPane) widget.component();
+            final JScrollPane scroll = (JScrollPane) widget.component();
             scroll.setSize(600, 300);
             layoutTree(scroll);
         });
@@ -99,7 +100,7 @@ class SubagentViewRefreshTest {
         });
         SwingUtilities.invokeAndWait(() -> { });
 
-        AtomicInteger y = new AtomicInteger();
+        final AtomicInteger y = new AtomicInteger();
         SwingUtilities.invokeAndWait(() -> y.set(((JScrollPane) w.get().component()).getViewport().getViewPosition().y));
         assertThat(y.get()).as("the reader stays where it was").isEqualTo(2000);
     }

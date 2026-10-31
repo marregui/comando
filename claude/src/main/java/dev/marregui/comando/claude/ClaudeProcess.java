@@ -1,7 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.loop.Threads;
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -19,6 +17,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+
+import dev.marregui.comando.core.loop.Threads;
 
 /**
  * One headless {@code claude -p} process: stdout lines go to {@code onLine}, stdin lines come from a queue, stderr goes
@@ -62,26 +62,26 @@ final class ClaudeProcess {
     /** Guards {@link #tree}: the stopping thread records it, the timer's thread signals it. */
     private final Object treeLock = new Object();
 
-    private ClaudeProcess(Process process, Path stderrFile) {
+    private ClaudeProcess(final Process process, final Path stderrFile) {
         this.process = process;
         this.stderrFile = stderrFile;
     }
 
-    static ClaudeProcess start(String name, List<String> argv, Path workDir, RootLaunch launch,
-                               Consumer<String> onLine, IntConsumer onExit) throws IOException {
-        Path stderrFile = Files.createTempFile("comando-claude-", ".stderr",
+    static ClaudeProcess start(final String name, final List<String> argv, final Path workDir, final RootLaunch launch,
+                               final Consumer<String> onLine, final IntConsumer onExit) throws IOException {
+        final Path stderrFile = Files.createTempFile("comando-claude-", ".stderr",
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
         Process process;
         try {
-            ProcessBuilder pb = new ProcessBuilder(argv).directory(workDir.toFile()).redirectError(stderrFile.toFile());
+            final ProcessBuilder pb = new ProcessBuilder(argv).directory(workDir.toFile()).redirectError(stderrFile.toFile());
             launch.environment(pb.environment());
             process = pb.start();
         } catch (IOException | RuntimeException e) {
             Files.deleteIfExists(stderrFile);
             throw e;
         }
-        ClaudeProcess p = new ClaudeProcess(process, stderrFile);
-        Thread reader = Thread.ofPlatform().name("claude-out-" + name).daemon(true).start(() -> p.readStdout(onLine));
+        final ClaudeProcess p = new ClaudeProcess(process, stderrFile);
+        final Thread reader = Thread.ofPlatform().name("claude-out-" + name).daemon(true).start(() -> p.readStdout(onLine));
         Threads.fork("claude-in-" + name, p::writeStdin);
         Threads.fork("claude-exit-" + name, () -> {
             int code;
@@ -95,7 +95,7 @@ final class ClaudeProcess {
                     LOG.log(System.Logger.Level.WARNING, "claude exited but a child still holds its output open; stopped reading it [session="
                             + name + ", exit=" + code + ']');
                 }
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
                 p.dropStderr();
                 return;
@@ -106,7 +106,7 @@ final class ClaudeProcess {
         return p;
     }
 
-    private void readStdout(Consumer<String> onLine) {
+    private void readStdout(final Consumer<String> onLine) {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8), 1 << 16)) {
             String line;
             while ((line = in.readLine()) != null) {
@@ -120,7 +120,7 @@ final class ClaudeProcess {
                     onLine.accept(line);
                 }
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "stdout closed [cause=" + e.getMessage() + ']');
         }
     }
@@ -128,7 +128,7 @@ final class ClaudeProcess {
     private void writeStdin() {
         try (BufferedWriter out = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
             while (true) {
-                String line = stdin.take();
+                final String line = stdin.take();
                 if (line == END) {
                     return;
                 }
@@ -136,9 +136,9 @@ final class ClaudeProcess {
                 out.write('\n');
                 out.flush();
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "stdin closed [cause=" + e.getMessage() + ']');
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
@@ -146,9 +146,9 @@ final class ClaudeProcess {
     /** Keeps the last lines of stderr, read from the end of its file, and deletes the file. */
     private void readStderrTail() {
         try (RandomAccessFile f = new RandomAccessFile(stderrFile.toFile(), "r")) {
-            long length = f.length();
-            long from = Math.max(0L, length - STDERR_TAIL_BYTES);
-            byte[] end = new byte[(int) (length - from)];
+            final long length = f.length();
+            final long from = Math.max(0L, length - STDERR_TAIL_BYTES);
+            final byte[] end = new byte[(int) (length - from)];
             f.seek(from);
             f.readFully(end);
             List<String> lines = new String(end, StandardCharsets.UTF_8).lines().toList();
@@ -156,7 +156,7 @@ final class ClaudeProcess {
                 lines = lines.subList(1, lines.size()); // a tail cut mid-file starts with a partial line
             }
             stderrTail = String.join("\n", lines.subList(Math.max(0, lines.size() - STDERR_LINES), lines.size()));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read stderr", e);
         }
         dropStderr();
@@ -165,12 +165,12 @@ final class ClaudeProcess {
     private void dropStderr() {
         try {
             Files.deleteIfExists(stderrFile);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot delete [file=" + stderrFile + ']', e);
         }
     }
 
-    void send(String line) {
+    void send(final String line) {
         stdin.add(line);
     }
 
@@ -235,10 +235,10 @@ final class ClaudeProcess {
     }
 
     /** Waits up to {@code millis} for the process to exit; true when it has. */
-    boolean awaitExit(long millis) {
+    boolean awaitExit(final long millis) {
         try {
             return process.waitFor(millis, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return !process.isAlive();
         }

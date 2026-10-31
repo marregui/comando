@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,8 +16,8 @@ class FileChoosersTest {
     /// A folder, a file in it and a path two levels below it that does not exist all open in that folder; null opens
     /// in `user.home`.
     @Test
-    void theChooserOpensInTheFolderOfTheStartOrItsNearestExistingParent(@TempDir Path dir) throws Exception {
-        Path file = Files.writeString(dir.resolve("a.txt"), "x");
+    void theChooserOpensInTheFolderOfTheStartOrItsNearestExistingParent(@TempDir final Path dir) throws Exception {
+        final Path file = Files.writeString(dir.resolve("a.txt"), "x");
         assertThat(FileChoosers.startDirectory(dir)).isEqualTo(dir);
         assertThat(FileChoosers.startDirectory(file)).isEqualTo(dir);
         assertThat(FileChoosers.startDirectory(dir.resolve("missing/deeper"))).isEqualTo(dir);

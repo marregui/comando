@@ -1,10 +1,5 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.model.ChangeTexts;
-import dev.marregui.comando.core.model.RepoStatus;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,6 +7,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.model.ChangeTexts;
+import dev.marregui.comando.core.model.RepoStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -29,15 +30,15 @@ class GitTest {
     /**
      * Runs git in {@code dir} as a test sets a repository up, with an identity of its own and no user configuration.
      */
-    static void git(Path dir, String... args) throws IOException, InterruptedException {
-        List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+    static void git(final Path dir, final String... args) throws IOException, InterruptedException {
+        final List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
                 "-c", "init.defaultBranch=main", "-C", dir.toString()));
         cmd.addAll(List.of(args));
-        ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
+        final ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
         pb.environment().put("GIT_CONFIG_GLOBAL", "/dev/null");
         pb.environment().put("GIT_CONFIG_NOSYSTEM", "1");
-        Process p = pb.start();
-        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        final Process p = pb.start();
+        final String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertThat(p.waitFor(30, TimeUnit.SECONDS)).isTrue();
         assertThat(p.exitValue()).as("git %s: %s", String.join(" ", args), out).isZero();
     }
@@ -46,7 +47,7 @@ class GitTest {
      * A repository with one of each: a file changed, one added to the index, one deleted, one renamed in the index, one
      * untracked inside an untracked folder, and an ignored folder of build output.
      */
-    static Path repo(Path dir) throws Exception {
+    static Path repo(final Path dir) throws Exception {
         git(dir, "init", "-q");
         Files.writeString(dir.resolve(".gitignore"), "dist/\n");
         Files.createDirectories(dir.resolve("src/main"));
@@ -70,11 +71,11 @@ class GitTest {
     /// In a test repository with a modified, added, deleted, renamed and untracked file, status reports branch `main`,
     /// no error, each change with its kind, and `dist` as the ignored folder.
     @Test
-    void statusListsEveryKindOfChangeAndTheIgnoredFolder(@TempDir Path dir) throws Exception {
-        Path root = repo(dir.toRealPath());
+    void statusListsEveryKindOfChangeAndTheIgnoredFolder(@TempDir final Path dir) throws Exception {
+        final Path root = repo(dir.toRealPath());
         try (Git git = new Git()) {
-            Git.Read read = git.status(root);
-            RepoStatus s = read.status();
+            final Git.Read read = git.status(root);
+            final RepoStatus s = read.status();
             assertThat(s.error()).isEmpty();
             assertThat(s.branch()).isEqualTo("main");
             assertThat(s.changes()).containsExactly(
@@ -90,20 +91,20 @@ class GitTest {
     /// A modified file's texts are `HEAD`'s and the working tree's; a rename keeps one text on both sides, a deletion
     /// has nothing after, an untracked file nothing before.
     @Test
-    void textsAreHeadsVersionAndTheWorkingTrees(@TempDir Path dir) throws Exception {
-        Path root = repo(dir.toRealPath());
+    void textsAreHeadsVersionAndTheWorkingTrees(@TempDir final Path dir) throws Exception {
+        final Path root = repo(dir.toRealPath());
         try (Git git = new Git()) {
-            ChangeTexts modified = git.texts(root, new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED));
+            final ChangeTexts modified = git.texts(root, new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED));
             assertThat(modified.note()).isEmpty();
             assertThat(modified.before()).contains("x = 1");
             assertThat(modified.after()).contains("x = 2");
-            ChangeTexts renamed = git.texts(root, new RepoStatus.FileChange("new name.txt", "old.txt", RepoStatus.Kind.RENAMED));
+            final ChangeTexts renamed = git.texts(root, new RepoStatus.FileChange("new name.txt", "old.txt", RepoStatus.Kind.RENAMED));
             assertThat(renamed.before()).isEqualTo("same\n");
             assertThat(renamed.after()).isEqualTo("same\n");
-            ChangeTexts deleted = git.texts(root, new RepoStatus.FileChange("gone.txt", "", RepoStatus.Kind.DELETED));
+            final ChangeTexts deleted = git.texts(root, new RepoStatus.FileChange("gone.txt", "", RepoStatus.Kind.DELETED));
             assertThat(deleted.before()).isEqualTo("bye\n");
             assertThat(deleted.after()).isEmpty();
-            ChangeTexts untracked = git.texts(root, new RepoStatus.FileChange("notes/deep/n.md", "", RepoStatus.Kind.UNTRACKED));
+            final ChangeTexts untracked = git.texts(root, new RepoStatus.FileChange("notes/deep/n.md", "", RepoStatus.Kind.UNTRACKED));
             assertThat(untracked.before()).isEmpty();
             assertThat(untracked.after()).isEqualTo("# n\n");
         }
@@ -111,12 +112,12 @@ class GitTest {
 
     /// A binary file's change carries a note saying it is binary and no text after.
     @Test
-    void aBinaryFileIsNotCompared(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath();
+    void aBinaryFileIsNotCompared(@TempDir final Path dir) throws Exception {
+        final Path root = dir.toRealPath();
         git(root, "init", "-q");
         Files.write(root.resolve("b.bin"), new byte[]{1, 0, 2});
         try (Git git = new Git()) {
-            ChangeTexts t = git.texts(root, new RepoStatus.FileChange("b.bin", "", RepoStatus.Kind.UNTRACKED));
+            final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("b.bin", "", RepoStatus.Kind.UNTRACKED));
             assertThat(t.note()).contains("binary");
             assertThat(t.after()).isEmpty();
         }
@@ -124,14 +125,14 @@ class GitTest {
 
     /// Before the first commit an added file lists as ADDED, and its texts are nothing before and the file after.
     @Test
-    void aRepositoryWithoutCommitsHasNothingBefore(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath();
+    void aRepositoryWithoutCommitsHasNothingBefore(@TempDir final Path dir) throws Exception {
+        final Path root = dir.toRealPath();
         git(root, "init", "-q");
         Files.writeString(root.resolve("a.txt"), "a\n");
         git(root, "add", "a.txt");
         try (Git git = new Git()) {
             assertThat(git.status(root).status().changes()).containsExactly(new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.ADDED));
-            ChangeTexts t = git.texts(root, new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED));
+            final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED));
             assertThat(t.before()).isEmpty();
             assertThat(t.after()).isEqualTo("a\n");
         }
@@ -141,7 +142,7 @@ class GitTest {
     /// shell passes on), a file not in `HEAD` still has nothing before and no note, since git's messages are read in
     /// English. Skipped where git has no German messages, as the case cannot arise there.
     @Test
-    void aPathMissingFromHeadReadsAsNothingBeforeWhateverTheUsersLocale(@TempDir Path dir) throws Exception {
+    void aPathMissingFromHeadReadsAsNothingBeforeWhateverTheUsersLocale(@TempDir final Path dir) throws Exception {
         final Path root = dir.resolve("repo");
         Files.createDirectories(root);
         git(root, "init", "-q");
@@ -169,10 +170,10 @@ class GitTest {
 
     /// With a git executable that does not exist, status answers an error text and no changes instead of failing.
     @Test
-    void aMissingGitIsAStatusThatSaysSo(@TempDir Path dir) throws Exception {
-        Path root = repo(dir.toRealPath());
+    void aMissingGitIsAStatusThatSaysSo(@TempDir final Path dir) throws Exception {
+        final Path root = repo(dir.toRealPath());
         try (Git git = new Git(dir.resolve("no-such-git").toString())) {
-            RepoStatus s = git.status(root).status();
+            final RepoStatus s = git.status(root).status();
             assertThat(s.error()).isNotEmpty();
             assertThat(s.changes()).isEmpty();
         }
@@ -181,8 +182,8 @@ class GitTest {
     /// [Git#repos] of a folder deep in a repository is that repository; of a folder holding repositories, each one
     /// directly inside it; of a folder with neither, none.
     @Test
-    void reposAreTheOneAboveOrThoseDirectlyInside(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath();
+    void reposAreTheOneAboveOrThoseDirectlyInside(@TempDir final Path dir) throws Exception {
+        final Path root = dir.toRealPath();
         Files.createDirectories(root.resolve("a/.git"));
         Files.createDirectories(root.resolve("a/sub/deeper"));
         Files.createDirectories(root.resolve("b"));
@@ -198,7 +199,7 @@ class GitTest {
     /// entry, about two a second on an idle comando). So a `.git` link to nothing is not a repository, above the folder
     /// or inside it.
     @Test
-    void aGitLinkToNothingIsNotARepository(@TempDir Path dir) throws Exception {
+    void aGitLinkToNothingIsNotARepository(@TempDir final Path dir) throws Exception {
         final Path root = dir.toRealPath();
         Files.createDirectories(root.resolve("a/sub"));
         Files.createSymbolicLink(root.resolve("a/.git"), root.resolve("missing"));
@@ -210,8 +211,8 @@ class GitTest {
     /// commit, each change with its kind and old path, the ignored paths, and no truncation.
     @Test
     void parseReadsEveryRecordKind() {
-        Path root = Path.of("/r");
-        String out = String.join("\0",
+        final Path root = Path.of("/r");
+        final String out = String.join("\0",
                 "# branch.oid c312e98f0a1b2c3d4e5f60718293a4b5c6d7e8f9",
                 "# branch.head topic",
                 "1 .M N... 100644 100644 100644 a a src/x y.java",
@@ -223,7 +224,7 @@ class GitTest {
                 "? new dir/f",
                 "! build/",
                 "! .idea/x.xml", "");
-        Git.Read read = Git.parse(root, out.getBytes(StandardCharsets.UTF_8), false);
+        final Git.Read read = Git.parse(root, out.getBytes(StandardCharsets.UTF_8), false);
         assertThat(read.status().branch()).isEqualTo("topic");
         assertThat(read.status().shortHead()).as("the commit checked out, abbreviated").isEqualTo("c312e98");
         assertThat(Git.parse(root, "# branch.oid (initial)\0# branch.head main\0".getBytes(StandardCharsets.UTF_8), false).status().head())
@@ -243,7 +244,7 @@ class GitTest {
     /// DELETED.
     @Test
     void anIntentToAddIsAddedAndARenameThenDeletedIsTheOldPathDeleted() {
-        String out = String.join("\0",
+        final String out = String.join("\0",
                 "1 .A N... 000000 000000 100644 0 0 intent",
                 "2 RD N... 100644 100644 000000 a a R100 moved", "orig", "");
         assertThat(Git.parse(Path.of("/r"), out.getBytes(StandardCharsets.UTF_8), false).status().changes()).containsExactly(
@@ -263,8 +264,8 @@ class GitTest {
 
     /// A removed submodule lists as DELETED, and its texts carry the note `a submodule: not compared`.
     @Test
-    void aSubmoduleIsNotCompared(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath();
+    void aSubmoduleIsNotCompared(@TempDir final Path dir) throws Exception {
+        final Path root = dir.toRealPath();
         git(root, "init", "-q");
         Files.writeString(root.resolve("a.txt"), "a\n");
         git(root, "add", "a.txt");
@@ -273,7 +274,7 @@ class GitTest {
         git(root, "update-index", "--force-remove", "sub");
         try (Git git = new Git()) {
             assertThat(git.status(root).status().changes()).containsExactly(new RepoStatus.FileChange("sub", "", RepoStatus.Kind.DELETED));
-            ChangeTexts t = git.texts(root, new RepoStatus.FileChange("sub", "", RepoStatus.Kind.DELETED));
+            final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("sub", "", RepoStatus.Kind.DELETED));
             assertThat(t.note()).isEqualTo("a submodule: not compared");
         }
     }
@@ -281,8 +282,8 @@ class GitTest {
     /// With `core.autocrlf` set to `input`, a CRLF file compares as the LF text git commits, and a symbolic link
     /// compares as its target path.
     @Test
-    void lineEndsAreComparedAsGitCommitsThemAndALinkAsItsTarget(@TempDir Path dir) throws Exception {
-        Path root = dir.toRealPath();
+    void lineEndsAreComparedAsGitCommitsThemAndALinkAsItsTarget(@TempDir final Path dir) throws Exception {
+        final Path root = dir.toRealPath();
         git(root, "init", "-q");
         git(root, "config", "core.autocrlf", "input");
         Files.writeString(root.resolve("t.txt"), "one\ntwo\n");
@@ -291,9 +292,9 @@ class GitTest {
         Files.writeString(root.resolve("t.txt"), "one\r\nTWO\r\n");
         Files.createSymbolicLink(root.resolve("link"), Path.of("t.txt"));
         try (Git git = new Git()) {
-            ChangeTexts t = git.texts(root, new RepoStatus.FileChange("t.txt", "", RepoStatus.Kind.MODIFIED));
+            final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("t.txt", "", RepoStatus.Kind.MODIFIED));
             assertThat(t.after()).isEqualTo("one\nTWO\n");
-            ChangeTexts link = git.texts(root, new RepoStatus.FileChange("link", "", RepoStatus.Kind.UNTRACKED));
+            final ChangeTexts link = git.texts(root, new RepoStatus.FileChange("link", "", RepoStatus.Kind.UNTRACKED));
             assertThat(link.after()).isEqualTo("t.txt");
         }
     }
@@ -301,11 +302,11 @@ class GitTest {
     /// Output with more changes than [RepoStatus#MAX_CHANGES] keeps exactly that many and marks the status truncated.
     @Test
     void parseKeepsAtMostTheBoundAndSaysSo() {
-        StringBuilder out = new StringBuilder();
+        final StringBuilder out = new StringBuilder();
         for (int i = 0; i < RepoStatus.MAX_CHANGES + 5; i++) {
             out.append("? f").append(String.format("%05d", i)).append('\0');
         }
-        RepoStatus s = Git.parse(Path.of("/r"), out.toString().getBytes(StandardCharsets.UTF_8), false).status();
+        final RepoStatus s = Git.parse(Path.of("/r"), out.toString().getBytes(StandardCharsets.UTF_8), false).status();
         assertThat(s.changes()).hasSize(RepoStatus.MAX_CHANGES);
         assertThat(s.truncated()).isTrue();
     }

@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Path;
 import java.util.Set;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,7 +23,7 @@ class PanelTextsTitleTest {
     /// ` · docs` to a README whose name is taken in any case, and names `/` as the folder of a file at the root.
     @Test
     void aFileElsewhereKeepsItsExtensionAndTakesItsFolderOnlyWhenItsNameIsTaken() {
-        Set<String> taken = Set.of("reviewer", "readme.md");
+        final Set<String> taken = Set.of("reviewer", "readme.md");
         assertThat(PanelTexts.documentTitle(Path.of("/c/plugin/agents/reviewer.md"), t -> taken.stream().anyMatch(t::equalsIgnoreCase)))
                 .as("a session's panel called reviewer is no clash").isEqualTo("reviewer.md");
         assertThat(PanelTexts.documentTitle(Path.of("/w/docs/README.md"), t -> taken.stream().anyMatch(t::equalsIgnoreCase)))

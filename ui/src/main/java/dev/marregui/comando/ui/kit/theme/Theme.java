@@ -1,14 +1,5 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import com.formdev.flatlaf.FlatDarkLaf;
-import com.formdev.flatlaf.FlatLaf;
-import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.themes.FlatMacDarkLaf;
-import com.formdev.flatlaf.themes.FlatMacLightLaf;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-
-import javax.swing.UIManager;
-import javax.swing.plaf.ColorUIResource;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -21,6 +12,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import javax.swing.UIManager;
+import javax.swing.plaf.ColorUIResource;
+
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import com.formdev.flatlaf.themes.FlatMacLightLaf;
+
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 /**
  * Design tokens and the look and feel (record 100). A theme is one set of tokens in four tiers: the palette (the ground
@@ -114,8 +115,8 @@ public final class Theme {
     /**
      * A row's height for text {@code textHeight} pixels high: the text plus {@link #SPACE_S}, rounded up to the grid.
      */
-    public static int rowHeight(int textHeight) {
-        int h = textHeight + SPACE_S;
+    public static int rowHeight(final int textHeight) {
+        final int h = textHeight + SPACE_S;
         return (h + SPACE_XS - 1) / SPACE_XS * SPACE_XS;
     }
 
@@ -140,7 +141,7 @@ public final class Theme {
 
         public final float pt;
 
-        TextSize(float pt) {
+        TextSize(final float pt) {
             this.pt = pt;
         }
     }
@@ -150,12 +151,12 @@ public final class Theme {
      * the half point, so that a base other than 13, as Linux's look and feel gives, lands on a size its fonts draw
      * (12 pt's small step is 11, not 11.08).
      */
-    public static float size(float base, TextSize s) {
+    public static float size(final float base, final TextSize s) {
         return Math.round(base * s.pt / BASE_SIZE * 2) / 2f;
     }
 
     /** {@code f}, taken as its context's body text, at step {@code s} of the scale. */
-    public static Font font(Font f, TextSize s) {
+    public static Font font(final Font f, final TextSize s) {
         return f.deriveFont(size(f.getSize2D(), s));
     }
 
@@ -205,8 +206,8 @@ public final class Theme {
      * background of the content components that draw their own; then the tooltips, as a report reads.
      */
     private static void setUpLook() {
-        String g = hex(ground.color);
-        String focus = hex(tint.body);
+        final String g = hex(ground.color);
+        final String focus = hex(tint.body);
         // focus is marked in the tint, as everything that says where the user is (record 100), not the system accent
         FlatLaf.setGlobalExtraDefaults(Map.ofEntries(Map.entry("@background", g), Map.entry("List.background", g),
                 Map.entry("Tree.background", g), Map.entry("Table.background", g), Map.entry("TextArea.background", g),
@@ -214,7 +215,7 @@ public final class Theme {
                 Map.entry("Viewport.background", g), Map.entry("Component.focusedBorderColor", focus),
                 Map.entry("Component.focusColor", focus), Map.entry("TabbedPane.underlineColor", focus)));
         // a light ground takes the light look and feel, whose controls, borders and text are drawn for it (record 127)
-        boolean ok = ground.light ? (Platform.isMac() ? FlatMacLightLaf.setup() : FlatLightLaf.setup())
+        final boolean ok = ground.light ? (Platform.isMac() ? FlatMacLightLaf.setup() : FlatLightLaf.setup())
                 : Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
         if (!ok) {
             if (ground.light) {
@@ -246,7 +247,7 @@ public final class Theme {
      * {@code c} as it is on a light ground or a dark one, whichever ground is chosen: what a palette made for a ground
      * other than the one chosen keeps (record 127).
      */
-    static Color fixed(Color c, boolean onLight) {
+    static Color fixed(final Color c, final boolean onLight) {
         return c instanceof ByMode m ? m.in(onLight) : c;
     }
 
@@ -260,7 +261,7 @@ public final class Theme {
      * listens to the tint ({@link #onTint}) lays itself out or recolours, as its colours mix the tint with the ground.
      * Without the look and feel installed, as in a test, only the choice is kept. EDT only.
      */
-    public static void ground(Ground chosen) {
+    public static void ground(final Ground chosen) {
         if (ground == chosen) {
             return;
         }
@@ -273,7 +274,7 @@ public final class Theme {
      * both and everything listening ({@link #onTint}) runs once, so no window shows the new ground in the old tint
      * between two passes. EDT only.
      */
-    public static void choose(Ground g, Tint t) {
+    public static void choose(final Ground g, final Tint t) {
         if (ground == g && tint == t) {
             return;
         }
@@ -289,13 +290,13 @@ public final class Theme {
             setUpLook();
             FlatLaf.updateUI();
         }
-        for (Runnable r : TINT_LISTENERS) {
+        for (final Runnable r : TINT_LISTENERS) {
             r.run();
         }
     }
 
     /** The monospaced font: JetBrains Mono when installed, else SF Mono, Menlo, Consolas, DejaVu Sans Mono, Java's. */
-    public static Font mono(float size) {
+    public static Font mono(final float size) {
         return mono.deriveFont(size);
     }
 
@@ -316,10 +317,10 @@ public final class Theme {
         static final Font SERIF = pickSerif(NEW_YORK, installedFamilies());
     }
 
-    static Font pickSerif(Path newYork, Set<String> installed) {
+    static Font pickSerif(final Path newYork, final Set<String> installed) {
         if (Files.isRegularFile(newYork)) {
             try {
-                Font created = Font.createFont(Font.TRUETYPE_FONT, newYork.toFile());
+                final Font created = Font.createFont(Font.TRUETYPE_FONT, newYork.toFile());
                 // registered, so that rendered Markdown's style sheet can name it
                 GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(created);
                 return created.deriveFont(Font.BOLD, 13f);
@@ -327,7 +328,7 @@ public final class Theme {
                 // not a font this Java reads: the next face
             }
         }
-        for (String family : SERIFS) {
+        for (final String family : SERIFS) {
             if (installed.contains(family)) {
                 return new Font(family, Font.BOLD, 13);
             }
@@ -340,7 +341,7 @@ public final class Theme {
      * fonts covering most of Unicode on every desktop. A font loaded from a file, or a physical one such as Charter,
      * draws a glyph it lacks as a box or nothing.
      */
-    public static Font fallback(Font f) {
+    public static Font fallback(final Font f) {
         return new Font(Font.DIALOG, f.getStyle(), 1).deriveFont(f.getSize2D());
     }
 
@@ -349,8 +350,8 @@ public final class Theme {
     }
 
     private static Font pickMono() {
-        Set<String> installed = installedFamilies();
-        for (String family : new String[]{"JetBrains Mono", "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono"}) {
+        final Set<String> installed = installedFamilies();
+        for (final String family : new String[]{"JetBrains Mono", "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono"}) {
             if (installed.contains(family)) {
                 return new Font(family, Font.PLAIN, 13);
             }
@@ -376,7 +377,7 @@ public final class Theme {
      * ({@link #onTint}) lays itself out or recolours in it; what reads {@link #tint()} as it paints, the tooltips' bar and
      * the focus ring among them, takes it at its next paint. EDT only.
      */
-    public static void tint(Tint chosen) {
+    public static void tint(final Tint chosen) {
         if (tint == chosen) {
             return;
         }
@@ -385,13 +386,13 @@ public final class Theme {
     }
 
     /** Runs {@code listener} on the EDT each time another tint, or another ground, is chosen; returns what stops it. */
-    public static Runnable onTint(Runnable listener) {
+    public static Runnable onTint(final Runnable listener) {
         TINT_LISTENERS.add(listener);
         return () -> TINT_LISTENERS.remove(listener);
     }
 
     /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement run. */
-    public static Color withAlpha(Color c, int alpha) {
+    public static Color withAlpha(final Color c, final int alpha) {
         return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
     }
 
@@ -399,12 +400,12 @@ public final class Theme {
      * The spinner's bar {@code behindHead} bars behind its head: the tint's body at the head, fading into the ground
      * with each bar behind; something running is "where I am", which the tint marks (records 100, 103).
      */
-    public static Color spinnerShade(int behindHead) {
+    public static Color spinnerShade(final int behindHead) {
         return Tint.over(ground(), tint.body, 1f - 0.11f * behindHead);
     }
 
     /** {@code c} as {@code #rrggbb}, for HTML and FlatLaf styles. */
-    public static String hex(Color c) {
+    public static String hex(final Color c) {
         return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
     }
 }

@@ -1,11 +1,11 @@
 package dev.marregui.comando.db;
 
-import io.questdb.ServerMain;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import io.questdb.ServerMain;
 
 /** A QuestDB server in a temporary directory, Postgres wire on a free port, everything else off. */
 final class EmbeddedQuestDb implements AutoCloseable {
@@ -13,9 +13,9 @@ final class EmbeddedQuestDb implements AutoCloseable {
     private final ServerMain server;
     private final int pgPort;
 
-    EmbeddedQuestDb(Path root) throws IOException {
+    EmbeddedQuestDb(final Path root) throws IOException {
         pgPort = freePort();
-        Path conf = Files.createDirectories(root.resolve("conf"));
+        final Path conf = Files.createDirectories(root.resolve("conf"));
         Files.writeString(conf.resolve("server.conf"), String.join("\n",
                 "pg.net.bind.to=127.0.0.1:" + pgPort,
                 "http.enabled=false",

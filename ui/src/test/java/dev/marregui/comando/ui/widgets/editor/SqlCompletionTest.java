@@ -1,14 +1,15 @@
 package dev.marregui.comando.ui.widgets.editor;
 
-import dev.marregui.comando.core.schema.Schema;
-import org.junit.jupiter.api.Test;
-
+import java.awt.Component;
+import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import java.awt.Component;
-import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.schema.Schema;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,7 +29,7 @@ class SqlCompletionTest {
     /// its type and both tables.
     @Test
     void offersKeywordsTablesAndEachColumnOnce() {
-        SqlCompletion c = new SqlCompletion();
+        final SqlCompletion c = new SqlCompletion();
         c.setSchema(SCHEMA);
         assertThat(c.provider().getCompletionByInputText("trades")).hasSize(1);
         assertThat(c.provider().getCompletionByInputText("ts")).hasSize(1);
@@ -39,11 +40,11 @@ class SqlCompletionTest {
     /// A table and a column named with HTML tags are shown escaped in the completion list.
     @Test
     void aTableNamedLikeHtmlIsListedAsText() throws Exception {
-        SqlCompletion c = new SqlCompletion();
+        final SqlCompletion c = new SqlCompletion();
         c.setSchema(new Schema(List.of(new Schema.Table("<img src=http://h/x.png>", List.of(new Schema.Column("<u>c", "INT"))))));
-        String[] shown = new String[2];
+        final String[] shown = new String[2];
         SwingUtilities.invokeAndWait(() -> {
-            JList<Object> list = new JList<>();
+            final JList<Object> list = new JList<>();
             shown[0] = text(c.renderer().getListCellRendererComponent(list, c.provider().getCompletionByInputText("<img src=http://h/x.png>").getFirst(), 0, false, false));
             shown[1] = text(c.renderer().getListCellRendererComponent(list, c.provider().getCompletionByInputText("<u>c").getFirst(), 1, false, false));
         });
@@ -51,14 +52,14 @@ class SqlCompletionTest {
         assertThat(shown[1]).contains("&lt;u&gt;c").doesNotContain("<u>");
     }
 
-    private static String text(Component c) {
+    private static String text(final Component c) {
         return ((JLabel) c).getText();
     }
 
     /// Setting an empty schema removes the previous tables and keeps the keywords.
     @Test
     void anotherSchemaReplacesTheWords() {
-        SqlCompletion c = new SqlCompletion();
+        final SqlCompletion c = new SqlCompletion();
         c.setSchema(SCHEMA);
         c.setSchema(Schema.EMPTY);
         assertThat(c.provider().getCompletionByInputText("trades")).isNull();
@@ -68,8 +69,8 @@ class SqlCompletionTest {
     /// A [CommandEditor] adds a `UIManager` listener and removes it on unmount.
     @Test
     void anUnmountedEditorLeavesNoGlobalListener() {
-        int before = UIManager.getPropertyChangeListeners().length;
-        CommandEditor editor = new CommandEditor();
+        final int before = UIManager.getPropertyChangeListeners().length;
+        final CommandEditor editor = new CommandEditor();
         assertThat(UIManager.getPropertyChangeListeners().length).isGreaterThan(before);
         editor.unmount();
         assertThat(UIManager.getPropertyChangeListeners().length).isEqualTo(before);
@@ -90,11 +91,11 @@ class SqlCompletionTest {
         assertThat(SqlCompletion.startsAStatement("select * From trades t where t.")).isTrue();
         assertThat(SqlCompletion.startsAStatement("select sym from trad")).isTrue();
         // lower-case prose with a mark of SQL in it: the word after the keyword is not the one its grammar requires
-        for (String prose : new String[]{"drop old rows from trades", "delete rows from trades older than a week",
+        for (final String prose : new String[]{"drop old rows from trades", "delete rows from trades older than a week",
                 "update dependencies, rerun tests", "create 3 tests for Lane", "update readme.md and commit", "update tests for ENG-1234"}) {
             assertThat(SqlCompletion.startsAStatement(prose)).as(prose).isFalse();
         }
-        for (String sql : new String[]{"create table t", "create ta", "drop table trades", "drop all tables", "truncate table x",
+        for (final String sql : new String[]{"create table t", "create ta", "drop table trades", "drop all tables", "truncate table x",
                 "insert into trades", "insert int", "delete from trades where", "update trades set price = 1", "update trades t set",
                 "update trades s", "create materialized view v", "alter table trades add column"}) {
             assertThat(SqlCompletion.startsAStatement(sql)).as(sql).isTrue();

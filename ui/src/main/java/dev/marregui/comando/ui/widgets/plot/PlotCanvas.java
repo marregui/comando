@@ -1,9 +1,5 @@
 package dev.marregui.comando.ui.widgets.plot;
 
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.JComponent;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -23,6 +19,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import javax.swing.JComponent;
+
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Series over shared axes. Points are sorted by x once per data change; a paint finds the visible range
@@ -60,26 +60,26 @@ final class PlotCanvas extends JComponent {
     private int hoverX = -1;
 
     PlotCanvas() {
-        MouseAdapter mouse = new MouseAdapter() {
+        final MouseAdapter mouse = new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 requestFocusInWindow(); // zoom and export keys act on the focused widget
                 dragStart = e.getX();
                 dragNow = e.getX();
             }
 
             @Override
-            public void mouseDragged(MouseEvent e) {
+            public void mouseDragged(final MouseEvent e) {
                 dragNow = e.getX();
                 hoverX = e.getX();
                 repaint();
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 if (dragStart >= 0 && Math.abs(dragNow - dragStart) > 6) {
-                    double a = toX(Math.min(dragStart, dragNow));
-                    double b = toX(Math.max(dragStart, dragNow));
+                    final double a = toX(Math.min(dragStart, dragNow));
+                    final double b = toX(Math.max(dragStart, dragNow));
                     zoomTo(a, b);
                 }
                 dragStart = -1;
@@ -88,20 +88,20 @@ final class PlotCanvas extends JComponent {
             }
 
             @Override
-            public void mouseClicked(MouseEvent e) {
+            public void mouseClicked(final MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     reset();
                 }
             }
 
             @Override
-            public void mouseMoved(MouseEvent e) {
+            public void mouseMoved(final MouseEvent e) {
                 hoverX = e.getX();
                 repaint();
             }
 
             @Override
-            public void mouseExited(MouseEvent e) {
+            public void mouseExited(final MouseEvent e) {
                 hoverX = -1;
                 repaint();
             }
@@ -119,13 +119,13 @@ final class PlotCanvas extends JComponent {
     }
 
     /** Sorts each series by x (series sharing one x share one sort) and finds the bounds; any thread. */
-    static Prepared prepare(ViewSpec.Plot plot) {
-        List<Sorted> sorted = new ArrayList<>(plot.series().size());
+    static Prepared prepare(final ViewSpec.Plot plot) {
+        final List<Sorted> sorted = new ArrayList<>(plot.series().size());
         double[] lastX = null;
         int[] lastOrder = null;
         int i = 0;
-        for (ViewSpec.Series s : plot.series()) {
-            int[] order = lastX != null && Arrays.equals(lastX, s.x()) ? lastOrder : order(s.x());
+        for (final ViewSpec.Series s : plot.series()) {
+            final int[] order = lastX != null && Arrays.equals(lastX, s.x()) ? lastOrder : order(s.x());
             sorted.add(sorted(s, order, Theme.content().series(i++)));
             lastX = s.x();
             lastOrder = order;
@@ -134,7 +134,7 @@ final class PlotCanvas extends JComponent {
         double x1 = Double.NEGATIVE_INFINITY;
         double y0 = Double.POSITIVE_INFINITY;
         double y1 = Double.NEGATIVE_INFINITY;
-        for (Sorted s : sorted) {
+        for (final Sorted s : sorted) {
             for (int k = 0; k < s.x.length; k++) {
                 if (Double.isFinite(s.x[k]) && Double.isFinite(s.y[k])) {
                     x0 = Math.min(x0, s.x[k]);
@@ -152,7 +152,7 @@ final class PlotCanvas extends JComponent {
         }
         if (x0 == x1) {
             // one instant: half a minute either side reads as time; a number gets one unit
-            double half = plot.timeX() ? 30_000 : 1;
+            final double half = plot.timeX() ? 30_000 : 1;
             x0 -= half;
             x1 += half;
         }
@@ -164,7 +164,7 @@ final class PlotCanvas extends JComponent {
     }
 
     /** Shows {@code p}, zoomed out to all of it; on the event thread. */
-    void setData(Prepared p) {
+    void setData(final Prepared p) {
         series.clear();
         series.addAll(p.series());
         xLabel = p.xLabel();
@@ -178,7 +178,7 @@ final class PlotCanvas extends JComponent {
     }
 
     /** The indices of {@code x} in ascending order; null when it is ascending already. */
-    private static int[] order(double[] x) {
+    private static int[] order(final double[] x) {
         boolean ascending = true;
         for (int i = 1; i < x.length && ascending; i++) {
             ascending = x[i - 1] <= x[i];
@@ -186,24 +186,24 @@ final class PlotCanvas extends JComponent {
         if (ascending) {
             return null;
         }
-        Integer[] idx = new Integer[x.length];
+        final Integer[] idx = new Integer[x.length];
         for (int i = 0; i < idx.length; i++) {
             idx[i] = i;
         }
         Arrays.sort(idx, (a, b) -> Double.compare(x[a], x[b]));
-        int[] order = new int[idx.length];
+        final int[] order = new int[idx.length];
         for (int i = 0; i < idx.length; i++) {
             order[i] = idx[i];
         }
         return order;
     }
 
-    private static Sorted sorted(ViewSpec.Series s, int[] order, Color color) {
+    private static Sorted sorted(final ViewSpec.Series s, final int[] order, final Color color) {
         if (order == null) {
             return new Sorted(s.name(), s.x(), s.y(), color);
         }
-        double[] sx = new double[order.length];
-        double[] sy = new double[order.length];
+        final double[] sx = new double[order.length];
+        final double[] sy = new double[order.length];
         for (int i = 0; i < order.length; i++) {
             sx[i] = s.x()[order[i]];
             sy[i] = s.y()[order[i]];
@@ -212,7 +212,7 @@ final class PlotCanvas extends JComponent {
     }
 
     void reset() {
-        double padY = (dataY1 - dataY0) * 0.05;
+        final double padY = (dataY1 - dataY0) * 0.05;
         viewX0 = dataX0;
         viewX1 = dataX1;
         viewY0 = dataY0 - padY;
@@ -220,7 +220,7 @@ final class PlotCanvas extends JComponent {
         repaint();
     }
 
-    void zoomTo(double x0, double x1) {
+    void zoomTo(final double x0, final double x1) {
         if (x1 - x0 <= 0) {
             return;
         }
@@ -230,9 +230,9 @@ final class PlotCanvas extends JComponent {
         repaint();
     }
 
-    void zoom(int steps) {
-        double mid = (viewX0 + viewX1) / 2;
-        double half = (viewX1 - viewX0) / 2 * Math.pow(0.8, steps);
+    void zoom(final int steps) {
+        final double mid = (viewX0 + viewX1) / 2;
+        final double half = (viewX1 - viewX0) / 2 * Math.pow(0.8, steps);
         zoomTo(mid - half, mid + half);
     }
 
@@ -240,9 +240,9 @@ final class PlotCanvas extends JComponent {
     private void fitY() {
         double lo = Double.POSITIVE_INFINITY;
         double hi = Double.NEGATIVE_INFINITY;
-        for (Sorted s : series) {
-            int a = lowerBound(s.x, viewX0);
-            int b = lowerBound(s.x, viewX1 + Math.ulp(viewX1));
+        for (final Sorted s : series) {
+            final int a = lowerBound(s.x, viewX0);
+            final int b = lowerBound(s.x, viewX1 + Math.ulp(viewX1));
             for (int i = a; i < b; i++) {
                 if (Double.isFinite(s.y[i])) {
                     lo = Math.min(lo, s.y[i]);
@@ -251,17 +251,17 @@ final class PlotCanvas extends JComponent {
             }
         }
         if (Double.isFinite(lo)) {
-            double pad = Math.max((hi - lo) * 0.05, 1e-9);
+            final double pad = Math.max((hi - lo) * 0.05, 1e-9);
             viewY0 = lo - pad;
             viewY1 = hi + pad;
         }
     }
 
-    static int lowerBound(double[] a, double key) {
+    static int lowerBound(final double[] a, final double key) {
         int lo = 0;
         int hi = a.length;
         while (lo < hi) {
-            int mid = (lo + hi) >>> 1;
+            final int mid = (lo + hi) >>> 1;
             if (a[mid] < key) {
                 lo = mid + 1;
             } else {
@@ -271,12 +271,12 @@ final class PlotCanvas extends JComponent {
         return lo;
     }
 
-    private static Rectangle area(int width, int height) {
+    private static Rectangle area(final int width, final int height) {
         return new Rectangle(LEFT, TOP, Math.max(1, width - LEFT - RIGHT), Math.max(1, height - TOP - BOTTOM));
     }
 
-    private double toX(int px) {
-        Rectangle a = area(getWidth(), getHeight());
+    private double toX(final int px) {
+        final Rectangle a = area(getWidth(), getHeight());
         return viewX0 + (px - a.x) * (viewX1 - viewX0) / a.width;
     }
 
@@ -297,8 +297,8 @@ final class PlotCanvas extends JComponent {
     }
 
     @Override
-    protected void paintComponent(Graphics g0) {
-        Graphics2D g = (Graphics2D) g0.create();
+    protected void paintComponent(final Graphics g0) {
+        final Graphics2D g = (Graphics2D) g0.create();
         try {
             paintPlot(g, getWidth(), getHeight());
         } finally {
@@ -307,12 +307,12 @@ final class PlotCanvas extends JComponent {
     }
 
     BufferedImage snapshot() {
-        BufferedImage img = new BufferedImage(Math.max(getWidth(), 800), Math.max(getHeight(), 500), BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
+        final BufferedImage img = new BufferedImage(Math.max(getWidth(), 800), Math.max(getHeight(), 500), BufferedImage.TYPE_INT_ARGB);
+        final Graphics2D g = img.createGraphics();
         try {
             g.setColor(getBackground() == null ? Theme.CARD : getBackground());
             g.fillRect(0, 0, img.getWidth(), img.getHeight());
-            int saved = hoverX;
+            final int saved = hoverX;
             hoverX = -1;
             paintPlot(g, img.getWidth(), img.getHeight());
             hoverX = saved;
@@ -322,33 +322,33 @@ final class PlotCanvas extends JComponent {
         return img;
     }
 
-    private void paintPlot(Graphics2D g, int width, int height) {
+    private void paintPlot(final Graphics2D g, final int width, final int height) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 12) : getFont();
+        final Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 12) : getFont();
         g.setFont(font);
-        FontMetrics fm = g.getFontMetrics();
-        Rectangle a = area(width, height);
+        final FontMetrics fm = g.getFontMetrics();
+        final Rectangle a = area(width, height);
         g.setColor(Theme.CARD_BORDER);
         g.draw(a);
         // grid and ticks
-        double[] yTicks = ticks(viewY0, viewY1, Math.max(2, a.height / 50));
-        double[] xTicks = timeX ? timeTicks(viewX0, viewX1, Math.max(2, a.width / 110)) : ticks(viewX0, viewX1, Math.max(2, a.width / 110));
+        final double[] yTicks = ticks(viewY0, viewY1, Math.max(2, a.height / 50));
+        final double[] xTicks = timeX ? timeTicks(viewX0, viewX1, Math.max(2, a.width / 110)) : ticks(viewX0, viewX1, Math.max(2, a.width / 110));
         g.setStroke(new BasicStroke(1f));
-        for (double t : yTicks) {
-            int y = py(t, a);
+        for (final double t : yTicks) {
+            final int y = py(t, a);
             g.setColor(Theme.CARD_BORDER);
             g.drawLine(a.x, y, a.x + a.width, y);
             g.setColor(Theme.MUTED);
-            String label = number(t, viewY1 - viewY0);
+            final String label = number(t, viewY1 - viewY0);
             g.drawString(label, a.x - fm.stringWidth(label) - 6, y + fm.getAscent() / 2 - 1);
         }
-        for (double t : xTicks) {
-            int x = px(t, a);
+        for (final double t : xTicks) {
+            final int x = px(t, a);
             g.setColor(Theme.CARD_BORDER);
             g.drawLine(x, a.y, x, a.y + a.height);
             g.setColor(Theme.MUTED);
-            String label = timeX ? time(t, viewX1 - viewX0) : number(t, viewX1 - viewX0);
+            final String label = timeX ? time(t, viewX1 - viewX0) : number(t, viewX1 - viewX0);
             g.drawString(label, x - fm.stringWidth(label) / 2, a.y + a.height + fm.getAscent() + 4);
         }
         g.setColor(Theme.MUTED);
@@ -359,10 +359,10 @@ final class PlotCanvas extends JComponent {
             g.drawString(yLabel, 6, TOP - 8);
         }
         // series
-        Graphics2D clip = (Graphics2D) g.create();
+        final Graphics2D clip = (Graphics2D) g.create();
         clip.clip(a);
         clip.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        for (Sorted s : series) {
+        for (final Sorted s : series) {
             clip.setColor(s.color);
             clip.draw(path(s, a));
             dots(clip, s, a);
@@ -370,7 +370,7 @@ final class PlotCanvas extends JComponent {
         clip.dispose();
         // legend, after the y label
         int lx = Math.max(a.x + 8, yLabel.isEmpty() ? 0 : 6 + fm.stringWidth(yLabel) + 16);
-        for (Sorted s : series) {
+        for (final Sorted s : series) {
             g.setColor(s.color);
             g.fillRect(lx, 8, 10, 10);
             g.setColor(Theme.MUTED);
@@ -387,9 +387,9 @@ final class PlotCanvas extends JComponent {
     }
 
     /** Marks each point when few are visible, so a sparse or single-point series shows. */
-    private void dots(Graphics2D g, Sorted s, Rectangle a) {
-        int from = Math.max(0, lowerBound(s.x, viewX0) - 1);
-        int to = Math.min(s.x.length, lowerBound(s.x, viewX1) + 1);
+    private void dots(final Graphics2D g, final Sorted s, final Rectangle a) {
+        final int from = Math.max(0, lowerBound(s.x, viewX0) - 1);
+        final int to = Math.min(s.x.length, lowerBound(s.x, viewX1) + 1);
         if (to - from > Math.max(2, a.width / 12)) {
             return;
         }
@@ -401,10 +401,10 @@ final class PlotCanvas extends JComponent {
     }
 
     /** One vertex pair (min, max) per pixel column for the visible points. */
-    private Path2D path(Sorted s, Rectangle a) {
-        Path2D.Double p = new Path2D.Double();
-        int from = Math.max(0, lowerBound(s.x, viewX0) - 1);
-        int to = Math.min(s.x.length, lowerBound(s.x, viewX1) + 1);
+    private Path2D path(final Sorted s, final Rectangle a) {
+        final Path2D.Double p = new Path2D.Double();
+        final int from = Math.max(0, lowerBound(s.x, viewX0) - 1);
+        final int to = Math.min(s.x.length, lowerBound(s.x, viewX1) + 1);
         int column = Integer.MIN_VALUE;
         double lo = 0;
         double hi = 0;
@@ -412,11 +412,11 @@ final class PlotCanvas extends JComponent {
         double last = 0;
         boolean started = false;
         for (int i = from; i < to; i++) {
-            double y = s.y[i];
+            final double y = s.y[i];
             if (!Double.isFinite(y) || !Double.isFinite(s.x[i])) {
                 continue; // a point without an x has no place on the axis
             }
-            int c = px(s.x[i], a);
+            final int c = px(s.x[i], a);
             if (c != column) {
                 if (column != Integer.MIN_VALUE) {
                     started = emit(p, column, first, lo, hi, last, a, started);
@@ -435,7 +435,7 @@ final class PlotCanvas extends JComponent {
         return p;
     }
 
-    private boolean emit(Path2D.Double p, int column, double first, double lo, double hi, double last, Rectangle a, boolean started) {
+    private boolean emit(final Path2D.Double p, final int column, final double first, final double lo, final double hi, final double last, final Rectangle a, final boolean started) {
         if (!started) {
             p.moveTo(column, py(first, a));
         } else {
@@ -449,14 +449,14 @@ final class PlotCanvas extends JComponent {
         return true;
     }
 
-    private void paintCrosshair(Graphics2D g, Rectangle a, FontMetrics fm) {
+    private void paintCrosshair(final Graphics2D g, final Rectangle a, final FontMetrics fm) {
         g.setColor(Theme.MUTED);
         g.drawLine(hoverX, a.y, hoverX, a.y + a.height);
-        double x = toX(hoverX);
-        List<String> lines = new ArrayList<>();
+        final double x = toX(hoverX);
+        final List<String> lines = new ArrayList<>();
         lines.add(timeX ? Instant.ofEpochMilli((long) x).toString() : number(x, viewX1 - viewX0));
-        for (Sorted s : series) {
-            int i = lowerBound(s.x, x);
+        for (final Sorted s : series) {
+            final int i = lowerBound(s.x, x);
             int best = i;
             if (i > 0 && (i == s.x.length || Math.abs(s.x[i - 1] - x) < Math.abs(s.x[i] - x))) {
                 best = i - 1;
@@ -472,51 +472,51 @@ final class PlotCanvas extends JComponent {
             }
         }
         int w = 0;
-        for (String l : lines) {
+        for (final String l : lines) {
             w = Math.max(w, fm.stringWidth(l));
         }
-        int h = lines.size() * fm.getHeight() + 8;
-        int bx = hoverX + 12 + w + 16 > a.x + a.width ? hoverX - w - 28 : hoverX + 12;
+        final int h = lines.size() * fm.getHeight() + 8;
+        final int bx = hoverX + 12 + w + 16 > a.x + a.width ? hoverX - w - 28 : hoverX + 12;
         g.setColor(Theme.CARD);
         g.fillRoundRect(bx, a.y + 8, w + 16, h, 8, 8);
         g.setColor(Theme.CARD_BORDER);
         g.drawRoundRect(bx, a.y + 8, w + 16, h, 8, 8);
         g.setColor(getForeground());
         int y = a.y + 8 + fm.getAscent() + 4;
-        for (String l : lines) {
+        for (final String l : lines) {
             g.drawString(l, bx + 8, y);
             y += fm.getHeight();
         }
     }
 
     /** Round tick values: steps of 1, 2 or 5 times a power of ten. */
-    static double[] ticks(double lo, double hi, int target) {
-        double range = hi - lo;
+    static double[] ticks(final double lo, final double hi, final int target) {
+        final double range = hi - lo;
         if (!(range > 0) || !Double.isFinite(range)) {
             return new double[0];
         }
-        double raw = range / target;
-        double mag = Math.pow(10, Math.floor(Math.log10(raw)));
-        double norm = raw / mag;
-        double step = (norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10) * mag;
-        double start = Math.ceil(lo / step) * step;
-        int n = (int) Math.floor((hi - start) / step) + 1;
-        double[] out = new double[Math.max(0, Math.min(n, 1000))];
+        final double raw = range / target;
+        final double mag = Math.pow(10, Math.floor(Math.log10(raw)));
+        final double norm = raw / mag;
+        final double step = (norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10) * mag;
+        final double start = Math.ceil(lo / step) * step;
+        final int n = (int) Math.floor((hi - start) / step) + 1;
+        final double[] out = new double[Math.max(0, Math.min(n, 1000))];
         for (int i = 0; i < out.length; i++) {
             out[i] = start + i * step;
         }
         return out;
     }
 
-    static String number(double v, double range) {
+    static String number(final double v, final double range) {
         if (Math.abs(v) < 1e-12 * Math.max(1, Math.abs(range))) {
             return "0";
         }
-        double abs = Math.abs(v);
+        final double abs = Math.abs(v);
         if (abs >= 1e7 || abs < 1e-4) {
             return String.format(Locale.ROOT, "%.3g", v);
         }
-        int decimals = range >= 100 ? 0 : range >= 1 ? 2 : 4;
+        final int decimals = range >= 100 ? 0 : range >= 1 ? 2 : 4;
         return String.format(Locale.ROOT, "%." + decimals + "f", v);
     }
 
@@ -529,29 +529,29 @@ final class PlotCanvas extends JComponent {
             86_400_000L, 172_800_000L, 604_800_000L, 2_592_000_000L, 31_536_000_000L};
 
     /** Time ticks on epoch milliseconds, aligned to whole steps in UTC, at most about {@code target} of them. */
-    static double[] timeTicks(double lo, double hi, int target) {
-        double range = hi - lo;
+    static double[] timeTicks(final double lo, final double hi, final int target) {
+        final double range = hi - lo;
         if (!(range > 0) || !Double.isFinite(range)) {
             return new double[0];
         }
         long step = TIME_STEPS[TIME_STEPS.length - 1];
-        for (long s : TIME_STEPS) {
+        for (final long s : TIME_STEPS) {
             if (range / s <= target) {
                 step = s;
                 break;
             }
         }
-        double start = Math.ceil(lo / step) * step;
-        int n = (int) Math.floor((hi - start) / step) + 1;
-        double[] out = new double[Math.max(0, Math.min(n, 1000))];
+        final double start = Math.ceil(lo / step) * step;
+        final int n = (int) Math.floor((hi - start) / step) + 1;
+        final double[] out = new double[Math.max(0, Math.min(n, 1000))];
         for (int i = 0; i < out.length; i++) {
             out[i] = start + (double) i * step;
         }
         return out;
     }
 
-    static String time(double millis, double range) {
-        Instant t = Instant.ofEpochMilli((long) millis);
+    static String time(final double millis, final double range) {
+        final Instant t = Instant.ofEpochMilli((long) millis);
         if (range < 10_000L) {
             return TIME_MILLIS.format(t);
         }

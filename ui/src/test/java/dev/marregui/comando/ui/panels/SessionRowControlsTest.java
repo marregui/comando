@@ -1,9 +1,10 @@
 package dev.marregui.comando.ui.panels;
 
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.SessionState;
-import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the checkpoint shows while the session has a checkpoint command, running or not
 class SessionRowControlsTest {
 
-    private static SessionState closed(String conversation, String checkpoint) {
-        SessionSpec spec = SessionSpec.fresh("s", "/tmp").withCheckpoint(checkpoint);
+    private static SessionState closed(final String conversation, final String checkpoint) {
+        final SessionSpec spec = SessionSpec.fresh("s", "/tmp").withCheckpoint(checkpoint);
         return SessionState.closed(conversation.isEmpty() ? spec : spec.resumable(conversation));
     }
 

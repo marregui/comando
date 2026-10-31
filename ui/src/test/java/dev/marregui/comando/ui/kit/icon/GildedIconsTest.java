@@ -1,11 +1,12 @@
 package dev.marregui.comando.ui.kit.icon;
 
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.kit.theme.Theme;
+import java.awt.Color;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.awt.Color;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,7 +44,7 @@ class GildedIconsTest {
     void aNameNoTintHasIsTreasureAndTheRampRunsFromHighlightThroughBodyToShade() {
         assertThat(Tint.named("COPPER")).isEqualTo(Tint.TREASURE);
         assertThat(Tint.named("CHAMPAGNE")).isEqualTo(Tint.CHAMPAGNE);
-        for (Tint g : Tint.values()) {
+        for (final Tint g : Tint.values()) {
             assertThat(g.at(0f)).isEqualTo(g.highlight);
             assertThat(g.at(0.45f)).isEqualTo(g.body);
             assertThat(g.at(1f)).isEqualTo(g.shade);

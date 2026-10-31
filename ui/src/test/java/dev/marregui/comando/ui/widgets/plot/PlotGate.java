@@ -1,8 +1,5 @@
 package dev.marregui.comando.ui.widgets.plot;
 
-import dev.marregui.comando.core.view.ViewSpec;
-
-import javax.swing.SwingUtilities;
 import java.awt.Graphics2D;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -12,6 +9,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import javax.swing.SwingUtilities;
+
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * The plot's frame-time gate: a {@link PlotCanvas} over 4 series of 200 000 points in a 1600 x 900 viewport, each frame
@@ -55,7 +55,7 @@ public final class PlotGate {
         final Thread watch = new Thread(() -> {
             try {
                 Thread.sleep(EXIT_GRACE_MILLIS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 return;
             }
             System.out.println("GATE FAILED: the JVM is still alive " + EXIT_GRACE_MILLIS + " ms after the measurement; "

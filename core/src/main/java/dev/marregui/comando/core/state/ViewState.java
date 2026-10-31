@@ -1,9 +1,9 @@
 package dev.marregui.comando.core.state;
 
+import java.util.Objects;
+
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
-
-import java.util.Objects;
 
 /**
  * A view placed by Claude or the user.
@@ -21,11 +21,11 @@ public record ViewState(long id, String title, ViewSpec spec, Placement placemen
         Objects.requireNonNull(session, "session");
     }
 
-    public ViewState replaced(ViewSpec newSpec) {
+    public ViewState replaced(final ViewSpec newSpec) {
         return new ViewState(id, title, newSpec, placement, pinned, session, version + 1);
     }
 
-    public ViewState withPinned(boolean newPinned) {
+    public ViewState withPinned(final boolean newPinned) {
         return new ViewState(id, title, spec, placement, newPinned, session, version);
     }
 }

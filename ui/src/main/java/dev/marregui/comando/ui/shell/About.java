@@ -1,25 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.commonmark.ext.gfm.tables.TableBlock;
-import org.commonmark.ext.gfm.tables.TableBody;
-import org.commonmark.ext.gfm.tables.TableRow;
-import org.commonmark.ext.gfm.tables.TablesExtension;
-import org.commonmark.node.Code;
-import org.commonmark.node.Heading;
-import org.commonmark.node.Link;
-import org.commonmark.node.Node;
-import org.commonmark.node.Paragraph;
-import org.commonmark.node.SoftLineBreak;
-import org.commonmark.node.Text;
-import org.commonmark.parser.Parser;
-
-import javax.swing.AbstractAction;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -60,6 +40,27 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+
+import org.commonmark.ext.gfm.tables.TableBlock;
+import org.commonmark.ext.gfm.tables.TableBody;
+import org.commonmark.ext.gfm.tables.TableRow;
+import org.commonmark.ext.gfm.tables.TablesExtension;
+import org.commonmark.node.Code;
+import org.commonmark.node.Heading;
+import org.commonmark.node.Link;
+import org.commonmark.node.Node;
+import org.commonmark.node.Paragraph;
+import org.commonmark.node.SoftLineBreak;
+import org.commonmark.node.Text;
+import org.commonmark.parser.Parser;
+
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * About comando: its icon, name and tagline, the facts of this installation, a few links and the maker's line, worded
@@ -91,23 +92,23 @@ final class About {
     }
 
     /** The content of {@code about.md} with this run's {@code values}. */
-    static Content load(Map<String, String> values) {
+    static Content load(final Map<String, String> values) {
         try (InputStream in = About.class.getResourceAsStream("about.md")) {
             if (in == null) {
                 throw new IllegalStateException("about.md is missing from the build");
             }
             return parse(new String(in.readAllBytes(), StandardCharsets.UTF_8), values);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException("cannot read about.md", e);
         }
     }
 
     /** {@code markdown} as About's content, its placeholders replaced by {@code values}; any other stays as written. */
-    static Content parse(String markdown, Map<String, String> values) {
+    static Content parse(final String markdown, final Map<String, String> values) {
         String name = "";
-        List<String> paragraphs = new ArrayList<>();
-        List<Row> rows = new ArrayList<>();
-        List<Way> links = new ArrayList<>();
+        final List<String> paragraphs = new ArrayList<>();
+        final List<Row> rows = new ArrayList<>();
+        final List<Way> links = new ArrayList<>();
         for (Node n = PARSER.parse(markdown).getFirstChild(); n != null; n = n.getNext()) {
             if (n instanceof Heading h && name.isEmpty()) {
                 name = fill(text(h), values);
@@ -124,21 +125,21 @@ final class About {
             }
         }
         // the first paragraph is the tagline, the last the maker's line
-        String tagline = paragraphs.isEmpty() ? "" : paragraphs.getFirst();
-        String footer = paragraphs.size() < 2 ? "" : paragraphs.getLast();
+        final String tagline = paragraphs.isEmpty() ? "" : paragraphs.getFirst();
+        final String footer = paragraphs.size() < 2 ? "" : paragraphs.getLast();
         return new Content(name, tagline, List.copyOf(rows), List.copyOf(links), footer);
     }
 
-    private static List<Row> rows(TableBlock table, Map<String, String> values) {
-        List<Row> rows = new ArrayList<>();
+    private static List<Row> rows(final TableBlock table, final Map<String, String> values) {
+        final List<Row> rows = new ArrayList<>();
         for (Node part = table.getFirstChild(); part != null; part = part.getNext()) {
             if (!(part instanceof TableBody body)) {
                 continue; // the head: About's table has no titles
             }
             for (Node r = body.getFirstChild(); r != null; r = r.getNext()) {
                 if (r instanceof TableRow row && row.getFirstChild() != null && row.getFirstChild().getNext() != null) {
-                    String label = fill(text(row.getFirstChild()), values);
-                    String value = fill(text(row.getFirstChild().getNext()), values);
+                    final String label = fill(text(row.getFirstChild()), values);
+                    final String value = fill(text(row.getFirstChild().getNext()), values);
                     if (!value.isBlank()) {
                         rows.add(new Row(label, value));
                     }
@@ -148,7 +149,7 @@ final class About {
         return rows;
     }
 
-    private static boolean hasLink(Paragraph p) {
+    private static boolean hasLink(final Paragraph p) {
         for (Node c = p.getFirstChild(); c != null; c = c.getNext()) {
             if (c instanceof Link) {
                 return true;
@@ -157,13 +158,13 @@ final class About {
         return false;
     }
 
-    private static String text(Node node) {
-        StringBuilder out = new StringBuilder();
+    private static String text(final Node node) {
+        final StringBuilder out = new StringBuilder();
         collect(node, out);
         return out.toString().strip();
     }
 
-    private static void collect(Node node, StringBuilder out) {
+    private static void collect(final Node node, final StringBuilder out) {
         for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
             switch (c) {
                 case Text t -> out.append(t.getLiteral());
@@ -174,11 +175,11 @@ final class About {
         }
     }
 
-    private static String fill(String text, Map<String, String> values) {
-        Matcher m = PLACEHOLDER.matcher(text);
-        StringBuilder out = new StringBuilder();
+    private static String fill(final String text, final Map<String, String> values) {
+        final Matcher m = PLACEHOLDER.matcher(text);
+        final StringBuilder out = new StringBuilder();
         while (m.find()) {
-            String value = values.get(m.group(1));
+            final String value = values.get(m.group(1));
             m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group()));
         }
         m.appendTail(out);
@@ -190,12 +191,12 @@ final class About {
      * ({@code claude}, empty when none has started), the system, the data root {@code home} (the home folder as
      * {@code ~}) and the year.
      */
-    static Map<String, String> facts(String version, Path home, String claude) {
-        Map<String, String> v = new HashMap<>();
+    static Map<String, String> facts(final String version, final Path home, final String claude) {
+        final Map<String, String> v = new HashMap<>();
         v.put("version", version == null ? "" : version);
         v.put("java", Runtime.version() + " · " + System.getProperty("java.vendor", ""));
         v.put("claude", claude == null ? "" : claude);
-        String os = System.getProperty("os.name", "");
+        final String os = System.getProperty("os.name", "");
         v.put("system", (os.startsWith("Mac") ? "macOS" : os) + " " + System.getProperty("os.version", "") + " · "
                 + System.getProperty("os.arch", ""));
         v.put("home", home == null ? "" : Labels.shortPath(home.toAbsolutePath().toString()));
@@ -207,30 +208,30 @@ final class About {
      * Shows About over {@code owner}: borderless, rounded, centred on it; {@code follow} gets the target of a link
      * clicked, after the window closes.
      */
-    static JDialog show(Window owner, Content content, Consumer<String> follow) {
-        JDialog d = new JDialog(owner, "About " + content.name());
+    static JDialog show(final Window owner, final Content content, final Consumer<String> follow) {
+        final JDialog d = new JDialog(owner, "About " + content.name());
         d.setUndecorated(true);
         d.setBackground(Theme.CLEAR);
         d.getRootPane().setOpaque(false);
         d.getRootPane().putClientProperty("Window.shadow", Boolean.TRUE);
-        Card card = new Card(content, target -> {
+        final Card card = new Card(content, target -> {
             d.dispose();
             follow.accept(target);
         });
         d.setContentPane(card);
-        for (KeyStroke k : List.of(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+        for (final KeyStroke k : List.of(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 KeyStroke.getKeyStroke(KeyEvent.VK_W, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()))) {
             d.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(k, "close");
         }
         d.getRootPane().getActionMap().put("close", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 d.dispose();
             }
         });
         d.addWindowFocusListener(new WindowAdapter() {
             @Override
-            public void windowLostFocus(WindowEvent e) {
+            public void windowLostFocus(final WindowEvent e) {
                 d.dispose();
             }
         });
@@ -274,41 +275,41 @@ final class About {
         private BufferedImage shadow;
         private int iconPixels;
 
-        Card(Content content, Consumer<String> follow) {
+        Card(final Content content, final Consumer<String> follow) {
             this.content = content;
             this.follow = follow;
             this.tagline = lines(content.tagline(), TAGLINE, WIDTH - 2 * SIDE - 20);
             this.height = layoutHeight();
             setOpaque(false);
-            MouseAdapter mouse = new MouseAdapter() {
+            final MouseAdapter mouse = new MouseAdapter() {
                 @Override
-                public void mouseMoved(MouseEvent e) {
+                public void mouseMoved(final MouseEvent e) {
                     hover(linkAt(e.getPoint()));
                 }
 
                 @Override
-                public void mouseExited(MouseEvent e) {
+                public void mouseExited(final MouseEvent e) {
                     hover(-1);
                 }
 
                 @Override
-                public void mousePressed(MouseEvent e) {
+                public void mousePressed(final MouseEvent e) {
                     dragFrom = linkAt(e.getPoint()) < 0 ? e.getPoint() : null;
                 }
 
                 @Override
-                public void mouseDragged(MouseEvent e) {
+                public void mouseDragged(final MouseEvent e) {
                     // the card has no title bar: it moves by its body
-                    Window w = SwingUtilities.getWindowAncestor(Card.this);
+                    final Window w = SwingUtilities.getWindowAncestor(Card.this);
                     if (dragFrom != null && w != null) {
-                        Point at = w.getLocation();
+                        final Point at = w.getLocation();
                         w.setLocation(at.x + e.getX() - dragFrom.x, at.y + e.getY() - dragFrom.y);
                     }
                 }
 
                 @Override
-                public void mouseClicked(MouseEvent e) {
-                    int i = linkAt(e.getPoint());
+                public void mouseClicked(final MouseEvent e) {
+                    final int i = linkAt(e.getPoint());
                     if (i >= 0) {
                         follow.accept(content.links().get(i).target());
                     }
@@ -324,7 +325,7 @@ final class About {
         }
 
         /** The index of the link at {@code p}, or -1. */
-        int linkAt(Point p) {
+        int linkAt(final Point p) {
             for (int i = 0; i < linkBounds.size(); i++) {
                 if (linkBounds.get(i).contains(p)) {
                     return i;
@@ -338,7 +339,7 @@ final class About {
             return List.copyOf(linkBounds);
         }
 
-        private void hover(int i) {
+        private void hover(final int i) {
             if (i != hovered) {
                 hovered = i;
                 setCursor(Cursor.getPredefinedCursor(i >= 0 ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
@@ -351,7 +352,7 @@ final class About {
         private int layoutHeight() {
             int y = 44 + ICON + 26;
             y += lineHeight(NAME) + 6;
-            for (TextLayout l : tagline) {
+            for (final TextLayout l : tagline) {
                 y += lineHeight(l);
             }
             y += 22 + 1 + 22;
@@ -363,17 +364,17 @@ final class About {
         }
 
         @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g = (Graphics2D) graphics.create();
+        protected void paintComponent(final Graphics graphics) {
+            final Graphics2D g = (Graphics2D) graphics.create();
             try {
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
                 g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
                 g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-                int w = getWidth();
-                int h = getHeight();
-                RoundRectangle2D shape = new RoundRectangle2D.Float(0.5f, 0.5f, w - 1f, h - 1f, RADIUS * 2f, RADIUS * 2f);
+                final int w = getWidth();
+                final int h = getHeight();
+                final RoundRectangle2D shape = new RoundRectangle2D.Float(0.5f, 0.5f, w - 1f, h - 1f, RADIUS * 2f, RADIUS * 2f);
                 g.setPaint(new GradientPaint(0, 0, TOP, 0, h, BOTTOM));
                 g.fill(shape);
                 g.setColor(Theme.withAlpha(Theme.tint().body, 72));
@@ -384,7 +385,7 @@ final class About {
                 y += ICON + 26;
                 y = centred(g, layout(content.name(), NAME), INK, w, y);
                 y += 6;
-                for (TextLayout l : tagline) {
+                for (final TextLayout l : tagline) {
                     y = centred(g, l, SOFT, w, y);
                 }
                 y += 22;
@@ -407,24 +408,24 @@ final class About {
             }
         }
 
-        private int paintRows(Graphics2D g, int w, int y) {
+        private int paintRows(final Graphics2D g, final int w, int y) {
             if (content.rows().isEmpty()) {
                 return y;
             }
             float labels = 0;
             float values = 0;
-            for (Row r : content.rows()) {
+            for (final Row r : content.rows()) {
                 labels = Math.max(labels, layout(r.label().toUpperCase(Locale.ROOT), LABEL).getAdvance());
                 values = Math.max(values, layout(r.value(), VALUE).getAdvance());
             }
-            float gap = 16;
-            float valueMax = w - 2 * SIDE - labels - gap;
-            float block = labels + gap + Math.min(values, valueMax);
-            float left = (w - block) / 2f;
-            for (Row r : content.rows()) {
-                TextLayout label = layout(r.label().toUpperCase(Locale.ROOT), LABEL);
-                TextLayout value = layout(fit(r.value(), valueMax), VALUE);
-                float baseline = y + ROW / 2f + value.getAscent() / 2f - 1;
+            final float gap = 16;
+            final float valueMax = w - 2 * SIDE - labels - gap;
+            final float block = labels + gap + Math.min(values, valueMax);
+            final float left = (w - block) / 2f;
+            for (final Row r : content.rows()) {
+                final TextLayout label = layout(r.label().toUpperCase(Locale.ROOT), LABEL);
+                final TextLayout value = layout(fit(r.value(), valueMax), VALUE);
+                final float baseline = y + ROW / 2f + value.getAscent() / 2f - 1;
                 g.setColor(MUTED);
                 label.draw(g, left + labels - label.getAdvance(), baseline - 0.5f);
                 g.setColor(INK);
@@ -434,22 +435,22 @@ final class About {
             return y;
         }
 
-        private void paintLinks(Graphics2D g, int w, int y) {
-            List<TextLayout> texts = new ArrayList<>();
-            TextLayout dot = layout("·", VALUE);
-            float spacing = 14;
+        private void paintLinks(final Graphics2D g, final int w, final int y) {
+            final List<TextLayout> texts = new ArrayList<>();
+            final TextLayout dot = layout("·", VALUE);
+            final float spacing = 14;
             float total = 0;
-            for (Way l : content.links()) {
-                TextLayout t = layout(l.text().toUpperCase(Locale.ROOT), LINK);
+            for (final Way l : content.links()) {
+                final TextLayout t = layout(l.text().toUpperCase(Locale.ROOT), LINK);
                 texts.add(t);
                 total += t.getAdvance();
             }
             total += (texts.size() - 1) * (2 * spacing + dot.getAdvance());
             float x = (w - total) / 2f;
-            float baseline = y + 13;
+            final float baseline = y + 13;
             linkBounds.clear();
             for (int i = 0; i < texts.size(); i++) {
-                TextLayout t = texts.get(i);
+                final TextLayout t = texts.get(i);
                 g.setColor(i == hovered ? Theme.tint().highlight : Theme.tint().body);
                 t.draw(g, x, baseline);
                 if (i == hovered) {
@@ -467,7 +468,7 @@ final class About {
         }
 
         /** Draws {@code l} centred on the card, its top at {@code y}; returns the y below it. */
-        private static int centred(Graphics2D g, TextLayout l, Color color, int w, int y) {
+        private static int centred(final Graphics2D g, final TextLayout l, final Color color, final int w, final int y) {
             g.setColor(color);
             l.draw(g, (w - l.getAdvance()) / 2f, y + l.getAscent());
             return y + lineHeight(l);
@@ -475,11 +476,11 @@ final class About {
 
         // ---- the icon: drawn from its 1024-pixel picture at the screen's scale, over a soft shadow
 
-        private void paintIcon(Graphics2D g, int x, int y) {
-            double scale = g.getTransform().getScaleX();
-            int pixels = (int) Math.round(ICON * Math.max(1, scale));
+        private void paintIcon(final Graphics2D g, final int x, final int y) {
+            final double scale = g.getTransform().getScaleX();
+            final int pixels = (int) Math.round(ICON * Math.max(1, scale));
             if (icon == null || iconPixels != pixels) {
-                BufferedImage source = AppIcon.load();
+                final BufferedImage source = AppIcon.load();
                 if (source == null) {
                     return;
                 }
@@ -487,25 +488,25 @@ final class About {
                 shadow = shadowOf(icon);
                 iconPixels = pixels;
             }
-            Graphics2D s = (Graphics2D) g.create();
+            final Graphics2D s = (Graphics2D) g.create();
             s.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
             s.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.42f));
             s.drawImage(shadow, x - 18, y - 4, ICON + 36, ICON + 36, null);
             s.dispose();
-            Graphics2D i = (Graphics2D) g.create();
+            final Graphics2D i = (Graphics2D) g.create();
             i.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
             i.drawImage(icon, x, y, ICON, ICON, null);
             i.dispose();
         }
 
         /** {@code source} at {@code pixels} a side, halved step by step so the downscale keeps its detail. */
-        private static BufferedImage scaled(BufferedImage source, int pixels) {
+        private static BufferedImage scaled(final BufferedImage source, final int pixels) {
             BufferedImage img = source;
             int side = img.getWidth();
             do {
                 side = Math.max(pixels, side / 2);
-                BufferedImage next = new BufferedImage(side, side, BufferedImage.TYPE_INT_ARGB);
-                Graphics2D g = next.createGraphics();
+                final BufferedImage next = new BufferedImage(side, side, BufferedImage.TYPE_INT_ARGB);
+                final Graphics2D g = next.createGraphics();
                 g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
                 g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
                 g.drawImage(img, 0, 0, side, side, null);
@@ -516,11 +517,11 @@ final class About {
         }
 
         /** The icon's silhouette in black, small and padded, so drawn large it is a soft shadow. */
-        private static BufferedImage shadowOf(BufferedImage icon) {
-            int small = 14;
-            int pad = 3;
-            BufferedImage s = new BufferedImage(small + 2 * pad, small + 2 * pad, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g = s.createGraphics();
+        private static BufferedImage shadowOf(final BufferedImage icon) {
+            final int small = 14;
+            final int pad = 3;
+            final BufferedImage s = new BufferedImage(small + 2 * pad, small + 2 * pad, BufferedImage.TYPE_INT_ARGB);
+            final Graphics2D g = s.createGraphics();
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
             g.drawImage(icon, pad, pad + 1, small, small, null);
             g.setComposite(AlphaComposite.SrcIn);
@@ -532,36 +533,36 @@ final class About {
 
         // ---- type
 
-        private static Font face(String name, int style, float size, String fallback) {
-            Font f = new Font(name, Font.PLAIN, 1);
-            boolean found = !f.getFamily().equals(Font.DIALOG);
+        private static Font face(final String name, final int style, final float size, final String fallback) {
+            final Font f = new Font(name, Font.PLAIN, 1);
+            final boolean found = !f.getFamily().equals(Font.DIALOG);
             return found ? f.deriveFont(size) : new Font(fallback, style, 1).deriveFont(size);
         }
 
-        private static Font tracked(Font f, float tracking) {
+        private static Font tracked(final Font f, final float tracking) {
             return f.deriveFont(Map.of(TextAttribute.TRACKING, tracking));
         }
 
-        private static TextLayout layout(String text, Font font) {
+        private static TextLayout layout(final String text, final Font font) {
             return new TextLayout(text.isEmpty() ? " " : text, font, FRC);
         }
 
-        private static int lineHeight(Font font) {
+        private static int lineHeight(final Font font) {
             return lineHeight(layout("Hg", font));
         }
 
-        private static int lineHeight(TextLayout l) {
+        private static int lineHeight(final TextLayout l) {
             return (int) Math.ceil(l.getAscent() + l.getDescent() + l.getLeading());
         }
 
         /** {@code text} in lines no wider than {@code width}. */
-        private static List<TextLayout> lines(String text, Font font, float width) {
-            List<TextLayout> out = new ArrayList<>();
+        private static List<TextLayout> lines(final String text, final Font font, final float width) {
+            final List<TextLayout> out = new ArrayList<>();
             if (text.isEmpty()) {
                 return out;
             }
-            AttributedString s = new AttributedString(text, Map.of(TextAttribute.FONT, font));
-            LineBreakMeasurer m = new LineBreakMeasurer(s.getIterator(), FRC);
+            final AttributedString s = new AttributedString(text, Map.of(TextAttribute.FONT, font));
+            final LineBreakMeasurer m = new LineBreakMeasurer(s.getIterator(), FRC);
             while (m.getPosition() < text.length()) {
                 out.add(m.nextLayout(width));
             }
@@ -569,13 +570,13 @@ final class About {
         }
 
         /** {@code text} cut in the middle with an ellipsis until it fits {@code width}, as a long path is. */
-        static String fit(String text, float width) {
+        static String fit(final String text, final float width) {
             if (layout(text, VALUE).getAdvance() <= width) {
                 return text;
             }
             int keep = text.length() - 1;
             while (keep > 2) {
-                String cut = text.substring(0, keep / 2) + "…" + text.substring(text.length() - (keep - keep / 2));
+                final String cut = text.substring(0, keep / 2) + "…" + text.substring(text.length() - (keep - keep / 2));
                 if (layout(cut, VALUE).getAdvance() <= width) {
                     return cut;
                 }

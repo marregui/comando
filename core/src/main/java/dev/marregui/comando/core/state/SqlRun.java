@@ -1,8 +1,8 @@
 package dev.marregui.comando.core.state;
 
-import dev.marregui.comando.core.model.PanelId;
-
 import java.util.Objects;
+
+import dev.marregui.comando.core.model.PanelId;
 
 /**
  * One SQL statement run from a panel. Its rows live in the result registry under {@code requestId}.
@@ -43,35 +43,35 @@ public record SqlRun(
         note = note == null ? "" : note;
     }
 
-    public static SqlRun queued(long requestId, PanelId panel, String connection, String sql) {
+    public static SqlRun queued(final long requestId, final PanelId panel, final String connection, final String sql) {
         return queued(requestId, panel, connection, sql, false);
     }
 
-    public static SqlRun queued(long requestId, PanelId panel, String connection, String sql, boolean background) {
+    public static SqlRun queued(final long requestId, final PanelId panel, final String connection, final String sql, final boolean background) {
         return new SqlRun(requestId, panel, connection, sql, RunStatus.QUEUED, 0, -1L, false, 0L, 0L, 0L, "", 0L, "", false, background);
     }
 
-    public SqlRun withStatus(RunStatus newStatus) {
+    public SqlRun withStatus(final RunStatus newStatus) {
         return new SqlRun(requestId, panel, connection, sql, newStatus, rowCount, updateCount, truncated, execMillis, fetchMillis, totalMillis, error, startedMillis, note, noteFailed, background);
     }
 
-    public SqlRun withProgress(int rows, long exec, long fetch, long total) {
+    public SqlRun withProgress(final int rows, final long exec, final long fetch, final long total) {
         return new SqlRun(requestId, panel, connection, sql, RunStatus.RUNNING, rows, updateCount, truncated, exec, fetch, total, error, startedMillis, note, noteFailed, background);
     }
 
-    public SqlRun completed(int rows, long updates, boolean wasTruncated, long exec, long fetch, long total) {
+    public SqlRun completed(final int rows, final long updates, final boolean wasTruncated, final long exec, final long fetch, final long total) {
         return new SqlRun(requestId, panel, connection, sql, RunStatus.DONE, rows, updates, wasTruncated, exec, fetch, total, error, startedMillis, note, noteFailed, background);
     }
 
-    public SqlRun started(long at) {
+    public SqlRun started(final long at) {
         return new SqlRun(requestId, panel, connection, sql, RunStatus.RUNNING, rowCount, updateCount, truncated, execMillis, fetchMillis, totalMillis, error, at, note, noteFailed, background);
     }
 
-    public SqlRun withNote(String text, boolean failed) {
+    public SqlRun withNote(final String text, final boolean failed) {
         return new SqlRun(requestId, panel, connection, sql, status, rowCount, updateCount, truncated, execMillis, fetchMillis, totalMillis, error, startedMillis, text, failed, background);
     }
 
-    public SqlRun failed(String message, long total) {
+    public SqlRun failed(final String message, final long total) {
         return new SqlRun(requestId, panel, connection, sql, RunStatus.FAILED, rowCount, updateCount, truncated, execMillis, fetchMillis, total, message, startedMillis, note, noteFailed, background);
     }
 }

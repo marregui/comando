@@ -14,13 +14,13 @@ final class Args {
     private Args() {
     }
 
-    static List<String> split(String line) {
-        List<String> out = new ArrayList<>();
-        StringBuilder word = new StringBuilder();
+    static List<String> split(final String line) {
+        final List<String> out = new ArrayList<>();
+        final StringBuilder word = new StringBuilder();
         boolean inWord = false;
         char quote = 0;
         for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
+            final char c = line.charAt(i);
             if (quote == '\'') {
                 if (c == '\'') {
                     quote = 0;

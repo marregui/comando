@@ -1,7 +1,5 @@
 package dev.marregui.comando.ui;
 
-import dev.marregui.comando.core.model.PanelId;
-
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
@@ -10,6 +8,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import dev.marregui.comando.core.model.PanelId;
+
 /** Where editor text lives between runs of comando: one file per panel, in one folder. */
 public interface PanelTexts {
 
@@ -17,12 +17,12 @@ public interface PanelTexts {
      * Whether two paths name one file, as the store decides it: absolute, normalised, ignoring case (macOS's default
      * volume). The one rule for "this file is already open", in the store and in the window.
      */
-    static boolean samePath(Path a, Path b) {
+    static boolean samePath(final Path a, final Path b) {
         return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
     }
 
     /** Whether a panel on {@code file} shows a log: read-only, following its end as it grows. */
-    static boolean isLog(Path file) {
+    static boolean isLog(final Path file) {
         return file.getFileName() != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".log");
     }
 
@@ -30,8 +30,8 @@ public interface PanelTexts {
      * The title a file of the panels' folder gives the panel opened on it: its name without a {@code .md} extension, as
      * the panel's own file is named after its title.
      */
-    static String titleOf(Path file) {
-        String name = file.getFileName().toString();
+    static String titleOf(final Path file) {
+        final String name = file.getFileName().toString();
         return (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
     }
 
@@ -40,9 +40,9 @@ public interface PanelTexts {
      * of comando's own or a session's; when {@code taken} says that is some panel's title already, the name and its
      * folder, {@code README.md · docs}.
      */
-    static String documentTitle(Path file, Predicate<String> taken) {
-        String name = file.getFileName().toString().strip();
-        Path parent = file.toAbsolutePath().normalize().getParent();
+    static String documentTitle(final Path file, final Predicate<String> taken) {
+        final String name = file.getFileName().toString().strip();
+        final Path parent = file.toAbsolutePath().normalize().getParent();
         if (!taken.test(name) || parent == null) {
             return name;
         }
@@ -58,7 +58,7 @@ public interface PanelTexts {
     void forget(PanelId panel);
 
     /** The panel was removed: its own file is deleted, a document's stays. */
-    default void delete(PanelId panel) {
+    default void delete(final PanelId panel) {
         forget(panel);
     }
 
@@ -74,12 +74,12 @@ public interface PanelTexts {
      * Replaces {@code file}'s text, written whole or not at all, off the caller's thread; completes with null once
      * written, or with the reason it was not. A panel open on the file takes the new text as any change made outside it.
      */
-    default CompletableFuture<String> write(Path file, String text) {
+    default CompletableFuture<String> write(final Path file, final String text) {
         return CompletableFuture.completedFuture("files are not written here");
     }
 
     /** The panel's file, once it has one; it stays known after the panel closed. */
-    default Optional<Path> file(PanelId panel) {
+    default Optional<Path> file(final PanelId panel) {
         return Optional.empty();
     }
 
@@ -87,7 +87,7 @@ public interface PanelTexts {
      * True when the panel was opened on a file outside the panels' folder, a document from the Files tab or any file opened:
      * it shows as that file's language, not as the panel's own SQL and prompts.
      */
-    default boolean document(PanelId panel) {
+    default boolean document(final PanelId panel) {
         return false;
     }
 
@@ -100,7 +100,7 @@ public interface PanelTexts {
      * Binds a new panel to an existing file of the folder and loads its text, off the EDT; completes with what came of
      * it.
      */
-    default CompletableFuture<Opened> open(PanelId panel, Path file) {
+    default CompletableFuture<Opened> open(final PanelId panel, final Path file) {
         return CompletableFuture.completedFuture(Opened.refused("panel text is not kept in files"));
     }
 
@@ -111,12 +111,12 @@ public interface PanelTexts {
 
         public static final Opened BOUND = new Opened(Kind.BOUND, "");
 
-        public static Opened alreadyOpen(String name) {
+        public static Opened alreadyOpen(final String name) {
             return new Opened(Kind.ALREADY_OPEN, name + " is already open");
         }
 
         /** {@code reason} empty: bound. */
-        public static Opened refused(String reason) {
+        public static Opened refused(final String reason) {
             return reason.isEmpty() ? BOUND : new Opened(Kind.REFUSED, reason);
         }
     }
@@ -130,7 +130,7 @@ public interface PanelTexts {
     }
 
     /** Where outside changes to open panels' files are reported, from the store's thread. */
-    default void onOutsideChange(Consumer<Outside> listener) {
+    default void onOutsideChange(final Consumer<Outside> listener) {
     }
 
     /**
@@ -145,6 +145,6 @@ public interface PanelTexts {
      * Where deleted panel files are reported, from the store's thread: a document's file or a panel's own, deleted
      * outside comando while the panel had no unsaved edits; the window then removes the panel.
      */
-    default void onDeleted(Consumer<Deleted> listener) {
+    default void onDeleted(final Consumer<Deleted> listener) {
     }
 }

@@ -1,14 +1,14 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.kit.text.LocalLinks;
-import dev.marregui.comando.ui.kit.text.NoteLinks;
-
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.text.LocalLinks;
+import dev.marregui.comando.ui.kit.text.NoteLinks;
 
 /**
  * Follows a link double-clicked anywhere in comando: a web address in the browser; a file, by its path or a
@@ -37,19 +37,19 @@ public final class Links {
      * How files open, how a link that names no file is told, and the folder a session's links are read from (its
      * working directory): the shell's, once.
      */
-    public static void install(Opener opener, Consumer<String> notice, Function<String, Path> sessionFolder) {
+    public static void install(final Opener opener, final Consumer<String> notice, final Function<String, Path> sessionFolder) {
         files = opener;
         notices = notice;
         sessionFolders = sessionFolder;
     }
 
     /** The folder the links in {@code session}'s text are read from; null when the session is not known. */
-    public static Path folderOf(String session) {
+    public static Path folderOf(final String session) {
         return session == null || session.isEmpty() ? null : sessionFolders.apply(session);
     }
 
     /** Where web addresses go instead of the browser; for tests. */
-    public static void browseWith(Consumer<String> browse) {
+    public static void browseWith(final Consumer<String> browse) {
         browser = browse;
     }
 
@@ -57,12 +57,12 @@ public final class Links {
      * Follows {@code href}, a relative one read from {@code folder} (may be null); false when comando does not follow
      * it.
      */
-    public static boolean open(String href, Path folder) {
+    public static boolean open(final String href, final Path folder) {
         return open(href, folder, files);
     }
 
     /** As {@link #open(String, Path)}, a file opened by {@code opener}. Called on the EDT; the opener runs on it. */
-    public static boolean open(String href, Path folder, Opener opener) {
+    public static boolean open(final String href, final Path folder, final Opener opener) {
         if (href == null || href.isBlank()) {
             return false;
         }
@@ -71,16 +71,16 @@ public final class Links {
             return true;
         }
         if (NoteLinks.is(href)) {
-            String name = NoteLinks.name(href);
-            String heading = NoteLinks.heading(href);
+            final String name = NoteLinks.name(href);
+            final String heading = NoteLinks.heading(href);
             UiErrands.start("note-link", () -> {
-                Optional<Path> file = NoteLinks.resolve(folder, name);
-                String missing = "No file for [[" + name + "]]" + (folder == null ? "" : " under " + NoteLinks.rootOf(folder));
+                final Optional<Path> file = NoteLinks.resolve(folder, name);
+                final String missing = "No file for [[" + name + "]]" + (folder == null ? "" : " under " + NoteLinks.rootOf(folder));
                 Edt.later(() -> file.ifPresentOrElse(f -> opener.open(f, heading), () -> notices.accept(missing)));
             });
             return true;
         }
-        Optional<Path> file = LocalLinks.file(folder, href);
+        final Optional<Path> file = LocalLinks.file(folder, href);
         if (file.isEmpty()) {
             return false;
         }
@@ -89,8 +89,8 @@ public final class Links {
     }
 
     /** The heading a link names after the file's name, as written; null when it names none. */
-    public static String heading(String href) {
-        int hash = href.indexOf('#');
+    public static String heading(final String href) {
+        final int hash = href.indexOf('#');
         return hash < 0 || hash == href.length() - 1 ? null : href.substring(hash + 1);
     }
 }

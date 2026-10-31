@@ -1,17 +1,17 @@
 package dev.marregui.comando.ui.widgets.editor;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
+
 import org.fife.ui.rsyntaxtextarea.RSyntaxDocument;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
-import javax.swing.text.BadLocationException;
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -91,20 +91,20 @@ class PanelTokenMakerTest {
         });
     }
 
-    private static List<Integer> types(CommandEditor e, int line) {
-        List<Integer> out = new ArrayList<>();
+    private static List<Integer> types(final CommandEditor e, final int line) {
+        final List<Integer> out = new ArrayList<>();
         for (Token t = tokens(e, line); t != null && t.isPaintable(); t = t.getNextToken()) {
             out.add(t.getType());
         }
         return out;
     }
 
-    private static int first(CommandEditor e, int line) {
+    private static int first(final CommandEditor e, final int line) {
         return tokens(e, line).getType();
     }
 
-    private static List<String> texts(CommandEditor e, int line, int type) {
-        List<String> out = new ArrayList<>();
+    private static List<String> texts(final CommandEditor e, final int line, final int type) {
+        final List<String> out = new ArrayList<>();
         for (Token t = tokens(e, line); t != null && t.isPaintable(); t = t.getNextToken()) {
             if (t.getType() == type) {
                 out.add(t.getLexeme());
@@ -113,22 +113,22 @@ class PanelTokenMakerTest {
         return out;
     }
 
-    private static Token tokens(CommandEditor e, int line) {
+    private static Token tokens(final CommandEditor e, final int line) {
         return ((RSyntaxDocument) e.area().getDocument()).getTokenListForLine(line);
     }
 
-    private static void insert(CommandEditor e, int at, String text) {
+    private static void insert(final CommandEditor e, final int at, final String text) {
         try {
             e.area().getDocument().insertString(at, text, null);
-        } catch (BadLocationException x) {
+        } catch (final BadLocationException x) {
             throw new IllegalStateException(x);
         }
     }
 
-    private static void withEditor(String text, Consumer<CommandEditor> test) {
+    private static void withEditor(final String text, final Consumer<CommandEditor> test) {
         try {
             SwingUtilities.invokeAndWait(() -> {
-                CommandEditor e = new CommandEditor();
+                final CommandEditor e = new CommandEditor();
                 try {
                     e.load(text);
                     test.accept(e);
@@ -136,7 +136,7 @@ class PanelTokenMakerTest {
                     e.unmount();
                 }
             });
-        } catch (InvocationTargetException x) {
+        } catch (final InvocationTargetException x) {
             if (x.getCause() instanceof RuntimeException r) {
                 throw r;
             }
@@ -144,7 +144,7 @@ class PanelTokenMakerTest {
                 throw r;
             }
             throw new IllegalStateException(x.getCause());
-        } catch (InterruptedException x) {
+        } catch (final InterruptedException x) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(x);
         }

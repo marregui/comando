@@ -1,9 +1,9 @@
 package dev.marregui.comando.testkit;
 
+import java.util.List;
+
 import dev.marregui.comando.core.result.ColumnKind;
 import dev.marregui.comando.core.result.ResultView;
-
-import java.util.List;
 
 /** A small result held as rows of objects: {@code Long}, {@code Double}, {@code Boolean}, {@code String}, or null. */
 public record FakeResult(long requestId, List<String> names, List<ColumnKind> kinds, List<List<Object>> rows) implements ResultView {
@@ -14,17 +14,17 @@ public record FakeResult(long requestId, List<String> names, List<ColumnKind> ki
     }
 
     @Override
-    public String columnName(int column) {
+    public String columnName(final int column) {
         return names.get(column);
     }
 
     @Override
-    public ColumnKind kind(int column) {
+    public ColumnKind kind(final int column) {
         return kinds.get(column);
     }
 
     @Override
-    public String typeName(int column) {
+    public String typeName(final int column) {
         return kinds.get(column).name();
     }
 
@@ -34,27 +34,27 @@ public record FakeResult(long requestId, List<String> names, List<ColumnKind> ki
     }
 
     @Override
-    public boolean isNull(int row, int column) {
+    public boolean isNull(final int row, final int column) {
         return rows.get(row).get(column) == null;
     }
 
     @Override
-    public long getLong(int row, int column) {
+    public long getLong(final int row, final int column) {
         return ((Number) rows.get(row).get(column)).longValue();
     }
 
     @Override
-    public double getDouble(int row, int column) {
+    public double getDouble(final int row, final int column) {
         return ((Number) rows.get(row).get(column)).doubleValue();
     }
 
     @Override
-    public boolean getBoolean(int row, int column) {
+    public boolean getBoolean(final int row, final int column) {
         return (Boolean) rows.get(row).get(column);
     }
 
     @Override
-    public String getText(int row, int column) {
+    public String getText(final int row, final int column) {
         return String.valueOf(rows.get(row).get(column));
     }
 }

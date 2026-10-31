@@ -1,5 +1,13 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.JComponent;
+import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -18,14 +26,6 @@ import dev.marregui.comando.ui.widget.WidgetRegistry;
 import dev.marregui.comando.ui.widgets.approval.ApprovalInbox;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptView;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
-
-import javax.swing.JComponent;
-import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
-import java.awt.Component;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The lower panel: Session (the focused panel's transcript), Approvals (every session), Terminal (the focused
@@ -63,7 +63,7 @@ public final class LowerPanel {
     /** The tab in front before the last change, so the Approvals tab knows when it comes forward. EDT only. */
     private int lastSelected = SESSION;
 
-    public LowerPanel(WidgetContext context, ResultRegistry results, TranscriptRegistry transcripts, WidgetRegistry registry) {
+    public LowerPanel(final WidgetContext context, final ResultRegistry results, final TranscriptRegistry transcripts, final WidgetRegistry registry) {
         this.context = context;
         this.transcripts = transcripts;
         this.results = new ResultsView(results);
@@ -82,14 +82,14 @@ public final class LowerPanel {
             if (rendering) {
                 return;
             }
-            int i = tabs.getSelectedIndex();
-            LowerTab tab = switch (i) {
+            final int i = tabs.getSelectedIndex();
+            final LowerTab tab = switch (i) {
                 case RESULTS -> LowerTab.RESULTS;
                 case SESSION -> LowerTab.SESSION;
                 case APPROVALS -> LowerTab.APPROVALS;
                 case TERMINAL -> LowerTab.TERMINAL;
                 default -> {
-                    long id = views.viewAt(i);
+                    final long id = views.viewAt(i);
                     yield id < 0 ? null : LowerTab.view(id);
                 }
             };
@@ -99,7 +99,7 @@ public final class LowerPanel {
         });
         // the Approvals tab comes forward at its top, the oldest request first, however it was brought forward
         tabs.addChangeListener(e -> {
-            int i = tabs.getSelectedIndex();
+            final int i = tabs.getSelectedIndex();
             if (i == APPROVALS && lastSelected != APPROVALS) {
                 inbox.shown();
             }
@@ -134,12 +134,12 @@ public final class LowerPanel {
 
     /** The placed view in front, or -1 when a fixed tab (Session, Approvals, Terminal, Results) is in front. */
     public long selectedView() {
-        int i = tabs.getSelectedIndex();
+        final int i = tabs.getSelectedIndex();
         return i < FIXED_TABS ? -1 : views.viewAt(i);
     }
 
     /** The placed view whose tab holds {@code c}, or -1. */
-    public long viewHolding(Component c) {
+    public long viewHolding(final Component c) {
         for (int i = FIXED_TABS; i < tabs.getTabCount(); i++) {
             if (SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
                 return views.viewAt(i);
@@ -149,8 +149,8 @@ public final class LowerPanel {
     }
 
     /** Selects the tab {@code delta} places from the one in front, wrapping around. */
-    public void selectRelative(int delta) {
-        int n = tabs.getTabCount();
+    public void selectRelative(final int delta) {
+        final int n = tabs.getTabCount();
         if (n > 0) {
             tabs.setSelectedIndex(Math.floorMod(tabs.getSelectedIndex() + delta, n));
         }
@@ -166,23 +166,23 @@ public final class LowerPanel {
         return transcriptSession;
     }
 
-    public void render(AppState s) {
+    public void render(final AppState s) {
         rendering = true;
         try {
-            PanelState focused = s.focusedPanel();
+            final PanelState focused = s.focusedPanel();
             results.render(s.runOf(focused.id()));
             renderTranscript(focused.session());
-            String shown = focused.session();
+            final String shown = focused.session();
             transcript.setWaiting(s.approvals().stream().filter(a -> a.session().equals(shown)).toList());
             transcript.setBackgroundTasks(s.session(shown).map(SessionState::tasks).orElse(List.of()));
             // read-only already; greyed with the session's other views, its approval cards still answerable
             veil.show(s.session(shown).map(SessionState::isCheckpointing).orElse(false));
             inbox.render(s.approvals());
-            int pending = s.approvals().size();
+            final int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, pending == 0 ? "Approvals" : "Approvals (" + pending + ")");
             tabs.setForegroundAt(APPROVALS, pending == 0 ? null : Theme.ATTENTION);
             views.render(s.views());
-            int want = switch (s.lowerTab().kind()) {
+            final int want = switch (s.lowerTab().kind()) {
                 case RESULTS -> RESULTS;
                 case SESSION -> SESSION;
                 case APPROVALS -> APPROVALS;
@@ -202,34 +202,34 @@ public final class LowerPanel {
     }
 
     /** A run of the focused panel that ended while Results was not in front gets a dot until Results is shown. */
-    private void markResults(AppState s) {
-        SqlRun run = s.runOf(s.focused()).orElse(null);
-        boolean showing = tabs.getSelectedIndex() == RESULTS;
-        String now = run == null ? "" : run.requestId() + ":" + run.status();
+    private void markResults(final AppState s) {
+        final SqlRun run = s.runOf(s.focused()).orElse(null);
+        final boolean showing = tabs.getSelectedIndex() == RESULTS;
+        final String now = run == null ? "" : run.requestId() + ":" + run.status();
         if (showing || run == null) {
             seenRun.put(s.focused(), now);
         } else {
             seenRun.putIfAbsent(s.focused(), now); // a panel seen for the first time has nothing new
         }
-        boolean unseen = run != null && !run.status().isActive() && !now.equals(seenRun.get(s.focused()));
+        final boolean unseen = run != null && !run.status().isActive() && !now.equals(seenRun.get(s.focused()));
         title(RESULTS, "Results", unseen);
     }
 
     /** New transcript content while Session is not in front gets a dot until Session is shown. */
     private void markSession() {
-        Transcript t = transcriptSession.isEmpty() ? null : transcripts.of(transcriptSession);
-        long version = t == null ? 0 : t.version();
-        boolean showing = tabs.getSelectedIndex() == SESSION;
-        Long seen = seenTranscript.get(transcriptSession);
+        final Transcript t = transcriptSession.isEmpty() ? null : transcripts.of(transcriptSession);
+        final long version = t == null ? 0 : t.version();
+        final boolean showing = tabs.getSelectedIndex() == SESSION;
+        final Long seen = seenTranscript.get(transcriptSession);
         if (showing || seen == null) {
             seenTranscript.put(transcriptSession, version);
         }
-        boolean unseen = !showing && seen != null && version > seen;
+        final boolean unseen = !showing && seen != null && version > seen;
         title(SESSION, "Session", unseen);
     }
 
-    private void title(int index, String name, boolean marked) {
-        String title = marked ? name + " ●" : name;
+    private void title(final int index, final String name, final boolean marked) {
+        final String title = marked ? name + " ●" : name;
         if (!tabs.getTitleAt(index).equals(title)) {
             tabs.setTitleAt(index, title);
             tabs.setForegroundAt(index, marked ? Theme.tint().body : null);
@@ -237,7 +237,7 @@ public final class LowerPanel {
     }
 
     /** Re-renders the Session tab; called when the shown transcript grew. */
-    public void renderTranscript(String session) {
+    public void renderTranscript(final String session) {
         transcriptSession = session;
         transcript.render(session.isEmpty() ? null : new TranscriptView(session, transcripts.of(session)));
         markSession();
@@ -248,7 +248,7 @@ public final class LowerPanel {
      * blocks, and no turn writes more. The conversation itself goes on.
      */
     public boolean canClearTranscript() {
-        boolean busy = state != null && state.session(transcriptSession).map(SessionState::isBusy).orElse(false);
+        final boolean busy = state != null && state.session(transcriptSession).map(SessionState::isBusy).orElse(false);
         return !transcriptSession.isEmpty() && !busy && transcripts.of(transcriptSession).size() > 0;
     }
 
@@ -259,7 +259,7 @@ public final class LowerPanel {
         }
     }
 
-    private static JTabbedPane named(JTabbedPane tabs, String name) {
+    private static JTabbedPane named(final JTabbedPane tabs, final String name) {
         tabs.setName(name);
         return tabs;
     }

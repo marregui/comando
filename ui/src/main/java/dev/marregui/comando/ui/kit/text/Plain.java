@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.kit.text;
 
+import java.util.Locale;
 import javax.swing.AbstractButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import java.util.Locale;
 
 /**
  * Text shown as text. Swing renders a label, button, tooltip, tab title or cell whose text starts with
@@ -20,11 +20,11 @@ public final class Plain {
     }
 
     /** {@code text}, with an invisible guard in front when Swing would render it as HTML. */
-    public static String text(String text) {
+    public static String text(final String text) {
         if (text == null || text.length() < 6) {
             return text;
         }
-        String head = text.substring(0, 6).toLowerCase(Locale.ROOT);
+        final String head = text.substring(0, 6).toLowerCase(Locale.ROOT);
         return head.equals("<html>") ? GUARD + text : text;
     }
 
@@ -33,14 +33,14 @@ public final class Plain {
      * the property when the text is set, so create the component without text, call this, then set the text;
      * text already set is set again so it is rebuilt without HTML.
      */
-    public static <T extends JComponent> T only(T c) {
+    public static <T extends JComponent> T only(final T c) {
         c.putClientProperty("html.disable", Boolean.TRUE);
         if (c instanceof JLabel l && l.getText() != null && !l.getText().isEmpty()) {
-            String t = l.getText();
+            final String t = l.getText();
             l.setText("");
             l.setText(t);
         } else if (c instanceof AbstractButton b && b.getText() != null && !b.getText().isEmpty()) {
-            String t = b.getText();
+            final String t = b.getText();
             b.setText("");
             b.setText(t);
         }

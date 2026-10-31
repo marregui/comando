@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import org.junit.jupiter.api.Test;
-
 import java.awt.Color;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,8 +21,8 @@ class NamedThemeTest {
     void twelveThemesSixDarkAndTheirSixLightTwins() {
         assertThat(NamedTheme.values()).hasSize(12);
         assertThat(Arrays.stream(NamedTheme.values()).map(t -> t.ground).distinct()).as("one theme per ground").hasSize(12);
-        List<NamedTheme> dark = Arrays.stream(NamedTheme.values()).filter(t -> !t.ground.light).toList();
-        List<NamedTheme> light = Arrays.stream(NamedTheme.values()).filter(t -> t.ground.light).toList();
+        final List<NamedTheme> dark = Arrays.stream(NamedTheme.values()).filter(t -> !t.ground.light).toList();
+        final List<NamedTheme> light = Arrays.stream(NamedTheme.values()).filter(t -> t.ground.light).toList();
         assertThat(dark).hasSize(6).allMatch(t -> t.twin.isEmpty() && !t.tint.light);
         assertThat(light).hasSize(6).allMatch(t -> t.tint.light).first().isEqualTo(NamedTheme.PAPER_OCHRE);
         assertThat(light).extracting(t -> t.twin.orElseThrow()).as("each dark theme's twin, in their order")
@@ -56,7 +56,7 @@ class NamedThemeTest {
         assertThat(NamedTheme.closest(Optional.of(Ground.EVERGREEN), Tint.SILVER)).as("the ground chosen wins")
                 .isEqualTo(NamedTheme.EVERGREEN_FOREST);
         assertThat(NamedTheme.closest(Optional.empty(), Tint.CHAMPAGNE)).as("a tint alone").isEqualTo(NamedTheme.ESPRESSO_CHAMPAGNE);
-        Ground onyx = new Ground("ONYX", "Onyx", new Color(0x0A0A0B));
+        final Ground onyx = new Ground("ONYX", "Onyx", new Color(0x0A0A0B));
         assertThat(NamedTheme.closest(Optional.of(onyx), Tint.SILVER)).as("a ground no theme has, then the tint")
                 .isEqualTo(NamedTheme.SLATE_SILVER);
         assertThat(NamedTheme.closest(Optional.empty(), Tint.TREASURE)).isEqualTo(NamedTheme.GRAPHITE_GOLD);

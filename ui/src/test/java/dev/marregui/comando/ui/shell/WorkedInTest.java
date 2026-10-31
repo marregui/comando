@@ -1,13 +1,14 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.ui.kit.desktop.FileSearch;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.ui.kit.desktop.FileSearch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,12 +24,12 @@ class WorkedInTest {
     /// [dev.marregui.comando.ui.kit.desktop.FileSearch#bySuffix] find a file under them.
     @Test
     void theRepositoriesOfTheFilesASessionsCallsNamedTheLatestFirst() throws Exception {
-        Path repo = Files.createDirectories(tmp.resolve("comando"));
+        final Path repo = Files.createDirectories(tmp.resolve("comando"));
         Files.createDirectories(repo.resolve(".git"));
-        Path doc = Files.createDirectories(repo.resolve("docs")).resolve("workbench.md");
+        final Path doc = Files.createDirectories(repo.resolve("docs")).resolve("workbench.md");
         Files.writeString(doc, "# Workbench\n");
-        Path loose = Files.createDirectories(tmp.resolve("loose"));
-        Transcript t = new Transcript();
+        final Path loose = Files.createDirectories(tmp.resolve("loose"));
+        final Transcript t = new Transcript();
         t.append(new Block.ToolCall("1", "Read", "{\"file_path\":\"" + loose.resolve("a.txt") + "\"}", "", Block.ToolStatus.DONE, ""));
         t.append(new Block.ToolCall("2", "Edit", "{\"file_path\":\"" + repo.resolve("ui/src/X.java") + "\"}", "", Block.ToolStatus.DONE, ""));
         t.append(new Block.ToolCall("3", "Grep", "{\"pattern\":\"x\",\"path\":\"relative/not/taken\"}", "", Block.ToolStatus.DONE, ""));

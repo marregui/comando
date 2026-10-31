@@ -1,5 +1,11 @@
 package dev.marregui.comando.core.loop;
 
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
@@ -7,12 +13,6 @@ import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.reduce.Transition;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
-
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 /**
  * The single thread that owns the state. Intents from every producer enter one queue; the loop applies
@@ -112,12 +112,12 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     // written by the watchdog's log of a hang, read by the log of its end on the loop's thread
     private volatile Logged hangLogged;
 
-    public StateLoop(AppState initial, Reducer reducer, EffectHandler effects) {
+    public StateLoop(final AppState initial, final Reducer reducer, final EffectHandler effects) {
         this(initial, reducer, effects, STALL_MILLIS, HANG_MILLIS, null);
     }
 
     /** With other limits and a receiver of every stall in place of the log; for tests. */
-    StateLoop(AppState initial, Reducer reducer, EffectHandler effects, long stallMillis, long hangMillis, Consumer<Stall> stalls) {
+    StateLoop(final AppState initial, final Reducer reducer, final EffectHandler effects, final long stallMillis, final long hangMillis, final Consumer<Stall> stalls) {
         this.state = initial;
         this.reducer = reducer;
         this.effects = effects;
@@ -134,7 +134,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     }
 
     @Override
-    public void dispatch(Intent intent) {
+    public void dispatch(final Intent intent) {
         final Error failed = failure;
         if (failed != null) {
             if (failureTold.compareAndSet(false, true)) {
@@ -157,20 +157,20 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         return failure;
     }
 
-    public void addListener(Listener listener) {
+    public void addListener(final Listener listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(Listener listener) {
+    public void removeListener(final Listener listener) {
         listeners.remove(listener);
     }
 
-    public void addObserver(IntentObserver observer) {
+    public void addObserver(final IntentObserver observer) {
         observers.add(observer);
     }
 
     /** Applies one intent on the caller's thread; for tests that drive the loop without its thread. */
-    public void applyNow(Intent intent) {
+    public void applyNow(final Intent intent) {
         apply(intent);
     }
 
@@ -180,7 +180,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             Intent intent;
             try {
                 intent = queue.take();
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
@@ -203,11 +203,11 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         }
     }
 
-    private void apply(Intent intent) {
-        long start = System.nanoTime();
+    private void apply(final Intent intent) {
+        final long start = System.nanoTime();
         try {
             enter(start, "observe");
-            for (IntentObserver o : observers) {
+            for (final IntentObserver o : observers) {
                 try {
                     o.observe(intent);
                 } catch (final RuntimeException e) {
@@ -215,7 +215,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
                             + ", intent=" + intent.getClass().getSimpleName() + ']', e);
                 }
             }
-            AppState previous = state;
+            final AppState previous = state;
             Transition t;
             enter(start, "reduce " + intent.getClass().getSimpleName());
             try {
@@ -226,20 +226,20 @@ public final class StateLoop implements IntentSink, AutoCloseable {
                 return;
             }
             state = t.state();
-            for (Effect effect : t.effects()) {
+            for (final Effect effect : t.effects()) {
                 enter(start, "effect " + effect.getClass().getSimpleName());
                 try {
                     effects.handle(effect);
-                } catch (RuntimeException e) {
+                } catch (final RuntimeException e) {
                     LOG.log(System.Logger.Level.ERROR, "effect failed [effect=" + effect.getClass().getSimpleName() + ']', e);
                 }
             }
             if (previous != t.state()) {
                 enter(start, "listeners");
-                for (Listener l : listeners) {
+                for (final Listener l : listeners) {
                     try {
                         l.onState(previous, t.state());
-                    } catch (RuntimeException e) {
+                    } catch (final RuntimeException e) {
                         LOG.log(System.Logger.Level.ERROR, "cannot notify a listener [listener=" + l.getClass().getName() + ']', e);
                     }
                 }
@@ -250,9 +250,9 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     }
 
     /** Ends the part under way, keeping it if it is the slowest so far, and starts {@code part}. */
-    private void enter(long start, String part) {
-        long now = System.nanoTime();
-        Busy b = busy;
+    private void enter(final long start, final String part) {
+        final long now = System.nanoTime();
+        final Busy b = busy;
         if (b != null && b.sinceNanos() == start && now - partStart > slowestNanos) {
             slowestNanos = now - partStart;
             slowestPart = b.part();
@@ -261,9 +261,9 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         busy = part == null ? null : new Busy(start, part, Thread.currentThread());
     }
 
-    private void finish(long start) {
+    private void finish(final long start) {
         enter(start, null);
-        long millis = (System.nanoTime() - start) / 1_000_000;
+        final long millis = (System.nanoTime() - start) / 1_000_000;
         if (millis >= stallMillis) {
             stalls.accept(new Stall(slowestPart, millis, true, "", start));
         }
@@ -276,9 +276,9 @@ public final class StateLoop implements IntentSink, AutoCloseable {
      * applied what was queued, so the shutdown is watched too.
      */
     private void look() {
-        Busy b = busy;
+        final Busy b = busy;
         if (b != null && b.sinceNanos() != hangTold) {
-            long millis = (System.nanoTime() - b.sinceNanos()) / 1_000_000;
+            final long millis = (System.nanoTime() - b.sinceNanos()) / 1_000_000;
             if (millis >= hangMillis) {
                 hangTold = b.sinceNanos();
                 stalls.accept(new Stall(b.part(), millis, false, format(b.thread().getStackTrace()), b.sinceNanos()));
@@ -292,17 +292,17 @@ public final class StateLoop implements IntentSink, AutoCloseable {
      * click on the notice opens the log at the hang's stack, or at the end's line when the hang ended before the
      * watchdog looked.
      */
-    private void log(Stall stall) {
+    private void log(final Stall stall) {
         if (!stall.ended()) {
             // known before the entry is written: the intent can end while the log writes it
             hangLogged = new Logged(stall.since(), System.currentTimeMillis());
             LOG.log(System.Logger.Level.WARNING, "the reducer has not finished an intent for " + stall.millis() + " ms [part="
                     + stall.part() + "]:\n" + stall.stack());
         } else if (stall.millis() >= hangMillis) {
-            long at = System.currentTimeMillis();
+            final long at = System.currentTimeMillis();
             LOG.log(System.Logger.Level.WARNING, "the reducer finished an intent after " + stall.millis() + " ms [part=" + stall.part() + ']');
-            Logged hang = hangLogged;
-            long where = hang != null && hang.since() == stall.since() ? hang.atMillis() : at;
+            final Logged hang = hangLogged;
+            final long where = hang != null && hang.since() == stall.since() ? hang.atMillis() : at;
             dispatch(new Intent.Notify(Notice.Level.WARN, "comando stopped updating for " + stall.millis()
                     + " ms; click to see where in the log", false, Notice.log(where)));
         } else {
@@ -310,8 +310,8 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         }
     }
 
-    private static String format(StackTraceElement[] frames) {
-        StringBuilder sb = new StringBuilder();
+    private static String format(final StackTraceElement[] frames) {
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < Math.min(frames.length, 40); i++) {
             sb.append("\tat ").append(frames[i]).append('\n');
         }
@@ -328,17 +328,17 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         queue.add(STOP);
         try {
             thread.join(TimeUnit.SECONDS.toMillis(2));
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         // a failure counted since its last line is told before the loop goes
         reduceFailures.flush();
         applyFailures.flush();
-        AutoCloseable w = watchdog;
+        final AutoCloseable w = watchdog;
         if (w != null) {
             try {
                 w.close();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot stop watching the loop", e);
             }
         }

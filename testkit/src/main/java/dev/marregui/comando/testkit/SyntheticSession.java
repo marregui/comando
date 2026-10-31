@@ -1,11 +1,11 @@
 package dev.marregui.comando.testkit;
 
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 
 /**
  * A deterministic session for rendering measurements: eight turns with Markdown text (headings, lists, code, tables,
@@ -22,27 +22,27 @@ public final class SyntheticSession {
     private SyntheticSession() {
     }
 
-    public static List<Step> steps(int deltaChars) {
-        Random r = new Random(42);
-        List<Step> out = new ArrayList<>();
-        int[] size = {0};
-        String[] tools = {"Bash", "Read", "Grep", "Edit", "Bash"};
+    public static List<Step> steps(final int deltaChars) {
+        final Random r = new Random(42);
+        final List<Step> out = new ArrayList<>();
+        final int[] size = {0};
+        final String[] tools = {"Bash", "Read", "Grep", "Edit", "Bash"};
         int call = 0;
         for (int turn = 0; turn < 8; turn++) {
             append(out, size, new Block.UserPrompt(prompt(turn), "main", ""));
             append(out, size, new Block.Thinking("m" + turn, 0, "Considering the request: " + words(r, 40), 120, false, ""));
             stream(out, size, "m" + turn, 1, markdown(r, turn), deltaChars, "");
-            for (String tool : tools) {
-                String id = "toolu_" + call++;
-                Block.ToolCall running = new Block.ToolCall(id, tool, input(tool, r, call), "", Block.ToolStatus.RUNNING, "");
-                int at = append(out, size, running);
+            for (final String tool : tools) {
+                final String id = "toolu_" + call++;
+                final Block.ToolCall running = new Block.ToolCall(id, tool, input(tool, r, call), "", Block.ToolStatus.RUNNING, "");
+                final int at = append(out, size, running);
                 out.add(new Step(at, running.withResult(result(tool, r), call % 13 == 0)));
             }
             if (turn == 4) {
-                String id = "toolu_agent";
-                Block.ToolCall agent = new Block.ToolCall(id, "Agent", "{\"description\":\"survey the module\",\"prompt\":\"List the classes.\"}",
+                final String id = "toolu_agent";
+                final Block.ToolCall agent = new Block.ToolCall(id, "Agent", "{\"description\":\"survey the module\",\"prompt\":\"List the classes.\"}",
                         "", Block.ToolStatus.RUNNING, "");
-                int at = append(out, size, agent);
+                final int at = append(out, size, agent);
                 append(out, size, new Block.UserPrompt("List the classes.", "subagent", id));
                 stream(out, size, "sub", 0, "The module has **12 classes**; the entry point is `core/Reducer.java:42`.", deltaChars, id);
                 out.add(new Step(at, agent.withResult("The module has 12 classes.", false)));
@@ -55,8 +55,8 @@ public final class SyntheticSession {
 
     /** Applies every step to a transcript, the final state of the session. */
     public static Transcript transcript() {
-        Transcript t = new Transcript();
-        for (Step s : steps(10_000)) {
+        final Transcript t = new Transcript();
+        for (final Step s : steps(10_000)) {
             if (s.index() < 0) {
                 t.append(s.block());
             } else {
@@ -66,14 +66,14 @@ public final class SyntheticSession {
         return t;
     }
 
-    private static int append(List<Step> out, int[] size, Block b) {
+    private static int append(final List<Step> out, final int[] size, final Block b) {
         out.add(new Step(-1, b));
         return size[0]++;
     }
 
-    private static void stream(List<Step> out, int[] size, String id, int index, String text, int delta, String parent) {
+    private static void stream(final List<Step> out, final int[] size, final String id, final int index, final String text, final int delta, final String parent) {
         Block.AssistantText b = new Block.AssistantText(id, index, text.substring(0, Math.min(delta, text.length())), true, parent);
-        int at = append(out, size, b);
+        final int at = append(out, size, b);
         for (int end = delta * 2; end < text.length(); end += delta) {
             b = b.appended(text.substring(end - delta, end));
             out.add(new Step(at, b));
@@ -81,7 +81,7 @@ public final class SyntheticSession {
         out.add(new Step(at, b.finished(text)));
     }
 
-    private static String prompt(int turn) {
+    private static String prompt(final int turn) {
         return switch (turn % 4) {
             case 0 -> "Why does the cancel path take eleven seconds? Look at db/Lane.java and the driver settings.";
             case 1 -> "Fix it, then run the tests.";
@@ -90,8 +90,8 @@ public final class SyntheticSession {
         };
     }
 
-    private static String markdown(Random r, int turn) {
-        StringBuilder sb = new StringBuilder();
+    private static String markdown(final Random r, final int turn) {
+        final StringBuilder sb = new StringBuilder();
         sb.append("## Finding ").append(turn + 1).append("\n\n");
         sb.append(words(r, 60)).append(" The call blocks in `Statement.cancel()` at `db/src/main/java/dev/marregui/comando/db/Lane.java:")
                 .append(100 + turn).append("`.\n\n");
@@ -114,7 +114,7 @@ public final class SyntheticSession {
         return sb.toString();
     }
 
-    private static String input(String tool, Random r, int call) {
+    private static String input(final String tool, final Random r, final int call) {
         return switch (tool) {
             case "Bash" -> "{\"command\":\"./gradlew :db:test --tests 'Lane*' -q 2>&1 | tail -" + (20 + call) + "\"}";
             case "Read" -> "{\"file_path\":\"/w/comando/db/src/main/java/dev/marregui/comando/db/Lane.java\",\"offset\":" + call * 10 + "}";
@@ -124,22 +124,22 @@ public final class SyntheticSession {
         };
     }
 
-    private static String lines(Random r, int n, String tag) {
-        StringBuilder sb = new StringBuilder();
+    private static String lines(final Random r, final int n, final String tag) {
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) {
             sb.append("    ").append(tag).append(' ').append(words(r, 5)).append(i == n - 1 ? "" : "\\n");
         }
         return sb.toString();
     }
 
-    private static String result(String tool, Random r) {
-        int n = switch (tool) {
+    private static String result(final String tool, final Random r) {
+        final int n = switch (tool) {
             case "Read" -> 60;
             case "Bash" -> 25;
             case "Grep" -> 8;
             default -> 1;
         };
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) {
             sb.append(i + 1).append('\t').append(words(r, 3 + r.nextInt(8))).append('\n');
         }
@@ -150,8 +150,8 @@ public final class SyntheticSession {
             + "result rows fetch chunk column abort timer state transcript block render layout frame width paint scroll "
             + "connection approval policy audit tool view plot table diff marker gutter").split(" ");
 
-    private static String words(Random r, int n) {
-        StringBuilder sb = new StringBuilder();
+    private static String words(final Random r, final int n) {
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) {
             sb.append(i == 0 ? "" : " ").append(WORDS[r.nextInt(WORDS.length)]);
         }

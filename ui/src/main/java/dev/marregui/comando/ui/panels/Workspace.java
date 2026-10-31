@@ -1,44 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.LinearTickets;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.model.Topic;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.port.TopicPort;
-import dev.marregui.comando.core.schema.SchemaRegistry;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.core.transcript.TopicSource;
-import dev.marregui.comando.core.view.Clip;
-import dev.marregui.comando.ui.PanelTexts;
-import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.async.ShownTimer;
-import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
-import dev.marregui.comando.ui.kit.tabs.MovableTabs;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.Icon;
-import javax.swing.Box;
-import javax.swing.JButton;
-import javax.swing.JComponent;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JTabbedPane;
-import javax.swing.Timer;
-import javax.swing.ToolTipManager;
 import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -68,6 +29,45 @@ import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import javax.swing.Box;
+import javax.swing.Icon;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JTabbedPane;
+import javax.swing.Timer;
+import javax.swing.ToolTipManager;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.LinearTickets;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.Topic;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.TopicPort;
+import dev.marregui.comando.core.schema.SchemaRegistry;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.TopicSource;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
+import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
+import dev.marregui.comando.ui.kit.tabs.MovableTabs;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The open panels as tabs, in state order; the selected tab is the focused panel, and a tab dragged along the row moves
@@ -175,12 +175,12 @@ public final class Workspace {
     private LinearTickets.Site site = LinearTickets.Site.NONE;
     private Consumer<LinearTickets.Site> keepSite = s -> { };
 
-    public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas) {
+    public Workspace(final IntentSink intents, final PanelTexts texts, final SchemaRegistry schemas) {
         this(intents, texts, schemas, System::currentTimeMillis);
     }
 
     /** With the clock the tab statuses read; tests set it. */
-    Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas, LongSupplier clock) {
+    Workspace(final IntentSink intents, final PanelTexts texts, final SchemaRegistry schemas, final LongSupplier clock) {
         this.clock = clock;
         this.intents = intents;
         this.texts = texts;
@@ -191,13 +191,13 @@ public final class Workspace {
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
         tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", KeyText.of("Close the panel (⌘W; ⌘⇧T reopens it)"));
         tabs.putClientProperty("JTabbedPane.tabCloseCallback", (IntConsumer) i -> {
-            EditorPanel p = (EditorPanel) tabs.getComponentAt(i);
+            final EditorPanel p = (EditorPanel) tabs.getComponentAt(i);
             closer.accept(p.panel().id());
         });
         tabs.putClientProperty("JTabbedPane.tabType", "card");
         tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-        JButton add = new JButton(Icons.get("add"));
+        final JButton add = new JButton(Icons.get("add"));
         add.setToolTipText(KeyText.of("New panel (⌘T)"));
         add.getAccessibleContext().setAccessibleName("New panel");
         add.putClientProperty("JButton.buttonType", "toolBarButton");
@@ -206,7 +206,7 @@ public final class Workspace {
         // centred in the tabs' height, rather than in the middle of that space; the theme's swatch left of New panel,
         // which keeps the corner (record 104)
         trailing.setOpaque(false);
-        GridBagConstraints at = new GridBagConstraints();
+        final GridBagConstraints at = new GridBagConstraints();
         at.weightx = 1;
         at.anchor = GridBagConstraints.EAST;
         trailing.add(Box.createHorizontalGlue(), at);
@@ -227,14 +227,14 @@ public final class Workspace {
         card.onPointerIn(card::stay);
         tabs.addComponentListener(new ComponentAdapter() {
             @Override
-            public void componentResized(ComponentEvent e) {
+            public void componentResized(final ComponentEvent e) {
                 placeCard();
             }
         });
         tabs.addMouseMotionListener(new MouseAdapter() {
             @Override
-            public void mouseMoved(MouseEvent e) {
-                int i = tabs.indexAtLocation(e.getX(), e.getY());
+            public void mouseMoved(final MouseEvent e) {
+                final int i = tabs.indexAtLocation(e.getX(), e.getY());
                 if (i != pressedIndex) {
                     pressedIndex = -1;
                 }
@@ -255,7 +255,7 @@ public final class Workspace {
         });
         tabs.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseExited(MouseEvent e) {
+            public void mouseExited(final MouseEvent e) {
                 // a card not yet shown is not shown; one shown closes unless the pointer goes on into it
                 hoverIndex = -1;
                 pressedIndex = -1;
@@ -266,7 +266,7 @@ public final class Workspace {
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 // any press, a click or the menu's, is the user acting on the tab: its card closes, or never shows,
                 // until the pointer leaves the tab and rests on one again
                 pressedIndex = tabs.indexAtLocation(e.getX(), e.getY());
@@ -279,20 +279,20 @@ public final class Workspace {
             }
 
             @Override
-            public void mouseClicked(MouseEvent e) {
-                int i = tabs.indexAtLocation(e.getX(), e.getY());
+            public void mouseClicked(final MouseEvent e) {
+                final int i = tabs.indexAtLocation(e.getX(), e.getY());
                 if (i >= 0 && e.getClickCount() == 2) {
                     rename((EditorPanel) tabs.getComponentAt(i));
                 }
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 popup(e);
             }
 
-            private void popup(MouseEvent e) {
-                int i = tabs.indexAtLocation(e.getX(), e.getY());
+            private void popup(final MouseEvent e) {
+                final int i = tabs.indexAtLocation(e.getX(), e.getY());
                 if (e.isPopupTrigger() && i >= 0) {
                     tabMenu(i).show(tabs, e.getX(), e.getY());
                 }
@@ -305,13 +305,13 @@ public final class Workspace {
      * shown. The tabs each item closes are taken as the menu opens, so a tab that closes while it is open changes
      * nothing.
      */
-    JPopupMenu tabMenu(int index) {
-        PanelId clicked = ((EditorPanel) tabs.getComponentAt(index)).panel().id();
-        int n = tabs.getTabCount();
-        List<PanelId> others = ids(0, n, index);
-        List<PanelId> right = ids(index + 1, n, -1);
-        List<PanelId> left = ids(0, index, -1);
-        JPopupMenu menu = new JPopupMenu();
+    JPopupMenu tabMenu(final int index) {
+        final PanelId clicked = ((EditorPanel) tabs.getComponentAt(index)).panel().id();
+        final int n = tabs.getTabCount();
+        final List<PanelId> others = ids(0, n, index);
+        final List<PanelId> right = ids(index + 1, n, -1);
+        final List<PanelId> left = ids(0, index, -1);
+        final JPopupMenu menu = new JPopupMenu();
         menu.add(menuItem("Close", "close", true, () -> closer.accept(clicked)));
         menu.addSeparator();
         menu.add(menuItem("Close others", null, !others.isEmpty(), () -> closeTabs(clicked, others)));
@@ -320,16 +320,16 @@ public final class Workspace {
         return menu;
     }
 
-    private static JMenuItem menuItem(String text, String icon, boolean enabled, Runnable run) {
-        JMenuItem item = icon == null ? new JMenuItem(text) : new JMenuItem(text, Icons.get(icon));
+    private static JMenuItem menuItem(final String text, final String icon, final boolean enabled, final Runnable run) {
+        final JMenuItem item = icon == null ? new JMenuItem(text) : new JMenuItem(text, Icons.get(icon));
         item.setEnabled(enabled);
         item.addActionListener(e -> run.run());
         return item;
     }
 
     /** The panels of the tabs from {@code from} to {@code to}, not included, leaving out the tab at {@code skip}. */
-    private List<PanelId> ids(int from, int to, int skip) {
-        List<PanelId> out = new ArrayList<>(Math.max(0, to - from));
+    private List<PanelId> ids(final int from, final int to, final int skip) {
+        final List<PanelId> out = new ArrayList<>(Math.max(0, to - from));
         for (int i = from; i < to; i++) {
             if (i != skip) {
                 out.add(((EditorPanel) tabs.getComponentAt(i)).panel().id());
@@ -343,12 +343,12 @@ public final class Workspace {
      * for the user stays, so no question is hidden, and so does a tab whose shell runs a program, which closing would
      * end. One notice, once the tabs are gone, says how many closed and what stayed, in place of a notice per tab.
      */
-    void closeTabs(PanelId keep, List<PanelId> ids) {
+    void closeTabs(final PanelId keep, final List<PanelId> ids) {
         intents.dispatch(new Intent.FocusPanel(keep));
         int waiting = 0;
         int running = 0;
-        List<PanelId> closing = new ArrayList<>(ids.size());
-        for (PanelId id : ids) {
+        final List<PanelId> closing = new ArrayList<>(ids.size());
+        for (final PanelId id : ids) {
             if (!panels.containsKey(id)) {
                 continue;
             }
@@ -360,25 +360,25 @@ public final class Workspace {
                 closing.add(id);
             }
         }
-        List<String> parts = new ArrayList<>(3);
+        final List<String> parts = new ArrayList<>(3);
         if (!closing.isEmpty()) {
             parts.add("Closed " + closing.size() + (closing.size() == 1 ? " tab" : " tabs") + KeyText.of("; ⌘⇧T or the Sessions tab reopens them"));
         }
         if (waiting + running > 0) {
-            List<String> why = new ArrayList<>(2);
+            final List<String> why = new ArrayList<>(2);
             if (waiting > 0) {
                 why.add(waiting + " waiting for you");
             }
             if (running > 0) {
                 why.add(running + " running a program in the shell");
             }
-            int kept = waiting + running;
+            final int kept = waiting + running;
             parts.add((closing.isEmpty() ? "Kept " : "kept ") + kept + (kept == 1 ? " tab open: " : " tabs open: ") + String.join(", ", why));
         }
         if (parts.isEmpty()) {
             return;
         }
-        String summary = String.join("; ", parts);
+        final String summary = String.join("; ", parts);
         if (closing.isEmpty()) {
             intents.dispatch(new Intent.Notify(Notice.Level.INFO, summary, false));
             return;
@@ -397,8 +397,8 @@ public final class Workspace {
      * A panel's file changed outside comando (another editor, Claude's Edit tool): the panel shows the new text,
      * unless it has edits not yet saved, whose save keeps the outside version next to the file.
      */
-    void takeOutside(PanelTexts.Outside change) {
-        EditorPanel view = panels.get(change.panel());
+    void takeOutside(final PanelTexts.Outside change) {
+        final EditorPanel view = panels.get(change.panel());
         if (view == null || !change.take().getAsBoolean() || view.editor().text().equals(change.text())) {
             return;
         }
@@ -413,7 +413,7 @@ public final class Workspace {
      * A panel's file was deleted outside comando: the panel, open or closed, is removed, and leaves nothing for ⌘⇧T;
      * unless edits were typed since the store saw it gone, whose save writes the file again.
      */
-    void closeDeleted(PanelTexts.Deleted deleted) {
+    void closeDeleted(final PanelTexts.Deleted deleted) {
         if (!deleted.remove().getAsBoolean()) {
             intents.dispatch(new Intent.Notify(Notice.Level.INFO, deleted.file()
                     + " was deleted outside comando; the panel's unsaved edits write it again", false));
@@ -421,10 +421,10 @@ public final class Workspace {
         }
         // a session's own panel is the session (record 88): removing it would remove and stop the session, so its text,
         // still in the editor or the store, is written again instead
-        Optional<PanelState> own = shown == null ? Optional.empty() : shown.panel(deleted.panel()).or(() -> shown.closedPanel(deleted.panel()))
+        final Optional<PanelState> own = shown == null ? Optional.empty() : shown.panel(deleted.panel()).or(() -> shown.closedPanel(deleted.panel()))
                 .filter(p -> !p.document() && shown.session(p.session()).isPresent());
         if (own.isPresent()) {
-            EditorPanel view = panels.get(deleted.panel());
+            final EditorPanel view = panels.get(deleted.panel());
             texts.changed(deleted.panel(), view != null ? view.editor().text() : texts.load(deleted.panel()));
             intents.dispatch(new Intent.Notify(Notice.Level.INFO, deleted.file() + " was deleted outside comando; it is session "
                     + own.get().session() + "'s own panel, so its text is written again", false));
@@ -441,8 +441,8 @@ public final class Workspace {
     }
 
     /** {@code buttons} sit left of the theme's swatch, in their order: the shell, the plots, the embedded server. */
-    public void corner(List<CommandButton> buttons) {
-        GridBagConstraints at = new GridBagConstraints();
+    public void corner(final List<CommandButton> buttons) {
+        final GridBagConstraints at = new GridBagConstraints();
         at.anchor = GridBagConstraints.EAST;
         at.insets = new Insets(0, 0, 0, Theme.SPACE_XS);
         for (int i = 0; i < buttons.size(); i++) {
@@ -452,17 +452,17 @@ public final class Workspace {
     }
 
     /** {@code chosen} hears the theme picked from the swatch beside New panel. */
-    public void onThemeChosen(Consumer<NamedTheme> chosen) {
+    public void onThemeChosen(final Consumer<NamedTheme> chosen) {
         theme.onChosen(chosen);
     }
 
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */
-    public void onClose(Consumer<PanelId> close) {
+    public void onClose(final Consumer<PanelId> close) {
         closer = close;
     }
 
     /** Whether a panel's shell runs a program: a tab closed with others stays open while it does. */
-    public void onRunsProgram(Predicate<PanelId> runs) {
+    public void onRunsProgram(final Predicate<PanelId> runs) {
         runsProgram = runs;
     }
 
@@ -471,12 +471,12 @@ public final class Workspace {
     };
 
     /** Where a panel's Locate button shows its file, or its session, in the sidebar (record 119). */
-    public void onLocate(BiConsumer<Path, String> locate) {
+    public void onLocate(final BiConsumer<Path, String> locate) {
         locator = locate;
     }
 
     /** How a link followed in a panel's rendered Markdown opens its file. */
-    public void onOpenFile(Consumer<Path> open) {
+    public void onOpenFile(final Consumer<Path> open) {
         opener = open;
     }
 
@@ -485,7 +485,7 @@ public final class Workspace {
     private Consumer<Boolean> outlineKept = on -> { };
 
     /** Panels open with the outline when {@code wanted}; {@code keep} hears each choice the user makes in a panel. */
-    public void outline(boolean wanted, Consumer<Boolean> keep) {
+    public void outline(final boolean wanted, final Consumer<Boolean> keep) {
         outlineWanted = wanted;
         outlineKept = keep;
     }
@@ -500,12 +500,12 @@ public final class Workspace {
     }
 
     /** What runs when a tab comes to need the user (a request, a failure): the shell asks the desktop for attention. */
-    public void onAttention(Runnable run) {
+    public void onAttention(final Runnable run) {
         attention = run;
     }
 
     /** How the tabs' topics are read, and a session's transcript by name, which a session panel's topic reads. */
-    public void topics(TopicPort port, Function<String, Transcript> sessions) {
+    public void topics(final TopicPort port, final Function<String, Transcript> sessions) {
         topics = port;
         transcripts = sessions;
     }
@@ -515,7 +515,7 @@ public final class Workspace {
      * none yet or what it is read from changed. Not over the tab's close button, whose own tooltip shows there: the
      * look puts it on the tab while the pointer is over the button.
      */
-    void showCard(int index) {
+    void showCard(final int index) {
         if (index >= 0 && index == pressedIndex) {
             return; // pressed since the wait began: the user acts on the tab
         }
@@ -526,8 +526,8 @@ public final class Workspace {
         if (index < 0 || index >= tabs.getTabCount() || !(tabs.getComponentAt(index) instanceof EditorPanel view)) {
             return;
         }
-        PanelId id = view.panel().id();
-        Rectangle r = tabs.getUI().getTabBounds(tabs, index);
+        final PanelId id = view.panel().id();
+        final Rectangle r = tabs.getUI().getTabBounds(tabs, index);
         if (r == null) {
             return;
         }
@@ -548,41 +548,41 @@ public final class Workspace {
     public SessionsSidebar.Cards rowCards() {
         return new SessionsSidebar.Cards() {
             @Override
-            public void show(String session, JComponent over, Rectangle row) {
+            public void show(final String session, final JComponent over, final Rectangle row) {
                 showSessionCard(session, over, row, -1);
             }
 
             @Override
-            public void show(String session, JComponent over, Rectangle row, int beside) {
+            public void show(final String session, final JComponent over, final Rectangle row, final int beside) {
                 showSessionCard(session, over, row, beside);
             }
 
             @Override
-            public void showConnection(String connection, JComponent over, Rectangle row) {
+            public void showConnection(final String connection, final JComponent over, final Rectangle row) {
                 showConnectionCard(connection, over, row, -1);
             }
 
             @Override
-            public void showConnection(String connection, JComponent over, Rectangle row, int beside) {
+            public void showConnection(final String connection, final JComponent over, final Rectangle row, final int beside) {
                 showConnectionCard(connection, over, row, beside);
             }
 
             @Override
-            public void showFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text,
-                                  JComponent over, Rectangle row, int beside) {
+            public void showFacts(final String key, final String title, final List<Map.Entry<String, String>> facts, final String heading, final String text,
+                                  final JComponent over, final Rectangle row, final int beside) {
                 card.stay();
                 card.showOther(OTHER_KEY + key, over, row, beside, otherFacts(title, facts), heading, text);
             }
 
             @Override
-            public void updateFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text) {
+            public void updateFacts(final String key, final String title, final List<Map.Entry<String, String>> facts, final String heading, final String text) {
                 if ((OTHER_KEY + key).equals(card.shown())) {
                     card.updateOther(otherFacts(title, facts), heading, text);
                 }
             }
 
             @Override
-            public boolean showing(String key) {
+            public boolean showing(final String key) {
                 return (OTHER_KEY + key).equals(card.shown());
             }
 
@@ -599,7 +599,7 @@ public final class Workspace {
             }
 
             @Override
-            public void onClose(Consumer<Point> r) {
+            public void onClose(final Consumer<Point> r) {
                 // a tab's card closing is not a row's
                 card.onHidden((over, at) -> {
                     if (over != tabs) {
@@ -610,36 +610,36 @@ public final class Workspace {
         };
     }
 
-    private static CardFacts otherFacts(String title, List<Map.Entry<String, String>> facts) {
+    private static CardFacts otherFacts(final String title, final List<Map.Entry<String, String>> facts) {
         return new CardFacts(title, facts.stream().map(f -> new CardFacts.Fact(f.getKey(), f.getValue())).toList());
     }
 
     /** {@code session}'s card under {@code row}, or beside the rows from {@code beside} when it is not negative. */
-    void showSessionCard(String session, JComponent over, Rectangle row, int beside) {
+    void showSessionCard(final String session, final JComponent over, final Rectangle row, final int beside) {
         if (shown == null || shown.session(session).isEmpty()) {
             return;
         }
         card.stay();
-        Optional<EditorPanel> view = sessionPanel(session);
-        String key = view.map(v -> v.panel().id().value()).orElse(SESSION_KEY + session);
+        final Optional<EditorPanel> view = sessionPanel(session);
+        final String key = view.map(v -> v.panel().id().value()).orElse(SESSION_KEY + session);
         card.show(key, over, row, beside, factsOf(key), "", false, false);
         card.tickets(view.map(v -> tickets(v.panel(), v)).orElse(List.of()));
         readTopic(key, false);
         updateCard(key);
     }
 
-    void showConnectionCard(String connection, JComponent over, Rectangle row, int beside) {
+    void showConnectionCard(final String connection, final JComponent over, final Rectangle row, final int beside) {
         if (shown == null || shown.connection(connection).isEmpty()) {
             return;
         }
         card.stay();
-        String key = CONNECTION_KEY + connection;
+        final String key = CONNECTION_KEY + connection;
         card.showFacts(key, over, row, beside, factsOf(key));
     }
 
     /** The open panel a session's card is its card of: the focused one when it is the session's, else the first. */
-    private Optional<EditorPanel> sessionPanel(String session) {
-        List<EditorPanel> open = shown.panelsBoundToSession(session).stream().map(p -> panels.get(p.id())).filter(v -> v != null).toList();
+    private Optional<EditorPanel> sessionPanel(final String session) {
+        final List<EditorPanel> open = shown.panelsBoundToSession(session).stream().map(p -> panels.get(p.id())).filter(v -> v != null).toList();
         return open.stream().filter(v -> v.panel().id().equals(shown.focused())).findFirst().or(() -> open.stream().findFirst());
     }
 
@@ -647,32 +647,32 @@ public final class Workspace {
      * What card {@code key} says above its summary (record 90): its panel's title and facts, with its session's; or a
      * headless session's name and facts.
      */
-    private CardFacts factsOf(String key) {
+    private CardFacts factsOf(final String key) {
         if (shown == null) {
             return new CardFacts("", List.of());
         }
         if (key.startsWith(CONNECTION_KEY)) {
-            String name = key.substring(CONNECTION_KEY.length());
-            List<String> using = shown.panels().stream().filter(p -> p.connection().equals(name)).map(PanelState::title).toList();
+            final String name = key.substring(CONNECTION_KEY.length());
+            final List<String> using = shown.panels().stream().filter(p -> p.connection().equals(name)).map(PanelState::title).toList();
             return shown.connection(name).map(c -> CardFacts.of(c, using)).orElse(new CardFacts(name, List.of()));
         }
-        long now = clock.getAsLong();
-        String newest = SessionRow.newestCli(shown.sessions());
+        final long now = clock.getAsLong();
+        final String newest = SessionRow.newestCli(shown.sessions());
         if (key.startsWith(SESSION_KEY)) {
-            String name = key.substring(SESSION_KEY.length());
-            CardFacts facts = CardFacts.of(Optional.empty(), shown.session(name), "", "", now, newest);
+            final String name = key.substring(SESSION_KEY.length());
+            final CardFacts facts = CardFacts.of(Optional.empty(), shown.session(name), "", "", now, newest);
             return facts.title().isEmpty() ? new CardFacts(name, facts.facts()) : facts;
         }
-        PanelId id = new PanelId(key);
-        Optional<PanelState> panel = shown.panel(id);
-        Optional<SessionState> session = panel.map(PanelState::session).filter(x -> !x.isEmpty()).flatMap(shown::session);
-        String doing = panel.map(p -> TabStatus.describe(p, shown, statuses.getOrDefault(id, TabStatus.NONE), now)).orElse("");
-        String file = texts.file(id).map(f -> Labels.shortPath(f.toString())).orElse("");
+        final PanelId id = new PanelId(key);
+        final Optional<PanelState> panel = shown.panel(id);
+        final Optional<SessionState> session = panel.map(PanelState::session).filter(x -> !x.isEmpty()).flatMap(shown::session);
+        final String doing = panel.map(p -> TabStatus.describe(p, shown, statuses.getOrDefault(id, TabStatus.NONE), now)).orElse("");
+        final String file = texts.file(id).map(f -> Labels.shortPath(f.toString())).orElse("");
         return CardFacts.of(panel, session, doing, file, now, newest);
     }
 
     /** Where Linear's tickets are found: learnt so far, kept by {@code keep} as more is learnt. */
-    public void linear(LinearTickets.Site known, Consumer<LinearTickets.Site> keep) {
+    public void linear(final LinearTickets.Site known, final Consumer<LinearTickets.Site> keep) {
         site = known;
         keepSite = keep;
     }
@@ -681,12 +681,12 @@ public final class Workspace {
      * The Linear tickets the panel's text names, the newest command's first; Linear's links in the text, and in the end
      * of the panel's session's conversation, teach which ids are tickets and their addresses.
      */
-    private List<LinearTickets.Ticket> tickets(PanelState p, EditorPanel view) {
-        String text = view.textEnd(PANEL_TEXT_READ);
+    private List<LinearTickets.Ticket> tickets(final PanelState p, final EditorPanel view) {
+        final String text = view.textEnd(PANEL_TEXT_READ);
         LinearTickets.Site learnt = LinearTickets.learn(site, text);
-        Transcript t = p.session().isEmpty() ? null : transcripts.apply(p.session());
+        final Transcript t = p.session().isEmpty() ? null : transcripts.apply(p.session());
         for (int i = t == null ? 0 : t.size() - 1, last = Math.max(0, i - LINK_BLOCKS); t != null && i >= last; i--) {
-            String said = switch (t.get(i)) {
+            final String said = switch (t.get(i)) {
                 case Block.AssistantText a -> a.text();
                 case Block.ToolCall c -> c.inputJson() + '\n' + c.resultText();
                 case Block.UserPrompt u -> u.text();
@@ -706,9 +706,9 @@ public final class Workspace {
      * resizes. A card shown from the sidebar stays under its row.
      */
     private void placeCard() {
-        EditorPanel view = card.shown() == null || card.over() != tabs ? null : panels.get(new PanelId(card.shown()));
-        int at = view == null ? -1 : tabs.indexOfComponent(view);
-        Rectangle r = at < 0 ? null : tabs.getUI().getTabBounds(tabs, at);
+        final EditorPanel view = card.shown() == null || card.over() != tabs ? null : panels.get(new PanelId(card.shown()));
+        final int at = view == null ? -1 : tabs.indexOfComponent(view);
+        final Rectangle r = at < 0 ? null : tabs.getUI().getTabBounds(tabs, at);
         if (r != null) {
             card.moveUnder(r);
         }
@@ -718,8 +718,8 @@ public final class Workspace {
      * Asks for the topic of card {@code key} when what it is read from changed since the last ask, or always when
      * {@code force}d (the card's button), ahead of the other cards. A card with nothing to read has no topic.
      */
-    private void readTopic(String key, boolean force) {
-        String source = topicSource(key);
+    private void readTopic(final String key, final boolean force) {
+        final String source = topicSource(key);
         if (source == null) {
             return; // its panel or session is gone
         }
@@ -746,7 +746,7 @@ public final class Workspace {
     }
 
     /** Whether card {@code key}'s panel is open, or its headless session or its connection still configured. */
-    private boolean exists(String key) {
+    private boolean exists(final String key) {
         if (key.startsWith(OTHER_KEY)) {
             // its owner, the Instances tab, keeps it current and closes it
             return true;
@@ -762,18 +762,18 @@ public final class Workspace {
      * What card {@code key}'s topic is read from: its panel's (see below), or a headless session's end of conversation,
      * headed by where it works; empty when there is nothing; null when the panel or the session is gone.
      */
-    private String topicSource(String key) {
+    private String topicSource(final String key) {
         if (key.startsWith(SESSION_KEY)) {
-            String name = key.substring(SESSION_KEY.length());
-            Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(name);
+            final String name = key.substring(SESSION_KEY.length());
+            final Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(name);
             if (session.isEmpty()) {
                 return null;
             }
-            Transcript t = transcripts.apply(name);
+            final Transcript t = transcripts.apply(name);
             return t == null || t.size() == 0 ? "" : TopicSource.ofSession(name, "", session.get().spec().workDir(), session.get().branch(), t,
                     TopicSource.MAX_CHARS);
         }
-        EditorPanel view = panels.get(new PanelId(key));
+        final EditorPanel view = panels.get(new PanelId(key));
         return view == null ? null : topicSource(view.panel(), view);
     }
 
@@ -782,13 +782,13 @@ public final class Workspace {
      * works; when the text is blank, the end of the session's conversation. A panel without a session: the start of its
      * own text with its file. Empty when there is nothing.
      */
-    private String topicSource(PanelState p, EditorPanel view) {
+    private String topicSource(final PanelState p, final EditorPanel view) {
         if (!p.session().isEmpty()) {
-            Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(p.session());
-            String workDir = session.map(x -> x.spec().workDir()).orElse("");
-            String branch = session.map(SessionState::branch).orElse("");
-            Transcript t = transcripts.apply(p.session());
-            String response = t == null ? "" : TopicSource.lastResponse(t);
+            final Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(p.session());
+            final String workDir = session.map(x -> x.spec().workDir()).orElse("");
+            final String branch = session.map(SessionState::branch).orElse("");
+            final Transcript t = transcripts.apply(p.session());
+            final String response = t == null ? "" : TopicSource.lastResponse(t);
             String source = TopicSource.ofPanel(p.title(), p.session(), workDir, branch, view.textEnd(PANEL_TEXT_READ), response,
                     TopicSource.MAX_CHARS);
             if (source.isEmpty() && t != null && t.size() > 0) {
@@ -798,22 +798,22 @@ public final class Workspace {
                 return source;
             }
         }
-        String file = texts.file(p.id()).map(Path::toString).orElse("");
+        final String file = texts.file(p.id()).map(Path::toString).orElse("");
         return TopicSource.ofText(p.title(), file, view.textStart(TopicSource.MAX_CHARS), TopicSource.MAX_CHARS);
     }
 
-    private void forgetTopicsOfNewConversations(AppState s) {
-        Set<String> names = new HashSet<>();
-        for (SessionState x : s.sessions()) {
+    private void forgetTopicsOfNewConversations(final AppState s) {
+        final Set<String> names = new HashSet<>();
+        for (final SessionState x : s.sessions()) {
             names.add(x.name());
-            String before = conversationOf.put(x.name(), x.spec().claudeSessionId());
+            final String before = conversationOf.put(x.name(), x.spec().claudeSessionId());
             if (before == null || before.equals(x.spec().claudeSessionId())) {
                 continue;
             }
-            List<String> keys = new ArrayList<>();
+            final List<String> keys = new ArrayList<>();
             keys.add(SESSION_KEY + x.name());
             s.panelsBoundToSession(x.name()).forEach(p -> keys.add(p.id().value()));
-            for (String key : keys) {
+            for (final String key : keys) {
                 topicOf.remove(key);
                 topicAsked.remove(key);
                 updateCardOf(key);
@@ -822,13 +822,13 @@ public final class Workspace {
         conversationOf.keySet().retainAll(names);
     }
 
-    private void updateCardOf(String key) {
+    private void updateCardOf(final String key) {
         if (key.equals(card.shown())) {
             updateCard(key);
         }
     }
 
-    private void updateCard(String key) {
+    private void updateCard(final String key) {
         if (key.startsWith(OTHER_KEY)) {
             return;
         }
@@ -836,8 +836,8 @@ public final class Workspace {
             card.update(factsOf(key), "", false, false); // facts alone: nothing is read
             return;
         }
-        boolean reading = topicReading.contains(key);
-        Topic topic = topicOf.get(key);
+        final boolean reading = topicReading.contains(key);
+        final Topic topic = topicOf.get(key);
         String line;
         boolean muted;
         if (topic != null && !topic.line().isEmpty()) {
@@ -854,12 +854,12 @@ public final class Workspace {
             muted = true;
         }
         card.update(factsOf(key), line, muted, reading);
-        String session = sessionOfCard(key);
+        final String session = sessionOfCard(key);
         card.agents(session.isEmpty() ? List.of() : delegation(session), id -> intents.dispatch(new Intent.OpenSubagent(session, id)));
     }
 
     /** The session a card is of: a headless session's, or its panel's; empty for a panel without one. */
-    private String sessionOfCard(String key) {
+    private String sessionOfCard(final String key) {
         if (shown == null) {
             return "";
         }
@@ -876,12 +876,12 @@ public final class Workspace {
     private List<Delegation.Line> delegation = List.of();
 
     /** {@code session}'s sub-agents for its card (record 109), read from its transcript when it changed. */
-    private List<Delegation.Line> delegation(String session) {
-        Transcript t = transcripts.apply(session);
+    private List<Delegation.Line> delegation(final String session) {
+        final Transcript t = transcripts.apply(session);
         if (t == null) {
             return List.of();
         }
-        Set<String> running = shown.session(session).map(x -> x.tasks().stream()
+        final Set<String> running = shown.session(session).map(x -> x.tasks().stream()
                 .filter(task -> task.kind().equals("local_agent")).map(BackgroundTask::id)
                 .collect(Collectors.toSet())).orElse(Set.of());
         if (!session.equals(delegationOf) || t.version() != delegationAt || !running.equals(delegationRunning)) {
@@ -895,7 +895,7 @@ public final class Workspace {
 
     /** The panel whose card shows, null when none, a headless session's or a connection's; for tests. */
     PanelId cardShown() {
-        String key = card.shown();
+        final String key = card.shown();
         return key == null || key.startsWith(SESSION_KEY) || key.startsWith(CONNECTION_KEY) ? null : new PanelId(key);
     }
 
@@ -917,8 +917,8 @@ public final class Workspace {
             return;
         }
         placeCard();
-        for (PanelState p : shown.panels()) {
-            EditorPanel view = panels.get(p.id());
+        for (final PanelState p : shown.panels()) {
+            final EditorPanel view = panels.get(p.id());
             if (view != null && tabs.indexOfComponent(view) >= 0) {
                 refreshTab(p, shown, view);
             }
@@ -935,7 +935,7 @@ public final class Workspace {
         spinner.advance();
         for (int i = 0; i < tabs.getTabCount(); i++) {
             if (tabs.getIconAt(i) == spinner) {
-                Rectangle r = tabs.getUI().getTabBounds(tabs, i);
+                final Rectangle r = tabs.getUI().getTabBounds(tabs, i);
                 if (r != null) {
                     tabs.repaint(r);
                 }
@@ -961,8 +961,8 @@ public final class Workspace {
      * The panel that holds {@code file} shows its text to edit: an open one now, one that opens or reopens at the
      * render that shows it. Called on the EDT.
      */
-    public void editWhenOpen(Path file) {
-        for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
+    public void editWhenOpen(final Path file) {
+        for (final Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
             if (texts.file(e.getKey()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 e.getValue().edit();
                 return;
@@ -975,8 +975,8 @@ public final class Workspace {
      * The panel that holds {@code file} scrolls its preview to the heading whose id is {@code heading}: an open one
      * now, one that opens or reopens at the render that shows it. Called on the EDT.
      */
-    public void headingWhenOpen(Path file, String heading) {
-        for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
+    public void headingWhenOpen(final Path file, final String heading) {
+        for (final Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
             if (texts.file(e.getKey()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 e.getValue().showHeading(heading);
                 return;
@@ -990,8 +990,8 @@ public final class Workspace {
      * {@link EditorPanel#showLogEntry}): an open one now, one that opens or reopens at the render that shows it.
      * Called on the EDT.
      */
-    public void entryWhenOpen(Path file, long atMillis) {
-        for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
+    public void entryWhenOpen(final Path file, final long atMillis) {
+        for (final Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
             if (texts.file(e.getKey()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 e.getValue().showLogEntry(atMillis);
                 return;
@@ -1000,9 +1000,9 @@ public final class Workspace {
         toEntry.put(file, atMillis);
     }
 
-    private String takeHeading(Path file) {
+    private String takeHeading(final Path file) {
         for (Iterator<Map.Entry<Path, String>> it = toHeading.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<Path, String> e = it.next();
+            final Map.Entry<Path, String> e = it.next();
             if (PanelTexts.samePath(e.getKey(), file)) {
                 it.remove();
                 return e.getValue();
@@ -1015,13 +1015,13 @@ public final class Workspace {
         intents.dispatch(new Intent.AddPanel(PanelId.random(), ""));
     }
 
-    public void rename(EditorPanel p) {
+    public void rename(final EditorPanel p) {
         rename(p.panel(), tabs, intents);
     }
 
     /** Asks for a panel's new name over {@code owner}; the panel tabs and the sidebar's panel rows rename this way. */
-    static void rename(PanelState panel, Component owner, IntentSink intents) {
-        String title = (String) JOptionPane.showInputDialog(owner, "Panel name", "Rename panel", JOptionPane.PLAIN_MESSAGE, null, null,
+    static void rename(final PanelState panel, final Component owner, final IntentSink intents) {
+        final String title = (String) JOptionPane.showInputDialog(owner, "Panel name", "Rename panel", JOptionPane.PLAIN_MESSAGE, null, null,
                 panel.title());
         if (title != null && !title.isBlank()) {
             intents.dispatch(new Intent.RenamePanel(panel.id(), title));
@@ -1032,7 +1032,7 @@ public final class Workspace {
         return tabs.getSelectedComponent() instanceof EditorPanel p ? p : null;
     }
 
-    public EditorPanel panel(PanelId id) {
+    public EditorPanel panel(final PanelId id) {
         return panels.get(id);
     }
 
@@ -1041,32 +1041,32 @@ public final class Workspace {
     }
 
     /** Selects the panel at {@code index} (0-based), for ⌘1…⌘9. */
-    public void select(int index) {
+    public void select(final int index) {
         if (index >= 0 && index < tabs.getTabCount()) {
             tabs.setSelectedIndex(index);
         }
     }
 
-    public void selectRelative(int delta) {
-        int n = tabs.getTabCount();
+    public void selectRelative(final int delta) {
+        final int n = tabs.getTabCount();
         if (n > 0) {
             tabs.setSelectedIndex(Math.floorMod(tabs.getSelectedIndex() + delta, n));
         }
     }
 
-    public void render(AppState s) {
+    public void render(final AppState s) {
         shown = s;
         rendering = true;
         try {
             forgetTopicsOfNewConversations(s);
             // remove panels the state no longer has
-            List<PanelId> ids = s.panels().stream().map(PanelState::id).toList();
-            for (PanelId id : new ArrayList<>(panels.keySet())) {
+            final List<PanelId> ids = s.panels().stream().map(PanelState::id).toList();
+            for (final PanelId id : new ArrayList<>(panels.keySet())) {
                 if (!ids.contains(id)) {
-                    EditorPanel gone = panels.remove(id);
-                    PanelState was = gone.panel();
-                    String deletedFile = deletedFiles.remove(id);
-                    boolean kept = s.closedPanel(id).isPresent();
+                    final EditorPanel gone = panels.remove(id);
+                    final PanelState was = gone.panel();
+                    final String deletedFile = deletedFiles.remove(id);
+                    final boolean kept = s.closedPanel(id).isPresent();
                     if (deletedFile == null && (kept || was.document())) {
                         closed.addFirst(new ClosedPanel(id, was.title(), was.document(), texts.file(id).orElse(null)));
                         while (closed.size() > CLOSED_KEPT) {
@@ -1107,7 +1107,7 @@ public final class Workspace {
             }
             // add new panels at their position, update titles and bindings
             for (int i = 0; i < s.panels().size(); i++) {
-                PanelState p = s.panels().get(i);
+                final PanelState p = s.panels().get(i);
                 EditorPanel view = panels.get(p.id());
                 if (view == null) {
                     view = new EditorPanel(p, intents, schemas);
@@ -1116,7 +1116,7 @@ public final class Workspace {
                         outlineWanted = on;
                         outlineKept.accept(on);
                     });
-                    PanelId id = p.id();
+                    final PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
                     view.onLocate((f, session) -> locator.accept(f, session));
                     view.onOpenFile((f, heading) -> {
@@ -1134,18 +1134,18 @@ public final class Workspace {
                     dimmed.remove(p.id());
                 }
                 refreshTab(p, s, view);
-                Path file = texts.file(p.id()).orElse(null);
+                final Path file = texts.file(p.id()).orElse(null);
                 view.file(file, texts.document(p.id()));
                 if (file != null && toEdit.removeIf(f -> PanelTexts.samePath(f, file))) {
                     view.edit();
                 }
-                String heading = file == null ? null : takeHeading(file);
+                final String heading = file == null ? null : takeHeading(file);
                 if (heading != null) {
                     view.showHeading(heading);
                 }
                 if (file != null && !toEntry.isEmpty()) {
                     for (Iterator<Map.Entry<Path, Long>> it = toEntry.entrySet().iterator(); it.hasNext(); ) {
-                        Map.Entry<Path, Long> e = it.next();
+                        final Map.Entry<Path, Long> e = it.next();
                         if (PanelTexts.samePath(e.getKey(), file)) {
                             it.remove();
                             view.showLogEntry(e.getValue());
@@ -1154,7 +1154,7 @@ public final class Workspace {
                 }
                 view.render(p, s);
             }
-            EditorPanel focused = panels.get(s.focused());
+            final EditorPanel focused = panels.get(s.focused());
             if (focused != null && tabs.getSelectedComponent() != focused) {
                 tabs.setSelectedComponent(focused);
             }
@@ -1174,15 +1174,15 @@ public final class Workspace {
     }
 
     /** The tab's status, icon, title mark and tooltip for {@code p} in {@code s}. */
-    private void refreshTab(PanelState p, AppState s, EditorPanel view) {
-        TabStatus status = track(p, s);
-        int at = tabs.indexOfComponent(view);
-        String title = title(p);
+    private void refreshTab(final PanelState p, final AppState s, final EditorPanel view) {
+        final TabStatus status = track(p, s);
+        final int at = tabs.indexOfComponent(view);
+        final String title = title(p);
         if (!tabs.getTitleAt(at).equals(title)) {
             tabs.setTitleAt(at, title);
         }
         // at rest, a session's tab shows whether its session is connected, as its row in the sidebar does (record 89)
-        Icon icon = status == TabStatus.IDLE ? s.session(p.session()).map(x -> Icons.get(SessionIcons.of(x.status()))).orElse(icon(status))
+        final Icon icon = status == TabStatus.IDLE ? s.session(p.session()).map(x -> Icons.get(SessionIcons.of(x.status()))).orElse(icon(status))
                 : icon(status);
         if (tabs.getIconAt(at) != icon) {
             tabs.setIconAt(at, icon);
@@ -1192,7 +1192,7 @@ public final class Workspace {
         if (locked ? dimmed.add(p.id()) : dimmed.remove(p.id())) {
             tabs.setForegroundAt(at, locked ? LockVeil.dimmed() : null);
         }
-        String tip = tooltip(p, s, status);
+        final String tip = tooltip(p, s, status);
         if (!tip.equals(tips.put(p.id(), tip)) && p.id().value().equals(card.shown())) {
             updateCard(p.id().value());
         }
@@ -1207,24 +1207,24 @@ public final class Workspace {
      * work that starts again drops the mark, its outcome is superseded. A tab that comes to need the user asks the
      * desktop for attention, once per change.
      */
-    private TabStatus track(PanelState p, AppState s) {
-        PanelId id = p.id();
-        boolean active = TabStatus.active(p, s, clock.getAsLong());
-        Boolean before = lastActive.put(id, active);
+    private TabStatus track(final PanelState p, final AppState s) {
+        final PanelId id = p.id();
+        final boolean active = TabStatus.active(p, s, clock.getAsLong());
+        final Boolean before = lastActive.put(id, active);
         if (id.equals(s.focused()) || (active && before != null && !before)) {
             unseen.remove(id);
         } else if (before != null && before && !active) {
             unseen.add(id);
         }
-        TabStatus status = TabStatus.of(p, s, unseen.contains(id));
-        TabStatus was = statuses.put(id, status);
+        final TabStatus status = TabStatus.of(p, s, unseen.contains(id));
+        final TabStatus was = statuses.put(id, status);
         if (status.wantsAttention() && status != was) {
             attention.run();
         }
         return status;
     }
 
-    private Icon icon(TabStatus status) {
+    private Icon icon(final TabStatus status) {
         return switch (status) {
             case NEEDS_YOU -> Icons.get("question");
             case ERROR -> Icons.get("error");
@@ -1236,23 +1236,23 @@ public final class Workspace {
         };
     }
 
-    private String tooltip(PanelState p, AppState s, TabStatus status) {
+    private String tooltip(final PanelState p, final AppState s, final TabStatus status) {
         return Plain.text(tooltip(p) + texts.file(p.id()).map(f -> " · " + Labels.shortPath(f.toString())).orElse("")
                 + TabStatus.describe(p, s, status, System.currentTimeMillis()));
     }
 
     /** The tab's title: plain and clipped; the icon alone carries the status. */
-    static String title(PanelState p) {
+    static String title(final PanelState p) {
         return Plain.text(Clip.keepStart(p.title(), TITLE_CHARS));
     }
 
     /** The title, the connection, and the session unless the title names it already (a session's own panel). */
-    private static String tooltip(PanelState p) {
+    private static String tooltip(final PanelState p) {
         return p.title() + (p.connection().isEmpty() ? "" : " · " + p.connection())
                 + (p.session().isEmpty() || p.session().equals(p.title()) ? "" : " · " + p.session());
     }
 
-    private static MovableTabs named(MovableTabs tabs, String name) {
+    private static MovableTabs named(final MovableTabs tabs, final String name) {
         tabs.setName(name);
         return tabs;
     }

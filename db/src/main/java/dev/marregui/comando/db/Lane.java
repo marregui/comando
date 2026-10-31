@@ -1,12 +1,5 @@
 package dev.marregui.comando.db;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.port.QueryPort;
-import dev.marregui.comando.core.result.ResultRegistry;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -25,6 +18,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.result.ResultRegistry;
 
 /**
  * One connection and the single thread that uses it. A JDBC connection runs one statement at a time,
@@ -45,7 +45,7 @@ final class Lane implements AutoCloseable {
 
     /** Work the connection's close, removal or change overtook before its turn came: it did not run. */
     static final class Overtaken extends IllegalStateException {
-        Overtaken(String connection) {
+        Overtaken(final String connection) {
             super("connection " + connection + " was closed or changed before this ran");
         }
     }
@@ -95,8 +95,8 @@ final class Lane implements AutoCloseable {
     private boolean retired; // guarded by this
     private Connection connection; // lane thread only
 
-    Lane(String name, IntentSink sink, ResultRegistry results, DbSettings settings, ScheduledExecutorService timer,
-         ExecutorService cancellers, Consumer<Lane> onRetired) {
+    Lane(final String name, final IntentSink sink, final ResultRegistry results, final DbSettings settings, final ScheduledExecutorService timer,
+         final ExecutorService cancellers, final Consumer<Lane> onRetired) {
         this(name, sink, results, settings, timer, cancellers, onRetired, QUERY_SECONDS, DESCRIBE_SECONDS);
     }
 
@@ -123,17 +123,17 @@ final class Lane implements AutoCloseable {
     }
 
     /** Queues the connection's open; false when the lane has stopped, as for every method that queues work. */
-    boolean open(ConnectionSpec spec) {
+    boolean open(final ConnectionSpec spec) {
         return work(() -> {
             try {
                 ensureOpen(spec);
-            } catch (SQLException e) {
+            } catch (final SQLException e) {
                 sink.dispatch(new Intent.ConnectionFailed(name, message(e)));
             }
         });
     }
 
-    boolean execute(long requestId, ConnectionSpec spec, String sql) {
+    boolean execute(final long requestId, final ConnectionSpec spec, final String sql) {
         return work(() -> run(requestId, spec, sql), () -> sink.dispatch(new Intent.SqlCancelled(requestId)));
     }
 
@@ -142,8 +142,8 @@ final class Lane implements AutoCloseable {
      * when the turn comes: false (the work was overtaken, such as a schema load the user's Disconnect followed) ends
      * it with {@link Overtaken} without opening the connection again.
      */
-    boolean query(ConnectionSpec spec, String sql, int maxRows, CompletableFuture<QueryPort.Rows> out, BooleanSupplier wanted) {
-        boolean accepted = work(() -> {
+    boolean query(final ConnectionSpec spec, final String sql, final int maxRows, final CompletableFuture<QueryPort.Rows> out, final BooleanSupplier wanted) {
+        final boolean accepted = work(() -> {
             if (out.isDone()) {
                 return; // the caller gave up while this waited behind other runs: it must not run later
             }
@@ -174,9 +174,9 @@ final class Lane implements AutoCloseable {
                 try (ResultSet rs = st.getResultSet()) {
                     out.complete(textRows(rs, maxRows));
                 }
-            } catch (SQLException e) {
+            } catch (final SQLException e) {
                 out.completeExceptionally(new IllegalStateException(message(e), e));
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 out.completeExceptionally(e);
             } finally {
                 if (bounded) {
@@ -194,7 +194,7 @@ final class Lane implements AutoCloseable {
      * Lists the columns of {@code table}: QuestDB's {@code SHOW COLUMNS} first, then the driver's metadata,
      * whose query QuestDB does not accept.
      */
-    boolean describe(ConnectionSpec spec, String table, CompletableFuture<QueryPort.Rows> out, BooleanSupplier wanted) {
+    boolean describe(final ConnectionSpec spec, final String table, final CompletableFuture<QueryPort.Rows> out, final BooleanSupplier wanted) {
         return work(() -> {
             if (!wanted.getAsBoolean()) {
                 out.completeExceptionally(new Overtaken(name));
@@ -202,7 +202,7 @@ final class Lane implements AutoCloseable {
             }
             try {
                 ensureOpen(spec);
-            } catch (SQLException e) {
+            } catch (final SQLException e) {
                 out.completeExceptionally(new IllegalStateException(message(e), e));
                 return;
             }
@@ -222,7 +222,7 @@ final class Lane implements AutoCloseable {
                     first = e;
                 }
                 try (ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
-                    List<List<String>> rows = new ArrayList<>();
+                    final List<List<String>> rows = new ArrayList<>();
                     while (rs.next()) {
                         // Arrays.asList, not List.of: a driver may answer SQL NULL for a type or nullability
                         rows.add(Arrays.asList(
@@ -245,7 +245,7 @@ final class Lane implements AutoCloseable {
     }
 
     /** Sets the connection's network timeout, 0 for none; false when the driver does not take one. */
-    private boolean networkTimeout(int millis) {
+    private boolean networkTimeout(final int millis) {
         try {
             connection.setNetworkTimeout(Runnable::run, millis);
             return true;
@@ -255,12 +255,12 @@ final class Lane implements AutoCloseable {
     }
 
     /** A double-quoted identifier; embedded quotes are doubled. */
-    static String quote(String identifier) {
+    static String quote(final String identifier) {
         return '"' + identifier.replace("\"", "\"\"") + '"';
     }
 
-    private static QueryPort.Rows textRows(ResultSet rs, int maxRows) throws SQLException {
-        ColumnarResult r = ColumnarResult.of(-1L, rs.getMetaData());
+    private static QueryPort.Rows textRows(final ResultSet rs, final int maxRows) throws SQLException {
+        final ColumnarResult r = ColumnarResult.of(-1L, rs.getMetaData());
         boolean truncated = false;
         while (rs.next()) {
             if (r.rowCount() == maxRows) {
@@ -269,14 +269,14 @@ final class Lane implements AutoCloseable {
             }
             r.append(rs);
         }
-        List<String> columns = new ArrayList<>(r.columnCount());
+        final List<String> columns = new ArrayList<>(r.columnCount());
         for (int c = 0; c < r.columnCount(); c++) {
             columns.add(r.columnName(c));
         }
-        List<List<String>> rows = new ArrayList<>(r.rowCount());
-        StringBuilder sb = new StringBuilder();
+        final List<List<String>> rows = new ArrayList<>(r.rowCount());
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < r.rowCount(); i++) {
-            List<String> row = new ArrayList<>(r.columnCount());
+            final List<String> row = new ArrayList<>(r.columnCount());
             for (int c = 0; c < r.columnCount(); c++) {
                 if (r.isNull(i, c)) {
                     row.add(null);
@@ -291,9 +291,9 @@ final class Lane implements AutoCloseable {
         return new QueryPort.Rows(columns, rows, -1L, truncated);
     }
 
-    void cancel(long requestId) {
+    void cancel(final long requestId) {
         cancelled.add(requestId);
-        Running r = running;
+        final Running r = running;
         if (r != null && r.requestId() == requestId) {
             cancelStatement(r);
         }
@@ -317,7 +317,7 @@ final class Lane implements AutoCloseable {
             boolean valid;
             try {
                 valid = connection.isValid(5);
-            } catch (SQLException e) {
+            } catch (final SQLException e) {
                 valid = false;
             }
             if (!valid) {
@@ -328,7 +328,7 @@ final class Lane implements AutoCloseable {
     }
 
     /** Queues work that runs only while the lane is open: once it closes, a queued task does nothing. */
-    private boolean work(Runnable task) {
+    private boolean work(final Runnable task) {
         return work(task, () -> {
         });
     }
@@ -337,7 +337,7 @@ final class Lane implements AutoCloseable {
      * Queues work that runs only while the lane is open: a task still queued when the lane closes runs {@code
      * whenClosed} instead, so a statement queued before the user quit is not run during the exit.
      */
-    private boolean work(Runnable task, Runnable whenClosed) {
+    private boolean work(final Runnable task, final Runnable whenClosed) {
         return submit(() -> {
             if (closed) {
                 whenClosed.run();
@@ -355,7 +355,7 @@ final class Lane implements AutoCloseable {
      * Queues {@code task}; false when the lane has stopped and the caller must use a new lane. A task offered after
      * {@link #close()} is dropped and counts as accepted.
      */
-    private synchronized boolean submit(Runnable task) {
+    private synchronized boolean submit(final Runnable task) {
         if (retired) {
             return false;
         }
@@ -368,7 +368,7 @@ final class Lane implements AutoCloseable {
                     ended();
                 }
             });
-        } catch (RejectedExecutionException e) {
+        } catch (final RejectedExecutionException e) {
             pending--;
             LOG.log(System.Logger.Level.DEBUG, "lane closed, task dropped [connection=" + name + ']');
         }
@@ -395,8 +395,8 @@ final class Lane implements AutoCloseable {
      * The driver properties of {@code spec}, the one place they are built: the connection test must reach the server
      * the way the lane does, TLS mode included.
      */
-    static Properties driverProperties(ConnectionSpec spec) {
-        Properties props = new Properties();
+    static Properties driverProperties(final ConnectionSpec spec) {
+        final Properties props = new Properties();
         props.setProperty("user", spec.user());
         props.setProperty("password", spec.password());
         props.setProperty("ApplicationName", "comando");
@@ -407,14 +407,14 @@ final class Lane implements AutoCloseable {
         return props;
     }
 
-    private void ensureOpen(ConnectionSpec spec) throws SQLException {
+    private void ensureOpen(final ConnectionSpec spec) throws SQLException {
         if (connection != null && !connection.isClosed()) {
             return;
         }
         LOG.log(System.Logger.Level.INFO, "connecting [connection=" + name + ", url=" + spec.jdbcUrl() + ']');
         try {
             connection = DriverManager.getConnection(spec.jdbcUrl(), driverProperties(spec));
-        } catch (SQLException e) {
+        } catch (final SQLException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot connect [connection=" + name + ", sqlState=" + e.getSQLState() + ']', e);
             throw e;
         }
@@ -423,15 +423,15 @@ final class Lane implements AutoCloseable {
         LOG.log(System.Logger.Level.INFO, "connected [connection=" + name + ']');
     }
 
-    private void run(long requestId, ConnectionSpec spec, String sql) {
-        long start = System.nanoTime();
+    private void run(final long requestId, final ConnectionSpec spec, final String sql) {
+        final long start = System.nanoTime();
         if (cancelled.remove(requestId)) {
             sink.dispatch(new Intent.SqlCancelled(requestId));
             return;
         }
         try {
             ensureOpen(spec);
-        } catch (SQLException e) {
+        } catch (final SQLException e) {
             sink.dispatch(new Intent.ConnectionFailed(name, message(e)));
             sink.dispatch(new Intent.SqlFailed(requestId, message(e), millisSince(start)));
             return;
@@ -447,11 +447,11 @@ final class Lane implements AutoCloseable {
                 return;
             }
             sink.dispatch(new Intent.SqlStarted(requestId));
-            boolean hasRows = st.execute(sql);
-            long execMillis = millisSince(start);
+            final boolean hasRows = st.execute(sql);
+            final long execMillis = millisSince(start);
             if (!hasRows) {
-                long updates = st.getLargeUpdateCount();
-                long total = millisSince(start);
+                final long updates = st.getLargeUpdateCount();
+                final long total = millisSince(start);
                 sink.dispatch(new Intent.SqlCompleted(requestId, 0, updates, false, execMillis, total - execMillis, total));
                 reportMoreResults(requestId, st);
                 return;
@@ -459,8 +459,8 @@ final class Lane implements AutoCloseable {
             if (fetch(requestId, st.getResultSet(), start, execMillis)) {
                 reportMoreResults(requestId, st);
             }
-        } catch (SQLException e) {
-            boolean wasCancelled = cancelled.contains(requestId);
+        } catch (final SQLException e) {
+            final boolean wasCancelled = cancelled.contains(requestId);
             if (wasCancelled) {
                 sink.dispatch(new Intent.SqlCancelled(requestId));
             } else {
@@ -476,7 +476,7 @@ final class Lane implements AutoCloseable {
             if (st != null) {
                 try {
                     st.close();
-                } catch (SQLException ignore) {
+                } catch (final SQLException ignore) {
                     // the statement's connection may be gone; nothing left to release
                 }
             }
@@ -487,13 +487,13 @@ final class Lane implements AutoCloseable {
      * Says so when the text held more than one statement: the driver runs them all and the Results tab shows
      * the first one's result only, which would otherwise pass without a word.
      */
-    private void reportMoreResults(long requestId, Statement st) {
+    private void reportMoreResults(final long requestId, final Statement st) {
         int more = 0;
         try {
             while (st.getMoreResults() || st.getLargeUpdateCount() != -1) {
                 more++;
             }
-        } catch (SQLException e) {
+        } catch (final SQLException e) {
             sink.dispatch(new Intent.SqlWarning(requestId, true, "statement " + (more + 2) + " of the block failed: " + message(e)));
             return;
         }
@@ -503,14 +503,14 @@ final class Lane implements AutoCloseable {
     }
 
     /** Fetches every row into the result; false when the run was cancelled on the way. */
-    private boolean fetch(long requestId, ResultSet rs, long start, long execMillis) throws SQLException {
+    private boolean fetch(final long requestId, final ResultSet rs, final long start, final long execMillis) throws SQLException {
         try (rs) {
-            ColumnarResult result = ColumnarResult.of(requestId, rs.getMetaData());
+            final ColumnarResult result = ColumnarResult.of(requestId, rs.getMetaData());
             results.put(result);
             int batch = 100;
             int rows = 0;
             boolean truncated = false;
-            long fetchStart = System.nanoTime();
+            final long fetchStart = System.nanoTime();
             while (rs.next()) {
                 if (rows == settings.maxRows()) {
                     truncated = true;
@@ -527,7 +527,7 @@ final class Lane implements AutoCloseable {
                     sink.dispatch(new Intent.SqlRows(requestId, rows, execMillis, millisSince(fetchStart), millisSince(start)));
                 }
             }
-            long total = millisSince(start);
+            final long total = millisSince(start);
             sink.dispatch(new Intent.SqlCompleted(requestId, rows, -1L, truncated, execMillis, millisSince(fetchStart), total));
             return true;
         }
@@ -537,23 +537,23 @@ final class Lane implements AutoCloseable {
      * Sends the driver's cancel off the caller's thread (pgjdbc waits for the server to close the cancel
      * socket) and arms the abort that unblocks a statement the server does not stop.
      */
-    private void cancelStatement(Running r) {
+    private void cancelStatement(final Running r) {
         timer.schedule(() -> abortIfStillRunning(r), settings.abortAfterMillis(), TimeUnit.MILLISECONDS);
         try {
             cancellers.execute(() -> {
                 try {
                     r.statement().cancel();
-                } catch (SQLException e) {
+                } catch (final SQLException e) {
                     LOG.log(System.Logger.Level.WARNING, "cancel failed [connection=" + name + ", request=" + r.requestId() + ']', e);
                 }
             });
-        } catch (RejectedExecutionException e) {
+        } catch (final RejectedExecutionException e) {
             LOG.log(System.Logger.Level.DEBUG, "adapter closed, cancel left to the abort [connection=" + name + ']');
         }
     }
 
-    private void abortIfStillRunning(Running r) {
-        Running now = running;
+    private void abortIfStillRunning(final Running r) {
+        final Running now = running;
         if (now == null || now.requestId() != r.requestId()) {
             return;
         }
@@ -561,34 +561,34 @@ final class Lane implements AutoCloseable {
                 + ", request=" + r.requestId() + ']');
         try {
             now.connection().abort(Runnable::run);
-        } catch (SQLException e) {
+        } catch (final SQLException e) {
             LOG.log(System.Logger.Level.WARNING, "abort failed [connection=" + name + ']', e);
         }
     }
 
     private void closeConnection() {
-        Connection c = connection;
+        final Connection c = connection;
         connection = null;
         if (c != null) {
             try {
                 c.close();
-            } catch (SQLException e) {
+            } catch (final SQLException e) {
                 LOG.log(System.Logger.Level.DEBUG, "close failed [connection=" + name + ']', e);
             }
         }
     }
 
-    private static boolean isConnectionError(SQLException e) {
-        String state = e.getSQLState();
+    private static boolean isConnectionError(final SQLException e) {
+        final String state = e.getSQLState();
         return state != null && state.startsWith("08");
     }
 
-    static String message(SQLException e) {
-        String m = e.getMessage();
+    static String message(final SQLException e) {
+        final String m = e.getMessage();
         return m == null ? e.getClass().getSimpleName() : m.strip();
     }
 
-    private static long millisSince(long startNanos) {
+    private static long millisSince(final long startNanos) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
     }
 
@@ -609,7 +609,7 @@ final class Lane implements AutoCloseable {
             return;
         }
         closed = true;
-        Running r = running;
+        final Running r = running;
         if (r != null) {
             cancelled.add(r.requestId());
             cancelStatement(r);
@@ -628,7 +628,7 @@ final class Lane implements AutoCloseable {
      * ({@link System#nanoTime}); past it, the tasks still queued are run on the caller as closed. Begins the close
      * first when nobody has.
      */
-    void finishClose(long deadlineNanos) {
+    void finishClose(final long deadlineNanos) {
         beginClose();
         if (drained) {
             return;
@@ -639,7 +639,7 @@ final class Lane implements AutoCloseable {
                 drained = true;
                 thread.shutdownNow().forEach(Runnable::run);
             }
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }

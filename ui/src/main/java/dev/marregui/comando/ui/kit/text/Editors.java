@@ -1,21 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.theme.FocusRing;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rsyntaxtextarea.RSyntaxUtilities;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rsyntaxtextarea.SyntaxScheme;
-import org.fife.ui.rtextarea.Gutter;
-import org.fife.ui.rtextarea.RTextScrollPane;
-
-import javax.swing.AbstractAction;
-import javax.swing.Action;
-import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
-import javax.swing.text.DefaultEditorKit;
-import javax.swing.undo.UndoManager;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
@@ -25,6 +9,23 @@ import java.awt.event.KeyEvent;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
+import javax.swing.AbstractAction;
+import javax.swing.Action;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
+import javax.swing.text.DefaultEditorKit;
+import javax.swing.undo.UndoManager;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.RSyntaxUtilities;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.fife.ui.rsyntaxtextarea.SyntaxScheme;
+import org.fife.ui.rtextarea.Gutter;
+import org.fife.ui.rtextarea.RTextScrollPane;
+
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The one place text areas are configured: colours from the content palette (record 101), font, syntax by file type.
@@ -102,7 +103,7 @@ public final class Editors {
 
     /** The command editor: SQL highlighting, current line, matching brackets, marked occurrences. */
     public static RSyntaxTextArea command() {
-        RSyntaxTextArea a = base(SyntaxConstants.SYNTAX_STYLE_SQL);
+        final RSyntaxTextArea a = base(SyntaxConstants.SYNTAX_STYLE_SQL);
         a.setEditable(true);
         a.setHighlightCurrentLine(true);
         a.setMarkOccurrences(true);
@@ -118,14 +119,14 @@ public final class Editors {
      * paste and select all on the menu key, and an undo (menu key Z) and redo (with Shift) of its own, which a plain
      * text area lacks. No syntax, no current line: text to read back, not to run.
      */
-    public static JTextArea plain(int rows, int columns) {
-        JTextArea a = new JTextArea(rows, columns);
+    public static JTextArea plain(final int rows, final int columns) {
+        final JTextArea a = new JTextArea(rows, columns);
         a.setFont(Theme.mono());
         a.setLineWrap(true);
         a.setWrapStyleWord(true);
-        UndoManager undo = new UndoManager();
+        final UndoManager undo = new UndoManager();
         a.getDocument().addUndoableEditListener(undo);
-        int menu = Platform.menuShortcutMask();
+        final int menu = Platform.menuShortcutMask();
         // on the menu key whatever the look's own map binds, as the Edit menu forwards them
         a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_X, menu), DefaultEditorKit.cutAction);
         a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), DefaultEditorKit.copyAction);
@@ -146,26 +147,26 @@ public final class Editors {
         return a;
     }
 
-    private static Action action(Runnable r) {
+    private static Action action(final Runnable r) {
         return new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 r.run();
             }
         };
     }
 
     /** A read-only viewer for {@code syntax}, a file extension or a style constant. */
-    public static RSyntaxTextArea viewer(String syntax) {
-        RSyntaxTextArea a = base(styleFor(syntax));
+    public static RSyntaxTextArea viewer(final String syntax) {
+        final RSyntaxTextArea a = base(styleFor(syntax));
         a.setEditable(false);
         a.setHighlightCurrentLine(false);
         return a;
     }
 
     /** {@code area} in a borderless scroll pane, with or without line numbers, without fold indicators. */
-    public static RTextScrollPane scroll(RSyntaxTextArea area, boolean lineNumbers) {
-        RTextScrollPane sp = new RTextScrollPane(area, lineNumbers);
+    public static RTextScrollPane scroll(final RSyntaxTextArea area, final boolean lineNumbers) {
+        final RTextScrollPane sp = new RTextScrollPane(area, lineNumbers);
         sp.setFoldIndicatorEnabled(false);
         FocusRing.install(sp);
         sp.getGutter().setLineNumberFont(Theme.font(Theme.mono(), Theme.TextSize.SMALL));
@@ -173,14 +174,14 @@ public final class Editors {
     }
 
     /** The style of a file: by its extension, or by its whole name for files such as {@code Makefile}. */
-    public static String styleFor(Path file) {
-        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        int dot = name.lastIndexOf('.');
+    public static String styleFor(final Path file) {
+        final String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        final int dot = name.lastIndexOf('.');
         return styleFor(dot < 0 ? name : name.substring(dot + 1));
     }
 
     /** The style of {@code syntax}: a file extension, a fence's language or a style constant; none when unknown. */
-    public static String styleFor(String syntax) {
+    public static String styleFor(final String syntax) {
         if (syntax == null || syntax.isEmpty()) {
             return SyntaxConstants.SYNTAX_STYLE_NONE;
         }
@@ -190,8 +191,8 @@ public final class Editors {
         return STYLES.getOrDefault(syntax.toLowerCase(Locale.ROOT), SyntaxConstants.SYNTAX_STYLE_NONE);
     }
 
-    private static RSyntaxTextArea base(String style) {
-        RSyntaxTextArea a = new RSyntaxTextArea();
+    private static RSyntaxTextArea base(final String style) {
+        final RSyntaxTextArea a = new RSyntaxTextArea();
         // the caret blinks on a Swing timer from construction; hidden until the first focus, which shows it again, an
         // area that is never focused (a viewer, a replaced view) leaves no timer running and holding it
         a.getCaret().setVisible(false);
@@ -204,8 +205,8 @@ public final class Editors {
     }
 
     /** The editor theme's foreground for token type {@code type}, null for the default. */
-    public static Color colorOf(int type) {
-        SyntaxScheme scheme = EditorThemes.scheme();
+    public static Color colorOf(final int type) {
+        final SyntaxScheme scheme = EditorThemes.scheme();
         if (type < 0 || type >= scheme.getStyleCount() || scheme.getStyle(type) == null) {
             return null;
         }
@@ -213,14 +214,14 @@ public final class Editors {
     }
 
     /** Gives {@code area} the editor theme; its font, zoom included, stays as it is. */
-    public static void theme(RSyntaxTextArea area) {
-        Font font = area.getFont();
+    public static void theme(final RSyntaxTextArea area) {
+        final Font font = area.getFont();
         EditorThemes.apply(area);
         area.setFont(font);
         // the theme colours the gutter; the icon column inside it keeps its own background unless told
-        Gutter gutter = RSyntaxUtilities.getGutter(area);
+        final Gutter gutter = RSyntaxUtilities.getGutter(area);
         if (gutter != null) {
-            for (Component c : gutter.getComponents()) {
+            for (final Component c : gutter.getComponents()) {
                 c.setBackground(gutter.getBackground());
             }
         }

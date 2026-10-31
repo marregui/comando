@@ -1,21 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.port.McpGateway;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.core.transcript.TranscriptRegistry;
-import dev.marregui.comando.core.view.Placement;
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.testkit.RecordingSink;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -26,6 +10,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,9 +55,9 @@ class SubagentViewTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        Path projects = tmp.resolve("projects");
+        final Path projects = tmp.resolve("projects");
         subagents = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
-        Path exe = tmp.resolve("fake-claude.sh");
+        final Path exe = tmp.resolve("fake-claude.sh");
         try (InputStream in = getClass().getResourceAsStream("/fake-claude.sh")) {
             Files.write(exe, in.readAllBytes());
         }
@@ -77,29 +78,29 @@ class SubagentViewTest {
         sink.await(Intent.SessionStarted.class, WAIT);
     }
 
-    private void agent(String id, String description, boolean finished, String firstLine) throws IOException {
+    private void agent(final String id, final String description, final boolean finished, final String firstLine) throws IOException {
         Files.writeString(subagents.resolve("agent-" + id + ".meta.json"), "{\"agentType\":\"general-purpose\",\"description\":\""
                 + description + "\",\"toolUseId\":\"toolu_" + id + "\"" + (finished ? ",\"finished\":true" : "") + "}");
         Files.writeString(subagents.resolve("agent-" + id + ".jsonl"), text(firstLine) + "\n");
     }
 
-    private void grow(String id, String line) throws IOException {
+    private void grow(final String id, final String line) throws IOException {
         Files.writeString(subagents.resolve("agent-" + id + ".jsonl"), text(line) + "\n", StandardOpenOption.APPEND);
     }
 
-    private static String text(String t) {
+    private static String text(final String t) {
         return "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"" + t + "\"}]}}";
     }
 
     /** What the sub-agent's tab says of its following (record 109). */
-    private static String state(Intent i) {
+    private static String state(final Intent i) {
         return ((ViewSpec.Agent) (i instanceof Intent.ShowView v ? v.spec() : ((Intent.RefreshView) i).spec())).state();
     }
 
     /** The texts of the tab's transcript: sub-agent {@code toolUseId}'s, as read so far. */
-    private List<String> said(String toolUseId) {
-        Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", toolUseId));
-        List<String> out = new ArrayList<>();
+    private List<String> said(final String toolUseId) {
+        final Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", toolUseId));
+        final List<String> out = new ArrayList<>();
         for (int i = 0; i < t.size(); i++) {
             if (t.get(i) instanceof Block.AssistantText a) {
                 out.add(a.text());
@@ -108,18 +109,18 @@ class SubagentViewTest {
         return out;
     }
 
-    private void awaitSaid(String toolUseId, String text) {
+    private void awaitSaid(final String toolUseId, final String text) {
         Awaitility.await("the tab shows " + text).atMost(WAIT).until(() -> said(toolUseId).contains(text));
     }
 
-    private boolean tabOf(Intent.ShowView v, String toolUseId) {
+    private boolean tabOf(final Intent.ShowView v, final String toolUseId) {
         return v.spec() instanceof ViewSpec.Agent a && a.toolUseId().equals(toolUseId);
     }
 
-    private <T extends Intent> Optional<T> within(Class<T> type, Predicate<T> match, Duration d) {
+    private <T extends Intent> Optional<T> within(final Class<T> type, final Predicate<T> match, final Duration d) {
         try {
             return Optional.of(sink.await(type, match, d));
-        } catch (AssertionError e) {
+        } catch (final AssertionError e) {
             return Optional.empty();
         }
     }
@@ -133,7 +134,7 @@ class SubagentViewTest {
 
         adapter.showSubagent("work", "conv-1", "toolu_a1");
 
-        Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
+        final Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
         assertThat(shown.session()).isEmpty();
         assertThat(shown.title()).isEqualTo("agent · Count the widgets");
         assertThat(shown.placement()).isEqualTo(Placement.LOWER);
@@ -202,7 +203,7 @@ class SubagentViewTest {
     void noFileForTheCallSaysSo() {
         adapter.showSubagent("work", "conv-1", "toolu_missing");
 
-        Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+        final Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
         assertThat(n.level()).isEqualTo(Notice.Level.WARN);
         assertThat(n.text()).isEqualTo("Session work: transcript not found for this sub-agent");
         assertThat(sink.of(Intent.ShowView.class)).isEmpty();
@@ -214,7 +215,7 @@ class SubagentViewTest {
     void anOpenThatFailsSaysSo() {
         adapter.showSubagent("work", "conv\0bad", "toolu_any");
 
-        Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+        final Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
         assertThat(n.level()).isEqualTo(Notice.Level.WARN);
         assertThat(n.text()).isEqualTo("Session work: cannot open the sub-agent's transcript");
     }
@@ -231,7 +232,7 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).isEqualTo(ClaudeAdapter.TAILS);
 
         // the first one no longer follows: its view says so once, and its growth refreshes nothing; the fifth's does
-        Intent.RefreshView stopped = sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 1"), WAIT);
+        final Intent.RefreshView stopped = sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 1"), WAIT);
         assertThat(state(stopped)).isEqualTo(ClaudeAdapter.STOPPED_TOO_MANY);
         grow("b1", "more");
         grow("b5", "more");
@@ -250,9 +251,9 @@ class SubagentViewTest {
         agent("x2", "Review the diff", false, "B-first");
 
         adapter.showSubagent("work", "conv-1", "toolu_x1");
-        Intent.ShowView a = sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x1"), WAIT);
+        final Intent.ShowView a = sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x1"), WAIT);
         adapter.showSubagent("work", "conv-1", "toolu_x2");
-        Intent.ShowView b = sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x2"), WAIT);
+        final Intent.ShowView b = sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x2"), WAIT);
         assertThat(said("toolu_x1")).containsExactly("A-first");
         assertThat(said("toolu_x2")).containsExactly("B-first");
         assertThat(a.title()).isEqualTo("agent · Review the diff");
@@ -265,7 +266,7 @@ class SubagentViewTest {
         assertThat(said("toolu_x2")).as("A's growth goes to A's tab, never B's").containsExactly("B-first");
 
         // the same sub-agent opened again keeps its title, read again whole
-        int shownBefore = sink.of(Intent.ShowView.class).size();
+        final int shownBefore = sink.of(Intent.ShowView.class).size();
         adapter.showSubagent("work", "conv-1", "toolu_x1");
         assertThat(sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x1") && sink.of(Intent.ShowView.class).size() > shownBefore, WAIT).title())
                 .isEqualTo(a.title());
@@ -297,7 +298,7 @@ class SubagentViewTest {
             agent("q" + i, "q" + i, false, "first");
             adapter.showSubagent("work", "conv-1", "toolu_q" + i);
         }
-        long t0 = System.nanoTime();
+        final long t0 = System.nanoTime();
         adapter.close();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(5));
 

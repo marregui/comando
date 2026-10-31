@@ -1,7 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import org.junit.jupiter.api.Test;
-
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -12,6 +10,8 @@ import java.time.Year;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,8 +26,8 @@ class AboutTest {
     /// folder shortened to `~`, the three links, and a footer with the current year.
     @Test
     void theFileWordsTheCardAndThisRunFillsItsFacts() {
-        Map<String, String> facts = About.facts("2.0.0", Path.of(System.getProperty("user.home"), ".comando"), "2.1.302");
-        About.Content c = About.load(facts);
+        final Map<String, String> facts = About.facts("2.0.0", Path.of(System.getProperty("user.home"), ".comando"), "2.1.302");
+        final About.Content c = About.load(facts);
         assertThat(c.name()).isEqualTo("comando");
         assertThat(c.tagline()).isEqualTo("One editor for SQL and Claude Code.");
         assertThat(c.rows()).extracting(About.Row::label).containsExactly("Version", "Java", "Claude Code", "System", "Data");
@@ -43,7 +43,7 @@ class AboutTest {
     /// paragraph as the footer, and gives no footer when there is only a tagline.
     @Test
     void aFactLeftEmptyIsNotShownAndAnUnknownPlaceholderStaysAsWritten() {
-        About.Content c = About.parse("""
+        final About.Content c = About.parse("""
                 # comando
 
                 Words.
@@ -66,23 +66,23 @@ class AboutTest {
     /// point inside the second hits it and a corner hits none, and a click follows `comando:tutorial`.
     @Test
     void theCardPaintsAtRetinaScaleAndALinkClickedGoesWhereItSays() {
-        List<String> followed = new CopyOnWriteArrayList<>();
-        About.Content c = About.load(About.facts("2.0.0", Path.of("/tmp/x"), ""));
-        About.Card card = new About.Card(c, followed::add);
+        final List<String> followed = new CopyOnWriteArrayList<>();
+        final About.Content c = About.load(About.facts("2.0.0", Path.of("/tmp/x"), ""));
+        final About.Card card = new About.Card(c, followed::add);
         card.setSize(card.getPreferredSize());
         assertThat(card.getPreferredSize().width).isEqualTo(About.Card.WIDTH);
-        BufferedImage img = new BufferedImage(card.getWidth() * 2, card.getHeight() * 2, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
+        final BufferedImage img = new BufferedImage(card.getWidth() * 2, card.getHeight() * 2, BufferedImage.TYPE_INT_ARGB);
+        final Graphics2D g = img.createGraphics();
         g.scale(2, 2);
         card.paint(g);
         g.dispose();
         assertThat(img.getRGB(img.getWidth() / 2, img.getHeight() / 2) >>> 24).as("the card is opaque inside").isEqualTo(255);
         assertThat(img.getRGB(1, 1) >>> 24).as("its rounded corner is not").isZero();
 
-        List<Rectangle> links = card.linkBounds();
+        final List<Rectangle> links = card.linkBounds();
         assertThat(links).hasSize(3);
-        Rectangle tutorial = links.get(1);
-        Point inside = new Point((int) tutorial.getCenterX(), (int) tutorial.getCenterY());
+        final Rectangle tutorial = links.get(1);
+        final Point inside = new Point((int) tutorial.getCenterX(), (int) tutorial.getCenterY());
         assertThat(card.linkAt(inside)).isEqualTo(1);
         assertThat(card.linkAt(new Point(5, 5))).isEqualTo(-1);
         card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, inside.x, inside.y, 1, false,
@@ -93,8 +93,8 @@ class AboutTest {
     /// [About.Card#fit] keeps both ends of a long path around `…` within the width, and leaves a short value whole.
     @Test
     void aValueTooLongIsCutInItsMiddle() {
-        String path = "/Users/someone/Library/Application Support/comando/a/very/deep/folder/of/data";
-        String cut = About.Card.fit(path, 160);
+        final String path = "/Users/someone/Library/Application Support/comando/a/very/deep/folder/of/data";
+        final String cut = About.Card.fit(path, 160);
         assertThat(cut).contains("…").startsWith("/Users").endsWith("data").hasSizeLessThan(path.length());
         assertThat(About.Card.fit("2.0.0", 160)).isEqualTo("2.0.0");
     }

@@ -40,16 +40,16 @@ public record PlanUsage(String provider, List<Window> windows, long readAtMillis
     }
 
     /** Claude Code's plan. */
-    public PlanUsage(List<Window> windows, long readAtMillis, String problem) {
+    public PlanUsage(final List<Window> windows, final long readAtMillis, final String problem) {
         this(CLAUDE, windows, readAtMillis, problem);
     }
 
     /** A failed read of Claude Code's plan. */
-    public static PlanUsage failed(String problem, long readAtMillis) {
+    public static PlanUsage failed(final String problem, final long readAtMillis) {
         return failed(CLAUDE, problem, readAtMillis);
     }
 
-    public static PlanUsage failed(String provider, String problem, long readAtMillis) {
+    public static PlanUsage failed(final String provider, final String problem, final long readAtMillis) {
         return new PlanUsage(provider, List.of(), readAtMillis, problem);
     }
 }

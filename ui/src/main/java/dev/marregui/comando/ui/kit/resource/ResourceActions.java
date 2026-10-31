@@ -1,16 +1,16 @@
 package dev.marregui.comando.ui.kit.resource;
 
-import dev.marregui.comando.core.model.Status;
-import dev.marregui.comando.core.resource.ResourceKind;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.ui.kit.text.Plain;
-
-import javax.swing.JOptionPane;
 import java.awt.Component;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import javax.swing.JOptionPane;
+
+import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.resource.ResourceKind;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.ui.kit.text.Plain;
 
 /**
  * What a list of resources (sessions, connections, panels) does besides its rows' own actions: add one, which its tab's
@@ -56,8 +56,8 @@ public final class ResourceActions<T> {
         /**
          * Rows of a resource kind: named by their resource name, in use unless closed or failed, asked its question.
          */
-        public static <T> Rows<T> of(ResourceKind<?> kind, Function<T, String> name, Function<T, Status> status, String closeVerb,
-                                     Supplier<AppState> state) {
+        public static <T> Rows<T> of(final ResourceKind<?> kind, final Function<T, String> name, final Function<T, Status> status, final String closeVerb,
+                                     final Supplier<AppState> state) {
             return new Rows<>(kind.noun(), name, name, t -> status.apply(t) != Status.CLOSED && status.apply(t) != Status.FAILED,
                     closeVerb, t -> kind.removalQuestion(state.get(), name.apply(t)));
         }
@@ -73,7 +73,7 @@ public final class ResourceActions<T> {
      * @param parent what the removal question is shown over
      * @param remove removes the named resource, once the user said so
      */
-    public ResourceActions(Component parent, Rows<T> rows, Editor editor, Consumer<String> remove, Questions questions) {
+    public ResourceActions(final Component parent, final Rows<T> rows, final Editor editor, final Consumer<String> remove, final Questions questions) {
         this.parent = parent;
         this.rows = rows;
         this.editor = editor;
@@ -87,8 +87,8 @@ public final class ResourceActions<T> {
     }
 
     /** Removes {@code row} after asking: the row menu's Remove…. */
-    public void remove(T row) {
-        Object[] options = rows.inUse().test(row) ? new Object[]{rows.closeVerb() + " and remove", "Leave it"} : new Object[]{"Remove", "Cancel"};
+    public void remove(final T row) {
+        final Object[] options = rows.inUse().test(row) ? new Object[]{rows.closeVerb() + " and remove", "Leave it"} : new Object[]{"Remove", "Cancel"};
         if (questions.ask(parent, Plain.text(rows.question().apply(row)), "Remove " + Plain.text(rows.label().apply(row)), options) == 0) {
             remove.accept(rows.name().apply(row));
         }

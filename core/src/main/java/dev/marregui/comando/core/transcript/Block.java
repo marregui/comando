@@ -29,11 +29,11 @@ public sealed interface Block {
             Objects.requireNonNull(parent, "parent");
         }
 
-        public AssistantText appended(String delta) {
+        public AssistantText appended(final String delta) {
             return new AssistantText(messageId, index, text + delta, true, parent);
         }
 
-        public AssistantText finished(String finalText) {
+        public AssistantText finished(final String finalText) {
             return new AssistantText(messageId, index, finalText, false, parent);
         }
     }
@@ -60,11 +60,11 @@ public sealed interface Block {
             Objects.requireNonNull(parent, "parent");
         }
 
-        public ToolCall withInput(String json) {
+        public ToolCall withInput(final String json) {
             return new ToolCall(toolUseId, name, json, resultText, status, parent);
         }
 
-        public ToolCall withResult(String text, boolean error) {
+        public ToolCall withResult(final String text, final boolean error) {
             return new ToolCall(toolUseId, name, inputJson, text, error ? ToolStatus.ERROR : ToolStatus.DONE, parent);
         }
 
@@ -80,8 +80,8 @@ public sealed interface Block {
          * successfully. … agentId: a58…", Claude Code 2.1.302, undocumented); empty for any other result. Only the
          * launch's own text counts, never a report that quotes one.
          */
-        public static String launchedAgent(String result) {
-            Matcher m = LAUNCHED.matcher(result);
+        public static String launchedAgent(final String result) {
+            final Matcher m = LAUNCHED.matcher(result);
             return m.lookingAt() ? m.group(1) : "";
         }
     }

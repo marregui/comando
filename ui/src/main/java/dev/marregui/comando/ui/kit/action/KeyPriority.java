@@ -1,7 +1,5 @@
 package dev.marregui.comando.ui.kit.action;
 
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
@@ -9,6 +7,8 @@ import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 
 /**
  * Gives the commands' keys priority over the focused component in one window. Swing offers a key to the focused
@@ -25,7 +25,7 @@ public final class KeyPriority implements KeyEventDispatcher, AutoCloseable {
     private final BiPredicate<Component, KeyStroke> keeps;
     private boolean swallowTyped;
 
-    private KeyPriority(ActionRegistry registry, Predicate<Component> owns, BiPredicate<Component, KeyStroke> keeps) {
+    private KeyPriority(final ActionRegistry registry, final Predicate<Component> owns, final BiPredicate<Component, KeyStroke> keeps) {
         this.registry = registry;
         this.owns = owns;
         this.keeps = keeps;
@@ -35,30 +35,30 @@ public final class KeyPriority implements KeyEventDispatcher, AutoCloseable {
      * Installs the priority for {@code window}, except for the keys {@code keeps} leaves to the component they are
      * pressed in; close the result to remove it.
      */
-    public static KeyPriority install(ActionRegistry registry, Window window, BiPredicate<Component, KeyStroke> keeps) {
-        KeyPriority p = new KeyPriority(registry, c -> c == window || SwingUtilities.getWindowAncestor(c) == window, keeps);
+    public static KeyPriority install(final ActionRegistry registry, final Window window, final BiPredicate<Component, KeyStroke> keeps) {
+        final KeyPriority p = new KeyPriority(registry, c -> c == window || SwingUtilities.getWindowAncestor(c) == window, keeps);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(p);
         return p;
     }
 
     /** For tests: the dispatcher, not installed, claiming keys whose source {@code owns} accepts and does not keep. */
-    static KeyPriority detached(ActionRegistry registry, Predicate<Component> owns, BiPredicate<Component, KeyStroke> keeps) {
+    static KeyPriority detached(final ActionRegistry registry, final Predicate<Component> owns, final BiPredicate<Component, KeyStroke> keeps) {
         return new KeyPriority(registry, owns, keeps);
     }
 
     @Override
-    public boolean dispatchKeyEvent(KeyEvent e) {
+    public boolean dispatchKeyEvent(final KeyEvent e) {
         switch (e.getID()) {
             case KeyEvent.KEY_PRESSED -> {
                 swallowTyped = false;
                 if (e.getComponent() == null || !owns.test(e.getComponent())) {
                     return false;
                 }
-                KeyStroke key = KeyStroke.getKeyStrokeForEvent(e);
+                final KeyStroke key = KeyStroke.getKeyStrokeForEvent(e);
                 if (keeps.test(e.getComponent(), key)) {
                     return false;
                 }
-                Command c = registry.forKey(key);
+                final Command c = registry.forKey(key);
                 if (c == null || !c.enabled().getAsBoolean()) {
                     return false;
                 }

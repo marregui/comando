@@ -1,8 +1,8 @@
 package dev.marregui.comando.tools;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,7 +37,7 @@ class ListingLinesTest {
     /// retained prose mention by its new one-based line number.
     @Test
     void aFileLosesItsListItemWithTheLinesUnderItAndItsTableRowAndTheProseThatNamesItIsReported() {
-        ListingLines.Result r = ListingLines.without(ALPHA, List.of("READ-01-ATLAS-OCT-18.md"));
+        final ListingLines.Result r = ListingLines.without(ALPHA, List.of("READ-01-ATLAS-OCT-18.md"));
         assertThat(r.removed()).as("the item, its continuation line and the table row").isEqualTo(3);
         assertThat(r.text()).doesNotContain("1. `READ-01", "Thirteen incidents", "| READ-01-ATLAS-OCT-18.md |")
                 .contains("2. `READ-02-OTHER-OCT-18.md`", "candidates in READ-01-ATLAS-OCT-18.md.", "| `work/` |");
@@ -49,11 +49,11 @@ class ListingLinesTest {
     /// folder is requested, reporting the shared row as a mention instead.
     @Test
     void aFolderLosesItsRowAndAFileInsideItIsOnlyReportedFromTheSharedRow() {
-        ListingLines.Result folder = ListingLines.without(ALPHA, List.of("work/"));
+        final ListingLines.Result folder = ListingLines.without(ALPHA, List.of("work/"));
         assertThat(folder.removed()).isEqualTo(1);
         assertThat(folder.text()).doesNotContain("`work/`").contains("| READ-01-ATLAS-OCT-18.md |");
 
-        ListingLines.Result nested = ListingLines.without(ALPHA, List.of("work/MINE.py"));
+        final ListingLines.Result nested = ListingLines.without(ALPHA, List.of("work/MINE.py"));
         assertThat(nested.removed()).as("named in a row about the folder, not its own").isZero();
         assertThat(nested.text()).isEqualTo(ALPHA);
         assertThat(nested.mentions()).containsExactly(16);
@@ -63,10 +63,10 @@ class ListingLinesTest {
     /// and mentions unchanged.
     @Test
     void aLinkNamesTheFileItPointsToAndNothingElseIsTouched() {
-        ListingLines.Result r = ListingLines.without(ALPHA, List.of("notes.md"));
+        final ListingLines.Result r = ListingLines.without(ALPHA, List.of("notes.md"));
         assertThat(r.removed()).isEqualTo(1);
         assertThat(r.text()).doesNotContain("[notes.md]");
-        ListingLines.Result none = ListingLines.without(ALPHA, List.of("missing.md"));
+        final ListingLines.Result none = ListingLines.without(ALPHA, List.of("missing.md"));
         assertThat(none.removed()).isZero();
         assertThat(none.text()).isEqualTo(ALPHA);
         assertThat(none.mentions()).isEmpty();
@@ -76,8 +76,8 @@ class ListingLinesTest {
     /// and its continuation are retained.
     @Test
     void aFolderIsNamedWithItsSlashSoAWordLikeItsNameStays() {
-        String text = "- work in progress: the miner\n  still running\n- `work/`: scripts\n";
-        ListingLines.Result r = ListingLines.without(text, List.of("work/"));
+        final String text = "- work in progress: the miner\n  still running\n- `work/`: scripts\n";
+        final ListingLines.Result r = ListingLines.without(text, List.of("work/"));
         assertThat(r.text()).isEqualTo("- work in progress: the miner\n  still running\n");
         assertThat(r.removed()).isEqualTo(1);
     }
@@ -85,7 +85,7 @@ class ListingLinesTest {
     /// [ListingLines#without] removes the requested CRLF list line and preserves the remaining line's CRLF ending.
     @Test
     void windowsLineEndsAreReadAndKept() {
-        ListingLines.Result r = ListingLines.without("1. `a.md`: x\r\n2. `b.md`: y\r\n", List.of("a.md"));
+        final ListingLines.Result r = ListingLines.without("1. `a.md`: x\r\n2. `b.md`: y\r\n", List.of("a.md"));
         assertThat(r.removed()).isEqualTo(1);
         assertThat(r.text()).isEqualTo("2. `b.md`: y\r\n");
     }
@@ -94,8 +94,8 @@ class ListingLinesTest {
     /// `data.md` and `a.md.bak` fragments.
     @Test
     void aCodeBlockIsNeverAnEntrysOwnLineAndAWholeNameIsAMention() {
-        String text = "```\n- a.md\n```\n- see data.md and a.md.bak\n- then a.md.\n";
-        ListingLines.Result r = ListingLines.without(text, List.of("a.md"));
+        final String text = "```\n- a.md\n```\n- see data.md and a.md.bak\n- then a.md.\n";
+        final ListingLines.Result r = ListingLines.without(text, List.of("a.md"));
         assertThat(r.removed()).as("the fenced line stays").isZero();
         assertThat(r.mentions()).as("the fenced line and the sentence; not data.md, not a.md.bak").containsExactly(2, 5);
     }

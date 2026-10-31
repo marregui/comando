@@ -1,4 +1,5 @@
 [versions]
+checkstyle = "14.3.0"
 flatlaf = "3.7.2"
 # the SVG renderer FlatLaf's extras use; kept at their version
 jsvg = "2.2.0"

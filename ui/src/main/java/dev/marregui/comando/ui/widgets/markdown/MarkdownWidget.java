@@ -1,5 +1,13 @@
 package dev.marregui.comando.ui.widgets.markdown;
 
+import java.awt.Point;
+import java.nio.file.Files;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
@@ -8,14 +16,6 @@ import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widget.capability.Exportable;
-
-import javax.swing.BorderFactory;
-import javax.swing.JComponent;
-import javax.swing.JScrollBar;
-import javax.swing.JScrollPane;
-import javax.swing.SwingUtilities;
-import java.awt.Point;
-import java.nio.file.Files;
 
 /** A Markdown view, rendered: a document or notes Claude places. */
 public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable, Exportable {
@@ -41,11 +41,11 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
      * was at the end; another document under the same view starts at its top.
      */
     @Override
-    public void render(ViewSpec.Markdown view) {
-        boolean first = !sameDocument(markdown, view.markdown());
-        JScrollBar bar = scroll.getVerticalScrollBar();
-        boolean atEnd = bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 4 && bar.getValue() > 0;
-        Point at = scroll.getViewport().getViewPosition();
+    public void render(final ViewSpec.Markdown view) {
+        final boolean first = !sameDocument(markdown, view.markdown());
+        final JScrollBar bar = scroll.getVerticalScrollBar();
+        final boolean atEnd = bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 4 && bar.getValue() > 0;
+        final Point at = scroll.getViewport().getViewPosition();
         markdown = view.markdown();
         pane.setMarkdown(markdown);
         if (first) {
@@ -65,17 +65,17 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
 
     static final int SAME_START = 200;
 
-    private static boolean sameDocument(String before, String after) {
+    private static boolean sameDocument(final String before, final String after) {
         if (before.isEmpty()) {
             return false;
         }
-        int n = Math.min(SAME_START, Math.min(before.length(), after.length()));
+        final int n = Math.min(SAME_START, Math.min(before.length(), after.length()));
         return before.regionMatches(0, after, 0, n);
     }
 
     @Override
     public String copyText() {
-        String selected = pane.getSelectedText();
+        final String selected = pane.getSelectedText();
         return selected != null ? selected : markdown;
     }
 
@@ -92,7 +92,7 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
 
     @Override
     public Export prepare() {
-        String text = markdown;
+        final String text = markdown;
         return file -> Files.writeString(file, text);
     }
 }

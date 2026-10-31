@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.kit.async;
 
+import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
+
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.InvocationInterceptor;
 import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
-
-import javax.swing.SwingUtilities;
-import java.lang.reflect.Method;
-import java.util.concurrent.atomic.AtomicReference;
 
 /// Runs each test method on the event dispatch thread, as the application runs its components. A test that drives a
 /// component from JUnit's thread races the component's own Swing timers, which fire on the EDT. A failure on the EDT is
@@ -14,13 +14,13 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OnEdt implements InvocationInterceptor {
 
     @Override
-    public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-                                    ExtensionContext extensionContext) throws Throwable {
-        AtomicReference<Throwable> failure = new AtomicReference<>();
+    public void interceptTestMethod(final Invocation<Void> invocation, final ReflectiveInvocationContext<Method> invocationContext,
+                                    final ExtensionContext extensionContext) throws Throwable {
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             try {
                 invocation.proceed();
-            } catch (Throwable t) {
+            } catch (final Throwable t) {
                 failure.set(t);
             }
         });

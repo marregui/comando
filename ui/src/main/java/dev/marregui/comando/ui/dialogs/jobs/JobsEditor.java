@@ -1,31 +1,5 @@
 package dev.marregui.comando.ui.dialogs.jobs;
 
-import dev.marregui.comando.core.model.KitJob;
-import dev.marregui.comando.core.model.KitJobs;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.JToggleButton;
-import javax.swing.ListSelectionModel;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -45,6 +19,32 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.JToggleButton;
+import javax.swing.ListSelectionModel;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.JTextComponent;
+
+import dev.marregui.comando.core.model.KitJob;
+import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The kit's scheduled jobs as a list with the selected one's fields beside it (record 117): add, remove, and the
@@ -78,7 +78,7 @@ public final class JobsEditor {
         boolean enabled;
         final String was;
 
-        Row(KitJob j, String was) {
+        Row(final KitJob j, final String was) {
             name = j.name();
             description = j.description();
             for (int d = 0; d < 7; d++) {
@@ -94,13 +94,13 @@ public final class JobsEditor {
         }
 
         KitJob job() {
-            List<String> d = new ArrayList<>();
+            final List<String> d = new ArrayList<>();
             for (int i = 0; i < 7; i++) {
                 if (days[i]) {
                     d.add(KitJob.WEEKDAYS.get(i));
                 }
             }
-            List<String> command = new ArrayList<>();
+            final List<String> command = new ArrayList<>();
             command.add(program.strip());
             command.addAll(KitJob.words(arguments));
             // the description as written: kit.py takes outer spaces, and stripping them would change an untouched job
@@ -143,11 +143,11 @@ public final class JobsEditor {
     private boolean loading;
 
     /** Edits {@code jobs}, the kit's at {@code root}, as {@code kit.py} last reported them. */
-    public JobsEditor(List<KitJobs.Entry> jobs, Path root, Actions actions) {
+    public JobsEditor(final List<KitJobs.Entry> jobs, final Path root, final Actions actions) {
         this.base = jobs.stream().map(KitJobs.Entry::job).toList();
         this.root = root;
         this.actions = actions;
-        for (KitJobs.Entry e : jobs) {
+        for (final KitJobs.Entry e : jobs) {
             facts.put(e.job().name(), e);
             rows.addElement(new Row(e.job(), e.job().name()));
         }
@@ -165,12 +165,12 @@ public final class JobsEditor {
     }
 
     /** Runs whenever the list or a field changes: the window enables Save. */
-    public void onChange(Runnable r) {
+    public void onChange(final Runnable r) {
         changed = r;
     }
 
     /** Selects the job named {@code job}, when there is one. */
-    public void select(String job) {
+    public void select(final String job) {
         for (int i = 0; i < rows.size(); i++) {
             if (rows.get(i).name.equals(job)) {
                 list.setSelectedIndex(i);
@@ -185,7 +185,7 @@ public final class JobsEditor {
     }
 
     private List<KitJob> edited() {
-        List<KitJob> out = new ArrayList<>(rows.size());
+        final List<KitJob> out = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             out.add(rows.get(i).job());
         }
@@ -194,7 +194,7 @@ public final class JobsEditor {
 
     /** Whether the list differs from the one the window opened with, after the canonical form of each job. */
     public boolean dirty() {
-        List<KitJob> now = edited();
+        final List<KitJob> now = edited();
         if (now.size() != base.size()) {
             return true;
         }
@@ -206,14 +206,14 @@ public final class JobsEditor {
         return false;
     }
 
-    private static boolean same(KitJob a, KitJob b) {
+    private static boolean same(final KitJob a, final KitJob b) {
         return a.name().equals(b.name()) && a.description().equals(b.description()) && a.when().equals(b.when())
                 && a.command().equals(b.command()) && a.env().equals(b.env()) && a.log().equals(b.log()) && a.enabled() == b.enabled();
     }
 
     /** Whether every job passes, so the list can be saved. */
     public boolean valid() {
-        List<KitJob> now = edited();
+        final List<KitJob> now = edited();
         for (int i = 0; i < now.size(); i++) {
             if (!KitJob.problems(now, i).isEmpty()) {
                 return false;
@@ -223,12 +223,12 @@ public final class JobsEditor {
     }
 
     /** Job {@code i}'s problems by field. */
-    Map<String, String> problems(int i) {
+    Map<String, String> problems(final int i) {
         return KitJob.problems(edited(), i);
     }
 
     /** Says in the message line what {@code kit.py} refused, until the next edit. */
-    public void refused(String why) {
+    public void refused(final String why) {
         refused = why;
         refresh();
     }
@@ -248,7 +248,7 @@ public final class JobsEditor {
         edited(true);
     }
 
-    private boolean taken(String n) {
+    private boolean taken(final String n) {
         for (int i = 0; i < rows.size(); i++) {
             if (rows.get(i).name.strip().equals(n)) {
                 return true;
@@ -259,7 +259,7 @@ public final class JobsEditor {
 
     /** Takes the selected job out of the list; the next one is selected. */
     void remove() {
-        int i = list.getSelectedIndex();
+        final int i = list.getSelectedIndex();
         if (i < 0) {
             return;
         }
@@ -276,7 +276,7 @@ public final class JobsEditor {
     }
 
     /** The field for {@code key} (a {@link KitJob} field name, or {@code enabled}), for tests. */
-    JComponent field(String key) {
+    JComponent field(final String key) {
         return switch (key) {
             case KitJob.NAME_FIELD -> name;
             case KitJob.DESCRIPTION_FIELD -> description;
@@ -291,7 +291,7 @@ public final class JobsEditor {
     }
 
     /** The toggle of weekday {@code d}, 0 for Monday. */
-    JToggleButton day(int d) {
+    JToggleButton day(final int d) {
         return days[d];
     }
 
@@ -304,21 +304,21 @@ public final class JobsEditor {
     }
 
     /** The menu of the job at row {@code i}: run it now and open its log, for a job the kit already has; remove it. */
-    JPopupMenu menuFor(int i) {
-        JPopupMenu menu = new JPopupMenu();
-        Row r = rows.get(i);
-        KitJobs.Entry e = facts.get(r.was);
-        JMenuItem run = new JMenuItem("Run now", Icons.get("play"));
+    JPopupMenu menuFor(final int i) {
+        final JPopupMenu menu = new JPopupMenu();
+        final Row r = rows.get(i);
+        final KitJobs.Entry e = facts.get(r.was);
+        final JMenuItem run = new JMenuItem("Run now", Icons.get("play"));
         run.setToolTipText("Start it through the scheduler; its output goes to its log");
         run.setEnabled(e != null && e.job().enabled() && !e.running());
         run.addActionListener(a -> actions.run(r.was));
         menu.add(run);
-        JMenuItem open = new JMenuItem("Open the log", Icons.get("log"));
+        final JMenuItem open = new JMenuItem("Open the log", Icons.get("log"));
         open.setToolTipText("Open the file the job writes its output to");
         open.setEnabled(e != null && !e.logPath().isEmpty());
         open.addActionListener(a -> actions.openLog(Path.of(e.logPath())));
         menu.add(open);
-        JMenuItem drop = new JMenuItem("Remove", Icons.get("close"));
+        final JMenuItem drop = new JMenuItem("Remove", Icons.get("close"));
         drop.setToolTipText("Take the job out of the list; Save unloads it and removes it from the kit");
         drop.addActionListener(a -> {
             list.setSelectedIndex(i);
@@ -329,12 +329,12 @@ public final class JobsEditor {
     }
 
     /** How the scheduler holds job {@code r}, in one line; a job added or renamed here is not the scheduler's yet. */
-    String stateOf(Row r) {
-        KitJobs.Entry e = facts.get(r.was);
+    String stateOf(final Row r) {
+        final KitJobs.Entry e = facts.get(r.was);
         if (e == null || !r.was.equals(r.name.strip())) {
             return "new: Save installs it";
         }
-        List<String> parts = new ArrayList<>();
+        final List<String> parts = new ArrayList<>();
         if (!e.job().enabled()) {
             parts.add("paused");
         } else if (e.pending()) {
@@ -353,13 +353,13 @@ public final class JobsEditor {
     }
 
     /** {@code 2026-10-28T19:49:59+01:00} as {@code Wed 10-28 19:49}. */
-    static String when(String iso) {
+    static String when(final String iso) {
         try {
-            OffsetDateTime t = OffsetDateTime.parse(iso);
-            String d = t.getDayOfWeek().name();
+            final OffsetDateTime t = OffsetDateTime.parse(iso);
+            final String d = t.getDayOfWeek().name();
             return d.charAt(0) + d.substring(1, 3).toLowerCase(Locale.ROOT)
                     + String.format(Locale.ROOT, " %02d-%02d %02d:%02d", t.getMonthValue(), t.getDayOfMonth(), t.getHour(), t.getMinute());
-        } catch (DateTimeParseException e) {
+        } catch (final DateTimeParseException e) {
             return iso;
         }
     }
@@ -371,12 +371,12 @@ public final class JobsEditor {
         list.getAccessibleContext().setAccessibleName("Jobs");
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean sel, boolean focus) {
-                JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
+            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int i, final boolean sel, final boolean focus) {
+                final JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
                 if (value instanceof Row r) {
-                    boolean bad = i < rows.size() && !problems(i).isEmpty();
-                    KitJobs.Entry e = facts.get(r.was);
-                    boolean failed = e != null && e.failed();
+                    final boolean bad = i < rows.size() && !problems(i).isEmpty();
+                    final KitJobs.Entry e = facts.get(r.was);
+                    final boolean failed = e != null && e.failed();
                     c.setText(Plain.text((bad ? "✗ " : "") + (r.name.isBlank() ? "(no name)" : r.name) + "   " + r.job().when()
                             + (e != null && e.running() ? " · running" : "")));
                     if (!sel && (bad || failed)) {
@@ -397,17 +397,17 @@ public final class JobsEditor {
         });
         list.addMouseListener(new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e) {
+            public void mousePressed(final MouseEvent e) {
                 popup(e);
             }
 
             @Override
-            public void mouseReleased(MouseEvent e) {
+            public void mouseReleased(final MouseEvent e) {
                 popup(e);
             }
 
-            private void popup(MouseEvent e) {
-                int i = list.locationToIndex(e.getPoint());
+            private void popup(final MouseEvent e) {
+                final int i = list.locationToIndex(e.getPoint());
                 if (!e.isPopupTrigger() || i < 0) {
                     return;
                 }
@@ -418,33 +418,33 @@ public final class JobsEditor {
         add.addActionListener(e -> add());
         remove.addActionListener(e -> remove());
 
-        JScrollPane listScroll = new JScrollPane(list);
+        final JScrollPane listScroll = new JScrollPane(list);
         listScroll.setPreferredSize(new Dimension(260, 260));
-        JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
+        final JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
         listButtons.add(add);
         listButtons.add(remove);
-        JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
+        final JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
         left.add(listScroll, BorderLayout.CENTER);
         left.add(listButtons, BorderLayout.SOUTH);
 
-        JPanel week = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
+        final JPanel week = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
         for (int d = 0; d < 7; d++) {
-            String w = KitJob.WEEKDAYS.get(d);
+            final String w = KitJob.WEEKDAYS.get(d);
             days[d] = new JToggleButton(w.charAt(0) + w.substring(1).toLowerCase(Locale.ROOT));
             days[d].setToolTipText("Run on " + w.charAt(0) + w.substring(1).toLowerCase(Locale.ROOT) + "days; all seven: daily");
             days[d].getAccessibleContext().setAccessibleName(w);
             days[d].addActionListener(e -> store());
             week.add(days[d]);
         }
-        JPanel when = new JPanel(new BorderLayout(Theme.GAP, 0));
+        final JPanel when = new JPanel(new BorderLayout(Theme.GAP, 0));
         when.add(week, BorderLayout.CENTER);
         when.add(time, BorderLayout.EAST);
         time.setToolTipText("The time it starts, HH:MM, 24 hours, local time");
         time.getAccessibleContext().setAccessibleName("Time");
         chooseProgram.setToolTipText("Choose a program in the kit's bin/");
         chooseProgram.addActionListener(e -> actions.program(body, root.resolve("bin")).ifPresent(f -> {
-            Path abs = f.toAbsolutePath().normalize();
-            Path r = root.toAbsolutePath().normalize();
+            final Path abs = f.toAbsolutePath().normalize();
+            final Path r = root.toAbsolutePath().normalize();
             if (!abs.startsWith(r)) {
                 refused("the program must be inside " + r + ": not taken");
             } else {
@@ -453,7 +453,7 @@ public final class JobsEditor {
         }));
         env.setLineWrap(false);
 
-        JPanel form = new JPanel(new GridBagLayout());
+        final JPanel form = new JPanel(new GridBagLayout());
         int y = 0;
         y = row(form, y, "Name", name, KitJob.NAME_FIELD, "The job's name: lower case, digits and -; unique");
         y = row(form, y, "Description", description, KitJob.DESCRIPTION_FIELD, "One line on what it does, at most 80 characters");
@@ -466,7 +466,7 @@ public final class JobsEditor {
         y = row(form, y, "Environment", new JScrollPane(env), KitJob.ENV_FIELD, "Variables it adds, one NAME=value per line");
         y = row(form, y, "Log", log, KitJob.LOG_FIELD, "The file its output goes to, inside the kit; empty: .kit-jobs/<name>.log");
         y = row(form, y, "Enabled", enabled, "enabled", "Off pauses the job: it stays in the list, unloaded from the scheduler");
-        GridBagConstraints g = new GridBagConstraints();
+        final GridBagConstraints g = new GridBagConstraints();
         g.gridx = 1;
         g.gridy = y;
         g.anchor = GridBagConstraints.LINE_START;
@@ -482,20 +482,20 @@ public final class JobsEditor {
         g.weighty = 1;
         form.add(new JPanel(), g);
 
-        for (JTextComponent f : List.of(name, description, time, program, arguments, env, log)) {
+        for (final JTextComponent f : List.of(name, description, time, program, arguments, env, log)) {
             f.getDocument().addDocumentListener(new DocumentListener() {
                 @Override
-                public void insertUpdate(DocumentEvent e) {
+                public void insertUpdate(final DocumentEvent e) {
                     store();
                 }
 
                 @Override
-                public void removeUpdate(DocumentEvent e) {
+                public void removeUpdate(final DocumentEvent e) {
                     store();
                 }
 
                 @Override
-                public void changedUpdate(DocumentEvent e) {
+                public void changedUpdate(final DocumentEvent e) {
                     store();
                 }
             });
@@ -507,13 +507,13 @@ public final class JobsEditor {
         body.add(form, BorderLayout.CENTER);
     }
 
-    private int row(JPanel form, int y, String label, JComponent field, String key, String tip) {
-        GridBagConstraints g = new GridBagConstraints();
+    private int row(final JPanel form, final int y, final String label, final JComponent field, final String key, final String tip) {
+        final GridBagConstraints g = new GridBagConstraints();
         g.gridx = 0;
         g.gridy = y;
         g.anchor = GridBagConstraints.LINE_END;
         g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
-        JLabel caption = new JLabel(label);
+        final JLabel caption = new JLabel(label);
         caption.setToolTipText(tip);
         form.add(caption, g);
         g.gridx = 1;
@@ -522,7 +522,7 @@ public final class JobsEditor {
         g.weightx = 1;
         g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
         form.add(field, g);
-        JComponent input = key.equals(KitJob.DAYS_FIELD) ? field : field(key);
+        final JComponent input = key.equals(KitJob.DAYS_FIELD) ? field : field(key);
         input.setToolTipText(tip);
         input.getAccessibleContext().setAccessibleName(label);
         caption.setLabelFor(input);
@@ -531,24 +531,24 @@ public final class JobsEditor {
         return y + 1;
     }
 
-    private static JPanel withButton(JComponent field, JButton button) {
-        JPanel p = new JPanel(new BorderLayout(4, 0));
+    private static JPanel withButton(final JComponent field, final JButton button) {
+        final JPanel p = new JPanel(new BorderLayout(4, 0));
         p.add(field, BorderLayout.CENTER);
         p.add(button, BorderLayout.EAST);
         return p;
     }
 
-    private static String lines(String... lines) {
+    private static String lines(final String... lines) {
         return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
     }
 
     /** Fills the fields with the selected job's; with none selected they are empty and off. */
     private void load() {
-        Row r = list.getSelectedValue();
+        final Row r = list.getSelectedValue();
         loading = true;
         try {
-            boolean on = r != null;
-            for (JComponent c : List.of(name, description, time, program, chooseProgram, arguments, env, log, enabled, remove)) {
+            final boolean on = r != null;
+            for (final JComponent c : List.of(name, description, time, program, chooseProgram, arguments, env, log, enabled, remove)) {
                 c.setEnabled(on);
             }
             for (int d = 0; d < 7; d++) {
@@ -571,7 +571,7 @@ public final class JobsEditor {
 
     /** Takes the fields into the selected job. */
     private void store() {
-        Row r = list.getSelectedValue();
+        final Row r = list.getSelectedValue();
         if (loading || r == null) {
             return;
         }
@@ -589,7 +589,7 @@ public final class JobsEditor {
         edited(true);
     }
 
-    private void edited(boolean byUser) {
+    private void edited(final boolean byUser) {
         if (byUser) {
             refused = "";
         }
@@ -599,11 +599,11 @@ public final class JobsEditor {
 
     /** Shows the selected job's problems and state, marks the list, and enables what applies. */
     private void refresh() {
-        int i = list.getSelectedIndex();
-        Map<String, String> p = i < 0 ? Map.of() : problems(i);
+        final int i = list.getSelectedIndex();
+        final Map<String, String> p = i < 0 ? Map.of() : problems(i);
         inputs.forEach((key, field) -> field.putClientProperty("JComponent.outline", p.containsKey(key) ? "error" : null));
-        Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
-        String text = !refused.isEmpty() ? refused : first != null ? labels.getOrDefault(first.getKey(), first.getKey()) + ": " + first.getValue() : "";
+        final Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
+        final String text = !refused.isEmpty() ? refused : first != null ? labels.getOrDefault(first.getKey(), first.getKey()) + ": " + first.getValue() : "";
         message.setText(text.isEmpty() ? " " : Plain.text(text));
         message.setForeground(Theme.DANGER);
         state.setText(i < 0 ? " " : Plain.text(stateOf(rows.get(i))));
@@ -611,8 +611,8 @@ public final class JobsEditor {
         changed.run();
     }
 
-    private static JButton tool(String icon, String tip) {
-        JButton b = new JButton(Icons.get(icon));
+    private static JButton tool(final String icon, final String tip) {
+        final JButton b = new JButton(Icons.get(icon));
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setToolTipText(tip);
         b.getAccessibleContext().setAccessibleName(tip);
@@ -621,7 +621,7 @@ public final class JobsEditor {
 
     /** For tests: the problems of the selected job as the form shows them, in field order. */
     Map<String, String> problemsShown() {
-        int i = list.getSelectedIndex();
+        final int i = list.getSelectedIndex();
         return i < 0 ? Map.of() : new LinkedHashMap<>(problems(i));
     }
 }

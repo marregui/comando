@@ -1,7 +1,11 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.ui.kit.theme.ContentPalette;
-import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Font;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.RSyntaxUtilities;
 import org.fife.ui.rsyntaxtextarea.Style;
@@ -10,11 +14,8 @@ import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.fife.ui.rtextarea.Gutter;
 
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Font;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import dev.marregui.comando.ui.kit.theme.ContentPalette;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 
 /**
  * The editors' colours, made in code from the theme's content palette ({@code Theme.content()}, record 101) on the
@@ -32,12 +33,12 @@ final class EditorThemes {
     }
 
     /** Gives {@code area} the palette chosen now, and again each time another is chosen while it is shown. */
-    static void apply(RSyntaxTextArea area) {
+    static void apply(final RSyntaxTextArea area) {
         restyle(area);
         if (area.getClientProperty(FOLLOWS_PALETTE) == null) {
             area.putClientProperty(FOLLOWS_PALETTE, Boolean.TRUE);
             SidebarLook.whileShown(area, () -> {
-                Font font = area.getFont();
+                final Font font = area.getFont();
                 restyle(area);
                 area.setFont(font);
                 area.repaint();
@@ -46,16 +47,16 @@ final class EditorThemes {
     }
 
     /** {@code area}, its gutter and the gutter's columns in the palette chosen now; the font is the theme's base. */
-    private static void restyle(RSyntaxTextArea area) {
-        ContentPalette p = dev.marregui.comando.ui.kit.theme.Theme.content();
-        Theme theme = theme(p);
+    private static void restyle(final RSyntaxTextArea area) {
+        final ContentPalette p = dev.marregui.comando.ui.kit.theme.Theme.content();
+        final Theme theme = theme(p);
         theme.apply(area);
         // each area its own copy: a zoom rewrites its scheme's fonts, which would reach every other editor
         area.setSyntaxScheme((SyntaxScheme) theme.scheme.clone());
         area.setForeground(p.ink);
-        Gutter gutter = RSyntaxUtilities.getGutter(area);
+        final Gutter gutter = RSyntaxUtilities.getGutter(area);
         if (gutter != null) {
-            for (Component c : gutter.getComponents()) {
+            for (final Component c : gutter.getComponents()) {
                 c.setBackground(theme.gutterBackgroundColor);
             }
         }
@@ -66,17 +67,17 @@ final class EditorThemes {
         return theme(dev.marregui.comando.ui.kit.theme.Theme.content()).scheme;
     }
 
-    private static Theme theme(ContentPalette p) {
+    private static Theme theme(final ContentPalette p) {
         return THEMES.computeIfAbsent(p, EditorThemes::make);
     }
 
-    private static Theme make(ContentPalette p) {
-        Color ground = dev.marregui.comando.ui.kit.theme.Theme.ground();
+    private static Theme make(final ContentPalette p) {
+        final Color ground = dev.marregui.comando.ui.kit.theme.Theme.ground();
         // the theme's only constructor reads an area; this one is never shown, and its caret would otherwise keep
         // blinking on a Swing timer that never stops, which keeps AWT, and a JVM with no window, alive
-        RSyntaxTextArea stray = new RSyntaxTextArea();
+        final RSyntaxTextArea stray = new RSyntaxTextArea();
         stray.getCaret().setBlinkRate(0);
-        Theme t = new Theme(stray);
+        final Theme t = new Theme(stray);
         t.baseFont = RSyntaxTextArea.getDefaultFont();
         t.bgColor = ground;
         t.caretColor = p.caret;
@@ -114,22 +115,22 @@ final class EditorThemes {
     }
 
     /** Every token type's colour: the ink unless named below; documentation comments in italic. */
-    private static SyntaxScheme scheme(ContentPalette p, Font base) {
-        SyntaxScheme s = new SyntaxScheme(base, false);
-        Font italic = base.deriveFont(Font.ITALIC);
+    private static SyntaxScheme scheme(final ContentPalette p, final Font base) {
+        final SyntaxScheme s = new SyntaxScheme(base, false);
+        final Font italic = base.deriveFont(Font.ITALIC);
         for (int i = 0; i < TokenTypes.DEFAULT_NUM_TOKEN_TYPES; i++) {
             s.setStyle(i, new Style(p.ink));
         }
-        for (int type : new int[]{TokenTypes.RESERVED_WORD, TokenTypes.RESERVED_WORD_2, TokenTypes.DATA_TYPE,
+        for (final int type : new int[]{TokenTypes.RESERVED_WORD, TokenTypes.RESERVED_WORD_2, TokenTypes.DATA_TYPE,
                 TokenTypes.LITERAL_BOOLEAN, TokenTypes.MARKUP_TAG_DELIMITER, TokenTypes.MARKUP_TAG_NAME,
                 TokenTypes.MARKUP_DTD, TokenTypes.MARKUP_PROCESSING_INSTRUCTION, TokenTypes.MARKUP_CDATA_DELIMITER}) {
             s.setStyle(type, new Style(p.keyword));
         }
-        for (int type : new int[]{TokenTypes.LITERAL_NUMBER_DECIMAL_INT, TokenTypes.LITERAL_NUMBER_FLOAT,
+        for (final int type : new int[]{TokenTypes.LITERAL_NUMBER_DECIMAL_INT, TokenTypes.LITERAL_NUMBER_FLOAT,
                 TokenTypes.LITERAL_NUMBER_HEXADECIMAL, TokenTypes.MARKUP_ENTITY_REFERENCE}) {
             s.setStyle(type, new Style(p.number));
         }
-        for (int type : new int[]{TokenTypes.LITERAL_STRING_DOUBLE_QUOTE, TokenTypes.LITERAL_CHAR,
+        for (final int type : new int[]{TokenTypes.LITERAL_STRING_DOUBLE_QUOTE, TokenTypes.LITERAL_CHAR,
                 TokenTypes.LITERAL_BACKQUOTE, TokenTypes.MARKUP_TAG_ATTRIBUTE_VALUE}) {
             s.setStyle(type, new Style(p.string));
         }
@@ -145,7 +146,7 @@ final class EditorThemes {
         s.setStyle(TokenTypes.COMMENT_MARKUP, new Style(p.comment, null, italic));
         s.setStyle(TokenTypes.COMMENT_KEYWORD, new Style(p.commentTag, null, italic));
         s.setStyle(TokenTypes.WHITESPACE, new Style(p.lineNumber));
-        for (int type : new int[]{TokenTypes.ERROR_IDENTIFIER, TokenTypes.ERROR_NUMBER_FORMAT,
+        for (final int type : new int[]{TokenTypes.ERROR_IDENTIFIER, TokenTypes.ERROR_NUMBER_FORMAT,
                 TokenTypes.ERROR_STRING_DOUBLE, TokenTypes.ERROR_CHAR}) {
             s.setStyle(type, new Style(p.error));
         }

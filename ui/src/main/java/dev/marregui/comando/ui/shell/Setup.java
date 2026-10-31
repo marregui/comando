@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.shell;
 
+import java.io.IOException;
+import java.util.List;
+
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.KitVersion;
-
-import java.io.IOException;
-import java.util.List;
 
 /**
  * The kit comando runs its sessions on, as the window reaches it: the root and its {@code comando-kit.json}, the kit's
@@ -41,12 +41,12 @@ public interface Setup {
      * Writes {@code jobs}, the whole list, to the manifest and brings the scheduler to it; throws with {@code kit.py}'s
      * words when it refused the list, which then changed nothing.
      */
-    default JobsDone saveJobs(List<KitJob> jobs) throws IOException {
+    default JobsDone saveJobs(final List<KitJob> jobs) throws IOException {
         throw new IOException("no kit in this window");
     }
 
     /** Starts job {@code name} now through the scheduler; throws with the reason when it cannot. */
-    default JobsDone runJob(String name) throws IOException {
+    default JobsDone runJob(final String name) throws IOException {
         throw new IOException("no kit in this window");
     }
 
@@ -70,7 +70,7 @@ public interface Setup {
         public static final Status NONE = new Status(KitVersion.UNKNOWN, false, false);
 
         /** A status without the kit's backup. */
-        public Status(KitVersion version, boolean canBackUp) {
+        public Status(final KitVersion version, final boolean canBackUp) {
             this(version, canBackUp, false);
         }
     }

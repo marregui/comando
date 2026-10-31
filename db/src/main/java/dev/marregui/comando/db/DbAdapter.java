@@ -1,21 +1,5 @@
 package dev.marregui.comando.db;
 
-import dev.marregui.comando.core.effect.Effect;
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.Errands;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.port.DatabasePort;
-import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.port.QueryPort;
-import dev.marregui.comando.core.result.ResultRegistry;
-import dev.marregui.comando.core.schema.Schema;
-import dev.marregui.comando.core.schema.SchemaRegistry;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.loop.ExecutorStop;
-import dev.marregui.comando.core.view.Placement;
-import dev.marregui.comando.core.view.ViewSpec;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -32,6 +16,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+
+import dev.marregui.comando.core.effect.Effect;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.port.DatabasePort;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.schema.Schema;
+import dev.marregui.comando.core.schema.SchemaRegistry;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * The database port: a lane per connection name while the connection is open or has work queued, a timer for
@@ -57,22 +57,22 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     private final ExecutorService cancellers = Executors.newVirtualThreadPerTaskExecutor();
     private volatile boolean closed;
 
-    public DbAdapter(IntentSink sink, ResultRegistry results, DbSettings settings) {
+    public DbAdapter(final IntentSink sink, final ResultRegistry results, final DbSettings settings) {
         this(sink, results, new SchemaRegistry(), settings);
     }
 
-    public DbAdapter(IntentSink sink, ResultRegistry results, SchemaRegistry schemas, DbSettings settings) {
+    public DbAdapter(final IntentSink sink, final ResultRegistry results, final SchemaRegistry schemas, final DbSettings settings) {
         this(sink, results, schemas, settings, MAX_CATALOGUE_TABLES);
     }
 
-    DbAdapter(IntentSink sink, ResultRegistry results, SchemaRegistry schemas, DbSettings settings, int maxCatalogueTables) {
+    DbAdapter(final IntentSink sink, final ResultRegistry results, final SchemaRegistry schemas, final DbSettings settings, final int maxCatalogueTables) {
         this.sink = sink;
         this.results = results;
         this.schemas = schemas;
         this.settings = settings;
         this.maxCatalogueTables = maxCatalogueTables;
         this.timer = Threads.timedStrand("db-timer");
-        long period = settings.healthPeriodSeconds();
+        final long period = settings.healthPeriodSeconds();
         timer.scheduleWithFixedDelay(this::checkHealth, period, period, TimeUnit.SECONDS);
     }
 
@@ -80,7 +80,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
      * Queues work on the lane of {@code name}; a lane that has stopped refuses it and a new lane takes it. Once the
      * adapter is closed no lane is made and nothing is queued: answers false.
      */
-    private boolean onLane(String name, Predicate<Lane> work) {
+    private boolean onLane(final String name, final Predicate<Lane> work) {
         if (closed) {
             return false;
         }
@@ -98,7 +98,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         return true;
     }
 
-    private Lane newLane(String name) {
+    private Lane newLane(final String name) {
         return new Lane(name, sink, results, settings, timer, cancellers, stopped -> lanes.remove(name, stopped));
     }
 
@@ -108,21 +108,21 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     @Override
-    public void open(ConnectionSpec spec) {
+    public void open(final ConnectionSpec spec) {
         onLane(spec.name(), lane -> lane.open(spec));
     }
 
     @Override
-    public void close(String name) {
+    public void close(final String name) {
         changed(name);
-        Lane lane = lanes.get(name);
+        final Lane lane = lanes.get(name);
         if (lane == null || !lane.disconnect()) {
             sink.dispatch(new Intent.ConnectionClosed(name)); // no lane, or one that stopped: nothing is open
         }
     }
 
     @Override
-    public void forgetSchema(String name) {
+    public void forgetSchema(final String name) {
         synchronized (changes) {
             changed(name);
             schemas.forget(name);
@@ -130,22 +130,22 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     @Override
-    public void test(ConnectionSpec spec) {
+    public void test(final ConnectionSpec spec) {
         if (closed) {
             return;
         }
         testers.start("db-test-" + spec.name(), () -> {
             try (Connection c = DriverManager.getConnection(spec.jdbcUrl(), Lane.driverProperties(spec))) {
-                boolean ok = c.isValid(10);
+                final boolean ok = c.isValid(10);
                 sink.dispatch(new Intent.ConnectionTested(spec.name(), ok, ok ? "reachable" : "not valid"));
-            } catch (SQLException e) {
+            } catch (final SQLException e) {
                 sink.dispatch(new Intent.ConnectionTested(spec.name(), false, Lane.message(e)));
             }
         });
     }
 
     @Override
-    public void execute(long requestId, ConnectionSpec spec, String sql) {
+    public void execute(final long requestId, final ConnectionSpec spec, final String sql) {
         onLane(spec.name(), lane -> {
             laneOfRequest.put(requestId, lane); // before the run is queued, so a cancel always finds its lane
             return lane.execute(requestId, spec, sql);
@@ -153,26 +153,26 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     @Override
-    public void cancel(long requestId) {
-        Lane lane = laneOfRequest.get(requestId);
+    public void cancel(final long requestId) {
+        final Lane lane = laneOfRequest.get(requestId);
         if (lane != null) {
             lane.cancel(requestId);
         }
     }
 
     @Override
-    public void release(long requestId) {
+    public void release(final long requestId) {
         laneOfRequest.remove(requestId);
         results.release(requestId);
     }
 
     @Override
-    public CompletableFuture<Rows> query(ConnectionSpec spec, String sql, int maxRows) {
+    public CompletableFuture<Rows> query(final ConnectionSpec spec, final String sql, final int maxRows) {
         return query(spec, sql, maxRows, () -> true);
     }
 
-    private CompletableFuture<Rows> query(ConnectionSpec spec, String sql, int maxRows, BooleanSupplier wanted) {
-        CompletableFuture<Rows> out = new CompletableFuture<>();
+    private CompletableFuture<Rows> query(final ConnectionSpec spec, final String sql, final int maxRows, final BooleanSupplier wanted) {
+        final CompletableFuture<Rows> out = new CompletableFuture<>();
         if (!onLane(spec.name(), lane -> lane.query(spec, sql, maxRows, out, wanted))) {
             out.completeExceptionally(closedError());
         }
@@ -180,12 +180,12 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     @Override
-    public CompletableFuture<Rows> describe(ConnectionSpec spec, String table) {
+    public CompletableFuture<Rows> describe(final ConnectionSpec spec, final String table) {
         return describe(spec, table, () -> true);
     }
 
-    private CompletableFuture<Rows> describe(ConnectionSpec spec, String table, BooleanSupplier wanted) {
-        CompletableFuture<Rows> out = new CompletableFuture<>();
+    private CompletableFuture<Rows> describe(final ConnectionSpec spec, final String table, final BooleanSupplier wanted) {
+        final CompletableFuture<Rows> out = new CompletableFuture<>();
         if (!onLane(spec.name(), lane -> lane.describe(spec, table, out, wanted))) {
             out.completeExceptionally(closedError());
         }
@@ -197,12 +197,12 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     /** The connection's count of closes and forgets: a schema load started before one of them is overtaken by it. */
-    private long changes(String name) {
+    private long changes(final String name) {
         return changes.computeIfAbsent(name, n -> new AtomicLong()).get();
     }
 
     /** Under the lock of {@link #changes}, so a load's last check and its publishing are one step against it. */
-    private void changed(String name) {
+    private void changed(final String name) {
         synchronized (changes) {
             changes.computeIfAbsent(name, n -> new AtomicLong()).incrementAndGet();
         }
@@ -227,9 +227,9 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
      * would open the connection again, on the settings it had), and its tables are not kept.
      */
     @Override
-    public void loadSchema(ConnectionSpec spec, boolean show) {
-        long at = changes(spec.name());
-        BooleanSupplier wanted = () -> changes(spec.name()) == at;
+    public void loadSchema(final ConnectionSpec spec, final boolean show) {
+        final long at = changes(spec.name());
+        final BooleanSupplier wanted = () -> changes(spec.name()) == at;
         questDbSchema(spec, wanted)
                 .exceptionallyCompose(e -> overtaken(e) ? CompletableFuture.failedFuture(e)
                         : query(spec, COLUMNS_SQL, MAX_SCHEMA_ROWS, wanted).thenApply(DbAdapter::fromColumns))
@@ -257,28 +257,28 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     /** Rows of (table, column, type), in table order, grouped into tables. */
-    static Schema fromColumns(QueryPort.Rows rows) {
-        Map<String, List<Schema.Column>> tables = new LinkedHashMap<>();
-        for (List<String> r : rows.rows()) {
+    static Schema fromColumns(final QueryPort.Rows rows) {
+        final Map<String, List<Schema.Column>> tables = new LinkedHashMap<>();
+        for (final List<String> r : rows.rows()) {
             tables.computeIfAbsent(r.get(0), k -> new ArrayList<>()).add(new Schema.Column(r.get(1), r.get(2)));
         }
         if (tables.isEmpty()) {
             throw new IllegalStateException("the information schema lists no columns");
         }
-        List<Schema.Table> out = new ArrayList<>();
+        final List<Schema.Table> out = new ArrayList<>();
         tables.forEach((name, columns) -> out.add(new Schema.Table(name, columns)));
         return new Schema(out);
     }
 
     /** QuestDB's own catalogue: {@code tables()}, then the columns of each; fails above the table limit. */
-    private CompletableFuture<Schema> questDbSchema(ConnectionSpec spec, BooleanSupplier wanted) {
+    private CompletableFuture<Schema> questDbSchema(final ConnectionSpec spec, final BooleanSupplier wanted) {
         return query(spec, "SELECT table_name FROM tables() ORDER BY table_name", MAX_SCHEMA_ROWS, wanted).thenCompose(t -> {
-            List<String> names = t.rows().stream().map(List::getFirst).toList();
+            final List<String> names = t.rows().stream().map(List::getFirst).toList();
             if (names.size() > maxCatalogueTables) {
                 return CompletableFuture.failedFuture(new IllegalStateException(names.size() + " tables: the information schema answers"));
             }
-            List<CompletableFuture<Schema.Table>> each = new ArrayList<>();
-            for (String name : names) {
+            final List<CompletableFuture<Schema.Table>> each = new ArrayList<>();
+            for (final String name : names) {
                 each.add(describe(spec, name, wanted).thenApply(d -> new Schema.Table(name,
                         d.rows().stream().map(r -> new Schema.Column(r.get(0), r.size() > 1 ? r.get(1) : "")).toList())));
             }
@@ -287,11 +287,11 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         });
     }
 
-    static ViewSpec.TreeNode tree(String connection, Schema schema) {
-        List<ViewSpec.TreeNode> tables = new ArrayList<>();
-        for (Schema.Table t : schema.tables()) {
-            List<ViewSpec.TreeNode> columns = new ArrayList<>();
-            for (Schema.Column c : t.columns()) {
+    static ViewSpec.TreeNode tree(final String connection, final Schema schema) {
+        final List<ViewSpec.TreeNode> tables = new ArrayList<>();
+        for (final Schema.Table t : schema.tables()) {
+            final List<ViewSpec.TreeNode> columns = new ArrayList<>();
+            for (final Schema.Column c : t.columns()) {
                 columns.add(new ViewSpec.TreeNode(c.name(), c.type(), "comando-insert:" + quoteIfNeeded(c.name()), List.of()));
             }
             tables.add(new ViewSpec.TreeNode(t.name(), count(t.columns().size(), "column"),
@@ -300,15 +300,15 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         return new ViewSpec.TreeNode(connection, count(schema.tables().size(), "table"), tables);
     }
 
-    private static String count(int n, String noun) {
+    private static String count(final int n, final String noun) {
         return n + " " + noun + (n == 1 ? "" : "s");
     }
 
-    private static String quoteIfNeeded(String name) {
+    private static String quoteIfNeeded(final String name) {
         return name.matches("[a-z_][a-z0-9_]*") ? name : Lane.quote(name);
     }
 
-    private static boolean overtaken(Throwable e) {
+    private static boolean overtaken(final Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
             if (t instanceof Lane.Overtaken) {
                 return true;
@@ -317,7 +317,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         return false;
     }
 
-    private static String rootMessage(Throwable e) {
+    private static String rootMessage(final Throwable e) {
         Throwable t = e;
         while (t.getCause() != null && t != t.getCause()) {
             t = t.getCause();
@@ -326,7 +326,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     private void checkHealth() {
-        for (Lane lane : lanes.values()) {
+        for (final Lane lane : lanes.values()) {
             lane.checkHealth();
         }
     }
@@ -342,12 +342,12 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         }
         closed = true;
         // one snapshot for both passes: a lane made meanwhile sees closed and closes itself (onLane)
-        List<Lane> closing = List.copyOf(lanes.values());
-        for (Lane lane : closing) {
+        final List<Lane> closing = List.copyOf(lanes.values());
+        for (final Lane lane : closing) {
             lane.beginClose();
         }
-        long deadline = System.nanoTime() + Lane.CLOSE_WAIT_NANOS;
-        for (Lane lane : closing) {
+        final long deadline = System.nanoTime() + Lane.CLOSE_WAIT_NANOS;
+        for (final Lane lane : closing) {
             lane.finishClose(deadline);
         }
         lanes.clear();

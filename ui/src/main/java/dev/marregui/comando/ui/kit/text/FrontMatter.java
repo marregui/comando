@@ -25,7 +25,7 @@ public final class FrontMatter {
         }
 
         /** The value of {@code key}; null when there is none. */
-        public String value(String key) {
+        public String value(final String key) {
             return facts.stream().filter(f -> f.key().equals(key)).map(Fact::value).findFirst().orElse(null);
         }
     }
@@ -40,18 +40,18 @@ public final class FrontMatter {
     }
 
     /** The front matter of {@code text} and the text without it; no facts when the text opens with none. */
-    public static Split split(String text) {
-        Split none = new Split(List.of(), text);
+    public static Split split(final String text) {
+        final Split none = new Split(List.of(), text);
         if (!text.startsWith("---")) {
             return none;
         }
-        String[] lines = text.split("\n", MAX_LINES + 2);
+        final String[] lines = text.split("\n", MAX_LINES + 2);
         if (!lines[0].strip().equals("---")) {
             return none;
         }
         int close = -1;
         for (int i = 1; i < Math.min(lines.length, MAX_LINES); i++) {
-            String l = lines[i].strip();
+            final String l = lines[i].strip();
             if (l.equals("---") || l.equals("...")) {
                 close = i;
                 break;
@@ -60,7 +60,7 @@ public final class FrontMatter {
         if (close < 2) {
             return none;
         }
-        List<Fact> facts = read(lines, close);
+        final List<Fact> facts = read(lines, close);
         if (facts == null || facts.isEmpty()) {
             return none;
         }
@@ -73,7 +73,7 @@ public final class FrontMatter {
             }
         }
         // blanked in place, so every line and character of the rest keeps its offset
-        StringBuilder body = new StringBuilder(text);
+        final StringBuilder body = new StringBuilder(text);
         for (int i = 0; i < at; i++) {
             if (body.charAt(i) != '\n') {
                 body.setCharAt(i, ' ');
@@ -83,28 +83,28 @@ public final class FrontMatter {
     }
 
     /** The facts of lines 1 to {@code close}, exclusive; null when a line is not one front matter has. */
-    private static List<Fact> read(String[] lines, int close) {
-        List<Fact> out = new ArrayList<>();
+    private static List<Fact> read(final String[] lines, final int close) {
+        final List<Fact> out = new ArrayList<>();
         // the keys open at each indent: a nested key's name is the path to it
-        List<int[]> indents = new ArrayList<>();
-        List<String> path = new ArrayList<>();
+        final List<int[]> indents = new ArrayList<>();
+        final List<String> path = new ArrayList<>();
         String listKey = null;
         StringBuilder list = null;
         for (int i = 1; i < close; i++) {
-            String line = lines[i].stripTrailing();
+            final String line = lines[i].stripTrailing();
             if (line.isBlank() || line.stripLeading().startsWith("#")) {
                 continue;
             }
-            Matcher item = ITEM.matcher(line);
+            final Matcher item = ITEM.matcher(line);
             if (item.matches() && listKey != null) {
                 list.append(list.isEmpty() ? "" : ", ").append(unquote(item.group(2)));
                 continue;
             }
-            Matcher m = ENTRY.matcher(line);
+            final Matcher m = ENTRY.matcher(line);
             if (!m.matches()) {
                 if (line.startsWith(" ") && !out.isEmpty()) {
                     // a folded or block value's next line
-                    Fact last = out.removeLast();
+                    final Fact last = out.removeLast();
                     out.add(new Fact(last.key(), (last.value() + " " + line.strip()).strip()));
                     continue;
                 }
@@ -117,13 +117,13 @@ public final class FrontMatter {
                 }
                 listKey = null;
             }
-            int indent = m.group(1).length();
+            final int indent = m.group(1).length();
             while (!indents.isEmpty() && indents.getLast()[0] >= indent) {
                 indents.removeLast();
                 path.removeLast();
             }
-            String key = (path.isEmpty() ? "" : String.join(".", path) + ".") + m.group(2).strip();
-            String value = m.group(3) == null ? "" : m.group(3).strip();
+            final String key = (path.isEmpty() ? "" : String.join(".", path) + ".") + m.group(2).strip();
+            final String value = m.group(3) == null ? "" : m.group(3).strip();
             if (value.isEmpty()) {
                 // a map or a list follows; a list's items become the value
                 indents.add(new int[]{indent});
@@ -144,9 +144,9 @@ public final class FrontMatter {
         return out;
     }
 
-    private static List<String> splitList(String inner) {
-        List<String> out = new ArrayList<>();
-        for (String s : inner.split(",")) {
+    private static List<String> splitList(final String inner) {
+        final List<String> out = new ArrayList<>();
+        for (final String s : inner.split(",")) {
             if (!s.isBlank()) {
                 out.add(unquote(s.strip()));
             }
@@ -154,9 +154,9 @@ public final class FrontMatter {
         return out;
     }
 
-    private static String unquote(String s) {
+    private static String unquote(final String s) {
         if (s.length() >= 2 && (s.startsWith("\"") && s.endsWith("\"") || s.startsWith("'") && s.endsWith("'"))) {
-            String inner = s.substring(1, s.length() - 1);
+            final String inner = s.substring(1, s.length() - 1);
             return s.startsWith("\"") ? inner.replace("\\\"", "\"").replace("\\\\", "\\") : inner.replace("''", "'");
         }
         return s;

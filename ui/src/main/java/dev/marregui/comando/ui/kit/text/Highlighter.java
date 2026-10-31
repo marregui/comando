@@ -1,15 +1,15 @@
 package dev.marregui.comando.ui.kit.text;
 
+import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.text.Segment;
+
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMaker;
 import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
-
-import javax.swing.text.Segment;
-import java.awt.Color;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Syntax colours for text painted outside a text area, from the same token makers and theme as the
@@ -25,14 +25,14 @@ public final class Highlighter {
     }
 
     /** Colour runs of {@code text} for {@code syntax} (a file extension or language name); empty for plain text. */
-    public static List<Run> runs(String text, String syntax) {
-        String style = Editors.styleFor(syntax);
-        List<Run> out = new ArrayList<>();
+    public static List<Run> runs(final String text, final String syntax) {
+        final String style = Editors.styleFor(syntax);
+        final List<Run> out = new ArrayList<>();
         if (style.equals(SyntaxConstants.SYNTAX_STYLE_NONE)) {
             return out;
         }
-        TokenMaker maker = TokenMakerFactory.getDefaultInstance().getTokenMaker(style);
-        char[] chars = text.toCharArray();
+        final TokenMaker maker = TokenMakerFactory.getDefaultInstance().getTokenMaker(style);
+        final char[] chars = text.toCharArray();
         int lineStart = 0;
         int state = TokenTypes.NULL;
         while (lineStart <= chars.length) {
@@ -40,9 +40,9 @@ public final class Highlighter {
             while (lineEnd < chars.length && chars[lineEnd] != '\n') {
                 lineEnd++;
             }
-            Segment seg = new Segment(chars, lineStart, lineEnd - lineStart);
+            final Segment seg = new Segment(chars, lineStart, lineEnd - lineStart);
             for (Token t = maker.getTokenList(seg, state, lineStart); t != null && t.isPaintable(); t = t.getNextToken()) {
-                Color c = Editors.colorOf(t.getType());
+                final Color c = Editors.colorOf(t.getType());
                 if (c != null && t.length() > 0) {
                     out.add(new Run(t.getTextOffset(), t.getTextOffset() + t.length(), c));
                 }

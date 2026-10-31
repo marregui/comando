@@ -1,15 +1,16 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.action.MenuEntry;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.theme.GroundIcon;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.function.Consumer;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.action.MenuEntry;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.GroundIcon;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,24 +23,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Separators sit only between entries.
 class MenusTest {
 
-    private static void walk(MenuEntry.Menu m, Consumer<MenuEntry.Menu> visit) {
+    private static void walk(final MenuEntry.Menu m, final Consumer<MenuEntry.Menu> visit) {
         visit.accept(m);
-        for (MenuEntry e : m.entries()) {
+        for (final MenuEntry e : m.entries()) {
             if (e instanceof MenuEntry.Menu sub) {
                 walk(sub, visit);
             }
         }
     }
 
-    private static List<String> ids(List<MenuEntry.Menu> bar) {
-        List<String> ids = new ArrayList<>();
+    private static List<String> ids(final List<MenuEntry.Menu> bar) {
+        final List<String> ids = new ArrayList<>();
         bar.forEach(m -> walk(m, x -> x.entries().stream().filter(MenuEntry.Item.class::isInstance)
                 .forEach(i -> ids.add(((MenuEntry.Item) i).id()))));
         return ids;
     }
 
-    private static List<MenuEntry.Menu> submenus(List<MenuEntry.Menu> bar) {
-        List<MenuEntry.Menu> subs = new ArrayList<>();
+    private static List<MenuEntry.Menu> submenus(final List<MenuEntry.Menu> bar) {
+        final List<MenuEntry.Menu> subs = new ArrayList<>();
         bar.forEach(top -> walk(top, m -> {
             if (m != top) {
                 subs.add(m);
@@ -51,7 +52,7 @@ class MenusTest {
     /// [Menus#bar] is exactly Edit and Help with the listed item ids in order, no submenus, and one separator in Help.
     @Test
     void editThenHelpFlatThePaletteThenTheHelp() {
-        List<MenuEntry.Menu> bar = Menus.bar();
+        final List<MenuEntry.Menu> bar = Menus.bar();
         assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Help");
         assertThat(ids(bar)).containsExactly(
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
@@ -83,9 +84,9 @@ class MenusTest {
     /// titles have no icon, [Menus#TIPS] holds exactly the placed ids, and each named theme's icon is its swatch.
     @Test
     void everyItemAndButtonHasAnIconThatExistsAndATooltip() {
-        List<String> placed = new ArrayList<>(ids(Menus.bar()));
+        final List<String> placed = new ArrayList<>(ids(Menus.bar()));
         Menus.corner(true, true).forEach(placed::addAll);
-        for (String id : placed) {
+        for (final String id : placed) {
             assertThat(Menus.icon(id)).as(id + " has an icon").isNotNull();
             assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
             assertThat(Menus.tip(id)).as(id + " has a tooltip").isNotBlank().hasSizeLessThanOrEqualTo(80);
@@ -94,7 +95,7 @@ class MenusTest {
         assertThat(Menus.TIPS.keySet()).as("no tooltip for an item or button that is gone").isEqualTo(new HashSet<>(placed));
         // the window asks for the areas once the theme files are read, which paints the themes' swatches
         Menus.areas();
-        for (NamedTheme t : NamedTheme.values()) {
+        for (final NamedTheme t : NamedTheme.values()) {
             assertThat(Icons.get(Menus.icon(t.commandId()))).as(t + "'s icon in the palette is its swatch").isInstanceOf(GroundIcon.class);
         }
     }
@@ -103,7 +104,7 @@ class MenusTest {
     /// map to their areas.
     @Test
     void aCommandIsInAMenuOrInAnAreaNeverBoth() {
-        List<String> placed = ids(Menus.bar());
+        final List<String> placed = ids(Menus.bar());
         assertThat(new HashSet<>(placed)).hasSameSizeAs(placed);
         assertThat(Menus.areas().keySet()).doesNotContainAnyElementsOf(placed);
         assertThat(Menus.areas()).as("the corner's commands are in no menu: each has its area")
@@ -116,7 +117,7 @@ class MenusTest {
     @Test
     void separatorsOnlyBetweenEntries() {
         Menus.bar().forEach(top -> walk(top, m -> {
-            List<MenuEntry> e = m.entries();
+            final List<MenuEntry> e = m.entries();
             assertThat(e).as(m.title()).isNotEmpty();
             assertThat(e.getFirst()).as(m.title() + " starts with an entry").isNotInstanceOf(MenuEntry.Separator.class);
             assertThat(e.getLast()).as(m.title() + " ends with an entry").isNotInstanceOf(MenuEntry.Separator.class);

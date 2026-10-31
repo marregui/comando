@@ -1,16 +1,17 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
-import dev.marregui.comando.ui.kit.desktop.Platform;
+import java.awt.Component;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import org.junit.jupiter.api.Test;
 
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.KeyStroke;
-import java.awt.Component;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,7 +29,7 @@ class TerminalKeysTest {
     private final JediTermWidget term = new JediTermWidget(new DefaultSettingsProvider());
     private final Component inside = term.getTerminalPanel();
 
-    private static KeyStroke key(int code, int modifiers) {
+    private static KeyStroke key(final int code, final int modifiers) {
         return KeyStroke.getKeyStroke(code, modifiers);
     }
 
@@ -38,7 +39,7 @@ class TerminalKeysTest {
         for (int code = KeyEvent.VK_A; code <= KeyEvent.VK_Z; code++) {
             assertThat(TerminalWidget.keepsKey(inside, key(code, CTRL))).as(KeyEvent.getKeyText(code)).isTrue();
         }
-        for (int code : new int[]{KeyEvent.VK_OPEN_BRACKET, KeyEvent.VK_BACK_SLASH, KeyEvent.VK_CLOSE_BRACKET, KeyEvent.VK_SPACE}) {
+        for (final int code : new int[]{KeyEvent.VK_OPEN_BRACKET, KeyEvent.VK_BACK_SLASH, KeyEvent.VK_CLOSE_BRACKET, KeyEvent.VK_SPACE}) {
             assertThat(TerminalWidget.keepsKey(inside, key(code, CTRL))).as(KeyEvent.getKeyText(code)).isTrue();
         }
         assertThat(TerminalWidget.keepsKey(term, key(KeyEvent.VK_C, CTRL))).as("the widget itself").isTrue();
@@ -59,7 +60,7 @@ class TerminalKeysTest {
     /// ⌘K is kept in the terminal only on macOS, never in a text field, and ⌘⇧K is never kept.
     @Test
     void onMacOsTheTerminalKeepsCommandKAsItsClearBufferAndTheChangesViewHasItElsewhere() {
-        KeyStroke cmdK = key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK);
+        final KeyStroke cmdK = key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK);
         assertThat(TerminalWidget.keepsKey(inside, cmdK)).isEqualTo(Platform.isMac());
         assertThat(TerminalWidget.keepsKey(new JTextField(), cmdK)).isFalse();
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK))).isFalse();

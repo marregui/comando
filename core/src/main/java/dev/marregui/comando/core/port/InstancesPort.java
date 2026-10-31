@@ -22,19 +22,19 @@ public interface InstancesPort {
     /** For a window without instances (the replay tests): asks nothing, refuses nothing. */
     InstancesPort NONE = new InstancesPort() {
         @Override
-        public void ask(String instance, String text) {
+        public void ask(final String instance, final String text) {
         }
 
         @Override
-        public void deny(String instance, boolean denied) {
+        public void deny(final String instance, final boolean denied) {
         }
 
         @Override
-        public void forget(String instance) {
+        public void forget(final String instance) {
         }
 
         @Override
-        public void role(String role) {
+        public void role(final String role) {
         }
     };
 }

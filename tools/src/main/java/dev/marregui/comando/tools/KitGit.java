@@ -1,7 +1,5 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.model.KitVersion;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -11,6 +9,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import dev.marregui.comando.core.model.KitVersion;
 
 /**
  * The kit's root and its brain as git checkouts: the kit's version and the newer releases its remote has, and the
@@ -38,7 +38,7 @@ public final class KitGit implements AutoCloseable {
         this(new Git());
     }
 
-    KitGit(Git git) {
+    KitGit(final Git git) {
         this.git = git;
     }
 
@@ -47,24 +47,24 @@ public final class KitGit implements AutoCloseable {
      * {@code origin}; unknown when the root is no checkout. A remote that does not answer leaves the newer releases
      * unknown, and says why.
      */
-    public KitVersion version(Path root) {
+    public KitVersion version(final Path root) {
         Git.Run describe;
         try {
             describe = git.run(root, List.of("describe", "--tags", "--always"));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return KitVersion.UNKNOWN;
         }
         if (describe.exit() != 0) {
             return KitVersion.UNKNOWN;
         }
-        String described = text(describe);
+        final String described = text(describe);
         try {
-            Git.Run tags = git.run(root, List.of("ls-remote", "--tags", "origin"), REMOTE_MILLIS);
+            final Git.Run tags = git.run(root, List.of("ls-remote", "--tags", "origin"), REMOTE_MILLIS);
             if (tags.exit() != 0) {
                 return KitVersion.of(described, "").failedRemote(why("git ls-remote", tags, REMOTE_MILLIS));
             }
             return KitVersion.of(described, text(tags));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return KitVersion.of(described, "").failedRemote(e.getMessage());
         }
     }
@@ -75,13 +75,13 @@ public final class KitGit implements AutoCloseable {
     static final int SUBJECT = 120;
 
     /** Whether {@code repo} is the top folder of a git repository that has a remote, so it can be backed up. */
-    public boolean canBackUp(Path repo) {
+    public boolean canBackUp(final Path repo) {
         try {
-            Git.Run top = git.run(repo, List.of("rev-parse", "--show-toplevel"));
+            final Git.Run top = git.run(repo, List.of("rev-parse", "--show-toplevel"));
             if (top.exit() != 0 || !Path.of(text(top)).toRealPath().equals(repo.toRealPath())) {
                 return false;
             }
-            Git.Run remotes = git.run(repo, List.of("remote"));
+            final Git.Run remotes = git.run(repo, List.of("remote"));
             return remotes.exit() == 0 && !text(remotes).isEmpty();
         } catch (IOException | RuntimeException e) {
             return false;
@@ -89,7 +89,7 @@ public final class KitGit implements AutoCloseable {
     }
 
     /** Backs the brain up: {@link #backUp(Path, String, LocalDate)} as {@code Brain}. */
-    public String backUp(Path brain, LocalDate today) throws IOException {
+    public String backUp(final Path brain, final LocalDate today) throws IOException {
         return backUp(brain, "Brain", today);
     }
 
@@ -99,25 +99,25 @@ public final class KitGit implements AutoCloseable {
      * {@code git push}. Answers what was done, for the notice; throws, saying which step failed and git's message, when
      * one fails.
      */
-    public String backUp(Path repo, String what, LocalDate today) throws IOException {
+    public String backUp(final Path repo, final String what, final LocalDate today) throws IOException {
         if (!canBackUp(repo)) {
             throw new IOException(repo + " is not a git repository with a remote");
         }
         write(repo, List.of("add", "-A"), "git add");
-        Git.Run staged = git.run(repo, List.of("diff", "--cached", "--quiet"), COMMIT_MILLIS);
-        boolean changed = staged.exit() == 1;
+        final Git.Run staged = git.run(repo, List.of("diff", "--cached", "--quiet"), COMMIT_MILLIS);
+        final boolean changed = staged.exit() == 1;
         if (staged.exit() != 0 && !changed) {
             throw new IOException(why("git diff --cached", staged, COMMIT_MILLIS));
         }
         String subject = "";
         if (changed) {
-            Git.Run names = step(repo, List.of("-c", "core.quotePath=false", "diff", "--cached", "--name-status", "-M"), COMMIT_MILLIS,
+            final Git.Run names = step(repo, List.of("-c", "core.quotePath=false", "diff", "--cached", "--name-status", "-M"), COMMIT_MILLIS,
                     "git diff --cached --name-status");
-            List<Change> list = changes(text(names));
+            final List<Change> list = changes(text(names));
             subject = subject(what, today, list);
             write(repo, List.of("commit", "-m", subject, "-m", body(list)), "git commit");
         }
-        String head = text(step(repo, List.of("rev-parse", "--short", "HEAD"), Git.TIMEOUT_MILLIS, "git rev-parse"));
+        final String head = text(step(repo, List.of("rev-parse", "--short", "HEAD"), Git.TIMEOUT_MILLIS, "git rev-parse"));
         step(repo, List.of("push"), REMOTE_MILLIS, "git push");
         return changed ? "committed " + head + " \"" + subject + "\" and pushed it" : "nothing to commit; pushed " + head;
     }
@@ -127,10 +127,10 @@ public final class KitGit implements AutoCloseable {
     }
 
     /** {@code git diff --name-status -M}'s lines as changes; a line git adds that is none of these is skipped. */
-    static List<Change> changes(String nameStatus) {
-        List<Change> out = new ArrayList<>();
-        for (String line : nameStatus.lines().toList()) {
-            String[] f = line.split("\t");
+    static List<Change> changes(final String nameStatus) {
+        final List<Change> out = new ArrayList<>();
+        for (final String line : nameStatus.lines().toList()) {
+            final String[] f = line.split("\t");
             if (f.length < 2 || f[0].isEmpty()) {
                 continue;
             }
@@ -150,24 +150,24 @@ public final class KitGit implements AutoCloseable {
      * (a file at the top is its own) with its counts in the order added, changed, renamed, removed; the areas past
      * {@link #SUBJECT} characters are counted at its end.
      */
-    static String subject(String what, LocalDate today, List<Change> list) {
-        Map<String, Map<String, Integer>> areas = new LinkedHashMap<>();
-        for (Change c : list) {
-            String area = c.path().contains("/") ? c.path().substring(0, c.path().indexOf('/')) : c.path();
+    static String subject(final String what, final LocalDate today, final List<Change> list) {
+        final Map<String, Map<String, Integer>> areas = new LinkedHashMap<>();
+        for (final Change c : list) {
+            final String area = c.path().contains("/") ? c.path().substring(0, c.path().indexOf('/')) : c.path();
             areas.computeIfAbsent(area, a -> new LinkedHashMap<>()).merge(c.verb(), 1, Integer::sum);
         }
-        StringBuilder out = new StringBuilder(what + " backup " + today + ":");
+        final StringBuilder out = new StringBuilder(what + " backup " + today + ":");
         int shown = 0;
-        for (Map.Entry<String, Map<String, Integer>> a : areas.entrySet()) {
-            List<String> counts = new ArrayList<>();
-            for (String verb : List.of("added", "changed", "renamed", "removed")) {
-                Integer n = a.getValue().get(verb);
+        for (final Map.Entry<String, Map<String, Integer>> a : areas.entrySet()) {
+            final List<String> counts = new ArrayList<>();
+            for (final String verb : List.of("added", "changed", "renamed", "removed")) {
+                final Integer n = a.getValue().get(verb);
                 if (n != null) {
                     counts.add(n + " " + verb);
                 }
             }
-            String part = (shown == 0 ? " " : "; ") + a.getKey() + " " + String.join(", ", counts);
-            int left = areas.size() - shown;
+            final String part = (shown == 0 ? " " : "; ") + a.getKey() + " " + String.join(", ", counts);
+            final int left = areas.size() - shown;
             if (shown > 0 && out.length() + part.length() > SUBJECT) {
                 out.append("; ").append(left).append(left == 1 ? " more area" : " more areas");
                 break;
@@ -182,9 +182,9 @@ public final class KitGit implements AutoCloseable {
      * One line a file, {@code added MEMORY/x.md} or {@code renamed a.md -> b.md}, the first {@link #LISTED}, then how
      * many more.
      */
-    static String body(List<Change> list) {
-        List<String> lines = new ArrayList<>();
-        for (Change c : list.subList(0, Math.min(LISTED, list.size()))) {
+    static String body(final List<Change> list) {
+        final List<String> lines = new ArrayList<>();
+        for (final Change c : list.subList(0, Math.min(LISTED, list.size()))) {
             lines.add(c.verb() + " " + (c.from().isEmpty() ? c.path() : c.from() + " -> " + c.path()));
         }
         if (list.size() > LISTED) {
@@ -193,8 +193,8 @@ public final class KitGit implements AutoCloseable {
         return String.join("\n", lines);
     }
 
-    private Git.Run step(Path dir, List<String> args, long millis, String what) throws IOException {
-        Git.Run r = git.run(dir, args, millis);
+    private Git.Run step(final Path dir, final List<String> args, final long millis, final String what) throws IOException {
+        final Git.Run r = git.run(dir, args, millis);
         if (r.exit() != 0) {
             throw new IOException(why(what, r, millis));
         }
@@ -222,21 +222,21 @@ public final class KitGit implements AutoCloseable {
         }
     }
 
-    private static String why(String what, Git.Run r, long millis) {
+    private static String why(final String what, final Git.Run r, final long millis) {
         if (r.exit() < 0) {
             return what + " took longer than " + millis / 1000 + " s";
         }
-        String err = r.err().strip();
+        final String err = r.err().strip();
         if (err.isEmpty()) {
             return what + " failed with exit code " + r.exit();
         }
         // git's own verdict line, else its first: a push begins with the remote's address
-        String line = err.lines().filter(l -> l.startsWith("fatal:") || l.startsWith("error:")).findFirst()
+        final String line = err.lines().filter(l -> l.startsWith("fatal:") || l.startsWith("error:")).findFirst()
                 .orElse(err.lines().findFirst().orElse(err));
         return what + " failed: " + line.strip();
     }
 
-    private static String text(Git.Run r) {
+    private static String text(final Git.Run r) {
         return new String(r.out(), StandardCharsets.UTF_8).strip();
     }
 

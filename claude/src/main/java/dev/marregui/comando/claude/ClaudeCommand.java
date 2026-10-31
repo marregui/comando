@@ -1,10 +1,10 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.SessionSpec;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
+import dev.marregui.comando.core.model.SessionSpec;
 
 /** Builds the argument list of a headless Claude Code process for a session. */
 public final class ClaudeCommand {
@@ -19,8 +19,8 @@ public final class ClaudeCommand {
      * a resume or fork. {@code mcpConfig} names comando's server, or is null for none; without it the session gets
      * neither the approval tool nor {@code uiInstructions}.
      */
-    public static List<String> of(String executable, SessionSpec spec, String newSessionId, Path mcpConfig, String uiInstructions) {
-        List<String> a = new ArrayList<>();
+    public static List<String> of(final String executable, final SessionSpec spec, final String newSessionId, final Path mcpConfig, final String uiInstructions) {
+        final List<String> a = new ArrayList<>();
         a.add(executable);
         a.add("-p");
         a.add("--input-format");
@@ -62,7 +62,7 @@ public final class ClaudeCommand {
         option(a, "--model", spec.model());
         option(a, "--effort", spec.effort());
         option(a, "--permission-mode", spec.permissionMode());
-        for (String dir : spec.addDirs()) {
+        for (final String dir : spec.addDirs()) {
             a.add("--add-dir");
             a.add(dir);
         }
@@ -73,7 +73,7 @@ public final class ClaudeCommand {
         return a;
     }
 
-    private static void option(List<String> args, String flag, String value) {
+    private static void option(final List<String> args, final String flag, final String value) {
         if (!value.isEmpty()) {
             args.add(flag);
             args.add(value);

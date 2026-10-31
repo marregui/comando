@@ -1,10 +1,5 @@
 package dev.marregui.comando.claude;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,6 +22,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The conversations Claude Code stores for a session's sub-agents. Not documented (2.1.302): beside the session's
@@ -60,33 +60,33 @@ final class SubagentFiles {
     }
 
     /** The files of the sub-agent that the Agent call {@code toolUseId} of conversation {@code sessionId} started. */
-    static Optional<Found> find(Path projectsDir, String sessionId, String toolUseId, ObjectMapper json) {
+    static Optional<Found> find(final Path projectsDir, final String sessionId, final String toolUseId, final ObjectMapper json) {
         if (sessionId.isEmpty() || toolUseId.isEmpty() || !Files.isDirectory(projectsDir)) {
             return Optional.empty();
         }
         try (var projects = Files.newDirectoryStream(projectsDir)) {
-            for (Path project : projects) {
-                Path dir = project.resolve(sessionId).resolve("subagents");
+            for (final Path project : projects) {
+                final Path dir = project.resolve(sessionId).resolve("subagents");
                 if (Files.isDirectory(dir)) {
-                    Optional<Found> found = findIn(dir, toolUseId, json);
+                    final Optional<Found> found = findIn(dir, toolUseId, json);
                     if (found.isPresent()) {
                         return found;
                     }
                 }
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot list [dir=" + projectsDir + ']', e);
         }
         return Optional.empty();
     }
 
-    private static Optional<Found> findIn(Path dir, String toolUseId, ObjectMapper json) throws IOException {
+    private static Optional<Found> findIn(final Path dir, final String toolUseId, final ObjectMapper json) throws IOException {
         try (var metas = Files.newDirectoryStream(dir, "agent-*" + META)) {
-            for (Path meta : metas) {
-                JsonNode m = readMeta(meta, json);
+            for (final Path meta : metas) {
+                final JsonNode m = readMeta(meta, json);
                 if (m != null && toolUseId.equals(m.path("toolUseId").asString(""))) {
-                    String name = meta.getFileName().toString();
-                    Path transcript = dir.resolve(name.substring(0, name.length() - META.length()) + ".jsonl");
+                    final String name = meta.getFileName().toString();
+                    final Path transcript = dir.resolve(name.substring(0, name.length() - META.length()) + ".jsonl");
                     return Optional.of(new Found(transcript, meta, m.path("description").asString(m.path("agentType").asString(""))));
                 }
             }
@@ -95,7 +95,7 @@ final class SubagentFiles {
     }
 
     /** The meta file's content; null when it cannot be read or is too large to be one. */
-    static JsonNode readMeta(Path meta, ObjectMapper json) {
+    static JsonNode readMeta(final Path meta, final ObjectMapper json) {
         try {
             if (Files.size(meta) > META_BYTES) {
                 return null;
@@ -112,24 +112,24 @@ final class SubagentFiles {
      * once (a message is stored a content block a line, each with the same usage), the tokens by kind, and the models
      * it ran on. An unreadable file gives what was read.
      */
-    static ObjectNode spend(Path file, ObjectMapper json) {
-        ObjectNode out = json.createObjectNode();
+    static ObjectNode spend(final Path file, final ObjectMapper json) {
+        final ObjectNode out = json.createObjectNode();
         long calls = 0;
         long input = 0;
         long output = 0;
         long cacheRead = 0;
         long cacheCreate = 0;
-        Set<String> seen = new HashSet<>();
-        Set<String> models = new TreeSet<>();
+        final Set<String> seen = new HashSet<>();
+        final Set<String> models = new TreeSet<>();
         try (BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             String line;
             while ((line = in.readLine()) != null) {
-                JsonNode n = parse(line, json);
+                final JsonNode n = parse(line, json);
                 if (n == null || !n.path("type").asString("").equals("assistant")) {
                     continue;
                 }
-                JsonNode m = n.path("message");
-                String id = m.path("id").asString("");
+                final JsonNode m = n.path("message");
+                final String id = m.path("id").asString("");
                 if (!id.isEmpty() && !seen.add(id)) {
                     continue;
                 }
@@ -137,7 +137,7 @@ final class SubagentFiles {
                 if (!m.path("model").asString("").isEmpty()) {
                     models.add(m.path("model").asString(""));
                 }
-                JsonNode u = m.path("usage");
+                final JsonNode u = m.path("usage");
                 input += u.path("input_tokens").asLong(0);
                 output += u.path("output_tokens").asLong(0);
                 cacheRead += u.path("cache_read_input_tokens").asLong(0);
@@ -156,16 +156,16 @@ final class SubagentFiles {
     }
 
     /** True when the meta file says the sub-agent finished; false when it does not say. */
-    static boolean finished(Path meta, ObjectMapper json) {
-        JsonNode m = readMeta(meta, json);
+    static boolean finished(final Path meta, final ObjectMapper json) {
+        final JsonNode m = readMeta(meta, json);
         return m != null && m.path("finished").asBoolean(false);
     }
 
     /** The size of {@code file}; 0 when it does not exist yet. */
-    static long size(Path file) {
+    static long size(final Path file) {
         try {
             return Files.size(file);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return 0L;
         }
     }
@@ -174,8 +174,8 @@ final class SubagentFiles {
      * The conversation as Markdown, read once: {@link Conversation#render} of a {@link Conversation} that reads at most
      * the last {@code scanBytes} of the file.
      */
-    static String render(Path file, long scanBytes, ObjectMapper json) throws IOException {
-        Conversation c = new Conversation(file, json, scanBytes);
+    static String render(final Path file, final long scanBytes, final ObjectMapper json) throws IOException {
+        final Conversation c = new Conversation(file, json, scanBytes);
         c.read();
         return c.render("");
     }
@@ -207,7 +207,7 @@ final class SubagentFiles {
         private int tools;
         private int toolsKept;
 
-        Conversation(Path file, ObjectMapper json, long scanBytes) {
+        Conversation(final Path file, final ObjectMapper json, final long scanBytes) {
             this.file = file;
             this.json = json;
             this.scanBytes = scanBytes;
@@ -218,7 +218,7 @@ final class SubagentFiles {
             final String toolId;
             String text;
 
-            Step(String toolId, String text) {
+            Step(final String toolId, final String text) {
                 this.toolId = toolId;
                 this.text = text;
             }
@@ -227,7 +227,7 @@ final class SubagentFiles {
         /** Hears every whole line read, before it is parsed here: a sub-agent's tab maps them into its transcript. */
         private Consumer<String> lines = line -> { };
 
-        void onLine(Consumer<String> listener) {
+        void onLine(final Consumer<String> listener) {
             lines = listener;
         }
 
@@ -247,7 +247,7 @@ final class SubagentFiles {
          */
         void read() throws IOException {
             try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
-                long size = ch.size();
+                final long size = ch.size();
                 if (offset < 0 || size < offset) {
                     reset();
                     offset = 0;
@@ -259,7 +259,7 @@ final class SubagentFiles {
                     }
                 }
                 consume(ch, size);
-            } catch (NoSuchFileException e) {
+            } catch (final NoSuchFileException e) {
                 // not written yet
             }
         }
@@ -275,8 +275,8 @@ final class SubagentFiles {
         }
 
         /** The task, then the steps kept, then {@code footer} when not empty. */
-        String render(String footer) {
-            List<String> parts = new ArrayList<>();
+        String render(final String footer) {
+            final List<String> parts = new ArrayList<>();
             if (!task.isBlank()) {
                 parts.add(quote(task));
             }
@@ -288,7 +288,7 @@ final class SubagentFiles {
             if (tools > toolsKept) {
                 parts.add("_Earlier steps are not shown: the view keeps the last " + LAST_TOOLS + " tool calls._");
             }
-            for (Step s : steps) {
+            for (final Step s : steps) {
                 parts.add(s.text);
             }
             if (tools > toolsKept) {
@@ -306,18 +306,18 @@ final class SubagentFiles {
         /**
          * Parses the whole lines from {@link #offset} to {@code size}, read a chunk at a time; a line may span chunks.
          */
-        private void consume(FileChannel ch, long size) throws IOException {
-            ByteArrayOutputStream line = new ByteArrayOutputStream();
-            ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
+        private void consume(final FileChannel ch, final long size) throws IOException {
+            final ByteArrayOutputStream line = new ByteArrayOutputStream();
+            final ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
             long at = offset;
             while (at < size) {
                 buf.clear();
                 buf.limit((int) Math.min(CHUNK_BYTES, size - at));
-                int n = ch.read(buf, at);
+                final int n = ch.read(buf, at);
                 if (n <= 0) {
                     break;
                 }
-                byte[] b = buf.array();
+                final byte[] b = buf.array();
                 int from = 0;
                 for (int i = 0; i < n; i++) {
                     if (b[i] == '\n') {
@@ -333,17 +333,17 @@ final class SubagentFiles {
             }
         }
 
-        private void accept(String line) {
+        private void accept(final String line) {
             if (!line.isBlank()) {
                 lines.accept(line);
             }
-            JsonNode n = parse(line, json);
-            boolean wasFirst = first;
+            final JsonNode n = parse(line, json);
+            final boolean wasFirst = first;
             first = false;
             if (n == null) {
                 return;
             }
-            JsonNode content = n.path("message").path("content");
+            final JsonNode content = n.path("message").path("content");
             switch (n.path("type").asString("")) {
                 case "user" -> user(content, wasFirst);
                 case "assistant" -> assistant(content);
@@ -352,20 +352,20 @@ final class SubagentFiles {
             }
         }
 
-        private void user(JsonNode content, boolean isTask) {
+        private void user(final JsonNode content, boolean isTask) {
             if (content.isString()) {
                 text(content.asString(""), isTask);
                 return;
             }
-            for (JsonNode c : content) {
+            for (final JsonNode c : content) {
                 switch (c.path("type").asString("")) {
                     case "text" -> {
                         text(c.path("text").asString(""), isTask);
                         isTask = false;
                     }
                     case "tool_result" -> {
-                        Step call = waiting.remove(c.path("tool_use_id").asString(""));
-                        String result = oneLine(resultText(c.path("content")));
+                        final Step call = waiting.remove(c.path("tool_use_id").asString(""));
+                        final String result = oneLine(resultText(c.path("content")));
                         if (call != null && !result.isEmpty()) {
                             call.text += (c.path("is_error").asBoolean(false) ? " → failed: " : " → ") + result;
                         }
@@ -376,7 +376,7 @@ final class SubagentFiles {
             }
         }
 
-        private void text(String text, boolean isTask) {
+        private void text(final String text, final boolean isTask) {
             if (isTask) {
                 task = text;
             } else {
@@ -384,18 +384,18 @@ final class SubagentFiles {
             }
         }
 
-        private void assistant(JsonNode content) {
-            for (JsonNode c : content) {
+        private void assistant(final JsonNode content) {
+            for (final JsonNode c : content) {
                 switch (c.path("type").asString("")) {
                     case "text" -> {
-                        String t = c.path("text").asString("").strip();
+                        final String t = c.path("text").asString("").strip();
                         if (!t.isEmpty()) {
                             add(new Step(null, t));
                         }
                     }
                     case "tool_use" -> {
-                        String summary = oneLine(summary(c.path("input")));
-                        Step call = new Step(c.path("id").asString(""), "- `" + c.path("name").asString("tool") + '`'
+                        final String summary = oneLine(summary(c.path("input")));
+                        final Step call = new Step(c.path("id").asString(""), "- `" + c.path("name").asString("tool") + '`'
                                 + (summary.isEmpty() ? "" : " " + summary));
                         tools++;
                         toolsKept++;
@@ -412,10 +412,10 @@ final class SubagentFiles {
          * Keeps {@code step}, dropping the oldest steps while more than {@link #LAST_TOOLS} tool calls or
          * {@link #MAX_STEPS} steps are kept.
          */
-        private void add(Step step) {
+        private void add(final Step step) {
             steps.addLast(step);
             while (toolsKept > LAST_TOOLS || steps.size() > MAX_STEPS) {
-                Step old = steps.removeFirst();
+                final Step old = steps.removeFirst();
                 if (old.toolId != null) {
                     toolsKept--;
                     waiting.remove(old.toolId);
@@ -424,16 +424,16 @@ final class SubagentFiles {
         }
 
         /** The task in a stored first line: its prompt when it is a user line with text, else empty. */
-        private String taskOf(String line) {
-            JsonNode n = parse(line, json);
+        private String taskOf(final String line) {
+            final JsonNode n = parse(line, json);
             if (n == null || !n.path("type").asString("").equals("user")) {
                 return "";
             }
-            JsonNode content = n.path("message").path("content");
+            final JsonNode content = n.path("message").path("content");
             if (content.isString()) {
                 return content.asString("");
             }
-            for (JsonNode c : content) {
+            for (final JsonNode c : content) {
                 if (c.path("type").asString("").equals("text")) {
                     return c.path("text").asString("");
                 }
@@ -442,10 +442,10 @@ final class SubagentFiles {
         }
 
         /** The file's first line when it ends within {@link #HEAD_BYTES}; else empty. */
-        private static String firstLine(FileChannel ch) throws IOException {
-            ByteBuffer buf = ByteBuffer.allocate((int) Math.min(HEAD_BYTES, ch.size()));
+        private static String firstLine(final FileChannel ch) throws IOException {
+            final ByteBuffer buf = ByteBuffer.allocate((int) Math.min(HEAD_BYTES, ch.size()));
             ch.read(buf, 0);
-            byte[] b = buf.array();
+            final byte[] b = buf.array();
             for (int i = 0; i < buf.position(); i++) {
                 if (b[i] == '\n') {
                     return new String(b, 0, i, StandardCharsets.UTF_8);
@@ -458,12 +458,12 @@ final class SubagentFiles {
          * The first line start at or after {@code pos}: {@code pos} itself when the byte before it ends a line;
          * {@code size} when none.
          */
-        private static long lineStart(FileChannel ch, long pos, long size) throws IOException {
-            ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
+        private static long lineStart(final FileChannel ch, final long pos, final long size) throws IOException {
+            final ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
             for (long at = pos - 1; at < size; ) {
                 buf.clear();
                 buf.limit((int) Math.min(CHUNK_BYTES, size - at));
-                int n = ch.read(buf, at);
+                final int n = ch.read(buf, at);
                 if (n <= 0) {
                     break;
                 }
@@ -479,31 +479,31 @@ final class SubagentFiles {
     }
 
     /** The line's JSON; null when it is not whole JSON. */
-    private static JsonNode parse(String line, ObjectMapper json) {
+    private static JsonNode parse(final String line, final ObjectMapper json) {
         if (line.isBlank()) {
             return null;
         }
         try {
             return json.readTree(line);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return null;
         }
     }
 
-    private static String quote(String text) {
+    private static String quote(final String text) {
         return "> " + text.strip().replace("\n", "\n> ");
     }
 
     /** What a tool call works on: the input a call is usually known by, else its first scalar, {@code key=value}. */
-    private static String summary(JsonNode in) {
-        for (String key : List.of("command", "file_path", "notebook_path", "pattern", "url", "query", "description", "skill")) {
+    private static String summary(final JsonNode in) {
+        for (final String key : List.of("command", "file_path", "notebook_path", "pattern", "url", "query", "description", "skill")) {
             if (in.path(key).isString()) {
                 return in.path(key).asString("");
             }
         }
-        var fields = in.properties().iterator();
+        final var fields = in.properties().iterator();
         while (fields.hasNext()) {
-            var f = fields.next();
+            final var f = fields.next();
             if (f.getValue().isValueNode()) {
                 return f.getKey() + "=" + f.getValue().asString("");
             }
@@ -511,12 +511,12 @@ final class SubagentFiles {
         return "";
     }
 
-    private static String resultText(JsonNode content) {
+    private static String resultText(final JsonNode content) {
         if (content.isString()) {
             return content.asString("");
         }
-        StringBuilder sb = new StringBuilder();
-        for (JsonNode c : content) {
+        final StringBuilder sb = new StringBuilder();
+        for (final JsonNode c : content) {
             if (c.path("text").isString()) {
                 sb.append(c.path("text").asString("")).append(' ');
             }
@@ -525,12 +525,12 @@ final class SubagentFiles {
     }
 
     /** {@code s} on one line, whitespace collapsed, clipped to {@link #RESULT_CHARS} characters. */
-    private static String oneLine(String s) {
-        String flat = s.strip().replaceAll("\\s+", " ");
+    private static String oneLine(final String s) {
+        final String flat = s.strip().replaceAll("\\s+", " ");
         return flat.length() <= RESULT_CHARS ? flat : flat.substring(0, RESULT_CHARS) + " …";
     }
 
-    private static String megabytes(long bytes) {
+    private static String megabytes(final long bytes) {
         return String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0));
     }
 }

@@ -1,13 +1,13 @@
 package dev.marregui.comando.core.model;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,24 +32,24 @@ class KitRootTest {
         return KIT;
     };
 
-    private static Path kitJson(Path dir, String text) throws IOException {
+    private static Path kitJson(final Path dir, final String text) throws IOException {
         return Files.writeString(Files.createDirectories(dir).resolve(KitRoot.FILE), text);
     }
 
     /// A non-blank explicit configuration directory wins over the user directory and loads its manifest only when its
     /// own manifest exists.
     @Test
-    void comandoStartedWithAConfigDirRunsOnItWithItsKitOrNone(@TempDir Path home) throws Exception {
-        Path other = home.resolve("elsewhere");
+    void comandoStartedWithAConfigDirRunsOnItWithItsKitOrNone(@TempDir final Path home) throws Exception {
+        final Path other = home.resolve("elsewhere");
         kitJson(home.resolve(".claude"), "{}");
 
-        KitRoot bare = KitRoot.resolve(other.toString(), home, READER);
+        final KitRoot bare = KitRoot.resolve(other.toString(), home, READER);
         assertThat(bare.dir()).isEqualTo(other);
         assertThat(bare.kit()).as("the folder named wins over a kit in ~/.claude").isEmpty();
         assertThat(bare.own()).isFalse();
 
         kitJson(other, "{}");
-        KitRoot kit = KitRoot.resolve(other.toString(), home, READER);
+        final KitRoot kit = KitRoot.resolve(other.toString(), home, READER);
         assertThat(kit.kit()).contains(KIT);
         assertThat(kit.userDir()).isEqualTo(home.resolve(".claude"));
     }
@@ -57,17 +57,17 @@ class KitRootTest {
     /// Resolution chooses the cloned kit when the own directory lacks one, then chooses the own kit when both manifests
     /// exist.
     @Test
-    void aKitInTheUsersOwnFolderComesFirstThenTheClonedKit(@TempDir Path home) throws Exception {
-        Path user = home.resolve(".claude");
+    void aKitInTheUsersOwnFolderComesFirstThenTheClonedKit(@TempDir final Path home) throws Exception {
+        final Path user = home.resolve(".claude");
         kitJson(user.resolve(KitRoot.CLONE), "{}");
 
-        KitRoot cloned = KitRoot.resolve(null, home, READER);
+        final KitRoot cloned = KitRoot.resolve(null, home, READER);
         assertThat(cloned.dir()).isEqualTo(user.resolve("comando-kit"));
         assertThat(cloned.kit()).contains(KIT);
         assertThat(cloned.own()).isFalse();
 
         kitJson(user, "{}");
-        KitRoot own = KitRoot.resolve(" ", home, READER);
+        final KitRoot own = KitRoot.resolve(" ", home, READER);
         assertThat(own.dir()).as("a blank CLAUDE_CONFIG_DIR is none").isEqualTo(user);
         assertThat(own.kit()).contains(KIT);
         assertThat(own.own()).isTrue();
@@ -75,8 +75,8 @@ class KitRootTest {
 
     /// Without a readable manifest, resolution returns the user's `.claude` directory with empty kit-derived values.
     @Test
-    void withoutAKitTheRootIsTheUsersOwnFolder(@TempDir Path home) {
-        KitRoot none = KitRoot.resolve(null, home, READER);
+    void withoutAKitTheRootIsTheUsersOwnFolder(@TempDir final Path home) {
+        final KitRoot none = KitRoot.resolve(null, home, READER);
 
         assertThat(none).isEqualTo(new KitRoot(home.resolve(".claude"), Optional.empty(), home.resolve(".claude")));
         assertThat(none.own()).isTrue();
@@ -89,8 +89,8 @@ class KitRootTest {
     /// A malformed own manifest is skipped in favour of a readable clone, while reader failures leave the selected root
     /// without a kit.
     @Test
-    void aKitJsonThatDoesNotReadCountsAsNone(@TempDir Path home) throws Exception {
-        Path user = home.resolve(".claude");
+    void aKitJsonThatDoesNotReadCountsAsNone(@TempDir final Path home) throws Exception {
+        final Path user = home.resolve(".claude");
         kitJson(user, "broken");
 
         assertThat(KitRoot.resolve(null, home, READER)).as("no kit at all").isEqualTo(new KitRoot(user, Optional.empty(), user));
@@ -103,10 +103,10 @@ class KitRootTest {
 
     /// A selected manifest maps its name, brain, memory, projects, and folder paths beneath the kit root only.
     @Test
-    void theKitsFoldersBrainAndMemoryAreUnderTheRoot(@TempDir Path home) throws Exception {
-        Path root = home.resolve(".claude/comando-kit");
+    void theKitsFoldersBrainAndMemoryAreUnderTheRoot(@TempDir final Path home) throws Exception {
+        final Path root = home.resolve(".claude/comando-kit");
         kitJson(root, "{}");
-        KitRoot r = KitRoot.resolve(null, home, READER);
+        final KitRoot r = KitRoot.resolve(null, home, READER);
 
         assertThat(r.name()).isEqualTo("marregui");
         assertThat(r.brain()).contains(root.resolve("BRAIN"));

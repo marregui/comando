@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.async;
 
-import javax.swing.SwingUtilities;
 import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javax.swing.SwingUtilities;
 
 /** Hand-off to the event dispatch thread. */
 public final class Edt {
@@ -14,7 +14,7 @@ public final class Edt {
     }
 
     /** Runs now when on the EDT, else posts. */
-    public static void run(Runnable task) {
+    public static void run(final Runnable task) {
         if (SwingUtilities.isEventDispatchThread()) {
             task.run();
         } else {
@@ -27,29 +27,29 @@ public final class Edt {
      * within the bound. For shutdown, where an EDT that does not answer must not hold the closing thread forever. A
      * task that has not started by then never runs.
      */
-    public static boolean runAndWait(Runnable task, Duration bound) {
+    public static boolean runAndWait(final Runnable task, final Duration bound) {
         if (SwingUtilities.isEventDispatchThread()) {
             task.run();
             return true;
         }
-        FutureTask<Void> future = new FutureTask<>(task, null);
+        final FutureTask<Void> future = new FutureTask<>(task, null);
         SwingUtilities.invokeLater(future);
         try {
             future.get(bound.toNanos(), TimeUnit.NANOSECONDS);
             return true;
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             future.cancel(false);
             Thread.currentThread().interrupt();
             return false;
-        } catch (TimeoutException e) {
+        } catch (final TimeoutException e) {
             future.cancel(false);
             return false;
-        } catch (ExecutionException e) {
+        } catch (final ExecutionException e) {
             throw new IllegalStateException("EDT task failed", e.getCause());
         }
     }
 
-    public static void later(Runnable task) {
+    public static void later(final Runnable task) {
         SwingUtilities.invokeLater(task);
     }
 }

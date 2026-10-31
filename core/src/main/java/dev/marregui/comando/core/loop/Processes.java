@@ -45,7 +45,7 @@ public final class Processes {
     }
 
     /** Runs {@code argv} in the current folder with comando's environment and no input. */
-    public static Result run(List<String> argv, Duration timeout, int maxOut) throws IOException, InterruptedException {
+    public static Result run(final List<String> argv, final Duration timeout, final int maxOut) throws IOException, InterruptedException {
         return run(argv, null, null, null, timeout, maxOut);
     }
 
@@ -58,8 +58,8 @@ public final class Processes {
      * @throws IOException          when the program cannot be started
      * @throws InterruptedException when the caller is interrupted; the program has been ended by then
      */
-    public static Result run(List<String> argv, Consumer<Map<String, String>> environment, Path folder, byte[] stdin,
-                             Duration timeout, int maxOut) throws IOException, InterruptedException {
+    public static Result run(final List<String> argv, final Consumer<Map<String, String>> environment, final Path folder, final byte[] stdin,
+                             final Duration timeout, final int maxOut) throws IOException, InterruptedException {
         return run(argv, environment, folder, stdin, timeout, maxOut, maxOut, null);
     }
 
@@ -67,17 +67,17 @@ public final class Processes {
      * As {@link #run(List, Consumer, Path, byte[], Duration, int)}, standard error kept up to {@code maxErr} bytes, and
      * {@code started}, when not null, told the process once it runs, so that its owner can end it on closing.
      */
-    public static Result run(List<String> argv, Consumer<Map<String, String>> environment, Path folder, byte[] stdin,
-                             Duration timeout, int maxOut, int maxErr, Consumer<Process> started)
+    public static Result run(final List<String> argv, final Consumer<Map<String, String>> environment, final Path folder, final byte[] stdin,
+                             final Duration timeout, final int maxOut, final int maxErr, final Consumer<Process> started)
             throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(argv);
+        final ProcessBuilder pb = new ProcessBuilder(argv);
         if (environment != null) {
             environment.accept(pb.environment());
         }
         if (folder != null) {
             pb.directory(folder.toFile());
         }
-        Path out = Files.createTempFile("comando-out-", ".tmp");
+        final Path out = Files.createTempFile("comando-out-", ".tmp");
         Path err = null;
         Path in = null;
         try {
@@ -88,7 +88,7 @@ public final class Processes {
                 Files.write(in, stdin);
                 pb.redirectInput(in.toFile());
             }
-            Process p = pb.start();
+            final Process p = pb.start();
             if (stdin == null) {
                 p.getOutputStream().close(); // no input: the program sees its end at once
             }
@@ -98,7 +98,7 @@ public final class Processes {
             boolean ended;
             try {
                 ended = p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 end(p);
                 throw e;
             } finally {
@@ -106,8 +106,8 @@ public final class Processes {
                     end(p);
                 }
             }
-            byte[] stdout = head(out, maxOut);
-            boolean cut = Files.size(out) > maxOut;
+            final byte[] stdout = head(out, maxOut);
+            final boolean cut = Files.size(out) > maxOut;
             return new Result(ended ? p.exitValue() : -1, stdout, new String(head(err, maxErr), StandardCharsets.UTF_8), !ended, cut);
         } finally {
             deleteQuietly(out);
@@ -117,7 +117,7 @@ public final class Processes {
     }
 
     /** Ends {@code p} and every process it started, children first; waits a moment for it to be gone. */
-    static void end(Process p) throws InterruptedException {
+    static void end(final Process p) throws InterruptedException {
         // only while it lives: the JDK finds descendants by pid, and an ended process's pid may be another's
         if (p.isAlive()) {
             p.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -127,19 +127,19 @@ public final class Processes {
     }
 
     /** The first {@code max} bytes of {@code file}. */
-    private static byte[] head(Path file, int max) throws IOException {
+    private static byte[] head(final Path file, final int max) throws IOException {
         try (InputStream in = Files.newInputStream(file)) {
             return in.readNBytes(max);
         }
     }
 
-    private static void deleteQuietly(Path file) {
+    private static void deleteQuietly(final Path file) {
         if (file == null) {
             return;
         }
         try {
             Files.deleteIfExists(file);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             // a temporary file left behind; the system cleans its temporary folder
         }
     }

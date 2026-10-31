@@ -33,21 +33,21 @@ public record Attribute(String key, String label, Kind kind, List<String> choice
         whenEmpty = whenEmpty == null ? "" : whenEmpty;
     }
 
-    public Attribute(String key, String label, Kind kind, List<String> choices, boolean required, String hint) {
+    public Attribute(final String key, final String label, final Kind kind, final List<String> choices, final boolean required, final String hint) {
         this(key, label, kind, choices, required, hint, kind != Kind.CHOICE, false, "", "");
     }
 
-    public static Attribute of(String key, String label, Kind kind, boolean required, String hint) {
+    public static Attribute of(final String key, final String label, final Kind kind, final boolean required, final String hint) {
         return new Attribute(key, label, kind, List.of(), required, hint);
     }
 
     /** A choice the user picks from the list only. */
-    public static Attribute choice(String key, String label, List<String> choices, String hint) {
+    public static Attribute choice(final String key, final String label, final List<String> choices, final String hint) {
         return new Attribute(key, label, Kind.CHOICE, choices, false, hint, false, false, "", "");
     }
 
     /** A choice whose list holds suggestions: the user may also type another value. */
-    public static Attribute openChoice(String key, String label, List<String> choices, String hint) {
+    public static Attribute openChoice(final String key, final String label, final List<String> choices, final String hint) {
         return new Attribute(key, label, Kind.CHOICE, choices, false, hint, true, false, "", "");
     }
 
@@ -57,12 +57,12 @@ public record Attribute(String key, String label, Kind kind, List<String> choice
     }
 
     /** The same attribute with {@code text} behind the ⓘ beside its label. */
-    public Attribute about(String text) {
+    public Attribute about(final String text) {
         return new Attribute(key, label, kind, choices, required, hint, editable, advanced, text, whenEmpty);
     }
 
     /** The same choice showing {@code text} for its empty value: the default an empty value stands for. */
-    public Attribute whenEmpty(String text) {
+    public Attribute whenEmpty(final String text) {
         return new Attribute(key, label, kind, choices, required, hint, editable, advanced, about, text);
     }
 }

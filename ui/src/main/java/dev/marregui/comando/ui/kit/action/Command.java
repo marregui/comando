@@ -1,8 +1,8 @@
 package dev.marregui.comando.ui.kit.action;
 
-import javax.swing.KeyStroke;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import javax.swing.KeyStroke;
 
 /**
  * One user action: menus, key bindings and the command palette are all built from these.
@@ -22,16 +22,16 @@ public record Command(String id, String label, String icon, KeyStroke key, Strin
     }
 
     /** The same command at menu path {@code path}. */
-    public Command withGroup(String path) {
+    public Command withGroup(final String path) {
         return new Command(id, label, icon, key, path, run, enabled);
     }
 
-    public static Command of(String id, String label, String icon, KeyStroke key, String group, Runnable run) {
+    public static Command of(final String id, final String label, final String icon, final KeyStroke key, final String group, final Runnable run) {
         return new Command(id, label, icon, key, group, run, () -> true);
     }
 
     /** A command that can run only while {@code enabled} holds; its key then goes on to the focused component. */
-    public static Command of(String id, String label, String icon, KeyStroke key, String group, Runnable run, BooleanSupplier enabled) {
+    public static Command of(final String id, final String label, final String icon, final KeyStroke key, final String group, final Runnable run, final BooleanSupplier enabled) {
         return new Command(id, label, icon, key, group, run, enabled);
     }
 }

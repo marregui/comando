@@ -1,11 +1,12 @@
 package dev.marregui.comando.ui.kit.overlay;
 
-import dev.marregui.comando.ui.kit.async.OnEdt;
+import javax.swing.JLabel;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import javax.swing.JLabel;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,7 +25,7 @@ class OverlayTest {
     /// after [Overlay#showLoading] and stops on content, empty and error, which keeps its text.
     @Test
     void theLoadingBarAnimatesOnlyWhileLoading() {
-        Overlay overlay = new Overlay(new JLabel("content"));
+        final Overlay overlay = new Overlay(new JLabel("content"));
         assertThat(overlay.animating()).as("built showing the content").isFalse();
         overlay.showLoading("Loading the schema");
         assertThat(overlay.animating()).isTrue();

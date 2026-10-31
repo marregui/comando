@@ -1,9 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import dev.marregui.comando.core.action.Actions;
-import dev.marregui.comando.core.intent.Intent;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +10,11 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.action.Actions;
+import dev.marregui.comando.core.intent.Intent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,12 +29,12 @@ class ActionParityTest {
     /// not yet offered with its reason; an intent in none or in two fails.
     @Test
     void everyKindOfIntentIsClassifiedOnce() {
-        List<String> unclassified = new ArrayList<>();
-        List<String> twice = new ArrayList<>();
-        for (Class<?> c : Intent.class.getPermittedSubclasses()) {
+        final List<String> unclassified = new ArrayList<>();
+        final List<String> twice = new ArrayList<>();
+        for (final Class<?> c : Intent.class.getPermittedSubclasses()) {
             @SuppressWarnings("unchecked")
-            Class<? extends Intent> kind = (Class<? extends Intent>) c;
-            int places = (Actions.offered(kind) ? 1 : 0) + (Actions.EVENTS.contains(kind) ? 1 : 0)
+            final Class<? extends Intent> kind = (Class<? extends Intent>) c;
+            final int places = (Actions.offered(kind) ? 1 : 0) + (Actions.EVENTS.contains(kind) ? 1 : 0)
                     + (Actions.WINDOW.containsKey(kind) ? 1 : 0) + (Actions.NOT_YET.containsKey(kind) ? 1 : 0);
             if (places == 0) {
                 unclassified.add(c.getSimpleName());
@@ -49,20 +50,20 @@ class ActionParityTest {
     /// listed as window-only or not yet offered, with its reason.
     @Test
     void everyIntentTheWindowSendsIsOfferedOrSaysWhyNot() throws IOException {
-        Set<String> sent = new TreeSet<>();
+        final Set<String> sent = new TreeSet<>();
         try (Stream<Path> files = Files.walk(Path.of("../ui/src/main/java"))) {
-            for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
-                Matcher m = SENT.matcher(Files.readString(f));
+            for (final Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                final Matcher m = SENT.matcher(Files.readString(f));
                 while (m.find()) {
                     sent.add(m.group(1) != null ? m.group(1) : m.group(2));
                 }
             }
         }
         assertThat(sent).as("the scan found the window's intents").hasSizeGreaterThan(40);
-        List<String> missing = new ArrayList<>();
-        for (Class<?> c : Intent.class.getPermittedSubclasses()) {
+        final List<String> missing = new ArrayList<>();
+        for (final Class<?> c : Intent.class.getPermittedSubclasses()) {
             @SuppressWarnings("unchecked")
-            Class<? extends Intent> kind = (Class<? extends Intent>) c;
+            final Class<? extends Intent> kind = (Class<? extends Intent>) c;
             if (sent.contains(c.getSimpleName()) && !Actions.offered(kind) && !Actions.WINDOW.containsKey(kind) && !Actions.NOT_YET.containsKey(kind)) {
                 missing.add(c.getSimpleName());
             }

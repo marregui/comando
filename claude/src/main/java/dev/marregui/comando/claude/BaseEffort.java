@@ -1,11 +1,11 @@
 package dev.marregui.comando.claude;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * The effort level Claude Code starts a model's turns at, from its {@code settings.json}: the model's own
@@ -18,17 +18,17 @@ final class BaseEffort {
     }
 
     /** The base effort for {@code model}, or empty when the settings give none or cannot be read. */
-    static String base(Path settings, String model, ObjectMapper json) {
+    static String base(final Path settings, final String model, final ObjectMapper json) {
         JsonNode root;
         try {
             if (!Files.isRegularFile(settings)) {
                 return "";
             }
             root = json.readTree(settings.toFile());
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return "";
         }
-        String own = model.isEmpty() ? "" : root.path("modelSettings").path(model).path("effortLevel").asString("");
+        final String own = model.isEmpty() ? "" : root.path("modelSettings").path(model).path("effortLevel").asString("");
         return own.isEmpty() ? root.path("effortLevel").asString("") : own;
     }
 }

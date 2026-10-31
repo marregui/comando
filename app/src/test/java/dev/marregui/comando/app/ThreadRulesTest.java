@@ -1,17 +1,5 @@
 package dev.marregui.comando.app;
 
-import com.tngtech.archunit.base.DescribedPredicate;
-import com.tngtech.archunit.core.domain.JavaCall;
-import com.tngtech.archunit.core.domain.JavaClass;
-import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
-import dev.marregui.comando.core.loop.StateLoop;
-import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.loop.Watchdog;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -24,6 +12,19 @@ import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.BaseStream;
 import java.util.stream.StreamSupport;
+
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.loop.Watchdog;
 
 import static com.tngtech.archunit.core.domain.JavaCall.Predicates.target;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
@@ -90,17 +91,17 @@ class ThreadRulesTest {
                 .check(comando);
     }
 
-    private static DescribedPredicate<JavaCall<?>> nameStartsWith(String prefix) {
+    private static DescribedPredicate<JavaCall<?>> nameStartsWith(final String prefix) {
         return DescribedPredicate.describe("name starting with " + prefix, call -> call.getName().startsWith(prefix));
     }
 
-    private static DescribedPredicate<JavaCall<?>> nameEndsWith(String suffix) {
+    private static DescribedPredicate<JavaCall<?>> nameEndsWith(final String suffix) {
         return DescribedPredicate.describe("name ending with " + suffix, call -> call.getName().endsWith(suffix));
     }
 
-    private static DescribedPredicate<JavaCall<?>> lastParameterIs(Class<?> type) {
+    private static DescribedPredicate<JavaCall<?>> lastParameterIs(final Class<?> type) {
         return DescribedPredicate.describe("last parameter " + type.getSimpleName(), call -> {
-            List<JavaClass> params = call.getTarget().getRawParameterTypes();
+            final List<JavaClass> params = call.getTarget().getRawParameterTypes();
             return !params.isEmpty() && params.getLast().isEquivalentTo(type);
         });
     }

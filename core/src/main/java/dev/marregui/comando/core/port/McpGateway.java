@@ -13,12 +13,12 @@ public interface McpGateway {
     /** No server: sessions start without comando's tools or the approval tool. */
     McpGateway NONE = new McpGateway() {
         @Override
-        public Ticket register(String session) {
+        public Ticket register(final String session) {
             return null;
         }
 
         @Override
-        public void unregister(String session, Ticket ticket) {
+        public void unregister(final String session, final Ticket ticket) {
         }
     };
 

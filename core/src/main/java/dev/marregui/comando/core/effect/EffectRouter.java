@@ -18,7 +18,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
     private final PersistencePort persistence;
     private final ToolPort tools;
 
-    public EffectRouter(DatabasePort db, ClaudePort claude, ApprovalPort approvals, UiPort ui, PersistencePort persistence, ToolPort tools) {
+    public EffectRouter(final DatabasePort db, final ClaudePort claude, final ApprovalPort approvals, final UiPort ui, final PersistencePort persistence, final ToolPort tools) {
         this.db = db;
         this.claude = claude;
         this.approvals = approvals;
@@ -28,7 +28,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
     }
 
     @Override
-    public void handle(Effect effect) {
+    public void handle(final Effect effect) {
         switch (effect) {
             case Effect.OpenDb e -> db.open(e.spec());
             case Effect.CloseDb e -> db.close(e.name());

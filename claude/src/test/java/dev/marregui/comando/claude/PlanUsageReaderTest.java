@@ -1,14 +1,15 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.PlanUsage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
+import dev.marregui.comando.core.model.PlanUsage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,8 +38,8 @@ class PlanUsageReaderTest {
     @TempDir
     Path dir;
 
-    private static String answer(String result, boolean error) {
-        ObjectNode n = JSON.createObjectNode();
+    private static String answer(final String result, final boolean error) {
+        final ObjectNode n = JSON.createObjectNode();
         n.put("type", "result");
         n.put("subtype", "success");
         n.put("is_error", error);
@@ -51,7 +52,7 @@ class PlanUsageReaderTest {
     /// the all-models and the one-model weekly forms.
     @Test
     void eachLimitLineBecomesAWindowAndTheRestIsIgnored() {
-        PlanUsage u = PlanUsageReader.parse(answer(MAX_PLAN, false), 7L, JSON);
+        final PlanUsage u = PlanUsageReader.parse(answer(MAX_PLAN, false), 7L, JSON);
         assertThat(u.problem()).isEmpty();
         assertThat(u.readAtMillis()).isEqualTo(7L);
         assertThat(u.windows()).containsExactly(
@@ -64,7 +65,7 @@ class PlanUsageReaderTest {
     /// The input has no session line, so the model-derived name is unambiguous.
     @Test
     void aModelOnlyWeekIsNamedAfterTheModelAndAWindowWithoutAResetKeepsItsShare() {
-        PlanUsage u = PlanUsageReader.parse(answer("Current week (Sonnet only): 2.6% used\n", false), 1L, JSON);
+        final PlanUsage u = PlanUsageReader.parse(answer("Current week (Sonnet only): 2.6% used\n", false), 1L, JSON);
         assertThat(u.windows()).containsExactly(new PlanUsage.Window("Sonnet", 3, ""));
     }
 
@@ -83,9 +84,9 @@ class PlanUsageReaderTest {
     /// The script records each argument before returning a valid three-window reply.
     @Test
     void theReadRunsTheLocalCommandInSafeModeWithoutSavingASession() throws Exception {
-        Path args = dir.resolve("args.txt");
-        Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\nprintf '%s' '" + answer(MAX_PLAN, false).replace("'", "'\\''") + "'\n");
-        PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(10));
+        final Path args = dir.resolve("args.txt");
+        final Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\nprintf '%s' '" + answer(MAX_PLAN, false).replace("'", "'\\''") + "'\n");
+        final PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(10));
         assertThat(u.windows()).hasSize(3);
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "/usage", "--no-session-persistence", "--output-format", "json");
     }
@@ -94,9 +95,9 @@ class PlanUsageReaderTest {
     /// The duration assertion excludes waiting for the script's 30-second sleep.
     @Test
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
-        Path exe = script("hang", "exec sleep 30\n");
-        long start = System.nanoTime();
-        PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofMillis(300));
+        final Path exe = script("hang", "exec sleep 30\n");
+        final long start = System.nanoTime();
+        final PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).isEqualTo("'claude -p /usage' did not answer within 300 ms");
@@ -105,13 +106,13 @@ class PlanUsageReaderTest {
     /// A missing executable gives a failed read, not an exception.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
-        PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(1));
+        final PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(1));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).startsWith("cannot run '");
     }
 
-    private Path script(String name, String body) throws Exception {
-        Path exe = dir.resolve(name);
+    private Path script(final String name, final String body) throws Exception {
+        final Path exe = dir.resolve(name);
         Files.writeString(exe, "#!/bin/sh\n" + body);
         exe.toFile().setExecutable(true);
         return exe;

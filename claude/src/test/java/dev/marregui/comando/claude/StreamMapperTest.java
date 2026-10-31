@@ -1,19 +1,20 @@
 package dev.marregui.comando.claude;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.Fixtures;
 import dev.marregui.comando.testkit.RecordingSink;
-import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,14 +26,14 @@ class StreamMapperTest {
     private final StreamMapper mapper = new StreamMapper("work", transcript, sink, new ObjectMapper());
 
     private List<Block> blocks() {
-        List<Block> out = new ArrayList<>();
+        final List<Block> out = new ArrayList<>();
         for (int i = 0; i < transcript.size(); i++) {
             out.add(transcript.get(i));
         }
         return out;
     }
 
-    private <T extends Block> List<T> blocks(Class<T> type) {
+    private <T extends Block> List<T> blocks(final Class<T> type) {
         return blocks().stream().filter(type::isInstance).map(type::cast).toList();
     }
 
@@ -40,8 +41,8 @@ class StreamMapperTest {
     /// shows its own note, and its turn ends.
     @Test
     void aCarriedSummaryShowsAsAnAnswerAndAClearShowsItself() {
-        String reset = "{\"type\":\"conversation_reset\",\"trigger\":\"clear\"}";
-        String result = "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0,"
+        final String reset = "{\"type\":\"conversation_reset\",\"trigger\":\"clear\"}";
+        final String result = "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0,"
                 + "\"duration_ms\":3,\"num_turns\":0}";
         mapper.carried("## Reflected\nmemory written");
         assertThat(blocks()).hasSize(3);
@@ -66,12 +67,12 @@ class StreamMapperTest {
         mapper.prompt("Run the shell command: touch probe-file.txt", "one");
         Fixtures.stream("approvals-and-question").forEach(mapper::accept);
 
-        Intent.SessionInit init = sink.of(Intent.SessionInit.class).getFirst();
+        final Intent.SessionInit init = sink.of(Intent.SessionInit.class).getFirst();
         assertThat(init.info().claudeSessionId()).isNotEmpty();
         assertThat(init.info().model()).isEqualTo("claude-haiku-5-5");
         assertThat(init.info().capabilities()).contains("interrupt_receipt_v1");
 
-        List<Block.ToolCall> calls = blocks(Block.ToolCall.class);
+        final List<Block.ToolCall> calls = blocks(Block.ToolCall.class);
         assertThat(calls).extracting(Block.ToolCall::name).containsExactly("Bash", "AskUserQuestion");
         assertThat(calls.get(0).status()).isEqualTo(Block.ToolStatus.DONE);
         assertThat(calls.get(0).inputJson()).contains("touch probe-file.txt");
@@ -82,7 +83,7 @@ class StreamMapperTest {
                 .containsExactly("DONE", "You answered **red**.");
         assertThat(blocks(Block.AssistantText.class)).noneMatch(Block.AssistantText::streaming);
 
-        List<Intent.SessionTurnEnded> ends = sink.of(Intent.SessionTurnEnded.class);
+        final List<Intent.SessionTurnEnded> ends = sink.of(Intent.SessionTurnEnded.class);
         assertThat(ends).hasSize(2).allSatisfy(e -> {
             assertThat(e.queued()).isZero();
             assertThat(e.error()).isFalse();
@@ -105,13 +106,13 @@ class StreamMapperTest {
     void theContextFollowsEachModelCallAndAStoredConversationReportsItOnce() {
         mapper.prompt("Run the shell command: touch probe-file.txt", "one");
         Fixtures.stream("approvals-and-question").forEach(mapper::accept);
-        List<Intent.SessionContext> live = sink.of(Intent.SessionContext.class);
+        final List<Intent.SessionContext> live = sink.of(Intent.SessionContext.class);
         assertThat(live).as("one a model call, before each turn's end").hasSizeGreaterThan(sink.of(Intent.SessionTurnEnded.class).size());
         assertThat(live).allSatisfy(c -> assertThat(c.tokens()).isPositive());
         assertThat(live.getLast().tokens()).isEqualTo(35_134L);
 
-        RecordingSink stored = new RecordingSink();
-        StreamMapper replay = new StreamMapper("old", new Transcript(), stored, new ObjectMapper());
+        final RecordingSink stored = new RecordingSink();
+        final StreamMapper replay = new StreamMapper("old", new Transcript(), stored, new ObjectMapper());
         replay.acceptHistory("{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"role\":\"assistant\",\"model\":\"m\","
                 + "\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],\"stop_reason\":\"end_turn\","
                 + "\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":100,\"cache_read_input_tokens\":400000}}}");
@@ -119,8 +120,8 @@ class StreamMapperTest {
         replay.reportContext(Optional.of(new long[]{588_979L, 1_000_000L}));
         assertThat(stored.of(Intent.SessionContext.class)).containsExactly(new Intent.SessionContext("old", 400_110L, 1_000_000L));
 
-        RecordingSink empty = new RecordingSink();
-        StreamMapper none = new StreamMapper("new", new Transcript(), empty, new ObjectMapper());
+        final RecordingSink empty = new RecordingSink();
+        final StreamMapper none = new StreamMapper("new", new Transcript(), empty, new ObjectMapper());
         none.reportContext(Optional.of(new long[]{588_979L, 1_000_000L}));
         assertThat(empty.of(Intent.SessionContext.class)).as("the metrics' own when the replay had none")
                 .containsExactly(new Intent.SessionContext("new", 588_979L, 1_000_000L));
@@ -144,12 +145,12 @@ class StreamMapperTest {
         assertThat(blocks(Block.Note.class)).extracting(Block.Note::kind)
                 .contains(Block.NoteKind.COMPACT, Block.NoteKind.INTERRUPT, Block.NoteKind.COMMAND);
 
-        List<Intent.SessionTurnEnded> ends = sink.of(Intent.SessionTurnEnded.class);
+        final List<Intent.SessionTurnEnded> ends = sink.of(Intent.SessionTurnEnded.class);
         assertThat(ends).hasSize(4);
         assertThat(ends.getLast().error()).isTrue();
         assertThat(ends.getLast().message()).isEqualTo("interrupted");
 
-        Block.ToolCall sleep30 = blocks(Block.ToolCall.class).getLast();
+        final Block.ToolCall sleep30 = blocks(Block.ToolCall.class).getLast();
         assertThat(sleep30.inputJson()).contains("sleep 30");
         assertThat(sleep30.status()).isEqualTo(Block.ToolStatus.ERROR);
 
@@ -162,10 +163,10 @@ class StreamMapperTest {
     @Test
     void clearRecordingStartsANewConversationWithAnEmptyContext() {
         Fixtures.stream("clear").forEach(mapper::accept);
-        List<String> conversations = sink.of(Intent.SessionInit.class).stream().map(i -> i.info().claudeSessionId()).distinct().toList();
+        final List<String> conversations = sink.of(Intent.SessionInit.class).stream().map(i -> i.info().claudeSessionId()).distinct().toList();
         assertThat(conversations).as("the clear's init names a new conversation").hasSize(2);
         // one, then the clear's turn (no model call), then two in the new conversation
-        List<Long> context = sink.of(Intent.SessionTurnEnded.class).stream().map(Intent.SessionTurnEnded::contextTokens).toList();
+        final List<Long> context = sink.of(Intent.SessionTurnEnded.class).stream().map(Intent.SessionTurnEnded::contextTokens).toList();
         assertThat(context).hasSize(3);
         assertThat(context.get(0)).isPositive();
         assertThat(context.get(1)).as("cleared").isZero();
@@ -287,7 +288,7 @@ class StreamMapperTest {
         mapper.endHistory();
         mapper.endHistory();
 
-        List<String> shape = blocks().stream().map(b -> switch (b) {
+        final List<String> shape = blocks().stream().map(b -> switch (b) {
             case Block.UserPrompt p -> "prompt " + p.text();
             case Block.AssistantText a -> "text " + a.text();
             case Block.TurnEnd t -> t.timed() ? "timed end" : "end";
@@ -328,7 +329,7 @@ class StreamMapperTest {
         mapper.accept("""
                 {"type":"system","subtype":"background_tasks_changed","tasks":[]}""");
 
-        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "Background sleep and pong", 0L);
+        final BackgroundTask agent = new BackgroundTask("a1", "local_agent", "Background sleep and pong", 0L);
         assertThat(sink.of(Intent.SessionTasksChanged.class)).as("the agent's own command and a task Claude Code runs by itself are not in it")
                 .extracting(Intent.SessionTasksChanged::open).containsExactly(List.of(agent), List.of(agent), List.of());
     }
@@ -361,7 +362,7 @@ class StreamMapperTest {
 
         assertThat(mapper.endRunningTools()).isEqualTo(1);
 
-        List<Block.ToolCall> calls = blocks(Block.ToolCall.class);
+        final List<Block.ToolCall> calls = blocks(Block.ToolCall.class);
         assertThat(calls.get(0).status()).isEqualTo(Block.ToolStatus.ERROR);
         assertThat(calls.get(0).resultText()).isEqualTo(StreamMapper.NO_RESULT);
         assertThat(calls.get(1).status()).isEqualTo(Block.ToolStatus.DONE);
@@ -375,9 +376,9 @@ class StreamMapperTest {
     /// model alone when the line never came.
     @Test
     void eachTopLevelMessageSendsTheModelAndEffortItsTranscriptLineGives() {
-        List<String> asked = new ArrayList<>();
-        Map<String, RunSettings.Ran> written = new HashMap<>();
-        List<Runnable> retries = new ArrayList<>();
+        final List<String> asked = new ArrayList<>();
+        final Map<String, RunSettings.Ran> written = new HashMap<>();
+        final List<Runnable> retries = new ArrayList<>();
         mapper.ranFrom((conversation, message) -> {
             asked.add(conversation + "/" + message);
             return Optional.ofNullable(written.get(message));
@@ -407,7 +408,7 @@ class StreamMapperTest {
                 new Intent.SessionRanAt("work", "claude-sonnet-5-5", "", false));
         assertThat(asked).as("one read per message, m3's last at the turn's end, none on the retry after it").containsExactly(
                 "conv-1/m1", "conv-1/m2", "conv-1/m3", "conv-1/m3");
-        List<Intent> all = sink.intents();
+        final List<Intent> all = sink.intents();
         assertThat(all.indexOf(new Intent.SessionRanAt("work", "claude-sonnet-5-5", "", false)))
                 .isLessThan(all.indexOf(sink.of(Intent.SessionTurnEnded.class).getFirst()));
 

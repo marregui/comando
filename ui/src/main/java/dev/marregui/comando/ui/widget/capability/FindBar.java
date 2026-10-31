@@ -1,9 +1,8 @@
 package dev.marregui.comando.ui.widget.capability;
 
-import dev.marregui.comando.ui.kit.async.Debouncer;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
+import java.awt.FlowLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -14,9 +13,10 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import java.awt.FlowLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
+
+import dev.marregui.comando.ui.kit.async.Debouncer;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /** The shared find bar: one instance per window, pointed at whichever {@link Searchable} has focus. */
 public final class FindBar extends JPanel {
@@ -48,35 +48,35 @@ public final class FindBar extends JPanel {
         // find as you type, once typing pauses; ⏎ and ⇧⏎ then step through the matches
         text.getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(DocumentEvent e) {
+            public void insertUpdate(final DocumentEvent e) {
                 typing.request();
             }
 
             @Override
-            public void removeUpdate(DocumentEvent e) {
+            public void removeUpdate(final DocumentEvent e) {
                 typing.request();
             }
 
             @Override
-            public void changedUpdate(DocumentEvent e) {
+            public void changedUpdate(final DocumentEvent e) {
                 // attributes only
             }
         });
         text.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "previous");
         text.getActionMap().put("previous", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 find(false);
             }
         });
         text.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "close");
         text.getActionMap().put("close", new AbstractAction() {
             @Override
-            public void actionPerformed(ActionEvent e) {
+            public void actionPerformed(final ActionEvent e) {
                 close();
             }
         });
-        JButton close = new JButton(Icons.get("close"));
+        final JButton close = new JButton(Icons.get("close"));
         close.setToolTipText("Close (Esc)");
         close.getAccessibleContext().setAccessibleName("Close the find bar");
         text.getAccessibleContext().setAccessibleName("Find");
@@ -90,7 +90,7 @@ public final class FindBar extends JPanel {
     }
 
     /** Opens the bar for {@code searchable}; does nothing when it is null. */
-    public void open(Searchable searchable) {
+    public void open(final Searchable searchable) {
         if (searchable == null) {
             return;
         }
@@ -103,7 +103,7 @@ public final class FindBar extends JPanel {
 
     /** Whether the view the bar searches is still in the window; true when it cannot tell. */
     public boolean targetShowing() {
-        JComponent root = target == null ? null : Capabilities.rootOf(target);
+        final JComponent root = target == null ? null : Capabilities.rootOf(target);
         return root == null || root.isDisplayable();
     }
 
@@ -113,13 +113,13 @@ public final class FindBar extends JPanel {
     }
 
     /** Finds the next or previous match of the bar's text (⌘G, ⌘⇧G); does nothing when the bar is closed. */
-    public void next(boolean forward) {
+    public void next(final boolean forward) {
         find(forward);
     }
 
-    private void find(boolean forward) {
+    private void find(final boolean forward) {
         if (target != null && !text.getText().isEmpty()) {
-            int n = target.find(text.getText(), forward);
+            final int n = target.find(text.getText(), forward);
             count.setText(n == 0 ? "no matches" : n + (n == 1 ? " match" : " matches"));
         }
     }

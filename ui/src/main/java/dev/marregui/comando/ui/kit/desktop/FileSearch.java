@@ -30,22 +30,22 @@ public final class FileSearch {
     }
 
     /** The file under one of {@code roots}, in order, whose path ends with {@code relative}; empty when none is. */
-    public static Optional<Path> bySuffix(String relative, List<Path> roots) {
+    public static Optional<Path> bySuffix(final String relative, final List<Path> roots) {
         Path suffix;
         try {
             suffix = Path.of(relative).normalize();
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             return Optional.empty();
         }
         if (suffix.isAbsolute() || suffix.getNameCount() == 0 || suffix.startsWith("..")) {
             return Optional.empty();
         }
-        int[] visited = {0};
-        for (Path root : roots) {
+        final int[] visited = {0};
+        for (final Path root : roots) {
             if (root == null || !Files.isDirectory(root)) {
                 continue;
             }
-            Optional<Path> found = under(root.toAbsolutePath().normalize(), suffix, visited);
+            final Optional<Path> found = under(root.toAbsolutePath().normalize(), suffix, visited);
             if (found.isPresent()) {
                 return found;
             }
@@ -56,14 +56,14 @@ public final class FileSearch {
         return Optional.empty();
     }
 
-    private static Optional<Path> under(Path root, Path suffix, int[] visited) {
-        Path[] best = {null};
-        FileTime[] bestTime = {null};
-        String last = suffix.getFileName().toString();
+    private static Optional<Path> under(final Path root, final Path suffix, final int[] visited) {
+        final Path[] best = {null};
+        final FileTime[] bestTime = {null};
+        final String last = suffix.getFileName().toString();
         try {
             Files.walkFileTree(root, Set.of(), MAX_DEPTH, new SimpleFileVisitor<>() {
                 @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs) {
                     if (++visited[0] >= MAX_VISITED) {
                         return FileVisitResult.TERMINATE;
                     }
@@ -72,7 +72,7 @@ public final class FileSearch {
                 }
 
                 @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs) {
                     if (++visited[0] >= MAX_VISITED) {
                         return FileVisitResult.TERMINATE;
                     }
@@ -85,11 +85,11 @@ public final class FileSearch {
                 }
 
                 @Override
-                public FileVisitResult visitFileFailed(Path file, IOException e) {
+                public FileVisitResult visitFileFailed(final Path file, final IOException e) {
                     return FileVisitResult.CONTINUE;
                 }
             });
-        } catch (IOException e) {
+        } catch (final IOException e) {
             // a root that cannot be walked holds nothing found
         }
         return Optional.ofNullable(best[0]);

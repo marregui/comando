@@ -1,18 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import dev.marregui.comando.core.loop.Threads;
-import com.github.weisj.jsvg.SVGDocument;
-import com.github.weisj.jsvg.parser.LoaderContext;
-import com.github.weisj.jsvg.parser.SVGLoader;
-import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
-import com.github.weisj.jsvg.view.FloatSize;
-import com.github.weisj.jsvg.view.ViewBox;
-import dev.marregui.comando.core.model.AtomicFiles;
-import dev.marregui.comando.core.loop.ExecutorStop;
-
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import java.awt.Component;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -37,6 +24,20 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+
+import com.github.weisj.jsvg.SVGDocument;
+import com.github.weisj.jsvg.parser.LoaderContext;
+import com.github.weisj.jsvg.parser.SVGLoader;
+import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
+import com.github.weisj.jsvg.view.FloatSize;
+import com.github.weisj.jsvg.view.ViewBox;
+
+import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
  * The pictures a Markdown document names by a local path, for the preview: a PNG, JPEG or GIF as it is, an SVG drawn
@@ -87,7 +88,7 @@ public final class LocalImages {
             Threads.strand("local-images");
 
     /** Pictures read from disk, SVGs drawn into {@code cache}; without a cache an SVG is not shown. */
-    LocalImages(Path cache) {
+    LocalImages(final Path cache) {
         this.cache = cache;
     }
 
@@ -97,7 +98,7 @@ public final class LocalImages {
     }
 
     /** Draws SVGs into {@code cache} from now on. */
-    public static void install(Path cache) {
+    public static void install(final Path cache) {
         installed.close();
         installed = new LocalImages(cache);
     }
@@ -115,19 +116,19 @@ public final class LocalImages {
      * The picture file an image link names, as {@link LocalLinks#file} reads it: a PNG, JPEG, GIF or SVG; empty for
      * any other kind of file.
      */
-    public static Optional<Path> resolve(Path folder, String destination) {
+    public static Optional<Path> resolve(final Path folder, final String destination) {
         return LocalLinks.file(folder, destination).filter(f -> shown(f.getFileName().toString()));
     }
 
     /** Whether a file of this name is a kind of picture the preview shows. */
-    private static boolean shown(String name) {
-        String ext = extension(name);
+    private static boolean shown(final String name) {
+        final String ext = extension(name);
         return RASTER.contains(ext) || ext.equals(SVG);
     }
 
-    private static String extension(String name) {
-        int dot = name.lastIndexOf('.');
-        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+    private static String extension(final String name) {
+        final int dot = name.lastIndexOf('.');
+        final int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
         return dot <= slash ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
@@ -136,23 +137,23 @@ public final class LocalImages {
      * {@code whenReady} runs, on the reading thread, once it is read or refused: once, however often the same callback
      * is handed in meanwhile.
      */
-    public Picture picture(Path file, Runnable whenReady) {
+    public Picture picture(final Path file, final Runnable whenReady) {
         Key key;
         try {
             if (!Files.isRegularFile(file)) {
                 return new Picture.Unavailable("no such file: " + file.getFileName());
             }
             key = new Key(file, Files.getLastModifiedTime(file).toMillis(), Files.size(file));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return new Picture.Unavailable("cannot read " + file.getFileName() + ": " + e.getMessage());
         }
-        Picture known = read.get(key);
+        final Picture known = read.get(key);
         if (known != null) {
             return known;
         }
-        boolean[] first = new boolean[1];
+        final boolean[] first = new boolean[1];
         waiting.compute(key, (k, list) -> {
-            List<Runnable> l = list == null ? new ArrayList<>() : list;
+            final List<Runnable> l = list == null ? new ArrayList<>() : list;
             first[0] = list == null;
             // a preview rendered again while it waits hands in the same callback: told once, not once per render
             if (!l.contains(whenReady)) {
@@ -164,12 +165,12 @@ public final class LocalImages {
             try {
                 reader.execute(() -> {
                     read.put(key, load(key));
-                    List<Runnable> callbacks = waiting.remove(key);
+                    final List<Runnable> callbacks = waiting.remove(key);
                     if (callbacks != null) {
                         callbacks.forEach(Runnable::run);
                     }
                 });
-            } catch (RejectedExecutionException e) {
+            } catch (final RejectedExecutionException e) {
                 waiting.remove(key);
                 return new Picture.Unavailable("comando is closing");
             }
@@ -177,9 +178,9 @@ public final class LocalImages {
         return new Picture.Pending();
     }
 
-    private Picture load(Key key) {
-        Path file = key.file();
-        String name = file.getFileName().toString();
+    private Picture load(final Key key) {
+        final Path file = key.file();
+        final String name = file.getFileName().toString();
         if (key.size() > MAX_BYTES) {
             return new Picture.Unavailable(name + " is over " + MAX_BYTES / (1024 * 1024) + " MB");
         }
@@ -192,13 +193,13 @@ public final class LocalImages {
     }
 
     /** A PNG, JPEG or GIF is shown as it is: only its size is read, from its header. */
-    private static Picture rasterSize(Path file) throws IOException {
+    private static Picture rasterSize(final Path file) throws IOException {
         try (ImageInputStream in = ImageIO.createImageInputStream(file.toFile())) {
-            Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
+            final Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
                 return new Picture.Unavailable(file.getFileName() + " is not a picture comando can read");
             }
-            ImageReader r = readers.next();
+            final ImageReader r = readers.next();
             try {
                 r.setInput(in, true, true);
                 return new Picture.Ready(file, r.getWidth(0), r.getHeight(0));
@@ -212,28 +213,28 @@ public final class LocalImages {
      * An SVG is drawn once into a PNG in the cache, twice as large as it is shown; what it names outside its folder is
      * not loaded.
      */
-    private Picture drawSvg(Key key) throws IOException {
+    private Picture drawSvg(final Key key) throws IOException {
         if (cache == null) {
             return new Picture.Unavailable("SVG pictures are not drawn here");
         }
-        Path png = cache.resolve(cacheName(key));
+        final Path png = cache.resolve(cacheName(key));
         SVGDocument doc;
         try (InputStream in = Files.newInputStream(key.file())) {
-            LoaderContext context = LoaderContext.builder().externalResourcePolicy(beside(key.file())).build();
+            final LoaderContext context = LoaderContext.builder().externalResourcePolicy(beside(key.file())).build();
             doc = new SVGLoader().load(in, key.file().toUri(), context);
         }
         if (doc == null) {
             return new Picture.Unavailable(key.file().getFileName() + " is not an SVG comando can read");
         }
-        FloatSize size = doc.size();
-        double w = size.width > 0 ? size.width : DEFAULT_SIDE;
-        double h = size.height > 0 ? size.height : DEFAULT_SIDE;
-        double fit = Math.min(1.0, MAX_SIDE / Math.max(w, h));
-        int width = Math.max(1, (int) Math.round(w * fit));
-        int height = Math.max(1, (int) Math.round(h * fit));
+        final FloatSize size = doc.size();
+        final double w = size.width > 0 ? size.width : DEFAULT_SIDE;
+        final double h = size.height > 0 ? size.height : DEFAULT_SIDE;
+        final double fit = Math.min(1.0, MAX_SIDE / Math.max(w, h));
+        final int width = Math.max(1, (int) Math.round(w * fit));
+        final int height = Math.max(1, (int) Math.round(h * fit));
         if (!Files.isRegularFile(png)) {
-            BufferedImage image = new BufferedImage(width * SCALE, height * SCALE, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g = image.createGraphics();
+            final BufferedImage image = new BufferedImage(width * SCALE, height * SCALE, BufferedImage.TYPE_INT_ARGB);
+            final Graphics2D g = image.createGraphics();
             try {
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
@@ -243,7 +244,7 @@ public final class LocalImages {
                 g.dispose();
             }
             Files.createDirectories(cache);
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             ImageIO.write(image, "png", bytes);
             AtomicFiles.write(png, bytes.toByteArray());
         }
@@ -255,20 +256,20 @@ public final class LocalImages {
      * resolves {@code //host/x.png} to {@code file://host/x.png}, which the JDK opens on that machine, and
      * {@code ../x.png} to a file outside the folder.
      */
-    static ResourcePolicy beside(Path svg) {
-        Path folder = svg.toAbsolutePath().normalize().getParent();
+    static ResourcePolicy beside(final Path svg) {
+        final Path folder = svg.toAbsolutePath().normalize().getParent();
         return new ResourcePolicy() {
             @Override
-            public URI resolveResourceURI(URI base, String path) {
+            public URI resolveResourceURI(final URI base, final String path) {
                 return confine(ResourcePolicy.ALLOW_RELATIVE.resolveResourceURI(base, path));
             }
 
             @Override
-            public URI resolveResourceURI(URI base, URI resource) {
+            public URI resolveResourceURI(final URI base, final URI resource) {
                 return confine(ResourcePolicy.ALLOW_RELATIVE.resolveResourceURI(base, resource));
             }
 
-            private URI confine(URI uri) {
+            private URI confine(final URI uri) {
                 if (uri == null || "data".equals(uri.getScheme())) {
                     return uri;
                 }
@@ -277,7 +278,7 @@ public final class LocalImages {
                 }
                 try {
                     return Path.of(uri).normalize().startsWith(folder) ? uri : null;
-                } catch (IllegalArgumentException e) {
+                } catch (final IllegalArgumentException e) {
                     return null;
                 }
             }
@@ -285,12 +286,12 @@ public final class LocalImages {
     }
 
     /** The drawing's file in the cache: one per SVG as it is on disk now, at this scale. */
-    private static String cacheName(Key key) {
+    private static String cacheName(final Key key) {
         try {
-            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            final MessageDigest sha = MessageDigest.getInstance("SHA-256");
             sha.update((key.file().toAbsolutePath() + "|" + key.modified() + "|" + key.size() + "|" + SCALE).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(sha.digest(), 0, 16) + ".png";
-        } catch (NoSuchAlgorithmException e) {
+        } catch (final NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is missing", e);
         }
     }

@@ -1,8 +1,8 @@
 package dev.marregui.comando.ui.kit.async;
 
-import javax.swing.Timer;
 import java.awt.Component;
 import java.awt.event.HierarchyEvent;
+import javax.swing.Timer;
 
 /**
  * A repeating timer owned by a component that runs exactly while its owner wants ticks and is showing: a closed window
@@ -15,7 +15,7 @@ public final class ShownTimer {
     private final Timer timer;
     private boolean wanted;
 
-    public ShownTimer(Component owner, int delayMillis, Runnable tick) {
+    public ShownTimer(final Component owner, final int delayMillis, final Runnable tick) {
         this.owner = owner;
         this.timer = new Timer(delayMillis, e -> tick.run());
         owner.addHierarchyListener(e -> {
@@ -26,7 +26,7 @@ public final class ShownTimer {
     }
 
     /** Records whether the owner wants ticks; the timer runs while this is true and the owner shows. */
-    public void want(boolean want) {
+    public void want(final boolean want) {
         wanted = want;
         update();
     }
@@ -47,7 +47,7 @@ public final class ShownTimer {
     }
 
     private void update() {
-        boolean run = wanted && owner.isShowing();
+        final boolean run = wanted && owner.isShowing();
         if (run && !timer.isRunning()) {
             timer.start();
         } else if (!run && timer.isRunning()) {

@@ -24,20 +24,20 @@ public final class InstanceName {
      * The instance's name: {@code explicit} when given, else from {@code dataRoot}'s folder name; empty for the main
      * instance.
      */
-    public static String of(Path dataRoot, String explicit) {
+    public static String of(final Path dataRoot, final String explicit) {
         if (explicit != null && !explicit.isBlank()) {
             return explicit.strip();
         }
-        Path last = dataRoot == null ? null : dataRoot.toAbsolutePath().normalize().getFileName();
+        final Path last = dataRoot == null ? null : dataRoot.toAbsolutePath().normalize().getFileName();
         if (last == null) {
             return "";
         }
-        String folder = last.toString();
-        String bare = folder.startsWith(".") ? folder.substring(1) : folder;
+        final String folder = last.toString();
+        final String bare = folder.startsWith(".") ? folder.substring(1) : folder;
         if (bare.equalsIgnoreCase(APP)) {
             return "";
         }
-        String lower = bare.toLowerCase(Locale.ROOT);
+        final String lower = bare.toLowerCase(Locale.ROOT);
         if ((lower.startsWith(APP + "_") || lower.startsWith(APP + "-")) && bare.length() > APP.length() + 1) {
             return bare.substring(APP.length() + 1);
         }
@@ -48,7 +48,7 @@ public final class InstanceName {
      * What the Dock, the menu bar and the window call the application: {@code comando}, {@code comando · b}, or a name
      * that already says comando as it is ({@code Comando Expert}).
      */
-    public static String display(String name) {
+    public static String display(final String name) {
         if (name == null || name.isBlank()) {
             return APP;
         }
@@ -59,7 +59,7 @@ public final class InstanceName {
      * The preferences node the window keeps its layout in: {@code dev/marregui/comando} for the main instance, one of
      * its own for a named one.
      */
-    public static String prefsNode(String name) {
+    public static String prefsNode(final String name) {
         return name == null || name.isBlank() ? "dev/marregui/comando" : "dev/marregui/comando-" + name.replaceAll("[^A-Za-z0-9_.-]", "_");
     }
 

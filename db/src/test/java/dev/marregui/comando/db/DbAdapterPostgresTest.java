@@ -1,13 +1,8 @@
 package dev.marregui.comando.db;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.result.ColumnKind;
-import dev.marregui.comando.core.result.ResultRegistry;
-import dev.marregui.comando.core.result.ResultView;
-import dev.marregui.comando.core.schema.Schema;
-import dev.marregui.comando.core.schema.SchemaRegistry;
-import dev.marregui.comando.testkit.RecordingSink;
+import java.time.Duration;
+import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,8 +11,14 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-import java.time.Duration;
-import java.util.List;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.result.ColumnKind;
+import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.result.ResultView;
+import dev.marregui.comando.core.schema.Schema;
+import dev.marregui.comando.core.schema.SchemaRegistry;
+import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -63,7 +64,7 @@ class DbAdapterPostgresTest {
     void typesMapToColumnKinds() {
         db.execute(1L, spec, "SELECT 1::int i, 2.5::float8 d, true b, 'x'::text t, TIMESTAMP '2024-01-01 00:00:01' ts, NULL::int n");
         sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
-        ResultView r = results.get(1L);
+        final ResultView r = results.get(1L);
         assertThat(List.of(r.kind(0), r.kind(1), r.kind(2), r.kind(3), r.kind(4)))
                 .containsExactly(ColumnKind.LONG, ColumnKind.DOUBLE, ColumnKind.BOOLEAN, ColumnKind.TEXT, ColumnKind.TIMESTAMP);
         assertThat(r.getMicros(0, 4)).isEqualTo(1_704_067_201_000_000L);
@@ -78,10 +79,10 @@ class DbAdapterPostgresTest {
         sink.await(Intent.SqlStarted.class, c -> c.requestId() == 2L, WAIT);
         try {
             Thread.sleep(300);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        long t0 = System.nanoTime();
+        final long t0 = System.nanoTime();
         db.cancel(2L);
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofMillis(100));
         sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 2L, Duration.ofSeconds(5));
@@ -94,10 +95,10 @@ class DbAdapterPostgresTest {
         db.query(spec, "CREATE TABLE IF NOT EXISTS withdrawn (id int)", 1).get();
         db.execute(3L, spec, "SELECT pg_sleep(1)");
         sink.await(Intent.SqlStarted.class, c -> c.requestId() == 3L, WAIT);
-        var queued = db.query(spec, "INSERT INTO withdrawn VALUES (1)", 1);
+        final var queued = db.query(spec, "INSERT INTO withdrawn VALUES (1)", 1);
         assertThat(queued.cancel(false)).isTrue(); // the tool's timeout gives up while it waits behind the user's run
         sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 3L, WAIT);
-        var count = db.query(spec, "SELECT count(*) FROM withdrawn", 1).get();
+        final var count = db.query(spec, "SELECT count(*) FROM withdrawn", 1).get();
         assertThat(count.rows().getFirst().getFirst()).isEqualTo("0");
     }
 
@@ -107,11 +108,11 @@ class DbAdapterPostgresTest {
     void schemaComesFromTheInformationSchema() throws Exception {
         db.query(spec, "CREATE TABLE IF NOT EXISTS trades (ts timestamptz, symbol text, price double precision)", 1).get();
         db.loadSchema(spec, false);
-        long deadline = System.currentTimeMillis() + 10_000;
+        final long deadline = System.currentTimeMillis() + 10_000;
         while (schemas.of("pg").tables().isEmpty() && System.currentTimeMillis() < deadline) {
             Thread.sleep(50);
         }
-        Schema.Table trades = schemas.of("pg").tables().stream().filter(t -> t.name().equals("trades")).findFirst().orElseThrow();
+        final Schema.Table trades = schemas.of("pg").tables().stream().filter(t -> t.name().equals("trades")).findFirst().orElseThrow();
         assertThat(trades.columns()).extracting(Schema.Column::name).containsExactly("ts", "symbol", "price");
         assertThat(trades.columns().get(2).type()).isEqualTo("double precision");
     }
@@ -120,7 +121,7 @@ class DbAdapterPostgresTest {
     @Test
     void describeFallsBackToDriverMetadata() throws Exception {
         db.query(spec, "CREATE TABLE IF NOT EXISTS described (id bigint, name text)", 1).get();
-        var rows = db.describe(spec, "described").get();
+        final var rows = db.describe(spec, "described").get();
         assertThat(rows.rows()).extracting(r -> r.getFirst()).containsExactly("id", "name");
     }
 }

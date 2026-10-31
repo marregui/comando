@@ -1,9 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import dev.marregui.comando.core.view.Clip;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,6 +8,11 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.view.Clip;
 
 /** Append-only JSON lines of every tool call and approval decision, one file per UTC day. */
 public final class AuditLog {
@@ -22,7 +23,7 @@ public final class AuditLog {
     private final Path dir;
     private final ObjectMapper json = new ObjectMapper();
 
-    public AuditLog(Path dir) {
+    public AuditLog(final Path dir) {
         this.dir = dir;
     }
 
@@ -31,11 +32,11 @@ public final class AuditLog {
         return new AuditLog(null);
     }
 
-    public synchronized void record(String session, String event, String tool, String detail, String outcome) {
+    public synchronized void record(final String session, final String event, final String tool, final String detail, final String outcome) {
         if (dir == null) {
             return;
         }
-        ObjectNode line = json.createObjectNode();
+        final ObjectNode line = json.createObjectNode();
         line.put("time", Instant.now().toString());
         line.put("session", session);
         line.put("event", event);
@@ -44,9 +45,9 @@ public final class AuditLog {
         line.put("outcome", outcome);
         try {
             Files.createDirectories(dir);
-            Path file = dir.resolve("audit-" + LocalDate.now(ZoneOffset.UTC) + ".jsonl");
+            final Path file = dir.resolve("audit-" + LocalDate.now(ZoneOffset.UTC) + ".jsonl");
             Files.writeString(file, line + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write audit log [dir=" + dir + ']', e);
         }
     }

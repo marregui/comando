@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.text;
 
-import org.junit.jupiter.api.Test;
-
 import javax.swing.JLabel;
 import javax.swing.JRadioButton;
 import javax.swing.plaf.basic.BasicHTML;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,7 +22,7 @@ class PlainTest {
     void swingRendersAnHtmlPrefixUnlessGuarded() {
         assertThat(new JLabel(HOSTILE).getClientProperty(BasicHTML.propertyKey)).as("control: Swing builds an HTML view").isNotNull();
         assertThat(new JLabel(Plain.text(HOSTILE)).getClientProperty(BasicHTML.propertyKey)).isNull();
-        JRadioButton option = Plain.only(new JRadioButton());
+        final JRadioButton option = Plain.only(new JRadioButton());
         option.setText(HOSTILE);
         assertThat(option.getClientProperty(BasicHTML.propertyKey)).isNull();
         assertThat(Plain.only(new JRadioButton(HOSTILE)).getClientProperty(BasicHTML.propertyKey)).as("text set before the guard is rebuilt").isNull();

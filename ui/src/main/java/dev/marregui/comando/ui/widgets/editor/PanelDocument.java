@@ -1,16 +1,16 @@
 package dev.marregui.comando.ui.widgets.editor;
 
-import org.fife.ui.rsyntaxtextarea.RSyntaxDocument;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rsyntaxtextarea.TokenMaker;
-import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
-
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.event.DocumentEvent;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.Segment;
-import java.util.HashSet;
-import java.util.Set;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxDocument;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.fife.ui.rsyntaxtextarea.TokenMaker;
+import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
 
 /**
  * The command editor's document. Under {@link CommandEditor#PANEL_STYLE} its text is coloured block by block by
@@ -44,7 +44,7 @@ final class PanelDocument extends RSyntaxDocument {
      * Whether SQL blocks are coloured as SQL: only while the panel's database is open. Without one, the text is
      * prompts and notes, and a statement written for later reads as text until the database opens.
      */
-    void sqlLive(boolean on) {
+    void sqlLive(final boolean on) {
         if (on == sqlLive) {
             return;
         }
@@ -57,29 +57,29 @@ final class PanelDocument extends RSyntaxDocument {
     }
 
     @Override
-    protected void fireInsertUpdate(DocumentEvent e) {
+    protected void fireInsertUpdate(final DocumentEvent e) {
         version++;
         super.fireInsertUpdate(e);
         repaintBlocks(e.getOffset(), e.getOffset() + e.getLength());
     }
 
     @Override
-    protected void fireRemoveUpdate(DocumentEvent e) {
+    protected void fireRemoveUpdate(final DocumentEvent e) {
         version++;
         super.fireRemoveUpdate(e);
         repaintBlocks(e.getOffset(), e.getOffset());
     }
 
     /** Repaints every line of the blocks holding {@code from} to {@code to}: a change of kind recolours all of them. */
-    private void repaintBlocks(int from, int to) {
+    private void repaintBlocks(final int from, final int to) {
         if (!CommandEditor.PANEL_STYLE.equals(getSyntaxStyle())) {
             return;
         }
-        Element root = getDefaultRootElement();
-        int first = firstLineOfBlock(root.getElementIndex(from));
-        int last = lastLineOfBlock(root.getElementIndex(Math.min(to, getLength())));
-        int start = root.getElement(first).getStartOffset();
-        int end = Math.min(getLength(), root.getElement(last).getEndOffset());
+        final Element root = getDefaultRootElement();
+        final int first = firstLineOfBlock(root.getElementIndex(from));
+        final int last = lastLineOfBlock(root.getElementIndex(Math.min(to, getLength())));
+        final int start = root.getElement(first).getStartOffset();
+        final int end = Math.min(getLength(), root.getElement(last).getEndOffset());
         if (end > start) {
             fireChangedUpdate(new DefaultDocumentEvent(start, end - start, DocumentEvent.EventType.CHANGE));
         }
@@ -101,14 +101,14 @@ final class PanelDocument extends RSyntaxDocument {
         if (isBlank(line)) {
             return line;
         }
-        int lines = getDefaultRootElement().getElementCount();
+        final int lines = getDefaultRootElement().getElementCount();
         while (line < lines - 1 && !isBlank(line + 1)) {
             line++;
         }
         return line;
     }
 
-    boolean isBlank(int line) {
+    boolean isBlank(final int line) {
         lineText(line, probe);
         for (int i = probe.offset, end = probe.offset + probe.count; i < end; i++) {
             if (!Character.isWhitespace(probe.array[i])) {
@@ -119,13 +119,13 @@ final class PanelDocument extends RSyntaxDocument {
     }
 
     /** Fills {@code into} with the text of {@code line}, without its newline. */
-    void lineText(int line, Segment into) {
-        Element e = getDefaultRootElement().getElement(line);
-        int start = e.getStartOffset();
-        int end = Math.min(e.getEndOffset() - 1, getLength());
+    void lineText(final int line, final Segment into) {
+        final Element e = getDefaultRootElement().getElement(line);
+        final int start = e.getStartOffset();
+        final int end = Math.min(e.getEndOffset() - 1, getLength());
         try {
             getText(start, Math.max(0, end - start), into);
-        } catch (BadLocationException ex) {
+        } catch (final BadLocationException ex) {
             into.array = new char[0];
             into.offset = 0;
             into.count = 0;
@@ -133,13 +133,13 @@ final class PanelDocument extends RSyntaxDocument {
     }
 
     /** The text of lines {@code first} to {@code last}, without the last newline. */
-    String linesText(int first, int last) {
-        Element root = getDefaultRootElement();
-        int start = root.getElement(first).getStartOffset();
-        int end = Math.min(root.getElement(last).getEndOffset() - 1, getLength());
+    String linesText(final int first, final int last) {
+        final Element root = getDefaultRootElement();
+        final int start = root.getElement(first).getStartOffset();
+        final int end = Math.min(root.getElement(last).getEndOffset() - 1, getLength());
         try {
             return getText(start, Math.max(0, end - start));
-        } catch (BadLocationException ex) {
+        } catch (final BadLocationException ex) {
             return "";
         }
     }
@@ -148,18 +148,18 @@ final class PanelDocument extends RSyntaxDocument {
     private static final class Factory extends TokenMakerFactory {
         private final PanelDocument doc;
 
-        Factory(PanelDocument doc) {
+        Factory(final PanelDocument doc) {
             this.doc = doc;
         }
 
         @Override
-        protected TokenMaker getTokenMakerImpl(String key) {
+        protected TokenMaker getTokenMakerImpl(final String key) {
             return CommandEditor.PANEL_STYLE.equals(key) ? new PanelTokenMaker(doc) : TokenMakerFactory.getDefaultInstance().getTokenMaker(key);
         }
 
         @Override
         public Set<String> keySet() {
-            Set<String> keys = new HashSet<>(TokenMakerFactory.getDefaultInstance().keySet());
+            final Set<String> keys = new HashSet<>(TokenMakerFactory.getDefaultInstance().keySet());
             keys.add(CommandEditor.PANEL_STYLE);
             return keys;
         }

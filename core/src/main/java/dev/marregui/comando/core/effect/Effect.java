@@ -1,5 +1,7 @@
 package dev.marregui.comando.core.effect;
 
+import java.util.List;
+
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -14,8 +16,6 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.ViewSpec;
-
-import java.util.List;
 
 /**
  * Work the reducer asks the adapters to do. Effects are handed out after the state transition, in
@@ -47,7 +47,7 @@ public sealed interface Effect {
     record LoadSchema(ConnectionSpec spec, boolean show) implements Effect {
 
         /** The title of the explorer view that shows a connection's schema. */
-        public static String viewTitle(String connection) {
+        public static String viewTitle(final String connection) {
             return "schema · " + connection;
         }
     }
@@ -71,7 +71,7 @@ public sealed interface Effect {
      */
     record SendToClaude(String name, String text, String origin, String preface) implements Effect {
 
-        public SendToClaude(String name, String text, String origin) {
+        public SendToClaude(final String name, final String text, final String origin) {
             this(name, text, origin, "");
         }
     }

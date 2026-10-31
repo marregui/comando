@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.kit.vcs;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,9 +20,9 @@ class OpenedFilesTest {
     /// Adding a path, a path with `..` to another, and the first again writes two normalised lines with no temporary
     /// file left, and a fresh load contains both and nothing else.
     @Test
-    void theFilesOpenedAreKeptAndReadBack(@TempDir Path dir) throws Exception {
-        Path store = dir.resolve("home").resolve("opened-files");
-        OpenedFiles o = OpenedFiles.load(store);
+    void theFilesOpenedAreKeptAndReadBack(@TempDir final Path dir) throws Exception {
+        final Path store = dir.resolve("home").resolve("opened-files");
+        final OpenedFiles o = OpenedFiles.load(store);
         assertThat(o.contains(Path.of("/a/x.md"))).as("nothing opened yet").isFalse();
         o.add(Path.of("/a/x.md"));
         o.add(Path.of("/a/b/../y.md"));
@@ -31,7 +31,7 @@ class OpenedFilesTest {
         assertThat(Files.readAllLines(store)).as("normalized, once each, oldest first").containsExactly("/a/x.md", "/a/y.md");
         assertThat(store.resolveSibling("opened-files.tmp")).doesNotExist();
 
-        OpenedFiles again = OpenedFiles.load(store);
+        final OpenedFiles again = OpenedFiles.load(store);
         assertThat(again.contains(Path.of("/a/x.md"))).isTrue();
         assertThat(again.contains(Path.of("/a/y.md"))).isTrue();
         assertThat(again.contains(Path.of("/a/z.md"))).isFalse();
@@ -41,9 +41,9 @@ class OpenedFilesTest {
     /// complete.
     @Test
     void listenersHearOnlyOfAFileNotOpenedBefore() {
-        OpenedFiles o = OpenedFiles.inMemory();
-        AtomicInteger heard = new AtomicInteger();
-        Runnable stop = o.listen(heard::incrementAndGet);
+        final OpenedFiles o = OpenedFiles.inMemory();
+        final AtomicInteger heard = new AtomicInteger();
+        final Runnable stop = o.listen(heard::incrementAndGet);
         o.add(Path.of("/a/x.md"));
         o.add(Path.of("/a/x.md"));
         assertThat(heard).hasValue(1);
@@ -56,7 +56,7 @@ class OpenedFilesTest {
     /// After [OpenedFiles#MAX] + 1 adds, the first is gone and the second and last remain.
     @Test
     void pastTheBoundTheOldestIsDropped() {
-        OpenedFiles o = OpenedFiles.inMemory();
+        final OpenedFiles o = OpenedFiles.inMemory();
         for (int i = 0; i <= OpenedFiles.MAX; i++) {
             o.add(Path.of("/f/" + i));
         }
@@ -67,9 +67,9 @@ class OpenedFilesTest {
 
     /// A store path that is a folder loads as empty instead of failing.
     @Test
-    void aStoreThatCannotBeReadStartsEmpty(@TempDir Path dir) throws Exception {
-        Path store = Files.createDirectory(dir.resolve("opened-files"));
-        OpenedFiles o = OpenedFiles.load(store);
+    void aStoreThatCannotBeReadStartsEmpty(@TempDir final Path dir) throws Exception {
+        final Path store = Files.createDirectory(dir.resolve("opened-files"));
+        final OpenedFiles o = OpenedFiles.load(store);
         assertThat(o.contains(store)).isFalse();
     }
 }

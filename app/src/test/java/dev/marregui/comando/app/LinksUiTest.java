@@ -1,20 +1,5 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.StateLoop;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.ui.kit.desktop.Browser;
-import dev.marregui.comando.ui.kit.desktop.Links;
-import dev.marregui.comando.ui.kit.text.HtmlPane;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.imageio.ImageIO;
-import javax.swing.JTabbedPane;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
@@ -32,6 +17,22 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import javax.imageio.ImageIO;
+import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.text.HtmlPane;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,10 +53,10 @@ class LinksUiTest {
     /// the browser.
     @Test
     void aDoubleClickOnANoteLinkOpensItsFileInAPanelAndOnAnAddressTheBrowser() throws Exception {
-        Path brain = home.resolve("brain");
+        final Path brain = home.resolve("brain");
         Files.createDirectories(brain.resolve(".git"));
-        Path memory = Files.createDirectories(brain.resolve("MEMORY"));
-        Path page = memory.resolve("reference_guide_page.md");
+        final Path memory = Files.createDirectories(brain.resolve("MEMORY"));
+        final Path page = memory.resolve("reference_guide_page.md");
         Files.writeString(page, """
                 ---
                 name: reference-guide-page
@@ -74,23 +75,23 @@ class LinksUiTest {
 
                 Verify.
                 """);
-        List<String> browsed = new CopyOnWriteArrayList<>();
-        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        final List<String> browsed = new CopyOnWriteArrayList<>();
+        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 "links", () -> {
         });
         try {
             app.start();
-            StateLoop loop = app.loop();
+            final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
             Links.browseWith(browsed::add);
             SwingUtilities.invokeAndWait(() -> Links.open(page.toString(), null));
             Awaitility.await("the page's panel").atMost(Duration.ofSeconds(10)).until(() -> tabs().contains("reference_guide_page.md"));
             Awaitility.await("the page rendered").atMost(Duration.ofSeconds(10)).until(() -> pane() != null);
-            HtmlPane pane = pane();
-            String shown = onEdt(() -> pane.getDocument().getText(0, pane.getDocument().getLength()));
+            final HtmlPane pane = pane();
+            final String shown = onEdt(() -> pane.getDocument().getText(0, pane.getDocument().getLength()));
             assertThat(shown).as("the front matter's facts").contains("name", "reference-guide-page", "metadata.type");
             assertThat(shown).as("the note link shows as its name, without brackets").contains("feedback-verification-discipline").doesNotContain("[[", "---");
-            String html = onEdt(() -> pane.getText());
+            final String html = onEdt(() -> pane.getText());
             assertThat(html).doesNotContain("<h2");
             snapshot(pane);
 
@@ -116,30 +117,30 @@ class LinksUiTest {
     /// opening another.
     @Test
     void aFileLinkWithoutALineIsFoundUnderTheSessionsFolderAndOpensInAPanelAsTheFilesTabOpensIt() throws Exception {
-        Path work = Files.createDirectories(home.resolve("work"));
-        Path doc = work.resolve("BRAIN/SCRATCHPAD/2026-10-28/harness/07-fleet-vision.md");
+        final Path work = Files.createDirectories(home.resolve("work"));
+        final Path doc = work.resolve("BRAIN/SCRATCHPAD/2026-10-28/harness/07-fleet-vision.md");
         Files.createDirectories(doc.getParent());
         Files.writeString(doc, "# Fleet vision\n");
-        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 "links", () -> {
         });
         try {
             app.start();
-            StateLoop loop = app.loop();
+            final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("lane", work.toString())));
             Awaitility.await("the session").atMost(Duration.ofSeconds(10)).until(() -> loop.state().session("lane").isPresent());
-            int before = loop.state().panels().size();
+            final int before = loop.state().panels().size();
 
             loop.dispatch(new Intent.OpenFile("lane", "harness/07-fleet-vision.md", 0));
 
             Awaitility.await("a panel of the file").atMost(Duration.ofSeconds(10))
                     .until(() -> loop.state().panels().stream().anyMatch(p -> p.title().equals("07-fleet-vision.md")));
-            PanelState panel = loop.state().panels().stream().filter(p -> p.title().equals("07-fleet-vision.md")).findFirst().orElseThrow();
+            final PanelState panel = loop.state().panels().stream().filter(p -> p.title().equals("07-fleet-vision.md")).findFirst().orElseThrow();
             assertThat(loop.state().views()).as("not a side view").noneMatch(v -> v.title().contains("07-fleet-vision"));
             Awaitility.await("in front").atMost(Duration.ofSeconds(5)).until(() -> loop.state().focused().equals(panel.id()));
 
-            int after = loop.state().panels().size();
+            final int after = loop.state().panels().size();
             assertThat(after).isEqualTo(before + 1);
             loop.dispatch(new Intent.OpenFile("lane", "harness/07-fleet-vision.md", 0));
             Awaitility.await("followed again: the same panel").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(3))
@@ -150,14 +151,14 @@ class LinksUiTest {
     }
 
     /** A left double click, as the desktop delivers it, on the character at {@code offset} of the page. */
-    private static void doubleClick(HtmlPane pane, int offset) throws Exception {
-        Point p = onEdt(() -> {
-            Rectangle2D r = pane.modelToView2D(offset);
+    private static void doubleClick(final HtmlPane pane, final int offset) throws Exception {
+        final Point p = onEdt(() -> {
+            final Rectangle2D r = pane.modelToView2D(offset);
             return new Point((int) r.getCenterX(), (int) r.getCenterY());
         });
         SwingUtilities.invokeAndWait(() -> {
             for (int clicks = 1; clicks <= 2; clicks++) {
-                long now = System.currentTimeMillis();
+                final long now = System.currentTimeMillis();
                 pane.dispatchEvent(new MouseEvent(pane, MouseEvent.MOUSE_PRESSED, now, InputEvent.BUTTON1_DOWN_MASK, p.x, p.y, clicks, false, MouseEvent.BUTTON1));
                 pane.dispatchEvent(new MouseEvent(pane, MouseEvent.MOUSE_RELEASED, now, 0, p.x, p.y, clicks, false, MouseEvent.BUTTON1));
                 pane.dispatchEvent(new MouseEvent(pane, MouseEvent.MOUSE_CLICKED, now, 0, p.x, p.y, clicks, false, MouseEvent.BUTTON1));
@@ -165,11 +166,11 @@ class LinksUiTest {
         });
     }
 
-    private static void snapshot(HtmlPane pane) throws Exception {
-        Path out = Path.of("build/snapshots/memory-page.png");
+    private static void snapshot(final HtmlPane pane) throws Exception {
+        final Path out = Path.of("build/snapshots/memory-page.png");
         Files.createDirectories(out.getParent());
-        BufferedImage image = onEdt(() -> {
-            BufferedImage b = new BufferedImage(Math.max(1, pane.getWidth()), Math.max(1, Math.min(400, pane.getHeight())), BufferedImage.TYPE_INT_ARGB);
+        final BufferedImage image = onEdt(() -> {
+            final BufferedImage b = new BufferedImage(Math.max(1, pane.getWidth()), Math.max(1, Math.min(400, pane.getHeight())), BufferedImage.TYPE_INT_ARGB);
             pane.paint(b.getGraphics());
             return b;
         });
@@ -184,14 +185,14 @@ class LinksUiTest {
     /** The titles of the panels' tabs; a long one ends in "…". */
     private static List<String> tabs() throws Exception {
         return onEdt(() -> {
-            List<JTabbedPane> panes = new ArrayList<>();
-            for (Frame f : Frame.getFrames()) {
+            final List<JTabbedPane> panes = new ArrayList<>();
+            for (final Frame f : Frame.getFrames()) {
                 if (f.isVisible()) {
                     collect(f, JTabbedPane.class, t -> true, panes);
                 }
             }
-            List<String> out = new ArrayList<>();
-            for (JTabbedPane t : panes) {
+            final List<String> out = new ArrayList<>();
+            for (final JTabbedPane t : panes) {
                 for (int i = 0; i < t.getTabCount(); i++) {
                     out.add(t.getTitleAt(i));
                 }
@@ -200,9 +201,9 @@ class LinksUiTest {
         });
     }
 
-    private static <T extends Component> T first(Class<T> type, Predicate<T> which) {
-        List<T> out = new ArrayList<>();
-        for (Frame f : Frame.getFrames()) {
+    private static <T extends Component> T first(final Class<T> type, final Predicate<T> which) {
+        final List<T> out = new ArrayList<>();
+        for (final Frame f : Frame.getFrames()) {
             if (f.isVisible()) {
                 collect(f, type, which, out);
             }
@@ -210,24 +211,24 @@ class LinksUiTest {
         return out.isEmpty() ? null : out.getFirst();
     }
 
-    private static <T extends Component> void collect(Component c, Class<T> type, Predicate<T> which, List<T> out) {
+    private static <T extends Component> void collect(final Component c, final Class<T> type, final Predicate<T> which, final List<T> out) {
         if (type.isInstance(c) && which.test(type.cast(c))) {
             out.add(type.cast(c));
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 collect(child, type, which, out);
             }
         }
     }
 
-    private static <T> T onEdt(Callable<T> call) throws Exception {
-        AtomicReference<T> out = new AtomicReference<>();
-        AtomicReference<Exception> failed = new AtomicReference<>();
+    private static <T> T onEdt(final Callable<T> call) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
+        final AtomicReference<Exception> failed = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             try {
                 out.set(call.call());
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 failed.set(e);
             }
         });

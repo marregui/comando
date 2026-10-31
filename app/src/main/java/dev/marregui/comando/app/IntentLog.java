@@ -1,20 +1,5 @@
 package dev.marregui.comando.app;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.StateLoop;
-import dev.marregui.comando.core.model.ApprovalDecision;
-import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.view.ViewSpec;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -25,6 +10,21 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * Writes every intent, in order, as one JSON line with its time and type: the record of a session for
@@ -55,26 +55,26 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     }
 
     /** Opens a log whose first line is {@code initial}, the state the logged intents apply to. */
-    IntentLog(Path dir, AppState initial) {
+    IntentLog(final Path dir, final AppState initial) {
         try {
             Files.createDirectories(dir);
             out = Files.newBufferedWriter(dir.resolve("intents-" + Instant.now().toEpochMilli() + ".jsonl"), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE_NEW);
-            ObjectNode n = JSON.createObjectNode();
+            final ObjectNode n = JSON.createObjectNode();
             n.put("at", Instant.now().toString());
             n.put("type", STATE);
             n.set("state", redact(JSON.valueToTree(initial)));
             out.write(JSON.writeValueAsString(n));
             out.write('\n');
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException("cannot open the intent log in " + dir, e);
         }
     }
 
     static final String STATE = "@state";
 
-    static String line(Intent intent) throws IOException {
-        ObjectNode n = JSON.createObjectNode();
+    static String line(final Intent intent) throws IOException {
+        final ObjectNode n = JSON.createObjectNode();
         n.put("at", Instant.now().toString());
         n.put("type", intent.getClass().getSimpleName());
         n.set("intent", redact(JSON.valueToTree(intent)));
@@ -116,7 +116,7 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     }
 
     @Override
-    public void observe(Intent intent) {
+    public void observe(final Intent intent) {
         try {
             out.write(line(intent));
             out.write('\n');
@@ -128,18 +128,18 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     }
 
     /** The starting state and the intents of a log, in order. */
-    static Replay read(Path file) throws IOException {
+    static Replay read(final Path file) throws IOException {
         AppState initial = null;
-        List<Intent> out = new ArrayList<>();
-        for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+        final List<Intent> out = new ArrayList<>();
+        for (final String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
             if (line.isBlank()) {
                 continue;
             }
-            JsonNode n = tree(line);
+            final JsonNode n = tree(line);
             if (n.path("type").asString("").equals(STATE)) {
                 try {
                     initial = JSON.treeToValue(n.path("state"), AppState.class);
-                } catch (JacksonException e) {
+                } catch (final JacksonException e) {
                     throw new IOException(e.getMessage(), e);
                 }
             } else {
@@ -152,27 +152,27 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
         return new Replay(initial, out);
     }
 
-    static Intent parse(String line) throws IOException {
-        JsonNode n = tree(line);
-        String type = n.path("type").asString("");
+    static Intent parse(final String line) throws IOException {
+        final JsonNode n = tree(line);
+        final String type = n.path("type").asString("");
         Class<?> c;
         try {
             c = Class.forName(Intent.class.getName() + "$" + type);
-        } catch (ClassNotFoundException e) {
+        } catch (final ClassNotFoundException e) {
             throw new IOException("unknown intent type " + type, e);
         }
         try {
             return (Intent) JSON.treeToValue(n.path("intent"), c);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             throw new IOException(e.getMessage(), e);
         }
     }
 
     /** {@code line} parsed; Jackson's unchecked parse error as the {@code IOException} a reader of a log handles. */
-    private static JsonNode tree(String line) throws IOException {
+    private static JsonNode tree(final String line) throws IOException {
         try {
             return JSON.readTree(line);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             throw new IOException(e.getMessage(), e);
         }
     }

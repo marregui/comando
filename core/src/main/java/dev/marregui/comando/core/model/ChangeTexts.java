@@ -21,7 +21,7 @@ public record ChangeTexts(String root, RepoStatus.FileChange change, String befo
         note = note == null ? "" : note;
     }
 
-    public static ChangeTexts noted(String root, RepoStatus.FileChange change, String note) {
+    public static ChangeTexts noted(final String root, final RepoStatus.FileChange change, final String note) {
         return new ChangeTexts(root, change, "", "", note);
     }
 }

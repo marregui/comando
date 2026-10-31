@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.theme.GildedSplitIcon;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-
-import javax.swing.JButton;
 import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
+import javax.swing.JButton;
+
+import dev.marregui.comando.ui.kit.theme.GildedSplitIcon;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
 /**
  * The theme button at the top right beside New panel (record 104), its icon a gilded square split between the ground
@@ -38,12 +38,12 @@ public final class ThemeButton extends JButton {
     }
 
     @Override
-    public String getToolTipText(MouseEvent event) {
+    public String getToolTipText(final MouseEvent event) {
         return "Theme: " + NamedTheme.chosen().map(t -> t.label).orElse("none") + "; click for another";
     }
 
     /** {@code chosen} hears the theme picked in the chooser. */
-    public void onChosen(Consumer<NamedTheme> chosen) {
+    public void onChosen(final Consumer<NamedTheme> chosen) {
         this.chosen = chosen;
     }
 }

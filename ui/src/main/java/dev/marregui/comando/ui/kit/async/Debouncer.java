@@ -7,7 +7,7 @@ public final class Debouncer {
 
     private final Timer timer;
 
-    public Debouncer(int delayMillis, Runnable task) {
+    public Debouncer(final int delayMillis, final Runnable task) {
         timer = new Timer(delayMillis, e -> task.run());
         timer.setRepeats(false);
     }

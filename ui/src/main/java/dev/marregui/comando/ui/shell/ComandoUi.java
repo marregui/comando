@@ -1,5 +1,34 @@
 package dev.marregui.comando.ui.shell;
 
+import java.awt.BorderLayout;
+import java.awt.Desktop;
+import java.awt.Frame;
+import java.awt.KeyboardFocusManager;
+import java.awt.Taskbar;
+import java.awt.event.InputEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.beans.PropertyChangeListener;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.LongConsumer;
+import java.util.function.Supplier;
+import java.util.prefs.Preferences;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.Timer;
+import javax.swing.WindowConstants;
+
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
@@ -72,35 +101,6 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.transcript.AgentWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
-
-import javax.swing.JFrame;
-import javax.swing.JPanel;
-import javax.swing.Timer;
-import javax.swing.WindowConstants;
-import java.awt.BorderLayout;
-import java.awt.Desktop;
-import java.awt.Frame;
-import java.awt.KeyboardFocusManager;
-import java.awt.Taskbar;
-import java.awt.event.InputEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.beans.PropertyChangeListener;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.function.LongConsumer;
-import java.util.function.Supplier;
-import java.util.prefs.Preferences;
 
 /**
  * The Swing shell and the UI port. Builds the window from its parts and renders the state on the EDT, at most once
@@ -198,10 +198,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** The theme files left out at start, one line each, told in a notice once the window is built. */
     private final List<String> themeProblems;
 
-    public ComandoUi(Dependencies deps) {
+    public ComandoUi(final Dependencies deps) {
         this.deps = deps;
         // the user's themes, read once before anything names a theme: the commands, the swatch, the theme kept (record 126)
-        ThemeFiles.Read themes = ThemeFiles.read(deps.home() == null ? null : deps.home().resolve(THEMES_FOLDER));
+        final ThemeFiles.Read themes = ThemeFiles.read(deps.home() == null ? null : deps.home().resolve(THEMES_FOLDER));
         NamedTheme.offer(themes.themes());
         this.themeProblems = themes.problems();
         this.windowLayout = new WindowLayout(deps.home() == null ? Settings.inMemory() : Settings.open(deps.home().resolve("settings.json"),
@@ -229,7 +229,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** Shows the kit's newer release on the Files tab's KIT row, and whether the brain and the kit can be backed up. */
-    public void kitStatus(Setup.Status status) {
+    public void kitStatus(final Setup.Status status) {
         kit.show(status);
     }
 
@@ -239,12 +239,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** How the tabs' cards read each panel's topic; set before {@link #start()}. None by default. */
-    public void topics(TopicPort port) {
+    public void topics(final TopicPort port) {
         topics = port;
     }
 
     /** What the Instances tab acts through (record 124); set before {@link #start}, as the build reads it. */
-    public void instances(InstancesPort port) {
+    public void instances(final InstancesPort port) {
         instances = port == null ? InstancesPort.NONE : port;
     }
 
@@ -252,17 +252,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * Hands {@code sink} the checkpoint threshold kept in the settings, now and each time the palette changes it
      * (record 129); set before {@link #start}.
      */
-    public void checkpointThreshold(LongConsumer sink) {
+    public void checkpointThreshold(final LongConsumer sink) {
         checkpointThreshold = sink;
         sink.accept(windowLayout.checkpointThreshold());
     }
 
     private void build() {
         Theme.install();
-        for (String problem : themeProblems) {
+        for (final String problem : themeProblems) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Theme file left out: " + problem, false));
         }
-        WidgetContext ctx = new WidgetContext(deps.intents(), actions);
+        final WidgetContext ctx = new WidgetContext(deps.intents(), actions);
         widgets.register("table", ViewSpec.Table.class, c -> new TableViewWidget());
         widgets.register("plot", ViewSpec.Plot.class, c -> new PlotWidget());
         widgets.register("diff", ViewSpec.Diff.class, c -> new DiffWidget());
@@ -274,23 +274,23 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile, new ChangesWidget.Actions() {
             // the comparison window drops its edits to a file rolled back or removed, and closes
             @Override
-            public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+            public void rollBack(final String root, final List<RepoStatus.FileChange> changes) {
                 parts.diffWindow().drop(root, changes.stream().map(RepoStatus.FileChange::path).toList());
                 deps.intents().dispatch(new Intent.RollBack(root, changes));
             }
 
             @Override
-            public void remove(String root, List<String> paths) {
+            public void remove(final String root, final List<String> paths) {
                 parts.diffWindow().drop(root, paths);
                 deps.intents().dispatch(new Intent.RemoveFiles(root, paths));
             }
         }, ResourceActions.Questions.MODAL));
 
-        JFrame frame = new JFrame(InstanceName.display(InstanceName.current()));
+        final JFrame frame = new JFrame(InstanceName.display(InstanceName.current()));
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(WindowEvent e) {
+            public void windowClosing(final WindowEvent e) {
                 quitFlow.quit();
             }
         });
@@ -306,21 +306,21 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             Desktop.getDesktop().setQuitHandler((event, response) -> Edt.later(() -> quitFlow.request(response)));
         }
         notifier = new Notifier(frame);
-        DiffWindow diffWindow = new DiffWindow(frame, () -> {
-            DiffWindow d = parts.diffWindow();
+        final DiffWindow diffWindow = new DiffWindow(frame, () -> {
+            final DiffWindow d = parts.diffWindow();
             if (d.change() != null) {
                 deps.intents().dispatch(new Intent.OpenChange(d.root(), currentChange(d.root(), d.change()), ChangeAsk.REFRESH));
             }
         }, deps.intents(), deps.texts()::write, ResourceActions.Questions.MODAL);
         AppIcon.install(frame);
         // a named instance's Dock icon carries its name's first letter, so instances differ at a glance (record 122)
-        String instance = InstanceName.current();
+        final String instance = InstanceName.current();
         if (!instance.isEmpty() && Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_BADGE_TEXT)) {
             Taskbar.getTaskbar().setIconBadge(instance.substring(0, 1).toUpperCase(Locale.ROOT));
         }
-        LivePlots livePlots = new LivePlots(deps.intents(), deps.results());
+        final LivePlots livePlots = new LivePlots(deps.intents(), deps.results());
         UiErrands.start("pty-preload", TerminalWidget::preload);
-        Workspace workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
+        final Workspace workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
@@ -335,11 +335,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 session -> deps.state().get().session(session).map(x -> Path.of(x.spec().workDir())).orElse(null));
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
-        LowerPanel lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
+        final LowerPanel lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
         workspace.onThemeChosen(this::themeChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
-        SidePane side = new SidePane(ctx, widgets);
-        SessionsSidebar sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
+        final SidePane side = new SidePane(ctx, widgets);
+        final SessionsSidebar sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
             @Override
             public ResourceActions.Editor sessions() {
                 return editor(() -> sessionsDialog);
@@ -356,33 +356,33 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
 
             @Override
-            public void exploreSchema(String connection) {
+            public void exploreSchema(final String connection) {
                 ComandoUi.this.exploreSchema(connection);
             }
 
             @Override
-            public void openFile(Path file) {
+            public void openFile(final Path file) {
                 ComandoUi.this.openFile(file);
             }
 
             @Override
-            public void editFile(Path file) {
+            public void editFile(final Path file) {
                 workspace.editWhenOpen(file.toAbsolutePath().normalize());
                 ComandoUi.this.openFile(file);
             }
 
             @Override
-            public void newSession(String name) {
+            public void newSession(final String name) {
                 sessionsDialog.showNew(deps.state().get(), name);
             }
         }, deps.texts(), () -> actions.run("view.sidebar"));
-        MenuBuilder menus = new MenuBuilder(deps, actions);
+        final MenuBuilder menus = new MenuBuilder(deps, actions);
         sidebar.onTabMenu(menus::tabMenu);
         // a session row shows the card a tab shows, the workspace's; a connection row a card of its facts
         sidebar.cards(workspace.rowCards());
         sidebar.watchOpened(openedFiles);
-        StatusBar status = new StatusBar(deps.intents(), this::noticeTarget);
-        SessionBar sessionBar = new SessionBar(deps.intents());
+        final StatusBar status = new StatusBar(deps.intents(), this::noticeTarget);
+        final SessionBar sessionBar = new SessionBar(deps.intents());
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         kit.attach(sidebar::kitRelease);
@@ -398,20 +398,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         });
         sidebar.onFolderMenu(menus::folderMenu);
-        ServerToggle edge = deps.edge();
+        final ServerToggle edge = deps.edge();
         sidebar.instances(instances, () -> edge != null && edge.isRunning(), () -> edge != null && edge.busy(), () -> {
             if (edge != null && !edge.isRunning() && !edge.busy()) {
                 edge.toggle();
             }
         });
         jobs.attach(sidebar);
-        FindBar findBar = new FindBar();
+        final FindBar findBar = new FindBar();
         parts = new ShellParts(frame, workspace, lower, side, sidebar, status, sessionBar, findBar, diffWindow, livePlots);
         layout = new LayoutKeeper(deps, windowLayout, parts, this::render);
         focus = new FocusRouter(deps, parts, layout);
         files = new PanelFiles(deps, parts, focus, layout, windowLayout, openedFiles, render::request);
         quitFlow = new QuitFlow(deps, parts, layout, this::teardown);
-        JPanel south = new JPanel(new BorderLayout());
+        final JPanel south = new JPanel(new BorderLayout());
         south.add(findBar, BorderLayout.NORTH);
         south.add(status.component(), BorderLayout.SOUTH);
         frame.getContentPane().add(layout.component(), BorderLayout.CENTER);
@@ -439,7 +439,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
         // the areas paint the themes' swatches, which the commands and the menus show
-        Map<String, String> areas = Menus.areas();
+        final Map<String, String> areas = Menus.areas();
         new Commands(this, deps, actions, parts, focus, layout, files, quitFlow, windowLayout).register(shortcut, lowerTabKey, help, kit, jobs);
         frame.setJMenuBar(menus.menuBar());
         workspace.corner(menus.cornerButtons());
@@ -459,7 +459,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         tickTimer = new Timer(1_000, e -> tick());
         tickTimer.start();
         help.writeTutorial();
-        EditorPanel p = workspace.focused();
+        final EditorPanel p = workspace.focused();
         if (p != null) {
             p.editor().requestFocus();
         }
@@ -468,7 +468,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** The EDT reached its hang limit: its stack goes to the log, where the stall's notice will take the user. */
-    private void hung(EdtWatchdog.Stall stall) {
+    private void hung(final EdtWatchdog.Stall stall) {
         hangLoggedAt = System.currentTimeMillis();
         LOG.log(System.Logger.Level.WARNING, "the EDT has not answered for " + stall.millis() + " ms " + label(stall) + ":\n" + stall.stack());
     }
@@ -478,7 +478,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * hang a warning after the stack logged at its limit; the user hears of one that lasted a second or more, and a
      * click on the notice opens the log at the line that says where: the hang's stack, or the short one's line.
      */
-    private void stalled(EdtWatchdog.Stall stall, long millis) {
+    private void stalled(final EdtWatchdog.Stall stall, final long millis) {
         long where;
         if (stall.reported()) {
             // the watchdog reported this stall just before, on this thread
@@ -498,7 +498,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * Where a click on a notice goes: the log's entry it names, the panel it is about; empty for a notice about
      * nothing to bring into view.
      */
-    private Optional<Runnable> noticeTarget(Notice n) {
+    private Optional<Runnable> noticeTarget(final Notice n) {
         return switch (n.kind()) {
             case "log" -> deps.logDir() == null ? Optional.empty() : millis(n.key()).map(at -> () -> showLogEntry(at));
             case "panel" -> deps.state().get().panel(new PanelId(n.key()))
@@ -507,10 +507,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         };
     }
 
-    private static Optional<Long> millis(String key) {
+    private static Optional<Long> millis(final String key) {
         try {
             return Optional.of(Long.parseLong(key));
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             return Optional.empty();
         }
     }
@@ -519,10 +519,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * Opens the log that holds the entry written at {@code atMillis}, scrolled to it, its line flashed; the log as
      * Help ▸ Show the log opens it, with a notice, when the logs kept no longer hold it.
      */
-    private void showLogEntry(long atMillis) {
-        Path dir = deps.logDir();
+    private void showLogEntry(final long atMillis) {
+        final Path dir = deps.logDir();
         UiErrands.start("log-entry", () -> {
-            Optional<Path> log = HelpFiles.logHolding(dir, atMillis);
+            final Optional<Path> log = HelpFiles.logHolding(dir, atMillis);
             Edt.later(() -> {
                 if (log.isPresent()) {
                     parts.workspace().entryWhenOpen(log.get().toAbsolutePath().normalize(), atMillis);
@@ -537,7 +537,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** {@code [kind] in=… comando=…}, the part of a stall's line that groups stalls of one cause. */
-    private static String label(EdtWatchdog.Stall stall) {
+    private static String label(final EdtWatchdog.Stall stall) {
         return stall.where().isEmpty() ? "[" + stall.kind() + "]" : "[" + stall.kind() + "] " + stall.where();
     }
 
@@ -550,9 +550,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         parts.lower().results().tick();
     }
 
-    private static Map<String, Status> statuses(List<Map.Entry<String, Status>> entries) {
-        Map<String, Status> m = new LinkedHashMap<>();
-        for (var e : entries) {
+    private static Map<String, Status> statuses(final List<Map.Entry<String, Status>> entries) {
+        final Map<String, Status> m = new LinkedHashMap<>();
+        for (final var e : entries) {
             m.put(e.getKey(), e.getValue());
         }
         return m;
@@ -561,7 +561,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     // ---- rendering
 
     private void render() {
-        AppState s = deps.state().get();
+        final AppState s = deps.state().get();
         // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
         focus.beforeRender(s);
         layout.lowerFor(s, !s.lowerTab().equals(focus.renderedLowerTab()) || s.approvals().size() > renderedApprovals);
@@ -589,8 +589,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** Follows the transcript the Session tab shows, re-rendering it as the session writes. */
-    private void watchTranscript(String session) {
-        Transcript t = session.isEmpty() ? null : deps.transcripts().of(session);
+    private void watchTranscript(final String session) {
+        final Transcript t = session.isEmpty() ? null : deps.transcripts().of(session);
         if (t != watched) {
             if (watched != null) {
                 watched.removeListener(transcriptListener);
@@ -609,9 +609,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     // ---- UiPort
 
     @Override
-    public void editPanel(PanelId panel, String text, EditMode mode) {
+    public void editPanel(final PanelId panel, final String text, final EditMode mode) {
         Edt.run(() -> {
-            EditorPanel p = parts == null ? null : parts.workspace().panel(panel);
+            final EditorPanel p = parts == null ? null : parts.workspace().panel(panel);
             if (p == null) {
                 return;
             }
@@ -632,7 +632,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     @Override
-    public void notifyDesktop(String title, String text) {
+    public void notifyDesktop(final String title, final String text) {
         Edt.run(() -> {
             if (notifier != null) {
                 notifier.notify(KeyText.of(title), KeyText.of(text));
@@ -641,18 +641,18 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     @Override
-    public void forgetPanel(PanelId panel) {
+    public void forgetPanel(final PanelId panel) {
         deps.texts().forget(panel);
         forgetTerminal(panel);
     }
 
     @Override
-    public void deletePanel(PanelId panel) {
+    public void deletePanel(final PanelId panel) {
         deps.texts().delete(panel);
         forgetTerminal(panel);
     }
 
-    private void forgetTerminal(PanelId panel) {
+    private void forgetTerminal(final PanelId panel) {
         Edt.run(() -> {
             if (parts != null) {
                 parts.lower().terminals().forget(panel);
@@ -664,12 +664,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * Opens the file in a panel, or shows it in the side pane: a binary or large one, and one at a line (record 111).
      */
     @Override
-    public void showFile(String session, String path, String baseDir, int line) {
+    public void showFile(final String session, final String path, final String baseDir, final int line) {
         Edt.run(() -> files.showFile(session, path, baseDir, line));
     }
 
     @Override
-    public void arrange(Layout layout) {
+    public void arrange(final Layout layout) {
         Edt.run(() -> {
             if (this.layout != null) {
                 this.layout.arrangeWhenIdle(layout);
@@ -678,12 +678,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     @Override
-    public void showFolder(FolderRoot folder, ViewSpec.TreeNode tree) {
+    public void showFolder(final FolderRoot folder, final ViewSpec.TreeNode tree) {
         Edt.run(() -> parts.sidebar().showFolder(folder, tree));
     }
 
     @Override
-    public void showRepos(List<RepoStatus> repos) {
+    public void showRepos(final List<RepoStatus> repos) {
         Edt.run(() -> {
             repoChanges.set(repos);
             if (parts != null) {
@@ -697,7 +697,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * window already open.
      */
     @Override
-    public void showChange(ChangeTexts texts, ChangeAsk ask) {
+    public void showChange(final ChangeTexts texts, final ChangeAsk ask) {
         Edt.run(() -> {
             if (parts == null || ask != ChangeAsk.OPEN && !parts.diffWindow().isShowing()) {
                 return;
@@ -707,7 +707,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     @Override
-    public void showPlanUsage(PlanUsage usage) {
+    public void showPlanUsage(final PlanUsage usage) {
         Edt.run(() -> parts.status().planUsage(usage));
     }
 
@@ -715,10 +715,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * {@code shown}'s path as the repositories were last read: staged, committed or removed since it was opened, the
      * file is read again as it now differs; a file that no longer differs is read as changed, and shows no differences.
      */
-    private RepoStatus.FileChange currentChange(String root, RepoStatus.FileChange shown) {
-        for (RepoStatus r : repoChanges.repos()) {
+    private RepoStatus.FileChange currentChange(final String root, final RepoStatus.FileChange shown) {
+        for (final RepoStatus r : repoChanges.repos()) {
             if (r.root().equals(root)) {
-                for (RepoStatus.FileChange c : r.changes()) {
+                for (final RepoStatus.FileChange c : r.changes()) {
                     if (c.path().equals(shown.path())) {
                         return c;
                     }
@@ -737,14 +737,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * A theme was chosen, from the swatch beside New panel or the palette: kept, and every window takes its ground and
      * its tint in one pass, faded in over the theme before (record 103).
      */
-    void themeChosen(NamedTheme theme) {
+    void themeChosen(final NamedTheme theme) {
         windowLayout.theme(theme);
         // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
         LayoutKeeper.fadeTo(theme, this::render);
     }
 
     /** A checkpoint threshold was chosen in the palette: kept in the settings and handed on (record 129). */
-    void checkpointThresholdChosen(long tokens) {
+    void checkpointThresholdChosen(final long tokens) {
         windowLayout.checkpointThreshold(tokens);
         checkpointThreshold.accept(windowLayout.checkpointThreshold());
     }
@@ -755,16 +755,16 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** The user asked for the explorer: it shows, even in a side pane the user hid earlier. */
-    void exploreSchema(String connection) {
+    void exploreSchema(final String connection) {
         layout.revealSidePane();
         deps.intents().dispatch(new Intent.ExploreSchema(connection));
     }
 
-    void openConnections(String select) {
+    void openConnections(final String select) {
         connectionsDialog.show(deps.state().get(), select);
     }
 
-    void openSessions(String select) {
+    void openSessions(final String select) {
         sessionsDialog.show(deps.state().get(), select);
     }
 
@@ -776,7 +776,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * What the sidebar's add, edit and clone menu items open in the dialog; read at the click, as the sidebar is built
      * before the dialogs.
      */
-    private ResourceActions.Editor editor(Supplier<ResourceDialog<?>> dialog) {
+    private ResourceActions.Editor editor(final Supplier<ResourceDialog<?>> dialog) {
         return new ResourceActions.Editor() {
             @Override
             public void add() {
@@ -784,12 +784,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
 
             @Override
-            public void edit(String name) {
+            public void edit(final String name) {
                 dialog.get().show(deps.state().get(), name);
             }
 
             @Override
-            public void cloneOf(String name) {
+            public void cloneOf(final String name) {
                 dialog.get().showClone(deps.state().get(), name);
             }
         };
@@ -799,23 +799,23 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * Opens a file in a new panel bound to it, or brings forward the panel that has it; a binary or large file goes to
      * the side pane. Called on the EDT.
      */
-    public void openFile(Path chosen) {
+    public void openFile(final Path chosen) {
         files.openFile(chosen);
     }
 
-    private void closePanel(PanelId id) {
+    private void closePanel(final PanelId id) {
         files.closePanel(id);
     }
 
     /**
      * Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may link into the brain.
      */
-    static boolean inside(Path p, Path dir) {
+    static boolean inside(final Path p, final Path dir) {
         return MenuBuilder.inside(p, dir);
     }
 
     /** "Quitting stops main's turn.", or what it stops one per line when several things run. */
-    static String quitQuestion(List<String> work) {
+    static String quitQuestion(final List<String> work) {
         return QuitFlow.quitQuestion(work);
     }
 
@@ -825,7 +825,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     @Override
     public void close() {
         // bounded: an event thread stuck at quit must not keep the process, and comando's lock, alive forever
-        boolean closed = Edt.runAndWait(() -> {
+        final boolean closed = Edt.runAndWait(() -> {
             if (parts == null) {
                 return;
             }

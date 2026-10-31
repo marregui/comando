@@ -1,16 +1,5 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
-import com.jediterm.terminal.SubstringFinder;
-import com.jediterm.terminal.ui.TerminalPanel;
-import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.widget.capability.Capabilities;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.event.InputEvent;
@@ -29,6 +18,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+
+import com.jediterm.terminal.SubstringFinder;
+import com.jediterm.terminal.ui.TerminalPanel;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.widget.capability.Capabilities;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,7 +50,7 @@ class TerminalWidgetTest {
     /// updates the text.
     @Test
     void beforeItsShellStartsTheAreaSaysWhereAndHow() {
-        TerminalWidget t = new TerminalWidget(Path.of(HOME, "lane2"));
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "lane2"));
         assertThat(t.isStarted()).isFalse();
         assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in ~/lane2 — click or press ⌃3 to start"));
         t.setDirectory(Path.of("/srv/x"));
@@ -59,7 +60,7 @@ class TerminalWidgetTest {
     /// After the shell exits, the restart button names the directory set since.
     @Test
     void theExitBarNamesTheDirectoryOfTheRestart() {
-        TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
         t.setDirectory(Path.of(HOME, "lane2"));
         t.showExited(1);
         assertThat(t.restartButtonText()).isEqualTo("Restart in ~/lane2");
@@ -68,8 +69,8 @@ class TerminalWidgetTest {
     /// The exit bar reads the directory source when it shows, so a rebinding no render reached is used for the restart.
     @Test
     void theExitBarAndRestartReadTheDirectorySourceWhenTheBarShows() {
-        TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
-        AtomicReference<Path> bound = new AtomicReference<>(Path.of(HOME, "edge"));
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
+        final AtomicReference<Path> bound = new AtomicReference<>(Path.of(HOME, "edge"));
         t.setDirectorySource(bound::get);
         bound.set(Path.of(HOME, "lane2")); // the panel was rebound while the shell ran: no render reached the terminal
         t.showExited(0);
@@ -79,10 +80,10 @@ class TerminalWidgetTest {
 
     /// Text sent before the shell settles waits; a restart drops it, and the new shell's screen never shows it.
     @Test
-    void textWaitingWhenTheShellClosesNeverReachesTheNextShell(@TempDir Path dir) throws Exception {
-        AtomicReference<TerminalWidget> t = new AtomicReference<>();
-        AtomicReference<Integer> waitingBefore = new AtomicReference<>();
-        AtomicReference<Integer> waitingAfter = new AtomicReference<>();
+    void textWaitingWhenTheShellClosesNeverReachesTheNextShell(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
+        final AtomicReference<Integer> waitingBefore = new AtomicReference<>();
+        final AtomicReference<Integer> waitingAfter = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             t.set(new TerminalWidget(dir, List.of("/bin/sh", "-c", "echo READY; exec cat")));
             t.get().start();
@@ -94,8 +95,8 @@ class TerminalWidgetTest {
         try {
             assertThat(waitingBefore.get()).isEqualTo(1);
             assertThat(waitingAfter.get()).isZero();
-            AtomicReference<String> screen = new AtomicReference<>("");
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+            final AtomicReference<String> screen = new AtomicReference<>("");
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
             while (System.nanoTime() < deadline && !screen.get().contains("READY")) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
@@ -151,10 +152,10 @@ class TerminalWidgetTest {
     @Test
     void theJobInFrontIsReadFromItsGroupsLeader() throws Exception {
         // the test's own process, given a child, stands for a shell with a job; ps is told what that job is
-        Process child = new ProcessBuilder("sleep", "30").start();
+        final Process child = new ProcessBuilder("sleep", "30").start();
         try {
-            long self = ProcessHandle.current().pid();
-            List<List<String>> calls = new ArrayList<>();
+            final long self = ProcessHandle.current().pid();
+            final List<List<String>> calls = new ArrayList<>();
             assertThat(TerminalWidget.foregroundJob(self, "/bin/zsh", args -> {
                 calls.add(args);
                 return calls.size() == 1 ? List.of("80 76 zsh")
@@ -172,8 +173,8 @@ class TerminalWidgetTest {
     /// A foreground group whose members cannot be listed is reported as "a program".
     @Test
     void aJobInFrontWhoseNameCannotBeReadIsStillAJob() {
-        long self = ProcessHandle.current().pid();
-        List<List<String>> calls = new ArrayList<>();
+        final long self = ProcessHandle.current().pid();
+        final List<List<String>> calls = new ArrayList<>();
         assertThat(TerminalWidget.foregroundJob(self, "/bin/zsh", args -> {
             calls.add(args);
             return calls.size() == 1 ? List.of("77 76 zsh") : List.of();
@@ -183,8 +184,8 @@ class TerminalWidgetTest {
     /// Zoom adds points, stops at 8 pt, and reset returns to the base size.
     @Test
     void zoomChangesTheFontSizeWithinBoundsAndResets() {
-        TerminalWidget t = new TerminalWidget(Path.of(HOME));
-        float base = t.fontSize();
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME));
+        final float base = t.fontSize();
         t.zoom(2);
         assertThat(t.fontSize()).isEqualTo(base + 2);
         t.zoom(-100);
@@ -196,28 +197,28 @@ class TerminalWidgetTest {
     /// The widget's component names the widget as its capability owner, and find without a shell finds nothing.
     @Test
     void zoomAndFindReachTheTerminalThroughItsRoot() {
-        TerminalWidget t = new TerminalWidget(Path.of(HOME));
+        final TerminalWidget t = new TerminalWidget(Path.of(HOME));
         assertThat(t.component().getClientProperty(Capabilities.OWNER)).isSameAs(t);
         assertThat(t.find("anything", true)).isZero(); // no shell yet: nothing to search
     }
 
     /// Two lines sent before a slow shell prints its first output appear after that output, in order.
     @Test
-    void textSentBeforeTheShellIsReadyArrivesAfterItsFirstOutputInOrder(@TempDir Path dir) throws Exception {
-        AtomicReference<TerminalWidget> t = new AtomicReference<>();
+    void textSentBeforeTheShellIsReadyArrivesAfterItsFirstOutputInOrder(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             t.set(new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 0.5; echo READY; exec cat")));
             t.get().send("first\n");
             t.get().send("second\n");
         });
         try {
-            AtomicReference<String> screen = new AtomicReference<>("");
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+            final AtomicReference<String> screen = new AtomicReference<>("");
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
             while (System.nanoTime() < deadline && count(screen.get(), "second") < 2) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
             }
-            String text = screen.get();
+            final String text = screen.get();
             assertThat(count(text, "second")).as("echo and cat's copy of both lines: %s", text).isEqualTo(2);
             assertThat(text.indexOf("READY")).as("the shell's first output comes first: %s", text).isNotNegative()
                     .isLessThan(text.indexOf("first"));
@@ -230,20 +231,20 @@ class TerminalWidgetTest {
     /// Find counts both matches of a lower-case word for an upper-case query, and zoom and clear find on a live
     /// terminal do not fail.
     @Test
-    void findCountsMatchesInTheBufferIgnoringCaseAndZoomRefontsALiveTerminal(@TempDir Path dir) throws Exception {
-        AtomicReference<TerminalWidget> t = new AtomicReference<>();
+    void findCountsMatchesInTheBufferIgnoringCaseAndZoomRefontsALiveTerminal(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             t.set(new TerminalWidget(dir, List.of("/bin/sh", "-c", "echo alpha needle; echo needle beta; exec cat")));
             t.get().start();
         });
         try {
-            AtomicReference<String> screen = new AtomicReference<>("");
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+            final AtomicReference<String> screen = new AtomicReference<>("");
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
             while (System.nanoTime() < deadline && !screen.get().contains("beta")) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
             }
-            AtomicReference<Integer> found = new AtomicReference<>();
+            final AtomicReference<Integer> found = new AtomicReference<>();
             SwingUtilities.invokeAndWait(() -> {
                 found.set(t.get().find("NEEDLE", true));
                 t.get().zoom(1);
@@ -258,9 +259,9 @@ class TerminalWidgetTest {
     /// With no new output, find steps through the same results; after new output on the same screen it counts the new
     /// matches and steps on from the match the user was on.
     @Test
-    void findNextSearchesAgainOnceTheOutputChanged(@TempDir Path dir) throws Exception {
-        AtomicReference<TerminalWidget> t = new AtomicReference<>();
-        Semaphore changed = new Semaphore(0);
+    void findNextSearchesAgainOnceTheOutputChanged(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
+        final Semaphore changed = new Semaphore(0);
         SwingUtilities.invokeAndWait(() -> {
             t.set(new TerminalWidget(dir, List.of("/bin/sh", "-c", "echo alpha needle; echo needle beta; exec cat")));
             t.get().start();
@@ -268,9 +269,9 @@ class TerminalWidgetTest {
         });
         try {
             awaitScreen(t.get(), changed, s -> s.contains("beta"));
-            AtomicReference<Integer> found = new AtomicReference<>();
-            AtomicReference<Object> first = new AtomicReference<>();
-            AtomicReference<Object> next = new AtomicReference<>();
+            final AtomicReference<Integer> found = new AtomicReference<>();
+            final AtomicReference<Object> first = new AtomicReference<>();
+            final AtomicReference<Object> next = new AtomicReference<>();
             SwingUtilities.invokeAndWait(() -> {
                 found.set(t.get().find("needle", true));
                 first.set(panel(t.get().component()).getFindResult());
@@ -285,8 +286,8 @@ class TerminalWidgetTest {
             awaitScreen(t.get(), changed, s -> count(s, "gamma") == 2); // the echo and cat's copy
             SwingUtilities.invokeAndWait(() -> found.set(t.get().find("needle", true)));
             assertThat(found.get()).as("the next find counts the new matches").isEqualTo(4);
-            AtomicReference<Object> on = new AtomicReference<>();
-            AtomicReference<Object> beta = new AtomicReference<>();
+            final AtomicReference<Object> on = new AtomicReference<>();
+            final AtomicReference<Object> beta = new AtomicReference<>();
             SwingUtilities.invokeAndWait(() -> {
                 on.set(panel(t.get().component()).getFindResult().selectedItem().getStart());
                 beta.set(((SubstringFinder.FindResult) first.get()).getItems().get(1).getStart());
@@ -298,13 +299,13 @@ class TerminalWidgetTest {
         }
     }
 
-    private static TerminalPanel panel(Component c) {
+    private static TerminalPanel panel(final Component c) {
         if (c instanceof TerminalPanel p) {
             return p;
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
-                TerminalPanel p = panel(child);
+            for (final Component child : k.getComponents()) {
+                final TerminalPanel p = panel(child);
                 if (p != null) {
                     return p;
                 }
@@ -314,20 +315,20 @@ class TerminalWidgetTest {
     }
 
     /** Waits, up to eight seconds, for the screen to satisfy {@code done}, rechecking on each change of the buffer. */
-    private static void awaitScreen(TerminalWidget t, Semaphore changed, Predicate<String> done) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+    private static void awaitScreen(final TerminalWidget t, final Semaphore changed, final Predicate<String> done) throws Exception {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
         while (true) {
-            AtomicReference<String> screen = new AtomicReference<>("");
+            final AtomicReference<String> screen = new AtomicReference<>("");
             SwingUtilities.invokeAndWait(() -> screen.set(t.screenText()));
             if (done.test(screen.get())) {
                 return;
             }
-            long left = deadline - System.nanoTime();
+            final long left = deadline - System.nanoTime();
             assertThat(left > 0 && changed.tryAcquire(left, TimeUnit.NANOSECONDS)).as("the screen: %s", screen.get()).isTrue();
         }
     }
 
-    private static int count(String text, String word) {
+    private static int count(final String text, final String word) {
         int n = 0;
         for (int i = text.indexOf(word); i >= 0; i = text.indexOf(word, i + 1)) {
             n++;
@@ -377,18 +378,18 @@ class TerminalWidgetTest {
 
     /// In an interactive shell, a job started with `&` is not a foreground job; a job run in front is, by its command.
     @Test
-    void onlyAForegroundJobCountsAsRunning(@TempDir Path dir) throws Exception {
-        Pty pty = Pty.start(List.of("/bin/sh", "-i"), dir, 80, 24);
-        Thread drain = Thread.ofVirtual().start(() -> {
+    void onlyAForegroundJobCountsAsRunning(@TempDir final Path dir) throws Exception {
+        final Pty pty = Pty.start(List.of("/bin/sh", "-i"), dir, 80, 24);
+        final Thread drain = Thread.ofVirtual().start(() -> {
             try {
                 pty.process().getInputStream().transferTo(OutputStream.nullOutputStream());
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 // the shell ended
             }
         });
         try {
-            long shell = pty.process().pid();
-            var in = pty.process().getOutputStream();
+            final long shell = pty.process().pid();
+            final var in = pty.process().getOutputStream();
             in.write("sleep 30 &\n".getBytes());
             in.flush();
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
@@ -414,7 +415,7 @@ class TerminalWidgetTest {
     /// With macOS keys, Select All is bound to ⌘A; elsewhere it has no key so Ctrl+A stays the shell's.
     @Test
     void commandASelectsTheTerminalBufferOnMacOs() {
-        var keys = new TerminalWidget.Settings(() -> 13).getSelectAllActionPresentation().getKeyStrokes();
+        final var keys = new TerminalWidget.Settings(() -> 13).getSelectAllActionPresentation().getKeyStrokes();
         if (Platform.macKeys()) {
             assertThat(keys).containsExactly(KeyStroke.getKeyStroke(KeyEvent.VK_A,
                     InputEvent.META_DOWN_MASK));
@@ -427,11 +428,11 @@ class TerminalWidgetTest {
     /// whose process id is unknown counts as running [TerminalWidget#UNCHECKED_JOB].
     @Test
     void severalShellsAnswerByKeyAndAnUnknownProcessIsUnchecked() {
-        Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
+        final Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
         shells.put("ssh", new TerminalWidget.Shell(4242, "/bin/zsh"));
         shells.put("idle", new TerminalWidget.Shell(4343, "/bin/zsh"));
         shells.put("unknown", new TerminalWidget.Shell(-1, "/bin/zsh"));
-        Map<String, String> jobs = TerminalWidget.foregroundJobs(shells, 2_000,
+        final Map<String, String> jobs = TerminalWidget.foregroundJobs(shells, 2_000,
                 args -> args.contains("4242") ? List.of("4242 4242 ssh") : List.of("4343 4343 -zsh"));
         assertThat(jobs).containsExactly(Map.entry("ssh", "ssh"), Map.entry("unknown", TerminalWidget.UNCHECKED_JOB));
     }
@@ -440,7 +441,7 @@ class TerminalWidgetTest {
     /// the 1 s bound answers [TerminalWidget#UNCHECKED_JOB], and the call returns at the bound, not when `ps` would.
     @Test
     void theChecksRunTogetherAndAShellNotAnsweredByTheBoundIsUnchecked() {
-        Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
+        final Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
         shells.put("a", new TerminalWidget.Shell(1, "/bin/zsh"));
         shells.put("b", new TerminalWidget.Shell(2, "/bin/zsh"));
         long start = System.nanoTime();
@@ -460,10 +461,10 @@ class TerminalWidgetTest {
         assertThat(jobs).containsExactly(Map.entry("slow", TerminalWidget.UNCHECKED_JOB));
     }
 
-    private static void sleep(long millis) {
+    private static void sleep(final long millis) {
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }

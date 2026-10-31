@@ -1,19 +1,20 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.util.List;
+import javax.swing.JLabel;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.async.OnEdt;
 import dev.marregui.comando.ui.widget.WidgetContext;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.swing.JLabel;
-import java.awt.Component;
-import java.awt.Container;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,16 +28,16 @@ class AgentStripTest {
         System.setProperty("java.awt.headless", "true");
     }
 
-    private static void layoutTree(Component c) {
+    private static void layoutTree(final Component c) {
         if (c instanceof Container k) {
             k.doLayout();
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 layoutTree(child);
             }
         }
     }
 
-    private static Block.ToolCall agent(String id, String description) {
+    private static Block.ToolCall agent(final String id, final String description) {
         return new Block.ToolCall(id, "Agent", "{\"description\":\"" + description + "\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, "");
     }
@@ -45,27 +46,27 @@ class AgentStripTest {
     /// rest are counted as `+N`; at 2 400 px all fit and the count is empty.
     @Test
     void chipsThatDoNotFitOnTheLineAreCountedInALastChip() {
-        TranscriptWidget widget = new TranscriptWidget(new WidgetContext(intent -> { }, new ActionRegistry()));
-        Transcript t = new Transcript();
+        final TranscriptWidget widget = new TranscriptWidget(new WidgetContext(intent -> { }, new ActionRegistry()));
+        final Transcript t = new Transcript();
         t.append(new Block.UserPrompt("review", "main", ""));
         t.append(agent("a1", "Check the adapter's tail"));
         t.append(agent("a2", "Check the UI side's strip"));
         t.append(agent("a3", "Verify the transcript gate"));
         t.append(agent("a4", "Probe the file parser inputs"));
         widget.render(new TranscriptView("s", t));
-        long started = System.currentTimeMillis() - 724_000L; // 12 min 04 s ago
+        final long started = System.currentTimeMillis() - 724_000L; // 12 min 04 s ago
         widget.setBackgroundTasks(List.of(
                 new BackgroundTask("t1", "local_agent", "Watch the build and report", started),
                 new BackgroundTask("t2", "local_agent", "Summarise the review findings", started)));
 
-        Component root = widget.component();
+        final Component root = widget.component();
         root.setSize(1200, 600);
         layoutTree(root);
 
-        AgentStrip strip = widget.strip();
+        final AgentStrip strip = widget.strip();
         assertThat(strip.chips()).hasSize(6);
-        List<JLabel> shown = strip.shownChips();
-        for (JLabel chip : shown) {
+        final List<JLabel> shown = strip.shownChips();
+        for (final JLabel chip : shown) {
             assertThat(chip.getY() + chip.getHeight()).as("on the strip's one line").isLessThanOrEqualTo(strip.getHeight());
             assertThat(chip.getX() + chip.getWidth()).isLessThanOrEqualTo(strip.getWidth());
         }

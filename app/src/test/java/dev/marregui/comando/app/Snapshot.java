@@ -1,5 +1,44 @@
 package dev.marregui.comando.app;
 
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Font;
+import java.awt.Frame;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.Window;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+import javax.imageio.ImageIO;
+import javax.swing.AbstractButton;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JRootPane;
+import javax.swing.JTextField;
+import javax.swing.JToggleButton;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
+import javax.swing.tree.DefaultMutableTreeNode;
+
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
@@ -28,45 +67,6 @@ import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 
-import javax.imageio.ImageIO;
-import javax.swing.AbstractButton;
-import javax.swing.JDialog;
-import javax.swing.JFrame;
-import javax.swing.JList;
-import javax.swing.JMenu;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JRootPane;
-import javax.swing.JTextField;
-import javax.swing.JToggleButton;
-import javax.swing.JTree;
-import javax.swing.SwingUtilities;
-import javax.swing.event.HyperlinkEvent;
-import javax.swing.text.BadLocationException;
-import javax.swing.tree.DefaultMutableTreeNode;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Font;
-import java.awt.Frame;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.Window;
-import java.awt.event.InputEvent;
-import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
-
 /**
  * Starts comando on a scratch data root, drives it with intents and paints the window to PNG files:
  * a visual check that needs no screen-recording permission.
@@ -80,18 +80,18 @@ public final class Snapshot {
     private Snapshot() {
     }
 
-    public static void main(String[] args) throws Exception {
-        Path out = Path.of(args.length > 0 ? args[0] : "build/snapshots");
-        boolean live = args.length > 1 && Boolean.parseBoolean(args[1]);
+    public static void main(final String[] args) throws Exception {
+        final Path out = Path.of(args.length > 0 ? args[0] : "build/snapshots");
+        final boolean live = args.length > 1 && Boolean.parseBoolean(args[1]);
         Files.createDirectories(out);
-        Path home = Files.createTempDirectory("comando-snapshot");
-        Path sampleRepo = sampleFolders(home);
+        final Path home = Files.createTempDirectory("comando-snapshot");
+        final Path sampleRepo = sampleFolders(home);
         // the root as comando reads it before one is chosen, without a kit: the pictures are the same on every machine
-        AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(), KitRoot.current(), true);
-        App app = new App(config, "snapshot", () -> {
+        final AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(), KitRoot.current(), true);
+        final App app = new App(config, "snapshot", () -> {
         });
         app.start();
-        StateLoop loop = app.loop();
+        final StateLoop loop = app.loop();
         Thread.sleep(2500);
         shoot(out.resolve("01-start.png"));
         // a panel's file edited outside comando, as by another editor or Claude's Edit tool, shows in its panel
@@ -99,15 +99,15 @@ public final class Snapshot {
         Thread.sleep(2500);
         shoot(out.resolve("01b-reloaded-from-file.png"));
 
-        String repo = Path.of(System.getProperty("user.dir")).getParent().toString();
+        final String repo = Path.of(System.getProperty("user.dir")).getParent().toString();
         loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("comando", repo).withModel("haiku")));
         loop.dispatch(new Intent.BindSession(loop.state().focused(), "comando"));
         loop.dispatch(new Intent.ShowView("comando", "primes", new ViewSpec.Table(List.of("n", "prime", "gap"),
                 List.of(List.of("1", "2", "null"), List.of("2", "3", "1"), List.of("3", "5", "2"), List.of("4", "7", "2"))), Placement.LOWER));
-        double[] x = new double[2000];
-        double[] y = new double[2000];
-        double[] z = new double[2000];
-        long t0 = 1_760_000_000_000L;
+        final double[] x = new double[2000];
+        final double[] y = new double[2000];
+        final double[] z = new double[2000];
+        final long t0 = 1_760_000_000_000L;
         for (int i = 0; i < x.length; i++) {
             x[i] = t0 + i * 60_000L;
             y[i] = 40 + 15 * Math.sin(i / 40.0) + (i % 300 == 0 ? 45 : 0);
@@ -137,9 +137,9 @@ public final class Snapshot {
         selectSidebarTab("Sessions");
         await(loop, st -> st.session("edge").map(e -> e.contextWindow() > 0).orElse(false), 5_000);
         SwingUtilities.invokeAndWait(() -> {
-            JList<?> sessions = list("Sessions");
+            final JList<?> sessions = list("Sessions");
             if (sessions != null) {
-                Rectangle row = sessions.getCellBounds(0, 0);
+                final Rectangle row = sessions.getCellBounds(0, 0);
                 sessions.dispatchEvent(new MouseEvent(sessions, MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0,
                         row.x + 80, row.y + 8, 0, false));
             }
@@ -159,7 +159,7 @@ public final class Snapshot {
         // the sidebar's Files tab, clicked as a user would: the folders as rows, the first opened as by a click
         selectSidebarTab("Files");
         SwingUtilities.invokeAndWait(() -> {
-            JTree files = tree("Files");
+            final JTree files = tree("Files");
             if (files != null) {
                 files.expandRow(0);
             }
@@ -173,7 +173,7 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> filesFilter().setText(""));
         // the memory: its index leads it, and a double click opens it rendered, to edit like any file
         SwingUtilities.invokeAndWait(() -> {
-            JTree files = tree("Files");
+            final JTree files = tree("Files");
             if (files != null) {
                 files.collapseRow(0);
                 files.expandRow(1);
@@ -182,9 +182,9 @@ public final class Snapshot {
         });
         await(loop, st -> rowShown("Files", "MEMORY.md"), 10_000);
         SwingUtilities.invokeAndWait(() -> {
-            JTree files = tree("Files");
+            final JTree files = tree("Files");
             if (files != null) {
-                Rectangle row = files.getRowBounds(2);
+                final Rectangle row = files.getRowBounds(2);
                 files.dispatchEvent(new MouseEvent(files, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0,
                         row.x + 4, row.y + row.height / 2, 2, false, MouseEvent.BUTTON1));
             }
@@ -194,8 +194,8 @@ public final class Snapshot {
         selectSidebarTab("Sessions");
         // files opened from the Files tab: a Markdown document opens rendered, its code in the editors' colours,
         // and a source file opens as text coloured as its language
-        Path docs = Files.createTempDirectory("comando-snapshot-docs");
-        Path plan = Files.writeString(docs.resolve("LANE-PLAN.md"), """
+        final Path docs = Files.createTempDirectory("comando-snapshot-docs");
+        final Path plan = Files.writeString(docs.resolve("LANE-PLAN.md"), """
                 # Lane plan
 
                 The **writer** owns the file; readers take a *stamp* first.
@@ -221,7 +221,7 @@ public final class Snapshot {
                 }
                 ```
                 """);
-        Path source = Files.writeString(docs.resolve("Lane.java"), """
+        final Path source = Files.writeString(docs.resolve("Lane.java"), """
                 package dev.marregui.lane;
 
                 /** One lane of the writer. */
@@ -238,17 +238,17 @@ public final class Snapshot {
                     }
                 }
                 """);
-        PanelId first = loop.state().focused();
+        final PanelId first = loop.state().focused();
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(plan));
         Thread.sleep(4000); // mmdc draws the diagram in about 1.5 s, and the preview shows it then
         shoot(out.resolve("02e-markdown-document.png"));
         // a report with the pictures beside it, a PNG in images/ and an SVG in img/
-        Path report = reportWithPictures(docs);
+        final Path report = reportWithPictures(docs);
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(report));
         picturesRead(docs.resolve("images/p99-latency.png"), docs.resolve("img/write-path.svg"));
         shoot(out.resolve("02e2-markdown-pictures.png"));
         // a link to a heading of another document, double-clicked in the report: the document opens at that heading
-        StringBuilder rollout = new StringBuilder("# Rollout\n\n");
+        final StringBuilder rollout = new StringBuilder("# Rollout\n\n");
         for (int i = 1; i <= 6; i++) {
             rollout.append("## ").append(i).append(". Stage ").append(i).append("\n\n");
             for (int j = 0; j < 8; j++) {
@@ -273,7 +273,7 @@ public final class Snapshot {
         showing(loop, "tutorial.md");
         shoot(out.resolve("02g-help-tutorial.png"));
         // the snapshot logs to the console only: a log file as comando writes one
-        Path log = config.logDir().resolve("comando-0.log");
+        final Path log = config.logDir().resolve("comando-0.log");
         Files.createDirectories(log.getParent());
         Files.writeString(log, String.join("\n",
                 "2026-10-16 08:40:01.120 INFO  [main] dev.marregui.comando.app.App comando starting [version=snapshot]",
@@ -285,7 +285,7 @@ public final class Snapshot {
         showing(loop, "comando-0.log");
         shoot(out.resolve("02h-help-log.png"));
         // Help's two sheets, each in the side pane: the keys, then Markdown
-        for (String[] sheet : new String[][]{{"Keyboard shortcuts", "Keyboard shortcuts", "02i-help-keys.png"},
+        for (final String[] sheet : new String[][]{{"Keyboard shortcuts", "Keyboard shortcuts", "02i-help-keys.png"},
                 {"Markdown sheet", "Markdown", "02j-help-markdown.png"}}) {
             menuItem("Help", sheet[0]);
             await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals(sheet[1])), 5_000);
@@ -300,7 +300,7 @@ public final class Snapshot {
         // changed file compared side by side in the window that floats over comando's
         selectSidebarTab("Files");
         SwingUtilities.invokeAndWait(() -> {
-            JTree files = tree("Files");
+            final JTree files = tree("Files");
             for (int i = 0; files != null && i < files.getRowCount(); i++) {
                 if (files.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                         && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals("Repo")) {
@@ -310,7 +310,7 @@ public final class Snapshot {
         });
         await(loop, st -> rowShown("Files", "src"), 10_000);
         SwingUtilities.invokeAndWait(() -> {
-            JTree files = tree("Files");
+            final JTree files = tree("Files");
             for (int i = 0; files != null && i < files.getRowCount() && i < 60; i++) {
                 if (files.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                         && n.getUserObject() instanceof ViewSpec.TreeNode node && !node.children().isEmpty()) {
@@ -330,7 +330,7 @@ public final class Snapshot {
         shoot(out.resolve("02l-changes.png"));
         loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
                 new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
-        String diffTitle = "src/main/java/demo/Lane.java — compared with HEAD";
+        final String diffTitle = "src/main/java/demo/Lane.java — compared with HEAD";
         await(loop, st -> dialogShown(diffTitle), 10_000);
         // a read again of a file the window no longer shows never takes it back
         loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
@@ -344,11 +344,11 @@ public final class Snapshot {
         shootDialog(diffTitle, out.resolve("02m-diff-window.png"));
         // a Markdown file's two sides rendered, what changed shaded as in the texts
         loop.dispatch(new Intent.OpenChange(sampleRepo.toString(), new RepoStatus.FileChange("README.md", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
-        String readmeTitle = "README.md — compared with HEAD";
+        final String readmeTitle = "README.md — compared with HEAD";
         if (await(loop, st -> dialogShown(readmeTitle), 15_000) == null) {
-            List<String> titles = new ArrayList<>();
+            final List<String> titles = new ArrayList<>();
             SwingUtilities.invokeAndWait(() -> {
-                for (Window w : Window.getWindows()) {
+                for (final Window w : Window.getWindows()) {
                     if (w instanceof JDialog d && d.isVisible()) {
                         titles.add(d.getTitle());
                     }
@@ -366,7 +366,7 @@ public final class Snapshot {
         selectSidebarTab("Sessions");
         loop.dispatch(new Intent.FocusPanel(first));
         Thread.sleep(500);
-        long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
+        final long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.view(plotId)));
         Thread.sleep(800);
         shoot(out.resolve("03-plot.png"));
@@ -395,9 +395,9 @@ public final class Snapshot {
      * Waits until the pictures are read and the preview that asked first has been redrawn with them: its redraw is
      * queued on the event thread before these callbacks run.
      */
-    private static void picturesRead(Path... files) throws Exception {
-        for (Path file : files) {
-            CountDownLatch read = new CountDownLatch(1);
+    private static void picturesRead(final Path... files) throws Exception {
+        for (final Path file : files) {
+            final CountDownLatch read = new CountDownLatch(1);
             if (LocalImages.current().picture(file, read::countDown) instanceof LocalImages.Picture.Pending
                     && !read.await(10, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("not read in 10 s: " + file);
@@ -410,17 +410,17 @@ public final class Snapshot {
     }
 
     /** A Markdown report as Claude writes one, beside a PNG chart in images/ and an SVG diagram in img/. */
-    private static Path reportWithPictures(Path docs) throws IOException {
-        Path images = Files.createDirectories(docs.resolve("images"));
-        Path img = Files.createDirectories(docs.resolve("img"));
-        BufferedImage chart = new BufferedImage(520, 170, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = chart.createGraphics();
+    private static Path reportWithPictures(final Path docs) throws IOException {
+        final Path images = Files.createDirectories(docs.resolve("images"));
+        final Path img = Files.createDirectories(docs.resolve("img"));
+        final BufferedImage chart = new BufferedImage(520, 170, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = chart.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setColor(new Color(0x2B2D30));
         g.fillRect(0, 0, 520, 170);
         g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        int[] p99 = {123, 114, 36, 29, 27};
-        String[] runs = {"base", "lock", "lane", "lane+", "final"};
+        final int[] p99 = {123, 114, 36, 29, 27};
+        final String[] runs = {"base", "lock", "lane", "lane+", "final"};
         for (int i = 0; i < p99.length; i++) {
             g.setColor(i < 2 ? new Color(0xE06C75) : new Color(0x56B6C2));
             g.fillRoundRect(40 + i * 95, 140 - p99[i], 60, p99[i], 6, 6);
@@ -462,22 +462,22 @@ public final class Snapshot {
      * index leads it, a folder of skills and one of a plugin, so every folder icon shows, and a git repository with
      * changes; answers the repository.
      */
-    private static Path sampleFolders(Path home) throws Exception {
-        Path root = Files.createTempDirectory("comando-snapshot-files");
-        Path repo = sampleRepo(root.resolve("repo"));
-        Path pad = root.resolve("SCRATCHPAD");
-        for (String day : List.of("2026-10-15", "2026-10-16")) {
-            Path d = Files.createDirectories(pad.resolve(day));
+    private static Path sampleFolders(final Path home) throws Exception {
+        final Path root = Files.createTempDirectory("comando-snapshot-files");
+        final Path repo = sampleRepo(root.resolve("repo"));
+        final Path pad = root.resolve("SCRATCHPAD");
+        for (final String day : List.of("2026-10-15", "2026-10-16")) {
+            final Path d = Files.createDirectories(pad.resolve(day));
             Files.writeString(d.resolve("INDEX.md"), "# " + day + "\n");
             Files.writeString(d.resolve("READ-01-LANE-REVIEW.md"), "# Lane review\n");
             Files.writeString(Files.createDirectories(d.resolve("work")).resolve("LANE-SPEC.md"), "# spec\n");
         }
         Files.writeString(pad.resolve("INDEX.md"), "# Scratchpad\n");
-        Path kb = root.resolve("KB");
+        final Path kb = root.resolve("KB");
         Files.writeString(Files.createDirectories(kb.resolve("architecture")).resolve("00_START_HERE.md"), "# Architecture\n");
         Files.writeString(Files.createDirectories(kb.resolve("build")).resolve("generated.html"), "x");
         Files.writeString(kb.resolve("00_START_HERE.md"), "# KB\n");
-        Path memory = root.resolve("MEMORY");
+        final Path memory = root.resolve("MEMORY");
         Files.writeString(Files.createDirectories(memory.resolve("archive")).resolve("session_log_2026-09.md"), "# September\n");
         Files.writeString(memory.resolve("agent_ledger.md"), "# Agent ledger\n");
         Files.writeString(memory.resolve("MEMORY.md"), "# Memory\n");
@@ -495,9 +495,9 @@ public final class Snapshot {
     }
 
     /** A repository with a file changed, one added, one deleted, one untracked, and an ignored folder. */
-    static Path sampleRepo(Path repo) throws Exception {
-        Path src = Files.createDirectories(repo.resolve("src/main/java/demo"));
-        StringBuilder lane = new StringBuilder("package demo;\n\n/** A lane of work: one writer, many readers. */\nfinal class Lane {\n\n");
+    static Path sampleRepo(final Path repo) throws Exception {
+        final Path src = Files.createDirectories(repo.resolve("src/main/java/demo"));
+        final StringBuilder lane = new StringBuilder("package demo;\n\n/** A lane of work: one writer, many readers. */\nfinal class Lane {\n\n");
         for (int i = 1; i <= 12; i++) {
             lane.append("    private long stamp").append(i).append(";\n");
         }
@@ -511,7 +511,7 @@ public final class Snapshot {
         git(repo, "init", "-q");
         git(repo, "add", "-A");
         git(repo, "commit", "-q", "-m", "first");
-        String changed = lane.toString()
+        final String changed = lane.toString()
                 .replace("    private long stamp7;\n", "")
                 .replace("        return s + stamp2;", "        // the reader takes its stamp before the data\n        return s + stamp2 + stamp3;")
                 .replace("        stamp2 = v * 2;", "        stamp2 = v << 1;");
@@ -526,11 +526,11 @@ public final class Snapshot {
         return repo;
     }
 
-    static void git(Path dir, String... args) throws Exception {
-        List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=snapshot", "-c", "user.email=s@s", "-c", "commit.gpgsign=false",
+    static void git(final Path dir, final String... args) throws Exception {
+        final List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=snapshot", "-c", "user.email=s@s", "-c", "commit.gpgsign=false",
                 "-c", "init.defaultBranch=main", "-C", dir.toString()));
         cmd.addAll(List.of(args));
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        final Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
         p.getInputStream().readAllBytes();
         if (p.waitFor() != 0) {
             throw new IllegalStateException("git " + String.join(" ", args) + " failed");
@@ -538,11 +538,11 @@ public final class Snapshot {
     }
 
     /** Whether the row labelled {@code label} of the tree named {@code name} is open; asked on the event thread. */
-    static boolean rowExpanded(String name, String label) {
-        boolean[] open = new boolean[1];
+    static boolean rowExpanded(final String name, final String label) {
+        final boolean[] open = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
-                JTree t = tree(name);
+                final JTree t = tree(name);
                 for (int i = 0; t != null && i < t.getRowCount(); i++) {
                     if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                             && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label)) {
@@ -550,7 +550,7 @@ public final class Snapshot {
                     }
                 }
             });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return false;
         }
         return open[0];
@@ -558,36 +558,36 @@ public final class Snapshot {
 
     /** Whether the Files tab knows the sample repository, so its row has the git icon and the flag. */
     static boolean repoMarked() {
-        boolean[] marked = new boolean[1];
+        final boolean[] marked = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
-                JTree t = tree("Files");
+                final JTree t = tree("Files");
                 for (int i = 0; t != null && i < t.getRowCount(); i++) {
                     if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                             && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals("Repo")) {
-                        Rectangle r = t.getRowBounds(i);
-                        Component c = t.getCellRenderer().getTreeCellRendererComponent(t, n, false, true, false, i, false);
+                        final Rectangle r = t.getRowBounds(i);
+                        final Component c = t.getCellRenderer().getTreeCellRendererComponent(t, n, false, true, false, i, false);
                         // the flag rides in a row of its own after the name
                         marked[0] = r != null && c instanceof JPanel;
                     }
                 }
             });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return false;
         }
         return marked[0];
     }
 
     /** A user's double click on the row labelled {@code label}: press, release and click, twice. */
-    static void doubleClickRow(JTree t, String label) {
+    static void doubleClickRow(final JTree t, final String label) {
         for (int i = 0; i < t.getRowCount(); i++) {
             if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                     && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label)) {
-                Rectangle r = t.getRowBounds(i);
-                int x = r.x + 30;
-                int y = r.y + r.height / 2;
+                final Rectangle r = t.getRowBounds(i);
+                final int x = r.x + 30;
+                final int y = r.y + r.height / 2;
                 for (int count = 1; count <= 2; count++) {
-                    long now = System.currentTimeMillis();
+                    final long now = System.currentTimeMillis();
                     t.dispatchEvent(new MouseEvent(t, MouseEvent.MOUSE_PRESSED, now, InputEvent.BUTTON1_DOWN_MASK, x, y, count, false, MouseEvent.BUTTON1));
                     t.dispatchEvent(new MouseEvent(t, MouseEvent.MOUSE_RELEASED, now, 0, x, y, count, false, MouseEvent.BUTTON1));
                     t.dispatchEvent(new MouseEvent(t, MouseEvent.MOUSE_CLICKED, now, 0, x, y, count, false, MouseEvent.BUTTON1));
@@ -599,11 +599,11 @@ public final class Snapshot {
     }
 
     /** Clicks the button whose accessible name is {@code name} in the open dialog titled {@code title}. */
-    static void clickInDialog(String title, String name) throws Exception {
+    static void clickInDialog(final String title, final String name) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Window w : Window.getWindows()) {
+            for (final Window w : Window.getWindows()) {
                 if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
-                    AbstractButton b = find(d.getContentPane(), AbstractButton.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
+                    final AbstractButton b = find(d.getContentPane(), AbstractButton.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
                     if (b == null) {
                         throw new IllegalStateException("no button " + name + " in " + title);
                     }
@@ -615,9 +615,9 @@ public final class Snapshot {
         });
     }
 
-    private static void closeDialog(String title) throws Exception {
+    private static void closeDialog(final String title) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Window w : Window.getWindows()) {
+            for (final Window w : Window.getWindows()) {
                 if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
                     d.setVisible(false);
                 }
@@ -629,18 +629,18 @@ public final class Snapshot {
      * Runs the Files tab's command {@code id} as the user would: a right click on the tab's header, then its item in
      * the menu that opens. EDT only.
      */
-    static void findCommand(String id) {
-        String text = switch (id) {
+    static void findCommand(final String id) {
+        final String text = switch (id) {
             case "files.settings" -> "Configure " + FoldersDialog.title();
             default -> throw new IllegalArgumentException(id);
         };
-        for (Frame f : Frame.getFrames()) {
+        for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
-                AbstractButton tab = named(jf, "Files");
+                final AbstractButton tab = named(jf, "Files");
                 if (tab != null) {
                     tab.dispatchEvent(new MouseEvent(tab, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0, 4, 4, 1, true, MouseEvent.BUTTON3));
-                    for (Window w : Window.getWindows()) {
-                        AbstractButton item = withText(w, text);
+                    for (final Window w : Window.getWindows()) {
+                        final AbstractButton item = withText(w, text);
                         if (item != null) {
                             item.doClick();
                             return;
@@ -652,13 +652,13 @@ public final class Snapshot {
         throw new IllegalStateException("no Files tab item for " + id);
     }
 
-    private static AbstractButton named(Component c, String name) {
+    private static AbstractButton named(final Component c, final String name) {
         if (c instanceof AbstractButton b && name.equals(b.getAccessibleContext().getAccessibleName())) {
             return b;
         }
         if (c instanceof Container k) {
-            for (Component x : k.getComponents()) {
-                AbstractButton b = named(x, name);
+            for (final Component x : k.getComponents()) {
+                final AbstractButton b = named(x, name);
                 if (b != null) {
                     return b;
                 }
@@ -667,13 +667,13 @@ public final class Snapshot {
         return null;
     }
 
-    private static AbstractButton withText(Component c, String text) {
+    private static AbstractButton withText(final Component c, final String text) {
         if (c instanceof JMenuItem b && text.equals(b.getText()) && b.isShowing()) {
             return b;
         }
         if (c instanceof Container k) {
-            for (Component x : k.getComponents()) {
-                AbstractButton b = withText(x, text);
+            for (final Component x : k.getComponents()) {
+                final AbstractButton b = withText(x, text);
                 if (b != null) {
                     return b;
                 }
@@ -689,32 +689,32 @@ public final class Snapshot {
     }
 
     /** Whether a dialog titled {@code title} is on screen; asked on the event thread. */
-    static boolean dialogShown(String title) {
-        boolean[] shown = new boolean[1];
+    static boolean dialogShown(final String title) {
+        final boolean[] shown = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
-                for (Window w : Window.getWindows()) {
+                for (final Window w : Window.getWindows()) {
                     shown[0] |= w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle());
                 }
             });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return false;
         }
         return shown[0];
     }
 
     /** Whether the visible window's tree {@code name} shows a row labelled {@code label}; asked on the event thread. */
-    static boolean rowShown(String name, String label) {
-        boolean[] shown = new boolean[1];
+    static boolean rowShown(final String name, final String label) {
+        final boolean[] shown = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
-                JTree t = tree(name);
+                final JTree t = tree(name);
                 for (int i = 0; t != null && i < t.getRowCount(); i++) {
                     shown[0] |= t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                             && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label);
                 }
             });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return false;
         }
         return shown[0];
@@ -722,9 +722,9 @@ public final class Snapshot {
 
     /** The Files tab's filter field in the visible window. */
     private static JTextField filesFilter() {
-        for (Frame f : Frame.getFrames()) {
+        for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
-                JTextField t = find(jf.getContentPane(), JTextField.class, x -> "Filter files".equals(x.getAccessibleContext().getAccessibleName()));
+                final JTextField t = find(jf.getContentPane(), JTextField.class, x -> "Filter files".equals(x.getAccessibleContext().getAccessibleName()));
                 if (t != null) {
                     return t;
                 }
@@ -734,10 +734,10 @@ public final class Snapshot {
     }
 
     /** The visible window's list named {@code name}, or null. */
-    private static JList<?> list(String name) {
-        for (Frame f : Frame.getFrames()) {
+    private static JList<?> list(final String name) {
+        for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
-                JList<?> l = find(jf.getContentPane(), JList.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
+                final JList<?> l = find(jf.getContentPane(), JList.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
                 if (l != null) {
                     return l;
                 }
@@ -747,10 +747,10 @@ public final class Snapshot {
     }
 
     /** The visible window's tree named {@code name}, or null. */
-    static JTree tree(String name) {
-        for (Frame f : Frame.getFrames()) {
+    static JTree tree(final String name) {
+        for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
-                JTree t = find(jf.getContentPane(), JTree.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
+                final JTree t = find(jf.getContentPane(), JTree.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
                 if (t != null) {
                     return t;
                 }
@@ -760,13 +760,13 @@ public final class Snapshot {
     }
 
     /** Double-clicks a link to {@code href} in the shown preview whose text contains {@code shows}, as a user would. */
-    private static void followLink(String shows, String href) throws Exception {
+    private static void followLink(final String shows, final String href) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {
-                    HtmlPane pane = find(jf.getContentPane(), HtmlPane.class, x -> x.isShowing() && text(x).contains(shows));
+                    final HtmlPane pane = find(jf.getContentPane(), HtmlPane.class, x -> x.isShowing() && text(x).contains(shows));
                     if (pane != null) {
-                        MouseEvent click = new MouseEvent(pane, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, 2, false,
+                        final MouseEvent click = new MouseEvent(pane, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, 2, false,
                                 MouseEvent.BUTTON1);
                         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, href, null, click));
                         return;
@@ -777,21 +777,21 @@ public final class Snapshot {
         });
     }
 
-    private static String text(HtmlPane pane) {
+    private static String text(final HtmlPane pane) {
         try {
             return pane.getDocument().getText(0, pane.getDocument().getLength());
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return "";
         }
     }
 
-    private static <T extends Component> T find(Component c, Class<T> type, Predicate<T> match) {
+    private static <T extends Component> T find(final Component c, final Class<T> type, final Predicate<T> match) {
         if (type.isInstance(c) && match.test(type.cast(c))) {
             return type.cast(c);
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
-                T found = find(child, type, match);
+            for (final Component child : k.getComponents()) {
+                final T found = find(child, type, match);
                 if (found != null) {
                     return found;
                 }
@@ -801,9 +801,9 @@ public final class Snapshot {
     }
 
     /** A Gradle run in its console, in a build of its own whose wrapper only prints, so the shot needs no project. */
-    private static void tools(StateLoop loop, Path out) throws Exception {
-        Path build = Files.createTempDirectory("comando-snapshot-build");
-        Path gradlew = Files.writeString(build.resolve("gradlew"), "#!/bin/sh\necho \"> Task :help\"\necho\necho \"BUILD SUCCESSFUL in 1s\"\n");
+    private static void tools(final StateLoop loop, final Path out) throws Exception {
+        final Path build = Files.createTempDirectory("comando-snapshot-build");
+        final Path gradlew = Files.writeString(build.resolve("gradlew"), "#!/bin/sh\necho \"> Task :help\"\necho\necho \"BUILD SUCCESSFUL in 1s\"\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
         loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("build", build.toString())));
         loop.dispatch(new Intent.BindSession(loop.state().focused(), "build"));
@@ -815,7 +815,7 @@ public final class Snapshot {
     }
 
     /** A stored conversation shown in the transcript, scrolled to its end, then a find. */
-    private static void storedConversation(StateLoop loop, Path out, String claudeSessionId) throws Exception {
+    private static void storedConversation(final StateLoop loop, final Path out, final String claudeSessionId) throws Exception {
         loop.dispatch(new Intent.SaveSession("", SessionSpec.imported("history", System.getProperty("user.home"), claudeSessionId)));
         loop.dispatch(new Intent.BindSession(loop.state().focused(), "history"));
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
@@ -824,9 +824,9 @@ public final class Snapshot {
     }
 
     /** A real turn: Claude places a table through comando's MCP tool; every approval is allowed. */
-    private static void liveSession(StateLoop loop, Path out) throws Exception {
+    private static void liveSession(final StateLoop loop, final Path out) throws Exception {
         loop.addListener((prev, next) -> {
-            for (Approval a : next.approvals()) {
+            for (final Approval a : next.approvals()) {
                 if (prev.approval(a.id()).isEmpty()) {
                     System.out.println("approving " + a.toolName() + ": " + a.summary());
                     loop.dispatch(new Intent.ApprovalAnswered(a.id(), ApprovalDecision.allowOnce()));
@@ -836,7 +836,7 @@ public final class Snapshot {
         loop.dispatch(new Intent.RunText(loop.state().focused(),
                 "Call the mcp__comando__ui_show_table tool once to show a table titled 'squares' with columns n and square for n = 1..5. "
                         + "Then reply with the single word DONE.", Target.CLAUDE));
-        AppState s = await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals("squares")), 120_000);
+        final AppState s = await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals("squares")), 120_000);
         System.out.println(s == null ? "no squares view within 120 s" : "squares view placed by Claude");
         await(loop, st -> st.session("comando").map(x -> !x.isBusy()).orElse(false), 120_000);
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
@@ -846,10 +846,10 @@ public final class Snapshot {
         await(loop, st -> st.session("comando").map(x -> x.status() == Status.CLOSED).orElse(true), 15_000);
     }
 
-    static AppState await(StateLoop loop, Predicate<AppState> done, long millis) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + millis;
+    static AppState await(final StateLoop loop, final Predicate<AppState> done, final long millis) throws InterruptedException {
+        final long deadline = System.currentTimeMillis() + millis;
         while (System.currentTimeMillis() < deadline) {
-            AppState s = loop.state();
+            final AppState s = loop.state();
             if (done.test(s)) {
                 return s;
             }
@@ -859,11 +859,11 @@ public final class Snapshot {
     }
 
     /** Clicks the first visible button with this accessible name, as a user would. */
-    private static void click(String name) throws Exception {
+    private static void click(final String name) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {
-                    AbstractButton b = button(jf.getContentPane(), name);
+                    final AbstractButton b = button(jf.getContentPane(), name);
                     if (b != null) {
                         b.doClick();
                         return;
@@ -873,13 +873,13 @@ public final class Snapshot {
         });
     }
 
-    private static AbstractButton button(Component c, String name) {
+    private static AbstractButton button(final Component c, final String name) {
         if (c instanceof AbstractButton b && b.isShowing() && name.equals(b.getAccessibleContext().getAccessibleName())) {
             return b;
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
-                AbstractButton b = button(child, name);
+            for (final Component child : k.getComponents()) {
+                final AbstractButton b = button(child, name);
                 if (b != null) {
                     return b;
                 }
@@ -889,7 +889,7 @@ public final class Snapshot {
     }
 
     /** Waits until the panel titled {@code title} is in front, then for the window to render that state. */
-    static void showing(StateLoop loop, String title) throws Exception {
+    static void showing(final StateLoop loop, final String title) throws Exception {
         if (await(loop, st -> st.focusedPanel().title().equals(title), 10_000) == null) {
             throw new IllegalStateException("no panel " + title + " within 10 s");
         }
@@ -900,11 +900,11 @@ public final class Snapshot {
     }
 
     /** Clicks the button named {@code name} in the visible window, as a user would. */
-    static void button(String name) throws Exception {
+    static void button(final String name) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f.isVisible()) {
-                    AbstractButton b = find(f, AbstractButton.class, x -> x.isShowing() && name.equals(x.getAccessibleContext().getAccessibleName()));
+                    final AbstractButton b = find(f, AbstractButton.class, x -> x.isShowing() && name.equals(x.getAccessibleContext().getAccessibleName()));
                     if (b != null) {
                         b.doClick();
                         return;
@@ -916,12 +916,12 @@ public final class Snapshot {
     }
 
     /** Clicks the item at {@code path} in the window's menu bar ("Help", "Tutorial"), as a user would. */
-    static void menuItem(String... path) throws Exception {
+    static void menuItem(final String... path) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible() && jf.getJMenuBar() != null) {
                     for (int i = 0; i < jf.getJMenuBar().getMenuCount(); i++) {
-                        JMenu m = jf.getJMenuBar().getMenu(i);
+                        final JMenu m = jf.getJMenuBar().getMenu(i);
                         if (m != null && path[0].equals(m.getText()) && click(m, path, 1)) {
                             return;
                         }
@@ -932,8 +932,8 @@ public final class Snapshot {
         });
     }
 
-    private static boolean click(JMenu menu, String[] path, int depth) {
-        for (Component c : menu.getMenuComponents()) {
+    private static boolean click(final JMenu menu, final String[] path, final int depth) {
+        for (final Component c : menu.getMenuComponents()) {
             if (c instanceof JMenuItem mi && path[depth].equals(mi.getText())) {
                 if (depth == path.length - 1) {
                     mi.doClick();
@@ -946,11 +946,11 @@ public final class Snapshot {
     }
 
     /** Brings a tab of the sidebar to the front by clicking its header, as a user would. */
-    static void selectSidebarTab(String title) throws Exception {
+    static void selectSidebarTab(final String title) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {
-                    JToggleButton header = header(jf.getContentPane(), title);
+                    final JToggleButton header = header(jf.getContentPane(), title);
                     if (header != null) {
                         header.doClick();
                     }
@@ -959,13 +959,13 @@ public final class Snapshot {
         });
     }
 
-    private static JToggleButton header(Component c, String title) {
+    private static JToggleButton header(final Component c, final String title) {
         if (c instanceof JToggleButton b && (title.equals(b.getText()) || title.equals(b.getAccessibleContext().getAccessibleName()))) {
             return b;
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
-                JToggleButton b = header(child, title);
+            for (final Component child : k.getComponents()) {
+                final JToggleButton b = header(child, title);
                 if (b != null) {
                     return b;
                 }
@@ -975,15 +975,15 @@ public final class Snapshot {
     }
 
     /** Paints the open dialog titled {@code title} at twice its size on a dark ground, then closes it. */
-    static void shootDialog(String title, Path file) throws Exception {
+    static void shootDialog(final String title, final Path file) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Window w : Window.getWindows()) {
+            for (final Window w : Window.getWindows()) {
                 if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
-                    int margin = 40;
-                    Container content = d.getContentPane();
-                    BufferedImage img = new BufferedImage(2 * (content.getWidth() + 2 * margin), 2 * (content.getHeight() + 2 * margin),
+                    final int margin = 40;
+                    final Container content = d.getContentPane();
+                    final BufferedImage img = new BufferedImage(2 * (content.getWidth() + 2 * margin), 2 * (content.getHeight() + 2 * margin),
                             BufferedImage.TYPE_INT_RGB);
-                    Graphics2D g = img.createGraphics();
+                    final Graphics2D g = img.createGraphics();
                     g.setColor(new Color(0x111214));
                     g.fillRect(0, 0, img.getWidth(), img.getHeight());
                     g.scale(2, 2);
@@ -993,7 +993,7 @@ public final class Snapshot {
                     d.dispose();
                     try {
                         ImageIO.write(img, "png", file.toFile());
-                    } catch (IOException e) {
+                    } catch (final IOException e) {
                         throw new UncheckedIOException(e);
                     }
                     return;
@@ -1004,29 +1004,29 @@ public final class Snapshot {
     }
 
     /** The visible window painted in each curated theme, half size, three a row, each named; then the default theme. */
-    static void themes(Path file) throws Exception {
+    static void themes(final Path file) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {
-                    JRootPane root = jf.getRootPane();
-                    NamedTheme[] themes = NamedTheme.values();
-                    int cols = 3;
-                    int cw = root.getWidth() / 2;
-                    int ch = root.getHeight() / 2;
-                    BufferedImage img = new BufferedImage(cols * cw, (themes.length + cols - 1) / cols * (ch + 22), BufferedImage.TYPE_INT_RGB);
-                    Graphics2D g = img.createGraphics();
+                    final JRootPane root = jf.getRootPane();
+                    final NamedTheme[] themes = NamedTheme.values();
+                    final int cols = 3;
+                    final int cw = root.getWidth() / 2;
+                    final int ch = root.getHeight() / 2;
+                    final BufferedImage img = new BufferedImage(cols * cw, (themes.length + cols - 1) / cols * (ch + 22), BufferedImage.TYPE_INT_RGB);
+                    final Graphics2D g = img.createGraphics();
                     g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                     for (int i = 0; i < themes.length; i++) {
                         Theme.ground(themes[i].ground);
                         Theme.tint(themes[i].tint);
                         root.validate();
-                        int x = i % cols * cw;
-                        int y = i / cols * (ch + 22);
+                        final int x = i % cols * cw;
+                        final int y = i / cols * (ch + 22);
                         g.setColor(Theme.ground());
                         g.fillRect(x, y, cw, 22);
                         g.setColor(Theme.TRANSCRIPT_TEXT);
                         g.drawString(themes[i].label, x + 8, y + 15);
-                        Graphics2D one = (Graphics2D) g.create(x, y + 22, cw, ch);
+                        final Graphics2D one = (Graphics2D) g.create(x, y + 22, cw, ch);
                         one.scale(0.5, 0.5);
                         root.paint(one);
                         one.dispose();
@@ -1036,7 +1036,7 @@ public final class Snapshot {
                     Theme.tint(Tint.TREASURE);
                     try {
                         ImageIO.write(img, "png", file.toFile());
-                    } catch (IOException e) {
+                    } catch (final IOException e) {
                         throw new UncheckedIOException(e);
                     }
                 }
@@ -1044,17 +1044,17 @@ public final class Snapshot {
         });
     }
 
-    static void shoot(Path file) throws Exception {
+    static void shoot(final Path file) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            for (Frame f : Frame.getFrames()) {
+            for (final Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {
-                    BufferedImage img = new BufferedImage(jf.getRootPane().getWidth(), jf.getRootPane().getHeight(), BufferedImage.TYPE_INT_RGB);
-                    Graphics2D g = img.createGraphics();
+                    final BufferedImage img = new BufferedImage(jf.getRootPane().getWidth(), jf.getRootPane().getHeight(), BufferedImage.TYPE_INT_RGB);
+                    final Graphics2D g = img.createGraphics();
                     jf.getRootPane().paint(g);
                     g.dispose();
                     try {
                         ImageIO.write(img, "png", file.toFile());
-                    } catch (IOException e) {
+                    } catch (final IOException e) {
                         throw new UncheckedIOException(e);
                     }
                 }

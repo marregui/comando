@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.widgets.editor;
 
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.SwingUtilities;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.SwingUtilities;
+
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,7 +27,7 @@ class CommandEditorTest {
     @Test
     void zoomStaysBetween8And40Points() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.zoom(100);
             assertThat(e.area().getFont().getSize2D()).isEqualTo(40f);
             e.zoom(-100);
@@ -41,7 +41,7 @@ class CommandEditorTest {
     @Test
     void runningABlockTintsItAndLeavesNothingSelected() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
             e.area().setCaretPosition(TEXT.indexOf("Explain") + 3);
             assertThat(e.runText()).isEqualTo("Explain the query above.");
@@ -58,9 +58,9 @@ class CommandEditorTest {
     @Test
     void aMarkRunsTheSelectionInsideItsBlockOrTheWholeBlock() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
-            int explain = TEXT.indexOf("Explain");
+            final int explain = TEXT.indexOf("Explain");
             e.area().select(explain + 8, explain + 17);
             assertThat(e.runText(2)).as("the selection inside the clicked block").isEqualTo("the query");
             e.area().select(0, 6);
@@ -78,7 +78,7 @@ class CommandEditorTest {
     @Test
     void aSessionsAppendKeepsTheCaretAndTheSelection() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
             e.area().select(0, 6);
             e.appendQuietly("SELECT 2;");
@@ -94,7 +94,7 @@ class CommandEditorTest {
     @Test
     void anInsertReplacesNothingAndLeavesTheSelectionAlone() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
             e.area().select(0, 9);
             e.insertAtCaret("\nSELECT 2;");
@@ -109,7 +109,7 @@ class CommandEditorTest {
     @Test
     void replacingTheWholeTextIsOneUndo() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
             e.replaceAll("new text");
             assertThat(e.text()).isEqualTo("new text");
@@ -124,11 +124,11 @@ class CommandEditorTest {
     @Test
     void anErrorPositionUnderlinesTheTokenInTheBlockThatRan() {
         onEdt(() -> {
-            String text = "-- note\n\nSELECT * FROM nope;\n";
-            CommandEditor e = new CommandEditor();
+            final String text = "-- note\n\nSELECT * FROM nope;\n";
+            final CommandEditor e = new CommandEditor();
             e.load(text);
             e.area().setCaretPosition(text.indexOf("nope"));
-            String ran = e.runText();
+            final String ran = e.runText();
             // the database counts from 1: "nope" starts at the 15th character of the statement
             assertThat(e.markError(ran, ran.indexOf("nope") + 1)).isTrue();
             assertThat(e.errorStart()).isEqualTo(text.indexOf("nope"));
@@ -144,7 +144,7 @@ class CommandEditorTest {
     @Test
     void anInsertLeavesTheLineUnderTheRanBlockToTheUser() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("Write a query for trades\n");
             e.area().setCaretPosition(e.text().length());
             e.runText();
@@ -159,7 +159,7 @@ class CommandEditorTest {
     @Test
     void anAppendToAnEmptyEditorLeavesTheFirstLineToTheUser() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("");
             e.appendQuietly("SELECT 1;");
             type(e, "explain ");
@@ -168,8 +168,8 @@ class CommandEditorTest {
         });
     }
 
-    private static void type(CommandEditor e, String s) {
-        for (char c : s.toCharArray()) {
+    private static void type(final CommandEditor e, final String s) {
+        for (final char c : s.toCharArray()) {
             e.area().replaceSelection(String.valueOf(c));
         }
     }
@@ -178,7 +178,7 @@ class CommandEditorTest {
     @Test
     void oneUndoTakesBackOnlyTheSessionsAppend() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("\n\nselect * From trades;");
             e.area().setCaretPosition(0);
             type(e, "Write a query for the biggest trade");
@@ -197,7 +197,7 @@ class CommandEditorTest {
     @Test
     void oneUndoTakesBackOnlyTheSessionsInsert() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("ask\n\nnotes");
             e.area().setCaretPosition(3);
             e.runText();
@@ -217,7 +217,7 @@ class CommandEditorTest {
     @Test
     void aSessionsAppendAtTheCaretLeavesTheUsersLineToTheUser() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("Write a query for trades\n");
             e.area().setCaretPosition(e.text().length());
             type(e, "\n");
@@ -225,7 +225,7 @@ class CommandEditorTest {
             type(e, "and explain it");
             assertThat(e.text()).isEqualTo("Write a query for trades\n\nand explain it\n\nSELECT * FROM trades;\n\n");
 
-            CommandEditor f = new CommandEditor();
+            final CommandEditor f = new CommandEditor();
             f.load("Write a query for trades");
             f.area().setCaretPosition(f.text().length());
             f.appendQuietly("SELECT 1;");
@@ -241,12 +241,12 @@ class CommandEditorTest {
     @Test
     void anInsertLandsAsABlockAfterTheBlockThatRanAndKeepsTheSelection() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("Write a query for trades\n\nnotes below");
             e.area().setCaretPosition(5);
             e.runText();
             e.area().insert("top\n\n", 0); // the user edits above the block that ran
-            int from = e.text().indexOf("trades");
+            final int from = e.text().indexOf("trades");
             e.area().setCaretPosition(from);
             e.area().moveCaretPosition(from + 6); // "trades" selected forwards, the caret at the block's end
             e.insertAtCaret("SELECT 1;");
@@ -267,7 +267,7 @@ class CommandEditorTest {
     @Test
     void anInsertAfterTheLastBlockIsABlockOfItsOwn() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("Write a query for trades");
             e.area().setCaretPosition(e.text().length());
             e.runText();
@@ -284,7 +284,7 @@ class CommandEditorTest {
     @Test
     void anInsertWithNothingRunAppends() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("abc def ghi");
             e.area().setCaretPosition(4);
             e.area().moveCaretPosition(7);
@@ -299,7 +299,7 @@ class CommandEditorTest {
     @Test
     void aSessionsWriteKeepsABackwardSelection() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
             e.area().setCaretPosition(20);
             e.area().moveCaretPosition(15);
@@ -315,11 +315,11 @@ class CommandEditorTest {
     @Test
     void anErrorInABlockOfSeveralStatementsIsNotUnderlined() {
         onEdt(() -> {
-            String block = "insert into t1 values (99); select * From nope";
-            CommandEditor e = new CommandEditor();
+            final String block = "insert into t1 values (99); select * From nope";
+            final CommandEditor e = new CommandEditor();
             e.load(block);
             e.area().setCaretPosition(3);
-            String ran = e.runText();
+            final String ran = e.runText();
             assertThat(e.markError(ran, 16)).isFalse();
             assertThat(e.errorStart()).isEqualTo(-1);
             e.unmount();
@@ -331,11 +331,11 @@ class CommandEditorTest {
     @Test
     void completionOpensInSqlBeingTypedNotInProse() {
         onEdt(() -> {
-            for (String sql : new String[] {"UPDATE tr", "update tr", "WITH x", "select * From trades t where t.", "SELECT"}) {
+            for (final String sql : new String[] {"UPDATE tr", "update tr", "WITH x", "select * From trades t where t.", "SELECT"}) {
                 assertThat(inSql(sql, true)).as(sql).isTrue();
                 assertThat(inSql(sql, false)).as(sql + ", no database open").isFalse();
             }
-            for (String prose : new String[] {"Show", "Explain", "Update", "Explain why the", "show me the log"}) {
+            for (final String prose : new String[] {"Show", "Explain", "Update", "Explain why the", "show me the log"}) {
                 assertThat(inSql(prose, true)).as(prose).isFalse();
             }
         });
@@ -345,9 +345,9 @@ class CommandEditorTest {
     @Test
     void clearEmptiesTheTextInOneStepThatUndoBringsBack() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
-            List<String> changes = new ArrayList<>();
+            final List<String> changes = new ArrayList<>();
             e.onChange(changes::add);
             e.clear();
             assertThat(e.text()).isEmpty();
@@ -358,12 +358,12 @@ class CommandEditorTest {
         });
     }
 
-    private static boolean inSql(String text, boolean live) {
-        CommandEditor c = new CommandEditor();
+    private static boolean inSql(final String text, final boolean live) {
+        final CommandEditor c = new CommandEditor();
         c.sqlLive(live);
         c.load(text);
         c.area().setCaretPosition(text.length());
-        boolean in = c.caretInSql();
+        final boolean in = c.caretInSql();
         c.unmount();
         return in;
     }
@@ -373,9 +373,9 @@ class CommandEditorTest {
     @Test
     void aReloadFromTheFileKeepsTheCaretReportsNoChangeAndUndoesInOneStep() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load(TEXT);
-            List<String> changes = new ArrayList<>();
+            final List<String> changes = new ArrayList<>();
             e.onChange(changes::add);
             e.area().setCaretPosition(5);
             e.reload("SELECT 2;\n");
@@ -396,7 +396,7 @@ class CommandEditorTest {
     @Test
     void aSourceFileIsColouredAsItsLanguageAndMarksNoTargets() {
         onEdt(() -> {
-            CommandEditor e = new CommandEditor();
+            final CommandEditor e = new CommandEditor();
             e.load("select x from t;\n\nclass A {}\n");
             assertThat(e.marked()).as("a panel's own text: each block marked with where it runs").isEqualTo(2);
             e.syntax(SyntaxConstants.SYNTAX_STYLE_JAVA);
@@ -410,10 +410,10 @@ class CommandEditorTest {
         });
     }
 
-    private static void onEdt(Runnable r) {
+    private static void onEdt(final Runnable r) {
         try {
             SwingUtilities.invokeAndWait(r);
-        } catch (InvocationTargetException e) {
+        } catch (final InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException x) {
                 throw x;
             }
@@ -421,7 +421,7 @@ class CommandEditorTest {
                 throw x;
             }
             throw new IllegalStateException(e.getCause());
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);
         }

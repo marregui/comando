@@ -1,11 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.async.Edt;
-
-import javax.swing.JComponent;
-import javax.swing.JLayeredPane;
-import javax.swing.RootPaneContainer;
-import javax.swing.Timer;
 import java.awt.AlphaComposite;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -15,6 +9,12 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JComponent;
+import javax.swing.JLayeredPane;
+import javax.swing.RootPaneContainer;
+import javax.swing.Timer;
+
+import dev.marregui.comando.ui.kit.async.Edt;
 
 /**
  * A theme chosen fading in over the one before (record 103). A picture of each shown window as it was covers it while
@@ -51,13 +51,13 @@ final class ThemeFade {
      * out over {@code millis} into a picture of them in the new theme; {@code halfway} runs when the fade is half done,
      * or at once when there is nothing to fade.
      */
-    static void run(Runnable change, int millis, Runnable halfway) {
+    static void run(final Runnable change, final int millis, final Runnable halfway) {
         stop();
-        long fade = ++generation;
-        List<Picture> pictures = new ArrayList<>();
-        for (Window w : Window.getWindows()) {
+        final long fade = ++generation;
+        final List<Picture> pictures = new ArrayList<>();
+        for (final Window w : Window.getWindows()) {
             if (w.isShowing() && w instanceof RootPaneContainer r) {
-                Picture p = Picture.over(r.getLayeredPane());
+                final Picture p = Picture.over(r.getLayeredPane());
                 if (p != null) {
                     pictures.add(p);
                 }
@@ -80,7 +80,7 @@ final class ThemeFade {
     }
 
     /** After {@code turns} more turns of the event queue, takes the second pictures and starts the fade. */
-    private static void settle(long fade, int turns, int millis) {
+    private static void settle(final long fade, final int turns, final int millis) {
         Edt.later(() -> {
             if (fade != generation) {
                 return;
@@ -89,12 +89,12 @@ final class ThemeFade {
                 settle(fade, turns - 1, millis);
                 return;
             }
-            for (Picture p : running) {
+            for (final Picture p : running) {
                 p.takeNew();
             }
-            long start = System.nanoTime();
+            final long start = System.nanoTime();
             timer = new Timer(STEP_MILLIS, e -> {
-                float left = 1f - (System.nanoTime() - start) / 1_000_000f / millis;
+                final float left = 1f - (System.nanoTime() - start) / 1_000_000f / millis;
                 if (left <= 0.5f) {
                     runHalf();
                 }
@@ -102,7 +102,7 @@ final class ThemeFade {
                     stop();
                     return;
                 }
-                for (Picture p : running) {
+                for (final Picture p : running) {
                     p.alpha = left;
                     p.repaint();
                 }
@@ -119,7 +119,7 @@ final class ThemeFade {
             timer.stop();
             timer = null;
         }
-        for (Picture p : running) {
+        for (final Picture p : running) {
             p.remove();
         }
         running = List.of();
@@ -127,7 +127,7 @@ final class ThemeFade {
 
     /** Runs what the fade has to do halfway, once. */
     private static void runHalf() {
-        Runnable r = pendingHalf;
+        final Runnable r = pendingHalf;
         pendingHalf = () -> { };
         r.run();
     }
@@ -143,7 +143,7 @@ final class ThemeFade {
         private BufferedImage now;
         private float alpha = 1f;
 
-        private Picture(JLayeredPane pane, BufferedImage old) {
+        private Picture(final JLayeredPane pane, final BufferedImage old) {
             this.pane = pane;
             this.old = old;
             setOpaque(true);
@@ -151,11 +151,11 @@ final class ThemeFade {
         }
 
         /** The picture of {@code pane} as it paints now, laid over it; null when it has no size. */
-        static Picture over(JLayeredPane pane) {
+        static Picture over(final JLayeredPane pane) {
             if (pane.getWidth() <= 0 || pane.getHeight() <= 0) {
                 return null;
             }
-            Picture p = new Picture(pane, shoot(pane));
+            final Picture p = new Picture(pane, shoot(pane));
             pane.add(p, LAYER);
             p.paintImmediately(0, 0, p.getWidth(), p.getHeight());
             return p;
@@ -176,13 +176,13 @@ final class ThemeFade {
          * {@code pane} painted into an image at the screen's scale, so that a picture on a Retina screen is as sharp as
          * the window: an image in memory, which the screen cannot take back as it can a volatile one.
          */
-        private static BufferedImage shoot(JLayeredPane pane) {
-            GraphicsConfiguration gc = pane.getGraphicsConfiguration();
-            AffineTransform scale = gc == null ? new AffineTransform() : gc.getDefaultTransform();
-            int w = (int) Math.ceil(pane.getWidth() * scale.getScaleX());
-            int h = (int) Math.ceil(pane.getHeight() * scale.getScaleY());
-            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-            Graphics2D g = img.createGraphics();
+        private static BufferedImage shoot(final JLayeredPane pane) {
+            final GraphicsConfiguration gc = pane.getGraphicsConfiguration();
+            final AffineTransform scale = gc == null ? new AffineTransform() : gc.getDefaultTransform();
+            final int w = (int) Math.ceil(pane.getWidth() * scale.getScaleX());
+            final int h = (int) Math.ceil(pane.getHeight() * scale.getScaleY());
+            final BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            final Graphics2D g = img.createGraphics();
             try {
                 g.scale(scale.getScaleX(), scale.getScaleY());
                 pane.paint(g);
@@ -193,11 +193,11 @@ final class ThemeFade {
         }
 
         @Override
-        protected void paintComponent(Graphics g0) {
-            Graphics2D g = (Graphics2D) g0.create();
+        protected void paintComponent(final Graphics g0) {
+            final Graphics2D g = (Graphics2D) g0.create();
             try {
-                int w = getWidth();
-                int h = getHeight();
+                final int w = getWidth();
+                final int h = getHeight();
                 if (now != null) {
                     g.drawImage(now, 0, 0, w, h, null);
                     g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));

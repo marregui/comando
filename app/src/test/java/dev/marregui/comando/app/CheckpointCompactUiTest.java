@@ -1,5 +1,23 @@
 package dev.marregui.comando.app;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Frame;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import javax.swing.AbstractButton;
+import javax.swing.SwingUtilities;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
@@ -12,23 +30,6 @@ import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.junit.jupiter.api.io.TempDir;
-
-import javax.swing.AbstractButton;
-import javax.swing.SwingUtilities;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Frame;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,9 +52,9 @@ class CheckpointCompactUiTest {
     /// the summary, with the compaction's note; the panel keeps its text; the next prompt goes out as typed.
     @Test
     void theCheckpointButtonCompactsTheConversationOnceItsTurnHasFinished() throws Exception {
-        Path stdin = home.resolve("stdin.jsonl");
-        Path claude = home.resolve("fake-claude.sh");
-        String init = "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fake-1\",\"model\":\"fake\",\"cwd\":\"/tmp\","
+        final Path stdin = home.resolve("stdin.jsonl");
+        final Path claude = home.resolve("fake-claude.sh");
+        final String init = "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fake-1\",\"model\":\"fake\",\"cwd\":\"/tmp\","
                 + "\"claude_code_version\":\"0.0.1\",\"permissionMode\":\"default\",\"capabilities\":[]}";
         Files.writeString(claude, """
                 #!/bin/sh
@@ -87,16 +88,16 @@ class CheckpointCompactUiTest {
                 done
                 """.formatted(stdin, init, init, SUMMARY_JSON, SUMMARY_JSON, init));
         claude.toFile().setExecutable(true);
-        App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "checkpoint", () -> {
+        final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "checkpoint", () -> {
         });
         try {
             app.start();
-            StateLoop loop = app.loop();
+            final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && editor() != null);
             // a new session comes with its own panel, titled with its name (record 88)
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("work", home.toString())));
             Awaitility.await("its own panel").atMost(Duration.ofSeconds(10)).until(() -> loop.state().homePanel("work").isPresent());
-            PanelId panel = loop.state().homePanel("work").orElseThrow().id();
+            final PanelId panel = loop.state().homePanel("work").orElseThrow().id();
             Awaitility.await("its panel shown").atMost(Duration.ofSeconds(10))
                     .until(() -> editor() != null && editor().panel().id().equals(panel));
             loop.dispatch(new Intent.EditPanel(panel, NOTES, EditMode.REPLACE, ""));
@@ -108,12 +109,12 @@ class CheckpointCompactUiTest {
             Awaitility.await("the Session tab shows it").atMost(Duration.ofSeconds(10)).until(() -> transcript().contains("pong 1"));
 
             // the gesture: a click on the session bar's Checkpoint button, the focused panel's session (record 105)
-            EditorPanel view = editor();
+            final EditorPanel view = editor();
             SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());
             Awaitility.await("checkpointed, then compacted").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
                 assertThat(Files.readAllLines(stdin)).filteredOn(l -> l.contains("\"type\":\"user\""))
                         .extracting(l -> l.replaceAll(".*\"content\":\"([^\"]*)\".*", "$1")).containsExactly("hello", "/reflect", "/compact");
-                SessionState x = session(loop);
+                final SessionState x = session(loop);
                 assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.spec().carried(), x.checkpointCompacts()))
                         .as("sent: %s", Files.readAllLines(stdin)).containsExactly(0, "fake-1", "", false);
             });
@@ -135,9 +136,9 @@ class CheckpointCompactUiTest {
     }
 
     /** The texts of the session's notes, from its transcript. */
-    private static List<String> notes(App app) {
-        Transcript t = app.transcripts().of("work");
-        List<String> out = new ArrayList<>();
+    private static List<String> notes(final App app) {
+        final Transcript t = app.transcripts().of("work");
+        final List<String> out = new ArrayList<>();
         for (int i = 0; i < t.size(); i++) {
             if (t.get(i) instanceof Block.Note n) {
                 out.add(n.text());
@@ -146,7 +147,7 @@ class CheckpointCompactUiTest {
         return out;
     }
 
-    private static SessionState session(StateLoop loop) {
+    private static SessionState session(final StateLoop loop) {
         return loop.state().session("work").orElseThrow();
     }
 
@@ -158,21 +159,21 @@ class CheckpointCompactUiTest {
     /** What the Session tab shows, as Markdown; empty while it shows nothing. */
     private static String transcript() throws Exception {
         return onEdt(() -> {
-            TranscriptCanvas canvas = first(TranscriptCanvas.class, Component::isShowing);
+            final TranscriptCanvas canvas = first(TranscriptCanvas.class, Component::isShowing);
             return canvas == null ? "" : canvas.markdown();
         });
     }
 
-    private static AbstractButton button(Container root, String name) {
-        List<AbstractButton> out = new ArrayList<>();
+    private static AbstractButton button(final Container root, final String name) {
+        final List<AbstractButton> out = new ArrayList<>();
         collect(root, AbstractButton.class, b -> name.equals(b.getAccessibleContext().getAccessibleName()) && b.isVisible(), out);
         assertThat(out).as("a visible %s button", name).isNotEmpty();
         return out.getFirst();
     }
 
-    private static <T extends Component> T first(Class<T> type, Predicate<T> which) {
-        List<T> out = new ArrayList<>();
-        for (Frame f : Frame.getFrames()) {
+    private static <T extends Component> T first(final Class<T> type, final Predicate<T> which) {
+        final List<T> out = new ArrayList<>();
+        for (final Frame f : Frame.getFrames()) {
             if (f.isVisible()) {
                 collect(f, type, which, out);
             }
@@ -180,12 +181,12 @@ class CheckpointCompactUiTest {
         return out.isEmpty() ? null : out.getFirst();
     }
 
-    private static <T extends Component> void collect(Component c, Class<T> type, Predicate<T> which, List<T> out) {
+    private static <T extends Component> void collect(final Component c, final Class<T> type, final Predicate<T> which, final List<T> out) {
         if (type.isInstance(c) && which.test(type.cast(c))) {
             out.add(type.cast(c));
         }
         if (c instanceof Container k) {
-            for (Component child : k.getComponents()) {
+            for (final Component child : k.getComponents()) {
                 collect(child, type, which, out);
             }
         }
@@ -195,13 +196,13 @@ class CheckpointCompactUiTest {
         T call() throws Exception;
     }
 
-    private static <T> T onEdt(EdtCall<T> call) throws Exception {
-        AtomicReference<T> out = new AtomicReference<>();
-        AtomicReference<Exception> failed = new AtomicReference<>();
+    private static <T> T onEdt(final EdtCall<T> call) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
+        final AtomicReference<Exception> failed = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             try {
                 out.set(call.call());
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 failed.set(e);
             }
         });

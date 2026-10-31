@@ -25,38 +25,38 @@ public final class ThemeFiles {
     }
 
     /** The themes in {@code folder}; none and no problem when it is null or does not exist. */
-    public static Read read(Path folder) {
-        List<NamedTheme> themes = new ArrayList<>();
-        List<String> problems = new ArrayList<>();
+    public static Read read(final Path folder) {
+        final List<NamedTheme> themes = new ArrayList<>();
+        final List<String> problems = new ArrayList<>();
         if (folder == null || !Files.isDirectory(folder)) {
             return new Read(themes, problems);
         }
         List<Path> files;
         try (Stream<Path> s = Files.list(folder)) {
             files = s.filter(f -> f.getFileName().toString().endsWith(".json") && Files.isRegularFile(f)).sorted().toList();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             problems.add(folder + ": cannot be listed: " + e.getMessage());
             return new Read(themes, problems);
         }
-        Set<String> ids = new HashSet<>(NamedTheme.builtIn().stream().map(t -> t.id).toList());
-        for (Path f : files) {
-            String name = f.getFileName().toString();
+        final Set<String> ids = new HashSet<>(NamedTheme.builtIn().stream().map(t -> t.id).toList());
+        for (final Path f : files) {
+            final String name = f.getFileName().toString();
             try {
-                ThemeSpec spec = ThemeSpec.parse(Files.readString(f, StandardCharsets.UTF_8));
+                final ThemeSpec spec = ThemeSpec.parse(Files.readString(f, StandardCharsets.UTF_8));
                 if (!ids.add(spec.id())) {
                     problems.add(name + ": the id " + spec.id() + " is another theme's");
                     continue;
                 }
-                NamedTheme t = NamedTheme.fromFile(spec, f);
-                List<String> low = ThemeRules.problems(t.ground, t.tint);
+                final NamedTheme t = NamedTheme.fromFile(spec, f);
+                final List<String> low = ThemeRules.problems(t.ground, t.tint);
                 if (!low.isEmpty()) {
                     problems.add(name + ": " + low.getFirst() + (low.size() > 1 ? " (and " + (low.size() - 1) + " more)" : ""));
                     continue;
                 }
                 themes.add(t);
-            } catch (IllegalArgumentException e) {
+            } catch (final IllegalArgumentException e) {
                 problems.add(name + ": " + e.getMessage());
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 problems.add(name + ": cannot be read: " + e.getMessage());
             }
         }

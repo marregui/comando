@@ -1,9 +1,5 @@
 package dev.marregui.comando.claude;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -37,7 +37,7 @@ class SubagentFilesProbeTest {
     /// an exception, and a valid sentinel line after it still renders.
     @Test
     void everyJsonTypeInEveryFieldReadRendersWithoutThrowing() throws IOException {
-        List<String> templates = List.of(
+        final List<String> templates = List.of(
                 "%s",
                 "{\"type\":%s}",
                 "{\"type\":\"user\",\"message\":%s}",
@@ -55,15 +55,15 @@ class SubagentFilesProbeTest {
                 "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":%s,\"content\":\"r\"}]}}",
                 "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"i\",\"content\":%s}]}}",
                 "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"i\",\"content\":\"r\",\"is_error\":%s}]}}");
-        List<String> failures = new ArrayList<>();
+        final List<String> failures = new ArrayList<>();
         int n = 0;
-        for (String t : templates) {
-            for (String v : VALUES) {
-                Path f = tmp.resolve("probe-" + n++ + ".jsonl");
-                String call = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"i\",\"name\":\"T\",\"input\":{}}]}}";
+        for (final String t : templates) {
+            for (final String v : VALUES) {
+                final Path f = tmp.resolve("probe-" + n++ + ".jsonl");
+                final String call = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"i\",\"name\":\"T\",\"input\":{}}]}}";
                 Files.writeString(f, call + "\n" + String.format(t, v) + "\n" + sentinel() + "\n");
                 try {
-                    String md = SubagentFiles.render(f, SubagentFiles.SCAN_BYTES, json);
+                    final String md = SubagentFiles.render(f, SubagentFiles.SCAN_BYTES, json);
                     if (!md.contains("SENTINEL")) {
                         failures.add(t + " <- " + v + ": sentinel lost");
                     }
@@ -79,10 +79,10 @@ class SubagentFilesProbeTest {
     /// also for an id no file has.
     @Test
     void everyJsonTypeInMetaFieldsFindsWithoutThrowing() throws IOException {
-        Path projects = tmp.resolve("projects");
-        Path dir = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
+        final Path projects = tmp.resolve("projects");
+        final Path dir = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
         int n = 0;
-        for (String v : VALUES) {
+        for (final String v : VALUES) {
             Files.writeString(dir.resolve("agent-t" + n + ".meta.json"), "{\"toolUseId\":" + v + ",\"description\":" + v + ",\"agentType\":" + v + "}");
             Files.writeString(dir.resolve("agent-r" + n + ".meta.json"), v);
             n++;
@@ -97,22 +97,22 @@ class SubagentFilesProbeTest {
     /// empty; the test pins this behaviour, not a design.
     @Test
     void aNumericToolUseIdMatchesItsDigits() throws IOException {
-        Path projects = tmp.resolve("projects");
-        Path dir = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
+        final Path projects = tmp.resolve("projects");
+        final Path dir = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
         Files.writeString(dir.resolve("agent-n.meta.json"), "{\"toolUseId\":7,\"description\":{\"x\":1}}");
-        SubagentFiles.Found f = SubagentFiles.find(projects, "conv-1", "7", json).orElseThrow();
+        final SubagentFiles.Found f = SubagentFiles.find(projects, "conv-1", "7", json).orElseThrow();
         assertThat(f.description()).isEmpty();
     }
 
     /// A user prompt, a text with a tool call and its result render identically with CRLF and with LF line ends.
     @Test
     void crlfLinesRenderAsLf() throws IOException {
-        Path lf = tmp.resolve("lf.jsonl");
-        Path crlf = tmp.resolve("crlf.jsonl");
-        String a = "{\"type\":\"user\",\"message\":{\"content\":\"the task\"}}";
-        String b = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"t\"},"
+        final Path lf = tmp.resolve("lf.jsonl");
+        final Path crlf = tmp.resolve("crlf.jsonl");
+        final String a = "{\"type\":\"user\",\"message\":{\"content\":\"the task\"}}";
+        final String b = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"t\"},"
                 + "{\"type\":\"tool_use\",\"id\":\"i\",\"name\":\"Bash\",\"input\":{\"command\":\"ls\"}}]}}";
-        String c = "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"i\",\"content\":\"out\"}]}}";
+        final String c = "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"i\",\"content\":\"out\"}]}}";
         Files.writeString(lf, a + "\n" + b + "\n" + c + "\n");
         Files.writeString(crlf, a + "\r\n" + b + "\r\n" + c + "\r\n");
         assertThat(SubagentFiles.render(crlf, SubagentFiles.SCAN_BYTES, json))
@@ -123,17 +123,17 @@ class SubagentFilesProbeTest {
     /// output.
     @Test
     void aMultiByteCharacterSplitAtTheCutLeavesNoReplacementCharacter() throws IOException {
-        long limit = 1000;
-        Path f = tmp.resolve("utf8.jsonl");
-        String euro = "€".repeat(400); // 1200 bytes
-        String first = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"" + euro + "\"}]}}";
-        String last = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"LAST\"}]}}";
-        byte[] all = (first + "\n" + last + "\n").getBytes(StandardCharsets.UTF_8);
+        final long limit = 1000;
+        final Path f = tmp.resolve("utf8.jsonl");
+        final String euro = "€".repeat(400); // 1200 bytes
+        final String first = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"" + euro + "\"}]}}";
+        final String last = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"LAST\"}]}}";
+        final byte[] all = (first + "\n" + last + "\n").getBytes(StandardCharsets.UTF_8);
         Files.write(f, all);
-        long from = all.length - limit;
-        int prefix = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"".length();
+        final long from = all.length - limit;
+        final int prefix = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"".length();
         assertThat((from - prefix) % 3).as("cut inside a character").isNotZero();
-        String md = SubagentFiles.render(f, limit, json);
+        final String md = SubagentFiles.render(f, limit, json);
         assertThat(md).contains("LAST").doesNotContain("�");
     }
 
@@ -141,12 +141,12 @@ class SubagentFilesProbeTest {
     /// the output starts with the notice, drops `FIRST` and keeps `LAST`.
     @Test
     void aFileExactlyAtTheLimitIsReadWhole() throws IOException {
-        for (int delta : new int[]{-1, 0}) {
-            Path f = sized(tmp.resolve("at" + delta + ".jsonl"), 4096 + delta);
-            String md = SubagentFiles.render(f, 4096, json);
+        for (final int delta : new int[]{-1, 0}) {
+            final Path f = sized(tmp.resolve("at" + delta + ".jsonl"), 4096 + delta);
+            final String md = SubagentFiles.render(f, 4096, json);
             assertThat(md).doesNotContain("is longer than").contains("FIRST");
         }
-        Path over = sized(tmp.resolve("over.jsonl"), 4097);
+        final Path over = sized(tmp.resolve("over.jsonl"), 4097);
         assertThat(SubagentFiles.render(over, 4096, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
     }
 
@@ -154,14 +154,14 @@ class SubagentFilesProbeTest {
     /// under the notice.
     @Test
     void aCutAtALineStartKeepsThatLine() throws IOException {
-        Path f = tmp.resolve("boundary.jsonl");
-        String first = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"FIRST\"}]}}";
-        String second = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"SECOND\"}]}}";
-        String third = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"THIRD\"}]}}";
+        final Path f = tmp.resolve("boundary.jsonl");
+        final String first = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"FIRST\"}]}}";
+        final String second = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"SECOND\"}]}}";
+        final String third = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"THIRD\"}]}}";
         Files.writeString(f, first + "\n" + second + "\n" + third + "\n");
-        long limit = (second + "\n" + third + "\n").getBytes(StandardCharsets.UTF_8).length;
+        final long limit = (second + "\n" + third + "\n").getBytes(StandardCharsets.UTF_8).length;
 
-        String md = SubagentFiles.render(f, limit, json);
+        final String md = SubagentFiles.render(f, limit, json);
 
         assertThat(md).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("THIRD");
         assertThat(md).as("the whole line that starts exactly at the cut").contains("SECOND");
@@ -171,18 +171,18 @@ class SubagentFilesProbeTest {
     /// of the long line; the test pins this behaviour, not a design.
     @Test
     void aLastLineLongerThanTheLimitShowsOnlyTheNotice() throws IOException {
-        Path f = tmp.resolve("oneline.jsonl");
-        String big = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"" + "z".repeat(5000) + "\"}]}}";
+        final Path f = tmp.resolve("oneline.jsonl");
+        final String big = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"" + "z".repeat(5000) + "\"}]}}";
         Files.writeString(f, "{\"type\":\"user\",\"message\":{\"content\":\"task\"}}\n" + big + "\n");
-        String md = SubagentFiles.render(f, 4096, json);
+        final String md = SubagentFiles.render(f, 4096, json);
         assertThat(md.strip()).startsWith("> task\n\n_The conversation is longer than").doesNotContain("zzz");
     }
 
-    private static Path sized(Path f, int size) throws IOException {
-        String first = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"FIRST\"}]}}\n";
-        String lastPrefix = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"LAST";
-        String lastSuffix = "\"}]}}\n";
-        int pad = size - first.length() - lastPrefix.length() - lastSuffix.length();
+    private static Path sized(final Path f, final int size) throws IOException {
+        final String first = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"FIRST\"}]}}\n";
+        final String lastPrefix = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"LAST";
+        final String lastSuffix = "\"}]}}\n";
+        final int pad = size - first.length() - lastPrefix.length() - lastSuffix.length();
         try (OutputStream out = Files.newOutputStream(f)) {
             out.write((first + lastPrefix + "p".repeat(pad) + lastSuffix).getBytes(StandardCharsets.UTF_8));
         }

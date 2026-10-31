@@ -1,21 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.FocusRing;
-import dev.marregui.comando.ui.kit.theme.SidebarLook;
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
@@ -26,6 +10,22 @@ import java.awt.event.MouseEvent;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
+
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * A Markdown document's outline, at the right of its panel (record 113): a line per heading, indented by its level, the
@@ -43,10 +43,10 @@ final class OutlinePane {
     private final JList<MarkdownHtml.Section> list = new JList<>(model) {
         /** The report's bar down the left edge of the selected row, as the sidebar's. */
         @Override
-        protected void paintComponent(Graphics g) {
+        protected void paintComponent(final Graphics g) {
             super.paintComponent(g);
-            for (int i : getSelectedIndices()) {
-                Rectangle r = getCellBounds(i, i);
+            for (final int i : getSelectedIndices()) {
+                final Rectangle r = getCellBounds(i, i);
                 if (r != null) {
                     SidebarLook.bar(g, r);
                 }
@@ -64,9 +64,9 @@ final class OutlinePane {
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
-            public Component getListCellRendererComponent(JList<?> l, Object value, int index, boolean selected, boolean focus) {
-                MarkdownHtml.Section s = (MarkdownHtml.Section) value;
-                JLabel c = (JLabel) super.getListCellRendererComponent(l, Plain.text(s.text()), index, selected, focus);
+            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int index, final boolean selected, final boolean focus) {
+                final MarkdownHtml.Section s = (MarkdownHtml.Section) value;
+                final JLabel c = (JLabel) super.getListCellRendererComponent(l, Plain.text(s.text()), index, selected, focus);
                 Plain.only(c);
                 c.setBorder(BorderFactory.createEmptyBorder(2, Theme.GAP + (s.level() - 1) * INDENT, 2, Theme.GAP));
                 c.setFont(l.getFont().deriveFont(s.level() == 1 ? Font.BOLD : Font.PLAIN));
@@ -76,8 +76,8 @@ final class OutlinePane {
         });
         list.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                int i = list.locationToIndex(e.getPoint());
+            public void mouseClicked(final MouseEvent e) {
+                final int i = list.locationToIndex(e.getPoint());
                 if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e) && i >= 0 && list.getCellBounds(i, i).contains(e.getPoint())) {
                     onOpen.accept(model.get(i));
                 }
@@ -86,7 +86,7 @@ final class OutlinePane {
         empty.setForeground(Theme.MUTED);
         empty.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, Theme.GAP, Theme.GAP, Theme.GAP));
         empty.setVerticalAlignment(JLabel.TOP);
-        JScrollPane scroll = new JScrollPane(list);
+        final JScrollPane scroll = new JScrollPane(list);
         FocusRing.install(scroll);
         SidebarLook.list(list);
         SidebarLook.ground(scroll);
@@ -102,20 +102,20 @@ final class OutlinePane {
     }
 
     /** {@code open} goes to a heading a double click picked. */
-    void onOpen(Consumer<MarkdownHtml.Section> open) {
+    void onOpen(final Consumer<MarkdownHtml.Section> open) {
         onOpen = open;
     }
 
     /** Lists {@code sections}; the one selected stays selected when it is still there. */
-    void show(List<MarkdownHtml.Section> sections) {
+    void show(final List<MarkdownHtml.Section> sections) {
         if (Collections.list(model.elements()).equals(sections)) {
             return;
         }
-        MarkdownHtml.Section was = list.getSelectedValue();
+        final MarkdownHtml.Section was = list.getSelectedValue();
         model.clear();
         model.addAll(sections);
         if (was != null) {
-            int i = sections.indexOf(was);
+            final int i = sections.indexOf(was);
             if (i >= 0) {
                 list.setSelectedIndex(i);
             }

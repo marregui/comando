@@ -1,8 +1,8 @@
 package dev.marregui.comando.core.model;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,12 +49,12 @@ class KitVersionTest {
     /// their respective text and problem.
     @Test
     void theStatusBarSaysTheKitsNameVersionAndTheNewestRelease() {
-        KitVersion past = KitVersion.of("v1.2.0-3-gabc1234\n", LS_REMOTE);
+        final KitVersion past = KitVersion.of("v1.2.0-3-gabc1234\n", LS_REMOTE);
         assertThat(past.shown()).isEqualTo("v1.2.0");
         assertThat(past.newest()).contains("v1.10.0");
         assertThat(past.label("marregui")).isEqualTo("kit marregui v1.2.0 → v1.10.0 available");
 
-        KitVersion latest = KitVersion.of("v1.10.0", LS_REMOTE);
+        final KitVersion latest = KitVersion.of("v1.10.0", LS_REMOTE);
         assertThat(latest.label("marregui")).isEqualTo("kit marregui v1.10.0");
         assertThat(KitVersion.of("abc1234", "").label("marregui")).as("no release yet: the commit").isEqualTo("kit marregui abc1234");
         assertThat(latest.failedRemote("offline").problem()).isEqualTo("offline");

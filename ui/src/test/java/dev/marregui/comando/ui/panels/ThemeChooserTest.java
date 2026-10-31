@@ -1,13 +1,14 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import org.junit.jupiter.api.Test;
-
 import java.awt.Dimension;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.util.List;
 import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,8 +24,8 @@ class ThemeChooserTest {
     /// Slot i of the light themes is the twin of slot i of the dark ones.
     @Test
     void aDarkThemeAndItsTwinShareASlot() {
-        List<NamedTheme> darkSlots = ThemeChooser.slots(NamedTheme.builtIn(), false);
-        List<NamedTheme> lightSlots = ThemeChooser.slots(NamedTheme.builtIn(), true);
+        final List<NamedTheme> darkSlots = ThemeChooser.slots(NamedTheme.builtIn(), false);
+        final List<NamedTheme> lightSlots = ThemeChooser.slots(NamedTheme.builtIn(), true);
         assertThat(darkSlots).extracting(t -> t.id).containsExactly("graphite_gold", "espresso_champagne", "aubergine_gold",
                 "midnight_blue", "evergreen_forest", "slate_silver");
         assertThat(lightSlots).extracting(t -> t.id).containsExactly("paper_ochre", "cream_bronze", "lilac_gold", "ice_navy",
@@ -37,7 +38,7 @@ class ThemeChooserTest {
     /// The pairs come first in both modes; a dark theme without its twin, and a light one whose twin is missing, follow.
     @Test
     void aThemeWithoutATwinFollowsThePairs() {
-        List<NamedTheme> some = List.of(NamedTheme.MIDNIGHT_BLUE, NamedTheme.GRAPHITE_GOLD, NamedTheme.FOG_SLATE, NamedTheme.PAPER_OCHRE);
+        final List<NamedTheme> some = List.of(NamedTheme.MIDNIGHT_BLUE, NamedTheme.GRAPHITE_GOLD, NamedTheme.FOG_SLATE, NamedTheme.PAPER_OCHRE);
         assertThat(ThemeChooser.slots(some, false)).containsExactly(NamedTheme.GRAPHITE_GOLD, NamedTheme.MIDNIGHT_BLUE);
         assertThat(ThemeChooser.slots(some, true)).containsExactly(NamedTheme.PAPER_OCHRE, NamedTheme.FOG_SLATE);
     }
@@ -46,8 +47,8 @@ class ThemeChooserTest {
     /// the screen; where it falls when the anchor is on no screen.
     @Test
     void thePopoverLiesUnderTheAnchorRightAligned() {
-        Rectangle screen = new Rectangle(0, 25, 1500, 900);
-        Dimension size = new Dimension(640, 500);
+        final Rectangle screen = new Rectangle(0, 25, 1500, 900);
+        final Dimension size = new Dimension(640, 500);
         assertThat(ThemeChooser.place(new Rectangle(1400, 40, 20, 20), size, Optional.of(screen))).isEqualTo(new Point(780, 64));
         assertThat(ThemeChooser.place(new Rectangle(100, 40, 20, 20), size, Optional.of(screen))).as("kept on the screen")
                 .isEqualTo(new Point(0, 64));
@@ -61,11 +62,11 @@ class ThemeChooserTest {
     /// other mode leaves empty, takes the other mode's first theme; a mode with no theme gives none.
     @Test
     void theToggleChoosesTheTwinOfTheThemeChosen() {
-        List<NamedTheme> all = NamedTheme.builtIn();
+        final List<NamedTheme> all = NamedTheme.builtIn();
         assertThat(ThemeChooser.flipped(all, Optional.of(NamedTheme.MIDNIGHT_BLUE), true)).contains(NamedTheme.ICE_NAVY);
         assertThat(ThemeChooser.flipped(all, Optional.of(NamedTheme.FOG_SLATE), false)).contains(NamedTheme.SLATE_SILVER);
         assertThat(ThemeChooser.flipped(all, Optional.empty(), true)).as("no theme chosen").contains(NamedTheme.PAPER_OCHRE);
-        List<NamedTheme> some = List.of(NamedTheme.GRAPHITE_GOLD, NamedTheme.MIDNIGHT_BLUE, NamedTheme.PAPER_OCHRE);
+        final List<NamedTheme> some = List.of(NamedTheme.GRAPHITE_GOLD, NamedTheme.MIDNIGHT_BLUE, NamedTheme.PAPER_OCHRE);
         assertThat(ThemeChooser.flipped(some, Optional.of(NamedTheme.MIDNIGHT_BLUE), true)).as("a slot left empty")
                 .contains(NamedTheme.PAPER_OCHRE);
         assertThat(ThemeChooser.flipped(List.of(NamedTheme.GRAPHITE_GOLD), Optional.of(NamedTheme.GRAPHITE_GOLD), true)).isEmpty();

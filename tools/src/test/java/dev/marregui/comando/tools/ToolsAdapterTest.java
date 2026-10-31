@@ -1,19 +1,8 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.console.ConsoleRegistry;
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.testkit.RecordingSink;
-import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,6 +11,17 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.console.ConsoleRegistry;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,7 +47,7 @@ class ToolsAdapterTest {
         return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")));
     }
 
-    private static FolderRoot folder(String name, Path path, String... excludes) {
+    private static FolderRoot folder(final String name, final Path path, final String... excludes) {
         return new FolderRoot(name, path.toString(), "", List.of(excludes));
     }
 
@@ -64,14 +64,14 @@ class ToolsAdapterTest {
             """;
 
     /** A project whose gradlew prints its arguments and writes one JUnit report with a failure. */
-    private static Path fakeBuild(Path dir) throws Exception {
-        Path src = dir.resolve("db/src/test/java/dev/x");
+    private static Path fakeBuild(final Path dir) throws Exception {
+        final Path src = dir.resolve("db/src/test/java/dev/x");
         Files.createDirectories(src);
         Files.writeString(src.resolve("LaneTest.java"), "class LaneTest {}\n");
-        Path report = dir.resolve("db/build/test-results/test");
+        final Path report = dir.resolve("db/build/test-results/test");
         Files.createDirectories(report);
         Files.writeString(dir.resolve("report.xml"), REPORT);
-        Path gradlew = dir.resolve("gradlew");
+        final Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho \"args: $*\"\ncp report.xml db/build/test-results/test/TEST-dev.x.LaneTest.xml\nexit 1\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
         Files.createDirectories(dir.resolve("db/sub"));
@@ -81,12 +81,12 @@ class ToolsAdapterTest {
     /// A run asked for after the adapter closed ends at once with `Not started: comando is closing` and no command
     /// line.
     @Test
-    void aRunAskedForAfterCloseStartsNoProcess(@TempDir Path dir) throws Exception {
+    void aRunAskedForAfterCloseStartsNoProcess(@TempDir final Path dir) throws Exception {
         fakeBuild(dir);
-        ToolsAdapter tools = adapter();
+        final ToolsAdapter tools = adapter();
         tools.close();
         tools.runGradle(8L, dir.toString(), "test");
-        Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+        final Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.runId()).isEqualTo(8L);
         assertThat(consoles.of(8L).text(0)).contains("Not started: comando is closing").doesNotContain("args:");
     }
@@ -95,14 +95,14 @@ class ToolsAdapterTest {
     /// failed test carries its message and a link to its source line, and the quoted `--tests` argument passed without
     /// its quotes.
     @Test
-    void gradleRunsInTheBuildRootAndReportsFailedTests(@TempDir Path dir) throws Exception {
+    void gradleRunsInTheBuildRootAndReportsFailedTests(@TempDir final Path dir) throws Exception {
         fakeBuild(dir);
         adapter().runGradle(7L, dir.resolve("db/sub").toString(), ":db:test --tests 'Lane*'");
-        Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+        final Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.runId()).isEqualTo(7L);
         assertThat(end.exitCode()).isEqualTo(1);
         assertThat(end.tests().label()).isEqualTo("1 of 2 tests failed");
-        ViewSpec.TreeNode suite = end.tests().children().getFirst();
+        final ViewSpec.TreeNode suite = end.tests().children().getFirst();
         assertThat(suite.label()).isEqualTo("LaneTest");
         assertThat(suite.children().getFirst().label()).isEqualTo("✗ cancelReturnsFast()");
         assertThat(suite.children().getFirst().detail()).isEqualTo("expected: 1 but was: 2");
@@ -115,13 +115,13 @@ class ToolsAdapterTest {
 
     /// A build folder the run cannot read does not stop it: the run ends and the readable reports still count.
     @Test
-    void anUnreadableDirectoryInTheBuildStillEndsTheRun(@TempDir Path dir) throws Exception {
+    void anUnreadableDirectoryInTheBuildStillEndsTheRun(@TempDir final Path dir) throws Exception {
         fakeBuild(dir);
-        Path locked = Files.createDirectories(dir.resolve("db/build/test-results/locked"));
+        final Path locked = Files.createDirectories(dir.resolve("db/build/test-results/locked"));
         Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"));
         try {
             adapter().runGradle(4L, dir.toString(), "test");
-            Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+            final Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
             assertThat(end.runId()).isEqualTo(4L);
             assertThat(end.tests().label()).as("the readable reports still count").isEqualTo("1 of 2 tests failed");
         } finally {
@@ -142,7 +142,7 @@ class ToolsAdapterTest {
 
     /// A Gradle run in a folder with no `gradlew` above it ends with exit code 2 and says `No gradlew`.
     @Test
-    void noBuildAboveTheDirectoryIsReported(@TempDir Path dir) throws Exception {
+    void noBuildAboveTheDirectoryIsReported(@TempDir final Path dir) throws Exception {
         adapter().runGradle(3L, dir.toString(), "build");
         assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isEqualTo(2);
         assertThat(consoles.of(3L).text(0)).contains("No gradlew");
@@ -150,32 +150,32 @@ class ToolsAdapterTest {
 
     /// Cancelling a run whose script started a child ends it cancelled within 5 s, the child with it.
     @Test
-    void cancelStopsTheProcessTree(@TempDir Path dir) throws Exception {
-        Path gradlew = dir.resolve("gradlew");
+    void cancelStopsTheProcessTree(@TempDir final Path dir) throws Exception {
+        final Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho started\nsleep 30 &\nwait\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter();
+        final ToolsAdapter tools = adapter();
         tools.runGradle(5L, dir.toString(), "build");
-        long deadline = System.currentTimeMillis() + 10_000;
+        final long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(5L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
             Thread.sleep(20);
         }
-        long t0 = System.nanoTime();
+        final long t0 = System.nanoTime();
         tools.cancelRun(5L);
-        Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+        final Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.cancelled()).isTrue();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(5));
     }
 
     /// Forgetting a run while it goes keeps its console until the run ends, then releases it.
     @Test
-    void aConsoleClosedWhileItsRunGoesIsReleasedWhenTheRunEnds(@TempDir Path dir) throws Exception {
-        Path gradlew = dir.resolve("gradlew");
+    void aConsoleClosedWhileItsRunGoesIsReleasedWhenTheRunEnds(@TempDir final Path dir) throws Exception {
+        final Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho started\nsleep 1\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter();
+        final ToolsAdapter tools = adapter();
         tools.runGradle(3L, dir.toString(), "build");
-        long deadline = System.currentTimeMillis() + 10_000;
+        final long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(3L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
             Thread.sleep(20);
         }
@@ -187,19 +187,19 @@ class ToolsAdapterTest {
 
     /// A process that traps SIGTERM is killed after the grace period, and the run ends cancelled.
     @Test
-    void cancelKillsAProcessThatIgnoresSigterm(@TempDir Path dir) throws Exception {
-        Path gradlew = dir.resolve("gradlew");
+    void cancelKillsAProcessThatIgnoresSigterm(@TempDir final Path dir) throws Exception {
+        final Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\ntrap '' TERM\necho started\nsleep 30\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter();
+        final ToolsAdapter tools = adapter();
         tools.runGradle(6L, dir.toString(), "build");
-        long deadline = System.currentTimeMillis() + 10_000;
+        final long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(6L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
             Thread.sleep(20);
         }
-        long t0 = System.nanoTime();
+        final long t0 = System.nanoTime();
         tools.cancelRun(6L);
-        Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+        final Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.cancelled()).isTrue();
         assertThat(Duration.ofNanos(System.nanoTime() - t0))
                 .isGreaterThanOrEqualTo(Duration.ofMillis(ToolsAdapter.KILL_AFTER_MILLIS - 100))
@@ -209,13 +209,13 @@ class ToolsAdapterTest {
     /// A script that exits while its child keeps the output open for 8 s ends with exit code 0 in under 6 s, its output
     /// and exit code in the console.
     @Test
-    void aChildHoldingTheOutputOpenDoesNotKeepTheRunGoing(@TempDir Path dir) throws Exception {
-        Path gradlew = dir.resolve("gradlew");
+    void aChildHoldingTheOutputOpenDoesNotKeepTheRunGoing(@TempDir final Path dir) throws Exception {
+        final Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho done\nsleep 8 &\nexit 0\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        long t0 = System.nanoTime();
+        final long t0 = System.nanoTime();
         adapter().runGradle(8L, dir.toString(), "build");
-        Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+        final Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.exitCode()).isZero();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).as("not the child's 8 s").isLessThan(Duration.ofSeconds(6));
         // the notice shows when the reader is still waiting on the pipe; at the exit the JDK's process reaper drains
@@ -226,15 +226,15 @@ class ToolsAdapterTest {
 
     /// Each run reads the settings anew: a wrapper script that appears between two runs is used by the second.
     @Test
-    void eachRunReadsTheSettings(@TempDir Path dir) throws Exception {
+    void eachRunReadsTheSettings(@TempDir final Path dir) throws Exception {
         fakeBuild(dir);
-        Path serial = dir.resolve("serial");
+        final Path serial = dir.resolve("serial");
         Files.writeString(serial, "#!/bin/sh\necho \"serial $*\"\n");
         Files.setPosixFilePermissions(serial, PosixFilePermissions.fromString("rwxr-xr-x"));
-        List<ToolSettings> settings = new ArrayList<>(List.of(
+        final List<ToolSettings> settings = new ArrayList<>(List.of(
                 new ToolSettings(Optional.empty(), System.getProperty("java.home")),
                 new ToolSettings(Optional.of(serial), System.getProperty("java.home"))));
-        ToolsAdapter tools = new ToolsAdapter(sink, consoles, settings::removeFirst);
+        final ToolsAdapter tools = new ToolsAdapter(sink, consoles, settings::removeFirst);
 
         tools.runGradle(1L, dir.toString(), "build");
         sink.await(Intent.CommandFinished.class, e -> e.runId() == 1L, WAIT);
@@ -249,9 +249,9 @@ class ToolsAdapterTest {
     /// A read sends every tree, unchanged ones too; a newly watched folder is read at once; unchanged polls send
     /// nothing and an unwatched folder is not read; a folder watched with new settings is read with them at once.
     @Test
-    void aReadSendsEveryTreeAndAWatchSendsAnOpenFolderOnlyWhenItChanged(@TempDir Path dir) throws Exception {
-        FolderRoot a = folder("A", Files.createDirectories(dir.resolve("a")));
-        FolderRoot b = folder("B", Files.createDirectories(dir.resolve("b")));
+    void aReadSendsEveryTreeAndAWatchSendsAnOpenFolderOnlyWhenItChanged(@TempDir final Path dir) throws Exception {
+        final FolderRoot a = folder("A", Files.createDirectories(dir.resolve("a")));
+        final FolderRoot b = folder("B", Files.createDirectories(dir.resolve("b")));
         Files.writeString(dir.resolve("a").resolve("PLAN.md"), "# plan");
         try (ToolsAdapter tools = adapter()) {
             tools.readFolders(List.of(a, b));
@@ -263,7 +263,7 @@ class ToolsAdapterTest {
 
             sink.clear();
             tools.watchFolders(List.of(a));
-            Intent.FolderLoaded first = sink.await(Intent.FolderLoaded.class, WAIT);
+            final Intent.FolderLoaded first = sink.await(Intent.FolderLoaded.class, WAIT);
             assertThat(first.folder()).as("a folder newly watched is read at once").isEqualTo(a);
             tools.pollFolders(Duration.ofMillis(20));
             Files.createDirectory(dir.resolve("b").resolve("unwatched"));
@@ -274,7 +274,7 @@ class ToolsAdapterTest {
 
             sink.clear();
             tools.watchFolders(List.of(folder("A", dir.resolve("a"), "changed")));
-            Intent.FolderLoaded edited = sink.await(Intent.FolderLoaded.class, WAIT);
+            final Intent.FolderLoaded edited = sink.await(Intent.FolderLoaded.class, WAIT);
             assertThat(edited.tree().children()).as("a folder watched with new settings is read with them at once")
                     .extracting(ViewSpec.TreeNode::label).containsExactly("PLAN.md");
         }
@@ -283,9 +283,9 @@ class ToolsAdapterTest {
     /// A missing folder's tree holds one `✗ cannot be read: no such folder` node, reads as unreadable, and raises no
     /// notice.
     @Test
-    void aFolderThatCannotBeReadSaysSoInItsTreeWithoutANotice(@TempDir Path dir) throws Exception {
+    void aFolderThatCannotBeReadSaysSoInItsTreeWithoutANotice(@TempDir final Path dir) throws Exception {
         adapter().readFolders(List.of(folder("Gone", dir.resolve("missing"))));
-        ViewSpec.TreeNode tree = sink.await(Intent.FolderLoaded.class, WAIT).tree();
+        final ViewSpec.TreeNode tree = sink.await(Intent.FolderLoaded.class, WAIT).tree();
         assertThat(tree.label()).isEqualTo("Gone");
         assertThat(tree.children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo("✗ cannot be read: no such folder");
         assertThat(FolderTree.isUnreadable(tree)).isTrue();
@@ -295,22 +295,22 @@ class ToolsAdapterTest {
     /// A scratchpad tree lists folders before files, day folders in date order, every level, files with a link to line
     /// 0 and folders without one, and leaves out hidden, build and excluded entries.
     @Test
-    void aFolderTreeOrdersDaysAndDocumentsAndLeavesOutHiddenBuildAndExcludedEntries(@TempDir Path dir) throws Exception {
+    void aFolderTreeOrdersDaysAndDocumentsAndLeavesOutHiddenBuildAndExcludedEntries(@TempDir final Path dir) throws Exception {
         Files.writeString(dir.resolve("PLAN.md"), "# plan");
         Files.createDirectories(dir.resolve("datahub"));
-        for (String left : List.of(".git", "build", "node_modules", "Tools")) {
+        for (final String left : List.of(".git", "build", "node_modules", "Tools")) {
             Files.createDirectories(dir.resolve(left));
         }
         Files.writeString(dir.resolve(".DS_Store"), "x");
-        for (String day : List.of("2026-10-11", "2026-10-12")) {
-            Path d = Files.createDirectories(dir.resolve(day));
+        for (final String day : List.of("2026-10-11", "2026-10-12")) {
+            final Path d = Files.createDirectories(dir.resolve(day));
             Files.writeString(d.resolve("ALPHA.md"), "a");
             Files.writeString(d.resolve("READ-01-X.md"), "r");
             Files.createDirectories(d.resolve("work")).resolve("spec.md").toFile().createNewFile();
             Files.writeString(Files.createDirectories(d.resolve("work").resolve("deep")).resolve("deeper.md"), "d");
         }
         adapter().readFolders(List.of(folder("Scratchpad", dir, "tools")));
-        ViewSpec.TreeNode root = sink.await(Intent.FolderLoaded.class, WAIT).tree();
+        final ViewSpec.TreeNode root = sink.await(Intent.FolderLoaded.class, WAIT).tree();
         assertThat(root.label()).isEqualTo("Scratchpad");
         assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("datahub", "2026-10-11", "2026-10-12", "PLAN.md");
         assertThat(root.children().get(2).children()).as("folders first, then files by name").extracting(ViewSpec.TreeNode::label)
@@ -324,7 +324,7 @@ class ToolsAdapterTest {
     }
 
     /** A Trash that moves each entry into {@code bin}, as the desktop's would, and records it. */
-    private ToolsAdapter withTrash(Path bin, List<Path> trashed) {
+    private ToolsAdapter withTrash(final Path bin, final List<Path> trashed) {
         return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), file -> {
             Files.move(file, bin.resolve(file.getFileName() + "-" + trashed.size()));
             trashed.add(file);
@@ -335,11 +335,11 @@ class ToolsAdapterTest {
     /// Moving a file and then a folder to the Trash removes their lines from the nearest listing file, says how many
     /// lines went, and leaves no temporary file beside the listing.
     @Test
-    void entriesGoToTheTrashAndLeaveTheirOwnLinesInTheNearestListingAndTheOpenFoldersShowIt(@TempDir Path dir, @TempDir Path bin) throws Exception {
-        Path day = Files.createDirectories(dir.resolve("2026-10-18"));
-        Path work = Files.createDirectories(day.resolve("work"));
-        Path read = Files.writeString(day.resolve("READ-01-X-OCT-18.md"), "# x");
-        Path mine = Files.writeString(work.resolve("mine.py"), "print()");
+    void entriesGoToTheTrashAndLeaveTheirOwnLinesInTheNearestListingAndTheOpenFoldersShowIt(@TempDir final Path dir, @TempDir final Path bin) throws Exception {
+        final Path day = Files.createDirectories(dir.resolve("2026-10-18"));
+        final Path work = Files.createDirectories(day.resolve("work"));
+        final Path read = Files.writeString(day.resolve("READ-01-X-OCT-18.md"), "# x");
+        final Path mine = Files.writeString(work.resolve("mine.py"), "print()");
         Files.writeString(day.resolve("ALPHA.md"), """
                 ## To read
 
@@ -350,14 +350,14 @@ class ToolsAdapterTest {
                 | `work/` | `mine.py` |
                 | READ-01-X-OCT-18.md | the result |
                 """);
-        FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of(), "scratchpad").withTrash("ALPHA.md");
-        List<Path> trashed = new CopyOnWriteArrayList<>();
-        ToolsAdapter tools = withTrash(bin, trashed);
+        final FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of(), "scratchpad").withTrash("ALPHA.md");
+        final List<Path> trashed = new CopyOnWriteArrayList<>();
+        final ToolsAdapter tools = withTrash(bin, trashed);
         tools.watchFolders(List.of(pad));
         sink.await(Intent.FolderLoaded.class, WAIT);
 
         tools.deleteFiles(pad, List.of(read.toString()));
-        Intent.Notify done = sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved"), WAIT);
+        final Intent.Notify done = sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved"), WAIT);
         assertThat(done.level()).isEqualTo(Notice.Level.INFO);
         assertThat(done.text()).isEqualTo("Moved READ-01-X-OCT-18.md to the Trash; 2 lines out of 2026-10-18/ALPHA.md");
         assertThat(trashed).containsExactly(read);
@@ -365,7 +365,7 @@ class ToolsAdapterTest {
         sink.await(Intent.FolderLoaded.class, l -> l.tree().children().getFirst().children().stream().noneMatch(c -> c.label().startsWith("READ")), WAIT);
 
         tools.deleteFiles(pad, List.of(mine.toString(), work.toString()));
-        Intent.Notify folder = sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved work"), WAIT);
+        final Intent.Notify folder = sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved work"), WAIT);
         assertThat(folder.text()).as("a file inside a folder asked for goes with it").isEqualTo("Moved work to the Trash; 1 line out of 2026-10-18/ALPHA.md");
         assertThat(trashed).containsExactly(read, work);
         assertThat(day.resolve("ALPHA.md")).content().doesNotContain("work/");
@@ -377,19 +377,19 @@ class ToolsAdapterTest {
     /// Without a Trash nothing is moved and nothing deleted; a missing entry, a path outside the folder, and an entry
     /// of a folder not marked deletable are refused.
     @Test
-    void nothingGoesWithoutATrashAndNeitherTheFolderNorAnythingOutsideItEverGoes(@TempDir Path dir, @TempDir Path bin) throws Exception {
-        Path a = Files.writeString(dir.resolve("a.md"), "a");
-        Path outside = Files.writeString(bin.resolve("outside.md"), "o");
-        FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of()).withTrash("");
+    void nothingGoesWithoutATrashAndNeitherTheFolderNorAnythingOutsideItEverGoes(@TempDir final Path dir, @TempDir final Path bin) throws Exception {
+        final Path a = Files.writeString(dir.resolve("a.md"), "a");
+        final Path outside = Files.writeString(bin.resolve("outside.md"), "o");
+        final FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of()).withTrash("");
         adapter().deleteFiles(pad, List.of(a.toString()));
-        Intent.Notify none = sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR, WAIT);
+        final Intent.Notify none = sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR, WAIT);
         assertThat(none.text()).isEqualTo("Nothing moved to the Trash; cannot move a.md: this desktop has no Trash");
         assertThat(a).as("a Trash missing: never deleted for good instead").exists();
 
-        List<Path> trashed = new CopyOnWriteArrayList<>();
-        ToolsAdapter tools = withTrash(Files.createDirectories(bin.resolve("bin")), trashed);
+        final List<Path> trashed = new CopyOnWriteArrayList<>();
+        final ToolsAdapter tools = withTrash(Files.createDirectories(bin.resolve("bin")), trashed);
         tools.deleteFiles(pad, List.of(dir.toString(), outside.toString(), dir.resolve("gone.md").toString()));
-        Intent.Notify refused = sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR && n.text().contains("outside.md"), WAIT);
+        final Intent.Notify refused = sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR && n.text().contains("outside.md"), WAIT);
         assertThat(refused.text()).startsWith("Nothing moved to the Trash; cannot move ").contains("gone.md: no such file or folder");
         assertThat(trashed).isEmpty();
         assertThat(outside).exists();
@@ -402,15 +402,15 @@ class ToolsAdapterTest {
     /// When a day's listing goes to the Trash with its entries, the listing above is left as it was, and an entry the
     /// Trash refuses is named while the others still go.
     @Test
-    void aListingThatGoesWithItsEntriesIsNotReplacedByOneAboveAndARefusedEntryDoesNotStopTheRest(@TempDir Path dir, @TempDir Path bin) throws Exception {
-        Path day = Files.createDirectories(dir.resolve("2026-10-18"));
-        Path alpha = Files.writeString(day.resolve("ALPHA.md"), "- `x.md`: x\n");
-        Path x = Files.writeString(day.resolve("x.md"), "x");
-        Path locked = Files.writeString(day.resolve("locked.md"), "l");
+    void aListingThatGoesWithItsEntriesIsNotReplacedByOneAboveAndARefusedEntryDoesNotStopTheRest(@TempDir final Path dir, @TempDir final Path bin) throws Exception {
+        final Path day = Files.createDirectories(dir.resolve("2026-10-18"));
+        final Path alpha = Files.writeString(day.resolve("ALPHA.md"), "- `x.md`: x\n");
+        final Path x = Files.writeString(day.resolve("x.md"), "x");
+        final Path locked = Files.writeString(day.resolve("locked.md"), "l");
         Files.writeString(dir.resolve("ALPHA.md"), "- `2026-10-18/x.md`: listed above too\n");
-        FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of()).withTrash("ALPHA.md");
-        List<Path> trashed = new CopyOnWriteArrayList<>();
-        ToolsAdapter tools = new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), file -> {
+        final FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of()).withTrash("ALPHA.md");
+        final List<Path> trashed = new CopyOnWriteArrayList<>();
+        final ToolsAdapter tools = new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), file -> {
             if (file.equals(locked)) {
                 throw new IOException("the Trash refused it");
             }
@@ -419,7 +419,7 @@ class ToolsAdapterTest {
             return true;
         });
         tools.deleteFiles(pad, List.of(alpha.toString(), locked.toString(), x.toString()));
-        Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+        final Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
         assertThat(n.text()).isEqualTo("Moved 2 entries to the Trash; cannot move locked.md: the Trash refused it");
         assertThat(trashed).containsExactly(alpha, x);
         assertThat(dir.resolve("ALPHA.md")).as("the day's listing went too: the one above is not the day's").hasContent("- `2026-10-18/x.md`: listed above too\n");
@@ -428,13 +428,13 @@ class ToolsAdapterTest {
     /// The folder's index file comes first at the top level only, then folders, then files; without an index, folders
     /// first.
     @Test
-    void theIndexFileLeadsItsFolderThenFoldersThenFiles(@TempDir Path dir) throws Exception {
+    void theIndexFileLeadsItsFolderThenFoldersThenFiles(@TempDir final Path dir) throws Exception {
         Files.writeString(dir.resolve("feedback.md"), "f");
         Files.writeString(dir.resolve("MEMORY.md"), "m");
         Files.writeString(dir.resolve("agent.md"), "a");
         Files.createDirectories(dir.resolve("archive")).resolve("MEMORY.md").toFile().createNewFile();
         Files.writeString(dir.resolve("archive").resolve("a.md"), "a");
-        ViewSpec.TreeNode root = FolderTree.tree(new FolderRoot("Memory", dir.toString(), "MEMORY.md", List.of()));
+        final ViewSpec.TreeNode root = FolderTree.tree(new FolderRoot("Memory", dir.toString(), "MEMORY.md", List.of()));
         assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("MEMORY.md", "archive", "agent.md", "feedback.md");
         assertThat(root.children().get(1).children()).as("a file named as the index deeper down is any file")
                 .extracting(ViewSpec.TreeNode::label).containsExactly("a.md", "MEMORY.md");
@@ -444,12 +444,12 @@ class ToolsAdapterTest {
 
     /// A folder with more than [FolderTree#MAX_ENTRIES] entries lists that many and ends with the more marker.
     @Test
-    void aLargeFolderIsReadUpToTheBoundAndEndsSayingSo(@TempDir Path dir) throws Exception {
+    void aLargeFolderIsReadUpToTheBoundAndEndsSayingSo(@TempDir final Path dir) throws Exception {
         for (int i = 0; i < FolderTree.MAX_ENTRIES + 10; i++) {
             Files.createFile(dir.resolve("f" + i + ".md"));
         }
         Files.createDirectories(dir.resolve("sub")).resolve("x.md").toFile().createNewFile();
-        ViewSpec.TreeNode tree = FolderTree.tree(folder("Big", dir));
+        final ViewSpec.TreeNode tree = FolderTree.tree(folder("Big", dir));
         assertThat(tree.children()).hasSize(FolderTree.MAX_ENTRIES + 1);
         assertThat(tree.children().getLast().label()).isEqualTo(ViewSpec.TreeNode.MORE);
     }
@@ -457,11 +457,11 @@ class ToolsAdapterTest {
     /// A folder of very many names, shown or hidden, is listed only one past [FolderTree#MAX_LISTED] and ends with the
     /// more marker.
     @Test
-    void aFolderOfAMillionNamesIsListedOnlyUpToTheBoundShownOrHidden(@TempDir Path dir) throws Exception {
-        for (String prefix : List.of("note", ".hidden")) {
-            AtomicInteger pulled = new AtomicInteger();
-            FolderTree.Lister million = d -> IntStream.range(0, 1_000_000).mapToObj(i -> d.resolve(prefix + i)).peek(p -> pulled.incrementAndGet());
-            ViewSpec.TreeNode tree = FolderTree.tree(folder("Big", dir), million);
+    void aFolderOfAMillionNamesIsListedOnlyUpToTheBoundShownOrHidden(@TempDir final Path dir) throws Exception {
+        for (final String prefix : List.of("note", ".hidden")) {
+            final AtomicInteger pulled = new AtomicInteger();
+            final FolderTree.Lister million = d -> IntStream.range(0, 1_000_000).mapToObj(i -> d.resolve(prefix + i)).peek(p -> pulled.incrementAndGet());
+            final ViewSpec.TreeNode tree = FolderTree.tree(folder("Big", dir), million);
             assertThat(pulled.get()).as(prefix + ": one past the bound is listed, to know there are more").isEqualTo(FolderTree.MAX_LISTED + 1);
             assertThat(tree.children().getLast().label()).isEqualTo(ViewSpec.TreeNode.MORE);
             assertThat(tree.children()).hasSize(prefix.startsWith(".") ? 1 : FolderTree.MAX_ENTRIES + 1);
@@ -470,12 +470,12 @@ class ToolsAdapterTest {
 
     /// Once one folder spends the listing bound, no later folder is listed: it shows only the more marker.
     @Test
-    void onceTheBoundIsSpentNoFurtherFolderIsListed(@TempDir Path dir) throws Exception {
+    void onceTheBoundIsSpentNoFurtherFolderIsListed(@TempDir final Path dir) throws Exception {
         for (int i = 0; i < 50; i++) {
             Files.createDirectories(dir.resolve(String.format("d%02d", i)));
         }
-        AtomicInteger listedAfter = new AtomicInteger();
-        FolderTree.Lister lister = d -> {
+        final AtomicInteger listedAfter = new AtomicInteger();
+        final FolderTree.Lister lister = d -> {
             if (d.equals(dir)) {
                 return Files.list(d);
             }
@@ -485,7 +485,7 @@ class ToolsAdapterTest {
             listedAfter.incrementAndGet();
             return Files.list(d);
         };
-        ViewSpec.TreeNode tree = FolderTree.tree(folder("Many", dir), lister);
+        final ViewSpec.TreeNode tree = FolderTree.tree(folder("Many", dir), lister);
         assertThat(listedAfter).as("the first folder spent the bound: none after it is listed").hasValue(0);
         assertThat(tree.children().get(1).children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo(ViewSpec.TreeNode.MORE);
     }
@@ -493,14 +493,14 @@ class ToolsAdapterTest {
     /// A subfolder without read permission shows `cannot be read` with a `permission denied` child, its siblings stand,
     /// and the tree as a whole is not unreadable.
     @Test
-    void aSubfolderThatCannotBeReadSaysSoAndTheRestStands(@TempDir Path dir) throws Exception {
+    void aSubfolderThatCannotBeReadSaysSoAndTheRestStands(@TempDir final Path dir) throws Exception {
         Files.writeString(dir.resolve("README.md"), "r");
-        Path locked = Files.createDirectories(dir.resolve("locked"));
+        final Path locked = Files.createDirectories(dir.resolve("locked"));
         Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"));
         try {
-            ViewSpec.TreeNode tree = FolderTree.tree(folder("Notes", dir));
+            final ViewSpec.TreeNode tree = FolderTree.tree(folder("Notes", dir));
             assertThat(tree.children()).extracting(ViewSpec.TreeNode::label).containsExactly("locked", "README.md");
-            ViewSpec.TreeNode lockedNode = tree.children().getFirst();
+            final ViewSpec.TreeNode lockedNode = tree.children().getFirst();
             assertThat(lockedNode.detail()).isEqualTo("cannot be read");
             assertThat(lockedNode.children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo("✗ cannot be read: permission denied");
             assertThat(FolderTree.isUnreadable(tree)).isFalse();
@@ -512,7 +512,7 @@ class ToolsAdapterTest {
     /// The folder at [FolderTree#MAX_DEPTH] is listed with the detail `not read: N levels deep` and only the more
     /// marker.
     @Test
-    void aFolderPastTheDepthBoundIsListedAndSaysItWasNotRead(@TempDir Path dir) throws Exception {
+    void aFolderPastTheDepthBoundIsListedAndSaysItWasNotRead(@TempDir final Path dir) throws Exception {
         Path deep = dir;
         for (int i = 0; i < FolderTree.MAX_DEPTH + 1; i++) {
             deep = Files.createDirectories(deep.resolve("d" + i));
@@ -530,12 +530,12 @@ class ToolsAdapterTest {
     /// A symbolic link to a folder is listed under its name with no file link, no children, and the detail `link to a
     /// folder, not followed`.
     @Test
-    void aLinkToAFolderIsListedAsAFolderAndNotFollowed(@TempDir Path dir) throws Exception {
-        Path target = Files.createDirectories(dir.resolve("target"));
+    void aLinkToAFolderIsListedAsAFolderAndNotFollowed(@TempDir final Path dir) throws Exception {
+        final Path target = Files.createDirectories(dir.resolve("target"));
         Files.writeString(target.resolve("inside.md"), "i");
-        Path root = Files.createDirectories(dir.resolve("root"));
+        final Path root = Files.createDirectories(dir.resolve("root"));
         Files.createSymbolicLink(root.resolve("docs"), target);
-        ViewSpec.TreeNode docs = FolderTree.tree(folder("Root", root)).children().getFirst();
+        final ViewSpec.TreeNode docs = FolderTree.tree(folder("Root", root)).children().getFirst();
         assertThat(docs.label()).isEqualTo("docs");
         assertThat(docs.link()).as("not offered as a file").isEmpty();
         assertThat(docs.children()).as("not followed").isEmpty();

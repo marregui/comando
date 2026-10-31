@@ -1,22 +1,23 @@
 package dev.marregui.comando.ui.dialogs.jobs;
 
-import dev.marregui.comando.core.model.KitJob;
-import dev.marregui.comando.core.model.KitJobs;
-import dev.marregui.comando.ui.kit.async.OnEdt;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import javax.swing.JCheckBox;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
-import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.swing.JCheckBox;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.text.JTextComponent;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import dev.marregui.comando.core.model.KitJob;
+import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,7 +39,7 @@ class JobsEditorTest {
 
     private final List<String> did = new ArrayList<>();
 
-    private static KitJobs.Entry entry(KitJob j, boolean running) {
+    private static KitJobs.Entry entry(final KitJob j, final boolean running) {
         return new KitJobs.Entry(j, true, true, true, running, "2026-10-26T07:30+01:00", 0, j.enabled() ? "2026-11-02T07:30+01:00" : "",
                 "/k/.kit-jobs/" + j.name() + ".log");
     }
@@ -51,30 +52,30 @@ class JobsEditorTest {
     private JobsEditor editor() {
         return new JobsEditor(List.of(entry(DRIFT, false), entry(BRIEF, false)), Path.of("/k"), new JobsEditor.Actions() {
             @Override
-            public Optional<Path> program(Component owner, Path bin) {
+            public Optional<Path> program(final Component owner, final Path bin) {
                 return Optional.of(bin.resolve("curator"));
             }
 
             @Override
-            public void run(String name) {
+            public void run(final String name) {
                 did.add("run " + name);
             }
 
             @Override
-            public void openLog(Path log) {
+            public void openLog(final Path log) {
                 did.add("log " + log);
             }
         });
     }
 
-    private static void type(JobsEditor e, String key, String text) {
+    private static void type(final JobsEditor e, final String key, final String text) {
         ((JTextComponent) e.field(key)).setText(text);
     }
 
     /// The list opens clean and valid, and hands back the jobs it was given.
     @Test
     void anUnchangedListIsCleanAndSavesAsItWas() {
-        JobsEditor e = editor();
+        final JobsEditor e = editor();
         assertThat(e.dirty()).isFalse();
         assertThat(e.valid()).isTrue();
         assertThat(e.jobs()).contains(List.of(DRIFT, BRIEF));
@@ -93,14 +94,14 @@ class JobsEditorTest {
     /// the list clean again, and an unpadded time is the same time.
     @Test
     void theFieldsBecomeTheJobHandedToKitPy() {
-        JobsEditor e = editor();
+        final JobsEditor e = editor();
         e.day(3).doClick();
         type(e, KitJob.TIME_FIELD, "8:05");
         type(e, "arguments", "--days 8 'a b'");
         type(e, KitJob.ENV_FIELD, "KB_DRIFT_TRIGGER={scheduler}\nX=1");
         ((JCheckBox) e.field("enabled")).doClick();
         assertThat(e.dirty()).isTrue();
-        KitJob edited = e.jobs().orElseThrow().getFirst();
+        final KitJob edited = e.jobs().orElseThrow().getFirst();
         assertThat(edited.when()).isEqualTo("MON,THU 08:05");
         assertThat(edited.command()).containsExactly("bin/kb-drift", "--days", "8", "a b");
         assertThat(edited.env()).isEqualTo(Map.of("KB_DRIFT_TRIGGER", "{scheduler}", "X", "1"));
@@ -125,7 +126,7 @@ class JobsEditorTest {
     /// in the message line until the next edit.
     @Test
     void aBrokenRuleBlocksTheSaveAndSaysWhy() {
-        JobsEditor e = editor();
+        final JobsEditor e = editor();
         type(e, KitJob.NAME_FIELD, "daily-brief");
         assertThat(e.valid()).isFalse();
         assertThat(e.jobs()).isEmpty();
@@ -152,7 +153,7 @@ class JobsEditorTest {
     /// the root; the state line says Save installs it. Removing takes the job out.
     @Test
     void addingAsksForAProgramAndRemovingTakesTheJobOut() {
-        JobsEditor e = editor();
+        final JobsEditor e = editor();
         e.add();
         assertThat(e.list().getSelectedValue().toString()).isEqualTo("job");
         assertThat(e.stateShown()).isEqualTo("new: Save installs it");
@@ -171,7 +172,7 @@ class JobsEditorTest {
     /// and that a renamed job is new to the scheduler.
     @Test
     void theStateLineSaysHowTheSchedulerHoldsTheJob() {
-        JobsEditor e = editor();
+        final JobsEditor e = editor();
         assertThat(e.stateShown()).isEqualTo("installed · last Mon 10-26 07:30 exit 0 · next Mon 11-02 07:30");
         e.select("daily-brief");
         assertThat(e.stateShown()).startsWith("paused · last");
@@ -183,14 +184,14 @@ class JobsEditorTest {
     /// Run now also for a paused one.
     @Test
     void aJobsMenuRunsItOrOpensItsLog() {
-        JobsEditor e = editor();
-        JPopupMenu menu = e.menuFor(0);
+        final JobsEditor e = editor();
+        final JPopupMenu menu = e.menuFor(0);
         ((JMenuItem) menu.getComponent(0)).doClick();
         ((JMenuItem) menu.getComponent(1)).doClick();
         assertThat(did).containsExactly("run kb-drift", "log " + Path.of("/k/.kit-jobs/kb-drift.log"));
         assertThat(e.menuFor(1).getComponent(0).isEnabled()).as("paused").isFalse();
         e.add();
-        JPopupMenu added = e.menuFor(2);
+        final JPopupMenu added = e.menuFor(2);
         assertThat(added.getComponent(0).isEnabled()).isFalse();
         assertThat(added.getComponent(1).isEnabled()).isFalse();
         ((JMenuItem) added.getComponent(2)).doClick();
@@ -202,19 +203,19 @@ class JobsEditorTest {
     /// kept as written.
     @Test
     void outerSpacesAreKeptAsWritten() {
-        KitJob spaced = new KitJob("s", " spaced ", List.of("MON"), "07:30", List.of("bin/s"), Map.of("A", "x "), "", true);
-        JobsEditor e = new JobsEditor(List.of(entry(spaced, false)), Path.of("/k"), new JobsEditor.Actions() {
+        final KitJob spaced = new KitJob("s", " spaced ", List.of("MON"), "07:30", List.of("bin/s"), Map.of("A", "x "), "", true);
+        final JobsEditor e = new JobsEditor(List.of(entry(spaced, false)), Path.of("/k"), new JobsEditor.Actions() {
             @Override
-            public Optional<Path> program(Component owner, Path bin) {
+            public Optional<Path> program(final Component owner, final Path bin) {
                 return Optional.empty();
             }
 
             @Override
-            public void run(String name) {
+            public void run(final String name) {
             }
 
             @Override
-            public void openLog(Path log) {
+            public void openLog(final Path log) {
             }
         });
         assertThat(e.dirty()).isFalse();

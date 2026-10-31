@@ -1,5 +1,16 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JToggleButton;
+
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -16,17 +27,6 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widgets.table.GridTable;
 import dev.marregui.comando.ui.widgets.table.TableSource;
-
-import javax.swing.BorderFactory;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JToggleButton;
-import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * The Results tab: the focused panel's last SQL run, its rows and its timings. The tab copies as a whole: the
@@ -48,7 +48,7 @@ public final class ResultsView {
     private long planOf = -1;
     private SqlRun shownRun;
 
-    public ResultsView(ResultRegistry results) {
+    public ResultsView(final ResultRegistry results) {
         this.results = results;
         status.setBorder(BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD));
         status.setForeground(Theme.MUTED);
@@ -58,7 +58,7 @@ public final class ResultsView {
         planToggle.setToolTipText("Show the EXPLAIN output as a tree or as rows");
         planToggle.setVisible(false);
         planToggle.addActionListener(e -> cards.show(center, planToggle.isSelected() ? "plan" : "rows"));
-        JPanel south = new JPanel(new BorderLayout());
+        final JPanel south = new JPanel(new BorderLayout());
         south.add(status, BorderLayout.CENTER);
         south.add(planToggle, BorderLayout.EAST);
         root.add(center, BorderLayout.CENTER);
@@ -79,7 +79,7 @@ public final class ResultsView {
 
     /** The error when the run on show failed, else the grid's copy text. */
     String copyText() {
-        String error = overlay.errorText();
+        final String error = overlay.errorText();
         return error.isEmpty() ? grid.copyText() : error;
     }
 
@@ -96,7 +96,7 @@ public final class ResultsView {
         return shownResult;
     }
 
-    public void render(Optional<SqlRun> maybeRun) {
+    public void render(final Optional<SqlRun> maybeRun) {
         if (maybeRun.isEmpty()) {
             showPlan(null, null);
             shownRun = null; // the tick must not paint another panel's run here
@@ -107,9 +107,9 @@ public final class ResultsView {
             overlay.showEmpty(KeyText.of("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎."));
             return;
         }
-        SqlRun run = maybeRun.get();
+        final SqlRun run = maybeRun.get();
         shownRun = run;
-        ResultView r = results.get(run.requestId());
+        final ResultView r = results.get(run.requestId());
         if (run.requestId() != shownRequest || r != shownResult) {
             shownRequest = run.requestId();
             shownResult = r;
@@ -151,18 +151,18 @@ public final class ResultsView {
 
     /** Once a second while a statement runs without rows yet: the elapsed time on the overlay. */
     public void tick() {
-        SqlRun run = shownRun;
+        final SqlRun run = shownRun;
         if (run != null && run.status() == RunStatus.RUNNING && shownResult == null) {
             overlay.showLoading(runningText(run, System.currentTimeMillis()));
         }
     }
 
-    static String runningText(SqlRun run, long nowMillis) {
+    static String runningText(final SqlRun run, final long nowMillis) {
         return "Running on " + run.connection() + (run.startedMillis() > 0 ? " · " + Labels.elapsed(nowMillis - run.startedMillis()) : "");
     }
 
     /** What a statement without rows did: rows changed for DML; "Done" for DDL, which changes no rows. */
-    static String doneText(SqlRun run) {
+    static String doneText(final SqlRun run) {
         if (run.updateCount() > 0 || (run.updateCount() == 0 && !Classifier.isDdl(run.sql()))) {
             return Labels.count(run.updateCount()) + (run.updateCount() == 1 ? " row changed" : " rows changed");
         }
@@ -170,8 +170,8 @@ public final class ResultsView {
     }
 
     /** A finished EXPLAIN with one column shows as a plan tree by default; anything else as rows. */
-    private void showPlan(SqlRun run, ResultView r) {
-        boolean isPlan = run != null && r != null && run.status() == RunStatus.DONE && r.columnCount() == 1 && PlanTree.isExplain(run.sql());
+    private void showPlan(final SqlRun run, final ResultView r) {
+        final boolean isPlan = run != null && r != null && run.status() == RunStatus.DONE && r.columnCount() == 1 && PlanTree.isExplain(run.sql());
         planToggle.setVisible(isPlan);
         if (!isPlan) {
             planOf = -1;
@@ -180,8 +180,8 @@ public final class ResultsView {
         }
         if (planOf != run.requestId()) {
             planOf = run.requestId();
-            List<String> lines = new ArrayList<>(r.rowCount());
-            StringBuilder sb = new StringBuilder();
+            final List<String> lines = new ArrayList<>(r.rowCount());
+            final StringBuilder sb = new StringBuilder();
             for (int i = 0; i < r.rowCount(); i++) {
                 sb.setLength(0);
                 r.format(i, 0, sb);
@@ -193,12 +193,12 @@ public final class ResultsView {
         }
     }
 
-    static String statusLine(SqlRun r) {
-        StringBuilder sb = new StringBuilder();
+    static String statusLine(final SqlRun r) {
+        final StringBuilder sb = new StringBuilder();
         sb.append(r.connection()).append(" · ").append(r.status().name().toLowerCase());
         if (r.status() == RunStatus.DONE && r.rowCount() == 0 && r.updateCount() >= 0) {
             // a statement without rows: the same words as the overlay, not "0 rows"
-            String done = doneText(r);
+            final String done = doneText(r);
             if (!done.equals("Done.")) {
                 sb.append(" · ").append(done);
             }

@@ -1,17 +1,18 @@
 package dev.marregui.comando.ui.kit.icon;
 
-import dev.marregui.comando.ui.kit.theme.Ground;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import org.junit.jupiter.api.Test;
-
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.IntStream;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,8 +27,8 @@ class SpinnerIconTest {
     /// to the start.
     @Test
     void theWheelTurnsOneBarPerStepAndComesRound() {
-        SpinnerIcon icon = new SpinnerIcon(16);
-        int start = icon.head();
+        final SpinnerIcon icon = new SpinnerIcon(16);
+        final int start = icon.head();
         icon.advance();
         assertThat(icon.head()).isEqualTo(start - 1);
         for (int i = 1; i < 8; i++) {
@@ -40,17 +41,17 @@ class SpinnerIconTest {
     /// square transparent.
     @Test
     void everyStepPaintsInsideTheIconAndDiffersFromTheLast() {
-        SpinnerIcon icon = new SpinnerIcon(16);
+        final SpinnerIcon icon = new SpinnerIcon(16);
         assertThat(icon.getIconWidth()).isEqualTo(16);
         assertThat(icon.getIconHeight()).isEqualTo(16);
-        BufferedImage before = paint(icon);
+        final BufferedImage before = paint(icon);
         icon.advance();
-        BufferedImage after = paint(icon);
+        final BufferedImage after = paint(icon);
         assertThat(pixels(after)).isNotEqualTo(pixels(before));
         // nothing is drawn outside the 16x16 square at the offset
         for (int x = 0; x < 24; x++) {
             for (int y = 0; y < 24; y++) {
-                boolean inside = x >= 4 && x < 20 && y >= 4 && y < 20;
+                final boolean inside = x >= 4 && x < 20 && y >= 4 && y < 20;
                 if (!inside) {
                     assertThat(after.getRGB(x, y) >>> 24).as("alpha at " + x + "," + y).isZero();
                 }
@@ -63,16 +64,16 @@ class SpinnerIconTest {
     @Test
     void theHeadIsTheTintChosenAndTheTailFadesIntoTheGroundInEveryTheme() throws Exception {
         try {
-            SpinnerIcon icon = new SpinnerIcon(32);
-            for (NamedTheme t : NamedTheme.values()) {
+            final SpinnerIcon icon = new SpinnerIcon(32);
+            for (final NamedTheme t : NamedTheme.values()) {
                 Theme.ground(t.ground);
                 Theme.tint(t.tint);
                 assertThat(Theme.spinnerShade(0)).as("the head in " + t).isEqualTo(t.tint.body);
                 assertThat(distance(Theme.spinnerShade(7), t.ground.color))
                         .as("the tail nearer the ground than the head, in " + t)
                         .isLessThan(distance(Theme.spinnerShade(0), t.ground.color));
-                BufferedImage img = new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB);
-                Graphics2D g = img.createGraphics();
+                final BufferedImage img = new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB);
+                final Graphics2D g = img.createGraphics();
                 icon.paintIcon(null, g, 4, 4);
                 g.dispose();
                 assertThat(count(img, t.tint.body)).as("the head painted in " + t).isPositive();
@@ -88,20 +89,20 @@ class SpinnerIconTest {
     /// `hourglass.svg` holds [Icons#SVG_GOLD] and not the blue `#548AF7`, so [Icons#gilded] repaints it in the tint.
     @Test
     void theHourglassIsDrawnInTheSvgsGoldSoItPaintsInTheTint() throws Exception {
-        String svg = Files.readString(Path.of("src/main/resources/icons/hourglass.svg"));
+        final String svg = Files.readString(Path.of("src/main/resources/icons/hourglass.svg"));
         assertThat(svg).contains(String.format("#%06X", Icons.SVG_GOLD)).doesNotContain("#548AF7");
     }
 
-    private static int distance(Color a, Color b) {
-        int r = a.getRed() - b.getRed();
-        int g = a.getGreen() - b.getGreen();
-        int bl = a.getBlue() - b.getBlue();
+    private static int distance(final Color a, final Color b) {
+        final int r = a.getRed() - b.getRed();
+        final int g = a.getGreen() - b.getGreen();
+        final int bl = a.getBlue() - b.getBlue();
         return r * r + g * g + bl * bl;
     }
 
-    private static int count(BufferedImage img, Color c) {
+    private static int count(final BufferedImage img, final Color c) {
         int n = 0;
-        for (int p : pixels(img)) {
+        for (final int p : pixels(img)) {
             if ((p >>> 24) == 0xFF && (p & 0xFFFFFF) == (c.getRGB() & 0xFFFFFF)) {
                 n++;
             }
@@ -109,15 +110,15 @@ class SpinnerIconTest {
         return n;
     }
 
-    private static BufferedImage paint(SpinnerIcon icon) {
-        BufferedImage img = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
+    private static BufferedImage paint(final SpinnerIcon icon) {
+        final BufferedImage img = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
+        final Graphics2D g = img.createGraphics();
         icon.paintIcon(null, g, 4, 4);
         g.dispose();
         return img;
     }
 
-    private static int[] pixels(BufferedImage img) {
+    private static int[] pixels(final BufferedImage img) {
         return img.getRGB(0, 0, img.getWidth(), img.getHeight(), null, 0, img.getWidth());
     }
 }

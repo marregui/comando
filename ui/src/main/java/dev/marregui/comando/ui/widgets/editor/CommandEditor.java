@@ -1,5 +1,28 @@
 package dev.marregui.comando.ui.widgets.editor;
 
+import java.awt.Color;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Caret;
+import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.Highlighter;
+import javax.swing.text.Position;
+
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.SquiggleUnderlineHighlightPainter;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.fife.ui.rtextarea.Gutter;
+import org.fife.ui.rtextarea.IconRowEvent;
+import org.fife.ui.rtextarea.IconRowListener;
+import org.fife.ui.rtextarea.RTextScrollPane;
+
 import dev.marregui.comando.core.dispatch.Blocks;
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Statements;
@@ -14,28 +37,6 @@ import dev.marregui.comando.ui.widget.Unmountable;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rsyntaxtextarea.SquiggleUnderlineHighlightPainter;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rtextarea.Gutter;
-import org.fife.ui.rtextarea.IconRowEvent;
-import org.fife.ui.rtextarea.IconRowListener;
-import org.fife.ui.rtextarea.RTextScrollPane;
-
-import javax.swing.JComponent;
-import javax.swing.SwingUtilities;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Caret;
-import javax.swing.text.DefaultHighlighter;
-import javax.swing.text.Highlighter;
-import javax.swing.text.Position;
-import java.awt.Color;
-import java.awt.Rectangle;
-import java.awt.event.MouseEvent;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 
 /**
  * The command editor: SQL and prompts in one document. The gutter marks each block with where it goes when run, a
@@ -95,17 +96,17 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         scroll.setIconRowHeaderEnabled(true);
         scroll.getGutter().addIconRowListener(new IconRowListener() {
             @Override
-            public void bookmarkAdded(IconRowEvent e) {
+            public void bookmarkAdded(final IconRowEvent e) {
                 // no bookmarks: the icon row holds the blocks' marks only
             }
 
             @Override
-            public void bookmarkRemoved(IconRowEvent e) {
+            public void bookmarkRemoved(final IconRowEvent e) {
                 // no bookmarks
             }
 
             @Override
-            public void mouseClicked(IconRowEvent e, MouseEvent m) {
+            public void mouseClicked(final IconRowEvent e, final MouseEvent m) {
                 if (SwingUtilities.isLeftMouseButton(m) && m.getClickCount() == 1 && markedBlock(e.getLine()) != null) {
                     onMark.accept(e.getLine());
                 }
@@ -113,17 +114,17 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         });
         area.getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(DocumentEvent e) {
+            public void insertUpdate(final DocumentEvent e) {
                 changed();
             }
 
             @Override
-            public void removeUpdate(DocumentEvent e) {
+            public void removeUpdate(final DocumentEvent e) {
                 changed();
             }
 
             @Override
-            public void changedUpdate(DocumentEvent e) {
+            public void changedUpdate(final DocumentEvent e) {
                 // attribute changes do not change the text
             }
         });
@@ -138,8 +139,8 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         return area;
     }
 
-    private static RSyntaxTextArea panelArea(PanelDocument doc) {
-        RSyntaxTextArea a = Editors.command();
+    private static RSyntaxTextArea panelArea(final PanelDocument doc) {
+        final RSyntaxTextArea a = Editors.command();
         a.setDocument(doc);
         a.setSyntaxEditingStyle(PANEL_STYLE);
         return a;
@@ -150,7 +151,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * or go to Claude; a file's own language for a file opened in a panel, where the gutter marks no targets and
      * nothing reads as SQL.
      */
-    public void syntax(String style) {
+    public void syntax(final String style) {
         if (style.equals(area.getSyntaxEditingStyle())) {
             return;
         }
@@ -167,7 +168,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * Whether the panel's database is open: only then are SQL blocks coloured as SQL and completed as they are typed;
      * without one, the text is prompts and notes.
      */
-    public void sqlLive(boolean on) {
+    public void sqlLive(final boolean on) {
         if (on != doc.sqlLive()) {
             doc.sqlLive(on);
             refreshOccurrences();
@@ -185,12 +186,12 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     /** Completes SQL keywords and the tables and columns of {@code schema}; Ctrl+Space, or after a pause in a word. */
-    public void setSchema(Schema schema) {
+    public void setSchema(final Schema schema) {
         completion.setSchema(schema);
     }
 
     /** Called on the EDT after each edit with the whole text. */
-    public void onChange(Consumer<String> listener) {
+    public void onChange(final Consumer<String> listener) {
         onChange = listener;
     }
 
@@ -205,7 +206,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     /** Sets the text without reporting a change; the undo history starts here. */
-    public void load(String text) {
+    public void load(final String text) {
         silent = true;
         try {
             area.setText(text);
@@ -222,9 +223,9 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * Replaces the text with its file's new content without reporting a change: one undoable edit, so ⌘Z brings
      * back the text it replaced; the caret and the view stay where they were, within the new text.
      */
-    public void reload(String text) {
-        int caret = area.getCaretPosition();
-        Rectangle view = area.getVisibleRect();
+    public void reload(final String text) {
+        final int caret = area.getCaretPosition();
+        final Rectangle view = area.getVisibleRect();
         silent = true;
         try {
             area.beginAtomicEdit();
@@ -246,10 +247,10 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * Adds {@code tail} at the end without reporting a change, as a log grows: the caret and the selection stay on the
      * text they were on, and the view where it was. Not undoable: no one typed it.
      */
-    public void grow(String tail) {
+    public void grow(final String tail) {
         // the caret stays still: moved, even back to where it was, it would scroll the view to itself
-        javax.swing.text.DefaultCaret caret = area.getCaret() instanceof javax.swing.text.DefaultCaret c ? c : null;
-        int policy = caret == null ? -1 : caret.getUpdatePolicy();
+        final javax.swing.text.DefaultCaret caret = area.getCaret() instanceof javax.swing.text.DefaultCaret c ? c : null;
+        final int policy = caret == null ? -1 : caret.getUpdatePolicy();
         silent = true;
         try {
             if (caret != null) {
@@ -258,7 +259,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
             area.getDocument().insertString(area.getDocument().getLength(), tail, null);
             area.discardAllEdits();
             ranEnd = null;
-        } catch (javax.swing.text.BadLocationException e) {
+        } catch (final javax.swing.text.BadLocationException e) {
             throw new IllegalStateException("the end of the text is always a place to insert at", e);
         } finally {
             if (caret != null) {
@@ -278,13 +279,13 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * the caret stays, so typing goes on where it was and nothing replaces the text that ran.
      */
     public String runText() {
-        String selected = area.getSelectedText();
+        final String selected = area.getSelectedText();
         clearErrorMark();
         if (selected != null && !selected.isBlank()) {
             return runSelected(selected);
         }
-        String text = area.getText();
-        Blocks.Block b = Blocks.at(text, area.getCaretPosition());
+        final String text = area.getText();
+        final Blocks.Block b = Blocks.at(text, area.getCaretPosition());
         return b == null ? "" : runBlock(text, b);
     }
 
@@ -293,13 +294,13 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * block, otherwise the whole block, as {@link #runText()} does for the block under the caret. The caret and a
      * selection elsewhere stay. Empty when no marked block starts there.
      */
-    public String runText(int line) {
-        Blocks.Block b = markedBlock(line);
+    public String runText(final int line) {
+        final Blocks.Block b = markedBlock(line);
         if (b == null) {
             return "";
         }
         clearErrorMark();
-        String selected = area.getSelectedText();
+        final String selected = area.getSelectedText();
         if (selected != null && !selected.isBlank() && area.getSelectionStart() >= b.start() && area.getSelectionEnd() <= b.end()) {
             return runSelected(selected);
         }
@@ -307,26 +308,26 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     /** {@code run} gets the first line of a block whose gutter mark was clicked. */
-    public void onMarkClicked(IntConsumer run) {
+    public void onMarkClicked(final IntConsumer run) {
         onMark = run;
     }
 
     /** The block starting at {@code line} that the gutter marks with a target; null when none. */
-    private Blocks.Block markedBlock(int line) {
+    private Blocks.Block markedBlock(final int line) {
         if (!sqlStyle()) {
             return null;
         }
-        String text = area.getText();
-        for (Blocks.Block b : Blocks.all(text)) {
+        final String text = area.getText();
+        for (final Blocks.Block b : Blocks.all(text)) {
             if (b.firstLine() == line) {
-                Classifier.Classification c = Classifier.classify(b.text(text));
+                final Classifier.Classification c = Classifier.classify(b.text(text));
                 return c.target() == Target.SQL && c.text().isEmpty() ? null : b;
             }
         }
         return null;
     }
 
-    private String runSelected(String selected) {
+    private String runSelected(final String selected) {
         lastRunStart = area.getSelectionStart();
         lastRunText = selected;
         trackRanEnd(blockEnd(area.getText(), area.getSelectionEnd()));
@@ -334,7 +335,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         return selected;
     }
 
-    private String runBlock(String text, Blocks.Block b) {
+    private String runBlock(final String text, final Blocks.Block b) {
         markRan(b.start(), b.end());
         trackRanEnd(b.end());
         lastRunStart = b.start();
@@ -344,16 +345,16 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     /** The end of the block holding the character before {@code selectionEnd}; {@code selectionEnd} outside blocks. */
-    private static int blockEnd(String text, int selectionEnd) {
-        int last = Math.max(0, selectionEnd - 1);
-        Blocks.Block b = Blocks.at(text, last);
+    private static int blockEnd(final String text, final int selectionEnd) {
+        final int last = Math.max(0, selectionEnd - 1);
+        final Blocks.Block b = Blocks.at(text, last);
         return b != null && b.start() <= last && last <= b.end() ? b.end() : selectionEnd;
     }
 
-    private void trackRanEnd(int offset) {
+    private void trackRanEnd(final int offset) {
         try {
             ranEnd = area.getDocument().createPosition(offset);
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             ranEnd = null;
         }
     }
@@ -374,17 +375,17 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * A block of several statements is not marked: the driver sends each statement on its own, and the database
      * counts the position from the start of the one that failed, which the error does not name.
      */
-    public boolean markError(String sql, int position) {
+    public boolean markError(final String sql, final int position) {
         clearErrorMark();
         if (Statements.split(sql).size() != 1) {
             return false;
         }
-        int within = lastRunStart < 0 ? -1 : lastRunText.indexOf(sql);
+        final int within = lastRunStart < 0 ? -1 : lastRunText.indexOf(sql);
         if (within < 0 || position < 1 || position > sql.length()) {
             return false;
         }
-        int at = lastRunStart + within + position - 1;
-        String text = area.getText();
+        final int at = lastRunStart + within + position - 1;
+        final String text = area.getText();
         if (at >= text.length()) {
             return false;
         }
@@ -395,7 +396,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         try {
             errorTag = area.getHighlighter().addHighlight(at, Math.max(end, at + 1), errorPainter);
             return true;
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             return false;
         }
     }
@@ -405,7 +406,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         if (errorTag == null) {
             return -1;
         }
-        for (Highlighter.Highlight h : area.getHighlighter().getHighlights()) {
+        for (final Highlighter.Highlight h : area.getHighlighter().getHighlights()) {
             if (h == errorTag) {
                 return h.getStartOffset();
             }
@@ -425,7 +426,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         if (ranTag == null) {
             return -1;
         }
-        for (Highlighter.Highlight h : area.getHighlighter().getHighlights()) {
+        for (final Highlighter.Highlight h : area.getHighlighter().getHighlights()) {
             if (h == ranTag) {
                 return h.getStartOffset();
             }
@@ -433,11 +434,11 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         return -1;
     }
 
-    private void markRan(int start, int end) {
+    private void markRan(final int start, final int end) {
         clearRanMark();
         try {
             ranTag = area.getHighlighter().addHighlight(start, end, ranPainter);
-        } catch (BadLocationException e) {
+        } catch (final BadLocationException e) {
             ranTag = null;
         }
     }
@@ -450,7 +451,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     /** Replaces the whole text as one step ⌘Z undoes. */
-    public void replaceAll(String text) {
+    public void replaceAll(final String text) {
         area.beginAtomicEdit();
         try {
             area.selectAll();
@@ -467,9 +468,9 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * block is now; appends it when nothing ran. The user's caret and selection stay exactly where they were, and a
      * second insert lands after the first.
      */
-    public void insertAtCaret(String text) {
+    public void insertAtCaret(final String text) {
         int at = ranEnd();
-        String current = area.getText();
+        final String current = area.getText();
         if (at < 0 || at >= current.length()) {
             appendQuietly(text);
             if (at >= 0) {
@@ -477,29 +478,29 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
             }
             return;
         }
-        String core = text.replaceFirst("^(?:[ \\t]*\\r?\\n)+", "").stripTrailing();
+        final String core = text.replaceFirst("^(?:[ \\t]*\\r?\\n)+", "").stripTrailing();
         // a caret on a line below the block that ran, in the blank lines before what follows, is where the user is
         // about to type: that line stays the user's, and the session's block goes after it
-        Caret caret = area.getCaret();
+        final Caret caret = area.getCaret();
         int gapEnd = at;
         while (gapEnd < current.length() && Character.isWhitespace(current.charAt(gapEnd))) {
             gapEnd++;
         }
-        int dot = Math.max(caret.getDot(), caret.getMark());
+        final int dot = Math.max(caret.getDot(), caret.getMark());
         if (dot > at && dot <= gapEnd && current.indexOf('\n', at) >= 0 && current.indexOf('\n', at) < dot) {
-            int lineEnd = current.indexOf('\n', dot);
+            final int lineEnd = current.indexOf('\n', dot);
             at = lineEnd < 0 ? current.length() : lineEnd;
         }
-        String rest = current.substring(at);
+        final String rest = current.substring(at);
         // a blank line must separate the new block from what follows it
-        String suffix = rest.isBlank() || rest.matches("(?s)\\n[ \\t]*\\n.*") ? "" : rest.startsWith("\n") ? "\n" : "\n\n";
-        String prefix = "\n\n";
+        final String suffix = rest.isBlank() || rest.matches("(?s)\\n[ \\t]*\\n.*") ? "" : rest.startsWith("\n") ? "\n" : "\n\n";
+        final String prefix = "\n\n";
         write(at, prefix + core + suffix);
         trackRanEnd(at + prefix.length() + core.length());
     }
 
     /** Appends {@code text} as a new block at the end and moves the caret under it: the user's own attachment. */
-    public void append(String text) {
+    public void append(final String text) {
         appendBlock(text);
         area.setCaretPosition(area.getDocument().getLength());
     }
@@ -509,13 +510,13 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * its own, without moving the caret or the selection: a session writes while the user may be typing. When the
      * caret is at the end, the line it is on stays the user's: the block goes after it, past a blank line.
      */
-    public void appendQuietly(String text) {
-        String current = area.getText();
-        int end = current.length();
-        Caret caret = area.getCaret();
+    public void appendQuietly(final String text) {
+        final String current = area.getText();
+        final int end = current.length();
+        final Caret caret = area.getCaret();
         // an empty editor counts too: the caret's line stays empty for the user, the block goes after it
-        boolean atEnd = caret.getDot() == end || caret.getMark() == end;
-        String body = text.endsWith("\n\n") ? text : text.endsWith("\n") ? text + "\n" : text + "\n\n";
+        final boolean atEnd = caret.getDot() == end || caret.getMark() == end;
+        final String body = text.endsWith("\n\n") ? text : text.endsWith("\n") ? text + "\n" : text + "\n\n";
         write(end, (atEnd ? "\n\n" : separator(current)) + body);
     }
 
@@ -523,11 +524,11 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
      * Inserts a session's text at {@code at} as one undo step of its own, so ⌘Z takes back only the session's
      * text, never the user's typing around it; the caret and the selection keep their places and direction.
      */
-    private void write(int at, String text) {
-        Caret caret = area.getCaret();
-        int dot = caret.getDot();
-        int mark = caret.getMark();
-        int ran = ranEnd();
+    private void write(final int at, final String text) {
+        final Caret caret = area.getCaret();
+        final int dot = caret.getDot();
+        final int mark = caret.getMark();
+        final int ran = ranEnd();
         // ends the user's open compound edit first, so the user's typing and this text are separate undo steps
         area.beginAtomicEdit();
         try {
@@ -541,17 +542,17 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         restoreSelection(dot > at ? dot + text.length() : dot, mark > at ? mark + text.length() : mark);
     }
 
-    private void restoreSelection(int dot, int mark) {
+    private void restoreSelection(final int dot, final int mark) {
         area.setCaretPosition(mark);
         area.moveCaretPosition(dot);
     }
 
-    private void appendBlock(String text) {
+    private void appendBlock(final String text) {
         area.append(separator(area.getText()) + text);
     }
 
     /** What goes between {@code current} and a block appended to it: enough newlines for one blank line. */
-    private static String separator(String current) {
+    private static String separator(final String current) {
         return current.isEmpty() ? "" : current.endsWith("\n\n") ? "" : current.endsWith("\n") ? "\n" : "\n\n";
     }
 
@@ -563,21 +564,21 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         if (!sqlStyle() || !doc.sqlLive()) {
             return false;
         }
-        String text = area.getText();
-        int caret = area.getCaretPosition();
-        Blocks.Block b = Blocks.at(text, caret);
+        final String text = area.getText();
+        final int caret = area.getCaretPosition();
+        final Blocks.Block b = Blocks.at(text, caret);
         if (b == null || caret < b.start() || caret > b.end()) {
             return false;
         }
-        String block = b.text(text);
-        Classifier.Classification c = Classifier.classify(block);
+        final String block = b.text(text);
+        final Classifier.Classification c = Classifier.classify(block);
         return c.target() == Target.SQL && !c.text().isEmpty() || SqlCompletion.startsAStatement(block);
     }
 
     /** Repeated words light up in SQL and in source code, where they are identifiers, not in prose. */
     private void refreshOccurrences() {
-        String style = area.getSyntaxEditingStyle();
-        boolean on = sqlStyle() ? caretInSql()
+        final String style = area.getSyntaxEditingStyle();
+        final boolean on = sqlStyle() ? caretInSql()
                 : !style.equals(SyntaxConstants.SYNTAX_STYLE_NONE) && !style.equals(SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
         if (area.getMarkOccurrences() != on) {
             area.setMarkOccurrences(on);
@@ -590,32 +591,32 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     private void refreshMarkers() {
-        Gutter gutter = scroll.getGutter();
+        final Gutter gutter = scroll.getGutter();
         gutter.removeAllTrackingIcons();
         marked = 0;
         if (!sqlStyle()) {
             return;
         }
-        String text = area.getText();
-        for (Blocks.Block b : Blocks.all(text)) {
-            Classifier.Classification c = Classifier.classify(b.text(text));
+        final String text = area.getText();
+        for (final Blocks.Block b : Blocks.all(text)) {
+            final Classifier.Classification c = Classifier.classify(b.text(text));
             if (c.target() == Target.SQL && c.text().isEmpty()) {
                 continue; // comments only: it goes nowhere
             }
-            Target t = c.target();
+            final Target t = c.target();
             try {
                 gutter.addLineTrackingIcon(b.firstLine(), Icons.get(t == Target.SQL ? "database" : "claude", 14),
                         t == Target.SQL ? "Runs on the panel's connection; click to run the selection in it, or the whole block"
                                 : "Goes to the panel's session as a prompt; click to send the selection in it, or the whole block");
                 marked++;
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 return; // the text changed under us; the next refresh redraws
             }
         }
     }
 
     @Override
-    public int find(String text, boolean forward) {
+    public int find(final String text, final boolean forward) {
         return search.find(text, forward);
     }
 
@@ -630,7 +631,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     }
 
     @Override
-    public void zoom(int steps) {
+    public void zoom(final int steps) {
         area.setFont(area.getFont().deriveFont(Zoomable.clampSize(area.getFont().getSize2D() + steps)));
     }
 

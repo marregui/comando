@@ -1,13 +1,13 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.ui.kit.theme.Theme;
-
-import javax.swing.JComponent;
 import java.awt.Cursor;
 import java.awt.Graphics;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
+import javax.swing.JComponent;
+
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The glass pane of a window that is closing: greys the window and takes every click and key, so nothing typed
@@ -20,31 +20,31 @@ final class ClosingCover extends JComponent {
         setFocusable(true);
         setFocusTraversalKeysEnabled(false);
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        MouseAdapter swallow = new MouseAdapter() {
+        final MouseAdapter swallow = new MouseAdapter() {
         };
         addMouseListener(swallow);
         addMouseMotionListener(swallow);
         addMouseWheelListener(swallow);
         addKeyListener(new KeyAdapter() {
             @Override
-            public void keyPressed(KeyEvent e) {
+            public void keyPressed(final KeyEvent e) {
                 e.consume();
             }
 
             @Override
-            public void keyTyped(KeyEvent e) {
+            public void keyTyped(final KeyEvent e) {
                 e.consume();
             }
 
             @Override
-            public void keyReleased(KeyEvent e) {
+            public void keyReleased(final KeyEvent e) {
                 e.consume();
             }
         });
     }
 
     @Override
-    protected void paintComponent(Graphics g) {
+    protected void paintComponent(final Graphics g) {
         g.setColor(Theme.VEIL);
         g.fillRect(0, 0, getWidth(), getHeight());
     }

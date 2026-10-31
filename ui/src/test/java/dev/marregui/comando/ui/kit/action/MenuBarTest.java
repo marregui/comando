@@ -1,7 +1,11 @@
 package dev.marregui.comando.ui.kit.action;
 
-import org.junit.jupiter.api.Test;
-
+import java.awt.Component;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -9,12 +13,8 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.KeyStroke;
-import java.awt.Component;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+
+import org.junit.jupiter.api.Test;
 
 import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
 import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
@@ -33,7 +33,7 @@ class MenuBarTest {
     private static final KeyStroke GO = KeyStroke.getKeyStroke(KeyEvent.VK_1, InputEvent.META_DOWN_MASK);
 
     private static ActionRegistry registry() {
-        ActionRegistry r = new ActionRegistry();
+        final ActionRegistry r = new ActionRegistry();
         r.register(Command.of("run", "Run", "play", RUN, "", () -> { }));
         r.register(Command.of("toggle", "Connect or disconnect", "plug", null, "", () -> { }));
         r.register(Command.of("compact", "Compact", null, null, "", () -> { }));
@@ -42,9 +42,9 @@ class MenuBarTest {
         return r;
     }
 
-    private static List<String> labels(JMenu m) {
-        List<String> out = new ArrayList<>();
-        for (Component c : m.getMenuComponents()) {
+    private static List<String> labels(final JMenu m) {
+        final List<String> out = new ArrayList<>();
+        for (final Component c : m.getMenuComponents()) {
             out.add(c instanceof JPopupMenu.Separator ? "—" : c instanceof JMenu sub ? sub.getText() + " ▸" : ((JMenuItem) c).getText());
         }
         return out;
@@ -54,13 +54,13 @@ class MenuBarTest {
     /// icon, an item carries its command's accelerator, and each command's group is its path joined with ` ▸ `.
     @Test
     void theBarHasSubmenusSeparatorsAndEachCommandsPath() {
-        ActionRegistry r = registry();
-        JMenuBar bar = r.menuBar(List.of(menu("Panel", null, "run", SEPARATOR,
+        final ActionRegistry r = registry();
+        final JMenuBar bar = r.menuBar(List.of(menu("Panel", null, "run", SEPARATOR,
                 menu("Session", "claude", "toggle", "compact", menu("Model", null, "model.opus")))));
-        JMenu panel = bar.getMenu(0);
+        final JMenu panel = bar.getMenu(0);
         assertThat(panel.getText()).isEqualTo("Panel");
         assertThat(labels(panel)).containsExactly("Run", "—", "Session ▸");
-        JMenu session = (JMenu) panel.getMenuComponent(2);
+        final JMenu session = (JMenu) panel.getMenuComponent(2);
         assertThat(session.getIcon()).as("a submenu carries its subject's icon").isNotNull();
         assertThat(labels(session)).containsExactly("Connect or disconnect", "Compact", "Model ▸");
         assertThat(((JMenuItem) panel.getMenuComponent(0)).getAccelerator()).isEqualTo(RUN);
@@ -75,9 +75,9 @@ class MenuBarTest {
     /// item's accelerator to the menu.
     @Test
     void onlyCommandsInNoMenuGetAWindowWideKey() {
-        ActionRegistry r = registry();
+        final ActionRegistry r = registry();
         r.menuBar(List.of(menu("Panel", null, "run")));
-        JPanel root = new JPanel();
+        final JPanel root = new JPanel();
         r.bind(root);
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(GO)).isEqualTo("go.1");
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(RUN)).as("the menu item's accelerator runs it").isNull();
@@ -86,11 +86,11 @@ class MenuBarTest {
     /// The item and submenu tooltip providers set the text they return; a null tip leaves no tooltip.
     @Test
     void itemsAndSubmenusCarryTheirTooltips() {
-        JMenuBar bar = registry().menuBar(List.of(menu("Panel", null, "run", menu("Session", "claude", "toggle", "compact"))),
+        final JMenuBar bar = registry().menuBar(List.of(menu("Panel", null, "run", menu("Session", "claude", "toggle", "compact"))),
                 id -> id.equals("run") ? "Runs the block" : null, title -> title.equals("Session") ? "The panel's session" : null);
-        JMenu panel = bar.getMenu(0);
+        final JMenu panel = bar.getMenu(0);
         assertThat(((JMenuItem) panel.getMenuComponent(0)).getToolTipText()).isEqualTo("Runs the block");
-        JMenu session = (JMenu) panel.getMenuComponent(1);
+        final JMenu session = (JMenu) panel.getMenuComponent(1);
         assertThat(session.getToolTipText()).isEqualTo("The panel's session");
         assertThat(((JMenuItem) session.getMenuComponent(1)).getToolTipText()).as("no tip, no tooltip").isNull();
     }
@@ -100,16 +100,16 @@ class MenuBarTest {
     /// [IllegalStateException] naming every such command.
     @Test
     void aCommandInNoMenuIsNamedByItsAreaAndKeepsItsWindowWideKey() {
-        ActionRegistry r = registry();
+        final ActionRegistry r = registry();
         r.menuBar(List.of(menu("Panel", null, "run", "toggle", "compact", "model.opus")));
         r.areas(Map.of("go.1", "Panels"));
         assertThat(r.get("go.1").group()).isEqualTo("Panels");
         assertThat(r.get("run").group()).as("a menu's path stays").isEqualTo("Panel");
-        JPanel root = new JPanel();
+        final JPanel root = new JPanel();
         r.bind(root);
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(GO)).as("an area is no menu").isEqualTo("go.1");
 
-        ActionRegistry missing = registry();
+        final ActionRegistry missing = registry();
         missing.menuBar(List.of(menu("Panel", null, "run")));
         assertThatThrownBy(() -> missing.areas(Map.of("go.1", "Panels")))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("toggle").hasMessageContaining("compact");

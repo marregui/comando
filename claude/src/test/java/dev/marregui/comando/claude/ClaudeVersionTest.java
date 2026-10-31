@@ -45,12 +45,12 @@ class ClaudeVersionTest {
     /// A version printed before a background child holds stdout open is read within 7 s: the check does not wait for
     /// the pipe to close.
     @Test
-    void aChildHoldingTheOutputOpenAfterTheExitDoesNotHoldTheCheck(@TempDir Path dir) throws IOException {
-        Path script = dir.resolve("claude");
+    void aChildHoldingTheOutputOpenAfterTheExitDoesNotHoldTheCheck(@TempDir final Path dir) throws IOException {
+        final Path script = dir.resolve("claude");
         Files.writeString(script, "#!/bin/sh\necho '2.1.296 (Claude Code)'\nsleep 8 &\nexit 0\n");
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwx------"));
 
-        String message = assertTimeoutPreemptively(Duration.ofSeconds(7), () -> ClaudeVersion.check(script.toString(), RootLaunch.INHERIT));
+        final String message = assertTimeoutPreemptively(Duration.ofSeconds(7), () -> ClaudeVersion.check(script.toString(), RootLaunch.INHERIT));
 
         assertThat(message).isEmpty();
     }

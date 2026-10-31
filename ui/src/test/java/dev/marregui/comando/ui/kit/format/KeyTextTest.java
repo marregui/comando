@@ -1,8 +1,9 @@
 package dev.marregui.comando.ui.kit.format;
 
-import dev.marregui.comando.ui.kit.desktop.Platform;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

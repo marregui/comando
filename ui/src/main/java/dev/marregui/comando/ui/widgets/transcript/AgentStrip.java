@@ -1,19 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
-import dev.marregui.comando.core.state.BackgroundTask;
-import dev.marregui.comando.core.view.Clip;
-import dev.marregui.comando.ui.kit.async.ShownTimer;
-import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
-import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas.RunningAgent;
-
-import javax.swing.BorderFactory;
-import javax.swing.Icon;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
@@ -28,6 +14,20 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+import javax.swing.BorderFactory;
+import javax.swing.Icon;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+
+import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas.RunningAgent;
 
 /**
  * One line above the transcript while sub-agents run: a chip per running top-level Agent card (spinner, description,
@@ -57,7 +57,7 @@ final class AgentStrip extends JPanel {
      * A chip's click has {@code reveal} show the running sub-agent's card in the transcript, by its call id; its double
      * click has {@code open} open the sub-agent's own tab in the lower panel, or bring it forward.
      */
-    AgentStrip(Consumer<String> reveal, Consumer<String> open, LongSupplier clock) {
+    AgentStrip(final Consumer<String> reveal, final Consumer<String> open, final LongSupplier clock) {
         super(null);
         this.reveal = reveal;
         this.open = open;
@@ -70,8 +70,8 @@ final class AgentStrip extends JPanel {
      * Shows {@code agents}, the running top-level sub-agent cards, and the session's background sub-agents among
      * {@code tasks}; rebuilds the chips only when what they show changed.
      */
-    void show(List<RunningAgent> agents, List<BackgroundTask> tasks) {
-        List<BackgroundTask> background = background(agents, tasks);
+    void show(final List<RunningAgent> agents, final List<BackgroundTask> tasks) {
+        final List<BackgroundTask> background = background(agents, tasks);
         if (agents.equals(this.agents) && background.equals(this.tasks)) {
             return;
         }
@@ -79,15 +79,15 @@ final class AgentStrip extends JPanel {
         this.tasks = background;
         removeAll();
         chips.clear();
-        for (RunningAgent a : this.agents) {
-            Chip c = new Chip(spinner, a.description(), a.startedMillis(), a.toolUseId());
+        for (final RunningAgent a : this.agents) {
+            final Chip c = new Chip(spinner, a.description(), a.startedMillis(), a.toolUseId());
             c.setToolTipText("Show this sub-agent's card; a double click opens its tab");
             c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             // on the press, not the click: the strip rebuilds its chips as the sub-agents change, and a click whose
             // press and release land on two chips is no click; the double click's first press shows the card
             c.addMouseListener(new MouseAdapter() {
                 @Override
-                public void mousePressed(MouseEvent e) {
+                public void mousePressed(final MouseEvent e) {
                     if (!SwingUtilities.isLeftMouseButton(e)) {
                         return;
                     }
@@ -100,8 +100,8 @@ final class AgentStrip extends JPanel {
             });
             chips.add(c);
         }
-        for (BackgroundTask t : background) {
-            Chip c = new Chip(Icons.get("hourglass", 12), t.description(), t.startedMillis() > 0 ? t.startedMillis() : -1, "");
+        for (final BackgroundTask t : background) {
+            final Chip c = new Chip(Icons.get("hourglass", 12), t.description(), t.startedMillis() > 0 ? t.startedMillis() : -1, "");
             c.setToolTipText("A sub-agent working in the background");
             chips.add(c);
         }
@@ -117,9 +117,9 @@ final class AgentStrip extends JPanel {
     }
 
     /** The background sub-agents that no running card shows already, by id or by description. */
-    private static List<BackgroundTask> background(List<RunningAgent> agents, List<BackgroundTask> tasks) {
-        Set<String> shown = new HashSet<>();
-        for (RunningAgent a : agents) {
+    private static List<BackgroundTask> background(final List<RunningAgent> agents, final List<BackgroundTask> tasks) {
+        final Set<String> shown = new HashSet<>();
+        for (final RunningAgent a : agents) {
             shown.add(a.toolUseId());
             shown.add(a.agentId());
             shown.add(a.description());
@@ -143,11 +143,11 @@ final class AgentStrip extends JPanel {
 
     @Override
     public Dimension getPreferredSize() {
-        Insets in = getInsets();
+        final Insets in = getInsets();
         int w = 0;
         int h = 0;
-        for (Chip c : chips) {
-            Dimension d = c.getPreferredSize();
+        for (final Chip c : chips) {
+            final Dimension d = c.getPreferredSize();
             w += d.width + GAP;
             h = Math.max(h, d.height);
         }
@@ -167,15 +167,15 @@ final class AgentStrip extends JPanel {
     /** Left to right on one line; what does not fit, keeping room for the "+N" chip, is counted in it. */
     @Override
     public void doLayout() {
-        Insets in = getInsets();
-        int right = getWidth() - in.right - GAP;
+        final Insets in = getInsets();
+        final int right = getWidth() - in.right - GAP;
         int x = in.left + GAP;
-        int y = in.top + VGAP;
+        final int y = in.top + VGAP;
         int fitted = 0;
         for (int i = 0; i < chips.size(); i++) {
-            Dimension d = chips.get(i).getPreferredSize();
-            int left = chips.size() - i - 1;
-            int reserve = left == 0 ? 0 : GAP + moreWidth(left);
+            final Dimension d = chips.get(i).getPreferredSize();
+            final int left = chips.size() - i - 1;
+            final int reserve = left == 0 ? 0 : GAP + moreWidth(left);
             if (x + d.width + reserve > right) {
                 break;
             }
@@ -183,23 +183,23 @@ final class AgentStrip extends JPanel {
             x += d.width + GAP;
             fitted++;
         }
-        StringBuilder hidden = new StringBuilder();
+        final StringBuilder hidden = new StringBuilder();
         for (int i = fitted; i < chips.size(); i++) {
             chips.get(i).setBounds(0, 0, 0, 0);
             hidden.append(hidden.isEmpty() ? "" : ", ").append(chips.get(i).description);
         }
-        int rest = chips.size() - fitted;
+        final int rest = chips.size() - fitted;
         if (rest == 0) {
             more.setBounds(0, 0, 0, 0);
             return;
         }
         more.setText("+" + rest);
         more.setToolTipText(hidden.toString());
-        Dimension d = more.getPreferredSize();
+        final Dimension d = more.getPreferredSize();
         more.setBounds(x, y + 2, d.width, d.height);
     }
 
-    private int moreWidth(int n) {
+    private int moreWidth(final int n) {
         return more.getFontMetrics(more.getFont()).stringWidth("+" + n) + 2;
     }
 
@@ -218,7 +218,7 @@ final class AgentStrip extends JPanel {
         }
         if (!agents.isEmpty()) {
             spinner.advance();
-            for (Chip c : chips) {
+            for (final Chip c : chips) {
                 if (c.getIcon() == spinner) {
                     c.repaint();
                 }
@@ -229,12 +229,12 @@ final class AgentStrip extends JPanel {
 
     /** The elapsed times, once a second. */
     private void relabel() {
-        long now = clock.getAsLong();
+        final long now = clock.getAsLong();
         if (now / 1000 == lastSecond) {
             return;
         }
         lastSecond = now / 1000;
-        for (Chip c : chips) {
+        for (final Chip c : chips) {
             c.relabel(now);
         }
     }
@@ -245,7 +245,7 @@ final class AgentStrip extends JPanel {
         private final long startedMillis;
         final String toolUseId;
 
-        Chip(Icon icon, String description, long startedMillis, String toolUseId) {
+        Chip(final Icon icon, final String description, final long startedMillis, final String toolUseId) {
             super(icon);
             this.description = Clip.keepStart(description.isEmpty() ? "sub-agent" : description, DESCRIPTION_CHARS);
             this.startedMillis = startedMillis;
@@ -256,16 +256,16 @@ final class AgentStrip extends JPanel {
             setOpaque(false);
         }
 
-        void relabel(long now) {
-            String text = startedMillis < 0 ? description : description + " · " + Labels.elapsed(now - startedMillis);
+        void relabel(final long now) {
+            final String text = startedMillis < 0 ? description : description + " · " + Labels.elapsed(now - startedMillis);
             if (!text.equals(getText())) {
                 setText(text);
             }
         }
 
         @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
+        protected void paintComponent(final Graphics g) {
+            final Graphics2D g2 = (Graphics2D) g.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(Theme.CARD);

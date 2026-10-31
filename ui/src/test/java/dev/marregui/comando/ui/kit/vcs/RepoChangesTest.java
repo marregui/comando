@@ -1,11 +1,12 @@
 package dev.marregui.comando.ui.kit.vcs;
 
-import dev.marregui.comando.core.model.RepoStatus;
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.jupiter.api.Test;
+
+import dev.marregui.comando.core.model.RepoStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Listeners hear only of a read that changed something, until stopped.
 class RepoChangesTest {
 
-    private static RepoStatus repo(RepoStatus.FileChange... changes) {
+    private static RepoStatus repo(final RepoStatus.FileChange... changes) {
         return new RepoStatus("/r", "main", List.of(changes), false, "");
     }
 
@@ -23,7 +24,7 @@ class RepoChangesTest {
     /// or one above the repository.
     @Test
     void filesAndTheFoldersHoldingThemAreFoundByPath() {
-        RepoChanges c = new RepoChanges();
+        final RepoChanges c = new RepoChanges();
         c.set(List.of(repo(new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED),
                 new RepoStatus.FileChange("notes/n.md", "", RepoStatus.Kind.UNTRACKED))));
         assertThat(c.of(Path.of("/r/src/main/A.java"))).contains(RepoStatus.Kind.MODIFIED);
@@ -39,10 +40,10 @@ class RepoChangesTest {
     /// Setting an equal status twice is heard once; after stop an empty set is not heard and leaves no repositories.
     @Test
     void listenersHearOnlyOfAReadThatChangedSomething() {
-        RepoChanges c = new RepoChanges();
-        AtomicInteger heard = new AtomicInteger();
-        Runnable stop = c.listen(heard::incrementAndGet);
-        RepoStatus r = repo(new RepoStatus.FileChange("a", "", RepoStatus.Kind.ADDED));
+        final RepoChanges c = new RepoChanges();
+        final AtomicInteger heard = new AtomicInteger();
+        final Runnable stop = c.listen(heard::incrementAndGet);
+        final RepoStatus r = repo(new RepoStatus.FileChange("a", "", RepoStatus.Kind.ADDED));
         c.set(List.of(r));
         c.set(List.of(repo(new RepoStatus.FileChange("a", "", RepoStatus.Kind.ADDED))));
         assertThat(heard).hasValue(1);

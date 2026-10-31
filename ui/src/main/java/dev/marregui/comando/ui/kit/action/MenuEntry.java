@@ -38,7 +38,7 @@ public sealed interface MenuEntry {
     /**
      * A menu of {@code entries}: a {@code String} is a command id, {@link #SEPARATOR} a line, a {@link Menu} a submenu.
      */
-    static Menu menu(String title, String icon, Object... entries) {
+    static Menu menu(final String title, final String icon, final Object... entries) {
         return new Menu(title, icon, Arrays.stream(entries).map(e -> e instanceof MenuEntry m ? m : new Item((String) e)).toList());
     }
 }

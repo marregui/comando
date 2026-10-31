@@ -1,5 +1,31 @@
 package dev.marregui.comando.mcp;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
+
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
@@ -29,31 +55,6 @@ import dev.marregui.comando.core.view.FileView;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-import java.util.regex.Pattern;
 
 /**
  * comando's MCP tools. A UI tool validates its input and sends an intent; it returns at once. The approval tool
@@ -75,11 +76,11 @@ public final class McpTools {
 
     /** A tool's outcome: text for Claude, and whether it is an error. */
     record Outcome(String text, boolean error) {
-        static Outcome ok(String text) {
+        static Outcome ok(final String text) {
             return new Outcome(text, false);
         }
 
-        static Outcome fail(String text) {
+        static Outcome fail(final String text) {
             return new Outcome(text == null || text.isBlank() ? "failed without a message" : text, true);
         }
     }
@@ -115,8 +116,8 @@ public final class McpTools {
     /** The JSON-RPC call this request thread serves; each request runs on its own thread. */
     private static final ThreadLocal<String> CALL = new ThreadLocal<>();
 
-    public McpTools(IntentSink sink, Supplier<AppState> state, TranscriptRegistry transcripts, QueryPort db, AuditLog audit, Clock clock,
-                    Duration approvalTimeout) {
+    public McpTools(final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final QueryPort db, final AuditLog audit, final Clock clock,
+                    final Duration approvalTimeout) {
         this.sink = sink;
         this.state = state;
         this.transcripts = transcripts;
@@ -125,14 +126,14 @@ public final class McpTools {
         this.clock = clock;
         this.approvalTimeout = approvalTimeout;
         try (var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
-            ArrayNode first = (ArrayNode) json.readTree(in);
-            Set<String> names = new LinkedHashSet<>();
+            final ArrayNode first = (ArrayNode) json.readTree(in);
+            final Set<String> names = new LinkedHashSet<>();
             first.forEach(d -> names.add(d.path("name").asString("")));
             builtIn = Set.copyOf(names);
             actions = new ActionTools(sink, state);
             definitions = first.deepCopy();
             definitions.addAll(actions.definitions(builtIn));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException("cannot read the tool definitions", e);
         }
     }
@@ -142,27 +143,27 @@ public final class McpTools {
     }
 
     /** The data root's {@code agents.json}, where the user grants callers destructive actions (record 121, rule 2). */
-    public void agentsFile(Path file) {
+    public void agentsFile(final Path file) {
         actions.agentsFile(file);
     }
 
     /** The local servers agents start and stop as the toggles do (record 121); the application sets them once. */
-    public void servers(List<ServerSwitch> servers) {
+    public void servers(final List<ServerSwitch> servers) {
         actions.servers(servers);
     }
 
     /** The other comando instances this one consults and answers (record 123); the application sets it once. */
-    public void peers(Peers peers) {
+    public void peers(final Peers peers) {
         this.peers = peers;
     }
 
     /** Runs tool {@code name} for {@code session}; never throws for bad input, which becomes an error outcome. */
-    Outcome call(String session, String name, JsonNode args) {
+    Outcome call(final String session, final String name, final JsonNode args) {
         return call(session, name, args, null);
     }
 
     /** As {@link #call(String, String, JsonNode)}, for the cancellable JSON-RPC request {@code callKey}. */
-    Outcome call(String session, String name, JsonNode args, String callKey) {
+    Outcome call(final String session, final String name, final JsonNode args, final String callKey) {
         CALL.set(callKey);
         try {
             return invoke(session, name, args);
@@ -175,15 +176,15 @@ public final class McpTools {
      * Claude Code cancelled a call (an interrupt): a card it waits on is withdrawn and the call denied, so a
      * statement it asked to run cannot run after the turn that wanted it was stopped.
      */
-    void cancelled(String callKey) {
-        Long id = callKey == null ? null : approvalByCall.remove(callKey);
-        CompletableFuture<ApprovalDecision> f = id == null ? null : pending.get(id);
+    void cancelled(final String callKey) {
+        final Long id = callKey == null ? null : approvalByCall.remove(callKey);
+        final CompletableFuture<ApprovalDecision> f = id == null ? null : pending.get(id);
         if (f != null && f.complete(new ApprovalDecision.Deny("The call was cancelled."))) {
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "Claude Code cancelled the call"));
         }
     }
 
-    private Outcome invoke(String session, String name, JsonNode args) {
+    private Outcome invoke(final String session, final String name, final JsonNode args) {
         Outcome out;
         try {
             out = switch (name) {
@@ -210,9 +211,9 @@ public final class McpTools {
                 case "instance_reply" -> peers().replyOf(args);
                 default -> ActionTools.handles(name, builtIn) ? actions.run(session, name, args) : Outcome.fail("unknown tool " + name);
             };
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             out = Outcome.fail(e.getMessage());
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             // every call gets an answer: an unexpected failure is a tool error, not a dropped request
             LOG.log(System.Logger.Level.WARNING, "tool failed [tool=" + name + ", session=" + session + ']', e);
             out = Outcome.fail(name + " failed: " + e);
@@ -223,25 +224,25 @@ public final class McpTools {
         return out;
     }
 
-    private Outcome approve(String session, JsonNode args) {
-        String tool = args.path("tool_name").asString("");
-        JsonNode input = args.path("input");
+    private Outcome approve(final String session, final JsonNode args) {
+        final String tool = args.path("tool_name").asString("");
+        final JsonNode input = args.path("input");
         if (tool.isEmpty() || !input.isObject()) {
             return Outcome.fail("approve takes {tool_name, input}");
         }
-        ApprovalKind kind = ApprovalKind.ofTool(tool);
-        ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asString(""));
+        final ApprovalKind kind = ApprovalKind.ofTool(tool);
+        final ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asString(""));
         audit.record(session, "approval", tool, redacted(input), decision.toString());
         return Outcome.ok(permissionResult(tool, (ObjectNode) input, decision));
     }
 
     /** Puts a card in the inbox and waits for the user's answer, or denies at the deadline. */
-    private ApprovalDecision ask(String session, ApprovalKind kind, String tool, String inputJson, String summary, String toolUseId) {
-        long id = approvalIds.incrementAndGet();
-        CompletableFuture<ApprovalDecision> answer = new CompletableFuture<>();
+    private ApprovalDecision ask(final String session, final ApprovalKind kind, final String tool, final String inputJson, final String summary, final String toolUseId) {
+        final long id = approvalIds.incrementAndGet();
+        final CompletableFuture<ApprovalDecision> answer = new CompletableFuture<>();
         pending.put(id, answer);
         askedBy.put(id, session);
-        String call = CALL.get();
+        final String call = CALL.get();
         if (call != null) {
             approvalByCall.put(call, id);
         }
@@ -251,19 +252,19 @@ public final class McpTools {
                 return SESSION_ENDED;
             }
             sink.dispatch(new Intent.ApprovalRequested(new Approval(id, session, kind, tool, inputJson, summary, clock.millis(), toolUseId)));
-            ApprovalDecision d = answer.get(approvalTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            final ApprovalDecision d = answer.get(approvalTimeout.toMillis(), TimeUnit.MILLISECONDS);
             if (d == SESSION_ENDED) {
                 sink.dispatch(new Intent.ApprovalWithdrawn(id, "the session ended"));
             }
             return d;
-        } catch (TimeoutException e) {
+        } catch (final TimeoutException e) {
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "no answer within " + approvalTimeout.toMinutes() + " minutes"));
             return new ApprovalDecision.Deny("No answer from the user within " + approvalTimeout.toMinutes() + " minutes.");
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "comando is shutting down"));
             return new ApprovalDecision.Deny("comando is shutting down.");
-        } catch (ExecutionException e) {
+        } catch (final ExecutionException e) {
             return new ApprovalDecision.Deny("Approval failed: " + e.getCause().getMessage());
         } finally {
             pending.remove(id);
@@ -275,20 +276,20 @@ public final class McpTools {
     }
 
     /** Tells the tools which panels take no text (a log); the application calls it once, with the store's view. */
-    public void readOnly(Predicate<PanelId> readOnly) {
+    public void readOnly(final Predicate<PanelId> readOnly) {
         this.readOnly = readOnly;
     }
 
     /** Tells the tools which sessions still run; the server calls it once, with its view of the tickets. */
-    void live(Predicate<String> live) {
+    void live(final Predicate<String> live) {
         this.live = live;
     }
 
     /** A session's process ended: every card it still waits on is denied, and withdrawn by the request it answers. */
-    void sessionEnded(String session) {
+    void sessionEnded(final String session) {
         askedBy.forEach((id, asker) -> {
             if (asker.equals(session)) {
-                CompletableFuture<ApprovalDecision> answer = pending.get(id);
+                final CompletableFuture<ApprovalDecision> answer = pending.get(id);
                 if (answer != null) {
                     answer.complete(SESSION_ENDED);
                 }
@@ -296,23 +297,23 @@ public final class McpTools {
         });
     }
 
-    void resolve(Approval approval, ApprovalDecision decision) {
-        CompletableFuture<ApprovalDecision> f = pending.get(approval.id());
+    void resolve(final Approval approval, final ApprovalDecision decision) {
+        final CompletableFuture<ApprovalDecision> f = pending.get(approval.id());
         if (f != null) {
             f.complete(decision);
         }
     }
 
     /** Denies every waiting card; used at shutdown so no call outlives the server. */
-    void denyAll(String reason) {
-        for (CompletableFuture<ApprovalDecision> f : pending.values()) {
+    void denyAll(final String reason) {
+        for (final CompletableFuture<ApprovalDecision> f : pending.values()) {
             f.complete(new ApprovalDecision.Deny(reason));
         }
     }
 
     /** The JSON Claude Code expects back from a permission-prompt tool. */
-    String permissionResult(String tool, ObjectNode input, ApprovalDecision decision) {
-        ObjectNode r = json.createObjectNode();
+    String permissionResult(final String tool, final ObjectNode input, final ApprovalDecision decision) {
+        final ObjectNode r = json.createObjectNode();
         switch (decision) {
             case ApprovalDecision.Deny d -> {
                 r.put("behavior", "deny");
@@ -320,8 +321,8 @@ public final class McpTools {
             }
             case ApprovalDecision.Answer a -> {
                 r.put("behavior", "allow");
-                ObjectNode updated = input.deepCopy();
-                ObjectNode answers = updated.putObject("answers");
+                final ObjectNode updated = input.deepCopy();
+                final ObjectNode answers = updated.putObject("answers");
                 a.answers().forEach(answers::put);
                 r.set("updatedInput", updated);
             }
@@ -331,7 +332,7 @@ public final class McpTools {
                 if (a.scope() == ApprovalDecision.Scope.ONCE) {
                     break;
                 }
-                ObjectNode update = r.putArray("updatedPermissions").addObject();
+                final ObjectNode update = r.putArray("updatedPermissions").addObject();
                 if (ApprovalKind.ofTool(tool) == ApprovalKind.PLAN) {
                     // a plan approved beyond once sets the session to accept edits, as the terminal's third choice does
                     update.put("type", "setMode");
@@ -339,11 +340,11 @@ public final class McpTools {
                     update.put("destination", "session");
                     break;
                 }
-                PermissionRules.Rules rules = PermissionRules.rules(tool, field -> input.path(field).asString(""));
+                final PermissionRules.Rules rules = PermissionRules.rules(tool, field -> input.path(field).asString(""));
                 update.put("type", "addRules");
-                ArrayNode entries = update.putArray("rules");
-                for (PermissionRules.Rule rule : rules.rules()) {
-                    ObjectNode entry = entries.addObject();
+                final ArrayNode entries = update.putArray("rules");
+                for (final PermissionRules.Rule rule : rules.rules()) {
+                    final ObjectNode entry = entries.addObject();
                     entry.put("toolName", rule.toolName());
                     if (!rule.ruleContent().isEmpty()) {
                         entry.put("ruleContent", rule.ruleContent());
@@ -351,25 +352,25 @@ public final class McpTools {
                 }
                 update.put("behavior", "allow");
                 // the card offers no Always for a rule that may not be saved; an Always for one stays in the session
-                boolean save = a.scope() == ApprovalDecision.Scope.ALWAYS && rules.persistable();
+                final boolean save = a.scope() == ApprovalDecision.Scope.ALWAYS && rules.persistable();
                 update.put("destination", save ? "localSettings" : "session");
             }
         }
         return r.toString();
     }
 
-    private Outcome show(String session, String title, ViewSpec spec, JsonNode args) {
-        Placement placement = "side".equalsIgnoreCase(args.path("placement").asString("lower")) ? Placement.SIDE : Placement.LOWER;
+    private Outcome show(final String session, final String title, final ViewSpec spec, final JsonNode args) {
+        final Placement placement = "side".equalsIgnoreCase(args.path("placement").asString("lower")) ? Placement.SIDE : Placement.LOWER;
         sink.dispatch(new Intent.ShowView(session, title, spec, placement));
         return Outcome.ok("shown '" + title + "' (" + spec.type() + ") in the " + placement.name().toLowerCase(Locale.ROOT) + " panel");
     }
 
-    private Outcome edit(String session, JsonNode args, EditMode mode) {
-        JsonNode text = args.path("text");
+    private Outcome edit(final String session, final JsonNode args, final EditMode mode) {
+        final JsonNode text = args.path("text");
         if (!text.isString()) {
             return Outcome.fail("text is required");
         }
-        PanelState panel = targetPanel(session, args.path("panel").asString(""));
+        final PanelState panel = targetPanel(session, args.path("panel").asString(""));
         if (!panel.session().isEmpty() && !panel.session().equals(session) && !args.path("force").asBoolean(false)) {
             return Outcome.fail("panel '" + panel.title() + "' belongs to session " + panel.session()
                     + "; pass force: true only when the user asked you to write there");
@@ -385,20 +386,20 @@ public final class McpTools {
      * A named panel; else the focused one when it is bound to the caller; else the caller's first. A session
      * bound to no panel must name one, so it never writes into another session's panel by default.
      */
-    private PanelState targetPanel(String session, String name) {
-        AppState s = state.get();
+    private PanelState targetPanel(final String session, final String name) {
+        final AppState s = state.get();
         if (!name.isBlank()) {
             return panelNamed(s, name).orElseThrow(() -> new IllegalArgumentException("no panel '" + name + "'; panels: "
                     + String.join(", ", s.panels().stream().map(PanelState::title).toList())));
         }
-        PanelState focused = s.focusedPanel();
+        final PanelState focused = s.focusedPanel();
         if (focused.session().equals(session)) {
             return focused;
         }
-        List<PanelState> mine = s.panelsBoundToSession(session);
+        final List<PanelState> mine = s.panelsBoundToSession(session);
         if (mine.isEmpty()) {
-            String panels = String.join(", ", s.panels().stream().map(PanelState::title).toList());
-            Optional<PanelState> closed = s.closedPanelOfSession(session);
+            final String panels = String.join(", ", s.panels().stream().map(PanelState::title).toList());
+            final Optional<PanelState> closed = s.closedPanelOfSession(session);
             throw new IllegalArgumentException(closed.isPresent()
                     ? "this session's panel " + closed.get().title() + " is closed; the user reopens it by opening the session in the sidebar, or pass panel (one of: " + panels + ')'
                     : "this session is bound to no panel; pass panel (one of: " + panels + ')');
@@ -407,23 +408,23 @@ public final class McpTools {
     }
 
     /** The panel with id {@code name}, or titled {@code name} in any case: every tool naming a panel looks it up so. */
-    private static Optional<PanelState> panelNamed(AppState s, String name) {
+    private static Optional<PanelState> panelNamed(final AppState s, final String name) {
         return s.panels().stream().filter(p -> p.id().value().equals(name) || p.title().equalsIgnoreCase(name)).findFirst();
     }
 
     /** Shows a file in the side pane, read as the user's click on a link reads it ({@link FileView}). */
-    private Outcome openFile(String session, JsonNode args) {
-        String p = args.path("path").asString("");
+    private Outcome openFile(final String session, final JsonNode args) {
+        final String p = args.path("path").asString("");
         if (p.isBlank()) {
             return Outcome.fail("path is required");
         }
-        String base = state.get().session(session).map(x -> x.spec().workDir()).orElse(HomeDir.home());
-        Path path = FileView.resolve(p, base);
-        int line = args.path("line").asInt(0);
+        final String base = state.get().session(session).map(x -> x.spec().workDir()).orElse(HomeDir.home());
+        final Path path = FileView.resolve(p, base);
+        final int line = args.path("line").asInt(0);
         FileView file;
         try {
             file = FileView.read(path, line);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return Outcome.fail("cannot open " + path + ": " + e.getMessage());
         }
         sink.dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
@@ -435,14 +436,14 @@ public final class McpTools {
      * Focuses a panel, selects a lower tab, shows or hides panes and moves the split; every argument is
      * optional. Every argument is checked before anything changes, so a refused call changed nothing.
      */
-    private Outcome layout(String session, JsonNode args) {
-        AppState s = state.get();
-        String panel = args.path("panel").asString("");
+    private Outcome layout(final String session, final JsonNode args) {
+        final AppState s = state.get();
+        final String panel = args.path("panel").asString("");
         PanelState target = null;
         if (!panel.isEmpty()) {
             target = panelNamed(s, panel).orElseThrow(() -> new IllegalArgumentException("no panel with id or title '" + panel + "'"));
         }
-        String tab = args.path("lower_tab").asString("");
+        final String tab = args.path("lower_tab").asString("");
         LowerTab lower = null;
         if (!tab.isEmpty()) {
             lower = switch (tab.toLowerCase(Locale.ROOT)) {
@@ -457,7 +458,7 @@ public final class McpTools {
                                 + "title of a view in the lower panel; no view '" + tab + "'"));
             };
         }
-        Layout layout = new Layout(toggle(args.path("sidebar")), toggle(args.path("side_pane")),
+        final Layout layout = new Layout(toggle(args.path("sidebar")), toggle(args.path("side_pane")),
                 args.path("lower_share").isNumber() ? args.path("lower_share").asDouble(0) : Double.NaN);
         if (target == null && lower == null && layout.changesNothing()) {
             return Outcome.fail("nothing to change: pass panel, lower_tab, sidebar, side_pane or lower_share");
@@ -468,7 +469,7 @@ public final class McpTools {
             return Outcome.fail("panel " + target.title() + " is not bound to this session; a session may focus only its own panels");
         }
         sink.dispatch(new Intent.SessionLayout(session, target == null ? null : target.id(), lower, layout.changesNothing() ? null : layout));
-        StringBuilder done = new StringBuilder();
+        final StringBuilder done = new StringBuilder();
         if (target != null && s.focused().equals(target.id())) {
             done.append("panel ").append(target.title()).append(" already has the focus")
                     .append(lower != null ? "; selected lower tab " + tab : "").append("; ");
@@ -477,7 +478,7 @@ public final class McpTools {
             done.append("will focus panel ").append(target.title()).append(lower != null ? " and select lower tab " + tab : "")
                     .append(" once the user pauses typing; ");
         } else if (lower != null) {
-            boolean mine = s.focusedPanel().session().equals(session);
+            final boolean mine = s.focusedPanel().session().equals(session);
             done.append(mine ? "selected lower tab " + tab : "did not select lower tab " + tab
                     + ": the user is looking at a panel of another session").append("; ");
         }
@@ -490,13 +491,13 @@ public final class McpTools {
     /**
      * Closes a view this session placed and the user has not pinned; the user's own views are not Claude's to close.
      */
-    private Outcome closeView(String session, JsonNode args) {
-        JsonNode id = args.path("id");
+    private Outcome closeView(final String session, final JsonNode args) {
+        final JsonNode id = args.path("id");
         if (!id.canConvertToLong() && !(id.isString() && id.asString("").matches("\\d+"))) {
             throw new IllegalArgumentException("id must be a view id from ui_get_state");
         }
-        long viewId = id.asLong(0);
-        ViewState v = state.get().views().stream().filter(x -> x.id() == viewId).findFirst()
+        final long viewId = id.asLong(0);
+        final ViewState v = state.get().views().stream().filter(x -> x.id() == viewId).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no view with id " + viewId));
         if (!v.session().equals(session)) {
             throw new IllegalArgumentException("view " + viewId + " was not placed by this session");
@@ -508,16 +509,16 @@ public final class McpTools {
         return Outcome.ok("closed view " + viewId + " '" + v.title() + "'");
     }
 
-    private static Layout.Toggle toggle(JsonNode n) {
+    private static Layout.Toggle toggle(final JsonNode n) {
         return n.isBoolean() ? (n.asBoolean(false) ? Layout.Toggle.SHOW : Layout.Toggle.HIDE) : Layout.Toggle.KEEP;
     }
 
-    private Outcome notify(JsonNode args) {
-        String text = args.path("text").asString("");
+    private Outcome notify(final JsonNode args) {
+        final String text = args.path("text").asString("");
         if (text.isBlank()) {
             return Outcome.fail("text is required");
         }
-        Notice.Level level = switch (args.path("level").asString("info").toLowerCase(Locale.ROOT)) {
+        final Notice.Level level = switch (args.path("level").asString("info").toLowerCase(Locale.ROOT)) {
             case "warn", "warning" -> Notice.Level.WARN;
             case "error" -> Notice.Level.ERROR;
             default -> Notice.Level.INFO;
@@ -527,18 +528,18 @@ public final class McpTools {
     }
 
     String stateJson() {
-        AppState s = state.get();
-        ObjectNode root = json.createObjectNode();
-        ArrayNode panels = root.putArray("panels");
-        for (PanelState p : s.panels()) {
-            ObjectNode n = panels.addObject();
+        final AppState s = state.get();
+        final ObjectNode root = json.createObjectNode();
+        final ArrayNode panels = root.putArray("panels");
+        for (final PanelState p : s.panels()) {
+            final ObjectNode n = panels.addObject();
             n.put("id", p.id().value());
             n.put("title", p.title());
             n.put("connection", p.connection());
             n.put("session", p.session());
             n.put("focused", p.id().equals(s.focused()));
             s.runOf(p.id()).ifPresent(r -> {
-                ObjectNode run = n.putObject("lastRun");
+                final ObjectNode run = n.putObject("lastRun");
                 run.put("sql", clip(r.sql(), 500));
                 run.put("status", r.status().name());
                 run.put("rows", r.rowCount());
@@ -547,17 +548,17 @@ public final class McpTools {
                 }
             });
         }
-        ArrayNode conns = root.putArray("connections");
-        for (ConnectionState c : s.connections()) {
-            ObjectNode n = conns.addObject();
+        final ArrayNode conns = root.putArray("connections");
+        for (final ConnectionState c : s.connections()) {
+            final ObjectNode n = conns.addObject();
             n.put("name", c.name());
             n.put("target", c.spec().label());
             n.put("status", c.status().name());
             n.put("prod", c.spec().prod());
         }
-        ArrayNode sessions = root.putArray("sessions");
-        for (SessionState x : s.sessions()) {
-            ObjectNode n = sessions.addObject();
+        final ArrayNode sessions = root.putArray("sessions");
+        for (final SessionState x : s.sessions()) {
+            final ObjectNode n = sessions.addObject();
             n.put("name", x.name());
             n.put("status", x.status().name());
             n.put("workDir", x.spec().workDir());
@@ -569,24 +570,24 @@ public final class McpTools {
             n.put("effort", x.spec().effort());
             n.put("createdBy", x.spec().createdBy());
         }
-        ArrayNode closed = root.putArray("closedPanels");
-        for (PanelState p : s.closed()) {
+        final ArrayNode closed = root.putArray("closedPanels");
+        for (final PanelState p : s.closed()) {
             closed.addObject().put("id", p.id().value()).put("title", p.title()).put("session", p.session());
         }
-        ArrayNode approvals = root.putArray("approvals");
-        for (Approval a : s.approvals()) {
-            ObjectNode n = approvals.addObject();
+        final ArrayNode approvals = root.putArray("approvals");
+        for (final Approval a : s.approvals()) {
+            final ObjectNode n = approvals.addObject();
             n.put("id", a.id());
             n.put("session", a.session());
             n.put("kind", a.kind().name().toLowerCase(Locale.ROOT));
             n.put("tool", a.toolName());
             n.put("summary", clip(a.summary(), 300));
         }
-        ArrayNode folders = root.putArray("folders");
+        final ArrayNode folders = root.putArray("folders");
         s.folders().forEach(f -> folders.addObject().put("name", f.name()).put("path", f.path()));
-        ArrayNode views = root.putArray("views");
-        for (ViewState v : s.views()) {
-            ObjectNode n = views.addObject();
+        final ArrayNode views = root.putArray("views");
+        for (final ViewState v : s.views()) {
+            final ObjectNode n = views.addObject();
             n.put("id", v.id());
             n.put("title", v.title());
             n.put("type", v.spec().type());
@@ -594,20 +595,20 @@ public final class McpTools {
             n.put("pinned", v.pinned());
         }
         // the other comando instances on the comando Edge (record 124)
-        ObjectNode instances = root.putObject("instances");
+        final ObjectNode instances = root.putObject("instances");
         instances.put("connected", s.instances().connected());
-        ArrayNode others = instances.putArray("others");
+        final ArrayNode others = instances.putArray("others");
         s.instances().others().forEach(o -> others.addObject().put("name", o.name()).put("instance", o.slug()).put("role", o.role())
                 .put("version", o.version()).put("busy", o.busy()).put("denied", s.instances().denied().contains(o.slug()))
                 .put("present", o.present()).put("edge", o.edge()));
-        ArrayNode servers = root.putArray("servers");
-        for (ServerSwitch x : actions.servers()) {
+        final ArrayNode servers = root.putArray("servers");
+        for (final ServerSwitch x : actions.servers()) {
             servers.addObject().put("name", x.name().toLowerCase(Locale.ROOT)).put("running", x.isRunning()).put("status", x.status());
         }
         root.put("lowerTab", s.lowerTab().kind().name().toLowerCase(Locale.ROOT));
         try {
             return json.writerWithDefaultPrettyPrinter().writeValueAsString(root);
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -615,7 +616,7 @@ public final class McpTools {
     /**
      * The first line of a prompt one session sends another: the receiving session and the user both see who sent it.
      */
-    static String fromLine(String session) {
+    static String fromLine(final String session) {
         return "[from session " + session + "]";
     }
 
@@ -624,16 +625,16 @@ public final class McpTools {
      * (record 44). The prompt, headed with the sender, is added to that panel as a block of its own and run there, so
      * the user sees what was sent, by whom, and what the session does with it; the audit log records it.
      */
-    private Outcome sessionSend(String session, JsonNode args) {
-        String to = args.path("session").asString("").strip();
-        String text = args.path("text").asString("").strip();
+    private Outcome sessionSend(final String session, final JsonNode args) {
+        final String to = args.path("session").asString("").strip();
+        final String text = args.path("text").asString("").strip();
         if (to.isEmpty() || text.isEmpty()) {
             return Outcome.fail("session and text are required");
         }
         if (to.equals(session)) {
             return Outcome.fail("session " + to + " is this session; session_send prompts another session");
         }
-        AppState s = state.get();
+        final AppState s = state.get();
         if (s.session(to).isEmpty()) {
             return Outcome.fail("no session '" + to + "'; sessions: " + sessionNames(s));
         }
@@ -643,22 +644,22 @@ public final class McpTools {
             return Outcome.fail("session " + to + " is not running; a session another session prompts must be running: the user starts it");
         }
         // a log panel takes no text, so the user would not see the prompt there
-        List<PanelState> panels = s.panelsBoundToSession(to).stream().filter(p -> !readOnly.test(p.id())).toList();
+        final List<PanelState> panels = s.panelsBoundToSession(to).stream().filter(p -> !readOnly.test(p.id())).toList();
         if (panels.isEmpty()) {
             return Outcome.fail("session " + to + " has no open panel that takes text; the prompt goes through its panel so the user "
                     + "sees it: the user opens one for it first");
         }
-        PanelState panel = panels.getFirst();
-        String prompt = fromLine(session) + '\n' + text;
-        ObjectNode input = json.createObjectNode();
+        final PanelState panel = panels.getFirst();
+        final String prompt = fromLine(session) + '\n' + text;
+        final ObjectNode input = json.createObjectNode();
         input.put("session", to);
         input.put("panel", panel.title());
         input.put("text", prompt);
         audit.record(session, "call", "session_send", input.toString(), "sent");
-        int cursor = transcripts.of(to).size();
+        final int cursor = transcripts.of(to).size();
         sink.dispatch(new Intent.EditPanel(panel.id(), prompt, EditMode.APPEND, session));
         sink.dispatch(new Intent.RunText(panel.id(), prompt, Target.CLAUDE));
-        boolean busy = s.session(to).map(SessionState::isBusy).orElse(false);
+        final boolean busy = s.session(to).map(SessionState::isBusy).orElse(false);
         return Outcome.ok("sent to " + to + " in panel " + panel.title() + (busy ? "; it is busy, so the prompt waits for its turn" : "")
                 + "; read what it does with session_read {\"session\": \"" + to + "\", \"after\": " + cursor + ", \"wait_seconds\": 300}");
     }
@@ -666,20 +667,20 @@ public final class McpTools {
     /**
      * Another session's transcript from a cursor on, after waiting, when asked, for that session to finish its turns.
      */
-    private Outcome sessionRead(JsonNode args) {
-        String of = args.path("session").asString("").strip();
+    private Outcome sessionRead(final JsonNode args) {
+        final String of = args.path("session").asString("").strip();
         if (of.isEmpty()) {
             return Outcome.fail("session is required");
         }
         if (state.get().session(of).isEmpty()) {
             return Outcome.fail("no session '" + of + "'; sessions: " + sessionNames(state.get()));
         }
-        Transcript t = transcripts.of(of);
-        JsonNode cursor = args.path("after");
-        int after = cursor.canConvertToInt() ? Math.max(0, cursor.asInt(0)) : Math.max(0, t.size() - READ_TAIL);
-        int wait = Math.max(0, Math.min(args.path("wait_seconds").asInt(0), MAX_WAIT_SECONDS));
-        boolean settled = wait == 0 || Turns.awaitTurnEnd(state, of, t, after, Duration.ofSeconds(wait));
-        SessionState x = state.get().session(of).orElse(null);
+        final Transcript t = transcripts.of(of);
+        final JsonNode cursor = args.path("after");
+        final int after = cursor.canConvertToInt() ? Math.max(0, cursor.asInt(0)) : Math.max(0, t.size() - READ_TAIL);
+        final int wait = Math.max(0, Math.min(args.path("wait_seconds").asInt(0), MAX_WAIT_SECONDS));
+        final boolean settled = wait == 0 || Turns.awaitTurnEnd(state, of, t, after, Duration.ofSeconds(wait));
+        final SessionState x = state.get().session(of).orElse(null);
         String status = x == null ? "removed" : x.isBusy() ? "busy" : x.isWaiting() ? "waiting on background work: " + x.waitingFor()
                 : x.status().isUsable() ? "idle" : x.status().name().toLowerCase(Locale.ROOT);
         if (!settled) {
@@ -689,61 +690,61 @@ public final class McpTools {
     }
 
     private Peers peers() {
-        Peers p = peers;
+        final Peers p = peers;
         if (p == null) {
             throw new IllegalArgumentException("this comando has no connection to other instances");
         }
         return p;
     }
 
-    private static String sessionNames(AppState s) {
+    private static String sessionNames(final AppState s) {
         return String.join(", ", s.sessions().stream().map(SessionState::name).toList());
     }
 
-    private Outcome runSql(String session, JsonNode args) {
-        String sql = args.path("sql").asString("").strip();
+    private Outcome runSql(final String session, final JsonNode args) {
+        final String sql = args.path("sql").asString("").strip();
         if (sql.isEmpty()) {
             return Outcome.fail("sql is required");
         }
-        ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
-        int maxRows = Math.max(1, Math.min(args.path("max_rows").asInt(MAX_SQL_ROWS), 10_000));
+        final ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
+        final int maxRows = Math.max(1, Math.min(args.path("max_rows").asInt(MAX_SQL_ROWS), 10_000));
         if (!SqlPolicy.isReadOnly(sql)) {
             if (spec.prod()) {
                 return Outcome.fail("connection " + spec.name() + " is a production connection; comando refuses statements that are not read-only");
             }
-            ObjectNode input = json.createObjectNode();
+            final ObjectNode input = json.createObjectNode();
             input.put("connection", spec.name());
             input.put("sql", sql);
-            ApprovalDecision d = ask(session, ApprovalKind.SQL_WRITE, "db_run_sql", input.toString(),
+            final ApprovalDecision d = ask(session, ApprovalKind.SQL_WRITE, "db_run_sql", input.toString(),
                     "Run on " + spec.name() + ": " + firstLine(sql), "");
             audit.record(session, "approval", "db_run_sql", sql, d.toString());
             if (d instanceof ApprovalDecision.Deny deny) {
                 return Outcome.fail("The user denied the statement" + (deny.message().isBlank() ? "." : ": " + deny.message()));
             }
             // the user approved the target the card named: a connection repointed or removed meanwhile is not it
-            ConnectionSpec now = connectionFor(session, args.path("connection").asString(""));
+            final ConnectionSpec now = connectionFor(session, args.path("connection").asString(""));
             if (!now.equals(spec)) {
                 return Outcome.fail("connection " + spec.name() + " changed while the card was open; nothing ran. Ask again.");
             }
         }
         QueryPort.Rows rows;
-        CompletableFuture<QueryPort.Rows> result = db.query(spec, sql, maxRows);
+        final CompletableFuture<QueryPort.Rows> result = db.query(spec, sql, maxRows);
         // a schema change reloads the schema behind completion and an open explorer, as a panel's run does; a failed
         // block may have run its earlier statements
-        boolean ddl = Classifier.anyDdl(sql);
+        final boolean ddl = Classifier.anyDdl(sql);
         try {
             rows = result.get(90, TimeUnit.SECONDS);
-        } catch (ExecutionException e) {
+        } catch (final ExecutionException e) {
             if (ddl) {
                 sink.dispatch(new Intent.SchemaChanged(spec.name()));
             }
             return Outcome.fail(e.getCause().getMessage());
-        } catch (TimeoutException e) {
+        } catch (final TimeoutException e) {
             // withdrawn: a statement still queued behind the user's runs will not run after Claude was told it failed
             result.cancel(false);
             return Outcome.fail("no result within 90 s on " + spec.name() + "; a statement still queued behind the user's runs was withdrawn "
                     + "and will not run; one already running ends at its 60 s statement timeout");
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             // comando is closing: a statement still queued must not run after the caller was told it failed
             result.cancel(false);
             Thread.currentThread().interrupt();
@@ -759,21 +760,21 @@ public final class McpTools {
         return Outcome.ok(format(rows));
     }
 
-    private Outcome describe(String session, JsonNode args) {
-        String table = args.path("table").asString("").strip();
+    private Outcome describe(final String session, final JsonNode args) {
+        final String table = args.path("table").asString("").strip();
         if (table.isEmpty()) {
             return Outcome.fail("table is required");
         }
-        ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
-        CompletableFuture<QueryPort.Rows> result = db.describe(spec, table);
+        final ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
+        final CompletableFuture<QueryPort.Rows> result = db.describe(spec, table);
         try {
             return Outcome.ok(format(result.get(60, TimeUnit.SECONDS)));
-        } catch (ExecutionException e) {
+        } catch (final ExecutionException e) {
             return Outcome.fail(e.getCause().getMessage());
-        } catch (TimeoutException e) {
+        } catch (final TimeoutException e) {
             result.cancel(false);
             return Outcome.fail("no answer within 60 s");
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             result.cancel(false);
             Thread.currentThread().interrupt();
             return Outcome.fail("interrupted");
@@ -784,11 +785,11 @@ public final class McpTools {
      * The named connection; else that of the caller's panel: the focused one when it is the caller's, else its first,
      * else its closed one.
      */
-    private ConnectionSpec connectionFor(String session, String name) {
-        AppState s = state.get();
+    private ConnectionSpec connectionFor(final String session, final String name) {
+        final AppState s = state.get();
         String chosen = name;
         if (chosen.isBlank()) {
-            Optional<PanelState> closed = s.closedPanelOfSession(session);
+            final Optional<PanelState> closed = s.closedPanelOfSession(session);
             if (s.panelsBoundToSession(session).isEmpty() && closed.isEmpty()) {
                 throw new IllegalArgumentException("this session is bound to no panel; pass connection (one of: " + connectionNames(s) + ')');
             }
@@ -798,13 +799,13 @@ public final class McpTools {
         if (chosen.isBlank()) {
             throw new IllegalArgumentException("no connection given and the panel has none; connections: " + connectionNames(s));
         }
-        String finalName = chosen;
-        Optional<ConnectionState> c = s.connection(finalName);
+        final String finalName = chosen;
+        final Optional<ConnectionState> c = s.connection(finalName);
         return c.map(ConnectionState::spec).orElseThrow(() -> new IllegalArgumentException("no connection '" + finalName
                 + "'; connections: " + connectionNames(s)));
     }
 
-    private static String connectionNames(AppState s) {
+    private static String connectionNames(final AppState s) {
         return String.join(", ", s.connections().stream().map(ConnectionState::name).toList());
     }
 
@@ -818,16 +819,16 @@ public final class McpTools {
      * PostgreSQL's COPY text form, so every value reads back unambiguously: SQL NULL is {@code \N}; a backslash,
      * tab, newline and carriage return in a value are {@code \\}, {@code \t}, {@code \n} and {@code \r}.
      */
-    static String format(QueryPort.Rows rows) {
+    static String format(final QueryPort.Rows rows) {
         if (rows.columns().isEmpty()) {
             return rows.updateCount() >= 0 ? rows.updateCount() + " rows changed" : "done";
         }
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append(copyClip(copyLine(rows.columns()), MAX_RESULT_CHARS)).append('\n');
         int shown = 0;
         boolean cut = false;
-        for (List<String> row : rows.rows()) {
-            int room = MAX_RESULT_CHARS - sb.length();
+        for (final List<String> row : rows.rows()) {
+            final int room = MAX_RESULT_CHARS - sb.length();
             if (room <= 0) {
                 break;
             }
@@ -897,12 +898,12 @@ public final class McpTools {
         return head + cut.substring(cut.length() - 1);
     }
 
-    private static String firstLine(String s) {
-        int eol = s.indexOf('\n');
+    private static String firstLine(final String s) {
+        final int eol = s.indexOf('\n');
         return clip(eol < 0 ? s : s.substring(0, eol), 120);
     }
 
-    static String clip(String s, int max) {
+    static String clip(final String s, final int max) {
         if (s == null) {
             return "";
         }

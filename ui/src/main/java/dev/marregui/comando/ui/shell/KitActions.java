@@ -1,5 +1,17 @@
 package dev.marregui.comando.ui.shell;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.KitRoot;
@@ -11,18 +23,6 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
-
-import javax.swing.JFrame;
-import javax.swing.JOptionPane;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Supplier;
 
 /**
  * The kit in the window: its name and version in the status bar, its upgrade, which a session in the root does when
@@ -55,8 +55,8 @@ final class KitActions {
          * the prompt (a state rendered before the prompt was sent says nothing), then until its turn and the work it
          * left running have ended; empty once it has reported, or stopped.
          */
-        Optional<Upgrade> next(SessionState session) {
-            boolean working = session != null && (session.isBusy() || session.isWaiting());
+        Optional<Upgrade> next(final SessionState session) {
+            final boolean working = session != null && (session.isBusy() || session.isWaiting());
             if (!running) {
                 return Optional.of(working ? new Upgrade(tag, true) : this);
             }
@@ -64,24 +64,24 @@ final class KitActions {
         }
     }
 
-    KitActions(ComandoUi.Dependencies deps, Supplier<JFrame> frame) {
+    KitActions(final ComandoUi.Dependencies deps, final Supplier<JFrame> frame) {
         this.deps = deps;
         this.frame = frame;
     }
 
     /** Where the kit's newer release shows, the Files tab's KIT row (record 119), once the window is built. */
-    void attach(BiConsumer<Path, String> release) {
+    void attach(final BiConsumer<Path, String> release) {
         this.release = release;
         paint();
     }
 
     /** Shows what git says of the kit now; says once that a newer release is out. Any thread. */
-    void show(Setup.Status now) {
+    void show(final Setup.Status now) {
         Edt.later(() -> {
             shown = now;
             paint();
-            KitRoot root = deps.setup().root();
-            Optional<String> newest = now.version().newest();
+            final KitRoot root = deps.setup().root();
+            final Optional<String> newest = now.version().newest();
             if (root.kit().isPresent() && newest.isPresent() && !newest.get().equals(announced)) {
                 announced = newest.get();
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, now.version().label(root.name())
@@ -94,7 +94,7 @@ final class KitActions {
         if (release == null) {
             return;
         }
-        KitRoot root = deps.setup().root();
+        final KitRoot root = deps.setup().root();
         release.accept(root.kit().isEmpty() ? null : root.dir(), root.kit().isEmpty() ? "" : shown.version().newest().orElse(""));
     }
 
@@ -114,7 +114,7 @@ final class KitActions {
     }
 
     /** The prompt the kit's session is sent. */
-    static String prompt(Path root, String tag) {
+    static String prompt(final Path root, final String tag) {
         return "Upgrade the kit at " + root + " to " + tag + ", following " + root.resolve("INSTALL.md") + " section Upgrade. Report what changed.";
     }
 
@@ -124,13 +124,13 @@ final class KitActions {
      * kit.
      */
     void upgrade() {
-        KitRoot root = deps.setup().root();
-        List<String> tags = shown.version().newer();
+        final KitRoot root = deps.setup().root();
+        final List<String> tags = shown.version().newer();
         if (root.kit().isEmpty() || tags.isEmpty()) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "The kit has no newer release to upgrade to", false));
             return;
         }
-        Object pick = JOptionPane.showInputDialog(frame.get(), "Upgrade the kit " + root.name() + " " + shown.version().shown() + " at "
+        final Object pick = JOptionPane.showInputDialog(frame.get(), "Upgrade the kit " + root.name() + " " + shown.version().shown() + " at "
                         + HomeDir.shorten(root.dir().toString()) + " to:", "Upgrade the kit", JOptionPane.QUESTION_MESSAGE, null,
                 tags.toArray(), tags.getFirst());
         if (pick == null) {
@@ -140,9 +140,9 @@ final class KitActions {
     }
 
     /** Sends the upgrade to {@code tag} to the kit's session, made in the root when there is none. */
-    void send(AppState s, KitRoot root, String tag) {
-        String name = KitRoot.UPGRADE_SESSION;
-        Optional<SessionState> session = s.session(name);
+    void send(final AppState s, final KitRoot root, final String tag) {
+        final String name = KitRoot.UPGRADE_SESSION;
+        final Optional<SessionState> session = s.session(name);
         if (session.isPresent() && !root.isRoot(session.get().spec().workDir())) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "The session " + name + " works in " + session.get().spec().workDir()
                     + "; the kit's upgrade runs in " + HomeDir.shorten(root.dir().toString()) + ": rename or remove that session", false,
@@ -162,20 +162,20 @@ final class KitActions {
      * Follows the kit's session until it has reported, then offers the restarts; starts each restarted one once
      * stopped.
      */
-    void render(AppState s) {
+    void render(final AppState s) {
         if (upgrade != null) {
-            SessionState kit = s.session(KitRoot.UPGRADE_SESSION).orElse(null);
-            Optional<Upgrade> next = upgrade.next(kit);
+            final SessionState kit = s.session(KitRoot.UPGRADE_SESSION).orElse(null);
+            final Optional<Upgrade> next = upgrade.next(kit);
             if (next.isEmpty()) {
-                String tag = upgrade.tag();
+                final String tag = upgrade.tag();
                 upgrade = null;
                 reported(s, tag, kit != null && kit.status().isUsable());
             } else {
                 upgrade = next.get();
             }
         }
-        for (String name : List.copyOf(restarting)) {
-            SessionState x = s.session(name).orElse(null);
+        for (final String name : List.copyOf(restarting)) {
+            final SessionState x = s.session(name).orElse(null);
             if (x == null || x.status() == Status.FAILED) {
                 restarting.remove(name);
             } else if (x.status() == Status.CLOSED) {
@@ -186,24 +186,24 @@ final class KitActions {
     }
 
     /** The sessions running on the old kit: every open one but the kit's own; busy ones are left to the user. */
-    static List<String> toRestart(AppState s) {
+    static List<String> toRestart(final AppState s) {
         return s.sessions().stream().filter(x -> x.status() == Status.OPEN && !x.isBusy() && !x.name().equals(KitRoot.UPGRADE_SESSION))
                 .map(SessionState::name).toList();
     }
 
-    private void reported(AppState s, String tag, boolean answered) {
+    private void reported(final AppState s, final String tag, final boolean answered) {
         refresh();
         if (!answered) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The kit's session stopped before it reported on the upgrade to " + tag,
                     false, Notice.session(KitRoot.UPGRADE_SESSION)));
             return;
         }
-        List<String> names = toRestart(s);
+        final List<String> names = toRestart(s);
         if (names.isEmpty() || frame.get() == null) {
             return;
         }
-        Object[] options = {"Restart them", "Not now"};
-        int pick = JOptionPane.showOptionDialog(frame.get(), "The kit's session has reported on the upgrade to " + tag + ".\nRestart the "
+        final Object[] options = {"Restart them", "Not now"};
+        final int pick = JOptionPane.showOptionDialog(frame.get(), "The kit's session has reported on the upgrade to " + tag + ".\nRestart the "
                         + (names.size() == 1 ? "session" : names.size() + " sessions") + " running on the old kit (" + String.join(", ", names)
                         + ")? Each resumes its conversation on the new kit; a session busy now is left as it is.",
                 "Kit upgraded", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
@@ -213,8 +213,8 @@ final class KitActions {
     }
 
     /** Stops each session; each starts again once it has stopped, resuming its conversation. */
-    void restart(List<String> names) {
-        for (String name : names) {
+    void restart(final List<String> names) {
+        for (final String name : names) {
             restarting.add(name);
             deps.intents().dispatch(new Intent.StopSession(name));
         }
@@ -232,7 +232,7 @@ final class KitActions {
 
     /** Commits and pushes the kit's root, off the EDT, as {@link #backUp()} does the brain. */
     void backUpKit() {
-        KitRoot root = deps.setup().root();
+        final KitRoot root = deps.setup().root();
         if (root.kit().isPresent()) {
             backUp("Kit", root.dir(), "kit-backup", () -> deps.setup().backUpKit());
         }
@@ -243,11 +243,11 @@ final class KitActions {
         String run() throws IOException;
     }
 
-    private void backUp(String what, Path dir, String thread, Backup backup) {
-        String where = HomeDir.shorten(dir.toString());
+    private void backUp(final String what, final Path dir, final String thread, final Backup backup) {
+        final String where = HomeDir.shorten(dir.toString());
         UiErrands.start(thread, () -> {
             try {
-                String done = backup.run();
+                final String done = backup.run();
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, what + " at " + where + ": " + done, false));
             } catch (IOException | RuntimeException e) {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "The " + what.toLowerCase(Locale.ROOT) + " at " + where

@@ -1,10 +1,10 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import org.junit.jupiter.api.Test;
-
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,7 +30,7 @@ class BrowserTest {
     /// [Browser#open] hands the parsed URI to the opener on a thread named `open-link`.
     @Test
     void theBrowserIsCalledOnAThreadOfItsOwnNotTheCallers() throws Exception {
-        CompletableFuture<String> thread = new CompletableFuture<>();
+        final CompletableFuture<String> thread = new CompletableFuture<>();
         Browser.open("https://example.com/a", uri -> thread.complete(Thread.currentThread().getName() + " " + uri));
         assertThat(thread.get(5, TimeUnit.SECONDS)).isEqualTo("open-link " + URI.create("https://example.com/a"));
     }
@@ -38,7 +38,7 @@ class BrowserTest {
     /// A `file` URI and a URI with a space in its host never reach the opener; the valid web link after them does.
     @Test
     void aLinkThatIsNotAWebLinkIsNotOpened() throws Exception {
-        CompletableFuture<URI> opened = new CompletableFuture<>();
+        final CompletableFuture<URI> opened = new CompletableFuture<>();
         Browser.open("file:///etc/passwd", opened::complete);
         Browser.open("https://bad host/", opened::complete);
         Browser.open("https://example.com/ok", opened::complete);

@@ -1,12 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.Topic;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -15,6 +8,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.model.Topic;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,8 +32,8 @@ class ClaudeTopicsTest {
     @TempDir
     Path dir;
 
-    private static String answer(String result, boolean error) {
-        ObjectNode n = JSON.createObjectNode();
+    private static String answer(final String result, final boolean error) {
+        final ObjectNode n = JSON.createObjectNode();
         n.put("type", "result");
         n.put("is_error", error);
         n.put("result", result);
@@ -63,13 +64,13 @@ class ClaudeTopicsTest {
     /// stdin, and sets `MAX_THINKING_TOKENS` to zero.
     @Test
     void theReadAsksHaikuWithoutToolsThinkingOrASavedSessionAndSendsTheSourceOnItsInput() throws Exception {
-        Path args = dir.resolve("args.txt");
-        Path input = dir.resolve("input.txt");
-        Path env = dir.resolve("env.txt");
-        Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\ncat > '" + input + "'\nprintf '%s' \"$MAX_THINKING_TOKENS\" > '" + env
+        final Path args = dir.resolve("args.txt");
+        final Path input = dir.resolve("input.txt");
+        final Path env = dir.resolve("env.txt");
+        final Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\ncat > '" + input + "'\nprintf '%s' \"$MAX_THINKING_TOKENS\" > '" + env
                 + "'\nprintf '%s' '" + answer("Sticky tab cards", false) + "'\n");
 
-        Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "User: make the card sticky", Duration.ofSeconds(10));
+        final Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "User: make the card sticky", Duration.ofSeconds(10));
 
         assertThat(topic.line()).isEqualTo("Sticky tab cards");
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "--model", "haiku", "--effort", "low", "--tools", "",
@@ -82,9 +83,9 @@ class ClaudeTopicsTest {
     /// executable reports that it cannot run.
     @Test
     void aReadThatHangsIsStoppedAndAMissingExecutableIsAProblem() throws Exception {
-        Path exe = script("hang", "exec sleep 30\n");
-        long start = System.nanoTime();
-        Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofMillis(300));
+        final Path exe = script("hang", "exec sleep 30\n");
+        final long start = System.nanoTime();
+        final Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(topic.problem()).isEqualTo("Haiku did not answer within 300 ms");
         assertThat(ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofSeconds(1)).problem()).isEqualTo("Haiku did not answer within 1 s");
@@ -95,23 +96,23 @@ class ClaudeTopicsTest {
     /// the single worker never runs two reads concurrently.
     @Test
     void asksAreReadOneAtATimeAndANewerAskForAWaitingKeyReplacesIt() throws Exception {
-        CountDownLatch release = new CountDownLatch(1);
-        AtomicInteger running = new AtomicInteger();
-        AtomicInteger most = new AtomicInteger();
-        List<String> read = new CopyOnWriteArrayList<>();
+        final CountDownLatch release = new CountDownLatch(1);
+        final AtomicInteger running = new AtomicInteger();
+        final AtomicInteger most = new AtomicInteger();
+        final List<String> read = new CopyOnWriteArrayList<>();
         try (ClaudeTopics topics = new ClaudeTopics(source -> {
             most.accumulateAndGet(running.incrementAndGet(), Math::max);
             try {
                 release.await(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             read.add(source);
             running.decrementAndGet();
             return new Topic("t " + source, 1L, "");
         })) {
-            List<String> done = new CopyOnWriteArrayList<>();
-            CountDownLatch all = new CountDownLatch(4);
+            final List<String> done = new CopyOnWriteArrayList<>();
+            final CountDownLatch all = new CountDownLatch(4);
             topics.read("a", "a0", false, t -> {
                 done.add(t.line());
                 all.countDown();
@@ -123,7 +124,7 @@ class ClaudeTopicsTest {
                 all.countDown();
             });
             for (int i = 1; i <= 3; i++) {
-                String source = "a" + i;
+                final String source = "a" + i;
                 topics.read("a", source, false, t -> {
                     done.add(t.line());
                     all.countDown();
@@ -149,16 +150,16 @@ class ClaudeTopicsTest {
     /// reader invocation occurs.
     @Test
     void closeDropsTheWaitingAsksAndStopsTheReadUnderWay() throws Exception {
-        CountDownLatch started = new CountDownLatch(1);
-        CountDownLatch never = new CountDownLatch(1);
-        AtomicInteger reads = new AtomicInteger();
-        List<Topic> done = new CopyOnWriteArrayList<>();
-        ClaudeTopics topics = new ClaudeTopics(source -> {
+        final CountDownLatch started = new CountDownLatch(1);
+        final CountDownLatch never = new CountDownLatch(1);
+        final AtomicInteger reads = new AtomicInteger();
+        final List<Topic> done = new CopyOnWriteArrayList<>();
+        final ClaudeTopics topics = new ClaudeTopics(source -> {
             reads.incrementAndGet();
             started.countDown();
             try {
                 never.await(10, TimeUnit.SECONDS); // a read that outlasts the close
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             return new Topic("late", 1L, "");
@@ -166,7 +167,7 @@ class ClaudeTopicsTest {
         topics.read("a", "a", false, done::add);
         topics.read("b", "b", false, done::add);
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
-        long start = System.nanoTime();
+        final long start = System.nanoTime();
         topics.close();
         topics.close();
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(3));
@@ -174,8 +175,8 @@ class ClaudeTopicsTest {
         Awaitility.await().during(Duration.ofMillis(100)).atMost(Duration.ofSeconds(2)).until(() -> reads.get() == 1 && done.isEmpty());
     }
 
-    private Path script(String name, String body) throws Exception {
-        Path exe = dir.resolve(name);
+    private Path script(final String name, final String body) throws Exception {
+        final Path exe = dir.resolve(name);
         Files.writeString(exe, "#!/bin/sh\n" + body);
         exe.toFile().setExecutable(true);
         return exe;

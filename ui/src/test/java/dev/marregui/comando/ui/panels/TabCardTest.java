@@ -1,13 +1,13 @@
 package dev.marregui.comando.ui.panels;
 
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JLabel;
-import javax.swing.JRootPane;
-import javax.swing.SwingUtilities;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.util.List;
+import javax.swing.JLabel;
+import javax.swing.JRootPane;
+import javax.swing.SwingUtilities;
+
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,8 +18,8 @@ class TabCardTest {
     /// panel's card shown next in the same card has its "Summary" and its button to read it again back.
     @Test
     void anExplanationIsItsTitleWhatItIsAndTheTextWithTheCloseButtonAlone() throws Exception {
-        TabCard card = new TabCard();
-        JLabel anchor = anchored();
+        final TabCard card = new TabCard();
+        final JLabel anchor = anchored();
         SwingUtilities.invokeAndWait(() -> card.explain("name", anchor, new Rectangle(0, 0, 40, 16), "Name", "A session is one line of work."));
         assertThat(card.shown()).isEqualTo("name");
         assertThat(card.statusText()).isEqualTo("Name");
@@ -40,9 +40,9 @@ class TabCardTest {
     /// card or came back.
     @Test
     void leftWithoutReachingItTheCardClosesAfterTheGrace() throws Exception {
-        TabCard card = new TabCard();
-        JLabel anchor = anchored();
-        Rectangle at = new Rectangle(0, 0, 40, 16);
+        final TabCard card = new TabCard();
+        final JLabel anchor = anchored();
+        final Rectangle at = new Rectangle(0, 0, 40, 16);
         SwingUtilities.invokeAndWait(() -> {
             card.explain("name", anchor, at, "Name", "text");
             card.left();
@@ -74,9 +74,9 @@ class TabCardTest {
 
     /// A label in a root pane, laid out, for a card to hang under.
     private static JLabel anchored() throws Exception {
-        JLabel[] l = new JLabel[1];
+        final JLabel[] l = new JLabel[1];
         SwingUtilities.invokeAndWait(() -> {
-            JRootPane root = new JRootPane();
+            final JRootPane root = new JRootPane();
             l[0] = new JLabel("Name");
             root.getContentPane().add(l[0]);
             root.setSize(800, 600);

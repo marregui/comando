@@ -1,10 +1,10 @@
 package dev.marregui.comando.core.port;
 
+import java.util.List;
+
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.RepoStatus;
-
-import java.util.List;
 
 /**
  * Development tools run outside the JVM or read from disk: Gradle builds, the Files tab's folders and their git

@@ -28,14 +28,14 @@ public interface ResultView {
     boolean getBoolean(int row, int column);
 
     /** Epoch microseconds UTC of a TIMESTAMP column. */
-    default long getMicros(int row, int column) {
+    default long getMicros(final int row, final int column) {
         return getLong(row, column);
     }
 
     String getText(int row, int column);
 
     /** A plottable value: numbers as they are, timestamps as epoch milliseconds, NaN otherwise. */
-    default double numeric(int row, int column) {
+    default double numeric(final int row, final int column) {
         if (isNull(row, column)) {
             return Double.NaN;
         }
@@ -49,7 +49,7 @@ public interface ResultView {
     }
 
     /** Appends the cell's display text to {@code sink}, which the caller reuses across cells. */
-    default void format(int row, int column, StringBuilder sink) {
+    default void format(final int row, final int column, final StringBuilder sink) {
         if (isNull(row, column)) {
             sink.append("null");
             return;
@@ -63,8 +63,8 @@ public interface ResultView {
         }
     }
 
-    default boolean isNumeric(int column) {
-        ColumnKind k = kind(column);
+    default boolean isNumeric(final int column) {
+        final ColumnKind k = kind(column);
         return k == ColumnKind.LONG || k == ColumnKind.DOUBLE || k == ColumnKind.TIMESTAMP;
     }
 }

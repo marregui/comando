@@ -1,5 +1,13 @@
 package dev.marregui.comando.app;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
@@ -17,13 +25,6 @@ import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,8 +67,8 @@ class IntentLogTest {
     /// intent equal; a plot's series arrays, which records compare by identity, match element by element with a `NaN`
     /// kept.
     @Test
-    void everyIntentRoundTrips(@TempDir Path dir) throws Exception {
-        AppState initial = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "lab", "edge")),
+    void everyIntentRoundTrips(@TempDir final Path dir) throws Exception {
+        final AppState initial = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "lab", "edge")),
                 List.of(), List.of());
         try (IntentLog log = new IntentLog(dir, initial)) {
             SAMPLE.forEach(log::observe);
@@ -76,16 +77,16 @@ class IntentLogTest {
         try (var files = Files.list(dir)) {
             file = files.findFirst().orElseThrow();
         }
-        IntentLog.Replay replay = IntentLog.read(file);
+        final IntentLog.Replay replay = IntentLog.read(file);
         assertThat(replay.initial()).isEqualTo(initial);
-        List<Intent> read = replay.intents();
+        final List<Intent> read = replay.intents();
         assertThat(read).hasSize(SAMPLE.size());
         for (int i = 0; i < SAMPLE.size(); i++) {
-            Intent expected = SAMPLE.get(i);
+            final Intent expected = SAMPLE.get(i);
             if (expected instanceof Intent.ShowView v && v.spec() instanceof ViewSpec.Plot) {
                 // arrays compare by identity in records; compare the parts
-                ViewSpec.Plot a = (ViewSpec.Plot) v.spec();
-                ViewSpec.Plot b = (ViewSpec.Plot) ((Intent.ShowView) read.get(i)).spec();
+                final ViewSpec.Plot a = (ViewSpec.Plot) v.spec();
+                final ViewSpec.Plot b = (ViewSpec.Plot) ((Intent.ShowView) read.get(i)).spec();
                 assertThat(b.series().getFirst().x()).containsExactly(a.series().getFirst().x());
                 assertThat(Double.isNaN(b.series().getFirst().y()[1])).isTrue();
             } else {
@@ -97,7 +98,7 @@ class IntentLogTest {
     /// A `SaveConnection` whose spec holds the password `s3cret` is logged with an empty `password` field.
     @Test
     void passwordsNeverReachTheLog() throws Exception {
-        String line = IntentLog.line(new Intent.SaveConnection("", new ConnectionSpec("lab", "h", 8812, "qdb", "u", "s3cret", false)));
+        final String line = IntentLog.line(new Intent.SaveConnection("", new ConnectionSpec("lab", "h", 8812, "qdb", "u", "s3cret", false)));
         assertThat(line).doesNotContain("s3cret").contains("\"password\":\"\"");
     }
 

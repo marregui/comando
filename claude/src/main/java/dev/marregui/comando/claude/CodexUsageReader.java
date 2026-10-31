@@ -1,11 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.model.PlanUsage;
-import dev.marregui.comando.core.view.Clip;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,6 +15,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.view.Clip;
 
 /**
  * Reads the Codex plan's usage limits from the Codex CLI itself: {@code codex app-server} speaks JSON-RPC over stdio,
@@ -47,12 +48,12 @@ final class CodexUsageReader {
 
     /** {@code COMANDO_CODEX}, else the Codex CLI where its installers put it, else {@code codex} on the PATH. */
     static String findExecutable() {
-        String env = System.getenv("COMANDO_CODEX");
+        final String env = System.getenv("COMANDO_CODEX");
         if (env != null && !env.isBlank()) {
             return env;
         }
-        String home = System.getProperty("user.home");
-        for (String candidate : List.of(home + "/.local/bin/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex")) {
+        final String home = System.getProperty("user.home");
+        for (final String candidate : List.of(home + "/.local/bin/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex")) {
             if (Files.isExecutable(Path.of(candidate))) {
                 return candidate;
             }
@@ -60,30 +61,30 @@ final class CodexUsageReader {
         return "codex";
     }
 
-    private static PlanUsage exitedWithoutAnswering(Process p) {
+    private static PlanUsage exitedWithoutAnswering(final Process p) {
         return PlanUsage.failed(PlanUsage.CODEX, "'codex app-server' exited with code " + p.exitValue() + " without answering",
                 System.currentTimeMillis());
     }
 
     /** Closes the server's input; a server that already exited makes the close fail, which changes nothing. */
-    private static void closeQuietly(OutputStream in) {
+    private static void closeQuietly(final OutputStream in) {
         try {
             in.close();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "closing the 'codex app-server' input failed [cause=" + e.getMessage() + ']');
         }
     }
 
     /** Runs the read; blocks up to {@code timeout}. Call it off the EDT and the reducer. */
-    static PlanUsage read(String executable, ObjectMapper json, Duration timeout, ZoneId zone) {
+    static PlanUsage read(final String executable, final ObjectMapper json, final Duration timeout, final ZoneId zone) {
         Process p = null;
         try {
             p = new ProcessBuilder(executable, "app-server").redirectError(ProcessBuilder.Redirect.DISCARD).start();
-            OutputStream in = p.getOutputStream();
+            final OutputStream in = p.getOutputStream();
             try {
                 in.write(REQUESTS.getBytes(StandardCharsets.UTF_8));
                 in.flush();
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 // a server that exits at once can close its end before the requests are written (a broken pipe on
                 // Linux): say how it exited, as when it exits after reading them
                 if (p.waitFor(1, TimeUnit.SECONDS)) {
@@ -92,13 +93,13 @@ final class CodexUsageReader {
                 throw e;
             }
             try {
-                long deadline = System.nanoTime() + timeout.toNanos();
-                InputStream out = p.getInputStream();
-                ByteArrayOutputStream line = new ByteArrayOutputStream();
-                byte[] buf = new byte[8192];
+                final long deadline = System.nanoTime() + timeout.toNanos();
+                final InputStream out = p.getInputStream();
+                final ByteArrayOutputStream line = new ByteArrayOutputStream();
+                final byte[] buf = new byte[8192];
                 // polled, not a blocking read: a read blocked on the pipe would outlive the timeout
                 while (System.nanoTime() < deadline) {
-                    int ready = out.available();
+                    final int ready = out.available();
                     if (ready == 0) {
                         if (!p.isAlive() && out.available() == 0) {
                             break;
@@ -106,15 +107,15 @@ final class CodexUsageReader {
                         Thread.sleep(20);
                         continue;
                     }
-                    int n = out.read(buf, 0, Math.min(ready, buf.length));
+                    final int n = out.read(buf, 0, Math.min(ready, buf.length));
                     for (int i = 0; i < n; i++) {
                         if (buf[i] != '\n') {
                             line.write(buf[i]);
                             continue;
                         }
-                        String text = line.toString(StandardCharsets.UTF_8);
+                        final String text = line.toString(StandardCharsets.UTF_8);
                         line.reset();
-                        PlanUsage u = answer(text, System.currentTimeMillis(), json, zone);
+                        final PlanUsage u = answer(text, System.currentTimeMillis(), json, zone);
                         if (u != null) {
                             return u;
                         }
@@ -127,9 +128,9 @@ final class CodexUsageReader {
                     ? PlanUsage.failed(PlanUsage.CODEX, "'codex app-server' did not answer within " + timeout.toMillis() + " ms",
                     System.currentTimeMillis())
                     : exitedWithoutAnswering(p);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return PlanUsage.failed(PlanUsage.CODEX, "cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             return PlanUsage.failed(PlanUsage.CODEX, "interrupted", System.currentTimeMillis());
         } finally {
@@ -140,7 +141,7 @@ final class CodexUsageReader {
     }
 
     /** Gives the server 1 s to exit on its closed input, then SIGTERM, then SIGKILL 2 s later. */
-    private static void stop(Process p) {
+    private static void stop(final Process p) {
         try {
             if (!p.waitFor(1, TimeUnit.SECONDS)) {
                 p.destroy();
@@ -148,7 +149,7 @@ final class CodexUsageReader {
                     p.destroyForcibly();
                 }
             }
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             p.destroyForcibly();
             Thread.currentThread().interrupt();
         }
@@ -158,18 +159,18 @@ final class CodexUsageReader {
      * The read from one line of the server's output: the windows when it is the answer to the read, why there are
      * none when it is an error answer, and null for any other line.
      */
-    static PlanUsage answer(String line, long readAtMillis, ObjectMapper json, ZoneId zone) {
+    static PlanUsage answer(final String line, final long readAtMillis, final ObjectMapper json, final ZoneId zone) {
         JsonNode msg;
         try {
             msg = json.readTree(line.strip());
-        } catch (JacksonException e) {
+        } catch (final JacksonException e) {
             return null;
         }
         if (msg == null || !msg.isObject() || msg.path("id").asInt(-1) != 2) {
             return null;
         }
         if (msg.has("error")) {
-            String why = msg.path("error").path("message").asString("");
+            final String why = msg.path("error").path("message").asString("");
             return PlanUsage.failed(PlanUsage.CODEX, Clip.keepStart(why.isBlank() ? "the rate-limit read failed" : why, 200), readAtMillis);
         }
         JsonNode limits = msg.path("result").path("rateLimits");
@@ -177,15 +178,15 @@ final class CodexUsageReader {
         if (!isAccount(limits)) {
             limits = msg.path("result").path("rateLimitsByLimitId").path("codex");
         }
-        List<PlanUsage.Window> windows = new ArrayList<>();
-        for (String position : List.of("primary", "secondary")) {
-            JsonNode w = limits.path(position);
+        final List<PlanUsage.Window> windows = new ArrayList<>();
+        for (final String position : List.of("primary", "secondary")) {
+            final JsonNode w = limits.path(position);
             if (!w.path("usedPercent").isNumber()) {
                 continue;
             }
-            long resetsAt = w.path("resetsAt").asLong(0);
-            boolean reset = resetsAt > 0 && resetsAt * 1000 <= readAtMillis;
-            int percent = reset ? 0 : (int) Math.round(w.path("usedPercent").asDouble(0));
+            final long resetsAt = w.path("resetsAt").asLong(0);
+            final boolean reset = resetsAt > 0 && resetsAt * 1000 <= readAtMillis;
+            final int percent = reset ? 0 : (int) Math.round(w.path("usedPercent").asDouble(0));
             windows.add(new PlanUsage.Window(name(w.path("windowDurationMins").asInt(0)), percent,
                     resetsAt > 0 ? RESETS.format(Instant.ofEpochSecond(resetsAt).atZone(zone)) : ""));
         }
@@ -194,13 +195,13 @@ final class CodexUsageReader {
                 : new PlanUsage(PlanUsage.CODEX, windows, readAtMillis, "");
     }
 
-    private static boolean isAccount(JsonNode limits) {
-        JsonNode id = limits.path("limitId");
+    private static boolean isAccount(final JsonNode limits) {
+        final JsonNode id = limits.path("limitId");
         return limits.isObject() && (id.isMissingNode() || id.isNull() || id.asString("").equals("codex"));
     }
 
     /** "Session" for the 5-hour window, as Claude Code names its own; "Week"; "Month" on the monthly plans. */
-    private static String name(int minutes) {
+    private static String name(final int minutes) {
         return minutes >= MONTH_MINUTES ? "Month" : minutes >= WEEK_MINUTES ? "Week" : "Session";
     }
 }

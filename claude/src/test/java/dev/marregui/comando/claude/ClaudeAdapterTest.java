@@ -1,18 +1,5 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.port.McpGateway;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.core.transcript.TranscriptRegistry;
-import dev.marregui.comando.testkit.RecordingSink;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -23,6 +10,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,13 +44,13 @@ class ClaudeAdapterTest {
     private final List<String> registered = new ArrayList<>();
     private final McpGateway gateway = new McpGateway() {
         @Override
-        public synchronized Ticket register(String session) {
+        public synchronized Ticket register(final String session) {
             registered.add("+" + session);
             return new Ticket("http://127.0.0.1:1/mcp", "token-" + session);
         }
 
         @Override
-        public synchronized void unregister(String session, Ticket ticket) {
+        public synchronized void unregister(final String session, final Ticket ticket) {
             registered.add("-" + session);
         }
     };
@@ -68,8 +69,8 @@ class ClaudeAdapterTest {
         }
     }
 
-    private ClaudeAdapter adapter(String script) throws IOException {
-        Path exe = tmp.resolve(script);
+    private ClaudeAdapter adapter(final String script) throws IOException {
+        final Path exe = tmp.resolve(script);
         try (InputStream in = getClass().getResourceAsStream("/" + script)) {
             Files.write(exe, in.readAllBytes());
         }
@@ -79,9 +80,9 @@ class ClaudeAdapterTest {
         return adapter;
     }
 
-    private List<Block> blocks(String session) {
-        Transcript t = transcripts.of(session);
-        List<Block> out = new ArrayList<>();
+    private List<Block> blocks(final String session) {
+        final Transcript t = transcripts.of(session);
+        final List<Block> out = new ArrayList<>();
         for (int i = 0; i < t.size(); i++) {
             out.add(t.get(i));
         }
@@ -92,20 +93,20 @@ class ClaudeAdapterTest {
     /// process (`pong 1`, `pong 2`), and after a clean stop leaves no configuration and no registration.
     @Test
     void startSendAnswerStop() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
-        SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
+        final ClaudeAdapter a = adapter("fake-claude.sh");
+        final SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
         a.start(spec);
         sink.await(Intent.SessionStarted.class, WAIT);
         try (Stream<Path> files = Files.list(runDir)) {
-            Path config = files.findFirst().orElseThrow();
+            final Path config = files.findFirst().orElseThrow();
             assertThat(Files.readString(config)).contains("Bearer token-work", "\"timeout\":3600000");
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(config))).isEqualTo("rw-------");
         }
 
         a.send("work", "ping", "panel one");
-        Intent.SessionInit init = sink.await(Intent.SessionInit.class, WAIT);
+        final Intent.SessionInit init = sink.await(Intent.SessionInit.class, WAIT);
         assertThat(init.info().claudeSessionId()).isEqualTo("fake-1");
-        Intent.SessionTurnEnded end = sink.await(Intent.SessionTurnEnded.class, WAIT);
+        final Intent.SessionTurnEnded end = sink.await(Intent.SessionTurnEnded.class, WAIT);
         assertThat(end.contextTokens()).isEqualTo(100L);
 
         a.send("work", "ping again", "panel one");
@@ -116,7 +117,7 @@ class ClaudeAdapterTest {
                 .containsExactly(new Block.UserPrompt("ping", "panel one", ""), new Block.UserPrompt("ping again", "panel one", ""));
 
         a.stop("work");
-        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isZero();
         try (Stream<Path> files = Files.list(runDir)) {
             assertThat(files).isEmpty();
@@ -128,7 +129,7 @@ class ClaudeAdapterTest {
     /// at 0 has the variable taken out, whatever the environment comando started with holds.
     @Test
     void aSessionLaunchedWhileTheThresholdIsOnLeavesTheCheckpointToComando() throws Exception {
-        Path exe = tmp.resolve("env-claude.sh");
+        final Path exe = tmp.resolve("env-claude.sh");
         Files.writeString(exe, """
                 #!/bin/sh
                 # stands in for claude -p: writes who checkpoints it, then reads its input until it closes
@@ -136,18 +137,18 @@ class ClaudeAdapterTest {
                 cat > /dev/null
                 """);
         exe.toFile().setExecutable(true);
-        AtomicLong threshold = new AtomicLong(400_000L);
+        final AtomicLong threshold = new AtomicLong(400_000L);
         adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
         adapter.checkpointThreshold(threshold::get);
 
-        Path on = Files.createDirectories(tmp.resolve("on"));
+        final Path on = Files.createDirectories(tmp.resolve("on"));
         adapter.start(SessionSpec.fresh("on", on.toString()));
         Awaitility.await("the session on").atMost(WAIT).until(() -> Files.exists(on.resolve("checkpoint-by.txt"))
                 && !Files.readString(on.resolve("checkpoint-by.txt")).isEmpty());
         assertThat(Files.readString(on.resolve("checkpoint-by.txt"))).isEqualTo("comando");
 
         threshold.set(0L);
-        Path off = Files.createDirectories(tmp.resolve("off"));
+        final Path off = Files.createDirectories(tmp.resolve("off"));
         adapter.start(SessionSpec.fresh("off", off.toString()));
         Awaitility.await("the session off").atMost(WAIT).until(() -> Files.exists(off.resolve("checkpoint-by.txt"))
                 && !Files.readString(off.resolve("checkpoint-by.txt")).isEmpty());
@@ -162,7 +163,7 @@ class ClaudeAdapterTest {
     /// prompt's block shows the prompt as typed.
     @Test
     void aPrefaceGoesWithThePromptAndIsNotShown() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
+        final ClaudeAdapter a = adapter("fake-claude.sh");
         a.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
         a.send("work", "ping", "panel one");
@@ -182,7 +183,7 @@ class ClaudeAdapterTest {
     void closeStopsRunningSessionsAndLeavesNoTokenFiles() throws Exception {
         Files.createDirectories(runDir);
         Files.writeString(runDir.resolve("old-crash.mcp.json"), "{}");
-        ClaudeAdapter a = adapter("fake-claude.sh");
+        final ClaudeAdapter a = adapter("fake-claude.sh");
         assertThat(runDir.resolve("old-crash.mcp.json")).doesNotExist();
         a.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
@@ -246,9 +247,9 @@ class ClaudeAdapterTest {
     /// A process that exits with code `3` reports its stderr text and appends an error note to the affected transcript.
     @Test
     void aProcessThatDiesReportsItsStderr() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude-crash.sh");
+        final ClaudeAdapter a = adapter("fake-claude-crash.sh");
         a.start(SessionSpec.fresh("work", tmp.toString()));
-        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isEqualTo(3);
         assertThat(exit.error()).contains("unknown option");
         assertThat(blocks("work")).anySatisfy(b -> assertThat(b).isInstanceOf(Block.Note.class)
@@ -259,9 +260,9 @@ class ClaudeAdapterTest {
     /// path conversion failure instead of attempting a process launch.
     @Test
     void aWorkingDirectoryThatIsNoPathFailsTheStart() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
+        final ClaudeAdapter a = adapter("fake-claude.sh");
         a.start(SessionSpec.fresh("work", "/tmp/bad\0dir"));
-        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isEqualTo(-1);
         assertThat(exit.error()).startsWith("working directory is not a path");
     }
@@ -270,9 +271,9 @@ class ClaudeAdapterTest {
     /// process can be started there.
     @Test
     void aMissingWorkingDirectoryFailsTheStart() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
+        final ClaudeAdapter a = adapter("fake-claude.sh");
         a.start(SessionSpec.fresh("work", tmp.resolve("nope").toString()));
-        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isEqualTo(-1);
         assertThat(exit.error()).contains("does not exist");
         assertThat(registered).noneMatch(r -> r.startsWith("+"));
@@ -281,9 +282,9 @@ class ClaudeAdapterTest {
     /// Sending to an unseen, stopped session finishes the turn as an error rather than silently dropping the prompt.
     @Test
     void sendingToAStoppedSessionEndsTheTurnWithAnError() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
+        final ClaudeAdapter a = adapter("fake-claude.sh");
         a.send("work", "hello?", "one");
-        Intent.SessionTurnEnded end = sink.await(Intent.SessionTurnEnded.class, WAIT);
+        final Intent.SessionTurnEnded end = sink.await(Intent.SessionTurnEnded.class, WAIT);
         assertThat(end.error()).isTrue();
     }
 
@@ -291,14 +292,14 @@ class ClaudeAdapterTest {
     /// intent, because stored history needs no running process.
     @Test
     void storedConversationLoadsWithoutStartingAProcess() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
-        Path project = Files.createDirectories(tmp.resolve("projects/-w"));
+        final ClaudeAdapter a = adapter("fake-claude.sh");
+        final Path project = Files.createDirectories(tmp.resolve("projects/-w"));
         Files.writeString(project.resolve("abc.jsonl"), """
                 {"type":"user","cwd":"/w","message":{"role":"user","content":"earlier question"}}
                 {"type":"assistant","message":{"id":"m0","content":[{"type":"text","text":"earlier answer"}]}}
                 """);
         a.loadHistory(SessionSpec.imported("old", tmp.toString(), "abc"));
-        long deadline = System.nanoTime() + WAIT.toNanos();
+        final long deadline = System.nanoTime() + WAIT.toNanos();
         while (transcripts.of("old").size() < 3 && System.nanoTime() < deadline) {
             Thread.sleep(20);
         }
@@ -307,12 +308,12 @@ class ClaudeAdapterTest {
         assertThat(sink.of(Intent.SessionStarted.class)).isEmpty();
     }
 
-    private ClaudeAdapter adapterAt(String executable, Path run) {
+    private ClaudeAdapter adapterAt(final String executable, final Path run) {
         adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(executable, run, tmp.resolve("projects"), UiInstructions.TEXT));
         return adapter;
     }
 
-    private List<Block.Note> errorNotes(String session) {
+    private List<Block.Note> errorNotes(final String session) {
         return blocks(session).stream().filter(Block.Note.class::isInstance).map(Block.Note.class::cast)
                 .filter(n -> n.kind() == Block.NoteKind.ERROR).toList();
     }
@@ -321,18 +322,18 @@ class ClaudeAdapterTest {
     /// error and an informational transcript note, without adding another error note.
     @Test
     void aPromptAfterAFailedStartAddsNoSecondError() {
-        ClaudeAdapter a = adapterAt(tmp.resolve("no-such-claude").toString(), runDir);
+        final ClaudeAdapter a = adapterAt(tmp.resolve("no-such-claude").toString(), runDir);
         a.start(SessionSpec.fresh("work", tmp.toString()));
         a.send("work", "hello", "one");
 
-        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isEqualTo(-1);
         assertThat(exit.error()).contains("COMANDO_CLAUDE");
-        Intent.SessionTurnEnded end = sink.await(Intent.SessionTurnEnded.class, WAIT);
+        final Intent.SessionTurnEnded end = sink.await(Intent.SessionTurnEnded.class, WAIT);
         assertThat(end.error()).isTrue();
         assertThat(end.message()).isEqualTo("session could not start");
         assertThat(errorNotes("work")).hasSize(1);
-        Block last = blocks("work").getLast();
+        final Block last = blocks("work").getLast();
         assertThat(last).as("the prompt says it went nowhere").isInstanceOfSatisfying(Block.Note.class,
                 n -> assertThat(n.text()).startsWith("Not sent: the session could not start"));
     }
@@ -341,11 +342,11 @@ class ClaudeAdapterTest {
     /// earlier filesystem cause even when the executable is also absent.
     @Test
     void aRunDirectoryThatCannotBeWrittenFailsWithoutTheExecutableAdvice() throws Exception {
-        Path notADirectory = Files.writeString(tmp.resolve("run-file"), "x");
-        ClaudeAdapter a = adapterAt(tmp.resolve("no-such-claude").toString(), notADirectory);
+        final Path notADirectory = Files.writeString(tmp.resolve("run-file"), "x");
+        final ClaudeAdapter a = adapterAt(tmp.resolve("no-such-claude").toString(), notADirectory);
         a.start(SessionSpec.fresh("work", tmp.toString()));
 
-        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isEqualTo(-1);
         assertThat(exit.error()).startsWith("cannot write the MCP configuration").doesNotContain("COMANDO_CLAUDE");
         assertThat(registered).containsExactly("+work", "-work");
@@ -355,7 +356,7 @@ class ClaudeAdapterTest {
     /// the transcript does not leave an indefinitely running tool.
     @Test
     void aToolCallLeftRunningWhenTheProcessEndsGetsAnErrorResult() throws Exception {
-        Path exe = tmp.resolve("fake-claude-dies-mid-tool.sh");
+        final Path exe = tmp.resolve("fake-claude-dies-mid-tool.sh");
         Files.writeString(exe, """
                 #!/bin/sh
                 while IFS= read -r line; do
@@ -367,7 +368,7 @@ class ClaudeAdapterTest {
                 done
                 """);
         exe.toFile().setExecutable(true);
-        ClaudeAdapter a = adapterAt(exe.toString(), runDir);
+        final ClaudeAdapter a = adapterAt(exe.toString(), runDir);
         a.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
         a.send("work", "run it", "one");
@@ -376,7 +377,7 @@ class ClaudeAdapterTest {
 
         assertThat(blocks("work")).filteredOn(Block.ToolCall.class::isInstance).singleElement()
                 .satisfies(b -> {
-                    Block.ToolCall call = (Block.ToolCall) b;
+                    final Block.ToolCall call = (Block.ToolCall) b;
                     assertThat(call.status()).isEqualTo(Block.ToolStatus.ERROR);
                     assertThat(call.resultText()).isEqualTo(StreamMapper.NO_RESULT);
                 });
@@ -386,14 +387,14 @@ class ClaudeAdapterTest {
     /// matching result exists in the saved stream.
     @Test
     void aStoredConversationThatStopsMidToolEndsTheCall() throws Exception {
-        ClaudeAdapter a = adapter("fake-claude.sh");
-        Path project = Files.createDirectories(tmp.resolve("projects/-w"));
+        final ClaudeAdapter a = adapter("fake-claude.sh");
+        final Path project = Files.createDirectories(tmp.resolve("projects/-w"));
         Files.writeString(project.resolve("abd.jsonl"), """
                 {"type":"user","cwd":"/w","message":{"role":"user","content":"build it"}}
                 {"type":"assistant","message":{"id":"m0","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"./gradlew build"}}]}}
                 """);
         a.loadHistory(SessionSpec.imported("old", tmp.toString(), "abd"));
-        long deadline = System.nanoTime() + WAIT.toNanos();
+        final long deadline = System.nanoTime() + WAIT.toNanos();
         while (transcripts.of("old").size() < 3 && System.nanoTime() < deadline) {
             Thread.sleep(20);
         }

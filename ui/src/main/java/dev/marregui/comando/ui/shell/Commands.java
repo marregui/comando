@@ -1,5 +1,18 @@
 package dev.marregui.comando.ui.shell;
 
+import java.awt.Component;
+import java.awt.KeyboardFocusManager;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import javax.swing.JOptionPane;
+import javax.swing.KeyStroke;
+import javax.swing.text.BadLocationException;
+
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
@@ -37,19 +50,6 @@ import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 
-import javax.swing.JOptionPane;
-import javax.swing.KeyStroke;
-import javax.swing.text.BadLocationException;
-import java.awt.Component;
-import java.awt.KeyboardFocusManager;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-
 /**
  * The window's command table: every command with its label, key and when it can run, registered once; and what the
  * commands that act on the focused panel, its results and its shell do. EDT only.
@@ -70,8 +70,8 @@ final class Commands {
     private final QuitFlow quit;
     private final WindowLayout windowLayout;
 
-    Commands(ComandoUi ui, ComandoUi.Dependencies deps, ActionRegistry actions, ShellParts parts, FocusRouter focus,
-            LayoutKeeper layout, PanelFiles files, QuitFlow quit, WindowLayout windowLayout) {
+    Commands(final ComandoUi ui, final ComandoUi.Dependencies deps, final ActionRegistry actions, final ShellParts parts, final FocusRouter focus,
+            final LayoutKeeper layout, final PanelFiles files, final QuitFlow quit, final WindowLayout windowLayout) {
         this.ui = ui;
         this.deps = deps;
         this.actions = actions;
@@ -87,11 +87,11 @@ final class Commands {
      * Registers every command, {@code shortcut} the modifier of comando's commands and {@code lowerTabKey} that of the
      * lower tabs' keys; where each sits, in a menu or an area, its icon and its tooltip come from {@link Menus}.
      */
-    void register(int shortcut, int lowerTabKey, HelpActions help, KitActions kit, JobActions jobs) {
-        Workspace workspace = parts.workspace();
-        LowerPanel lower = parts.lower();
-        FindBar findBar = parts.findBar();
-        LivePlots livePlots = parts.livePlots();
+    void register(final int shortcut, final int lowerTabKey, final HelpActions help, final KitActions kit, final JobActions jobs) {
+        final Workspace workspace = parts.workspace();
+        final LowerPanel lower = parts.lower();
+        final FindBar findBar = parts.findBar();
+        final LivePlots livePlots = parts.livePlots();
         // file
         cmd("panel.new", "New panel", key(KeyEvent.VK_T, shortcut), () -> workspace.newPanel());
         cmd("panel.openSpec", "Open file…", key(KeyEvent.VK_O, shortcut), files::openSpec);
@@ -99,14 +99,14 @@ final class Commands {
         // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
         cmd("panel.save", "Save", key(KeyEvent.VK_S, shortcut), files::savePanel);
         cmd("panel.rename", "Rename panel…", null, () -> {
-            EditorPanel p = workspace.focused();
+            final EditorPanel p = workspace.focused();
             if (p != null) {
                 workspace.rename(p);
             }
         });
         // ⌘W closes the view that has the keyboard, else the panel
         cmd("file.close", "Close", key(KeyEvent.VK_W, shortcut), () -> {
-            long view = focus.focusedView();
+            final long view = focus.focusedView();
             if (view >= 0) {
                 deps.intents().dispatch(new Intent.CloseView(view));
             } else {
@@ -123,26 +123,26 @@ final class Commands {
         edit("edit.paste", "Paste", key(KeyEvent.VK_V, shortcut));
         edit("edit.selectAll", "Select all", key(KeyEvent.VK_A, shortcut));
         cmd("view.copy", "Copy view content", key(KeyEvent.VK_C, shortcut | SHIFT), () -> {
-            Copyable c = focus.capability(Copyable.class);
+            final Copyable c = focus.capability(Copyable.class);
             if (c != null && Capabilities.copy(c)) {
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Copied the view's content", false));
             }
         }, () -> {
-            Copyable c = focus.capability(Copyable.class);
+            final Copyable c = focus.capability(Copyable.class);
             return c != null && c.canCopy();
         });
         cmd("view.find", "Find…", key(KeyEvent.VK_F, shortcut), () -> findBar.open(focus.capability(Searchable.class)),
                 () -> focus.capability(Searchable.class) != null);
         cmd("view.findNext", "Find next", key(KeyEvent.VK_G, shortcut), () -> findBar.next(true), () -> findBar.isOpen());
         cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, shortcut | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
-        KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
+        final KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
         cmd("edit.complete", "Complete SQL", complete, () -> Keys.forward(focus.editorArea(), complete, true),
                 () -> focus.editorFocused() && Keys.forward(focus.editorArea(), complete, false));
         // ⌥⎋ as well, as in macOS text views: ⌃Space is the system's input-source switch on many Macs
         cmd("edit.completeAlt", "Complete SQL", key(KeyEvent.VK_ESCAPE, ALT), () -> Keys.forward(focus.editorArea(), complete, true),
                 () -> focus.editorFocused() && Keys.forward(focus.editorArea(), complete, false));
         cmd("panel.preview", "Edit / Preview Markdown", key(KeyEvent.VK_M, shortcut | SHIFT), () -> {
-            EditorPanel p = workspace.focused();
+            final EditorPanel p = workspace.focused();
             if (p != null) {
                 p.togglePreview();
             }
@@ -172,12 +172,12 @@ final class Commands {
                 () -> focusedSession().filter(x -> x.status().isUsable() && !x.isCheckpointing()).isPresent());
         // every session's: the context at which a turn's end runs the checkpoint, then /compact (record 129)
         cmd("session.checkpointThreshold", "Checkpoint threshold…", null, this::checkpointThreshold);
-        for (String m : SessionSpec.MODELS) {
+        for (final String m : SessionSpec.MODELS) {
             cmd("session.model." + m, m, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionModel(x.name(), m))),
                     () -> focusedSession().filter(x -> !x.isCheckpointing()).isPresent());
         }
-        for (String e : SessionSpec.EFFORTS) {
+        for (final String e : SessionSpec.EFFORTS) {
             cmd("session.effort." + e, e, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionEffort(x.name(), e))),
                     () -> focusedSession().filter(x -> !x.isCheckpointing()).isPresent());
@@ -190,7 +190,7 @@ final class Commands {
         cmd("session.import", "Import conversations…", null, ui::openImport);
         // panel: its connection
         cmd("connection.toggle", "Connect or disconnect", null, () -> {
-            AppState s = deps.state().get();
+            final AppState s = deps.state().get();
             s.connection(s.focusedPanel().connection()).ifPresent(c -> deps.intents().dispatch(c.status().isUsable()
                     ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name())));
         }, () -> !deps.state().get().focusedPanel().connection().isEmpty());
@@ -233,7 +233,7 @@ final class Commands {
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, shortcut | SHIFT), () -> new CommandPalette(actions).show(parts.frame()));
         cmd("focus.editor", "Focus the editor", key(KeyEvent.VK_E, shortcut), () -> {
-            EditorPanel p = workspace.focused();
+            final EditorPanel p = workspace.focused();
             if (p != null) {
                 p.editor().requestFocus();
             }
@@ -244,7 +244,7 @@ final class Commands {
         // ⌘K, IntelliJ's key for its commit view; a focused terminal keeps it as its Clear Buffer
         cmd("view.changes", "Uncommitted changes", key(KeyEvent.VK_K, shortcut), this::toggleChanges);
         cmd("view.files", "Files", null, () -> {
-            SessionsSidebar sidebar = parts.sidebar();
+            final SessionsSidebar sidebar = parts.sidebar();
             if (!sidebar.isShown()) {
                 layout.toggleSidebar();
             }
@@ -264,9 +264,9 @@ final class Commands {
         cmd("view.results", "Results", key(KeyEvent.VK_4, lowerTabKey),
                 () -> focus.showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
         // ⌘⌥1–4 as well: macOS Mission Control takes ⌃1–⌃4 when its desktop shortcuts are on
-        String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
+        final String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
         for (int i = 0; i < lowerTabs.length; i++) {
-            String target = lowerTabs[i];
+            final String target = lowerTabs[i];
             cmd(target + ".alt", actions.get(target).label() + " tab", key(KeyEvent.VK_1 + i, shortcut | ALT), () -> actions.run(target));
         }
         cmd("view.nextTab", "Next tab", key(KeyEvent.VK_TAB, CTRL), () -> lower.selectRelative(1));
@@ -276,13 +276,13 @@ final class Commands {
         cmd("panel.next", "Next panel", key(KeyEvent.VK_CLOSE_BRACKET, shortcut | SHIFT), () -> workspace.selectRelative(1));
         cmd("panel.previous", "Previous panel", key(KeyEvent.VK_OPEN_BRACKET, shortcut | SHIFT), () -> workspace.selectRelative(-1));
         for (int i = 1; i <= 9; i++) {
-            int index = i - 1;
+            final int index = i - 1;
             cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, shortcut), () -> workspace.select(index));
         }
         cmd("view.zoomIn", "Zoom in", key(KeyEvent.VK_EQUALS, shortcut), () -> zoom(1), () -> focus.capability(Zoomable.class) != null);
         cmd("view.zoomOut", "Zoom out", key(KeyEvent.VK_MINUS, shortcut), () -> zoom(-1), () -> focus.capability(Zoomable.class) != null);
         cmd("view.zoomReset", "Reset zoom", key(KeyEvent.VK_0, shortcut), () -> {
-            Zoomable z = focus.capability(Zoomable.class);
+            final Zoomable z = focus.capability(Zoomable.class);
             if (z != null) {
                 z.resetZoom();
             }
@@ -299,26 +299,26 @@ final class Commands {
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch
         // (Menus), the one chosen ticked (record 103)
-        for (NamedTheme t : NamedTheme.values()) {
+        for (final NamedTheme t : NamedTheme.values()) {
             cmd(t.commandId(), t.label, null, () -> ui.themeChosen(t));
             actions.choice(t.commandId(), () -> NamedTheme.chosen().orElse(null) == t);
         }
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
-        boolean mac = Platform.isMac();
+        final boolean mac = Platform.isMac();
         cmd("app.about", "About comando", null, help::showAbout);
         cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, shortcut), quit::quit);
     }
 
-    private void cmd(String id, String label, KeyStroke key, Runnable run) {
+    private void cmd(final String id, final String label, final KeyStroke key, final Runnable run) {
         actions.register(Command.of(id, label, Menus.icon(id), key, "", run));
     }
 
-    private void cmd(String id, String label, KeyStroke key, Runnable run, BooleanSupplier enabled) {
+    private void cmd(final String id, final String label, final KeyStroke key, final Runnable run, final BooleanSupplier enabled) {
         actions.register(Command.of(id, label, Menus.icon(id), key, "", run, enabled));
     }
 
     /** An Edit command: runs the focused component's own action for {@code key}; enabled when it has one. */
-    private void edit(String id, String label, KeyStroke key) {
+    private void edit(final String id, final String label, final KeyStroke key) {
         cmd(id, label, key, () -> Keys.forward(editTarget(), key, true), () -> Keys.forward(editTarget(), key, false));
     }
 
@@ -327,11 +327,11 @@ final class Commands {
      * takes the command's key before that window sees it; else the main window's.
      */
     private Component editTarget() {
-        Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        final Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
         return c != null && parts.diffWindow().holds(c) ? c : focus.focusOwnerInFrame();
     }
 
-    private static KeyStroke key(int code, int modifiers) {
+    private static KeyStroke key(final int code, final int modifiers) {
         return KeyStroke.getKeyStroke(code, modifiers);
     }
 
@@ -342,24 +342,24 @@ final class Commands {
     }
 
     private Optional<SessionState> focusedSession() {
-        AppState s = deps.state().get();
+        final AppState s = deps.state().get();
         return s.session(s.focusedPanel().session());
     }
 
     private boolean canStop() {
-        AppState s = deps.state().get();
+        final AppState s = deps.state().get();
         return s.runOf(s.focused()).map(r -> r.status().isActive()).orElse(false)
                 || focusedSession().map(SessionState::isBusy).orElse(false);
     }
 
     private boolean hasRun() {
-        AppState s = deps.state().get();
+        final AppState s = deps.state().get();
         return s.runOf(s.focused()).isPresent();
     }
 
     /** Runs the editor's selection or the block under the caret. */
-    private void run(Target target) {
-        EditorPanel p = parts.workspace().focused();
+    private void run(final Target target) {
+        final EditorPanel p = parts.workspace().focused();
         if (p != null) {
             p.runSelection(target);
         }
@@ -370,7 +370,7 @@ final class Commands {
      * it when it shows one.
      */
     private void toggleChanges() {
-        Optional<ViewState> open = deps.state().get().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst();
+        final Optional<ViewState> open = deps.state().get().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst();
         if (open.isPresent() && ((ViewSpec.Changes) open.get().spec()).root().isEmpty()) {
             deps.intents().dispatch(new Intent.CloseView(open.get().id()));
         } else {
@@ -381,8 +381,8 @@ final class Commands {
 
     /** Asks for Gradle tasks, naming the build they run in; the last ones are remembered across restarts. */
     private void runGradle() {
-        String dir = focusedSession().map(x -> Labels.shortPath(x.spec().workDir())).orElse("the session's directory");
-        String tasks = (String) JOptionPane.showInputDialog(parts.frame(), Plain.text("Tasks and options, run in " + dir + ":"),
+        final String dir = focusedSession().map(x -> Labels.shortPath(x.spec().workDir())).orElse("the session's directory");
+        final String tasks = (String) JOptionPane.showInputDialog(parts.frame(), Plain.text("Tasks and options, run in " + dir + ":"),
                 "Run Gradle", JOptionPane.PLAIN_MESSAGE, null, null, windowLayout.gradleTasks());
         if (tasks != null && !tasks.isBlank()) {
             windowLayout.gradleTasks(tasks.strip());
@@ -395,7 +395,7 @@ final class Commands {
      * none (record 129). Kept across restarts; a session started from then on is told who checkpoints it.
      */
     private void checkpointThreshold() {
-        String answer = (String) JOptionPane.showInputDialog(parts.frame(),
+        final String answer = (String) JOptionPane.showInputDialog(parts.frame(),
                 Plain.text("Context, in tokens, at which a turn's end runs the session's checkpoint, then /compact; 0 for never:"),
                 "Checkpoint threshold", JOptionPane.PLAIN_MESSAGE, null, null, Long.toString(windowLayout.checkpointThreshold()));
         if (answer == null || answer.isBlank()) {
@@ -404,7 +404,7 @@ final class Commands {
         long tokens;
         try {
             tokens = Long.parseLong(answer.strip().replace("_", "").replace(",", ""));
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             tokens = -1L;
         }
         if (tokens < 0 || tokens > Integer.MAX_VALUE) {
@@ -418,52 +418,52 @@ final class Commands {
 
     /** Types the editor's selection, or the line under the caret, into the panel's shell and runs it. */
     private void runInTerminal() {
-        EditorPanel p = parts.workspace().focused();
+        final EditorPanel p = parts.workspace().focused();
         if (p == null) {
             return;
         }
         String text = p.editor().area().getSelectedText();
         if (text == null || text.isBlank()) {
-            var area = p.editor().area();
+            final var area = p.editor().area();
             try {
-                int line = area.getLineOfOffset(area.getCaretPosition());
+                final int line = area.getLineOfOffset(area.getCaretPosition());
                 text = area.getText(area.getLineStartOffset(line), area.getLineEndOffset(line) - area.getLineStartOffset(line));
-            } catch (BadLocationException e) {
+            } catch (final BadLocationException e) {
                 return;
             }
         }
-        String command = text.strip();
+        final String command = text.strip();
         if (command.isEmpty()) {
             return;
         }
         deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
         Edt.later(() -> {
             // the posted send may run before the render that creates the panel's terminal: render it here first
-            TerminalTabs tabs = parts.lower().terminals();
+            final TerminalTabs tabs = parts.lower().terminals();
             tabs.render(deps.state().get(), true);
-            TerminalWidget t = tabs.focused();
+            final TerminalWidget t = tabs.focused();
             if (t != null) {
                 t.send(command + "\n");
             }
         });
     }
 
-    private void zoom(int steps) {
-        Zoomable z = focus.capability(Zoomable.class);
+    private void zoom(final int steps) {
+        final Zoomable z = focus.capability(Zoomable.class);
         if (z != null) {
             z.zoom(steps);
         }
     }
 
     /** Asks for one of {@code names}; nothing happens when there are none or the user cancels. */
-    private void choose(String title, List<String> names, Consumer<String> chosen) {
+    private void choose(final String title, final List<String> names, final Consumer<String> chosen) {
         if (names.isEmpty()) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Nothing to choose: add one first", false));
             return;
         }
         // names can come from stored conversations: shown guarded, mapped back to the real name
-        List<String> shown = names.stream().map(Plain::text).toList();
-        Object pick = JOptionPane.showInputDialog(parts.frame(), title, title, JOptionPane.PLAIN_MESSAGE, null, shown.toArray(), shown.getFirst());
+        final List<String> shown = names.stream().map(Plain::text).toList();
+        final Object pick = JOptionPane.showInputDialog(parts.frame(), title, title, JOptionPane.PLAIN_MESSAGE, null, shown.toArray(), shown.getFirst());
         if (pick != null) {
             chosen.accept(names.get(shown.indexOf(pick.toString())));
         }
@@ -476,9 +476,9 @@ final class Commands {
      * rows when the grid has a selection, else the first 50 rows; the error when the run failed.
      */
     private void insertLastResult() {
-        AppState s = deps.state().get();
-        SqlRun run = s.runOf(s.focused()).orElse(null);
-        EditorPanel p = parts.workspace().focused();
+        final AppState s = deps.state().get();
+        final SqlRun run = s.runOf(s.focused()).orElse(null);
+        final EditorPanel p = parts.workspace().focused();
         // its session runs its checkpoint: the panel takes no text from the user meanwhile (record 130)
         if (p == null || p.locked()) {
             return;
@@ -491,7 +491,7 @@ final class Commands {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The panel has no result to attach", false));
             return;
         }
-        ResultView r = parts.lower().results().shown();
+        final ResultView r = parts.lower().results().shown();
         String block;
         if (run.status() == RunStatus.FAILED) {
             block = Attachments.error(run.sql(), run.error());
@@ -506,7 +506,7 @@ final class Commands {
     }
 
     /** The grid's selected rows as result rows, in the order shown, at most 500; empty when nothing is selected. */
-    private int[] selectedResultRows(ResultView r) {
+    private int[] selectedResultRows(final ResultView r) {
         return Arrays.stream(parts.lower().results().grid().selectedSourceRows())
                 .filter(i -> i >= 0 && i < r.rowCount()).limit(500).toArray();
     }
@@ -516,17 +516,17 @@ final class Commands {
      */
     private void plotLastResult() {
         try {
-            ViewSpec.Plot plot = ResultViews.plot(parts.lower().results().shown());
+            final ViewSpec.Plot plot = ResultViews.plot(parts.lower().results().shown());
             deps.intents().dispatch(new Intent.ShowView("", "plot · " + deps.state().get().focusedPanel().title(), plot, Placement.LOWER));
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, e.getMessage(), false));
         }
     }
 
     /** Re-runs the focused panel's last query every N seconds, N asked for, and plots each result again. */
     private void plotLive() {
-        AppState s = deps.state().get();
-        SqlRun run = s.runOf(s.focused()).orElse(null);
+        final AppState s = deps.state().get();
+        final SqlRun run = s.runOf(s.focused()).orElse(null);
         if (run == null) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Run the query to plot first", false));
             return;
@@ -534,11 +534,11 @@ final class Commands {
         ViewSpec.Plot plot;
         try {
             plot = ResultViews.plot(parts.lower().results().shown());
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, e.getMessage(), false));
             return;
         }
-        String every = (String) JOptionPane.showInputDialog(parts.frame(), "Re-run the query and refresh the plot every N seconds:",
+        final String every = (String) JOptionPane.showInputDialog(parts.frame(), "Re-run the query and refresh the plot every N seconds:",
                 "Live plot", JOptionPane.PLAIN_MESSAGE, null, null, "5");
         if (every == null) {
             return;
@@ -546,7 +546,7 @@ final class Commands {
         int seconds;
         try {
             seconds = Integer.parseInt(every.strip());
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Not a number of seconds: " + every, false));
             return;
         }
@@ -554,7 +554,7 @@ final class Commands {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Refresh every 1 to " + LivePlots.MAX_SECONDS + " seconds", false));
             return;
         }
-        String title = "live · " + s.focusedPanel().title();
+        final String title = "live · " + s.focusedPanel().title();
         parts.livePlots().start(s.focused(), run.sql(), title, seconds);
         // the plot checked before the dialog: a run that ended while it was open is plotted by the first refresh
         deps.intents().dispatch(new Intent.ShowView("", title, plot, Placement.LOWER));
@@ -562,15 +562,15 @@ final class Commands {
 
     /** Copies the focused panel's last result into its own tab, which later runs do not replace. */
     private void keepResult() {
-        ResultView r = parts.lower().results().shown();
-        AppState s = deps.state().get();
-        SqlRun run = s.runOf(s.focused()).orElse(null);
+        final ResultView r = parts.lower().results().shown();
+        final AppState s = deps.state().get();
+        final SqlRun run = s.runOf(s.focused()).orElse(null);
         if (r == null || run == null) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The panel has no result to keep", false));
             return;
         }
-        String sql = run.sql().replace('\n', ' ').strip();
-        String title = "result · " + Clip.keepStart(sql, 41) + " #" + run.requestId();
+        final String sql = run.sql().replace('\n', ' ').strip();
+        final String title = "result · " + Clip.keepStart(sql, 41) + " #" + run.requestId();
         deps.intents().dispatch(new Intent.ShowView("", title, ResultViews.table(r), Placement.LOWER));
     }
 }

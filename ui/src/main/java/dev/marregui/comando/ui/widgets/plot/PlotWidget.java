@@ -1,5 +1,9 @@
 package dev.marregui.comando.ui.widgets.plot;
 
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import javax.swing.JComponent;
+
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
@@ -8,10 +12,6 @@ import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Exportable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
-
-import javax.imageio.ImageIO;
-import javax.swing.JComponent;
-import java.awt.image.BufferedImage;
 
 /** Series plotted over shared axes; drag to zoom, double-click to reset, export as PNG. */
 public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Exportable {
@@ -38,9 +38,9 @@ public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Export
     }
 
     @Override
-    public void render(ViewSpec.Plot view) {
-        long g = ++generation;
-        long points = view.series().stream().mapToLong(s -> s.x().length).sum();
+    public void render(final ViewSpec.Plot view) {
+        final long g = ++generation;
+        final long points = view.series().stream().mapToLong(s -> s.x().length).sum();
         if (points == 0) {
             canvas.setData(PlotCanvas.prepare(view));
             overlay.showEmpty("No points to plot");
@@ -55,7 +55,7 @@ public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Export
             }
             // sorting millions of points takes the event thread half a second or more; a live plot does it every period
             UiErrands.start("plot-prepare", () -> {
-                PlotCanvas.Prepared p = PlotCanvas.prepare(view);
+                final PlotCanvas.Prepared p = PlotCanvas.prepare(view);
                 Edt.later(() -> {
                     if (g == generation) {
                         canvas.setData(p);
@@ -68,7 +68,7 @@ public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Export
     }
 
     @Override
-    public void zoom(int steps) {
+    public void zoom(final int steps) {
         canvas.zoom(steps);
     }
 
@@ -84,7 +84,7 @@ public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Export
 
     @Override
     public Export prepare() {
-        BufferedImage image = canvas.snapshot();
+        final BufferedImage image = canvas.snapshot();
         return file -> ImageIO.write(image, "png", file.toFile());
     }
 }

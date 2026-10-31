@@ -1,21 +1,22 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import javax.swing.JButton;
+import javax.swing.SwingUtilities;
+
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
-import org.awaitility.Awaitility;
-import org.junit.jupiter.api.Test;
-
-import javax.swing.JButton;
-import javax.swing.SwingUtilities;
-import java.awt.event.MouseEvent;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,8 +47,8 @@ class EditorPanelOutlineTest {
             ### Detail
             """;
 
-    private static EditorPanel panel(String title, Path file, String text) throws Exception {
-        EditorPanel[] p = new EditorPanel[1];
+    private static EditorPanel panel(final String title, final Path file, final String text) throws Exception {
+        final EditorPanel[] p = new EditorPanel[1];
         SwingUtilities.invokeAndWait(() -> {
             p[0] = new EditorPanel(new PanelState(new PanelId(title), title, "", ""), intent -> { }, new SchemaRegistry());
             p[0].editor().load(text);
@@ -58,17 +59,17 @@ class EditorPanelOutlineTest {
         return p[0];
     }
 
-    private static JButton button(EditorPanel p) {
+    private static JButton button(final EditorPanel p) {
         return find(p, "Outline");
     }
 
-    private static JButton find(java.awt.Container c, String name) {
-        for (java.awt.Component k : c.getComponents()) {
+    private static JButton find(final java.awt.Container c, final String name) {
+        for (final java.awt.Component k : c.getComponents()) {
             if (k instanceof JButton b && name.equals(b.getAccessibleContext().getAccessibleName())) {
                 return b;
             }
             if (k instanceof java.awt.Container sub) {
-                JButton f = find(sub, name);
+                final JButton f = find(sub, name);
                 if (f != null) {
                     return f;
                 }
@@ -82,8 +83,8 @@ class EditorPanelOutlineTest {
     /// the button toggles the pane and reports the new choice.
     @Test
     void theOutlineListsTheHeadingsWithTheRenderedPagesIdsAndItsButtonRemembersTheChoice() throws Exception {
-        List<Boolean> kept = new CopyOnWriteArrayList<>();
-        EditorPanel p = panel("plan.md", Path.of("/d/plan.md"), DOC);
+        final List<Boolean> kept = new CopyOnWriteArrayList<>();
+        final EditorPanel p = panel("plan.md", Path.of("/d/plan.md"), DOC);
         SwingUtilities.invokeAndWait(() -> p.outline(false, kept::add));
         assertThat(button(p).isVisible()).as("a Markdown document has the button").isTrue();
         assertThat(p.outlineShows()).isFalse();
@@ -97,7 +98,7 @@ class EditorPanelOutlineTest {
                 new MarkdownHtml.Section(2, "Scope", "scope", 7),
                 new MarkdownHtml.Section(2, "Scope", "scope-1", 13),
                 new MarkdownHtml.Section(3, "Detail", "detail", 14));
-        String html = MarkdownHtml.render(DOC);
+        final String html = MarkdownHtml.render(DOC);
         assertThat(html).as("the ids the rendered page gives").contains("id=\"plan\"", "id=\"scope\"", "id=\"scope-1\"", "id=\"detail\"");
 
         // typing changes the headings: read again once it pauses
@@ -114,7 +115,7 @@ class EditorPanelOutlineTest {
     /// leaves the caret at line 0.
     @Test
     void aDoubleClickOnAHeadingPutsItsLineAtTheTopOfTheText() throws Exception {
-        EditorPanel p = panel("plan.md", Path.of("/d/plan.md"), DOC + "\nfiller\n".repeat(200) + "## Far\n");
+        final EditorPanel p = panel("plan.md", Path.of("/d/plan.md"), DOC + "\nfiller\n".repeat(200) + "## Far\n");
         SwingUtilities.invokeAndWait(() -> {
             p.outline(true, on -> { });
             p.edit();
@@ -123,18 +124,18 @@ class EditorPanelOutlineTest {
         });
         Awaitility.await("the headings read").atMost(Duration.ofSeconds(5))
                 .until(() -> p.outlinePane().sections().stream().anyMatch(s -> s.text().equals("Far")));
-        int far = p.outlinePane().sections().size() - 1;
-        int line = p.outlinePane().sections().get(far).line();
+        final int far = p.outlinePane().sections().size() - 1;
+        final int line = p.outlinePane().sections().get(far).line();
         SwingUtilities.invokeAndWait(() -> {
-            var list = p.outlinePane().list();
+            final var list = p.outlinePane().list();
             list.setSize(200, 400);
-            var r = list.getCellBounds(far, far);
+            final var r = list.getCellBounds(far, far);
             list.dispatchEvent(new MouseEvent(list, MouseEvent.MOUSE_CLICKED, 0, 0, r.x + 5, r.y + 2, 1, false, MouseEvent.BUTTON1));
         });
         assertThat(p.editor().area().getCaretLineNumber()).as("a single click goes nowhere").isZero();
         SwingUtilities.invokeAndWait(() -> {
-            var list = p.outlinePane().list();
-            var r = list.getCellBounds(far, far);
+            final var list = p.outlinePane().list();
+            final var r = list.getCellBounds(far, far);
             list.dispatchEvent(new MouseEvent(list, MouseEvent.MOUSE_CLICKED, 0, 0, r.x + 5, r.y + 2, 2, false, MouseEvent.BUTTON1));
         });
         assertThat(p.editor().area().getCaretLineNumber()).isEqualTo(line);
@@ -144,8 +145,8 @@ class EditorPanelOutlineTest {
     @Test
     void theOutlineIsInTheSidebarsLook() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            OutlinePane o = new OutlinePane();
-            javax.swing.JList<?> l = o.list();
+            final OutlinePane o = new OutlinePane();
+            final javax.swing.JList<?> l = o.list();
             assertThat(l.getBackground()).as("the theme's ground").isEqualTo(Theme.ground());
             assertThat(l.getForeground()).as("ivory names").isEqualTo(SidebarLook.TEXT);
             assertThat(l.getSelectionBackground()).as("a band of the tint").isEqualTo(Theme.tint().tableHeadGround());
@@ -157,7 +158,7 @@ class EditorPanelOutlineTest {
     /// A `.sql` file hides the Outline button and shows no outline even when the outline is wanted.
     @Test
     void textThatDoesNotRenderAsAPageHasNoOutline() throws Exception {
-        EditorPanel p = panel("query.sql", Path.of("/d/query.sql"), "select 1;\n");
+        final EditorPanel p = panel("query.sql", Path.of("/d/query.sql"), "select 1;\n");
         SwingUtilities.invokeAndWait(() -> p.outline(true, on -> { }));
         assertThat(button(p).isVisible()).isFalse();
         assertThat(p.outlineShows()).as("wanted, but a SQL file is no page").isFalse();

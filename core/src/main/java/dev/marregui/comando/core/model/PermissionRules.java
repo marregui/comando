@@ -91,16 +91,16 @@ public final class PermissionRules {
      *
      * @param field the call's input field by name, empty when absent
      */
-    public static Rules rules(String tool, Function<String, String> field) {
+    public static Rules rules(final String tool, final Function<String, String> field) {
         return switch (tool) {
             case "Bash" -> {
-                String command = field.apply("command").strip();
+                final String command = field.apply("command").strip();
                 // no command to name: the tool itself, for the session only; saved, it would allow every command
                 yield command.isEmpty() ? session(new Rule(tool, ""))
                         : new Rules(bash(command).stream().map(c -> new Rule(tool, c)).toList(), true);
             }
             case "WebFetch" -> {
-                String host = host(field.apply("url"));
+                final String host = host(field.apply("url"));
                 // no host to name (no scheme, a file: URL): the tool itself, for the session only
                 yield host == null ? session(new Rule(tool, "")) : new Rules(List.of(new Rule(tool, "domain:" + host)), true);
             }
@@ -110,14 +110,14 @@ public final class PermissionRules {
             // Read rules cover every tool that reads files: Grep and Glob search the directory they are given
             case "Read" -> session(file("Read", field.apply("file_path")));
             case "Glob", "Grep" -> {
-                String dir = field.apply("path").strip();
+                final String dir = field.apply("path").strip();
                 yield session(dir.isEmpty() ? new Rule(tool, "") : directory("Read", dir));
             }
             default -> session(new Rule(tool, ""));
         };
     }
 
-    private static Rules session(Rule rule) {
+    private static Rules session(final Rule rule) {
         return new Rules(List.of(rule), false);
     }
 
@@ -129,18 +129,18 @@ public final class PermissionRules {
      * text; the whole command when it nests commands ({@code $(…)}, backticks, process substitution) or feeds a
      * here-document, whose lines are data and never subcommands.
      */
-    static List<String> bash(String command) {
-        for (String op : NESTED) {
+    static List<String> bash(final String command) {
+        for (final String op : NESTED) {
             if (command.contains(op)) {
                 return List.of(command);
             }
         }
-        List<String> parts = split(command);
+        final List<String> parts = split(command);
         if (parts == null) {
             return List.of(command);
         }
-        Set<String> out = new LinkedHashSet<>();
-        for (String part : parts) {
+        final Set<String> out = new LinkedHashSet<>();
+        for (final String part : parts) {
             out.add(simple(part));
         }
         return List.copyOf(out);
@@ -150,17 +150,17 @@ public final class PermissionRules {
      * The subcommands of {@code command} at {@code &&}, {@code ||}, {@code ;}, {@code |}, {@code |&}, {@code &} and
      * newlines outside quotes and escapes; null for an unbalanced quote or a here-document.
      */
-    private static List<String> split(String command) {
-        List<String> parts = new ArrayList<>();
-        int n = command.length();
+    private static List<String> split(final String command) {
+        final List<String> parts = new ArrayList<>();
+        final int n = command.length();
         int start = 0;
         int i = 0;
         while (i < n) {
-            char c = command.charAt(i);
+            final char c = command.charAt(i);
             if (c == '\\') {
                 i += 2;
             } else if (c == '\'') {
-                int close = command.indexOf('\'', i + 1);
+                final int close = command.indexOf('\'', i + 1);
                 if (close < 0) {
                     return null;
                 }
@@ -185,8 +185,8 @@ public final class PermissionRules {
             } else if (c == ';' || c == '|' || c == '&' || c == '\n') {
                 int width;
                 if (c == '&') {
-                    char prev = i > 0 ? command.charAt(i - 1) : ' ';
-                    char next = i + 1 < n ? command.charAt(i + 1) : ' ';
+                    final char prev = i > 0 ? command.charAt(i - 1) : ' ';
+                    final char next = i + 1 < n ? command.charAt(i + 1) : ' ';
                     if (next == '&') {
                         width = 2;
                     } else if (prev == '>' || prev == '<' || next == '>') {
@@ -196,7 +196,7 @@ public final class PermissionRules {
                         width = 1; // a background job: Claude Code matches each side on its own
                     }
                 } else if (c == '|') {
-                    char next = i + 1 < n ? command.charAt(i + 1) : ' ';
+                    final char next = i + 1 < n ? command.charAt(i + 1) : ' ';
                     width = next == '|' || next == '&' ? 2 : 1;
                 } else {
                     width = 1;
@@ -214,8 +214,8 @@ public final class PermissionRules {
     }
 
     /** Adds a subcommand; an empty one (a blank line, a trailing {@code &}) adds nothing. */
-    private static boolean add(List<String> parts, String part) {
-        String p = part.strip();
+    private static boolean add(final List<String> parts, final String part) {
+        final String p = part.strip();
         if (!p.isEmpty()) {
             parts.add(p);
         }
@@ -223,23 +223,23 @@ public final class PermissionRules {
     }
 
     /** {@code prefix:*} for one simple command, else its exact text; the wrappers Claude Code strips come off first. */
-    private static String simple(String command) {
-        List<String> words = new ArrayList<>();
-        List<Integer> starts = new ArrayList<>();
-        Matcher m = WORD.matcher(command);
+    private static String simple(final String command) {
+        final List<String> words = new ArrayList<>();
+        final List<Integer> starts = new ArrayList<>();
+        final Matcher m = WORD.matcher(command);
         while (m.find()) {
             words.add(m.group());
             starts.add(m.start());
         }
-        int k = stripWrappers(words);
+        final int k = stripWrappers(words);
         if (k < 0 || k >= words.size()) {
             return command; // a wrapper with nothing to run, or options it does not take
         }
-        String exact = command.substring(starts.get(k));
-        List<String> w = words.subList(k, words.size());
-        String name = baseName(w.get(0));
+        final String exact = command.substring(starts.get(k));
+        final List<String> w = words.subList(k, words.size());
+        final String name = baseName(w.get(0));
         int n;
-        boolean module = PYTHON.matcher(name).matches() && w.size() > 2 && w.get(1).equals("-m");
+        final boolean module = PYTHON.matcher(name).matches() && w.size() > 2 && w.get(1).equals("-m");
         if (module) {
             n = 3;
         } else if (NEVER_PREFIX.contains(name) || PYTHON.matcher(name).matches()) {
@@ -251,7 +251,7 @@ public final class PermissionRules {
             return exact; // runs a command in a container, like docker exec
         } else if ((WITH_SUBCOMMANDS.contains(w.get(0)) || WITH_SUBCOMMANDS.contains(name)) && w.size() > 1) {
             // by its base name too: /usr/bin/git commit is git commit, and its rule keeps the path as typed
-            String sub = w.get(1);
+            final String sub = w.get(1);
             if (CONTAINER_EXEC.contains(name + ' ' + sub)) {
                 return exact;
             }
@@ -280,15 +280,15 @@ public final class PermissionRules {
      * duration, {@code time}, {@code nice} with its adjustment, {@code nohup}, {@code stdbuf} with its options,
      * {@code command}, {@code builtin}, {@code noglob}); -1 when a wrapper's arguments are not understood.
      */
-    private static int stripWrappers(List<String> words) {
+    private static int stripWrappers(final List<String> words) {
         int i = 0;
         while (i < words.size()) {
-            String w = words.get(i);
+            final String w = words.get(i);
             switch (w) {
                 case "timeout" -> {
                     i++;
                     while (i < words.size() && words.get(i).startsWith("-")) {
-                        String o = words.get(i);
+                        final String o = words.get(i);
                         i += o.equals("-s") || o.equals("-k") || o.equals("--signal") || o.equals("--kill-after") ? 2 : 1;
                     }
                     if (i >= words.size() || !DURATION.matcher(words.get(i)).matches()) {
@@ -305,7 +305,7 @@ public final class PermissionRules {
                 case "nice" -> {
                     i++;
                     if (i < words.size()) {
-                        String o = words.get(i);
+                        final String o = words.get(i);
                         if (o.equals("-n") || o.equals("--adjustment")) {
                             if (i + 1 >= words.size() || !NUMBER.matcher(words.get(i + 1)).matches()) {
                                 return -1;
@@ -330,7 +330,7 @@ public final class PermissionRules {
                 case "stdbuf" -> {
                     i++;
                     while (i < words.size() && words.get(i).startsWith("-")) {
-                        String o = words.get(i);
+                        final String o = words.get(i);
                         i += o.equals("-i") || o.equals("-o") || o.equals("-e") ? 2 : 1;
                     }
                 }
@@ -342,18 +342,18 @@ public final class PermissionRules {
         return i;
     }
 
-    private static String baseName(String word) {
-        int slash = word.lastIndexOf('/');
+    private static String baseName(final String word) {
+        final int slash = word.lastIndexOf('/');
         return slash < 0 ? word : word.substring(slash + 1);
     }
 
-    private static boolean plainWord(String w) {
+    private static boolean plainWord(final String w) {
         if (w.isEmpty()) {
             return false;
         }
         for (int i = 0; i < w.length(); i++) {
-            char c = w.charAt(i);
-            boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || "._/:@+-".indexOf(c) >= 0;
+            final char c = w.charAt(i);
+            final boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || "._/:@+-".indexOf(c) >= 0;
             if (!ok) {
                 return false;
             }
@@ -367,18 +367,18 @@ public final class PermissionRules {
      * {@code Tool(//abs/dir/**)} for an absolute file, {@code Tool(./dir/**)} for a relative one, the whole tool for
      * none.
      */
-    static Rule file(String tool, String file) {
-        String f = file == null ? "" : file.strip();
+    static Rule file(final String tool, final String file) {
+        final String f = file == null ? "" : file.strip();
         if (f.isEmpty()) {
             return new Rule(tool, "");
         }
         Path p;
         try {
             p = Path.of(f).normalize();
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             return new Rule(tool, "");
         }
-        Path dir = p.getParent();
+        final Path dir = p.getParent();
         if (dir == null) {
             return p.isAbsolute() ? new Rule(tool, "//**") : new Rule(tool, "./" + p.toString().replace('\\', '/'));
         }
@@ -386,14 +386,14 @@ public final class PermissionRules {
     }
 
     /** {@code Tool(//abs/dir/**)} for an absolute directory, {@code Tool(./dir/**)} for a relative one. */
-    static Rule directory(String tool, String directory) {
+    static Rule directory(final String tool, final String directory) {
         Path p;
         try {
             p = Path.of(directory.strip()).normalize();
-        } catch (InvalidPathException e) {
+        } catch (final InvalidPathException e) {
             return new Rule(tool, "");
         }
-        String s = p.toString().replace('\\', '/');
+        final String s = p.toString().replace('\\', '/');
         if (p.isAbsolute()) {
             // an absolute path takes "//": a single leading slash anchors at the settings file's project instead
             return new Rule(tool, "/" + (s.equals("/") ? "" : s) + "/**");
@@ -402,11 +402,11 @@ public final class PermissionRules {
     }
 
     /** The host of {@code url}, lower case, or null when it has none. */
-    static String host(String url) {
+    static String host(final String url) {
         try {
-            String host = URI.create(url == null ? "" : url.strip()).getHost();
+            final String host = URI.create(url == null ? "" : url.strip()).getHost();
             return host == null || host.isBlank() ? null : host.toLowerCase(Locale.ROOT);
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             return null;
         }
     }

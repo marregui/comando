@@ -7,8 +7,8 @@ public final class Fences {
     }
 
     /** The fence's language: the first whitespace-separated word of {@code info}, empty for none or null. */
-    public static String language(String info) {
-        String s = info == null ? "" : info.strip();
+    public static String language(final String info) {
+        final String s = info == null ? "" : info.strip();
         return s.isEmpty() ? "" : s.split("\\s+", 2)[0];
     }
 }
