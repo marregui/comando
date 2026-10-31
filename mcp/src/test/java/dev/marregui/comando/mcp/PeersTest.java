@@ -368,7 +368,8 @@ class PeersTest {
                 i -> i.instances().consults().stream().anyMatch(c -> c.status() == InstancesState.Status.OK), WAIT).instances().consults().getFirst();
         assertThat(answered.direction()).isEqualTo(InstancesState.Direction.ANSWERED);
         assertThat(answered.session()).isEqualTo("consult-main");
-        assertThat(main.window.recorded.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("reply from comando · b"));
+        // the tab's notice comes from its errand after the ask returns, so after the state already says OK: waited for
+        main.window.recorded.await(Intent.Notify.class, n -> n.text().startsWith("reply from comando · b"), WAIT);
     }
 
     /// Refusing from the tab writes `agents.json`'s `peers.deny`, keeping its grants; the next question from that
