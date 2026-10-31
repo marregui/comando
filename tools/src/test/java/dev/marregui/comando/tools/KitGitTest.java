@@ -9,9 +9,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - Version lookup reports the checked-out tag and newer remote tags.
 /// - Backup requires a repository root with a remote.
 /// - Backup commits changes before pushing and surfaces push failures.
+/// - Closing lets a backup's write of the index finish, so no `index.lock` is left.
 class KitGitTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 26);
@@ -178,5 +181,65 @@ class KitGitTest {
 
         assertThatThrownBy(() -> kit.backUp(brain, TODAY)).isInstanceOf(IOException.class).hasMessageStartingWith("git push failed: ");
         assertThat(git(brain, "log", "-1", "--format=%s")).as("committed before the push").isEqualTo("Brain backup 2026-10-26: x.md 1 added");
+    }
+
+    /// Closing while a backup's `git add` holds `.git/index.lock` waits for that step: `close` has not returned while
+    /// the add runs, and once it is let finish the file is in the index and no `index.lock` is left. The fake git holds
+    /// the lock until the test releases it, then runs the real `git add`.
+    @Test
+    void closingLetsABackupsIndexWriteFinishAndLeavesNoLock(@TempDir final Path tmp) throws Exception {
+        final Path brain = tmp.resolve("BRAIN");
+        checkout(brain, tmp.resolve("brain.git"));
+        Files.writeString(brain.resolve("x.md"), "x\n");
+        final Path started = tmp.resolve("add-started");
+        mkfifo(started);
+        final Path release = tmp.resolve("add-release");
+        final Path fake = tmp.resolve("slow-git");
+        // arguments as Git passes them: --no-optional-locks -C <dir> <command> ...; the wait for the release is bounded
+        Files.writeString(fake, """
+                #!/bin/sh
+                if [ "$4" = add ]; then
+                  : > "$3/.git/index.lock"
+                  echo started > "%s"
+                  i=0
+                  while [ ! -e "%s" ] && [ $i -lt 300 ]; do sleep 0.05; i=$((i+1)); done
+                  rm -f "$3/.git/index.lock"
+                fi
+                exec git "$@"
+                """.formatted(started, release));
+        assertThat(fake.toFile().setExecutable(true)).isTrue();
+        final CountDownLatch adding = new CountDownLatch(1);
+        Thread.ofVirtual().start(() -> {
+            try {
+                Files.readAllBytes(started);
+                adding.countDown();
+            } catch (final IOException e) {
+                // the latch is not counted down and the test fails at its await
+            }
+        });
+        final KitGit slow = new KitGit(new Git(fake.toString()));
+        final Thread backup = Thread.ofVirtual().start(() -> {
+            try {
+                slow.backUp(brain, TODAY);
+            } catch (final IOException e) {
+                // a backup cut by the close says so; what this test reads is the repository
+            }
+        });
+        assertThat(adding.await(10, TimeUnit.SECONDS)).as("the fake git add started").isTrue();
+
+        final Thread closing = Thread.ofVirtual().start(slow::close);
+        assertThat(closing.join(Duration.ofMillis(300))).as("close waits while the add writes the index").isFalse();
+        Files.writeString(release, "");
+        assertThat(closing.join(Duration.ofMillis(KitGit.COMMIT_MILLIS))).as("close returns once the add ended").isTrue();
+        assertThat(backup.join(Duration.ofSeconds(10))).isTrue();
+        assertThat(brain.resolve(".git/index.lock")).as("no lock left").doesNotExist();
+        assertThat(git(brain, "ls-files", "x.md")).as("the add finished").isEqualTo("x.md");
+    }
+
+    /** Makes a named pipe at {@code path}: a read of it waits for its writer, so it serves as a signal. */
+    private static void mkfifo(final Path path) throws Exception {
+        final Process p = new ProcessBuilder("mkfifo", path.toString()).redirectErrorStream(true).start();
+        assertThat(p.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(p.exitValue()).isZero();
     }
 }

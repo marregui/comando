@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -50,9 +51,14 @@ final class Lane implements AutoCloseable {
     }
 
     private static final System.Logger LOG = System.getLogger(Lane.class.getName());
-    /** The bound on a table description, as long as Claude waits for one. */
-    private static final int DESCRIBE_SECONDS = 60;
-    /** The statement timeout of {@link #query}: Claude's runs and the schema loads, as long as Claude waits for one. */
+    /** The bound on a table description; the same choice as {@link #QUERY_SECONDS}. */
+    static final int DESCRIBE_SECONDS = 60;
+    /**
+     * The statement timeout of {@link #query}: Claude's runs and the schema loads. Unmeasured, a choice: a call to
+     * comando's tools may wait an hour (the timeout {@code ClaudeAdapter} writes into a session's MCP configuration),
+     * so this bound, not Claude, ends a statement that runs long. Settled by the longest schema load seen on a user's
+     * database.
+     */
     static final int QUERY_SECONDS = 60;
     /**
      * Added to a query's statement timeout to bound its socket reads: the driver's cancel may take its own
@@ -77,6 +83,7 @@ final class Lane implements AutoCloseable {
     private final ExecutorService thread;
     private final Consumer<Lane> onRetired;
     private final int querySeconds;
+    private final int describeSeconds;
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private volatile Running running;
     private volatile boolean closed;
@@ -90,12 +97,19 @@ final class Lane implements AutoCloseable {
 
     Lane(String name, IntentSink sink, ResultRegistry results, DbSettings settings, ScheduledExecutorService timer,
          ExecutorService cancellers, Consumer<Lane> onRetired) {
-        this(name, sink, results, settings, timer, cancellers, onRetired, QUERY_SECONDS);
+        this(name, sink, results, settings, timer, cancellers, onRetired, QUERY_SECONDS, DESCRIBE_SECONDS);
     }
 
-    /** With another statement timeout for {@link #query}; for tests. */
-    Lane(String name, IntentSink sink, ResultRegistry results, DbSettings settings, ScheduledExecutorService timer,
-         ExecutorService cancellers, Consumer<Lane> onRetired, int querySeconds) {
+    /** With other statement timeouts for {@link #query} and {@link #describe}; for tests. */
+    Lane(final String name,
+         final IntentSink sink,
+         final ResultRegistry results,
+         final DbSettings settings,
+         final ScheduledExecutorService timer,
+         final ExecutorService cancellers,
+         final Consumer<Lane> onRetired,
+         final int querySeconds,
+         final int describeSeconds) {
         this.name = name;
         this.sink = sink;
         this.results = results;
@@ -104,6 +118,7 @@ final class Lane implements AutoCloseable {
         this.cancellers = cancellers;
         this.onRetired = onRetired;
         this.querySeconds = querySeconds;
+        this.describeSeconds = describeSeconds;
         this.thread = Threads.strand("db-" + name);
     }
 
@@ -194,22 +209,23 @@ final class Lane implements AutoCloseable {
             // the statement timeout's cancel reaches a server that answers, and the driver's metadata takes none: a
             // network timeout bounds both steps, so a server that stopped answering cannot hold the lane, and the next
             // run opens the connection again if the timeout broke it
-            final boolean bounded = networkTimeout((DESCRIBE_SECONDS + QUERY_MARGIN_SECONDS) * 1000);
+            final boolean bounded = networkTimeout((describeSeconds + QUERY_MARGIN_SECONDS) * 1000);
             try {
                 SQLException first;
                 try (Statement st = connection.createStatement()) {
-                    st.setQueryTimeout(DESCRIBE_SECONDS);
+                    st.setQueryTimeout(describeSeconds);
                     try (ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
                         out.complete(textRows(rs, 10_000));
                         return;
                     }
-                } catch (SQLException e) {
+                } catch (final SQLException e) {
                     first = e;
                 }
                 try (ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
                     List<List<String>> rows = new ArrayList<>();
                     while (rs.next()) {
-                        rows.add(List.of(
+                        // Arrays.asList, not List.of: a driver may answer SQL NULL for a type or nullability
+                        rows.add(Arrays.asList(
                                 rs.getString("COLUMN_NAME"), rs.getString("TYPE_NAME"), rs.getString("IS_NULLABLE")));
                     }
                     if (rows.isEmpty()) {
@@ -217,7 +233,7 @@ final class Lane implements AutoCloseable {
                     } else {
                         out.complete(new QueryPort.Rows(List.of("column", "type", "nullable"), rows, -1L, false));
                     }
-                } catch (SQLException e) {
+                } catch (final SQLException e) {
                     out.completeExceptionally(new IllegalStateException(message(first), first));
                 }
             } finally {
@@ -262,6 +278,10 @@ final class Lane implements AutoCloseable {
         for (int i = 0; i < r.rowCount(); i++) {
             List<String> row = new ArrayList<>(r.columnCount());
             for (int c = 0; c < r.columnCount(); c++) {
+                if (r.isNull(i, c)) {
+                    row.add(null);
+                    continue;
+                }
                 sb.setLength(0);
                 r.format(i, c, sb);
                 row.add(sb.toString());

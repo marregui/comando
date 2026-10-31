@@ -40,6 +40,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /// [EmbeddedEdge]: comando's one Edge on the machine, started and stopped from the window, run from a fake distribution
@@ -182,6 +183,24 @@ class EmbeddedEdgeTest {
         EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports);
         assertThat(conf.resolve("config.xml.unparsed-1")).hasContent("<hivemq><first>");
         assertThat(conf.resolve("config.xml.unparsed-2")).hasContent("<hivemq><second>");
+    }
+
+    /// A rewrite of the saved configuration that fails at the move into place, as a kill mid-write would, leaves the
+    /// old `config.xml` whole and no temporary file beside it.
+    @Test
+    void aFailedConfigurationWriteLeavesTheSavedFileIntact() throws Exception {
+        final Path conf = Files.createDirectories(dir.resolve("conf"));
+        final String saved = EmbeddedEdge.config(ports).replace("</hivemq>", "<protocol-adapters/></hivemq>");
+        Files.writeString(conf.resolve("config.xml"), saved);
+
+        assertThatThrownBy(() -> EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports, (from, to, options) -> {
+            throw new IOException("killed mid-move");
+        })).isInstanceOf(IOException.class);
+
+        assertThat(conf.resolve("config.xml")).hasContent(saved);
+        try (final Stream<Path> files = Files.list(conf)) {
+            assertThat(files.map(f -> f.getFileName().toString())).containsExactly("config.xml");
+        }
     }
 
     /// The same zip again starts the installed home as it is; a newer zip with another top folder replaces the home,

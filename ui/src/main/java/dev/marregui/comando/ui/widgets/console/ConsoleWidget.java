@@ -235,4 +235,10 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
         String s = area.getSelectedText();
         return s != null ? s : area.getText();
     }
+
+    /** A selection is part of the text, so there is something to copy when the text is not empty. */
+    @Override
+    public boolean canCopy() {
+        return area.getDocument().getLength() > 0;
+    }
 }

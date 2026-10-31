@@ -10,20 +10,29 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The kit's root and its brain as git checkouts: the kit's version and the newer releases its remote has, and the
  * backup of either, a commit of everything in it, saying what it adds, pushed to its remote. Each run is bounded, never
- * asks for credentials, and ends when this closes. Every method blocks: call it off the EDT and the reducer.
+ * asks for credentials, and ends when this closes; a step that writes the repository is let finish first, within its
+ * bound. Every method blocks: call it off the EDT and the reducer.
  */
 public final class KitGit implements AutoCloseable {
 
+    private static final System.Logger LOG = System.getLogger(KitGit.class.getName());
     /** {@code ls-remote} and {@code push} talk to a remote: they may take this long. */
     static final long REMOTE_MILLIS = 120_000;
     /** A commit of the whole brain may take this long. */
     static final long COMMIT_MILLIS = 60_000;
 
     private final Git git;
+    /** Guards {@link #writing} and {@link #closing}; notified when a write ends. */
+    private final Object writes = new Object();
+    /** The steps writing a repository now ({@code git add}, {@code git commit}). Guarded by {@link #writes}. */
+    private int writing;
+    /** Set by {@link #close}: no write starts after it. Guarded by {@link #writes}. */
+    private boolean closing;
 
     public KitGit() {
         this(new Git());
@@ -94,7 +103,7 @@ public final class KitGit implements AutoCloseable {
         if (!canBackUp(repo)) {
             throw new IOException(repo + " is not a git repository with a remote");
         }
-        step(repo, List.of("add", "-A"), COMMIT_MILLIS, "git add");
+        write(repo, List.of("add", "-A"), "git add");
         Git.Run staged = git.run(repo, List.of("diff", "--cached", "--quiet"), COMMIT_MILLIS);
         boolean changed = staged.exit() == 1;
         if (staged.exit() != 0 && !changed) {
@@ -106,7 +115,7 @@ public final class KitGit implements AutoCloseable {
                     "git diff --cached --name-status");
             List<Change> list = changes(text(names));
             subject = subject(what, today, list);
-            step(repo, List.of("commit", "-m", subject, "-m", body(list)), COMMIT_MILLIS, "git commit");
+            write(repo, List.of("commit", "-m", subject, "-m", body(list)), "git commit");
         }
         String head = text(step(repo, List.of("rev-parse", "--short", "HEAD"), Git.TIMEOUT_MILLIS, "git rev-parse"));
         step(repo, List.of("push"), REMOTE_MILLIS, "git push");
@@ -192,6 +201,27 @@ public final class KitGit implements AutoCloseable {
         return r;
     }
 
+    /**
+     * A step that writes the repository's index or refs: {@link #close} waits for it, as git killed mid-write leaves
+     * {@code .git/index.lock} behind and the user's next git command fails. Refused once closing has begun.
+     */
+    private Git.Run write(final Path dir, final List<String> args, final String what) throws IOException {
+        synchronized (writes) {
+            if (closing) {
+                throw new IOException(what + " not started: closing [repo=" + dir + ']');
+            }
+            writing++;
+        }
+        try {
+            return step(dir, args, COMMIT_MILLIS, what);
+        } finally {
+            synchronized (writes) {
+                writing--;
+                writes.notifyAll();
+            }
+        }
+    }
+
     private static String why(String what, Git.Run r, long millis) {
         if (r.exit() < 0) {
             return what + " took longer than " + millis / 1000 + " s";
@@ -210,8 +240,31 @@ public final class KitGit implements AutoCloseable {
         return new String(r.out(), StandardCharsets.UTF_8).strip();
     }
 
+    /**
+     * Lets a step writing a repository finish, at most {@link #COMMIT_MILLIS}, its own bound; then kills every git run
+     * left, a push or a read, which do not write the index.
+     */
     @Override
     public void close() {
+        final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(COMMIT_MILLIS);
+        final int cut;
+        synchronized (writes) {
+            closing = true;
+            try {
+                for (long leftNanos = deadlineNanos - System.nanoTime(); writing > 0 && leftNanos > 0;
+                     leftNanos = deadlineNanos - System.nanoTime()) {
+                    TimeUnit.NANOSECONDS.timedWait(writes, leftNanos);
+                }
+            } catch (final InterruptedException e) {
+                // the closing thread was told to stop: what is still writing is killed below
+                Thread.currentThread().interrupt();
+            }
+            cut = writing;
+        }
+        if (cut > 0) {
+            LOG.log(System.Logger.Level.WARNING, "git write still running at close, killed [owner=kit-git, writing=" + cut
+                    + ", waitMillis=" + COMMIT_MILLIS + ']');
+        }
         git.close();
     }
 }

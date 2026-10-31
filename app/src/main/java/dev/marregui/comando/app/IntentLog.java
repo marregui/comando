@@ -81,17 +81,38 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
         return JSON.writeValueAsString(n);
     }
 
-    /** Blanks every {@code password} field: a log is for sharing a defect, not the user's credentials. */
-    static JsonNode redact(JsonNode node) {
-        if (node instanceof ObjectNode o) {
+    /**
+     * Blanks every {@code password} field: a log is for sharing a defect, not the user's credentials. A text field that
+     * holds JSON (an approval card's tool input) is read, blanked the same way and written back, so a password inside
+     * it does not reach the log either.
+     */
+    static JsonNode redact(final JsonNode node) {
+        if (node instanceof final ObjectNode o) {
             if (o.has("password")) {
                 o.put("password", "");
             }
-            o.properties().forEach(e -> redact(e.getValue()));
+            for (final String name : List.copyOf(o.propertyNames())) {
+                final JsonNode value = o.get(name);
+                if (value.isString() && value.asString().contains("password")) {
+                    o.put(name, redactText(value.asString()));
+                } else {
+                    redact(value);
+                }
+            }
         } else if (node.isArray()) {
             node.forEach(IntentLog::redact);
         }
         return node;
+    }
+
+    /** {@code text} blanked as {@link #redact} does when it is a JSON object or array; else unchanged. */
+    private static String redactText(final String text) {
+        try {
+            final JsonNode inner = JSON.readTree(text);
+            return inner.isContainer() ? JSON.writeValueAsString(redact(inner)) : text;
+        } catch (final RuntimeException e) {
+            return text; // not JSON: free text keeps its words
+        }
     }
 
     @Override

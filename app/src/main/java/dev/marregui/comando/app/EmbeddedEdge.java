@@ -33,6 +33,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -637,6 +638,14 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
      * MQTT listeners and admin API set to comando's ports, which the instances need to find one another (record 122).
      */
     static void prepareConfig(Path shipped, Path conf, Ports ports) throws IOException {
+        prepareConfig(shipped, conf, ports, Files::move);
+    }
+
+    /**
+     * As {@link #prepareConfig(Path, Path, Ports)}, {@code config.xml} moved into place by {@code mover}: whole or not
+     * at all, so a kill mid-write leaves the user's saved settings as they were.
+     */
+    static void prepareConfig(final Path shipped, final Path conf, final Ports ports, final AtomicFiles.Mover mover) throws IOException {
         Files.createDirectories(conf);
         if (Files.isDirectory(shipped)) {
             try (Stream<Path> files = Files.walk(shipped)) {
@@ -652,7 +661,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         }
         Path config = conf.resolve("config.xml");
         if (!Files.isRegularFile(config)) {
-            Files.writeString(config, config(ports));
+            AtomicFiles.write(config, config(ports).getBytes(StandardCharsets.UTF_8), mover);
             return;
         }
         String next;
@@ -669,7 +678,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
             LOG.log(System.Logger.Level.WARNING, "cannot parse the Edge's config.xml, the template replaces it [kept=" + kept + ']', e);
             next = config(ports);
         }
-        Files.writeString(config, next);
+        AtomicFiles.write(config, next.getBytes(StandardCharsets.UTF_8), mover);
     }
 
     /**
@@ -715,7 +724,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         String s = Files.readString(runScript);
         String patched = s.replaceAll("jmxremote\\.port=\\d+", "jmxremote.port=" + port);
         if (!patched.equals(s)) {
-            Files.writeString(runScript, patched);
+            AtomicFiles.writeString(runScript, patched);
         }
     }
 

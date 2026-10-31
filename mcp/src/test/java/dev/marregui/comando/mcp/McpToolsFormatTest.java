@@ -3,6 +3,7 @@ package dev.marregui.comando.mcp;
 import dev.marregui.comando.core.port.QueryPort;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,5 +29,23 @@ class McpToolsFormatTest {
     void rowsWithinTheBudgetArePassedWhole() {
         String text = McpTools.format(new QueryPort.Rows(List.of("n"), List.of(List.of("1"), List.of("2")), -1L, false));
         assertThat(text).isEqualTo("n\n1\n2\n(2 rows)");
+    }
+
+    /// [McpTools#format] writes PostgreSQL COPY text: SQL NULL is `\N`, the text `null` stays `null`, and a tab,
+    /// newline, carriage return or backslash inside a value is escaped, so each row is one line of tab-separated cells.
+    @Test
+    void sqlNullAndTheTextNullReadApartAndSeparatorsInAValueAreEscaped() {
+        final String text = McpTools.format(new QueryPort.Rows(List.of("a\tb", "c"),
+                List.of(Arrays.asList(null, "null"), List.of("x\ty\nz", "C:\\dir\r")), -1L, false));
+        assertThat(text).isEqualTo("a\\tb\tc\n\\N\tnull\nx\\ty\\nz\tC:\\\\dir\\r\n(2 rows)");
+    }
+
+    /// A cut never splits an escape: `\N` cut after its backslash loses the backslash, so the line does not end in `\…`,
+    /// which a COPY reader would take for the text `…`; an escaped backslash, `\\`, is kept whole.
+    @Test
+    void aCutLineNeverEndsInsideAnEscape() {
+        assertThat(McpTools.copyClip("x\t\\N\ty", 4)).isEqualTo("x\t…");
+        assertThat(McpTools.copyClip("a\\\\bc", 4)).isEqualTo("a\\\\…");
+        assertThat(McpTools.copyClip("abc", 4)).isEqualTo("abc");
     }
 }

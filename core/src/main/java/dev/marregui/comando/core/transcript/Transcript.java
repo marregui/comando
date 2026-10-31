@@ -12,6 +12,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class Transcript {
 
+    /**
+     * The most blocks a transcript holds: the JDK's soft maximum array length
+     * ({@code ArraysSupport.SOFT_MAX_ARRAY_LENGTH}).
+     */
+    static final int MAX_BLOCKS = Integer.MAX_VALUE - 8;
+
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
     private volatile Block[] blocks = new Block[64];
     private volatile int size;
@@ -24,7 +30,11 @@ public final class Transcript {
         int n = size;
         Block[] a = blocks;
         if (n == a.length) {
-            a = Arrays.copyOf(a, n * 2);
+            // doubles; past MAX_BLOCKS an append fails loudly instead of overflowing the length (G-1.7)
+            if (n >= MAX_BLOCKS) {
+                throw new IllegalStateException("transcript full [blocks=" + n + ']');
+            }
+            a = Arrays.copyOf(a, (int) Math.min(2L * n, MAX_BLOCKS));
             blocks = a;
         }
         a[n] = block;

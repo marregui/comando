@@ -154,6 +154,7 @@ public final class ColumnarResult implements ResultView {
     private long[] longChunk(int c, int chunk) {
         long[][] table = longs[c];
         if (chunk == table.length) {
+            // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
             table = Arrays.copyOf(table, table.length * 2);
             LONG_TABLE.setRelease(longs, c, table);
         }
@@ -167,6 +168,7 @@ public final class ColumnarResult implements ResultView {
     private double[] doubleChunk(int c, int chunk) {
         double[][] table = doubles[c];
         if (chunk == table.length) {
+            // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
             table = Arrays.copyOf(table, table.length * 2);
             DOUBLE_TABLE.setRelease(doubles, c, table);
         }
@@ -180,6 +182,7 @@ public final class ColumnarResult implements ResultView {
     private String[] textChunk(int c, int chunk) {
         String[][] table = texts[c];
         if (chunk == table.length) {
+            // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
             table = Arrays.copyOf(table, table.length * 2);
             TEXT_TABLE.setRelease(texts, c, table);
         }
@@ -193,6 +196,7 @@ public final class ColumnarResult implements ResultView {
     private long[] nullChunk(int c, int chunk) {
         long[][] table = nulls[c];
         if (chunk == table.length) {
+            // no overflow: a row is an int, so a table never needs more than 2^(31 - CHUNK_BITS) = 2^17 slots
             table = Arrays.copyOf(table, table.length * 2);
             LONG_TABLE.setRelease(nulls, c, table);
         }

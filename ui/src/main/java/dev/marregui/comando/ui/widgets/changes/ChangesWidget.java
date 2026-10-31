@@ -168,6 +168,12 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         return tree.copyText();
     }
 
+    /** True once a tree is built: its root is a node, so the copy holds at least its label. */
+    @Override
+    public boolean canCopy() {
+        return built;
+    }
+
     TreeView tree() {
         return tree;
     }

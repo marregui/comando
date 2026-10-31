@@ -126,6 +126,12 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
         return s != null ? s : area.getText();
     }
 
+    /** A selection is part of the text, so there is something to copy when the text is not empty. */
+    @Override
+    public boolean canCopy() {
+        return area.getDocument().getLength() > 0;
+    }
+
     @Override
     public void zoom(int steps) {
         area.setFont(area.getFont().deriveFont(Zoomable.clampSize(area.getFont().getSize2D() + steps)));

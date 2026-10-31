@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [IntentLog] writes every intent as one JSON line and reads it back for replay.
 /// - every kind of intent survives a write and a read, the initial state too
 /// - a connection's password never reaches the log
+/// - a password inside a text field that holds JSON (an approval card's tool input) is blanked too
+/// - a connection spec printed as text writes its password as `***`
 class IntentLogTest {
 
     static final List<Intent> SAMPLE = List.of(
@@ -97,5 +99,23 @@ class IntentLogTest {
     void passwordsNeverReachTheLog() throws Exception {
         String line = IntentLog.line(new Intent.SaveConnection("", new ConnectionSpec("lab", "h", 8812, "qdb", "u", "s3cret", false)));
         assertThat(line).doesNotContain("s3cret").contains("\"password\":\"\"");
+    }
+
+    /// A text field holding a tool's JSON input, as an approval card carries it, is read, its `password` blanked and
+    /// written back; free text that only mentions the word stays as it is.
+    @Test
+    void aPasswordInsideJsonTextNeverReachesTheLog() {
+        final var node = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        node.put("input", "{\"name\":\"lab\",\"password\":\"s3cret\"}");
+        node.put("note", "the password field is optional");
+        final String out = IntentLog.redact(node).toString();
+        assertThat(out).doesNotContain("s3cret").contains("the password field is optional");
+    }
+
+    /// `ConnectionSpec.toString` writes `password=***`, so a spec in a log line or an exception message keeps it out.
+    @Test
+    void aConnectionSpecPrintsNoPassword() {
+        assertThat(new ConnectionSpec("lab", "h", 8812, "qdb", "u", "s3cret", false).toString())
+                .doesNotContain("s3cret").contains("password=***");
     }
 }

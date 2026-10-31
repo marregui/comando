@@ -76,7 +76,10 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     private static final System.Logger LOG = System.getLogger(TerminalWidget.class.getName());
     private static final int GATE_POLL_MILLIS = 50;
-    /** How long a closed panel's shell has to end after the hangup before it is killed. */
+    /**
+     * How long a closed panel's shell and the processes it started have to end after the SIGTERM before they are
+     * killed. Unmeasured, a choice: the same grace as a Claude Code session's ({@code ClaudeAdapter}).
+     */
     private static final long KILL_GRACE_MILLIS = 2_000;
     /** The job reported when {@code ps} cannot say what the shell runs: closing asks rather than kills unseen. */
     public static final String UNCHECKED_JOB = "a program comando could not check";
@@ -514,19 +517,19 @@ public final class TerminalWidget implements Zoomable, Searchable {
         gate.clear(); // never typed into the next shell, which may open elsewhere
         Pty p = pty;
         pty = null;
+        // before the emulator closes, which signals the shell from its own thread: once the shell is gone its children
+        // are no longer its descendants
+
+        final List<ProcessHandle> tree = p != null && p.process().isAlive() ? p.terminate() : null;
         removeTerm();
         exitedBar.setVisible(false);
-        if (p != null && p.process().isAlive()) {
-            Process shell = p.process();
-            shell.destroy();
+        if (tree != null) {
+            final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(KILL_GRACE_MILLIS);
             // a job that ignores the hangup (nohup, a trap, a stuck ssh) would outlive the panel: killed after a grace
             UiErrands.start("terminal-kill", () -> {
                 try {
-                    if (!shell.waitFor(KILL_GRACE_MILLIS, TimeUnit.MILLISECONDS)) {
-                        shell.destroyForcibly();
-                    }
-                } catch (InterruptedException e) {
-                    shell.destroyForcibly();
+                    p.killRemaining(tree, deadlineNanos);
+                } catch (final InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             });

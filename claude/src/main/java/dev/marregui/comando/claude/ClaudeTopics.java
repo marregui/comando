@@ -1,5 +1,6 @@
 package dev.marregui.comando.claude;
 
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.Topic;
@@ -19,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -194,11 +194,6 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
             closed = true;
             waiting.clear();
         }
-        worker.shutdownNow();
-        try {
-            worker.awaitTermination(2, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        ExecutorStop.now("claude-topics", Map.of("topic-reader", worker));
     }
 }

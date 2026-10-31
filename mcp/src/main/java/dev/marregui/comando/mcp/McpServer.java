@@ -133,9 +133,13 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         return sessionByToken.get(auth.substring("Bearer ".length()).strip());
     }
 
-    /** Browsers send Origin; a page on another site must not reach a local server (DNS rebinding). */
+    /**
+     * Browsers send Origin; a page on another site must not reach a local server (DNS rebinding). A client that is not
+     * a browser sends none. {@code null} is a browser's opaque origin (a sandboxed frame, a {@code file:} page, a
+     * redirect across sites): a page, and not a loopback one, so it is refused.
+     */
     static boolean originAllowed(String origin) {
-        if (origin == null || origin.isBlank() || origin.equals("null")) {
+        if (origin == null || origin.isBlank()) {
             return true;
         }
         try {

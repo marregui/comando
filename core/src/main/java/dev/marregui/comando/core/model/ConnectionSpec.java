@@ -19,6 +19,13 @@ public record ConnectionSpec(String name, String host, int port, String database
                              String sslMode) {
 
     public static final int DEFAULT_PORT = 8812;
+
+    /** The fields with the password written {@code ***}: a spec printed in a log or an error never carries it. */
+    @Override
+    public String toString() {
+        return "ConnectionSpec[name=" + name + ", host=" + host + ", port=" + port + ", database=" + database + ", user="
+                + user + ", password=***, prod=" + prod + ", sslMode=" + sslMode + ']';
+    }
     /**
      * TLS modes: {@code prefer} tries TLS and falls back; {@code require} encrypts; {@code verify-full} also checks the
      * certificate and host.

@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +53,14 @@ final class ClaudeProcess {
     private boolean drained;
     /** Held while a line is handed over and while {@link #drained} is set, so no line is handed over after the exit. */
     private final Object handOver = new Object();
+    /**
+     * The descendants recorded while Claude Code lived ({@link #recordTree}, {@link #terminate}), kept for
+     * {@link #terminate} and {@link #kill}: once Claude Code exits they are no longer its descendants, and one that
+     * ignored the SIGTERM would outlive comando. Guarded by {@link #treeLock}.
+     */
+    private List<ProcessHandle> tree = List.of();
+    /** Guards {@link #tree}: the stopping thread records it, the timer's thread signals it. */
+    private final Object treeLock = new Object();
 
     private ClaudeProcess(Process process, Path stderrFile) {
         this.process = process;
@@ -178,13 +187,51 @@ final class ClaudeProcess {
         return process.pid();
     }
 
-    /** SIGTERM; Claude Code stops the turn, runs SessionEnd hooks and exits. */
+    /**
+     * SIGTERM to every process Claude Code started (MCP servers, a running command), children first, then to Claude
+     * Code itself, which stops the turn, runs SessionEnd hooks and exits.
+     */
     void terminate() {
+        for (final ProcessHandle h : recordTree()) {
+            if (h.isAlive()) {
+                h.destroy();
+            }
+        }
         process.destroy();
     }
 
+    /**
+     * Adds every process Claude Code has started by now to the recorded tree and returns the tree; called before
+     * Claude Code is asked to exit, as afterwards its children are no longer its descendants. Reads nothing once Claude
+     * Code has ended: the JDK finds descendants by pid, and an ended process's pid may already be another's.
+     */
+    List<ProcessHandle> recordTree() {
+        synchronized (treeLock) {
+            if (process.isAlive()) {
+                final List<ProcessHandle> now = new ArrayList<>(tree);
+                process.descendants().filter(h -> !now.contains(h)).forEach(now::add);
+                tree = List.copyOf(now);
+            }
+            return tree;
+        }
+    }
+
+    /**
+     * SIGKILL to what is left of the recorded tree, to every descendant now, then to Claude Code. Safe
+     * after Claude Code has exited: the recorded handles carry their start time, and the
+     * descendants are read only while Claude Code is alive, since the JDK reads them by pid and an ended process's pid
+     * may already belong to another process.
+     */
     void kill() {
-        process.destroyForcibly();
+        for (final ProcessHandle h : recordTree()) {
+            if (h.isAlive()) {
+                h.destroyForcibly();
+            }
+        }
+        if (process.isAlive()) {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
     }
 
     /** Waits up to {@code millis} for the process to exit; true when it has. */

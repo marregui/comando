@@ -2,6 +2,8 @@ package dev.marregui.comando.core.port;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -9,7 +11,7 @@ import java.util.concurrent.CompletableFuture;
 public interface QueryPort {
 
     /**
-     * Rows as text.
+     * Rows as text; a {@code null} cell is SQL NULL, so a reader can tell it from the text {@code "null"}.
      *
      * @param updateCount rows changed by a statement without rows, -1 otherwise
      * @param truncated   more rows existed than were returned
@@ -17,7 +19,8 @@ public interface QueryPort {
     record Rows(List<String> columns, List<List<String>> rows, long updateCount, boolean truncated) {
         public Rows {
             columns = List.copyOf(columns);
-            rows = rows.stream().map(List::copyOf).toList();
+            // not List.copyOf, which refuses the null that stands for SQL NULL
+            rows = rows.stream().map(row -> Collections.unmodifiableList(new ArrayList<>(row))).toList();
         }
     }
 

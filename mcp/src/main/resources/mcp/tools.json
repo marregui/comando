@@ -321,7 +321,7 @@
   },
   {
     "name": "db_run_sql",
-    "description": "Runs SQL on a database connection and returns rows as tab-separated text. Send one statement per call: text with several statements always needs the user's approval and returns only the first statement's result. Read-only statements run at once; others need the user's approval, and production connections refuse them. Without connection, uses the connection of this session's panel; a session bound to no panel must pass connection.",
+    "description": "Runs SQL on a database connection and returns rows as tab-separated text in PostgreSQL COPY text form: \\N is SQL NULL; \\\\, \\t, \\n and \\r in a value stand for a backslash, tab, newline and carriage return. Send one statement per call: text with several statements always needs the user's approval and returns only the first statement's result. Read-only statements run at once; others need the user's approval, and production connections refuse them. Without connection, uses the connection of this session's panel; a session bound to no panel must pass connection.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -354,7 +354,7 @@
   },
   {
     "name": "db_describe",
-    "description": "Lists the columns of a table: name and type.",
+    "description": "Lists the columns of a table with their types, as tab-separated text in the PostgreSQL COPY text form db_run_sql uses.",
     "inputSchema": {
       "type": "object",
       "properties": {

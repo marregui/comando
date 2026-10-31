@@ -340,6 +340,12 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         return selected.isEmpty() ? canvas.markdown() : selected;
     }
 
+    /** A selection lies in an item, so there is something to copy when the canvas holds one. */
+    @Override
+    public boolean canCopy() {
+        return canvas.itemCount() > 0;
+    }
+
     @Override
     public void zoom(int steps) {
         canvas.setZoom(Style.clampZoom(canvas.zoom() + steps));

@@ -144,6 +144,20 @@ class McpServerTest {
         assertThat(post(ticket.token(), ping, null).statusCode()).isEqualTo(401);
     }
 
+    /// A browser's opaque origin `null` (a sandboxed frame or a `file:` page) is refused, over HTTP too; no origin or a
+    /// blank one (a client that is not a browser) and the loopback hosts are allowed.
+    @Test
+    void anOpaqueNullOriginIsRefusedWhileNoOriginAndLoopbackAreAllowed() throws Exception {
+        assertThat(McpServer.originAllowed("null")).isFalse();
+        assertThat(McpServer.originAllowed(null)).isTrue();
+        assertThat(McpServer.originAllowed(" ")).isTrue();
+        assertThat(McpServer.originAllowed("http://localhost:3000")).isTrue();
+        assertThat(McpServer.originAllowed("http://127.0.0.1")).isTrue();
+        assertThat(McpServer.originAllowed("http://[::1]:8080")).isTrue();
+        final String ping = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
+        assertThat(post(ticket.token(), ping, "null").statusCode()).isEqualTo(403);
+    }
+
     /// Revoking an old process's token after the session got a newer one leaves the newer token answering 200 and the
     /// old 401.
     @Test

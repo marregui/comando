@@ -2,6 +2,7 @@ package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.Notice;
@@ -197,7 +198,7 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
             return Optional.empty();
         }
         Files.createDirectories(ours.getParent());
-        Files.writeString(ours, LOG_CONFIG);
+        AtomicFiles.writeString(ours, LOG_CONFIG);
         return Optional.of(ours);
     }
 

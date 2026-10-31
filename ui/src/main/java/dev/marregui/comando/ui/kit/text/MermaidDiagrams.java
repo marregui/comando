@@ -238,19 +238,21 @@ public final class MermaidDiagrams {
 
     void close() {
         if (drawer != null) {
-            drawer.shutdownNow();
             Process p = drawing;
             if (p != null) {
                 stop(p);
             }
             // after mmdc is stopped, so the drawer's wait for it ends at once
-            ExecutorStop.now("mermaid", drawer);
+            ExecutorStop.now("mermaid", Map.of("mermaid", drawer));
         }
     }
 
     /** Stops {@code p} and every process it started; the children first, as they leave its tree when it ends. */
     private static void stop(Process p) {
-        p.descendants().forEach(ProcessHandle::destroyForcibly);
+        // only while it lives: the JDK finds descendants by pid, and an ended process's pid may be another's
+        if (p.isAlive()) {
+            p.descendants().forEach(ProcessHandle::destroyForcibly);
+        }
         p.destroyForcibly();
     }
 

@@ -724,17 +724,16 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         run.stopping = true;
         ClaudeProcess p = run.process;
+        // before the EOF: Claude Code exits on it, and its children are no longer its descendants once it has
+        p.recordTree();
         p.send(interruptRequest());
         p.closeInput();
+        // whether or not Claude Code exited within the grace: a child it started may outlive it, so what is left of
+        // the recorded tree gets SIGTERM, then SIGKILL (own rule 12). The 3 s and 2 s are unmeasured, a choice: time
+        // for SessionEnd hooks, then for a child's own cleanup
         timer.schedule(() -> {
-            if (p.isAlive()) {
-                p.terminate();
-                timer.schedule(() -> {
-                    if (p.isAlive()) {
-                        p.kill();
-                    }
-                }, 2, TimeUnit.SECONDS);
-            }
+            p.terminate();
+            timer.schedule(p::kill, 2, TimeUnit.SECONDS);
         }, 3, TimeUnit.SECONDS);
     }
 
@@ -875,11 +874,12 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         closed = true;
         // a read that outlasts the wait sends nothing: it checks closed first
-        ExecutorStop.now("claude", planUsage, subagents);
+        ExecutorStop.now("claude", Map.of("plan-usage", planUsage, "subagent-tail", subagents));
         // SIGTERM to every process, collected on each strand; the strands then stop, so no exit handler runs and
         // this method cleans up after the processes itself: SIGKILL after the grace period, config files with
         // their bearer tokens deleted, tokens revoked
         Map<String, Run> runs = new ConcurrentHashMap<>();
+        final Map<String, ExecutorService> strands = new LinkedHashMap<>();
         for (Session s : sessions.values()) {
             s.run(() -> {
                 if (s.current != null) {
@@ -890,27 +890,22 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                     }
                 }
             });
-            s.strand.shutdown();
+            strands.put(s.name, s.strand);
         }
-        for (Session s : sessions.values()) {
-            try {
-                s.strand.awaitTermination(2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
+        // one bound for every session together, so a close with many sessions waits as long as with one
+        ExecutorStop.drain("claude", ExecutorStop.WAIT, strands);
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
         for (Map.Entry<String, Run> e : runs.entrySet()) {
             Run run = e.getValue();
             if (run.process != null) {
-                if (!run.process.awaitExit(Math.max(0L, TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())))) {
-                    run.process.kill();
-                }
+                run.process.awaitExit(Math.max(0L, TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())));
+                // also when Claude Code exited in time: a child that ignored the SIGTERM is still running
+                run.process.kill();
                 run.process.closeInput();
             }
             deleteConfig(run);
             mcp.unregister(e.getKey(), run.ticket);
         }
-        ExecutorStop.now("claude", timer);
+        ExecutorStop.now("claude", Map.of("claude-timer", timer));
     }
 }

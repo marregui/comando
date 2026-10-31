@@ -79,6 +79,12 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
         return selected != null ? selected : markdown;
     }
 
+    /** A selection is part of the markdown, so there is something to copy when the markdown is not empty. */
+    @Override
+    public boolean canCopy() {
+        return !markdown.isEmpty();
+    }
+
     @Override
     public String exportName() {
         return "view.md";

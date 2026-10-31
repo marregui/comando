@@ -22,6 +22,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -162,6 +163,14 @@ class DbAdapterTest {
         assertThat(r.isNull(1, 0)).isTrue();
         assertThat(r.isNull(0, 1)).isTrue();
         assertThat(r.getText(1, 1)).isEqualTo("v");
+    }
+
+    /// A query for Claude hands SQL NULL over as a `null` cell, apart from the text `null`, so its text form can say which.
+    @Test
+    void aQueryForClaudeKeepsSqlNullApartFromTheTextNull() throws Exception {
+        final QueryPort.Rows rows = db.query(spec, "SELECT CASE WHEN x = 1 THEN NULL ELSE 'null' END s FROM long_sequence(2)", 10)
+                .get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        assertThat(rows.rows()).containsExactly(Arrays.asList((String) null), List.of("null"));
     }
 
     /// A query past the row cap stops at 1 000 rows, marks the result truncated, and has sent rows on the way.

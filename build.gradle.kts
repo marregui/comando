@@ -28,7 +28,9 @@ subprojects {
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
         options.release = 25
-        options.compilerArgs.addAll(listOf("-Xlint:all,-serial,-processing,-this-escape", "-Werror"))
+        // every lint as an error (G-10.10), this-escape included (G-9.5); serial excluded, as Swing components are
+        // Serializable and comando never serializes one
+        options.compilerArgs.addAll(listOf("-Xlint:all,-serial", "-Werror"))
     }
 
     tasks.withType<Test>().configureEach {

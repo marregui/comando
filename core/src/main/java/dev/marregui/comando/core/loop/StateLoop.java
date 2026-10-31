@@ -92,10 +92,17 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     private final Consumer<Stall> stalls;
     private volatile AppState state;
     private volatile boolean halted;
-    /** The {@link Error} that stopped the loop's thread; null while it runs. */
+    /**
+     * The {@link Error} that stopped the loop's thread; null while it runs. Written once, by the loop's thread as it
+     * stops; read by {@link #dispatch} on any thread, to refuse intents from then on, and by tests.
+     */
     private volatile Error failure;
     private final AtomicBoolean failureTold = new AtomicBoolean();
     private volatile Busy busy;
+    /** Intents whose reduction failed, by class: the first failure's stack is logged, the later ones counted. */
+    private final Watchdog.Repeats reduceFailures = new Watchdog.Repeats(LOG, Watchdog.Repeats.TELL_EVERY_NANOS);
+    /** As {@link #reduceFailures}, for a failure outside the reducer while an intent is applied. */
+    private final Watchdog.Repeats applyFailures = new Watchdog.Repeats(LOG, Watchdog.Repeats.TELL_EVERY_NANOS);
     // confined to the thread applying an intent
     private long partStart;
     private String slowestPart;
@@ -145,7 +152,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         return state;
     }
 
-    /** The {@link Error} that stopped the loop, or null while it runs. */
+    /** The {@link Error} that stopped the loop, or null while it runs; for tests. */
     Error failure() {
         return failure;
     }
@@ -183,8 +190,8 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             try {
                 apply(intent);
             } catch (final RuntimeException e) {
-                LOG.log(System.Logger.Level.ERROR, "cannot apply an intent [intent=" + intent.getClass().getSimpleName()
-                        + ']', e);
+                applyFailures.failed(intent.getClass(), "cannot apply an intent", "intent=" + intent.getClass().getSimpleName(), e,
+                        System.nanoTime());
             } catch (final Error e) {
                 // the state the intent was building is unknown: no later intent may build on it
                 failure = e;
@@ -213,8 +220,9 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             enter(start, "reduce " + intent.getClass().getSimpleName());
             try {
                 t = reducer.apply(previous, intent);
-            } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.ERROR, "reducer failed [intent=" + intent.getClass().getSimpleName() + ']', e);
+            } catch (final RuntimeException e) {
+                reduceFailures.failed(intent.getClass(), "reducer failed", "intent=" + intent.getClass().getSimpleName(), e,
+                        System.nanoTime());
                 return;
             }
             state = t.state();
@@ -323,6 +331,9 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        // a failure counted since its last line is told before the loop goes
+        reduceFailures.flush();
+        applyFailures.flush();
         AutoCloseable w = watchdog;
         if (w != null) {
             try {

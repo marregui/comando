@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.table;
 
+import dev.marregui.comando.ui.kit.text.CaseFold;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -259,7 +260,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         if (s == null || text.isEmpty()) {
             return 0;
         }
-        String needle = lowerCase(text);
+        final String needle = CaseFold.fold(text);
         int cols = s.columnCount();
         int rows = findRows(model.rows, cols);
         long cells = (long) rows * cols;
@@ -277,7 +278,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             int c = (int) (i % cols);
             sb.setLength(0);
             s.format(model.sourceRow(r), c, sb);
-            if (containsLowerCase(sb, needle)) {
+            if (CaseFold.contains(sb, needle)) {
                 matches++;
                 if (firstRow < 0) {
                     firstRow = r;
@@ -316,30 +317,6 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         return (int) Math.min(Math.min(rows, MAX_EDT_ROWS), Math.max(1L, MAX_EDT_CELLS / Math.max(1, cols)));
     }
 
-    /** {@code text} lowercased char by char, as {@link #containsLowerCase} compares. */
-    static String lowerCase(String text) {
-        char[] a = text.toCharArray();
-        for (int i = 0; i < a.length; i++) {
-            a[i] = Character.toLowerCase(a[i]);
-        }
-        return new String(a);
-    }
-
-    /** Whether {@code text}, lowercased char by char, holds {@code needle} from {@link #lowerCase}; no allocation. */
-    static boolean containsLowerCase(CharSequence text, String needle) {
-        int n = needle.length();
-        for (int i = 0, last = text.length() - n; i <= last; i++) {
-            int j = 0;
-            while (j < n && Character.toLowerCase(text.charAt(i + j)) == needle.charAt(j)) {
-                j++;
-            }
-            if (j == n) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
     public void clearFind() {
         findRow = -1;
@@ -373,6 +350,12 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             out.append('\n');
         }
         return out.toString();
+    }
+
+    /** False on an empty grid: a copy then holds no row, at most the header. */
+    @Override
+    public boolean canCopy() {
+        return model.source != null && model.rows > 0;
     }
 
     @Override

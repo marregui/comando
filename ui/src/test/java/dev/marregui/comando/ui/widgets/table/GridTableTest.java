@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.widgets.table;
 
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.widget.capability.Capabilities;
+import dev.marregui.comando.ui.widget.capability.Copyable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -9,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -20,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - CSV quotes a field holding a carriage return or a newline
 /// - find is bounded by cells and matches without regard to case; a copy is capped, selected or not
 /// - CSV and copy tell SQL NULL from empty text and from the text `null`
+/// - find folds case as the transcript's find does, Greek and Turkish letters included
+/// - ⌘⇧C is disabled on an empty grid
 class GridTableTest {
 
     /// A find looks at the rows whose cells fit the bound: all of a narrow result, fewer of a wide one, at least one.
@@ -31,14 +36,48 @@ class GridTableTest {
         assertThat(GridTable.findRows(5, 10_000_000)).as("at least the first row").isEqualTo(1);
     }
 
-    /// The cell match ignores case and needs no allocation per cell: a needle at the start, the end, absent, or longer.
+    /// A find for `ΛΌΓΟΣ` selects the row holding `λόγος`, whose final `ς` lowers no further, and a find for
+    /// `istanbul` selects the row holding `İstanbul`: the grid folds as the transcript's find does.
     @Test
-    void cellMatchIgnoresCase() {
-        String needle = GridTable.lowerCase("MaTcH");
-        assertThat(GridTable.containsLowerCase(new StringBuilder("A MATCH here"), needle)).isTrue();
-        assertThat(GridTable.containsLowerCase(new StringBuilder("ends in match"), needle)).isTrue();
-        assertThat(GridTable.containsLowerCase(new StringBuilder("matc"), needle)).isFalse();
-        assertThat(GridTable.containsLowerCase(new StringBuilder("no hit"), needle)).isFalse();
+    void findFoldsGreekAndTurkishLettersAsTheTranscriptDoes() throws Exception {
+        final AtomicInteger greek = new AtomicInteger(-1);
+        final AtomicInteger greekRow = new AtomicInteger(-1);
+        final AtomicInteger turkish = new AtomicInteger(-1);
+        final AtomicInteger turkishRow = new AtomicInteger(-1);
+        SwingUtilities.invokeAndWait(() -> {
+            final GridTable grid = new GridTable();
+            grid.setSource(TableSource.of(new ViewSpec.Table(List.of("v"),
+                    List.of(List.of("alpha"), List.of("λόγος"), List.of("beta"), List.of("İstanbul")))), "t.csv");
+            greek.set(grid.find("ΛΌΓΟΣ", true));
+            greekRow.set(grid.table().getSelectedRow());
+            turkish.set(grid.find("istanbul", true));
+            turkishRow.set(grid.table().getSelectedRow());
+        });
+        assertThat(greek.get()).isEqualTo(1);
+        assertThat(greekRow.get()).isEqualTo(1);
+        assertThat(turkish.get()).isEqualTo(1);
+        assertThat(turkishRow.get()).isEqualTo(3);
+    }
+
+    /// The grid's [Copyable], the one ⌘⇧C asks, answers false with no result and with a result of no rows, and true
+    /// once the result holds a row.
+    @Test
+    void copyIsDisabledOnAnEmptyGrid() throws Exception {
+        final AtomicBoolean noSource = new AtomicBoolean(true);
+        final AtomicBoolean noRows = new AtomicBoolean(true);
+        final AtomicBoolean oneRow = new AtomicBoolean(false);
+        SwingUtilities.invokeAndWait(() -> {
+            final GridTable grid = new GridTable();
+            final Copyable copy = Capabilities.at(grid.component(), Copyable.class);
+            noSource.set(copy.canCopy());
+            grid.setSource(TableSource.of(new ViewSpec.Table(List.of("v"), List.of())), "t.csv");
+            noRows.set(copy.canCopy());
+            grid.setSource(TableSource.of(new ViewSpec.Table(List.of("v"), List.of(List.of("r")))), "t.csv");
+            oneRow.set(copy.canCopy());
+        });
+        assertThat(noSource.get()).as("no result").isFalse();
+        assertThat(noRows.get()).as("a result of no rows").isFalse();
+        assertThat(oneRow.get()).as("a result of one row").isTrue();
     }
 
     /// Copying every row selected of a result larger than the cap copies the cap: the header and the capped rows.

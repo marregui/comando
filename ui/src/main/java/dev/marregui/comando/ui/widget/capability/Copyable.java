@@ -5,8 +5,9 @@ public interface Copyable {
 
     String copyText();
 
-    /** Whether there is anything to copy now; ⌘⇧C is disabled otherwise. Cheap: it never builds the text. */
-    default boolean canCopy() {
-        return true;
-    }
+    /**
+     * Whether there is anything to copy now; ⌘⇧C is disabled otherwise. Cheap: it never builds the text. No default,
+     * so each widget answers from its own state rather than enabling the command on an empty view.
+     */
+    boolean canCopy();
 }

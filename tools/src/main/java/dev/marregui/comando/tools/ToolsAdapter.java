@@ -283,7 +283,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * descendants it found, so a later pass can reach those the process's exit re-parented.
      */
     private static List<ProcessHandle> terminate(Process p, boolean force) {
-        List<ProcessHandle> tree = p.toHandle().descendants().toList();
+        // only while it lives: the JDK finds descendants by pid, and an ended process's pid may be another's
+        final List<ProcessHandle> tree = p.isAlive() ? p.toHandle().descendants().toList() : List.of();
         for (ProcessHandle h : tree) {
             if (force) {
                 h.destroyForcibly();

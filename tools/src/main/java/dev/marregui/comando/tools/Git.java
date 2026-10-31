@@ -344,9 +344,12 @@ final class Git implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
-        for (Process p : live) {
-            p.descendants().forEach(ProcessHandle::destroyForcibly);
-            p.destroyForcibly();
+        for (final Process p : live) {
+            // only while it lives: the JDK reads descendants by pid, and an ended process's pid may be reused
+            if (p.isAlive()) {
+                p.descendants().forEach(ProcessHandle::destroyForcibly);
+                p.destroyForcibly();
+            }
         }
     }
 }

@@ -756,29 +756,10 @@ in Git.
 
 ## 7. The kit
 
-A kit is a Claude Code setup kept in a git repository and versioned by tags `vMAJOR.MINOR.PATCH`. The author's kit,
-`marregui/comando-kit`, is the reference: a kit conforms when it has the reference kit's layout, the parts below at the
-top of its repository, each where Claude Code loads it from a config folder; no part is a plugin.
-
-| Part | What it holds |
-|---|---|
-| `CLAUDE.md` | the instructions every session loads |
-| `settings.json` | Claude Code's settings, the hooks among them; each hook names its script as `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/…` |
-| `skills/` | the skills; `reflect` answers the checkpoint ([§1.4](#14-the-checkpoint)) |
-| `agents/` | the subagent types the sessions dispatch |
-| `workflows/` | saved workflows |
-| `hooks/` | the hooks' scripts; one, at every session start, puts `bin/` on the Bash tool's `PATH` |
-| `bin/` | the scripts on the Bash tool's `PATH` |
-| `tools/` | each script's code and its test |
-| `templates/` | the agent spec and the knowledge base's set templates |
-| `comando-kit.json` | what comando reads: the kit's name, its brain, the Files tab's folders, and what it needs outside the folder |
-| `INSTALL.md`, `install/` | the install, upgrade and uninstall recipe, and its installer with the brain's skeleton |
-
-comando's code reads nothing of a kit but `comando-kit.json`; the rest of the layout is what the sessions comando starts
-work by. Conformance is documented, not checked: a kit that lacks a part runs without what that part carries. The brain
-is no part of the kit ([§7.2](#72-the-brain)). The reference kit and the brain kept beside it, `marregui/comando-brain`,
-are private repositories. comando does not install a kit: the agent that installs comando offers the reference kit or
-one the user names ([INSTALL.md §5](../INSTALL.md#5-the-kit)), and comando finds it at start
+A kit is a Claude Code setup kept in a git repository and versioned by tags `vMAJOR.MINOR.PATCH`; what it holds and
+how its parts act on a session is in [the kit](kit/README.md). This section is what comando does with one. comando's
+code reads nothing of a kit but `comando-kit.json`. comando does not install a kit: the agent that installs comando
+offers the reference kit or one the user names ([INSTALL.md §5](../INSTALL.md#5-the-kit)), and comando finds it at start
 ([record 80](adr/0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md)).
 
 ### 7.1 The root
@@ -801,7 +782,8 @@ writes `~/.claude`. Claude Code signs a new root in once, with `CLAUDE_CONFIG_DI
 ### 7.2 The brain
 
 The brain is `<root>/<brain>/` (`brain` in `comando-kit.json`): `MEMORY/`, `KB/` and `SCRATCHPAD/`, what the sessions
-learn and write. It is never part of the kit, whose repository ignores it; it can be a git repository of its own.
+learn and write. It is never part of the kit, whose repository ignores it; it can be a git repository of its own. What
+it is made of and how it changes is in [the brain](brain/README.md).
 
 ### 7.3 The Files tab
 

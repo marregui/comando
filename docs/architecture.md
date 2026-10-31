@@ -363,23 +363,23 @@ closes what was built and rethrows. A part that takes 100 ms or more to close is
 |---|---|---|---|
 | 1 | the root, named for every module (`KitRoot.use`) | 16 | restores the root that was named before |
 | 2 | `kit-check` | 15 | stops the kit's periodic read |
-| 3 | `KitGit` | 14 | kills its git runs |
-| 4 | `Store` | 13 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call) |
+| 3 | `KitGit` | 14 | lets a backup's `git add` or `git commit` under way finish, up to its 60 s bound, so no `.git/index.lock` is left, then kills its git runs and every process they started |
+| 4 | `Store` | 13 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call), then interrupts what is left (each file is written through `AtomicFiles`, so an interrupted write leaves the old one) |
 | 5 | `App`'s errands | 12 | interrupts the start-up check and waits for it |
 | 6 | `IntentLog` (when recording) | 11 | closes the log after the loop, so the shutdown's intents are recorded |
 | 7 | `StateLoop` | 10 | stops the reducer after the queued intents, then its look on the watchdog |
-| 8 | `DbAdapter` | 9 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer |
+| 8 | `DbAdapter` | 9 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer (at most 2 s), and lets the cancels sent finish (2 s, then 2 s more after an interrupt): at most 9 s |
 | 9 | `MermaidDiagrams` | 8 | stops `mmdc` and its children |
 | 10 | `LocalImages` | 7 | stops reading pictures and drawing SVGs |
 | 11 | `McpServer` | 6 | denies every waiting approval, stops the server |
-| 12 | `ClaudeAdapter` | 5 | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
+| 12 | `ClaudeAdapter` | 5 | SIGTERM to each `claude` process and every process it started; SIGKILL 2 s later to what is left of them, a child that ignored the SIGTERM after `claude` exited included; the session strands end on one 2 s bound (2 s more after an interrupt); deletes every MCP configuration file and revokes its token |
 | 13 | `ToolsAdapter` | 4 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll; lets a queued repository write (stage, roll back, remove) finish within 10 s, one git run, so no `.git/index.lock` is left, then stops git; its errands last |
 | 14 | `ClaudeTopics` | 3 | drops the waiting asks, stops a read under way |
 | 15 | `MqttPeerBroker` (unless `-Dcomando.peers=false`) | 2 | stops following the Edge, disconnects (so the broker drops the last will), at most 2 s |
 | 16 | `Peers` | 1 | clears this instance's presence on the comando Edge (at most 2 s), interrupts the answers under way, which reply `error`, and fails this instance's questions still waiting |
 | 17 | `EmbeddedEdge` | 17 | stops the Edge this instance started (SIGTERM to its recorded pid, bounded wait) and clears `~/.comando-edge.json` |
 | 18 | `EmbeddedQuestDb` | 18 | closes after the lanes |
-| 19 | `ComandoUi` | 19 | closes last: terminals (a shell still alive 2 s after the hangup is killed), live plots, the EDT's watchdog look, the window, the window's errands |
+| 19 | `ComandoUi` | 19 | closes last: terminals (a shell or a job it started still alive 2 s after the hangup and SIGTERM is killed), live plots, the EDT's watchdog look, the window, the window's errands |
 
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
 job in the foreground, a Gradle run; Cancel is the default. The shells' jobs are looked up off the EDT, every shell
@@ -423,7 +423,7 @@ Where new code goes:
 
 ## 9. Code rules
 
-comando follows the [Java Coding Standard v2.0.2](https://github.com/marregui/java-standard/blob/v2.0.2/STANDARD.md),
+comando follows the [Java Coding Standard v2.0.3](https://github.com/marregui/java-standard/blob/v2.0.3/STANDARD.md),
 on JDK 25 (`release = 25`). Its rules live there and are cited by ID (`G-<section>.<n>`); this section holds comando's
 own rules, keeps the numbers other documents cite, and is comando's Apply section (§12 of the standard), its parts in
 the table below. Rules 12 to 15 cover what a desktop application meets and the standard leaves open.
@@ -434,17 +434,19 @@ the table below. Rules 12 to 15 cover what a desktop application meets and the s
 3. Waits follow G-7.6, and every wait has an action on expiry.
 4. Nothing in `ui` imports an adapter module; no widget imports another widget.
 5. The EDT owns latency (G-7.11). Swing components and their models are created, read and written on the EDT only;
-   work done on another thread hands its result back with `invokeLater`.
+   work done on another thread hands its result back with `invokeLater`. A test does the same through the `OnEdt`
+   extension or `invokeAndWait`.
 6. Text from Claude, a database or a file reaches Swing as text, never as HTML (`Plain`, `MarkdownHtml`).
 7. Tests follow G-11.8: the user's data root, keychain and Java preferences.
 8. G-10.9.
-9. G-10.10; the excluded categories are `serial`, `processing` and `this-escape`.
+9. G-10.10; the one excluded category is `serial`.
 10. G-10.11; static imports last.
 11. G-6.5.
 12. A child process has one owner. A short command runs through `Processes` (output to temporary files, a time limit,
     the program and every process it started ended forcibly past it); a long-lived one (the `claude -p` process, the
     terminal's shell, the embedded Edge) is started, drained and ended with its descendants by the adapter that owns
-    it, and its close waits a bounded time. What a child did is read from its exit code, never from its text, which
+    it, and its close waits a bounded time. Descendants are read for a signal only while the parent lives: the JDK
+    finds them by pid, and an ended process's pid may already be another's. What a child did is read from its exit code, never from its text, which
     a locale changes (G-5.7).
 13. A file comando owns is written whole through `AtomicFiles`: a temporary file beside it, then a move over it.
 14. The MCP server binds `127.0.0.1` only, answers only a request that carries a session's bearer token, refuses a
@@ -454,20 +456,60 @@ the table below. Rules 12 to 15 cover what a desktop application meets and the s
 
 | Part | comando |
 |---|---|
-| 1. Version | v2.0.2, JDK 25. No `AGENTS.md` or `CLAUDE.md` in the repository yet to point an agent here (§12) |
-| 2. Hot paths | A hot path is code with a frame-time gate in the build: the transcript renderer (`ui.widgets.transcript.render`: `TranscriptCanvas`, `TextBox`; layouts kept, only the clip painted), `:ui:transcriptGate`, p99 3.39 ms against 16 ms ([UI §4.3](ui.md#43-the-frame-time-gate)); the plot (`ui.widgets.plot`: `PlotCanvas`), `:ui:plotGate`, p99 28–32 ms over three runs on an M2 Max, over its 16 ms budget: a crosshair move repaints and re-reduces every series (2026-10-31; its G-1 to G-3 findings are open). Measured and not hot: the grid (`GridTable`), `:ui:gridGate`, p99 1.4–1.5 ms; a path is hot when its gate's p99 exceeds 4 ms. The stores the hot paths read, `ColumnarResult` and `Transcript`, publish with release-acquire ordering (a volatile write after the data). G-1 to G-3 and G-10.7 apply on the hot paths only |
-| 3. Applied and enforced | Enforced by the build or a test: G-10.10 (`-Xlint:all -Werror`; doclint not yet); G-7.10 (`ThreadBudgetTest`: no platform thread and no kit thread alive after close). Applied and checked by review only, no checker in the repository: G-11.7 (every test documented with `///`), G-10.5 (test methods named for the behaviour they prove), G-10.11 static imports last. Measured at run time, not enforced: G-7.11 (`EdtWatchdog` and the `StateLoop` watchdog log a stall over 200 ms with its stack) |
-| 4. Departures kept on purpose | G-14.6 and G-14.11: comando has no JFR code and imports no `jdk.jfr`; it is recorded from outside with the JDK's own events ([record 54](adr/0054-comando-knows-nothing-of-jfr.md)) |
-| 5. Not applied | Does not fit: G-7.1 to G-7.5 (no object pools, ring queues, padding or worker pools: comando's event rates are UI rates). Not applied yet, not waived (findings are still reported; the plan is to fix defect-class rules first, the rest on changed lines). Counts of 2026-10-31 at `152b6b6`, by the standard's Checkstyle configuration: G-10.2 (16,048 declarations never reassigned without `final`); G-10.11 (group order in 445 of 559 files with imports; 14 unused imports, 6 of them in main code); G-10.10 doclint and a reason beside each excluded category; G-10.12 (thresholds without their measurement); G-10.8 line limit (1,462 main lines over 120). Defect-class rules from the audits of 2026-10-30 and 2026-10-31: G-1.7 (`ColumnarResult` growth), G-4.3 (an `Error` from one close stops the rest in `App`'s close loop), G-7.12 (`Peers`), G-13.6, G-13.7, G-14.9, G-15.2 and G-15.12 (Edge MQTT reconnect: no jitter, no attempt limit), G-15.4, G-15.6 (unbounded intent and strand queues), G-15.7 (registry removal), G-15.9 (stored and peer formats without a version), G-16.13. Rule-class: G-7.13, G-7.14, G-13.5, G-14.7, G-14.10, G-14.13, G-16.3, G-16.4, G-16.5, G-16.10 |
+| 1. Version | v2.0.3, JDK 25. No `AGENTS.md` or `CLAUDE.md` in the repository yet to point an agent here (§12) |
+| 2. Hot paths | A path is hot when the p99 of its frame-time gate exceeds 4 ms. Hot: the transcript renderer (`ui.widgets.transcript.render`: `TranscriptCanvas`, `TextBox`; layouts kept, only the clip painted), `:ui:transcriptGate`, p99 3.39 ms on the gate's document and 4.75 ms on a 1,500-line code fence ([UI §4.3](ui.md#43-the-frame-time-gate)); the plot (`ui.widgets.plot`: `PlotCanvas`), `:ui:plotGate`, p99 28–32 ms over three runs on an M2 Max, over its 16 ms budget: a crosshair move repaints and re-reduces every series (2026-10-31). Not hot: the grid (`GridTable`), `:ui:gridGate`, p99 1.4–1.5 ms. `Transcript`, which the transcript renderer reads, publishes with release-acquire ordering (a volatile write after the data); so does `ColumnarResult`, which the grid reads. G-1 to G-3 and G-10.7 apply on the hot paths only; what they leave open there is in [§9.1](#91-not-applied) |
+| 3. Applied and enforced | Enforced by the build or a test: G-10.10 (`-Xlint:all -Werror`, `serial` excluded with its reason beside the flag in `build.gradle.kts`; doclint not yet); G-9.5 (the `this-escape` lint); G-7.10 (`ThreadBudgetTest`: no platform thread and none of the threads `Threads` made alive after close, read from `Threads.alive()`). Applied and checked by review only, no checker in the repository: G-11.7 (every test documented with `///`), G-10.5 (test methods named for the behaviour they prove), G-10.11 static imports last. Measured at run time, not enforced: G-7.11 (`EdtWatchdog` logs a stall of the EDT over 200 ms with its length when it ends, and the EDT's stack at 1 s, 2 s for a stall in the JDK's drawing; the `StateLoop` watchdog logs an intent still applying at 1 s with the loop's stack) |
+| 4. Departures kept on purpose | G-14.6 and G-14.11: comando has no JFR code and imports no `jdk.jfr`; it is recorded from outside with the JDK's own events ([record 54](adr/0054-comando-knows-nothing-of-jfr.md)). |
+| 5. Not applied | [§9.1](#91-not-applied): each rule with its sites and why, and either the condition under which it does not fit or the change that must apply it |
 | 6. Project packages | `^dev\.marregui\.comando\.` |
 | 7. Preview features | None |
 | 8. Doc comments in main code | `/** */` |
 | 9. Nullability annotations | None (`org.jetbrains:annotations` is declared `compileOnly` and not used) |
 | 10. Licence header | None; G-10.8's header clause is not checked |
 | 11. Logging | `System.Logger` (G-6.5), JUL behind it; no hot-path logger |
-| 12. Test framework | JUnit Jupiter 6.1.3 (`@Test`, `@BeforeEach`, `@AfterEach`; `@TempDir` for scratch folders), AssertJ |
-| 13. Entry points, configuration, latency budgets | The `core.port` interfaces; configuration as records, no interface; budgets: the EDT and one intent 200 ms (§6), transcript frame p99 16 ms (§10) |
+| 12. Test framework | JUnit Jupiter 6.1.3, AssertJ, Awaitility. Lifecycle: `@BeforeEach`/`@AfterEach`; `@BeforeAll`/`@AfterAll` for a fixture shared by a class (the embedded QuestDB, a Postgres container), closed in `@AfterAll`; `@TempDir` for scratch folders; `@ExtendWith(OnEdt.class)` runs a test on the EDT; `@ParameterizedTest` for tables of cases |
+| 13. Entry points, configuration, latency budgets | The `core.port` interfaces; configuration as records, no interface; budgets: the EDT and one intent 200 ms (§6); a frame of the transcript, the plot and the grid p99 16 ms (§10) |
 | 14. Line limit | 120 characters (the default) |
+
+### 9.1 Not applied
+
+A rule here is not waived: a review still reports it. "Does not fit" names the condition under which the rule has
+nothing to act on; when the condition stops holding, the rule applies. Otherwise the last column names the change that
+must apply it: "the sweep" is one commit made by a tool over the whole tree (`final` and import order), after which the
+standard's Checkstyle configuration joins the build; "a change to the file" means the next change to that file applies
+the rule to the whole file, not only to its changed lines. Every rule applies to every new or changed line from now
+on. Counts are of 2026-10-31 at `8b0b4f1`, by the standard's Checkstyle configuration.
+
+| Rule | Class | Sites | Why not yet | Applied by |
+|---|---|---|---|---|
+| G-7.1 to G-7.5 | rule | none | Does not fit: no object pools, ring queues, padding or worker pools; comando's event rates are UI rates | when a path takes events at a rate a frame cannot absorb |
+| G-8.4 | rule | `SubagentFiles` | Does not fit: a JSONL tail read at UI rate whose consumer, Jackson, takes a `String` | when a tail is parsed below line level |
+| G-10.2 | rule | 16,050 declarations never reassigned without `final` | Predates the standard | the sweep |
+| G-10.11 | rule | group order: 4,840 reports in 452 files; 14 unused imports; 9 fully qualified names in main code | Predates the standard; comando's own order put project imports first | the sweep (order, unused); a change to the file (qualified names) |
+| G-10.8 | rule | 1,464 main lines over 120; 66 signatures not wrapped | Predates the standard; a tool rewrap would touch every file for no defect | a change to the line |
+| G-10.10 | rule | doclint off | Doc comments predate the standard; doclint's count is not taken | its own change: count the reports of `-Xdoclint:all/private,-missing`, fix them, turn it on |
+| G-10.12 | rule | `HtmlPane`'s 150 ms debounce has no comment on what set it (`ExecutorStop.WAIT`, `ThreadBudgetTest`'s strand exit, `Lane.QUERY_SECONDS`, `ClaudeAdapter`'s stop grace and `TerminalWidget.KILL_GRACE_MILLIS` each say they are unmeasured) | Never measured | a change to `HtmlPane` |
+| G-1.1, G-1.3, G-3.7 | rule, hot path | transcript: boxed-key maps and null tests on the paint path (`TranscriptCanvas`, `TextBox`, `Finder`) | The transcript turned hot on its 1,500-line fence (4.75 ms) | a change to the file |
+| G-2.3, G-3.1, G-10.7 | rule, hot path | plot: tick text formatted per frame, a `Path2D` and lambdas per series per repaint (`PlotCanvas`); `TextBox` lambdas | The plot is over its budget; its fix is one change | the plot's frame-time fix |
+| G-4.3 | defect | `App`'s close loop: an `Error` from one part stops the rest | Found 2026-10-30 | a change to `App` |
+| G-7.12 | defect | `Peers` publishes under `presenceLock`; `ClaudeProcess` hands a line over under `handOver` | Found 2026-10-30 | a change to the file |
+| G-13.6, G-13.7 | defect | `MetricsLog` matches a substring; `Git.notInHead` decides from git's text, not its exit code | Found 2026-10-30 | a change to the file |
+| G-14.9 | defect | `nanoTime` values compared with `<` or `>` (12 sites) | Found 2026-10-31 | a change to the file |
+| G-15.2, G-15.12 | defect | Edge MQTT reconnect: no jitter, no attempt limit | Disputed: the standard's v3 backlog asks whether "reconnects while the Edge runs" is a stop condition | the standard's answer |
+| G-15.4 | defect | the peer inbox is not deduplicated by correlation id | Found 2026-10-31 | a change to `Peers` |
+| G-15.6 | defect | intent queue, session strands, `ClaudeProcess` stdin: unbounded | The policy for a queue the EDT feeds is not decided | that decision |
+| G-15.7, G-15.9 | defect | registry removal not fenced; stored and peer formats carry no version | Found 2026-10-30 | the next change to a stored or peer format |
+| G-16.13 | defect | `McpServer` hands each request to a virtual thread, without a bound | Found 2026-10-31 | a change to `McpServer` |
+| own rule 12 | defect | `EmbeddedEdge` stops its recorded pid only; a process the Edge started is not ended | Found 2026-10-31 | a change to `EmbeddedEdge` |
+| G-5.3, G-6.5 | rule | log messages not shaped `[key=value]`; `Pty` has no logger of its own | Predates the standard | a change to the file |
+| G-10.1, G-10.5 | rule | member order in `PlotGate`; `tl` prefix and `length()` names | Predates the standard | a change to the file |
+| G-11.5 | rule | 14 sleep polls and 4 unbounded joins in tests | Predates the standard | a change to the test |
+| G-13.5 | rule | `StateLoop.failure()`, `McpTools.pending()`: surface for tests only, not marked | Found 2026-10-31 | a change to the file |
+| G-13.8 | rule | `Watchdog`'s `finally` untested; `Transcript`'s growth limit untested (2^31 blocks cannot be built in a test) | The first needs a fault-injecting look | a change to `Watchdog` |
+| G-14.1, G-14.4 | rule | peer answers and kit backups log failures only; `context` and `window` metrics without unit | Found 2026-10-31 | a change to the file |
+| G-15.14 | rule | `subscribe` states no delivery semantics | Found 2026-10-31 | a change to `Peers` |
+| G-16.1, G-16.2 | rule | `default` arms over sealed `Block` and `Intent`; casts after type tests | Predates the standard | a change to the file |
+| own rule 5 | rule | 12 test files build Swing components off the EDT (`ResourceDialogTest`, `MenuBarTest`, `TableSourceTest`, ...) | Predates rule 5's test clause | a change to the test |
 
 ## 10. Quality
 

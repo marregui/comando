@@ -45,7 +45,7 @@ import java.util.regex.Pattern;
  * (record 94): a link to a heading of the page ({@code #} and its id) scrolls to it; any other link, a web page or a
  * file, goes to the {@link LinkHandler}.
  */
-public class HtmlPane extends JEditorPane {
+public final class HtmlPane extends JEditorPane {
 
     private static final System.Logger LOG = System.getLogger(HtmlPane.class.getName());
 

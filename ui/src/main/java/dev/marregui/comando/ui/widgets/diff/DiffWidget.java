@@ -53,6 +53,12 @@ public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copy
         return s != null ? s : pane.area().getText();
     }
 
+    /** A selection is part of the text, so there is something to copy when the text is not empty. */
+    @Override
+    public boolean canCopy() {
+        return pane.area().getDocument().getLength() > 0;
+    }
+
     @Override
     public String exportName() {
         return "change.diff";

@@ -13,6 +13,9 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** A process on a pseudo-terminal, connected to the terminal emulator. */
 final class Pty extends ProcessTtyConnector {
@@ -96,5 +99,49 @@ final class Pty extends ProcessTtyConnector {
 
     PtyProcess process() {
         return process;
+    }
+
+    /**
+     * SIGTERM to every process the shell started, children first, then to the shell; answers them. They are read
+     * before the signals: once the shell is gone its children are no longer its descendants. pty4j's process has no
+     * {@link Process#toHandle}, so they are read through its pid.
+     */
+    List<ProcessHandle> terminate() {
+        // only while the shell lives: the JDK finds descendants by pid, and an ended shell's pid may be another's
+        final List<ProcessHandle> tree = process.isAlive()
+                ? ProcessHandle.of(process.pid()).map(h -> h.descendants().toList()).orElse(List.of())
+                : List.of();
+        tree.forEach(ProcessHandle::destroy);
+        process.destroy();
+        return tree;
+    }
+
+    /**
+     * Waits until {@code deadlineNanos}, by {@link System#nanoTime()}, for the shell and {@code tree} to end, then sends
+     * SIGKILL to what is left of them and of the shell's descendants: a job that ignores the hangup and the SIGTERM
+     * (nohup, a trap, a stuck ssh). Interrupted, it kills at once.
+     */
+    void killRemaining(final List<ProcessHandle> tree, final long deadlineNanos) throws InterruptedException {
+        try {
+            process.waitFor(Math.max(0L, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
+            for (final ProcessHandle h : tree) {
+                try {
+                    h.onExit().get(Math.max(0L, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
+                } catch (final ExecutionException | TimeoutException e) {
+                    // still running at the deadline: killed below
+                }
+            }
+        } finally {
+            for (final ProcessHandle h : tree) {
+                if (h.isAlive()) {
+                    h.destroyForcibly();
+                }
+            }
+            // only while the shell lives: the JDK reads descendants by pid, and an ended shell's pid may be reused
+            if (process.isAlive()) {
+                ProcessHandle.of(process.pid()).ifPresent(h -> h.descendants().forEach(ProcessHandle::destroyForcibly));
+                process.destroyForcibly();
+            }
+        }
     }
 }

@@ -203,6 +203,46 @@ class ClaudeAdapterTest {
         }
     }
 
+    /// A child of Claude Code that ignores SIGTERM is killed at close although Claude Code itself exits on the
+    /// SIGTERM within the grace: once Claude Code is gone the child is no longer its descendant, so only the kill of
+    /// the signalled tree ends it.
+    @Test
+    void closeKillsAChildThatIgnoredTheTerminate() throws Exception {
+        final ClaudeAdapter a = adapter("fake-claude-stubborn-child.sh");
+        a.start(SessionSpec.fresh("work", tmp.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+        final Path pidFile = tmp.resolve("child.pid");
+        Awaitility.await("the child wrote its pid").atMost(WAIT).until(() -> Files.exists(pidFile));
+        final long child = Long.parseLong(Files.readString(pidFile).strip());
+        try {
+            a.close();
+            Awaitility.await("the child ended").atMost(WAIT)
+                    .until(() -> ProcessHandle.of(child).map(h -> !h.isAlive()).orElse(true));
+        } finally {
+            ProcessHandle.of(child).ifPresent(ProcessHandle::destroyForcibly);
+        }
+    }
+
+    /// Stopping a session kills a child that ignores SIGTERM although Claude Code exits on its closed input before the
+    /// grace ends: the tree was recorded before the input closed, so the child is still found once it is orphaned.
+    @Test
+    void stopKillsAChildThatOutlivesClaudeExitingOnItsInput() throws Exception {
+        final ClaudeAdapter a = adapter("fake-claude-stubborn-child.sh");
+        a.start(SessionSpec.fresh("work", tmp.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+        final Path pidFile = tmp.resolve("child.pid");
+        Awaitility.await("the child wrote its pid").atMost(WAIT).until(() -> Files.exists(pidFile));
+        final long child = Long.parseLong(Files.readString(pidFile).strip());
+        try {
+            a.stop("work");
+            sink.await(Intent.SessionExited.class, WAIT);
+            Awaitility.await("the child ended").atMost(WAIT)
+                    .until(() -> ProcessHandle.of(child).map(h -> !h.isAlive()).orElse(true));
+        } finally {
+            ProcessHandle.of(child).ifPresent(ProcessHandle::destroyForcibly);
+        }
+    }
+
     /// A process that exits with code `3` reports its stderr text and appends an error note to the affected transcript.
     @Test
     void aProcessThatDiesReportsItsStderr() throws Exception {

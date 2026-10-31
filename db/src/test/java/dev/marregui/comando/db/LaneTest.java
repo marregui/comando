@@ -32,6 +32,8 @@ class LaneTest {
 
     /// The statement timeout the lane under test gives a query, in place of the 60 s it gives in use.
     private static final int QUERY_SECONDS = 1;
+    /// The bound the lane under test gives a table description, in place of the 60 s it gives in use.
+    private static final int DESCRIBE_SECONDS = 1;
 
     /// A server that completes the startup, then never answers the first query and ignores its cancel: the query fails
     /// within its statement timeout plus the margin, and the lane runs the next query on a new connection.
@@ -43,7 +45,7 @@ class LaneTest {
             final DbSettings settings = new DbSettings(0, 1_000, 500, 60, 1_000L);
             final Lane lane = new Lane("stalled", new RecordingSink(), new ResultRegistry(), settings, timer,
                     cancellers, stopped -> {
-                    }, QUERY_SECONDS);
+                    }, QUERY_SECONDS, DESCRIBE_SECONDS);
             final ConnectionSpec spec =
                     new ConnectionSpec("stalled", "127.0.0.1", server.port(), "db", "u", "p", false, "disable");
             try {
@@ -59,6 +61,42 @@ class LaneTest {
                 final CompletableFuture<QueryPort.Rows> second = new CompletableFuture<>();
                 assertThat(lane.query(spec, "SELECT 2", 10, second, () -> true)).isTrue();
                 assertThat(second.get(10, TimeUnit.SECONDS).rows()).isEmpty();
+                assertThat(server.startups()).hasValue(2);
+            } finally {
+                lane.close();
+                timer.shutdownNow();
+                cancellers.shutdownNow();
+            }
+        }
+    }
+
+    /// A server that completes the startup, then never answers the table description and ignores its cancel: the
+    /// description fails within its bound plus the margin, and the lane runs the next query on a new connection.
+    @Test
+    void aDescriptionOnAServerThatStopsAnsweringEndsAtItsBoundAndTheLaneTakesTheNextRun() throws Exception {
+        try (PgStub server = new PgStub()) {
+            final ScheduledExecutorService timer = Threads.timedStrand("lane-test-timer");
+            final ExecutorService cancellers = Threads.strand("lane-test-cancel");
+            final DbSettings settings = new DbSettings(0, 1_000, 500, 60, 1_000L);
+            final Lane lane = new Lane("stalled", new RecordingSink(), new ResultRegistry(), settings, timer,
+                    cancellers, stopped -> {
+                    }, QUERY_SECONDS, DESCRIBE_SECONDS);
+            final ConnectionSpec spec =
+                    new ConnectionSpec("stalled", "127.0.0.1", server.port(), "db", "u", "p", false, "disable");
+            try {
+                final long boundSeconds = DESCRIBE_SECONDS + Lane.QUERY_MARGIN_SECONDS;
+                final CompletableFuture<QueryPort.Rows> described = new CompletableFuture<>();
+                final long startNanos = System.nanoTime();
+                assertThat(lane.describe(spec, "t", described, () -> true)).isTrue();
+                assertThatThrownBy(() -> described.get(boundSeconds + 5, TimeUnit.SECONDS))
+                        .isInstanceOf(ExecutionException.class);
+                final long tookSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startNanos);
+                assertThat(tookSeconds).isBetween((long) DESCRIBE_SECONDS, boundSeconds + 1);
+                assertThat(server.stalled()).isNotEmpty();
+
+                final CompletableFuture<QueryPort.Rows> next = new CompletableFuture<>();
+                assertThat(lane.query(spec, "SELECT 2", 10, next, () -> true)).isTrue();
+                assertThat(next.get(10, TimeUnit.SECONDS).rows()).isEmpty();
                 assertThat(server.startups()).hasValue(2);
             } finally {
                 lane.close();

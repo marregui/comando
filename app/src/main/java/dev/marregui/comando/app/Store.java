@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -22,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1047,18 +1049,10 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         }
         closed = true;
         writer.execute(this::writePanels);
-        writer.shutdown();
+        // no connection save is taken from here on; the one queued drains below
         secretsWriter.shutdown();
-        try {
-            if (!writer.awaitTermination(5, TimeUnit.SECONDS)) {
-                LOG.log(System.Logger.Level.WARNING, "store writes still pending at exit");
-            }
-            // one keychain call's bound plus a margin: a connection saved just before quitting still lands
-            if (!secretsWriter.awaitTermination(Secrets.Keychain.TIMEOUT_SECONDS + 1, TimeUnit.SECONDS)) {
-                LOG.log(System.Logger.Level.WARNING, "connections write still pending at exit (keychain not answering)");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        ExecutorStop.drain("store", Duration.ofSeconds(5), Map.of("store", writer));
+        // one keychain call's bound plus a margin: a connection saved just before quitting still lands
+        ExecutorStop.drain("store", Duration.ofSeconds(Secrets.Keychain.TIMEOUT_SECONDS + 1), Map.of("store-secrets", secretsWriter));
     }
 }

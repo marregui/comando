@@ -53,6 +53,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 /**
  * comando's MCP tools. A UI tool validates its input and sends an intent; it returns at once. The approval tool
@@ -68,6 +69,9 @@ public final class McpTools {
     /** Blocks {@code session_read} shows without a cursor: the end of the transcript. */
     static final int READ_TAIL = 40;
     static final int MAX_WAIT_SECONDS = 600;
+    /** A field whose name says it holds a credential; the audit log writes its value as {@link #REDACTED}. */
+    private static final Pattern SECRET_KEY = Pattern.compile("(?i)(password|secret|token|api[_-]?key)");
+    static final String REDACTED = "***";
 
     /** A tool's outcome: text for Claude, and whether it is an error. */
     record Outcome(String text, boolean error) {
@@ -214,7 +218,7 @@ public final class McpTools {
             out = Outcome.fail(name + " failed: " + e);
         }
         if (!name.equals(APPROVE)) {
-            audit.record(session, "tool", name, args.toString(), out.error() ? "error: " + clip(out.text(), 200) : "ok");
+            audit.record(session, "tool", name, redacted(args), out.error() ? "error: " + clip(out.text(), 200) : "ok");
         }
         return out;
     }
@@ -227,7 +231,7 @@ public final class McpTools {
         }
         ApprovalKind kind = ApprovalKind.ofTool(tool);
         ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asString(""));
-        audit.record(session, "approval", tool, input.toString(), decision.toString());
+        audit.record(session, "approval", tool, redacted(input), decision.toString());
         return Outcome.ok(permissionResult(tool, (ObjectNode) input, decision));
     }
 
@@ -750,7 +754,7 @@ public final class McpTools {
         }
         if (args.path("show").asBoolean(false) && !rows.columns().isEmpty()) {
             sink.dispatch(new Intent.ShowView(session, args.path("title").asString(firstLine(sql)),
-                    new ViewSpec.Table(rows.columns(), rows.rows()), Placement.LOWER));
+                    new ViewSpec.Table(rows.columns(), viewRows(rows)), Placement.LOWER));
         }
         return Outcome.ok(format(rows));
     }
@@ -804,13 +808,22 @@ public final class McpTools {
         return String.join(", ", s.connections().stream().map(ConnectionState::name).toList());
     }
 
-    /** Rows as tab-separated text with a header, clipped to {@link #MAX_RESULT_CHARS}. */
+    /** The rows as a table view shows them: SQL NULL as the text {@code null}, as a panel's result shows it. */
+    private static List<List<String>> viewRows(final QueryPort.Rows rows) {
+        return rows.rows().stream().map(row -> row.stream().map(c -> c == null ? "null" : c).toList()).toList();
+    }
+
+    /**
+     * Rows as tab-separated text with a header, clipped to {@link #MAX_RESULT_CHARS}. Cells and names are in
+     * PostgreSQL's COPY text form, so every value reads back unambiguously: SQL NULL is {@code \N}; a backslash,
+     * tab, newline and carriage return in a value are {@code \\}, {@code \t}, {@code \n} and {@code \r}.
+     */
     static String format(QueryPort.Rows rows) {
         if (rows.columns().isEmpty()) {
             return rows.updateCount() >= 0 ? rows.updateCount() + " rows changed" : "done";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append(clip(String.join("\t", rows.columns()), MAX_RESULT_CHARS)).append('\n');
+        sb.append(copyClip(copyLine(rows.columns()), MAX_RESULT_CHARS)).append('\n');
         int shown = 0;
         boolean cut = false;
         for (List<String> row : rows.rows()) {
@@ -819,9 +832,9 @@ public final class McpTools {
                 break;
             }
             // the budget holds for every character: one huge cell is cut, not passed whole
-            String line = String.join("\t", row);
+            final String line = copyLine(row);
             cut = line.length() > room;
-            sb.append(clip(line, room)).append('\n');
+            sb.append(copyClip(line, room)).append('\n');
             shown++;
             if (cut) {
                 break;
@@ -837,6 +850,53 @@ public final class McpTools {
         return sb.append(')').toString();
     }
 
+    /** One line of COPY text: each cell escaped, SQL NULL as {@code \N}, cells joined by tabs. */
+    static String copyLine(final List<String> cells) {
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < cells.size(); i++) {
+            if (i > 0) {
+                sb.append('\t');
+            }
+            final String cell = cells.get(i);
+            if (cell == null) {
+                sb.append("\\N");
+                continue;
+            }
+            for (int k = 0; k < cell.length(); k++) {
+                final char ch = cell.charAt(k);
+                switch (ch) {
+                    case '\\' -> sb.append("\\\\");
+                    case '\t' -> sb.append("\\t");
+                    case '\n' -> sb.append("\\n");
+                    case '\r' -> sb.append("\\r");
+                    default -> sb.append(ch);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * {@code line} of COPY text cut to {@code max} as {@link #clip} cuts, never inside an escape: a cut that would leave
+     * a lone backslash before the ellipsis drops it, as {@code \N} cut to {@code \…} would read as the text
+     * {@code …}.
+     */
+    static String copyClip(final String line, final int max) {
+        final String cut = clip(line, max);
+        if (cut.length() == line.length()) {
+            return cut;
+        }
+        String head = cut.substring(0, cut.length() - 1);
+        int backslashes = 0;
+        while (backslashes < head.length() && head.charAt(head.length() - 1 - backslashes) == '\\') {
+            backslashes++;
+        }
+        if (backslashes % 2 == 1) {
+            head = head.substring(0, head.length() - 1);
+        }
+        return head + cut.substring(cut.length() - 1);
+    }
+
     private static String firstLine(String s) {
         int eol = s.indexOf('\n');
         return clip(eol < 0 ? s : s.substring(0, eol), 120);
@@ -847,6 +907,31 @@ public final class McpTools {
             return "";
         }
         return Clip.keepStart(s, max);
+    }
+
+    /**
+     * {@code node} as JSON text, every field whose name matches {@link #SECRET_KEY}, at any depth, holding
+     * {@link #REDACTED}: the audit log is a plain file on disk, and Claude's arguments can carry a password
+     * ({@code connection_save}). {@code node} itself is not changed.
+     */
+    static String redacted(final JsonNode node) {
+        final JsonNode copy = node.deepCopy();
+        blankSecrets(copy);
+        return copy.toString();
+    }
+
+    private static void blankSecrets(final JsonNode node) {
+        if (node instanceof final ObjectNode o) {
+            for (final String key : List.copyOf(o.propertyNames())) {
+                if (SECRET_KEY.matcher(key).find()) {
+                    o.put(key, REDACTED);
+                } else {
+                    blankSecrets(o.get(key));
+                }
+            }
+        } else if (node.isArray()) {
+            node.forEach(McpTools::blankSecrets);
+        }
     }
 
     /** For tests: approvals waiting for an answer. */

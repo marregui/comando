@@ -351,8 +351,9 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
             lane.finishClose(deadline);
         }
         lanes.clear();
-        ExecutorStop.now("db", timer);
+        ExecutorStop.now("db", Map.of("db-timer", timer));
         testers.close();
-        cancellers.shutdown();
+        // a cancel the lanes' close handed over is let finish, so the server stops the statement it was sent for
+        ExecutorStop.drain("db", ExecutorStop.WAIT, Map.of("db-cancel", cancellers));
     }
 }

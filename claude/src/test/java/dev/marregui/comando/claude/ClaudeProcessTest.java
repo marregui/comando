@@ -1,9 +1,11 @@
 package dev.marregui.comando.claude;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -19,7 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Bounds exit reporting when a child retains stdout.
 /// - Retains the final forty stderr lines without leaving a temporary file.
 /// - Uses one platform reader thread per session process.
+/// - Ends the processes Claude Code started with it, one that ignores SIGTERM by SIGKILL.
 class ClaudeProcessTest {
+
+    /** How long a signalled process is given to be gone. */
+    private static final Duration GONE = Duration.ofSeconds(5);
 
     /// A process that prints `a` and `b` then exits `3` delivers both lines before the exit callback observes code `3`.
     @Test
@@ -81,5 +87,52 @@ class ClaudeProcessTest {
             p.send("bye");
             assertThat(exited.await(10, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    /// A process that starts a `nohup sleep 60` and waits: after [ClaudeProcess#terminate] the grandchild's pid is not
+    /// alive within five seconds, though it ignores the hangup and is no longer a descendant once its parent exited.
+    @Test
+    void terminateEndsTheProcessesClaudeStarted(@TempDir final Path dir) throws Exception {
+        final List<String> lines = new CopyOnWriteArrayList<>();
+        final ClaudeProcess p = ClaudeProcess.start("t", List.of("sh", "-c", "nohup sleep 60 >/dev/null 2>&1 & echo $!; wait"),
+                dir, RootLaunch.INHERIT, lines::add, c -> { });
+        final long grandchild = awaitPid(lines);
+        try {
+            p.terminate();
+            Awaitility.await("the grandchild ended").atMost(GONE).until(() -> !alive(grandchild));
+            assertThat(p.awaitExit(GONE.toMillis())).isTrue();
+        } finally {
+            ProcessHandle.of(grandchild).ifPresent(ProcessHandle::destroyForcibly);
+            p.kill();
+        }
+    }
+
+    /// A grandchild that ignores SIGTERM survives [ClaudeProcess#terminate] and its parent's exit; [ClaudeProcess#kill]
+    /// still ends it, from the processes the terminate signalled.
+    @Test
+    void killEndsAChildThatIgnoredTheTerminateAfterClaudeExited(@TempDir final Path dir) throws Exception {
+        final List<String> lines = new CopyOnWriteArrayList<>();
+        final ClaudeProcess p = ClaudeProcess.start("t", List.of("sh", "-c", "(trap '' TERM HUP; exec sleep 61) & echo $!; wait"),
+                dir, RootLaunch.INHERIT, lines::add, c -> { });
+        final long grandchild = awaitPid(lines);
+        try {
+            p.terminate();
+            assertThat(p.awaitExit(GONE.toMillis())).as("the parent exits on the SIGTERM").isTrue();
+            assertThat(alive(grandchild)).as("the grandchild ignored it").isTrue();
+            p.kill();
+            Awaitility.await("the grandchild ended").atMost(GONE).until(() -> !alive(grandchild));
+        } finally {
+            ProcessHandle.of(grandchild).ifPresent(ProcessHandle::destroyForcibly);
+        }
+    }
+
+    /** The pid the process printed as its first line. */
+    private static long awaitPid(final List<String> lines) {
+        Awaitility.await("the grandchild's pid").atMost(GONE).until(() -> !lines.isEmpty());
+        return Long.parseLong(lines.getFirst().strip());
+    }
+
+    private static boolean alive(final long pid) {
+        return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
     }
 }

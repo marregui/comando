@@ -68,4 +68,10 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
     public String copyText() {
         return tree.copyText();
     }
+
+    /** True once a tree is shown: its root is a node, so the copy holds at least its label. */
+    @Override
+    public boolean canCopy() {
+        return rendered;
+    }
 }

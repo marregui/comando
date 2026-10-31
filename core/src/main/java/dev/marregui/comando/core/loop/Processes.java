@@ -118,7 +118,10 @@ public final class Processes {
 
     /** Ends {@code p} and every process it started, children first; waits a moment for it to be gone. */
     static void end(Process p) throws InterruptedException {
-        p.descendants().forEach(ProcessHandle::destroyForcibly);
+        // only while it lives: the JDK finds descendants by pid, and an ended process's pid may be another's
+        if (p.isAlive()) {
+            p.descendants().forEach(ProcessHandle::destroyForcibly);
+        }
         p.destroyForcibly();
         p.waitFor(END_MILLIS, TimeUnit.MILLISECONDS);
     }

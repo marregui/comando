@@ -5,6 +5,7 @@ import com.jediterm.terminal.ui.TerminalPanel;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,6 +18,7 @@ import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +27,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - zoom stays in bounds and resets; find counts case-insensitively and searches again after new output
 /// - only a foreground job counts as running
 /// - on macOS ⌘A selects the terminal buffer
+/// - closing ends every process the shell started, one that ignores SIGTERM after the grace
 class TerminalWidgetTest {
 
     private static final String HOME = System.getProperty("user.home");
@@ -328,6 +333,40 @@ class TerminalWidgetTest {
             n++;
         }
         return n;
+    }
+
+    /// A shell that starts `nohup sleep 60` and a `sleep 61` that ignores SIGTERM and the hangup, then waits: after
+    /// [TerminalWidget#close] neither grandchild's pid is alive within the grace and three seconds, though both outlive
+    /// their parent and are then no longer its descendants.
+    @Test
+    void closingEndsEveryProcessTheShellStarted(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            t.set(new TerminalWidget(dir, List.of("/bin/sh", "-c",
+                    "nohup sleep 60 >/dev/null 2>&1 & echo PID=$!; (trap '' TERM HUP; exec sleep 61) & echo PID=$!; wait")));
+            t.get().start();
+        });
+        final List<Long> pids = new ArrayList<>();
+        try {
+            final AtomicReference<String> screen = new AtomicReference<>("");
+            Awaitility.await("both pids on the screen").atMost(Duration.ofSeconds(8)).until(() -> {
+                SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
+                return count(screen.get(), "PID=") == 2;
+            });
+            final Matcher m = Pattern.compile("PID=(\\d+)").matcher(screen.get());
+            while (m.find()) {
+                pids.add(Long.parseLong(m.group(1)));
+            }
+            assertThat(pids).hasSize(2);
+            SwingUtilities.invokeAndWait(() -> t.get().close());
+            Awaitility.await("the shell's children ended").atMost(Duration.ofSeconds(5))
+                    .until(() -> pids.stream().noneMatch(pid -> ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)));
+        } finally {
+            SwingUtilities.invokeAndWait(() -> t.get().close());
+            for (final long pid : pids) {
+                ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
+            }
+        }
     }
 
     /// A terminal that never started a shell reports no running job.

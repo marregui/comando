@@ -107,6 +107,11 @@ public final class AgentWidget implements Widget<ViewSpec.Agent>, Searchable, Co
     }
 
     @Override
+    public boolean canCopy() {
+        return transcript.canCopy();
+    }
+
+    @Override
     public void zoom(int steps) {
         transcript.zoom(steps);
     }

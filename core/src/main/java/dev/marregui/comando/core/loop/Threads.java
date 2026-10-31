@@ -24,6 +24,13 @@ public final class Threads {
     private Threads() {
     }
 
+    /** Every live thread made here, virtual ones included; for tests that check a close left none of an owner's. */
+    public static List<Thread> alive() {
+        synchronized (MADE) {
+            return MADE.keySet().stream().filter(Thread::isAlive).toList();
+        }
+    }
+
     /** The live threads made here named {@code name}, virtual ones included; for tests. */
     public static List<Thread> alive(String name) {
         synchronized (MADE) {

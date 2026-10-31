@@ -13,7 +13,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
@@ -24,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// `./gradlew :app:uiTest`.
 /// - the reducer and the watchdog, plus one reader per running session, since a process pipe keeps an operating-system
 ///   thread even when read from a virtual thread
-/// - strands, errands and timers add none, and no strand of comando's is alive once it has closed
+/// - strands, errands and timers add none, and no thread the thread kit made is alive once comando has closed
 /// - the JVM's, the toolkit's, the libraries' and the JDK's process reapers are not comando's and are left out by name
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class ThreadBudgetTest {
@@ -35,20 +34,19 @@ class ThreadBudgetTest {
      * More sessions than cores: were a session's reader a virtual thread, its pipe read would add a carrier past them.
      */
     static final int SESSIONS = Runtime.getRuntime().availableProcessors() + 4;
-    /** The strands and timed strands comando's parts own, by the name each gives the thread kit. */
-    static final List<String> STRANDS = List.of("kit-check", "store", "store-secrets", "peer-broker", "peer-messages", "claude-timer",
-            "plan-usage", "subagent-tail", "topic-reader", "db-timer", "peers", "folder-poll", "change-read", "repo-write", "mermaid",
-            "local-images");
-    /** A session's strand: this followed by the session's name. */
-    static final String SESSION_STRAND = "claude-strand-";
-    /** How long after an executor says it has terminated its thread may still be ending. */
+    /** How long after an executor says it has terminated its thread may still be ending; unmeasured, a margin. */
     private static final Duration STRAND_EXIT = Duration.ofMillis(500);
 
     /** Threads that are not comando's: the JVM's, the toolkit's, the libraries' and the test runner's. */
     private static final List<String> NOT_COMANDO = List.of("Reference Handler", "Finalizer", "Signal Dispatcher", "Notification Thread",
             "Attach Listener", "Common-Cleaner", "DestroyJavaVM", "AWT-", "AppKit", "Java2D", "TimerQueue", "Image ", "process reaper",
-            "ForkJoinPool", "VirtualThread-unblocker", "HTTP-Dispatcher", "idle-timeout-task", "JNA Cleaner", "Timer-",
+            "ForkJoinPool", "VirtualThread-unblocker", "idle-timeout-task", "JNA Cleaner", "Timer-",
             "Test worker", "/127.0.0.1", "surefire", "junit", "awaitility");
+    /**
+     * The JDK HTTP server's dispatcher, the MCP server's: a platform thread while comando runs, outside the budget since
+     * the JDK makes it; the MCP server's close stops it, so after close it counts as comando's.
+     */
+    private static final String MCP_DISPATCHER = "HTTP-Dispatcher";
 
     @TempDir
     Path home;
@@ -73,6 +71,7 @@ class ThreadBudgetTest {
                 """);
         claude.toFile().setExecutable(true);
         Set<Long> before = platformThreads().keySet();
+        final Set<Thread> madeBefore = Set.copyOf(Threads.alive());
         App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "budget", () -> {
         });
         try {
@@ -88,7 +87,8 @@ class ThreadBudgetTest {
             // the start-up errands, the first ticks and the first reads run meanwhile
             Awaitility.await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(4)).until(() -> true);
 
-            TreeMap<String, Integer> running = comandos(before);
+            final TreeMap<String, Integer> running = comandos(before);
+            running.remove(MCP_DISPATCHER);
             assertThat(running.keySet()).as("comando's platform threads with %d sessions: %s", SESSIONS, running)
                     .allMatch(name -> SINGLETONS.contains(name) || name.startsWith(SESSION_READER));
             assertThat(running.values().stream().mapToInt(Integer::intValue).sum()).as("%s", running).isLessThanOrEqualTo(SINGLETONS.size() + SESSIONS);
@@ -106,19 +106,18 @@ class ThreadBudgetTest {
         // each owner waits for its strands in close, so they are gone when it returns; the bound covers only a
         // strand's thread ending just after its executor says it has terminated
         Awaitility.await("no strand of comando's left after close").atMost(STRAND_EXIT)
-                .untilAsserted(() -> assertThat(strands()).as("comando's strands alive after close").isEmpty());
+                .untilAsserted(() -> assertThat(made(madeBefore)).as("comando's strands, forks and errands alive after close").isEmpty());
         Awaitility.await("nothing of comando's left after close").atMost(Duration.ofSeconds(20))
                 .untilAsserted(() -> assertThat(comandos(before)).as(() -> "comando's platform threads after close, "
                         + "each with where it stands, to name the code that started it:\n" + stacks(before)).isEmpty());
     }
 
-    /** The virtual threads of comando's strands and timed strands still alive, by name; the JDK lists none of them. */
-    private static List<String> strands() {
-        final List<String> names = new ArrayList<>(STRANDS);
-        for (int i = 0; i < SESSIONS; i++) {
-            names.add(SESSION_STRAND + "s" + i);
-        }
-        return names.stream().filter(n -> !Threads.alive(n).isEmpty()).toList();
+    /**
+     * The threads the thread kit made since {@code before} that are still alive, by name: every strand, timed strand,
+     * fork and errand of comando's, virtual ones included, which the JDK does not list.
+     */
+    private static List<String> made(final Set<Thread> before) {
+        return Threads.alive().stream().filter(t -> !before.contains(t)).map(Thread::getName).sorted().toList();
     }
 
     /** The virtual threads' scheduler's carriers: one per core at most while none is held in file or pipe I/O. */

@@ -52,7 +52,7 @@ abstract class IconRow extends JPanel {
     }
 
     /** Whether the pointer is over this row: only then is its ⓘ drawn and clickable. */
-    void hovered(boolean on) {
+    final void hovered(final boolean on) {
         hovered = on;
         info.setIcon(on ? INFO : NO_INFO);
         info.setToolTipText(on ? INFO_TIP : null);
