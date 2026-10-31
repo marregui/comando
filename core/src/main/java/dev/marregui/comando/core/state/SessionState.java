@@ -25,8 +25,12 @@ import java.util.Objects;
  *                          still to come
  * @param startedMillis     when the session's process started, 0 while it does not run
  * @param reflection        whether the session is due its checkpoint
- * @param checkpointClears  the Checkpoint button's command runs: when its turn ends, the conversation is cleared and
- *                          the turn's last answer, its summary, is carried into the next prompt
+ * @param checkpointCompacts the Checkpoint button's command, or the automatic checkpoint's, runs: when its turn ends,
+ *                          the conversation is compacted
+ * @param checkpointArmed   a turn has ended with the context below the checkpoint threshold since the last checkpoint
+ *                          command: the next turn that ends at or above it runs the automatic checkpoint
+ * @param checkpointTurns   the turns still to end, the session's queue up to and including a checkpoint command or the
+ *                          {@code /compact} that follows it; 0 when none is under way. See {@link #isCheckpointing()}
  */
 public record SessionState(
         SessionSpec spec,
@@ -47,7 +51,9 @@ public record SessionState(
         boolean handedOff,
         long startedMillis,
         Reflection reflection,
-        boolean checkpointClears) {
+        boolean checkpointCompacts,
+        boolean checkpointArmed,
+        int checkpointTurns) {
 
     public SessionState {
         Objects.requireNonNull(spec, "spec");
@@ -62,10 +68,13 @@ public record SessionState(
         if (pendingTurns < 0) {
             throw new IllegalArgumentException("pendingTurns is negative");
         }
+        if (checkpointTurns < 0) {
+            throw new IllegalArgumentException("checkpointTurns is negative");
+        }
     }
 
     public static SessionState closed(SessionSpec spec) {
-        return new SessionState(spec, Status.CLOSED, "", SessionInfo.NONE, 0, 0.0, 0L, 0L, 0L, "", "", 0L, "", List.of(), 0L, false, 0L, Reflection.FRESH, false);
+        return new SessionState(spec, Status.CLOSED, "", SessionInfo.NONE, 0, 0.0, 0L, 0L, 0L, "", "", 0L, "", List.of(), 0L, false, 0L, Reflection.FRESH, false, true, 0);
     }
 
     public String name() {
@@ -74,6 +83,16 @@ public record SessionState(
 
     public boolean isBusy() {
         return pendingTurns > 0;
+    }
+
+    /**
+     * A checkpoint runs: its command, typed or sent by any route, or the {@code /compact} that follows the Checkpoint
+     * button's or the automatic one, is queued or running (record 130). The session's views are read-only meanwhile;
+     * only an interrupt or a stop acts on it. Derived, never stored: a session with no turn running is never locked, so
+     * a checkpoint whose turn ended in any way, interrupted, failed or with its process, has lifted it.
+     */
+    public boolean isCheckpointing() {
+        return isBusy() && (checkpointTurns > 0 || checkpointCompacts);
     }
 
     /** No turn runs, but background work the session started has not ended: its answer is still to come. */
@@ -132,44 +151,56 @@ public record SessionState(
         boolean added = next.stream().anyMatch(t -> tasks.stream().noneMatch(k -> k.id().equals(t.id())));
         boolean handed = !next.isEmpty() && (handedOff || added && isBusy());
         return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, lastTurnError, next, returned, handed, startedMillis, reflection, checkpointClears);
+                branch, turnStartedMillis, lastTurnError, next, returned, handed, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     /** No background work: the session's process ended, and its tasks with it. */
     public SessionState withoutTasks() {
         return tasks.isEmpty() && returnedMillis == 0L && !handedOff ? this
                 : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, lastTurnError, List.of(), 0L, false, startedMillis, reflection, checkpointClears);
+                branch, turnStartedMillis, lastTurnError, List.of(), 0L, false, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     public SessionState withSpec(SessionSpec newSpec) {
-        return new SessionState(newSpec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+        return new SessionState(newSpec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     /** A session that stopped, or failed to start, no longer has a start time. */
     public SessionState withStatus(Status newStatus, String newError) {
         long started = newStatus == Status.CLOSED || newStatus == Status.FAILED ? 0L : startedMillis;
-        return new SessionState(spec, newStatus, newError, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, started, reflection, checkpointClears);
+        return new SessionState(spec, newStatus, newError, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, started, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     /** The process started at {@code at}; a start reported again for a process already running keeps the first time. */
     public SessionState withStarted(long at) {
         return startedMillis > 0L ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, at, reflection, checkpointClears);
+                branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, at, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     public SessionState withReflection(Reflection newReflection) {
         return newReflection.equals(reflection) ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis,
-                activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, newReflection, checkpointClears);
+                activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, newReflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
-    /**
-     * Whether the end of the running turn clears the conversation and carries its summary; see
-     * {@link #checkpointClears}.
-     */
-    public SessionState withCheckpointClears(boolean clears) {
-        return clears == checkpointClears ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow,
-                lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, clears);
+    /** Whether the end of the running turn compacts the conversation; see {@link #checkpointCompacts}. */
+    public SessionState withCheckpointCompacts(boolean compacts) {
+        return compacts == checkpointCompacts ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow,
+                lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection,
+                compacts, checkpointArmed, checkpointTurns);
+    }
+
+    /** Whether the next turn that ends at or above the threshold runs the automatic checkpoint; see {@link #checkpointArmed}. */
+    public SessionState withCheckpointArmed(boolean armed) {
+        return armed == checkpointArmed ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow,
+                lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection,
+                checkpointCompacts, armed, checkpointTurns);
+    }
+
+    /** The turns still to end before the running checkpoint, or its compaction, has; see {@link #checkpointTurns}. */
+    public SessionState withCheckpointTurns(final int turns) {
+        return turns == checkpointTurns ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow,
+                lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection,
+                checkpointCompacts, checkpointArmed, turns);
     }
 
     /**
@@ -180,7 +211,7 @@ public record SessionState(
     }
 
     public SessionState withInfo(SessionInfo newInfo, long at) {
-        return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+        return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     /**
@@ -191,17 +222,17 @@ public record SessionState(
         boolean starts = pendingTurns == 0 && pending > 0;
         long started = pending == 0 ? 0L : starts ? at : turnStartedMillis;
         return new SessionState(spec, status, error, info, pending, costUsd, contextTokens, contextWindow, at, activity, branch, started,
-                starts ? "" : lastTurnError, tasks, starts ? 0L : returnedMillis, !starts && handedOff, startedMillis, reflection, checkpointClears);
+                starts ? "" : lastTurnError, tasks, starts ? 0L : returnedMillis, !starts && handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     /** How the last turn ended: a message when it failed, empty when it finished or was interrupted. */
     public SessionState withLastTurnError(String message) {
         return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, message, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+                branch, turnStartedMillis, message, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     public SessionState withUsage(double cost, long tokens, long window, long at) {
-        return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+        return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     /** The context as a model call or the stored conversation reports it; a value at 0 or below keeps the one known. */
@@ -210,14 +241,14 @@ public record SessionState(
         long w = window > 0 ? window : contextWindow;
         return t == contextTokens && w == contextWindow ? this
                 : new SessionState(spec, status, error, info, pendingTurns, costUsd, t, w, lastActivityMillis, activity, branch, turnStartedMillis,
-                lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+                lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     public SessionState withActivity(String newActivity, long at) {
-        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 
     public SessionState withBranch(String newBranch) {
-        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, newBranch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, newBranch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointCompacts, checkpointArmed, checkpointTurns);
     }
 }

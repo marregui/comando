@@ -66,7 +66,7 @@ runs one JVM per test class, one at a time, as its windows share one desktop.
 | `TreeClicksUiTest` | a tree that opens a folder on one click, as the Files tab's; a window started on a kit's root opens on the kit's folders |
 | `DarkPageTintUiTest` | a rendered Markdown page takes a newly chosen tint at once, as the transcript does |
 | `ThreadBudgetTest` | comando's own platform threads stay within their budget with the processor count plus four fake sessions running ([record 82](adr/0082-threads-by-kind-with-a-budget.md)) |
-| `CheckpointClearUiTest` | the Checkpoint button against a stand-in for `claude -p`: the conversation cleared, the summary shown and carried into the next prompt, the panel's text kept ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)) |
+| `CheckpointCompactUiTest` | the Checkpoint button against a stand-in for `claude -p`: the checkpoint, then `/compact` once its turn has finished, the conversation and the Session tab kept, nothing carried, the panel's text kept ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `SessionCardUiTest` | a session's row shows the tab's card, a connection's row a card of its facts; both painted to `app/build/snapshots/` |
 | `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
 | `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |

@@ -61,7 +61,7 @@ public final class Actions {
             new Action("session_fresh", Kind.ACT,
                     "Restarts a session on a new conversation, as Start fresh does; the old conversation stays on disk. Same rule as session_start.",
                     List.of(SESSION), Set.of(Intent.StartFresh.class)),
-            new Action("session_checkpoint", Kind.ACT, "Sends a session its checkpoint command and carries its summary into a fresh conversation, as Checkpoint does.",
+            new Action("session_checkpoint", Kind.ACT, "Sends a session its checkpoint command and, once its turn has finished, /compact, as Checkpoint does.",
                     List.of(SESSION), Set.of(Intent.Checkpoint.class)),
             new Action("session_command", Kind.ACT, "Sends a session a slash command, as the palette and the compact button do (/compact, /clear, …).",
                     List.of(SESSION, Arg.required("command", Type.STRING, "the command, with its slash")), Set.of(Intent.SessionCommand.class)),

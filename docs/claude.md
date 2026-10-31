@@ -98,11 +98,15 @@ of text and shown to 400 lines.
   in a new `system/init`: comando zeroes the context, notes the clear, and resumes the new id from then on, saying the
   previous one can be imported again.
 - **The checkpoint** sends the session's checkpoint command. Once its turn has finished (nothing running, queued or out
-  in the background), the `result` event's `result`, the turn's last answer, is kept as the session's carried summary
-  (`SessionSpec.carried`); `/clear` is sent with its note and turn end not shown, and the transcript is emptied to the
-  summary. The next prompt that is not a slash command goes to Claude with the summary in front of it, its block
-  showing the prompt as typed. [Workbench §1.4](workbench.md#14-the-checkpoint) lists when the conversation is kept
-  instead ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)).
+  in the background) and its `result` carries text, `/compact` goes out as a prompt from the session's panel, as the
+  Compact command sends it: the same conversation goes on, and the transcript keeps its blocks and shows the
+  compaction's notes. comando also runs it by itself when a turn ends with the context at or above the checkpoint
+  threshold (`sessions.checkpointThresholdTokens`, default 400,000 tokens, 0 for never), once per crossing. A session
+  launched while the threshold is above 0 gets `CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that
+  would checkpoint at that size leaves it to comando; every other process has the variable taken out. A summary an
+  earlier checkpoint carried (`SessionSpec.carried`, record 86) still goes in front of the next prompt that is not a
+  slash command, its block showing the prompt as typed. [Workbench §1.4](workbench.md#14-the-checkpoint) lists when
+  the conversation is kept instead ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)).
 - **Versions.** At start `claude --version` runs with a 5 s bound on its exit and 1 s more for its output. A version
   outside the tested line (2.1.296 up to, not including, 2.2.0) gets a warning, not a refusal; features are read from
   `system/init`'s capabilities.

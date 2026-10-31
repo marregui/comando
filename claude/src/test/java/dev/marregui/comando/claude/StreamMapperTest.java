@@ -36,29 +36,26 @@ class StreamMapperTest {
         return blocks().stream().filter(type::isInstance).map(type::cast).toList();
     }
 
-    /// A clear that follows a checkpoint shows a note saying so and the summary it carried, then the turn's end; a
-    /// clear by hand shows only its own note, and both turns still end.
+    /// A summary an earlier checkpoint carried (record 86) shows as a note and the answer of a turn that ended; a clear
+    /// shows its own note, and its turn ends.
     @Test
-    void aCheckpointsClearShowsOnlyWhatItCarriedAndAClearByHandShowsItself() {
+    void aCarriedSummaryShowsAsAnAnswerAndAClearShowsItself() {
         String reset = "{\"type\":\"conversation_reset\",\"trigger\":\"clear\"}";
         String result = "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0,"
                 + "\"duration_ms\":3,\"num_turns\":0}";
         mapper.carried("## Reflected\nmemory written");
-        mapper.clearQuietly();
-        mapper.accept(reset);
-        mapper.accept(result);
         assertThat(blocks()).hasSize(3);
         assertThat(blocks().get(0)).isInstanceOfSatisfying(Block.Note.class,
                 n -> assertThat(n.text()).isEqualTo("Conversation cleared after the checkpoint; its summary below goes in front of the next prompt"));
         assertThat(blocks().get(1)).isInstanceOfSatisfying(Block.AssistantText.class,
-                a -> assertThat(a.text()).isEqualTo("## Reflected\nmemory written"));
+                t -> assertThat(t.text()).isEqualTo("## Reflected\nmemory written"));
         assertThat(blocks().get(2)).isEqualTo(Block.TurnEnd.stored());
-        assertThat(sink.of(Intent.SessionTurnEnded.class)).as("the clear's turn still ends").hasSize(1);
 
         mapper.accept(reset);
         mapper.accept(result);
         assertThat(blocks(Block.Note.class)).last().extracting(Block.Note::text).asString().startsWith("Conversation cleared (clear)");
         assertThat(blocks(Block.TurnEnd.class)).hasSize(2);
+        assertThat(sink.of(Intent.SessionTurnEnded.class)).as("the clear's turn ends").hasSize(1);
     }
 
     /// A recorded run with a tool approval and a question yields the session's init, the Bash and question calls done

@@ -228,7 +228,7 @@ public sealed interface Intent {
 
     /**
      * The Checkpoint button: sends the session's checkpoint command as a prompt from its panel; when that turn has
-     * finished, the conversation is cleared and the turn's summary goes in front of the next prompt.
+     * finished, {@code /compact} (record 129).
      */
     record Checkpoint(String name) implements Intent {
     }

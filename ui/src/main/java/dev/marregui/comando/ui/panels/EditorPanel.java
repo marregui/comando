@@ -109,6 +109,10 @@ public final class EditorPanel extends JPanel {
     private final JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
     /** What the panel's body holds: the text or the preview, alone or beside the outline. */
     private final JPanel body = new JPanel(new BorderLayout());
+    /** Greys the text, the preview and the outline while the panel's session runs its checkpoint (record 130). */
+    private final LockVeil veil = new LockVeil(body);
+    /** The panel's session runs its checkpoint: the text reads only and nothing runs from it; Stop interrupts it. */
+    private boolean locked;
     /** Whether the user wants the outline in this panel; it shows only where the text renders as a page. */
     private boolean outlineWanted;
     /** Hears the user show or hide the outline, so the next panel opens the same way. */
@@ -232,7 +236,7 @@ public final class EditorPanel extends JPanel {
         center.add(editor.component(), EDIT);
         center.add(renderedScroll, PREVIEW);
         body.add(center, BorderLayout.CENTER);
-        add(body, BorderLayout.CENTER);
+        add(veil.component(), BorderLayout.CENTER);
 
         run.addActionListener(e -> runSelection(Target.AUTO));
         // a block's gutter mark runs that block, or the selection inside it, where the mark says it goes
@@ -339,7 +343,7 @@ public final class EditorPanel extends JPanel {
         this.document = document;
         editor.syntax(document && file != null ? Editors.styleFor(file) : CommandEditor.PANEL_STYLE);
         // a log belongs to the program writing it: read here, never written
-        editor.area().setEditable(!isLog());
+        editor.area().setEditable(!isLog() && !locked);
         if (opened && isLog()) {
             followEnd();
             followsEnd = true;
@@ -361,9 +365,17 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** False for a log: nothing writes into it, neither the user nor a tool. */
+    /**
+     * False for a log: nothing writes into it, neither the user nor a tool. A panel locked by its session's checkpoint
+     * is editable still: a prompt another session sends is written into it (record 130); only the user's typing waits.
+     */
     public boolean editable() {
-        return editor.area().isEditable();
+        return !isLog();
+    }
+
+    /** Whether the panel's session runs its checkpoint: the panel reads only, greyed, until it ends (record 130). */
+    public boolean locked() {
+        return locked;
     }
 
     /** A document ending in {@code .log}: read-only, and it follows its end as it grows. */
@@ -747,7 +759,7 @@ public final class EditorPanel extends JPanel {
     /** Clear is offered for the panel's own text while it is edited, and does something only when there is text. */
     private void showClear() {
         clear.setVisible(!document);
-        clear.setEnabled(!previewing && editor.area().getDocument().getLength() > 0);
+        clear.setEnabled(!locked && !previewing && editor.area().getDocument().getLength() > 0);
     }
 
     /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else none. */
@@ -859,7 +871,7 @@ public final class EditorPanel extends JPanel {
     }
 
     private void run(String text, Target target) {
-        if (!text.isBlank()) {
+        if (!text.isBlank() && !locked) {
             intents.dispatch(new Intent.RunText(panel.id(), text, target));
         }
     }
@@ -893,6 +905,7 @@ public final class EditorPanel extends JPanel {
         editor.sqlLive(c.map(cs -> cs.status().isUsable()).orElse(false));
         boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);
         stop.setEnabled(running);
+        lock(x.map(SessionState::isCheckpointing).orElse(false));
         s.runOf(p.id()).filter(r -> r.status() == RunStatus.FAILED && r.requestId() != errorMarked).ifPresent(r -> {
             errorMarked = r.requestId();
             int position = errorPosition(r.error());
@@ -900,6 +913,26 @@ public final class EditorPanel extends JPanel {
                 editor.markError(r.sql(), position);
             }
         });
+    }
+
+    /**
+     * Locks the panel while its session runs its checkpoint, or unlocks it (record 130): the text reads only and the
+     * view greys with the session's other views; Run and Clear are off, Stop stays on and interrupts the checkpoint.
+     */
+    private void lock(final boolean on) {
+        if (on == locked) {
+            return;
+        }
+        locked = on;
+        editor.area().setEditable(!isLog() && !on);
+        run.setEnabled(!on);
+        veil.show(on);
+        showClear();
+    }
+
+    /** Whether the veil greys the panel; for tests. */
+    boolean veiled() {
+        return veil.shown();
     }
 
     private static final Pattern POSITION = Pattern.compile("Position: (\\d+)");

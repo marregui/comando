@@ -13,6 +13,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ServerSwitch;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
@@ -339,6 +340,11 @@ final class ActionTools {
     }
 
     private String send(Intent intent) {
+        // the reducer drops an action on a session whose checkpoint runs without a word: say so to the agent (record 130)
+        if (Reducer.refusedWhileCheckpointing(state.get(), intent)) {
+            return "refused: the session is running its checkpoint (record 130); only session_interrupt or session_stop act on it "
+                    + "until the checkpoint and its compaction end";
+        }
         sink.dispatch(intent);
         return "done: " + intent.getClass().getSimpleName();
     }

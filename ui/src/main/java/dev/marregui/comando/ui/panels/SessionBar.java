@@ -34,10 +34,13 @@ import java.util.function.Function;
  * and branch, whose menu binds, attaches or detaches it; the plug that starts or stops it; the new conversation; then
  * what it does ("working · 12 s"), last, so that its changing width moves nothing. On the right its model and effort,
  * each a menu that changes it, then its context and, beside it, the checkpoint the context makes due, both purple once
- * it is. A panel without a session shows the chip that binds one, and nothing else.
+ * it is. A panel without a session shows the chip that binds one, and nothing else. While the session runs its
+ * checkpoint every control but the plug is off and the activity, purple, says how to carry on (record 130).
  */
 public final class SessionBar {
 
+    /** How a session whose checkpoint runs is left: the panel's Stop, which interrupts it (record 130). */
+    static final String LOCKED_HINT = "Stop to carry on";
     private final IntentSink intents;
     private final JPanel root = new JPanel(new BorderLayout());
     private final JButton session = EditorPanel.chip();
@@ -51,9 +54,8 @@ public final class SessionBar {
     /** How full the context is; purple once the checkpoint is due. */
     private final JLabel context = new JLabel();
     /**
-     * Sends the session's checkpoint command; once its turn has finished, the conversation is cleared and the turn's
-     * summary goes in front of the next prompt. Beside the context, which makes it due; shown while the session has
-     * one.
+     * Sends the session's checkpoint command; once its turn has finished, the conversation is compacted (record 129).
+     * Beside the context, which makes it due; shown while the session has one.
      */
     private final JButton checkpoint = EditorPanel.iconButton();
     /** Opens the session dialog on a new session with the name given; the shell's. */
@@ -152,6 +154,9 @@ public final class SessionBar {
             return;
         }
         SessionState ss = x.get();
+        // the session runs its checkpoint: every control but the plug, which stops it, waits until it ends (record 130)
+        final boolean free = !ss.isCheckpointing();
+        session.setEnabled(free);
         // the state as the session's row and its tab show it: orange running, grey stopped, faint starting, red failed
         session.setIcon(Icons.get(SessionIcons.of(ss.status())));
         session.setText(chipText(ss));
@@ -169,10 +174,13 @@ public final class SessionBar {
         String doing = busyText(ss).strip();
         activity.setVisible(true);
         activity.setText(doing);
+        activity.setForeground(free ? Theme.MUTED : Theme.THINKING);
         model.setVisible(true);
+        model.setEnabled(free);
         model.setText(SessionRow.modelName(ss) + " ▾");
         model.setToolTipText(SessionRow.modelTip(ss));
         effort.setVisible(true);
+        effort.setEnabled(free);
         effort.setText(SessionRow.effortName(ss) + " ▾");
         effort.setToolTipText(SessionRow.effortTip(ss));
         boolean due = ss.reflection().due() && showsCheckpoint(ss);
@@ -181,7 +189,7 @@ public final class SessionBar {
         context.setForeground(due ? Theme.THINKING : Theme.MUTED);
         context.setToolTipText(contextTip(ss, due));
         checkpoint.setVisible(showsCheckpoint(ss));
-        checkpoint.setEnabled(ss.status() != Status.CLOSING);
+        checkpoint.setEnabled(ss.status() != Status.CLOSING && free);
         checkpoint.setIcon(Icons.get(checkpointIcon(ss)));
         checkpoint.setToolTipText(checkpointTip(ss));
     }
@@ -250,8 +258,17 @@ public final class SessionBar {
         };
     }
 
-    /** "  working · 12 s" while a turn runs, "  waiting on …" while background work runs; the shell's tick moves it. */
+    /**
+     * "  working · 12 s" while a turn runs, "  waiting on …" while background work runs; the shell's tick moves it.
+     * While the checkpoint runs, what it does and how to leave it: "  checkpoint · compacting · 12 s · Stop to carry
+     * on".
+     */
     static String busyText(SessionState ss) {
+        if (ss.isCheckpointing()) {
+            final long since = ss.turnStartedMillis();
+            final String elapsed = since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "";
+            return "  checkpoint · " + TabStatus.working(ss) + elapsed + " · " + LOCKED_HINT;
+        }
         if (ss.isWaiting()) {
             long since = ss.waitingSinceMillis();
             return "  " + TabStatus.waiting(ss) + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "");
@@ -307,10 +324,13 @@ public final class SessionBar {
         return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
     }
 
-    /** What the checkpoint sends and what follows: the clear, or nothing while the last one's summary still waits. */
+    /**
+     * What the checkpoint sends and what follows: the compaction (record 129), or nothing while an earlier checkpoint's
+     * summary still waits.
+     */
     static String checkpointTip(SessionState ss) {
         String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
-                ? ", then clears the conversation and carries its summary into the next prompt"
+                ? ", then compacts the conversation"
                 : "; the last checkpoint's summary still waits for the next prompt");
         return ss.reflection().due() ? "Checkpoint due, context past " + Math.round(Reflection.THRESHOLD * 100) + "%: " + send
                 : "Checkpoint: " + send;

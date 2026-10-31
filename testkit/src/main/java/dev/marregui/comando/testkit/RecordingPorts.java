@@ -108,11 +108,6 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void clearConversation(String name, String carried) {
-        record("claude.clearConversation " + name);
-    }
-
-    @Override
     public void loadHistory(SessionSpec spec) {
         record("claude.history " + spec.name());
     }

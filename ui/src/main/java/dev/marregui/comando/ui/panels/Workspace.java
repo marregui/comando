@@ -110,6 +110,8 @@ public final class Workspace {
     private final Map<PanelId, Boolean> lastActive = new HashMap<>();
     /** Panels whose work ended while another tab was in front, until the user looks at them. */
     private final Set<PanelId> unseen = new HashSet<>();
+    /** The panels whose tab title is greyed: their session runs its checkpoint (record 130). */
+    private final Set<PanelId> dimmed = new HashSet<>();
     private final Map<PanelId, TabStatus> statuses = new HashMap<>();
     /** The theme chosen, beside New panel (record 104). */
     private final ThemeButton theme = new ThemeButton();
@@ -1073,6 +1075,7 @@ public final class Workspace {
                     }
                     lastActive.remove(id);
                     unseen.remove(id);
+                    dimmed.remove(id);
                     statuses.remove(id);
                     tips.remove(id);
                     topicOf.remove(id.value());
@@ -1127,6 +1130,8 @@ public final class Workspace {
                 } else if (tabs.indexOfComponent(view) != i) {
                     tabs.remove(view);
                     tabs.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
+                    // a tab put in again has the strip's colour: its grey, if any, is set again below
+                    dimmed.remove(p.id());
                 }
                 refreshTab(p, s, view);
                 Path file = texts.file(p.id()).orElse(null);
@@ -1181,6 +1186,11 @@ public final class Workspace {
                 : icon(status);
         if (tabs.getIconAt(at) != icon) {
             tabs.setIconAt(at, icon);
+        }
+        // its session runs its checkpoint: the title greys with the panel, the tab still opens it (record 130)
+        final boolean locked = s.session(p.session()).map(SessionState::isCheckpointing).orElse(false);
+        if (locked ? dimmed.add(p.id()) : dimmed.remove(p.id())) {
+            tabs.setForegroundAt(at, locked ? LockVeil.dimmed() : null);
         }
         String tip = tooltip(p, s, status);
         if (!tip.equals(tips.put(p.id(), tip)) && p.id().value().equals(card.shown())) {

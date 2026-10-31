@@ -1129,6 +1129,8 @@ public final class SessionsSidebar {
 
     JPopupMenu sessionMenu(SessionState s) {
         JPopupMenu m = new JPopupMenu();
+        // the session runs its checkpoint: what acts on it waits, but a stop or an interrupt (record 130)
+        final boolean free = !s.isCheckpointing();
         m.add(item("Open in a panel", "claude", () -> intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()))));
         m.addSeparator();
         if (s.status().isUsable()) {
@@ -1140,15 +1142,17 @@ public final class SessionsSidebar {
             m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
         if (SessionBar.showsFresh(s)) {
-            m.add(tipped(item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))), SessionRow.freshTip(s)));
+            m.add(tipped(item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))),
+                    SessionRow.freshTip(s))).setEnabled(free);
         }
         if (SessionBar.showsCheckpoint(s)) {
             m.add(tipped(item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", SessionBar.checkpointIcon(s),
-                    () -> intents.dispatch(new Intent.Checkpoint(s.name()))), SessionBar.checkpointTip(s)));
+                    () -> intents.dispatch(new Intent.Checkpoint(s.name()))), SessionBar.checkpointTip(s)))
+                    .setEnabled(free);
         }
         if (s.status().isUsable()) {
             m.add(tipped(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),
-                    SessionRow.COMPACT_TIP));
+                    SessionRow.COMPACT_TIP)).setEnabled(free);
             rewriteItem(s).ifPresent(m::add);
         }
         m.addSeparator();
@@ -1156,24 +1160,26 @@ public final class SessionsSidebar {
         JMenu models = new JMenu("Model: " + SessionRow.modelName(s));
         models.setToolTipText(SessionRow.modelTip(s));
         modelItems(s).forEach(models::add);
+        models.setEnabled(free);
         m.add(models);
         JMenu efforts = new JMenu("Effort: " + SessionRow.effortName(s));
         efforts.setToolTipText(SessionRow.effortTip(s));
         effortItems(s).forEach(efforts::add);
+        efforts.setEnabled(free);
         m.add(efforts);
         m.addSeparator();
         m.add(item("Copy details", "copy", () -> clipboard.accept(details(s))));
         m.addSeparator();
-        m.add(item("Edit…", "edit", () -> dialogs.sessions().edit(s.name())));
+        m.add(item("Edit…", "edit", () -> dialogs.sessions().edit(s.name()))).setEnabled(free);
         m.add(item("Clone…", "copy", () -> dialogs.sessions().cloneOf(s.name())));
-        m.add(item("Remove…", "close", () -> sessionActions.remove(s)));
+        m.add(item("Remove…", "close", () -> sessionActions.remove(s))).setEnabled(free);
         return m;
     }
 
     /**
      * Has the running session rewrite its panel's whole text as a professional Markdown document, put in place of the
      * text: the focused panel when it is the session's, else the first of its panels. None for a session without an
-     * open panel; disabled while that panel's text is blank.
+     * open panel; disabled while that panel's text is blank or the session runs its checkpoint.
      */
     private Optional<JMenuItem> rewriteItem(SessionState s) {
         List<PanelState> bound = state.panelsBoundToSession(s.name());
@@ -1189,7 +1195,7 @@ public final class SessionsSidebar {
             }
         });
         i.setToolTipText(EditorPanel.POLISH_TIP);
-        i.setEnabled(!text.isBlank());
+        i.setEnabled(!text.isBlank() && !s.isCheckpointing());
         return Optional.of(i);
     }
 

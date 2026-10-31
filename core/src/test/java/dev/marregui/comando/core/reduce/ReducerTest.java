@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReducerTest {
 
     private final FakeClock clock = new FakeClock();
-    private final Reducer reducer = new Reducer(clock);
+    private Reducer reducer = new Reducer(clock);
     private AppState state = States.twoPanels();
     private List<Effect> effects = List.of();
 
@@ -775,49 +775,34 @@ class ReducerTest {
         assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again");
     }
 
-    /// The checkpoint button clears the conversation after its turn, carrying the summary (the clear counts as a turn);
-    /// the summary survives into the new conversation, a command leaves it for the next prompt, and the next prompt
-    /// sends it as a preface once, after which prompts go plain.
+    /// The checkpoint button compacts the conversation once its turn has finished: `/compact` goes out as a prompt from
+    /// the session's panel (a turn of its own, so the checkpoint's end does not notify), nothing is cleared or carried,
+    /// and the compaction's end notifies once.
     @Test
-    void theCheckpointButtonClearsTheConversationOnceItsTurnHasFinishedAndCarriesItsSummaryIntoTheNextPrompt() {
+    void theCheckpointButtonCompactsTheConversationOnceItsTurnHasFinished() {
         String title = state.panel(P1).orElseThrow().title();
         String summary = "## Reflected\nSession log and memory written.";
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.SessionInit("work", new SessionInfo("conv-1", "opus", "/w", "2.1", "", List.of())));
         apply(new Intent.Checkpoint("work"));
-        assertThat(state.session("work").orElseThrow().checkpointClears()).isTrue();
+        assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect", title));
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).isTrue();
 
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, "", "  " + summary + "\n"));
         SessionState x = state.session("work").orElseThrow();
-        assertThat(x.checkpointClears()).isFalse();
-        assertThat(x.spec().carried()).isEqualTo(summary);
-        assertThat(x.pendingTurns()).as("the clear is a turn").isEqualTo(1);
-        assertThat(effects).contains(new Effect.ClearConversation("work", summary), new Effect.SaveSessions(List.of(x.spec())))
-                .as("the turn that clears notifies, once").doesNotHaveAnyElementsOfTypes(Effect.DesktopNotify.class);
+        assertThat(x.checkpointCompacts()).isFalse();
+        assertThat(x.spec().carried()).as("nothing carried: the compaction keeps the conversation").isEmpty();
+        assertThat(x.pendingTurns()).as("the compaction is a turn").isEqualTo(1);
+        assertThat(effects).containsExactly(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, title))
+                .as("the turn that compacts notifies, once").doesNotHaveAnyElementsOfTypes(Effect.DesktopNotify.class);
 
-        apply(new Intent.SessionInit("work", new SessionInfo("conv-2", "opus", "/w", "2.1", "", List.of())));
-        assertThat(state.session("work").orElseThrow().spec().carried()).as("kept with the new conversation").isEqualTo(summary);
-        assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again;"
-                + " the checkpoint's summary goes in front of the next prompt");
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 0L, 1_000_000L, false, "", ""));
-        assertThat(effects).contains(new Effect.DesktopNotify("work", "Turn finished"));
-
-        apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
-        assertThat(effects).as("a command leaves the summary for the next prompt").contains(new Effect.SendToClaude("work", "/compact", title));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 0L, 1_000_000L, false, "", ""));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 40_000L, 1_000_000L, false, "", ""));
+        assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+        assertThat(state.session("work").orElseThrow().spec().claudeSessionId()).as("the same conversation").isEqualTo("conv-1");
 
         apply(new Intent.RunText(P1, "go on", Target.CLAUDE));
-        SessionSpec spec = state.session("work").orElseThrow().spec();
-        assertThat(spec.carried()).isEmpty();
-        assertThat(effects).containsExactly(new Effect.SendToClaude("work", "go on", title, Reducer.preface(summary)),
-                new Effect.SaveSessions(List.of(spec)));
-        assertThat(Reducer.preface(summary)).contains(summary).endsWith("\n\n---\n\n");
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "on it"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
-
-        apply(new Intent.RunText(P1, "next", Target.CLAUDE));
-        assertThat(effects).contains(new Effect.SendToClaude("work", "next", title));
+        assertThat(effects).as("the next prompt goes plain").containsExactly(new Effect.SendToClaude("work", "go on", title));
     }
 
     /// The conversation is kept when the user prompts after the checkpoint, when its turn fails or is interrupted, when
@@ -828,59 +813,61 @@ class ReducerTest {
         apply(new Intent.SessionStarted("work"));
 
         apply(new Intent.Checkpoint("work"));
-        apply(new Intent.RunText(P1, "wait, one more thing", Target.CLAUDE));
-        assertThat(state.session("work").orElseThrow().checkpointClears()).as("a prompt after it: the user goes on").isFalse();
+        // the window offers no prompt while the checkpoint runs (record 130); one another session sends queues
+        apply(new Intent.PromptSession("work", "wait, one more thing", "lead"));
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).as("a prompt after it: the user goes on").isFalse();
         apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "summary"));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "done"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertNoCompaction();
 
         apply(new Intent.Checkpoint("work"));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "rate limited"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
-        assertThat(state.session("work").orElseThrow().checkpointClears()).isFalse();
+        assertNoCompaction();
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).isFalse();
 
         apply(new Intent.Checkpoint("work"));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "interrupted"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertNoCompaction();
         assertThat(state.notice().text()).isEqualTo("work: interrupted");
 
         apply(new Intent.Checkpoint("work"));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", " "));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertNoCompaction();
         assertThat(state.notice().text()).isEqualTo("work: the checkpoint ended without a summary; the conversation is kept");
 
         apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
-        assertThat(state.session("work").orElseThrow().checkpointClears()).as("typed, it is a prompt like any other").isFalse();
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).as("typed, it is a prompt like any other").isFalse();
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "summary"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertNoCompaction();
 
         apply(new Intent.Checkpoint("work"));
         apply(new Intent.SessionExited("work", 1, "killed"));
-        assertThat(state.session("work").orElseThrow().checkpointClears()).as("its turn ended with the process").isFalse();
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).as("its turn ended with the process").isFalse();
+        assertNoCompaction();
     }
 
-    /// A checkpoint queued behind a prompt does not clear when the prompt's turn ends, only after its own.
+    /// A checkpoint queued behind a prompt does not compact when the prompt's turn ends, only after its own.
     @Test
-    void aCheckpointQueuedBehindAPromptClearsAfterItsOwnTurn() {
+    void aCheckpointQueuedBehindAPromptCompactsAfterItsOwnTurn() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.RunText(P1, "go", Target.CLAUDE));
         apply(new Intent.Checkpoint("work"));
         apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "gone"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertNoCompaction();
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "the summary"));
-        assertThat(effects).contains(new Effect.ClearConversation("work", "the summary"));
+        assertThat(effects).contains(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, state.panel(P1).orElseThrow().title()));
     }
 
-    /// Saving the session form, which has no carried-summary field, keeps the carried summary while applying the edit;
-    /// a checkpoint before the next prompt has nothing new to clear and keeps the summary.
+    /// A summary an earlier checkpoint carried (record 86) outlives the session form, which has no such field; a
+    /// checkpoint before the next prompt has nothing new to compact and keeps it; the next prompt that is not a command
+    /// takes it with it once.
     @Test
     void aCarriedSummaryOutlivesTheSessionFormAndACheckpointBeforeTheNextPrompt() {
+        String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
-        apply(new Intent.Checkpoint("work"));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "the summary"));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 0L, 1_000_000L, false, "", ""));
+        state = state.withSession(state.session("work").orElseThrow().withSpec(state.session("work").orElseThrow().spec().withCarried("the summary")));
 
         SessionSpec edited = SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(state.session("work").orElseThrow().spec()
                 .withModel("opus")));
@@ -890,10 +877,247 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().spec().model()).isEqualTo("opus");
 
         apply(new Intent.Checkpoint("work"));
-        assertThat(state.session("work").orElseThrow().checkpointClears()).as("nothing new to clear").isFalse();
+        assertThat(state.session("work").orElseThrow().checkpointCompacts()).as("nothing new to compact").isFalse();
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "nothing to reflect on"));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertNoCompaction();
         assertThat(state.session("work").orElseThrow().spec().carried()).isEqualTo("the summary");
+
+        apply(new Intent.RunText(P1, "go on", Target.CLAUDE));
+        SessionSpec spec = state.session("work").orElseThrow().spec();
+        assertThat(spec.carried()).isEmpty();
+        assertThat(effects).containsExactly(new Effect.SendToClaude("work", "go on", title, Reducer.preface("the summary")),
+                new Effect.SaveSessions(List.of(spec)));
+    }
+
+    /// With a threshold, a turn that ends at or above it runs the session's checkpoint from its panel, and its end
+    /// `/compact`, as the button does; once per crossing: a later turn still above it runs nothing, a turn that ends
+    /// below it re-arms, and the next crossing runs it again. Without a threshold nothing runs.
+    @Test
+    void aTurnThatEndsAtTheThresholdRunsTheCheckpointThenCompactsOncePerCrossing() {
+        reducer = new Reducer(clock, () -> 400_000L);
+        String title = state.panel(P1).orElseThrow().title();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 399_999L, 1_000_000L, false, "", "below"));
+        assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+
+        apply(new Intent.RunText(P1, "more", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 400_000L, 1_000_000L, false, "", "at it"));
+        assertThat(effects).as("at the threshold: the checkpoint, and no notice of the turn yet")
+                .containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+        SessionState x = state.session("work").orElseThrow();
+        assertThat(List.of(x.pendingTurns(), x.checkpointCompacts(), x.checkpointArmed())).containsExactly(1, true, false);
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(effects).as("then /compact").containsExactly(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", ""));
+        assertThat(effects).as("the compaction's turn, still reporting the old size: nothing more")
+                .containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+        apply(new Intent.RunText(P1, "on", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, "", "still above"));
+        assertThat(effects).as("the same crossing: once").containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+
+        apply(new Intent.RunText(P1, "after the compaction", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 50_000L, 1_000_000L, false, "", "below again"));
+        assertThat(state.session("work").orElseThrow().checkpointArmed()).as("re-armed below the threshold").isTrue();
+        apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 401_000L, 1_000_000L, false, "", "crossed again"));
+        assertThat(effects).as("the next crossing").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+
+        reducer = new Reducer(clock, () -> 0L);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 401_000L, 1_000_000L, false, "", "reflected"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", ""));
+        apply(new Intent.RunText(P1, "off", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 900_000L, 1_000_000L, false, "", "no threshold"));
+        assertThat(effects).as("a threshold of 0: never").containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+    }
+
+    /// At the threshold nothing runs for a session with no checkpoint command, for a turn that failed or was
+    /// interrupted, or while background work is out; while a prompt is queued the queued prompt runs first and the
+    /// check repeats at its end.
+    @Test
+    void theAutomaticCheckpointWaitsForTheSessionsOwnTurnToFinishAndNeedsACommand() {
+        reducer = new Reducer(clock, () -> 400_000L);
+        String title = state.panel(P1).orElseThrow().title();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.RunText(P1, "queued", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 500_000L, 1_000_000L, false, "", "first"));
+        assertThat(effects).as("a prompt queued: it runs first").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 510_000L, 1_000_000L, false, "", "second"));
+        assertThat(effects).as("at its end").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 510_000L, 1_000_000L, true, "rate limited"));
+        assertNoCompaction();
+        apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 20_000L, 1_000_000L, false, "", ""));
+        assertThat(state.session("work").orElseThrow().checkpointArmed()).isTrue();
+
+        apply(new Intent.RunText(P1, "fails", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, true, "rate limited"));
+        assertThat(effects).as("a failed turn").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+        apply(new Intent.RunText(P1, "stopped", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, true, "interrupted"));
+        assertThat(effects).as("an interrupted turn").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+
+        BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
+        apply(new Intent.RunText(P1, "hand it off", Target.CLAUDE));
+        apply(new Intent.SessionTasksChanged("work", List.of(build)));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, "", "started a build"));
+        assertThat(effects).as("background work out").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+        apply(new Intent.SessionTasksChanged("work", List.of()));
+        apply(new Intent.SessionTurnRunning("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 505_000L, 1_000_000L, false, "", "the build passed"));
+        assertThat(effects).as("the work back").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 505_000L, 1_000_000L, true, "interrupted"));
+
+        SessionSpec silent = state.session("work").orElseThrow().spec().withCheckpoint("");
+        state = state.withSession(state.session("work").orElseThrow().withSpec(silent).withCheckpointArmed(true));
+        apply(new Intent.RunText(P1, "no command", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 600_000L, 1_000_000L, false, "", "big"));
+        assertThat(effects).as("no checkpoint command: nothing").containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+    }
+
+    /// A session is locked from its checkpoint command's send until the `/compact` that follows has ended, whether the
+    /// button sent it or the threshold did; a checkpoint command typed in its panel locks it for its own turn, which
+    /// no compaction follows. A checkpoint queued behind a prompt locks the session from its send.
+    @Test
+    void aSessionIsLockedFromItsCheckpointUntilTheCompactionThatFollowsEnds() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        assertThat(locked()).as("idle").isFalse();
+
+        apply(new Intent.Checkpoint("work"));
+        assertThat(locked()).as("the button's checkpoint").isTrue();
+        final String title = state.panel(P1).orElseThrow().title();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(effects).contains(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, title));
+        assertThat(locked()).as("through the compaction").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 2_000L, 1_000_000L, false, "", ""));
+        assertThat(locked()).as("the compaction ended").isFalse();
+
+        reducer = new Reducer(clock, () -> 400_000L);
+        apply(new Intent.RunText(P1, "a short task", Target.CLAUDE));
+        assertThat(locked()).as("a prompt").isFalse();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 1_000_000L, false, "", "below: armed"));
+        apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 400_000L, 1_000_000L, false, "", "done"));
+        assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect", title));
+        assertThat(locked()).as("the automatic checkpoint").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 410_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(locked()).as("its compaction").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", ""));
+        assertThat(locked()).isFalse();
+
+        reducer = new Reducer(clock);
+        apply(new Intent.RunText(P1, "/reflect now", Target.CLAUDE));
+        assertThat(locked()).as("typed").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));
+        assertNoCompaction();
+        assertThat(locked()).as("typed: its own turn only").isFalse();
+
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(locked()).as("queued behind a prompt: from its send").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "gone"));
+        assertThat(locked()).as("the prompt's turn ended, the checkpoint's runs").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 2_000L, 1_000_000L, false, "", ""));
+        assertThat(locked()).isFalse();
+    }
+
+    /// An interrupt goes through to a locked session; the interrupted checkpoint lifts the lock and sends no
+    /// `/compact`. A failed checkpoint, an interrupted compaction and a process that ends lift it the same way.
+    @Test
+    void anInterruptLiftsTheLockAndTheConversationIsKept() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.InterruptSession("work"));
+        assertThat(effects).containsExactly(new Effect.InterruptClaude("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "interrupted"));
+        assertNoCompaction();
+        assertThat(locked()).as("interrupted").isFalse();
+        apply(new Intent.RunText(P1, "carry on", Target.CLAUDE));
+        assertThat(effects).as("the panel takes prompts again")
+                .contains(new Effect.SendToClaude("work", "carry on", state.panel(P1).orElseThrow().title()));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "carried on"));
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "rate limited"));
+        assertThat(locked()).as("failed").isFalse();
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(locked()).as("compacting").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "interrupted"));
+        assertThat(locked()).as("the compaction interrupted").isFalse();
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.StopSession("work"));
+        assertThat(effects).as("a stop goes through").containsExactly(new Effect.StopClaude("work"));
+        apply(new Intent.SessionExited("work", 0, ""));
+        assertThat(locked()).as("the process ended").isFalse();
+        assertThat(state.session("work").orElseThrow().checkpointTurns()).isZero();
+    }
+
+    /// While the checkpoint runs, everything the window would do to the session is refused without a notice: a prompt
+    /// run from its panel, the checkpoint again, a command, a fresh start, its settings, model and effort, removing it
+    /// or its own panel, clearing its Session tab. A prompt another session sends queues and lifts the lock when the
+    /// checkpoint's turn ends, its conversation kept. Another session and a panel without one go on as before.
+    @Test
+    void aLockedSessionRefusesWhatActsOnItAndOtherSessionsGoOn() {
+        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/o")));
+        final PanelId other = state.homePanel("other").orElseThrow().id();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(locked()).isTrue();
+        final Notice before = state.notice();
+
+        final SessionSpec spec = state.session("work").orElseThrow().spec();
+        for (final Intent refused : List.of(new Intent.RunText(P1, "more", Target.CLAUDE),
+                new Intent.RunText(P1, "SELECT 1", Target.SQL), new Intent.Checkpoint("work"),
+                new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND), new Intent.StartFresh("work"),
+                new Intent.SaveSession("work", spec.withModel("opus")), new Intent.SetSessionModel("work", "opus"),
+                new Intent.SetSessionEffort("work", "high"), new Intent.RemoveSession("work"),
+                new Intent.RemovePanel(P1), new Intent.ClearTranscript("work"))) {
+            final AppState was = state;
+            apply(refused);
+            assertThat(state).as("%s", refused).isSameAs(was);
+            assertThat(effects).as("%s", refused).isEmpty();
+        }
+        assertThat(state.notice()).as("no notice").isEqualTo(before);
+
+        apply(new Intent.RunText(other, "hello", Target.CLAUDE));
+        assertThat(effects).as("another session").anySatisfy(e -> assertThat(e).isInstanceOf(Effect.SendToClaude.class));
+        apply(new Intent.RunText(P2, "SELECT 1", Target.SQL));
+        assertThat(effects).as("a panel without a session")
+                .anySatisfy(e -> assertThat(e).isInstanceOf(Effect.ExecuteSql.class));
+        assertThat(state.session("other").orElseThrow().isCheckpointing()).isFalse();
+
+        apply(new Intent.PromptSession("work", "after it", "lead"));
+        assertThat(effects).as("queued")
+                .contains(new Effect.SendToClaude("work", "after it", state.panel(P1).orElseThrow().title()));
+        assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(2);
+        assertThat(locked()).as("until the checkpoint's turn ends").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));
+        assertNoCompaction();
+        assertThat(locked()).as("the queued prompt runs unlocked").isFalse();
+    }
+
+    /// Whether the session `work` is locked by its checkpoint.
+    private boolean locked() {
+        return state.session("work").orElseThrow().isCheckpointing();
+    }
+
+    /// No effect sends `/compact` or `/clear`: the conversation is kept.
+    private void assertNoCompaction() {
+        assertThat(effects).noneMatch(e -> e instanceof Effect.SendToClaude s
+                && (s.text().equals(SessionSpec.COMPACT_COMMAND) || s.text().equals("/clear")));
     }
 
     /// Ordering sessions puts the named ones first in the given order and the rest after them in their place, saving

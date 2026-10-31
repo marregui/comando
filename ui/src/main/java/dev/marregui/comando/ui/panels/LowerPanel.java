@@ -48,6 +48,8 @@ public final class LowerPanel {
     private final JTabbedPane tabs = named(new JTabbedPane(), "lower");
     private final ResultsView results;
     private final TranscriptWidget transcript;
+    /** Greys the Session tab while its session runs its checkpoint (record 130). */
+    private final LockVeil veil;
     private final ApprovalInbox inbox;
     private final ViewTabs views;
     private final TerminalTabs terminals = new TerminalTabs();
@@ -66,8 +68,9 @@ public final class LowerPanel {
         this.transcripts = transcripts;
         this.results = new ResultsView(results);
         this.transcript = new TranscriptWidget(context);
+        this.veil = new LockVeil(transcript.component());
         this.inbox = new ApprovalInbox(context);
-        tabs.addTab("Session", Icons.get("session"), transcript.component());
+        tabs.addTab("Session", Icons.get("session"), veil.component());
         tabs.addTab("Approvals", Icons.get("check"), inbox.component());
         tabs.addTab("Terminal", Icons.get("terminal"), terminals.component());
         tabs.addTab("Results", Icons.get("table"), this.results.component());
@@ -153,6 +156,11 @@ public final class LowerPanel {
         }
     }
 
+    /** Whether the Session tab is greyed: its session runs its checkpoint; for tests. */
+    boolean sessionVeiled() {
+        return veil.shown();
+    }
+
     /** The session whose transcript the Session tab shows. */
     public String transcriptSession() {
         return transcriptSession;
@@ -167,6 +175,8 @@ public final class LowerPanel {
             String shown = focused.session();
             transcript.setWaiting(s.approvals().stream().filter(a -> a.session().equals(shown)).toList());
             transcript.setBackgroundTasks(s.session(shown).map(SessionState::tasks).orElse(List.of()));
+            // read-only already; greyed with the session's other views, its approval cards still answerable
+            veil.show(s.session(shown).map(SessionState::isCheckpointing).orElse(false));
             inbox.render(s.approvals());
             int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, pending == 0 ? "Approvals" : "Approvals (" + pending + ")");

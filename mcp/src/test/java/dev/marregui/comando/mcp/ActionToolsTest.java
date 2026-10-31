@@ -238,6 +238,25 @@ class ActionToolsTest {
         return new Approval(id, session, ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 0L);
     }
 
+    /// An action on a session whose checkpoint runs is refused with an answer naming record 130, where the reducer would
+    /// drop it without a word; an interrupt and a stop still go through, and other sessions are unaffected.
+    @Test
+    void anActionOnASessionWhoseCheckpointRunsIsRefusedAsLockedRecord130() throws Exception {
+        final SessionState reflecting = session("users", "").withStatus(Status.OPEN, "").withTurns(1, 0).withCheckpointTurns(1);
+        state.set(state.get().withSession(reflecting));
+        for (final String tool : List.of("session_checkpoint", "session_model", "session_effort")) {
+            final McpTools.Outcome out = call("foreman", tool, "{\"session\":\"users\"}");
+            assertThat(out.error()).as(tool).isTrue();
+            assertThat(out.text()).as(tool).contains("record 130");
+        }
+        assertThat(call("foreman", "session_command", "{\"session\":\"users\",\"command\":\"/compact\"}").text()).contains("record 130");
+        assertThat(sink.of(Intent.Checkpoint.class)).isEmpty();
+        assertThat(sink.of(Intent.SessionCommand.class)).isEmpty();
+        assertThat(call("foreman", "session_interrupt", "{\"session\":\"users\"}").error()).as("interrupt goes through").isFalse();
+        assertThat(call("foreman", "session_stop", "{\"session\":\"users\"}").error()).as("stop goes through").isFalse();
+        assertThat(call("foreman", "session_checkpoint", "{\"session\":\"mine\"}").error()).as("another session").isFalse();
+    }
+
     private static SessionState session(String name, String createdBy) {
         return SessionState.closed(SessionSpec.fresh(name, "/tmp").withCreatedBy(createdBy)).withStatus(Status.CLOSED, "");
     }

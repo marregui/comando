@@ -114,7 +114,7 @@ The bar under the lower tabs belongs to the focused panel's session. Next to its
 | Button | Does |
 |---|---|
 | **new conversation** | starts a stopped session on a new conversation; shown once it has one, greyed out while the session runs |
-| **checkpoint** | sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). Once that turn has finished, the conversation is cleared, the **Session** tab shows only its summary, and the summary goes in front of your next prompt |
+| **checkpoint** | sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). Once that turn has finished, it sends `/compact`: the same conversation goes on, smaller, and the **Session** tab keeps it. comando does the same by itself when a turn ends with the context at 400k tokens or more, once each time it crosses; **Checkpoint threshold…** in the palette changes the figure, 0 turns it off. Until the checkpoint and its compaction have ended, the session's panel reads only and greys with its tab and the **Session** tab; **Stop** (⌘.) interrupts it and you carry on in the same conversation, nothing compacted |
 
 The context and the checkpoint turn purple together when a checkpoint is due. Click the model or the effort to change
 it, even mid-session. To compact the conversation, use **Compact the conversation** in the palette or type

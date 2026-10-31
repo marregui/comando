@@ -151,7 +151,7 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 | `UiKeysTest` | keys typed into a real window, with macOS's keys and with the other desktops' | `./gradlew :app:uiTest` |
 | `TreeClicksUiTest` | a tree's clicks, and the Files tab of a window started on a temporary kit root | `./gradlew :app:uiTest` |
 | `DarkPageTintUiTest`, `LinksUiTest` | a rendered Markdown page in a window: its tint, a memory file's front matter and links | `./gradlew :app:uiTest` |
-| `CheckpointClearUiTest` | the Checkpoint button against a stand-in for `claude -p`: the conversation cleared, the summary carried | `./gradlew :app:uiTest` |
+| `CheckpointCompactUiTest` | the Checkpoint button against a stand-in for `claude -p`: the checkpoint, then `/compact`, the conversation kept | `./gradlew :app:uiTest` |
 | `SessionCardUiTest` | the card a session's row and a connection's row show | `./gradlew :app:uiTest` |
 | `FocusBackUiTest` | closing gives the keyboard back to where the user came from: chained openings, the sidebar, the Session tab | `./gradlew :app:uiTest` |
 | `LocateUiTest` | a panel's Locate: the file selected in the Files tab, its folders opened; the session selected in the Sessions tab | `./gradlew :app:uiTest` |

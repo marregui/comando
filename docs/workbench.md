@@ -22,7 +22,7 @@ their own, Configure ~/.claude folders, which keeps them in `folders.json` ([§5
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary a checkpoint carries into the next prompt | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | none |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -107,7 +107,10 @@ Any number of document panels may be attached to a session
   ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)). The context and the checkpoint
   turn purple together once a turn ended with the context at 60% of the window or more and the command was not sent
   since; after a checkpoint the context has to drop below 60% and cross it again before the next one is due. What a
-  checkpoint does once its turn has finished is in [§1.4](#14-the-checkpoint). Compact has no button: the palette's
+  checkpoint does once its turn has finished, and when comando runs it by itself, is in [§1.4](#14-the-checkpoint).
+  While it runs every control of the bar but the plug is off, and the activity, purple, reads "checkpoint · compacting
+  · 12 s · Stop to carry on" ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)).
+  Compact has no button: the palette's
   "Compact the conversation", the session's menu and `/compact` do it. A panel without a session shows only the chip,
   "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
@@ -299,16 +302,39 @@ password), Edit…, Clone…, Remove….
 
 ### 1.4 The checkpoint
 
-The checkpoint button (the panel's header or the session's menu) sends the session's checkpoint command. Once that turn
-has finished (nothing runs or is queued, no background work it started is still out), comando keeps the turn's last
-answer as the session's carried summary, sends `/clear`, and empties the Session tab to that summary; the panel's text
-stays. The tab cards drop their summary and read it again at the next show. The summary goes in front of the next
-prompt that is not a slash command, and is kept in `sessions.json` until then
-([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)).
+The checkpoint button (the session bar, or the session's menu) sends the session's checkpoint command. Once that turn
+has finished (nothing runs or is queued, no background work it started is still out), comando sends `/compact` from the
+session's panel, as the palette's "Compact the conversation" does: the same conversation goes on, the Session tab keeps
+it and shows the compaction, and the panel's text stays
+([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)).
 
-The conversation is kept instead when a prompt is sent before the turn ends, the turn fails or is interrupted, the
-process ends, the answer is blank (a warning says so), or a summary from the last checkpoint still waits. A checkpoint
-typed by hand, or sent by another session, is a prompt like any other and clears nothing.
+comando runs the same sequence by itself, the checkpoint command then `/compact`, when a turn ends with the context at
+or above the checkpoint threshold: `sessions.checkpointThresholdTokens` in comando's `settings.json`, 400,000 tokens by
+default, 0 for never, changed with the palette's "Checkpoint threshold…". It runs once per crossing: any checkpoint
+command sent disarms it, and a turn that ends below the threshold arms it again. It waits while a prompt is queued (the
+check repeats at that prompt's end) or background work is out, and does not run after a failed or interrupted turn or
+for a session without a checkpoint command. A session launched while the threshold is above 0 gets
+`CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that would checkpoint at that size on its own leaves it
+to comando; a session keeps what it was launched with.
+
+The conversation is not compacted when a prompt is sent before the checkpoint's turn ends, the turn fails or is
+interrupted, the process ends, or the answer is blank (a warning says so). A summary an earlier checkpoint carried
+(record 86) still goes in front of the next prompt that is not a slash command; while it waits, a checkpoint runs its
+command alone. A checkpoint typed by hand, or sent by another session, is a prompt like any other and compacts
+nothing.
+
+While a checkpoint runs, by any route, typed included, the session is locked until its turn has ended and, when
+`/compact` follows, until the compaction's turn has ended
+([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). Its panels read only and grey under one veil with
+its Session tab, their tabs' titles grey; Run and Clear are off; on the session bar only the plug stays on; the
+session's menu keeps Open, Stop, Interrupt, Copy details and Clone; the palette's Compact, model and effort commands
+wait. Stop in the panel's header (⌘.) interrupts the checkpoint: the lock lifts and nothing is compacted. A failed turn,
+a blank answer or a process that ends lifts it the same way. A prompt another session or an agent sends queues, as it
+does while the session works, and runs once the checkpoint's turn has ended, unlocked; anything else that acts on the
+session (a prompt from its panel, Fresh, Checkpoint, Compact, its settings, Remove) is refused without a notice. The
+Session tab is greyed, not blocked: an approval the checkpoint asks for can still be answered. While the checkpoint's
+turn has handed work to the background and no turn runs, the session is not locked. The lock is the session's live
+state, never stored: comando started again shows none. Other sessions and their panels are not touched.
 [Claude §1.3](claude.md#13-turns-interrupt-stop) gives the stream-level sequence.
 
 ## 2. Running text
@@ -671,7 +697,7 @@ backing up.
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
 | `metrics/` | a file a day of the sessions' turns, sub-agents and plan usage, for the kit's calibration ([record 110](adr/0110-metrics-for-calibration.md)) |
-| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)) |
+| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)), the checkpoint threshold ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |

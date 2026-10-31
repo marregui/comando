@@ -69,11 +69,6 @@ final class StreamMapper {
      * notification. Written on the strand, read by the sub-agent thread.
      */
     private final Set<String> endedAgents = ConcurrentHashMap.newKeySet();
-    /**
-     * A {@code /clear} comando sent for a checkpoint runs: the transcript already shows what the checkpoint carried, so
-     * the clear's note and its turn's end are not shown. Cleared by the clear's {@code result}.
-     */
-    private boolean quietClear;
     /** How long a message's model and effort wait between reads of the transcript, and how long in all. */
     static final long RAN_RETRY_MILLIS = 100;
     static final long RAN_GIVE_UP_MILLIS = 2_000;
@@ -123,9 +118,7 @@ final class StreamMapper {
                 // /clear: a system/init with the new conversation's id follows; the old context no longer applies, and
                 // the clear's turn makes no model call to report the new one
                 contextTokens = 0L;
-                if (!quietClear) {
-                    note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asString("clear") + "); a new one starts");
-                }
+                note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asString("clear") + "); a new one starts");
             }
             default -> LOG.log(System.Logger.Level.DEBUG, "event ignored [session=" + session + ", type=" + type + ']');
         }
@@ -217,7 +210,10 @@ final class StreamMapper {
         transcript.append(new Block.Note(kind, text, ""));
     }
 
-    /** The message id of the summary a checkpoint carried into the next prompt, shown as the transcript's answer. */
+    /**
+     * The message id of the summary a checkpoint carried into the next prompt (record 86), shown as the transcript's
+     * answer; a session saved before record 129 may still carry one.
+     */
     static final String CARRIED_ID = "carried";
 
     /**
@@ -244,11 +240,6 @@ final class StreamMapper {
     /** Where the base effort of the model a {@code system/init} names is read from. */
     void effortFrom(Function<String, String> effort) {
         effortOf = effort;
-    }
-
-    /** The {@code /clear} about to be sent is a checkpoint's: its note and its turn's end are not shown. */
-    void clearQuietly() {
-        quietClear = true;
     }
 
     /** The result a tool call gets when its process ended, or its stored conversation stopped, before it returned. */
@@ -682,12 +673,8 @@ final class StreamMapper {
         String message = error ? errorText(e) : "";
         // result.usage sums every API call of the turn; the context is the last call's input
         long tokens = contextTokens;
-        boolean quiet = quietClear && !error;
-        quietClear = false;
-        if (!quiet) {
-            transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(0), e.path("duration_ms").asLong(0),
-                    e.path("num_turns").asInt(0), error, message.isEmpty() ? subtype : message));
-        }
+        transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(0), e.path("duration_ms").asLong(0),
+                e.path("num_turns").asInt(0), error, message.isEmpty() ? subtype : message));
         long window = 0;
         for (JsonNode model : e.path("modelUsage")) {
             window = Math.max(window, model.path("contextWindow").asLong(0));

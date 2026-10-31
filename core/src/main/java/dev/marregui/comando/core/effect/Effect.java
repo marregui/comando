@@ -76,13 +76,6 @@ public sealed interface Effect {
         }
     }
 
-    /**
-     * Clears the session's conversation ({@code /clear}) and its Session tab, which then shows {@code carried}, the
-     * summary that goes in front of the next prompt.
-     */
-    record ClearConversation(String name, String carried) implements Effect {
-    }
-
     record InterruptClaude(String name) implements Effect {
     }
 

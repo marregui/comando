@@ -6,6 +6,7 @@ import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.state.AppState;
@@ -24,8 +25,8 @@ import static dev.marregui.comando.core.reduce.Shared.notice;
 import static dev.marregui.comando.core.reduce.Shared.sessionSpecs;
 
 /**
- * A session's turns: prompts, commands and the checkpoint, interrupts, a turn's progress and end, and clearing the
- * transcript.
+ * A session's turns: prompts, commands and the checkpoint (the button's, and the automatic one at the threshold),
+ * interrupts, a turn's progress and end, and clearing the transcript.
  */
 final class TurnRules {
 
@@ -64,11 +65,15 @@ final class TurnRules {
         long now = clock.millis();
         session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
         if (checkpoint) {
-            // typed, sent by the button or by another session alike: the session is no longer due
-            session = session.withReflection(Reflection.checkpointed(session.contextTokens(), session.contextWindow()));
+            // typed, sent by the button or by another session alike: the session is no longer due, and the automatic
+            // checkpoint waits for the context to drop below its threshold again; the session is locked until the
+            // command's turn, and every turn queued before it, has ended (record 130)
+            session = session.withReflection(Reflection.checkpointed(session.contextTokens(), session.contextWindow()))
+                    .withCheckpointArmed(false)
+                    .withCheckpointTurns(session.pendingTurns());
         } else {
-            // a prompt after the button's checkpoint: the user goes on in this conversation, which is not cleared
-            session = session.withCheckpointClears(false);
+            // a prompt after the checkpoint: the user goes on in this conversation, which is not compacted
+            session = session.withCheckpointCompacts(false);
         }
         if (carries) {
             session = session.withSpec(session.spec().withCarried(""));
@@ -86,10 +91,10 @@ final class TurnRules {
     }
 
     /**
-     * The Checkpoint button: the checkpoint command runs from the session's panel and, once its turn has finished, the
-     * conversation is cleared and the turn's summary carried into the next prompt (see {@link #turnEnded}). A summary
-     * still carried means the conversation has had no prompt since its clear: there is nothing new to clear, and the
-     * command runs alone.
+     * The Checkpoint button, and the automatic checkpoint at the threshold: the checkpoint command runs from the
+     * session's panel and, once its turn has finished, the conversation is compacted (see {@link #turnEnded}). A summary
+     * still carried, from a checkpoint that cleared the conversation (record 86), means the conversation has had no
+     * prompt since its clear: there is nothing new to compact, and the command runs alone.
      */
     static Transition checkpoint(Clock clock, AppState s, String name) {
         Optional<SessionState> found = s.session(name);
@@ -102,8 +107,37 @@ final class TurnRules {
             return t;
         }
         return t.state().session(name)
-                .map(x -> new Transition(t.state().withSession(x.withCheckpointClears(true)), t.effects()))
+                .map(x -> new Transition(t.state().withSession(x.withCheckpointCompacts(true)), t.effects()))
                 .orElse(t);
+    }
+
+    /**
+     * Whether {@code i} acts on a session whose checkpoint runs (record 130): a run from one of its panels, the
+     * checkpoint or another command, a fresh start, its settings, model or effort, removing it or its own panel,
+     * clearing its Session tab. Refused without a notice: the window offers none of them meanwhile. An interrupt, a
+     * stop and a prompt another session sends ({@link Intent.PromptSession}, which queues) go through.
+     */
+    static boolean refused(final AppState s, final Intent i) {
+        return switch (i) {
+            case Intent.RunText r -> s.panel(r.panel() != null && s.panel(r.panel()).isPresent() ? r.panel()
+                    : s.focused()).map(p -> locked(s, p.session())).orElse(false);
+            case Intent.Checkpoint c -> locked(s, c.name());
+            case Intent.SessionCommand c -> locked(s, c.name());
+            case Intent.StartFresh f -> locked(s, f.name());
+            case Intent.SaveSession v -> locked(s, v.previousName());
+            case Intent.SetSessionModel m -> locked(s, m.name());
+            case Intent.SetSessionEffort e -> locked(s, e.name());
+            case Intent.RemoveSession r -> locked(s, r.name());
+            // a session's own panel goes with the session (record 88); a document attached to it goes alone
+            case Intent.RemovePanel r -> s.panel(r.panel()).or(() -> s.closedPanel(r.panel()))
+                    .filter(p -> !p.document()).map(p -> locked(s, p.session())).orElse(false);
+            case Intent.ClearTranscript c -> locked(s, c.name());
+            default -> false;
+        };
+    }
+
+    private static boolean locked(final AppState s, final String name) {
+        return !name.isEmpty() && s.session(name).map(SessionState::isCheckpointing).orElse(false);
     }
 
     /**
@@ -149,7 +183,11 @@ final class TurnRules {
                 .orElse(Transition.of(s));
     }
 
-    static Transition turnEnded(Clock clock, AppState s, Intent.SessionTurnEnded i) {
+    /**
+     * A turn ended. The checkpoint's turn, once finished, sends {@code /compact}; a turn that leaves the context at or
+     * above {@code threshold} (0 or below: never) runs the checkpoint, once per crossing (record 129).
+     */
+    static Transition turnEnded(Clock clock, AppState s, Intent.SessionTurnEnded i, long threshold) {
         Optional<SessionState> found = s.session(i.name());
         if (found.isEmpty()) {
             return Transition.of(s);
@@ -177,30 +215,55 @@ final class TurnRules {
         // the user's own interrupt is an outcome, not a failure
         boolean interrupted = i.error() && INTERRUPTED.equals(i.message());
         x = x.withLastTurnError(i.error() && !interrupted ? i.message() : "");
-        // the button's checkpoint has finished once nothing runs, is queued or was handed to the background; a result
-        // that made no model call and carries no text finished nothing
-        boolean checkpointDone = x.checkpointClears() && !x.isBusy() && !x.isAwaitingHandOff() && (ran || !i.result().isBlank());
+        // the checkpoint has finished once nothing runs, is queued or was handed to the background; a result that made
+        // no model call and carries no text finished nothing
+        boolean checkpointDone = x.checkpointCompacts() && !x.isBusy() && !x.isAwaitingHandOff() && (ran || !i.result().isBlank());
+        boolean compacts = checkpointDone && !i.error() && !i.result().isBlank();
         if (checkpointDone) {
-            x = x.withCheckpointClears(false);
-            String summary = i.result().strip();
-            if (!i.error() && !summary.isEmpty()) {
-                x = x.withSpec(x.spec().withCarried(summary)).withTurns(x.pendingTurns() + 1, now).withActivity("clearing", now);
-                effects.add(new Effect.ClearConversation(i.name(), summary));
-            }
+            x = x.withCheckpointCompacts(false);
         }
+        // the turns that ended count down to the checkpoint's own, interrupted or failed alike; with nothing left to
+        // run, none is under way (record 130)
+        final int ended = Math.max(0, found.get().pendingTurns() - x.pendingTurns());
+        x = x.withCheckpointTurns(x.isBusy() ? Math.max(0, x.checkpointTurns() - ended) : 0);
+        // the context fell below the threshold (a compaction, a new conversation): the next crossing checkpoints again
+        boolean above = threshold > 0 && x.contextTokens() >= threshold;
+        if (threshold > 0 && !above) {
+            x = x.withCheckpointArmed(true);
+        }
+        // at the threshold, the session's own turn finished: nothing queued, no background work out, no checkpoint
+        // under way, and a checkpoint command to run
+        boolean automatic = above && x.checkpointArmed() && !checkpointDone && !x.checkpointCompacts() && !i.error() && !x.isBusy()
+                && !x.isAwaitingHandOff() && x.status().isUsable() && !x.spec().checkpoint().isBlank();
         next = next.withSession(x);
-        if (checkpointDone && !x.spec().carried().isEmpty()) {
-            effects.add(new Effect.SaveSessions(sessionSpecs(next)));
-        }
         if (interrupted) {
             next = notice(clock, next, Notice.Level.INFO, i.name() + ": interrupted", Notice.session(i.name()));
         } else if (i.error()) {
             next = notice(clock, next, Notice.Level.ERROR, i.name() + ": " + i.message(), Notice.session(i.name()));
-        } else if (checkpointDone && x.spec().carried().isEmpty()) {
+        } else if (checkpointDone && !compacts) {
             next = notice(clock, next, Notice.Level.WARN, i.name() + ": the checkpoint ended without a summary; the conversation is kept",
                     Notice.session(i.name()));
         } else {
             next = clear(next, Notice.session(i.name()));
+        }
+        // the compaction, or the automatic checkpoint, runs from the session's panel as the Compact and Checkpoint
+        // buttons do: the Session tab shows it
+        Transition follow = compacts ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
+                : automatic ? checkpoint(clock, next, i.name()) : null;
+        if (follow != null) {
+            next = follow.state();
+            effects.addAll(follow.effects());
+            x = next.session(i.name()).orElse(x);
+            if (automatic) {
+                // sent or refused (no panel to send it from), this crossing has had its checkpoint
+                x = x.withCheckpointArmed(false);
+                next = next.withSession(x);
+            }
+            if (compacts) {
+                // the compaction is the checkpoint's last turn: the session stays locked until it ends
+                x = x.withCheckpointTurns(x.pendingTurns());
+                next = next.withSession(x);
+            }
         }
         if (!x.isBusy()) {
             // a turn that hands work to the background has not finished it: the turn Claude Code starts when the work

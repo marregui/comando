@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
@@ -24,8 +25,8 @@ import java.util.TreeSet;
  * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root,
  * record 106): its bounds and whether it was maximised, the dividers (the lower one per panel), the sidebar's state
  * and tab, the side pane, the theme (its ground and tint), Linear's site, the folder of the last export, the last
- * Gradle tasks and the outline's choice. The one place each key is named; a method that changes a setting writes the
- * file.
+ * Gradle tasks, the outline's choice and the checkpoint threshold. The one place each key is named; a method that
+ * changes a setting writes the file.
  */
 final class WindowLayout {
 
@@ -41,6 +42,8 @@ final class WindowLayout {
     static final String OFF_SCREEN_PROPERTY = "comando.offScreen";
     /** A panel's lower divider is kept under this prefix and the panel's id. */
     static final String PANEL_DIVIDER = "divider.lower.panel.";
+    /** The checkpoint threshold, in tokens (record 129). */
+    static final String CHECKPOINT_THRESHOLD = "sessions.checkpointThresholdTokens";
 
     private final Settings prefs;
     private final boolean offScreen;
@@ -162,6 +165,19 @@ final class WindowLayout {
 
     void gradleTasks(String tasks) {
         prefs.put("tools.gradle", tasks);
+        prefs.flush();
+    }
+
+    /**
+     * The context, in tokens, at which a session's turn end runs its checkpoint, then {@code /compact} (record 129);
+     * 0 runs none.
+     */
+    long checkpointThreshold() {
+        return Math.max(0, prefs.getInt(CHECKPOINT_THRESHOLD, (int) Reducer.CHECKPOINT_THRESHOLD_TOKENS));
+    }
+
+    void checkpointThreshold(long tokens) {
+        prefs.putInt(CHECKPOINT_THRESHOLD, Math.clamp(tokens, 0, Integer.MAX_VALUE));
         prefs.flush();
     }
 

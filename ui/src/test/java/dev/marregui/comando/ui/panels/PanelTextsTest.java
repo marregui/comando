@@ -76,17 +76,16 @@ class PanelTextsTest {
     }
 
     /// The checkpoint icon is `checkpoint-due` only past 60% context; its tooltip names what a checkpoint sends and
-    /// says when a carried summary still waits for the next prompt.
+    /// says when a summary an earlier checkpoint carried still waits for the next prompt.
     @Test
     void theCheckpointButtonIsPurpleOnlyWhenDue() {
         SessionState x = SessionState.closed(States.WORK);
         assertThat(SessionBar.checkpointIcon(x)).isEqualTo("checkpoint");
         assertThat(SessionBar.checkpointTip(x))
-                .isEqualTo("Checkpoint: sends /reflect, then clears the conversation and carries its summary into the next prompt");
+                .isEqualTo("Checkpoint: sends /reflect, then compacts the conversation");
         SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L));
         assertThat(SessionBar.checkpointIcon(due)).isEqualTo("checkpoint-due");
-        assertThat(SessionBar.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect, then clears the conversation"
-                + " and carries its summary into the next prompt");
+        assertThat(SessionBar.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect, then compacts the conversation");
         assertThat(SessionBar.checkpointTip(x.withSpec(x.spec().withCarried("the summary"))))
                 .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
     }

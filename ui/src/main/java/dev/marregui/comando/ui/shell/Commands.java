@@ -165,17 +165,22 @@ final class Commands {
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
         // the Session tab emptied, the conversation going on: from the palette only, once a turn has ended (record 104)
         cmd("transcript.clear", "Clear the Session tab", null, lower::clearTranscript, lower::canClearTranscript);
-        // as the session's menu in the sidebar: only a running session has a conversation to compact
+        // as the session's menu in the sidebar: only a running session has a conversation to compact, and not while its
+        // checkpoint runs (record 130)
         cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
                         deps.intents().dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))),
-                () -> focusedSession().filter(x -> x.status().isUsable()).isPresent());
+                () -> focusedSession().filter(x -> x.status().isUsable() && !x.isCheckpointing()).isPresent());
+        // every session's: the context at which a turn's end runs the checkpoint, then /compact (record 129)
+        cmd("session.checkpointThreshold", "Checkpoint threshold…", null, this::checkpointThreshold);
         for (String m : SessionSpec.MODELS) {
             cmd("session.model." + m, m, null, () -> focusedSession().ifPresent(x ->
-                    deps.intents().dispatch(new Intent.SetSessionModel(x.name(), m))), () -> focusedSession().isPresent());
+                    deps.intents().dispatch(new Intent.SetSessionModel(x.name(), m))),
+                    () -> focusedSession().filter(x -> !x.isCheckpointing()).isPresent());
         }
         for (String e : SessionSpec.EFFORTS) {
             cmd("session.effort." + e, e, null, () -> focusedSession().ifPresent(x ->
-                    deps.intents().dispatch(new Intent.SetSessionEffort(x.name(), e))), () -> focusedSession().isPresent());
+                    deps.intents().dispatch(new Intent.SetSessionEffort(x.name(), e))),
+                    () -> focusedSession().filter(x -> !x.isCheckpointing()).isPresent());
         }
         cmd("panel.bindSession", "Open a session…", null, () -> choose("Session to open",
                 deps.state().get().sessions().stream().map(x -> x.name()).toList(),
@@ -385,6 +390,32 @@ final class Commands {
         }
     }
 
+    /**
+     * Asks for the context, in tokens, at which a session's turn end runs its checkpoint, then {@code /compact}; 0 runs
+     * none (record 129). Kept across restarts; a session started from then on is told who checkpoints it.
+     */
+    private void checkpointThreshold() {
+        String answer = (String) JOptionPane.showInputDialog(parts.frame(),
+                Plain.text("Context, in tokens, at which a turn's end runs the session's checkpoint, then /compact; 0 for never:"),
+                "Checkpoint threshold", JOptionPane.PLAIN_MESSAGE, null, null, Long.toString(windowLayout.checkpointThreshold()));
+        if (answer == null || answer.isBlank()) {
+            return;
+        }
+        long tokens;
+        try {
+            tokens = Long.parseLong(answer.strip().replace("_", "").replace(",", ""));
+        } catch (NumberFormatException e) {
+            tokens = -1L;
+        }
+        if (tokens < 0 || tokens > Integer.MAX_VALUE) {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Checkpoint threshold kept: " + answer.strip() + " is not a number of tokens", false));
+            return;
+        }
+        ui.checkpointThresholdChosen(tokens);
+        deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, tokens == 0 ? "No automatic checkpoint"
+                : "Checkpoint, then /compact, at " + String.format("%,d", tokens) + " tokens of context", false));
+    }
+
     /** Types the editor's selection, or the line under the caret, into the panel's shell and runs it. */
     private void runInTerminal() {
         EditorPanel p = parts.workspace().focused();
@@ -448,7 +479,8 @@ final class Commands {
         AppState s = deps.state().get();
         SqlRun run = s.runOf(s.focused()).orElse(null);
         EditorPanel p = parts.workspace().focused();
-        if (p == null) {
+        // its session runs its checkpoint: the panel takes no text from the user meanwhile (record 130)
+        if (p == null || p.locked()) {
             return;
         }
         if (!p.editable()) {

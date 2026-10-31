@@ -11,11 +11,13 @@ import dev.marregui.comando.core.view.ViewSpec;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongSupplier;
 
 /**
  * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which only stamps
- * notices and activity, and the home folder, where a file link or a Gradle run without a session starts: the same
- * state, intent, time and home always give the same transition.
+ * notices and activity, the home folder, where a file link or a Gradle run without a session starts, and the checkpoint
+ * threshold, a setting of the window: the same state, intent, time, home and threshold always give the same
+ * transition.
  *
  * <p>Request identity drops stale results: every SQL run gets an id from the state's counter, a panel holds one run,
  * and an event for an id that is no longer a panel's run is dropped.</p>
@@ -25,10 +27,24 @@ import java.util.List;
  */
 public final class Reducer {
 
-    private final Clock clock;
+    /**
+     * The context, in tokens, at or above which a turn's end runs the session's checkpoint, then {@code /compact}
+     * (record 129), unless the setting says otherwise.
+     */
+    public static final long CHECKPOINT_THRESHOLD_TOKENS = 400_000L;
 
+    private final Clock clock;
+    /** The checkpoint threshold in force, read at each turn's end; 0 or below runs no automatic checkpoint. */
+    private final LongSupplier checkpointThreshold;
+
+    /** A reducer that runs no automatic checkpoint: tests and tools. */
     public Reducer(Clock clock) {
+        this(clock, () -> 0L);
+    }
+
+    public Reducer(Clock clock, LongSupplier checkpointThreshold) {
         this.clock = clock;
+        this.checkpointThreshold = checkpointThreshold;
     }
 
     public Transition apply(AppState s, Intent intent) {
@@ -74,7 +90,20 @@ public final class Reducer {
         return new Transition(t.state(), effects);
     }
 
+    /**
+     * Whether {@code intent} acts on a session whose checkpoint runs and is therefore refused (record 130): the
+     * reducer drops it silently, so a caller that is not the window, an agent's action tool, asks first and answers
+     * "locked".
+     */
+    public static boolean refusedWhileCheckpointing(final AppState s, final Intent intent) {
+        return TurnRules.refused(s, intent);
+    }
+
     private Transition reduce(AppState s, Intent intent) {
+        // a session whose checkpoint runs takes only an interrupt or a stop from the window (record 130)
+        if (TurnRules.refused(s, intent)) {
+            return Transition.of(s);
+        }
         return switch (intent) {
             case Intent.AddPanel i -> PanelRules.addPanel(s, i);
             case Intent.ClosePanel i -> PanelRules.closePanel(clock, s, i.panel());
@@ -137,7 +166,7 @@ public final class Reducer {
             case Intent.SessionActivity i -> TurnRules.sessionActivity(clock, s, i);
             case Intent.SessionTasksChanged i -> TurnRules.sessionTasksChanged(clock, s, i);
             case Intent.SessionTurnRunning i -> TurnRules.sessionTurnRunning(clock, s, i);
-            case Intent.SessionTurnEnded i -> TurnRules.turnEnded(clock, s, i);
+            case Intent.SessionTurnEnded i -> TurnRules.turnEnded(clock, s, i, checkpointThreshold.getAsLong());
 
             case Intent.ApprovalRequested i -> ApprovalRules.approvalRequested(clock, s, i.approval());
             case Intent.ApprovalAnswered i -> ApprovalRules.approvalAnswered(s, i);

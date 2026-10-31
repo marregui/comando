@@ -298,8 +298,10 @@ final class SessionRules {
                 .withTurns(0, now)
                 .withActivity("", now)
                 .withoutTasks()
-                // the checkpoint's turn ended with the process: its conversation is not cleared
-                .withCheckpointClears(false);
+                // the checkpoint's turn ended with the process: its conversation is not compacted, nor the session
+                // locked
+                .withCheckpointCompacts(false)
+                .withCheckpointTurns(0);
         List<Effect> effects = new ArrayList<>();
         AppState next = ApprovalRules.withdrawApprovals(s.withSession(x), i.name(), "session ended", effects);
         if (!expected) {

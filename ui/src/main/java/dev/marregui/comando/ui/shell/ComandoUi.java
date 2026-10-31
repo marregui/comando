@@ -98,6 +98,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
 
@@ -147,6 +148,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private volatile TopicPort topics = TopicPort.NONE;
     /** The other comando instances, for the sidebar's Instances tab. */
     private volatile InstancesPort instances = InstancesPort.NONE;
+    /** Where the checkpoint threshold goes (record 129); nowhere until {@link #checkpointThreshold} sets it. */
+    private volatile LongConsumer checkpointThreshold = tokens -> {
+    };
     private final HelpActions help;
     private final KitActions kit;
     /** The kit's scheduled jobs: the Files tab's Jobs row and the window that edits them. */
@@ -242,6 +246,15 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** What the Instances tab acts through (record 124); set before {@link #start}, as the build reads it. */
     public void instances(InstancesPort port) {
         instances = port == null ? InstancesPort.NONE : port;
+    }
+
+    /**
+     * Hands {@code sink} the checkpoint threshold kept in the settings, now and each time the palette changes it
+     * (record 129); set before {@link #start}.
+     */
+    public void checkpointThreshold(LongConsumer sink) {
+        checkpointThreshold = sink;
+        sink.accept(windowLayout.checkpointThreshold());
     }
 
     private void build() {
@@ -728,6 +741,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         windowLayout.theme(theme);
         // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
         LayoutKeeper.fadeTo(theme, this::render);
+    }
+
+    /** A checkpoint threshold was chosen in the palette: kept in the settings and handed on (record 129). */
+    void checkpointThresholdChosen(long tokens) {
+        windowLayout.checkpointThreshold(tokens);
+        checkpointThreshold.accept(windowLayout.checkpointThreshold());
     }
 
     /** The Files tab's folders in their window; saving replaces them. */

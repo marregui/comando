@@ -7,6 +7,7 @@ import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.testkit.RecordingSink;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -122,30 +124,54 @@ class ClaudeAdapterTest {
         assertThat(registered).containsExactly("+work", "-work");
     }
 
-    /// Clearing a live session keeps only the checkpoint note, carried summary, and prior turn boundary before the
-    /// next prompt; the preface is transport context rather than a displayed user prompt.
+    /// A session launched while the checkpoint threshold is above 0 gets `CONTEXT_CHECKPOINT_BY=comando`; one launched
+    /// at 0 has the variable taken out, whatever the environment comando started with holds.
     @Test
-    void aCheckpointsClearEmptiesTheTranscriptToItsSummaryAndThePrefaceIsNotShown() throws Exception {
+    void aSessionLaunchedWhileTheThresholdIsOnLeavesTheCheckpointToComando() throws Exception {
+        Path exe = tmp.resolve("env-claude.sh");
+        Files.writeString(exe, """
+                #!/bin/sh
+                # stands in for claude -p: writes who checkpoints it, then reads its input until it closes
+                printf '%s' "${CONTEXT_CHECKPOINT_BY-absent}" > "$PWD/checkpoint-by.txt"
+                cat > /dev/null
+                """);
+        exe.toFile().setExecutable(true);
+        AtomicLong threshold = new AtomicLong(400_000L);
+        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        adapter.checkpointThreshold(threshold::get);
+
+        Path on = Files.createDirectories(tmp.resolve("on"));
+        adapter.start(SessionSpec.fresh("on", on.toString()));
+        Awaitility.await("the session on").atMost(WAIT).until(() -> Files.exists(on.resolve("checkpoint-by.txt"))
+                && !Files.readString(on.resolve("checkpoint-by.txt")).isEmpty());
+        assertThat(Files.readString(on.resolve("checkpoint-by.txt"))).isEqualTo("comando");
+
+        threshold.set(0L);
+        Path off = Files.createDirectories(tmp.resolve("off"));
+        adapter.start(SessionSpec.fresh("off", off.toString()));
+        Awaitility.await("the session off").atMost(WAIT).until(() -> Files.exists(off.resolve("checkpoint-by.txt"))
+                && !Files.readString(off.resolve("checkpoint-by.txt")).isEmpty());
+        assertThat(Files.readString(off.resolve("checkpoint-by.txt"))).isEqualTo("absent");
+
+        adapter.stop("on");
+        adapter.stop("off");
+        sink.await(Intent.SessionExited.class, e -> sink.of(Intent.SessionExited.class).size() == 2, WAIT);
+    }
+
+    /// A preface, the summary an earlier checkpoint carried (record 86), goes to Claude in front of the prompt; the
+    /// prompt's block shows the prompt as typed.
+    @Test
+    void aPrefaceGoesWithThePromptAndIsNotShown() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
         a.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
         a.send("work", "ping", "panel one");
         sink.await(Intent.SessionTurnEnded.class, WAIT);
 
-        a.clearConversation("work", "the summary");
-        sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 2, WAIT);
-        List<Block> cleared = blocks("work");
-        assertThat(cleared.subList(0, 3)).as("only what the checkpoint carried, then what the stand-in answers").containsExactly(
-                new Block.Note(Block.NoteKind.INFO, "Conversation cleared after the checkpoint; its summary below goes in front of the next prompt", ""),
-                new Block.AssistantText(StreamMapper.CARRIED_ID, 0, "the summary", false, ""),
-                Block.TurnEnd.stored());
-        assertThat(cleared).as("no prompt block for the clear, nor its turn's end").noneMatch(Block.UserPrompt.class::isInstance)
-                .filteredOn(Block.TurnEnd.class::isInstance).hasSize(1);
-
         a.send("work", "go on", "panel one", "Context carried over: the summary\n\n---\n\n");
-        sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 3, WAIT);
+        sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 2, WAIT);
         assertThat(blocks("work")).filteredOn(Block.UserPrompt.class::isInstance)
-                .containsExactly(new Block.UserPrompt("go on", "panel one", ""));
+                .containsExactly(new Block.UserPrompt("ping", "panel one", ""), new Block.UserPrompt("go on", "panel one", ""));
         a.stop("work");
         sink.await(Intent.SessionExited.class, WAIT);
     }

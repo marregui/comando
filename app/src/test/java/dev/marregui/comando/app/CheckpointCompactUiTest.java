@@ -8,6 +8,8 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.awaitility.Awaitility;
@@ -32,43 +34,42 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// The Checkpoint button in the real window, against a stand-in for `claude -p`. Opens the window, so this runs in
 /// `./gradlew :app:uiTest`.
-/// - once the checkpoint's turn has finished, the conversation is cleared
-/// - the Session tab then shows only the summary, and the panel's text stays
-/// - the next prompt carries the summary with it without showing it again
+/// - once the checkpoint's turn has finished, `/compact` goes out and the conversation is compacted, not cleared
+/// - the Session tab keeps the conversation and shows the compaction; the panel's text stays
+/// - nothing is carried: the next prompt goes as typed
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
-class CheckpointClearUiTest {
+class CheckpointCompactUiTest {
 
     private static final String NOTES = "notes the panel keeps as they are";
     private static final String SUMMARY_JSON = "## Reflected\\nmemory written";
-    private static final String SUMMARY = "## Reflected\nmemory written";
 
     @TempDir
     Path home;
 
-    /// After the checkpoint's turn the session has no pending turn, a new conversation id (`fake-2`) and the summary
-    /// carried; the Session tab shows the summary but neither the old turns nor `/reflect` and `/clear`; the panel
-    /// keeps its text; the next prompt goes out with "Context carried over" and the summary in front, which the tab
-    /// never shows.
+    /// After the checkpoint's turn the session has no pending turn, the same conversation (`fake-1`) and nothing
+    /// carried; the stand-in received `hello`, `/reflect`, `/compact`; the Session tab still shows the first turn and
+    /// the summary, with the compaction's note; the panel keeps its text; the next prompt goes out as typed.
     @Test
-    void theCheckpointButtonClearsTheConversationAndTheSessionTabToItsSummaryWhichGoesWithTheNextPrompt() throws Exception {
+    void theCheckpointButtonCompactsTheConversationOnceItsTurnHasFinished() throws Exception {
         Path stdin = home.resolve("stdin.jsonl");
         Path claude = home.resolve("fake-claude.sh");
-        String init = "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"'$id'\",\"model\":\"fake\",\"cwd\":\"/tmp\","
+        String init = "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fake-1\",\"model\":\"fake\",\"cwd\":\"/tmp\","
                 + "\"claude_code_version\":\"0.0.1\",\"permissionMode\":\"default\",\"capabilities\":[]}";
         Files.writeString(claude, """
                 #!/bin/sh
-                # stands in for claude -p: /reflect answers with a summary, /clear starts a new conversation, the rest pong
-                id=fake-1
+                # stands in for claude -p: /reflect answers with a summary, /compact compacts as Claude Code reports it, the
+                # rest pong
                 n=0
                 while IFS= read -r line; do
                   printf '%%s\\n' "$line" >> '%s'
                   case "$line" in
                     *'"control_request"'*)
                       printf '%%s\\n' '{"type":"control_response","response":{"subtype":"success","request_id":"x"}}' ;;
-                    *'"content":"/clear"'*)
-                      id=fake-2
-                      printf '%%s\\n' '{"type":"conversation_reset","trigger":"clear"}'
+                    *'"content":"/compact"'*)
+                      printf '%%s\\n' '{"type":"system","subtype":"status","status":"compacting"}'
+                      printf '%%s\\n' '{"type":"system","subtype":"status","status":null,"compact_result":"success"}'
                       printf '%%s\\n' '%s'
+                      printf '%%s\\n' '{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":30,"post_tokens":5}}'
                       printf '%%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"","total_cost_usd":0,"duration_ms":1,"num_turns":0}'
                       ;;
                     *'"content":"/reflect"'*)
@@ -109,30 +110,40 @@ class CheckpointClearUiTest {
             // the gesture: a click on the session bar's Checkpoint button, the focused panel's session (record 105)
             EditorPanel view = editor();
             SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());
-            Awaitility.await("checkpointed, cleared, the summary carried").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            Awaitility.await("checkpointed, then compacted").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+                assertThat(Files.readAllLines(stdin)).filteredOn(l -> l.contains("\"type\":\"user\""))
+                        .extracting(l -> l.replaceAll(".*\"content\":\"([^\"]*)\".*", "$1")).containsExactly("hello", "/reflect", "/compact");
                 SessionState x = session(loop);
-                assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.spec().carried()))
-                        .as("sent: %s", Files.readAllLines(stdin)).containsExactly(0, "fake-2", SUMMARY);
+                assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.spec().carried(), x.checkpointCompacts()))
+                        .as("sent: %s", Files.readAllLines(stdin)).containsExactly(0, "fake-1", "", false);
             });
-            Awaitility.await("the Session tab holds only the summary").atMost(Duration.ofSeconds(10))
-                    .untilAsserted(() -> assertThat(transcript()).contains("memory written").doesNotContain("pong 1", "hello", "/reflect", "/clear"));
+            Awaitility.await("the compaction shown").atMost(Duration.ofSeconds(10)).until(() -> notes(app).contains("Compacted manual: 30 → 5 tokens"));
+            Awaitility.await("the Session tab keeps the conversation").atMost(Duration.ofSeconds(10))
+                    .untilAsserted(() -> assertThat(transcript()).contains("pong 1", "hello", "memory written"));
             assertThat(onEdt(() -> view.editor().text())).as("the panel's text is left alone").isEqualTo(NOTES);
-            assertThat(Files.readAllLines(stdin)).filteredOn(l -> l.contains("\"type\":\"user\""))
-                    .extracting(l -> l.replaceAll(".*\"content\":\"([^\"]*)\".*", "$1")).containsExactly("hello", "/reflect", "/clear");
 
             loop.dispatch(new Intent.RunText(panel, "go on", Target.CLAUDE));
             Awaitility.await("the next turn").atMost(Duration.ofSeconds(20))
-                    .until(() -> !session(loop).isBusy() && session(loop).spec().carried().isEmpty());
-            String sent = Files.readAllLines(stdin).getLast();
-            assertThat(sent).as("the summary goes in front of the prompt").contains("Context carried over", "memory written", "go on");
-            Awaitility.await("the prompt shown as typed").atMost(Duration.ofSeconds(10))
-                    .untilAsserted(() -> assertThat(transcript()).contains("go on").doesNotContain("Context carried over"));
+                    .until(() -> !session(loop).isBusy() && Files.readAllLines(stdin).getLast().contains("go on"));
+            assertThat(Files.readAllLines(stdin).getLast()).as("nothing carried in front of the prompt").doesNotContain("Context carried over");
 
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);
         } finally {
             app.close();
         }
+    }
+
+    /** The texts of the session's notes, from its transcript. */
+    private static List<String> notes(App app) {
+        Transcript t = app.transcripts().of("work");
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < t.size(); i++) {
+            if (t.get(i) instanceof Block.Note n) {
+                out.add(n.text());
+            }
+        }
+        return out;
     }
 
     private static SessionState session(StateLoop loop) {

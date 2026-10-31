@@ -39,6 +39,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /**
  * The Claude port. Each session has a strand, a single-thread executor that is the only writer of the
@@ -92,6 +93,20 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     /** Keeps the metrics in {@code log}; called before the first session starts. */
     public void metrics(MetricsLog log) {
         metrics = log;
+    }
+
+    /**
+     * The context threshold at which comando runs a session's checkpoint (record 129), read at each launch; 0 or
+     * below, the default, runs none.
+     */
+    private volatile LongSupplier checkpointThreshold = () -> 0L;
+
+    /**
+     * Reads the checkpoint threshold from {@code tokens} at each launch: a session launched while it is above 0 gets
+     * {@code CONTEXT_CHECKPOINT_BY=comando}; called before the first session starts.
+     */
+    public void checkpointThreshold(LongSupplier tokens) {
+        checkpointThreshold = tokens;
     }
 
     /**
@@ -260,33 +275,6 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 return;
             }
             sendLine(s, preface + text);
-        });
-    }
-
-    /**
-     * On the session's strand, so no line of the stream lands between the clear and the mapper forgetting where its
-     * blocks were. The {@code /clear} goes after the transcript shows what the checkpoint carried; its own note and
-     * turn end are not shown.
-     */
-    @Override
-    public void clearConversation(String name, String carried) {
-        Session s = sessions.get(name);
-        if (s == null) {
-            return;
-        }
-        s.run(() -> {
-            s.transcript.clear();
-            s.mapper.forgetBlocks();
-            s.mapper.carried(carried);
-            if (s.current == null || !s.current.isAlive()) {
-                s.mapper.note(Block.NoteKind.ERROR, "Session is not running; the conversation was not cleared");
-                s.transcript.changed();
-                sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session not running"));
-                return;
-            }
-            s.transcript.changed();
-            s.mapper.clearQuietly();
-            sendLine(s, SessionSpec.CLEAR_COMMAND);
         });
     }
 
@@ -653,7 +641,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             return;
         }
         try {
-            RootLaunch launch = settings.launch().forSession(spec.name(), spec.workDir()).madeBy(spec.createdBy());
+            RootLaunch launch = settings.launch().forSession(spec.name(), spec.workDir()).madeBy(spec.createdBy())
+                    .checkpointBy(checkpointThreshold.getAsLong() > 0);
             var argv = launch.argv(ClaudeCommand.of(settings.executable(), spec, newId, run.mcpConfig, settings.uiInstructions()));
             s.workDir = workDir;
             s.mapper.resetStreams();

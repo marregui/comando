@@ -23,12 +23,6 @@ public interface ClaudePort {
     /** Drops the blocks of the session's transcript; the conversation, in Claude Code's files, is untouched. */
     void clearTranscript(String name);
 
-    /**
-     * Sends {@code /clear}, so a new conversation starts, and empties the transcript, which then shows {@code carried},
-     * the summary the next prompt takes with it; the clear's own notes are not shown.
-     */
-    void clearConversation(String name, String carried);
-
     /** Fills the session's transcript from its stored conversation, without starting a process. */
     void loadHistory(SessionSpec spec);
 

@@ -170,7 +170,7 @@ final class Menus {
         }
         put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle", "terminal.start", "terminal.stop", "terminal.restart");
         put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "transcript.clear", "panel.bindSession", "session.dialog",
-                "session.import");
+                "session.import", "session.checkpointThreshold");
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
         put(a, "Connection", "server.start", "server.stop", "edge.start", "edge.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");

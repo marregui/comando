@@ -160,12 +160,12 @@ class SessionBarTest {
             bar[0] = new SessionBar(intents::add);
             bar[0].render(AppState.initial(List.of(panel), List.of(), List.of(running)));
         });
-        assertThat(button(bar[0], "Clear the conversation")).as("the checkpoint clears").isNull();
+        assertThat(button(bar[0], "Clear the conversation")).as("no clear button: the checkpoint compacts").isNull();
         assertThat(button(bar[0], "Rewrite as a document")).as("in the session's menu in the sidebar").isNull();
         assertThat(button(bar[0], "Checkpoint").getParent()).as("in the context's group").isSameAs(label(bar[0], "Context").getParent());
         assertThat(label(bar[0], "Context").getText()).as("before a turn reports it").isEqualTo("ctx –");
         assertThat(label(bar[0], "Context").getToolTipText()).endsWith("the checkpoint beside it falls due at 60%");
-        assertThat(button(bar[0], "Checkpoint").getToolTipText()).contains("then clears the conversation and carries its summary");
+        assertThat(button(bar[0], "Checkpoint").getToolTipText()).contains("then compacts the conversation");
         SwingUtilities.invokeAndWait(() -> button(bar[0], "Checkpoint").doClick());
         assertThat(intents).containsExactly(new Intent.Checkpoint("work"));
     }

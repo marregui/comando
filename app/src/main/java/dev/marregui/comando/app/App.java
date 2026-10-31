@@ -58,6 +58,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: this instance's
@@ -129,7 +130,10 @@ public final class App implements AutoCloseable {
             DeferredEffects effects = new DeferredEffects();
             // the log is owned before the loop, so it closes after it and records the intents of the shutdown
             IntentLog log = config.recordIntents() ? own(new IntentLog(config.logDir(), initial)) : null;
-            loop = new StateLoop(initial, new Reducer(Clock.SYSTEM), effects);
+            // the checkpoint threshold (record 129): the window's setting, read by the reducer at each turn's end and by
+            // the adapter at each launch
+            AtomicLong checkpointThreshold = new AtomicLong(Reducer.CHECKPOINT_THRESHOLD_TOKENS);
+            loop = new StateLoop(initial, new Reducer(Clock.SYSTEM, checkpointThreshold::get), effects);
             owned.push(loop);
             store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
             store.onFoldersChanged(folders -> loop.dispatch(new Intent.FoldersRead(folders)));
@@ -165,6 +169,7 @@ public final class App implements AutoCloseable {
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
             claude.metrics(new MetricsLog(config.metricsDir()));
+            claude.checkpointThreshold(checkpointThreshold::get);
             ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
@@ -179,6 +184,7 @@ public final class App implements AutoCloseable {
                     questDb, edge, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
             ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
+            ui.checkpointThreshold(checkpointThreshold::set);
             // the instances consult each other through the comando Edge while it runs, whichever instance started it
             // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
             if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {
