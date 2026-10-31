@@ -1,8 +1,8 @@
 # Architecture
 
 How comando is built: the modules, the one state and its reducer, the ports, the threads, who owns what, the UI's
-package rules, the code rules and the tests. For contributors and for readers of the module READMEs, which hold each
-module's classes in detail.
+package rules, the code rules and the tests. For contributors; the classes of each module, its port methods, its
+threads and its tests are in [Modules](modules.md).
 
 1. [What comando is](#1-what-comando-is)
 2. [Modules](#2-modules)
@@ -47,10 +47,8 @@ on the JDK alone, each adapter module wraps one outside system, only `app` sees 
 every module's tests share. `mcp` stays apart from `db` so that every route from Claude to the database passes
 `QueryPort` and, for a statement that is not read-only, the approval card.
 
-Each module has a README on its classes, its interface with the others, its threads and its tests:
-[`core`](../core/README.md), [`testkit`](../testkit/README.md), [`db`](../db/README.md),
-[`claude`](../claude/README.md), [`mcp`](../mcp/README.md), [`tools`](../tools/README.md), [`ui`](../ui/README.md),
-[`app`](../app/README.md).
+Each module has a section in [Modules](modules.md) on its classes, its interface with the others, its threads and its
+tests.
 
 ## 3. The flow of one command
 
@@ -113,7 +111,8 @@ One immutable record of metadata and ids. Lists hold tens of entries, so lookups
 | `closed` | comando's own panels the user closed, kept with their bindings until removed |
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
-| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint compacts when it ends, whether the automatic checkpoint is armed (record 129) |
+| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint compacts when it ends, whether the automatic checkpoint is armed (record 129), and `checkpointTurns`, the turns still to end up to the checkpoint command or its `/compact`: while non-zero the session is locked and every intent on it but an interrupt or a stop is dropped (record 130) |
+| `instances` | the other comando instances on the comando Edge and the questions between them (`InstancesState`, record 124) |
 | `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group whose row shows them ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
@@ -142,13 +141,15 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
 | Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead`, `RollBack`, `RemoveFiles`, `Unstage` (the git writes of the Changes view and the comparison window) |
 | Notices | `Notify`, `DismissNotice` |
+| Instances | `InstancesChanged` (the Instances tab's state, from `mcp`'s `Peers`, record 124) |
 
-A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
+A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel; `RunText` naming a panel closed since the
+text was sent (a console's origin) also runs on the focused one, where `EditPanel` sets an ERROR notice.
 
 ### 4.3 The reducer
 
 `Reducer.apply(state, intent)` returns a `Transition`: the next state and a list of effects. It is pure in its
-arguments, a `Clock` and the home folder, so tests drive it with a fake clock. Nothing a user or an adapter sends makes
+arguments, a `Clock`, the home folder and the checkpoint threshold (read at each turn's end), so tests drive it with a fake clock. Nothing a user or an adapter sends makes
 it throw: an intent naming a missing panel, connection or session changes nothing or sets a notice. `Reducer` holds
 the entry point and dispatches each intent to the rules of its domain, package-private classes beside it:
 `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules` (runs and connections), `ApprovalRules`, `FolderRules`,
@@ -232,6 +233,8 @@ transcript text.
 | `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange`, `rollBack`, `removeFiles`, `unstage` | `ToolsAdapter` |
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage` | `ComandoUi` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` |
+| `InstancesPort` | `ask`, `deny`, `forget`, `role` (the Instances tab's acts, off the caller's thread; record 124) | `Peers` |
+| `ServerSwitch` | `name`, `isRunning`, `want(up)`, `status` (a local server an agent starts or stops, record 121) | `EmbeddedEdge`, `EmbeddedQuestDb` |
 
 `testkit` holds what every module's tests share: `RecordingPorts` (every effect port, each call recorded as a line),
 `RecordingSink` (keeps intents, awaits one with a deadline), `FakeClock`, `States` (a two-panel state), `Fixtures`
@@ -287,7 +290,7 @@ can.
 | `watchdog` | K2 | every 100 ms: a probe to the EDT, a look at the reducer; an EDT held 200 ms is a stall, an intent still applying at 1 s a hang, each logged |
 | `claude-out-<session>` | K3 | stdout lines of the session's process; stderr goes to a file, read once at the exit |
 | `claude-strand-<session>` | K4 | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
-| `claude-timer` | K4, timed | the stop sequence's deadlines |
+| `claude-timer` | K4, timed | the stop sequence's deadlines; the re-read of a message's model and effort, every 100 ms for up to 2 s |
 | `subagent-tail` | K4, timed | finds and renders a subagent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
 | `plan-usage` | K4, timed | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s; then `codex app-server` for Codex's plan, stopped after 10 s |
 | `topic-reader` | K4 | the tabs' topics with Haiku, one `claude --safe-mode -p --model haiku` at a time; at most one ask waiting per tab, the card shown first |
@@ -308,6 +311,7 @@ can.
 | `claude-version`, `questdb-toggle`, `edge-toggle`, `edge-check` | K5 (`App`, `EmbeddedQuestDb`, `EmbeddedEdge`) | the start-up check; one start or stop of the embedded QuestDB or of the comando Edge; the Edge registry read at most once a second |
 | `db-test-<connection>` | K5 (`DbAdapter`) | one connection test |
 | `peer-answer` | K5 (`Peers`) | one question from another instance: its consult session made and prompted, the wait for the turn, the reply |
+| `peer-ask` | K5 (`Peers`) | one question asked from the Instances tab as the user: the wait for the reply, then a notice |
 | `open-file`, `show-file`, `log-entry`, `open-link`, `note-link`, `reveal`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, `write-tutorial`, `show-tutorial`, `pty-preload`, `terminal-exit`, `terminal-jobs`, `terminal-kill`, `outline`, `kit-jobs`, `kit-jobs-save`, `kit-jobs-apply`, `kit-jobs-run` | K5 (`UiErrands`) | one blocking call each, off the EDT |
 | MCP requests; a cancel | per-task virtual executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s cancellers |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook |
@@ -388,7 +392,7 @@ holds the question and the greying.
 ## 8. UI packages
 
 The packages of `ui`, under `dev.marregui.comando.ui`, in layer order. The classes of each are listed in the
-[`ui` README](../ui/README.md#1-architecture).
+[Modules §7.1](modules.md#71-architecture).
 
 | Package | Holds |
 |---|---|

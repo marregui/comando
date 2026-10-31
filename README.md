@@ -143,7 +143,7 @@ JDK 25 and the Claude Code CLI.
 | [Claude](docs/claude.md) | the `claude -p` bridge, the MCP tools, approvals and safety |
 | [UI](docs/ui.md) | the UI's shared package (`ui.kit`), commands and keys, widgets, the painted transcript |
 | [Architecture](docs/architecture.md) | modules, state and intents, ports, threads, ownership, code rules, quality |
-| Module READMEs | one per module, on its classes and its interface with the rest: [core](core/README.md), [testkit](testkit/README.md), [db](db/README.md), [claude](claude/README.md), [mcp](mcp/README.md), [tools](tools/README.md), [ui](ui/README.md), [app](app/README.md) |
+| [Modules](docs/modules.md) | each module: its classes, its interface with the rest, its threads and its tests |
 | [Decisions](docs/adr/README.md) | one record per decision, dated, with who decided |
 
 ## Built with

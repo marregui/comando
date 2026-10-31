@@ -12,7 +12,7 @@ modules.
 
 comando runs Claude Code as one child process per session, speaks stream-JSON over its standard input and output, and
 maps the stream into transcript blocks and intents. The CLI facts below were verified with recorded probes against
-Claude Code 2.1.296 (fixtures in `testkit`), and against 2.1.300 for background tasks.
+Claude Code 2.1.296 and 2.1.302 (fixtures in `testkit`), and against 2.1.300 for background tasks.
 
 ### 1.1 The process
 
