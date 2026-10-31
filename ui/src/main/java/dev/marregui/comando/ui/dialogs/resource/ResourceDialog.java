@@ -83,7 +83,7 @@ import java.util.regex.Pattern;
 public final class ResourceDialog<S> {
 
     /** The content's size when the dialog first opens: every control is visible at this size. */
-    static final Dimension DEFAULT_SIZE = new Dimension(608, 520);
+    static final Dimension DEFAULT_SIZE = new Dimension(680, 520);
 
     /**
      * What differs between connections and sessions. {@code test}, {@code open} (with {@code close}) and
