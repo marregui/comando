@@ -26,6 +26,8 @@ import java.awt.Container;
 import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.Window;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the picture is gone within a second, the window on the new ground
 /// - the theme chosen already is applied without a fade
 /// - a light theme puts the look and feel, the text and the title bars in light, and a dark one back
+/// - the chooser closed with Esc opens again at the swatch's next click, at once
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class ThemeFadeUiTest {
 
@@ -78,6 +81,40 @@ class ThemeFadeUiTest {
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
+            app.close();
+        }
+    }
+
+    /// The chooser closed with Esc opens again at the swatch's next click, even at once: the deactivation its own close
+    /// brings, which X11 delivers after the dispose, is not the click elsewhere that the swatch's own click must not undo.
+    @Test
+    void aChooserClosedWithEscOpensAgainAtOnce() throws Exception {
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "theme-reopen", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            for (int round = 0; round < 2; round++) {
+                JDialog chooser = onEdt(() -> {
+                    find(frame(), JButton.class, b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName())).doClick(0);
+                    return chooser();
+                });
+                assertThat(chooser).as("the chooser open, round " + round).isNotNull();
+                onEdt(() -> {
+                    chooser.getRootPane().getActionMap().get("close").actionPerformed(null);
+                    // the deactivation X11 delivers after the dispose, straight to the listeners: dispatched, the focus
+                    // manager drops it for a window not active, and macOS sends none to a window it never activated
+                    WindowEvent deactivated = new WindowEvent(chooser, WindowEvent.WINDOW_DEACTIVATED);
+                    for (WindowListener l : chooser.getWindowListeners()) {
+                        l.windowDeactivated(deactivated);
+                    }
+                    return null;
+                });
+                assertThat(onEdt(ThemeFadeUiTest::chooser)).as("closed by Esc").isNull();
+            }
+        } finally {
             app.close();
         }
     }
@@ -368,6 +405,16 @@ class ThemeFadeUiTest {
             chooser.getRootPane().getActionMap().get("close").actionPerformed(null);
             return null;
         });
+    }
+
+    /** The theme chooser showing, or null. EDT only. */
+    private static JDialog chooser() {
+        for (Window w : frame().getOwnedWindows()) {
+            if (w.isShowing() && w instanceof JDialog d && "Theme".equals(d.getTitle())) {
+                return d;
+            }
+        }
+        return null;
     }
 
     /** Opens the theme chooser from the swatch and flips its switch to {@code light}, without waiting. */

@@ -56,6 +56,10 @@ one theme, the app adopts it while the dialog remains open, I will close it when
 selection is the selection". A click or ⏎ on a card chooses its theme, with the fade, and the cards are drawn again
 with the ring on it; Esc, a click elsewhere, or the swatch again closes the chooser, the theme last chosen kept. The
 swatch's click that closed the chooser by taking its focus does not open it again (a click within 300 ms of that close).
+2026-10-31: only a close by losing the focus starts those 300 ms. X11 delivers the deactivation of a close by Esc or the
+close button after the dispose, so the swatch's next click opened nothing on Linux (`ThemeFadeUiTest`, three tests red on
+ubuntu CI); Esc, the close button and the swatch now mark the close as the chooser's own
+(`aChooserClosedWithEscOpensAgainAtOnce`).
 Tested in `UiKeysTest` (a card chosen: the window takes it, the chooser open with the ring on it; Esc closes it, the
 theme kept) and `ThemeFadeUiTest` (each pick leaves the chooser open, then closes it with Esc).
 

@@ -78,6 +78,8 @@ public final class ThemeChooser {
     private static final long CLICK_NANOS = 300_000_000L;
     /** The mode whose cards the grid shows. */
     private boolean shownLight;
+    /** Closed by Esc, its close button or {@link #close}: the deactivation that follows is not a click elsewhere. */
+    private boolean closing;
 
     private ThemeChooser(Window owner, Consumer<NamedTheme> chosen) {
         this.chosen = chosen;
@@ -95,7 +97,7 @@ public final class ThemeChooser {
         close.setFocusable(false);
         close.setToolTipText("Close (Esc); the theme last chosen stays");
         close.getAccessibleContext().setAccessibleName("Close the theme chooser");
-        close.addActionListener(e -> dialog.dispose());
+        close.addActionListener(e -> close());
         JPanel top = new JPanel(new BorderLayout());
         // a spacer as wide as the button on the left keeps the toggle in the middle
         top.add(Box.createHorizontalStrut(close.getPreferredSize().width), BorderLayout.WEST);
@@ -116,8 +118,11 @@ public final class ThemeChooser {
         dialog.addWindowListener(new WindowAdapter() {
             @Override
             public void windowDeactivated(WindowEvent e) {
-                // a click elsewhere: the swatch's own click, which deactivates it first, must not open it again
-                closedNanos = System.nanoTime();
+                // a click elsewhere: the swatch's own click, which deactivates it first, must not open it again; a close of
+                // its own deactivates it too, after the dispose on X11, and must leave the swatch's next click alone
+                if (!closing) {
+                    closedNanos = System.nanoTime();
+                }
                 dialog.dispose();
             }
         });
@@ -155,6 +160,7 @@ public final class ThemeChooser {
 
     /** Closes the chooser; the theme last chosen in it stays. */
     void close() {
+        closing = true;
         dialog.dispose();
     }
 
@@ -276,7 +282,7 @@ public final class ThemeChooser {
 
     /** Esc closes; D and L flip the toggle; the arrows move between cards; ⏎ chooses the card with the focus. */
     private void keys(JComponent pane) {
-        bind(pane, KeyEvent.VK_ESCAPE, "close", dialog::dispose);
+        bind(pane, KeyEvent.VK_ESCAPE, "close", this::close);
         bind(pane, KeyEvent.VK_D, "dark", () -> mode.go(false));
         bind(pane, KeyEvent.VK_L, "light", () -> mode.go(true));
         bind(pane, KeyEvent.VK_LEFT, "left", () -> move(-1));
