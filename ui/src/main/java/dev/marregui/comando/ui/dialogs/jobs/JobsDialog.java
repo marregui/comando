@@ -1,30 +1,18 @@
 package dev.marregui.comando.ui.dialogs.jobs;
 
-import java.awt.BorderLayout;
 import java.awt.Dialog;
-import java.awt.FlowLayout;
 import java.awt.Window;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JComponent;
 import javax.swing.JDialog;
-import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.WindowConstants;
 
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.ui.dialogs.FormRows;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The kit's scheduled jobs in a window over comando's (record 117): the {@link JobsEditor}, Cancel and Save. Save hands
@@ -56,39 +44,12 @@ public final class JobsDialog {
         this.questions = questions;
         editor = new JobsEditor(jobs.jobs(), root, actions);
         dialog = new JDialog(owner, TITLE, Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        dialog.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(final WindowEvent e) {
-                cancel();
-            }
-        });
         cancel.addActionListener(e -> cancel());
-        save.putClientProperty("JButton.buttonType", "default");
         save.setToolTipText("Write the jobs to comando-kit.json and bring the scheduler to them");
         save.addActionListener(e -> save());
         editor.onChange(this::enable);
         enable();
-        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
-        buttons.add(cancel);
-        buttons.add(save);
-        final JPanel south = new JPanel(new BorderLayout());
-        south.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
-        south.add(buttons, BorderLayout.EAST);
-        final JPanel content = new JPanel(new BorderLayout());
-        content.add(editor.component(), BorderLayout.CENTER);
-        content.add(south, BorderLayout.SOUTH);
-        dialog.setContentPane(content);
-        final JComponent pane = dialog.getRootPane();
-        pane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
-        pane.getActionMap().put("cancel", new AbstractAction() {
-            @Override
-            public void actionPerformed(final ActionEvent e) {
-                cancel();
-            }
-        });
-        dialog.pack();
-        dialog.setLocationRelativeTo(owner);
+        FormRows.frame(dialog, owner, editor.component(), FormRows.south(cancel, save), this::cancel);
     }
 
     /** Opens the window over {@code owner}, {@code select} selected when named; returns when it closes. */

@@ -7,12 +7,12 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import javax.swing.Icon;
 
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.format.Versions;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -28,9 +28,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  * row is the same row ({@link ConnectionRow}).
  */
 final class SessionRow extends IconRow {
-
-    /** What follows a version part's number ("1-beta" → "-beta"), dropped before it is read. */
-    private static final Pattern NOT_A_NUMBER = Pattern.compile("\\D.*");
 
     /** The controls of a row: its state icon and its ⓘ. */
     enum Control {
@@ -90,7 +87,7 @@ final class SessionRow extends IconRow {
     static String newestCli(final List<SessionState> sessions) {
         String newest = "";
         for (final SessionState s : sessions) {
-            if (!cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newest) > 0) {
+            if (!cliText(s).isEmpty() && Versions.compare(s.info().cliVersion(), newest) > 0) {
                 newest = s.info().cliVersion();
             }
         }
@@ -110,31 +107,7 @@ final class SessionRow extends IconRow {
 
     /** Whether {@code s} runs an older Claude Code than {@code newestCli}: it started before the CLI was updated. */
     static boolean olderCli(final SessionState s, final String newestCli) {
-        return !cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newestCli) < 0;
-    }
-
-    /** Compares "2.1.302" and "2.1.303" by number; a part that is not a number counts as 0, an empty text is oldest. */
-    static int compareVersions(final String a, final String b) {
-        if (a.isEmpty() || b.isEmpty()) {
-            return Boolean.compare(!a.isEmpty(), !b.isEmpty());
-        }
-        final String[] x = a.split("\\.");
-        final String[] y = b.split("\\.");
-        for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            final int c = Integer.compare(number(x, i), number(y, i));
-            if (c != 0) {
-                return c;
-            }
-        }
-        return 0;
-    }
-
-    private static int number(final String[] parts, final int i) {
-        try {
-            return i < parts.length ? Integer.parseInt(NOT_A_NUMBER.matcher(parts[i]).replaceAll("")) : 0;
-        } catch (final NumberFormatException e) {
-            return 0;
-        }
+        return !cliText(s).isEmpty() && Versions.compare(s.info().cliVersion(), newestCli) < 0;
     }
 
     /** How full the context is, "42%", once a turn has reported it; empty before. */

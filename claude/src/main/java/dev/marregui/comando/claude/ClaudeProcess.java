@@ -86,6 +86,16 @@ final class ClaudeProcess {
      */
     static ClaudeProcess start(final String name, final List<String> argv, final Path workDir, final RootLaunch launch,
                                final Errands helpers, final Consumer<String> onLine, final IntConsumer onExit) throws IOException {
+        return start(name, argv, workDir, launch, helpers, onLine, onExit, Duration.ofMillis(DRAIN_MILLIS));
+    }
+
+    /**
+     * As {@link #start(String, List, Path, RootLaunch, Errands, Consumer, IntConsumer)}, with {@code drain} in place of
+     * {@link #DRAIN_MILLIS}: how long after the exit a child of the process may hold its stdout open.
+     */
+    static ClaudeProcess start(final String name, final List<String> argv, final Path workDir, final RootLaunch launch,
+                               final Errands helpers, final Consumer<String> onLine, final IntConsumer onExit,
+                               final Duration drain) throws IOException {
         final Path stderrFile = OwnerOnly.tempFile("comando-claude-", ".stderr");
         Process process;
         try {
@@ -107,7 +117,7 @@ final class ClaudeProcess {
             int code;
             try {
                 code = p.process.waitFor();
-                if (!reader.join(Duration.ofMillis(DRAIN_MILLIS))) {
+                if (!reader.join(drain)) {
                     p.drained.set(true);
                     // a line already past its look at drained is handed over first, and none follows the exit
                     while (p.handing.get() > 0) {

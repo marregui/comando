@@ -27,7 +27,9 @@ import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.async.Waiters;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.Versions;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -73,7 +75,7 @@ public final class MermaidDiagrams {
     private final Map<String, String> failures = new ConcurrentHashMap<>();
     private final Map<String, int[]> sizes = new ConcurrentHashMap<>();
     /** Keys being drawn, with who waits for each. */
-    private final Map<String, List<Runnable>> waiting = new ConcurrentHashMap<>();
+    private final Waiters<String> waiting = new Waiters<>();
     private final ExecutorService drawer;
     private volatile Process drawing;
 
@@ -144,21 +146,11 @@ public final class MermaidDiagrams {
             // drawn, but not a picture: shown as a failure, not drawn and announced again and again
             return new Diagram.Unavailable(unreadable(key, png));
         }
-        final boolean[] first = new boolean[1];
-        waiting.compute(key, (k, list) -> {
-            final List<Runnable> l = list == null ? new ArrayList<>() : list;
-            first[0] = list == null;
-            // a preview rendered again while it waits hands in the same callback: told once, not once per render
-            if (!l.contains(whenReady)) {
-                l.add(whenReady);
-            }
-            return l;
-        });
-        if (first[0]) {
+        if (waiting.join(key, whenReady)) {
             try {
                 drawer.execute(() -> draw(key, source, png, light));
             } catch (final RejectedExecutionException e) {
-                waiting.remove(key);
+                waiting.abandon(key);
                 return new Diagram.Unavailable("comando is closing");
             }
         }
@@ -168,7 +160,7 @@ public final class MermaidDiagrams {
     private void draw(final String key, final String source, final Path png, final boolean light) {
         if (Files.isRegularFile(png)) {
             // asked again while the last drawing of it finished: it is there
-            finish(key);
+            waiting.finish(key);
             return;
         }
         Process p = null;
@@ -212,14 +204,14 @@ public final class MermaidDiagrams {
                 // close interrupted the wait before it could see this process: it would outlive comando
                 stop(p);
             }
-            waiting.remove(key);
+            waiting.abandon(key);
             return;
         }
         final String failed = failures.get(key);
         if (failed != null) {
             LOG.log(System.Logger.Level.WARNING, "Mermaid diagram not drawn [key=" + key + "]: " + failed);
         }
-        finish(key);
+        waiting.finish(key);
     }
 
     /** Records that the cached picture of {@code key} cannot be read and removes it; returns why. */
@@ -234,14 +226,6 @@ public final class MermaidDiagrams {
         }
         LOG.log(System.Logger.Level.WARNING, "Mermaid diagram not shown [key=" + key + "]: " + why);
         return why;
-    }
-
-    /** Tells whoever waits for {@code key} that it is drawn or rejected. */
-    private void finish(final String key) {
-        final List<Runnable> callbacks = waiting.remove(key);
-        if (callbacks != null) {
-            callbacks.forEach(Runnable::run);
-        }
     }
 
     void close() {
@@ -310,7 +294,7 @@ public final class MermaidDiagrams {
         final Path nvm = Path.of(System.getProperty("user.home"), ".nvm", "versions", "node");
         if (Files.isDirectory(nvm)) {
             try (final Stream<Path> versions = Files.list(nvm)) {
-                versions.sorted((a, b) -> compareVersions(b.getFileName().toString(), a.getFileName().toString()))
+                versions.sorted((a, b) -> Versions.compare(b.getFileName().toString(), a.getFileName().toString()))
                         .forEach(v -> candidates.add(v.resolve("bin").resolve("mmdc")));
             } catch (final IOException e) {
                 LOG.log(System.Logger.Level.DEBUG, "cannot list [dir=" + nvm + ']', e);
@@ -319,27 +303,6 @@ public final class MermaidDiagrams {
         candidates.add(Path.of("/opt/homebrew/bin/mmdc"));
         candidates.add(Path.of("/usr/local/bin/mmdc"));
         return candidates.stream().filter(Files::isExecutable).findFirst();
-    }
-
-    /** Compares "v22.20.0" and "v20.9.1" by their numbers. */
-    static int compareVersions(final String a, final String b) {
-        final String[] x = a.replaceFirst("^v", "").split("\\.");
-        final String[] y = b.replaceFirst("^v", "").split("\\.");
-        for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            final int c = Integer.compare(number(x, i), number(y, i));
-            if (c != 0) {
-                return c;
-            }
-        }
-        return 0;
-    }
-
-    private static int number(final String[] parts, final int i) {
-        try {
-            return i < parts.length ? Integer.parseInt(parts[i]) : 0;
-        } catch (final NumberFormatException e) {
-            return 0;
-        }
     }
 
     private static String firstLine(final String text) {

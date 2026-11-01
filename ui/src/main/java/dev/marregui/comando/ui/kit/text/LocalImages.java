@@ -13,10 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +36,7 @@ import com.github.weisj.jsvg.view.ViewBox;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.ui.kit.async.Waiters;
 
 /**
  * The pictures a Markdown document names by a local path, for the preview: a PNG, JPEG or GIF as it is, an SVG drawn
@@ -83,7 +82,7 @@ public final class LocalImages {
     private final Path cache;
     private final Map<Key, Picture> read = new ConcurrentHashMap<>();
     /** Keys being read, with who waits for each. */
-    private final Map<Key, List<Runnable>> waiting = new ConcurrentHashMap<>();
+    private final Waiters<Key> waiting = new Waiters<>();
     private final ExecutorService reader =
             Threads.strand("local-images");
 
@@ -151,27 +150,14 @@ public final class LocalImages {
         if (known != null) {
             return known;
         }
-        final boolean[] first = new boolean[1];
-        waiting.compute(key, (k, list) -> {
-            final List<Runnable> l = list == null ? new ArrayList<>() : list;
-            first[0] = list == null;
-            // a preview rendered again while it waits hands in the same callback: told once, not once per render
-            if (!l.contains(whenReady)) {
-                l.add(whenReady);
-            }
-            return l;
-        });
-        if (first[0]) {
+        if (waiting.join(key, whenReady)) {
             try {
                 reader.execute(() -> {
                     read.put(key, load(key));
-                    final List<Runnable> callbacks = waiting.remove(key);
-                    if (callbacks != null) {
-                        callbacks.forEach(Runnable::run);
-                    }
+                    waiting.finish(key);
                 });
             } catch (final RejectedExecutionException e) {
-                waiting.remove(key);
+                waiting.abandon(key);
                 return new Picture.Unavailable("comando is closing");
             }
         }

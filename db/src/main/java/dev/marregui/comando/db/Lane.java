@@ -25,6 +25,7 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.result.ResultText;
 
 /**
  * One connection and the single thread that uses it. A JDBC connection runs one statement at a time,
@@ -269,26 +270,7 @@ final class Lane implements AutoCloseable {
             }
             r.append(rs);
         }
-        final List<String> columns = new ArrayList<>(r.columnCount());
-        for (int c = 0; c < r.columnCount(); c++) {
-            columns.add(r.columnName(c));
-        }
-        final List<List<String>> rows = new ArrayList<>(r.rowCount());
-        final StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < r.rowCount(); i++) {
-            final List<String> row = new ArrayList<>(r.columnCount());
-            for (int c = 0; c < r.columnCount(); c++) {
-                if (r.isNull(i, c)) {
-                    row.add(null);
-                    continue;
-                }
-                sb.setLength(0);
-                r.format(i, c, sb);
-                row.add(sb.toString());
-            }
-            rows.add(row);
-        }
-        return new QueryPort.Rows(columns, rows, -1L, truncated);
+        return new QueryPort.Rows(ResultText.columns(r), ResultText.rows(r, r.rowCount()), -1L, truncated);
     }
 
     void cancel(final long requestId) {

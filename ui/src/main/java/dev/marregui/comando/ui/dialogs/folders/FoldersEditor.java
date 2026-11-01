@@ -2,11 +2,6 @@ package dev.marregui.comando.ui.dialogs.folders;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
@@ -19,10 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -31,22 +23,18 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
-import javax.swing.ListSelectionModel;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.KitFolders;
 import dev.marregui.comando.core.resource.FolderKind;
+import dev.marregui.comando.ui.dialogs.FormRows;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
@@ -83,6 +71,8 @@ public final class FoldersEditor {
     static final String DELETABLE = "deletable";
     static final String LISTED_IN = "listedIn";
     static final String GROUP = "group";
+    /** A folder's problem while its facts are still being looked up: neither outlined nor in red. */
+    private static final String CHECKING = "checking…";
 
     /** What a folder's path is on disk, as looked up off the EDT. */
     record Facts(boolean exists, boolean readable, Path gitRoot) {
@@ -133,12 +123,8 @@ public final class FoldersEditor {
     private final JTextField listedIn = new JTextField(24);
     private final JTextField group = new JTextField(24);
     private final JButton chooseListing = new JButton("…");
-    /** The fields by key, outlined in red while they fail. */
-    private final Map<String, JComponent> inputs = new HashMap<>();
-    /** The labels by key, naming each field in the message line. */
-    private final Map<String, String> labels = new HashMap<>();
-    /** One line under the form: the selected entry's first problem in red, else a note in grey. */
-    private final JLabel message = new JLabel(" ");
+    /** The fields as rows, outlined in red while they fail. */
+    private final FormRows form = new FormRows();
     private final JLabel facts = new JLabel(" ");
     private final JButton add;
     private final JButton remove;
@@ -177,10 +163,10 @@ public final class FoldersEditor {
         this.indexRoots = indexRoots.stream().map(r -> r.toAbsolutePath().normalize()).distinct().toList();
         this.repos = repos;
         this.chooser = chooser;
-        add = tool("add", "Add a folder: choose it inside " + configShown());
-        remove = tool("close", "Take the selected folder out of the Files tab; nothing on disk changes");
-        up = tool("↑", KeyText.of("Move the selected folder up (⌥↑)"));
-        down = tool("↓", KeyText.of("Move the selected folder down (⌥↓)"));
+        add = FormRows.tool("add", "Add a folder: choose it inside " + configShown());
+        remove = FormRows.tool("close", "Take the selected folder out of the Files tab; nothing on disk changes");
+        up = FormRows.tool(new JButton("↑"), KeyText.of("Move the selected folder up (⌥↑)"));
+        down = FormRows.tool(new JButton("↓"), KeyText.of("Move the selected folder down (⌥↓)"));
         for (final FolderRoot f : folders) {
             rows.addElement(new Row(FolderKind.INSTANCE.toAttributes(f)));
         }
@@ -189,9 +175,7 @@ public final class FoldersEditor {
             lookUp(r.get(PATH));
             lookUpIndex(r);
         });
-        if (!rows.isEmpty()) {
-            list.setSelectedIndex(0);
-        }
+        FormRows.selectFirst(list);
         load();
     }
 
@@ -206,12 +190,7 @@ public final class FoldersEditor {
 
     /** Selects the folder named {@code folder}, when there is one. */
     public void select(final String folder) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).get(NAME).equals(folder)) {
-                list.setSelectedIndex(i);
-                return;
-            }
-        }
+        FormRows.select(list, rows, r -> r.get(NAME).equals(folder));
     }
 
     /** Every entry of {@code folders.json} as edited; empty while any fails a check. */
@@ -308,7 +287,7 @@ public final class FoldersEditor {
         } else {
             final Facts f = looked.get(HomeDir.expand(p));
             if (f == null) {
-                out.put(PATH, "checking…");
+                out.put(PATH, CHECKING);
             } else if (!f.exists()) {
                 out.put(PATH, "no such folder");
             } else if (!f.readable()) {
@@ -415,26 +394,15 @@ public final class FoldersEditor {
     }
 
     private boolean nameTaken(final String n) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).get(NAME).strip().equals(n)) {
-                return true;
-            }
-        }
-        return false;
+        return FormRows.any(rows, r -> r.get(NAME).strip().equals(n));
     }
 
     /** Takes the selected folder out of the list; the next one is selected. */
     void remove() {
-        final int i = list.getSelectedIndex();
-        if (i < 0) {
-            return;
+        if (FormRows.removeSelected(list, rows)) {
+            load();
+            edited();
         }
-        rows.remove(i);
-        if (!rows.isEmpty()) {
-            list.setSelectedIndex(Math.min(i, rows.size() - 1));
-        }
-        load();
-        edited();
     }
 
     /** Moves the selected folder {@code by} places, within the list. */
@@ -477,7 +445,7 @@ public final class FoldersEditor {
 
     /** The message line under the form. */
     String messageShown() {
-        return message.getText().strip();
+        return form.messageShown();
     }
 
     String factsShown() {
@@ -559,56 +527,23 @@ public final class FoldersEditor {
     // ---- the form
 
     private void build() {
-        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.getAccessibleContext().setAccessibleName("Folders");
-        list.setCellRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int i, final boolean sel, final boolean focus) {
-                final JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
-                if (value instanceof Row r) {
-                    final boolean bad = i < rows.size() && !problems(i).isEmpty() && !"checking…".equals(problems(i).get(PATH));
-                    c.setText(Plain.text((bad ? "✗ " : "") + (r.get(NAME).isBlank() ? "(no name)" : r.get(NAME))));
-                    if (bad && !sel) {
-                        c.setForeground(Theme.DANGER);
-                    }
-                    c.setIcon(Icons.folder(rowIcon(r)));
-                }
-                return c;
-            }
-        });
-        list.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                load();
-            }
-        });
         bind(list, KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.ALT_DOWN_MASK), "up", () -> move(-1));
         bind(list, KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.ALT_DOWN_MASK), "down", () -> move(1));
         add.addActionListener(e -> add());
         remove.addActionListener(e -> remove());
         up.addActionListener(e -> move(-1));
         down.addActionListener(e -> move(1));
-
-        final JScrollPane listScroll = new JScrollPane(list);
-        listScroll.setPreferredSize(new Dimension(220, 220));
-        final JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
-        listButtons.add(add);
-        listButtons.add(remove);
-        listButtons.add(up);
-        listButtons.add(down);
-        final JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
-        left.add(listScroll, BorderLayout.CENTER);
-        left.add(listButtons, BorderLayout.SOUTH);
-
-        icon.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int i, final boolean sel, final boolean focus) {
-                final JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
-                if (value instanceof String s) {
-                    c.setIcon(Icons.folder(FolderRoot.FOLDER.equals(s) ? "folder" : "folder-" + s));
-                }
-                return c;
+        final JPanel left = FormRows.listSide(list, Row.class, (c, r, i, sel) -> {
+            final boolean bad = i < rows.size() && !problems(i).isEmpty() && !CHECKING.equals(problems(i).get(PATH));
+            c.setText(Plain.text((bad ? "✗ " : "") + (r.get(NAME).isBlank() ? "(no name)" : r.get(NAME))));
+            if (bad && !sel) {
+                c.setForeground(Theme.DANGER);
             }
-        });
+            c.setIcon(Icons.folder(rowIcon(r)));
+        }, "Folders", 220, this::load, add, remove, up, down);
+
+        icon.setRenderer(FormRows.cells(String.class,
+                (c, s, i, sel) -> c.setIcon(Icons.folder(FolderRoot.FOLDER.equals(s) ? "folder" : "folder-" + s))));
         choosePath.setToolTipText("Choose a folder inside " + configShown());
         path.setEditable(false); // chosen, never typed: it exists when chosen
         choosePath.addActionListener(e -> {
@@ -628,104 +563,39 @@ public final class FoldersEditor {
         chooseListing.addActionListener(e -> chooseInFolder("listing").ifPresent(f -> listedIn.setText(f.getFileName().toString())));
 
         final String home = configShown();
-        final JPanel form = new JPanel(new GridBagLayout());
-        int y = 0;
-        y = row(form, y, "Name", name, NAME, "The row's name in the Files tab; unique");
-        y = row(form, y, "Folder", withButton(path, choosePath), PATH, "The folder the row shows; chosen with …, only inside " + home);
-        y = row(form, y, "Index file", withButton(index, chooseIndex), INDEX,
-                lines("The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
+        form.row("Name", name, name, NAME, "The row's name in the Files tab; unique");
+        form.row("Folder", FormRows.withButton(path, choosePath), path, PATH,
+                "The folder the row shows; chosen with …, only inside " + home);
+        form.row("Index file", FormRows.withButton(index, chooseIndex), index, INDEX,
+                FormRows.lines(
+                        "The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
                         "Named but missing in the kit or the brain: Save creates it, and /reflect keeps a line in it for each entry",
                         "Empty: the folder has no index"));
-        y = row(form, y, "Leave out", excludes, EXCLUDES, lines("Names hidden from the tree wherever they appear, comma-separated, any case",
-                "Always hidden: names starting with a dot, " + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
-        y = row(form, y, "Icon", icon, ICON, "The icon of the folder's row");
-        y = row(form, y, "Trash", deletable, DELETABLE, "Whether the Files tab moves the folder's files and subfolders to the Trash; never the folder");
-        y = row(form, y, "Listed in", withButton(listedIn, chooseListing), LISTED_IN,
-                lines("The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
+        form.row("Leave out", excludes, excludes, EXCLUDES,
+                FormRows.lines("Names hidden from the tree wherever they appear, comma-separated, any case",
+                        "Always hidden: names starting with a dot, "
+                                + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
+        form.row("Icon", icon, icon, ICON, "The icon of the folder's row");
+        form.row("Trash", deletable, deletable, DELETABLE,
+                "Whether the Files tab moves the folder's files and subfolders to the Trash; never the folder");
+        form.row("Listed in", FormRows.withButton(listedIn, chooseListing), listedIn, LISTED_IN,
+                FormRows.lines(
+                        "The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
                         "An entry moved to the Trash takes its lines out of the nearest such file above it",
                         "Missing in a subfolder: nothing to take out there; /reflect creates it with its first line",
                         "Empty, or Trash off: no file is changed"));
-        y = row(form, y, "Group", group, GROUP,
-                lines("A header the Files tab shows above this folder and the folders after it in the same group, such as Brain",
+        form.row("Group", group, group, GROUP,
+                FormRows.lines(
+                        "A header the Files tab shows above this folder and the folders after it in the same group,"
+                                + " such as Brain",
                         "The folders stay where they are: nothing nests, nothing opens or closes",
                         "Empty: the folder is in no group"));
-        final GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 1;
-        g.gridy = y;
-        g.anchor = GridBagConstraints.LINE_START;
-        g.insets = new Insets(Theme.GAP, 0, 0, 0);
-        message.getAccessibleContext().setAccessibleName("Problem");
-        form.add(message, g);
-        g.gridy = y + 1;
-        g.insets = new Insets(2, 0, 0, 0);
-        facts.setForeground(Theme.MUTED_STRONG);
-        facts.getAccessibleContext().setAccessibleName("Folder facts");
-        form.add(facts, g);
-        g.gridy = y + 2;
-        g.weighty = 1;
-        form.add(new JPanel(), g);
+        form.footer(facts, "Folder facts");
 
-        for (final JTextField f : List.of(name, path, index, excludes, listedIn, group)) {
-            f.getDocument().addDocumentListener(new DocumentListener() {
-                @Override
-                public void insertUpdate(final DocumentEvent e) {
-                    store();
-                }
-
-                @Override
-                public void removeUpdate(final DocumentEvent e) {
-                    store();
-                }
-
-                @Override
-                public void changedUpdate(final DocumentEvent e) {
-                    store();
-                }
-            });
-        }
+        FormRows.onEdit(this::store, List.of(name, path, index, excludes, listedIn, group));
         icon.addActionListener(e -> store());
         deletable.addActionListener(e -> store());
-
-        body.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
-        body.add(left, BorderLayout.WEST);
-        body.add(form, BorderLayout.CENTER);
-    }
-
-    /** A labelled field, its label and the field explaining it under the mouse; answers the next free grid row. */
-    private int row(final JPanel form, final int y, final String label, final JComponent field, final String key, final String tip) {
-        final GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 0;
-        g.gridy = y;
-        g.anchor = GridBagConstraints.LINE_END;
-        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
-        final JLabel caption = new JLabel(label);
-        caption.setToolTipText(tip);
-        form.add(caption, g);
-        g.gridx = 1;
-        g.anchor = GridBagConstraints.LINE_START;
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.weightx = 1;
-        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
-        form.add(field, g);
-        final JComponent input = field(key);
-        input.setToolTipText(tip);
-        input.getAccessibleContext().setAccessibleName(label);
-        caption.setLabelFor(input);
-        inputs.put(key, input);
-        labels.put(key, label);
-        return y + 1;
-    }
-
-    private static JPanel withButton(final JComponent field, final JButton button) {
-        final JPanel p = new JPanel(new BorderLayout(4, 0));
-        p.add(field, BorderLayout.CENTER);
-        p.add(button, BorderLayout.EAST);
-        return p;
-    }
-
-    /** A tooltip of a few lines. */
-    private static String lines(final String... lines) {
-        return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
+        FormRows.lay(body, left, form.panel());
     }
 
     /** The roots as shown: {@code ~/.claude}, or "~/.claude, ~/comando-kit or ~/comando-brain". */
@@ -807,14 +677,8 @@ public final class FoldersEditor {
     /** Shows the selected folder's problems and facts, marks the list, and enables what applies. */
     private void refresh() {
         final int i = list.getSelectedIndex();
-        final Map<String, String> p = i < 0 ? Map.of() : problems(i);
-        inputs.forEach((key, field) -> field.putClientProperty("JComponent.outline",
-                p.containsKey(key) && !"checking…".equals(p.get(key)) ? "error" : null));
-        final Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
-        final String note = i < 0 ? "" : note(rows.get(i));
-        final String text = !refused.isEmpty() ? refused : first != null ? labels.get(first.getKey()) + ": " + first.getValue() : note;
-        message.setText(text.isEmpty() ? " " : Plain.text(text));
-        message.setForeground(refused.isEmpty() && (first == null || "checking…".equals(first.getValue())) ? Theme.MUTED_STRONG : Theme.DANGER);
+        form.show(i < 0 ? Map.of() : problems(i), why -> !CHECKING.equals(why), refused,
+                i < 0 ? "" : note(rows.get(i)));
         listedIn.setEnabled(i >= 0 && deletable.isSelected());
         chooseListing.setEnabled(listedIn.isEnabled());
         up.setEnabled(i > 0);
@@ -859,14 +723,6 @@ public final class FoldersEditor {
         }
         final String i = r.get(ICON);
         return FolderRoot.ICONS.contains(i) && !FolderRoot.FOLDER.equals(i) ? "folder-" + i : "folder";
-    }
-
-    private static JButton tool(final String iconOrText, final String tip) {
-        final JButton b = Set.of("↑", "↓").contains(iconOrText) ? new JButton(iconOrText) : new JButton(Icons.get(iconOrText));
-        b.putClientProperty("JButton.buttonType", "toolBarButton");
-        b.setToolTipText(tip);
-        b.getAccessibleContext().setAccessibleName(tip);
-        return b;
     }
 
     private static void bind(final JComponent c, final KeyStroke key, final String name, final Runnable r) {

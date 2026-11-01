@@ -2,11 +2,7 @@ package dev.marregui.comando.ui.dialogs.jobs;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
@@ -19,8 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -34,15 +28,11 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
-import javax.swing.ListSelectionModel;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.text.JTextComponent;
 
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.ui.dialogs.FormRows;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -129,9 +119,8 @@ public final class JobsEditor {
     private final JTextArea env = new JTextArea(3, 24);
     private final JTextField log = new JTextField(24);
     private final JCheckBox enabled = new JCheckBox("runs on its schedule; off pauses it");
-    private final Map<String, JComponent> inputs = new HashMap<>();
-    private final Map<String, String> labels = new HashMap<>();
-    private final JLabel message = new JLabel(" ");
+    /** The fields as rows, outlined in red while they fail. */
+    private final FormRows form = new FormRows();
     private final JLabel state = new JLabel(" ");
     private final JButton add;
     private final JButton remove;
@@ -151,12 +140,10 @@ public final class JobsEditor {
             facts.put(e.job().name(), e);
             rows.addElement(new Row(e.job(), e.job().name()));
         }
-        add = tool("add", "Add a job: name it, pick its days, time and program");
-        remove = tool("close", "Take the selected job out: Save unloads it and removes it from the kit");
+        add = FormRows.tool("add", "Add a job: name it, pick its days, time and program");
+        remove = FormRows.tool("close", "Take the selected job out: Save unloads it and removes it from the kit");
         build();
-        if (!rows.isEmpty()) {
-            list.setSelectedIndex(0);
-        }
+        FormRows.selectFirst(list);
         load();
     }
 
@@ -171,12 +158,7 @@ public final class JobsEditor {
 
     /** Selects the job named {@code job}, when there is one. */
     public void select(final String job) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).name.equals(job)) {
-                list.setSelectedIndex(i);
-                return;
-            }
-        }
+        FormRows.select(list, rows, r -> r.name.equals(job));
     }
 
     /** Every job as edited; empty while any fails a check. */
@@ -249,26 +231,15 @@ public final class JobsEditor {
     }
 
     private boolean taken(final String n) {
-        for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).name.strip().equals(n)) {
-                return true;
-            }
-        }
-        return false;
+        return FormRows.any(rows, r -> r.name.strip().equals(n));
     }
 
     /** Takes the selected job out of the list; the next one is selected. */
     void remove() {
-        final int i = list.getSelectedIndex();
-        if (i < 0) {
-            return;
+        if (FormRows.removeSelected(list, rows)) {
+            load();
+            edited(true);
         }
-        rows.remove(i);
-        if (!rows.isEmpty()) {
-            list.setSelectedIndex(Math.min(i, rows.size() - 1));
-        }
-        load();
-        edited(true);
     }
 
     JList<Row> list() {
@@ -296,7 +267,7 @@ public final class JobsEditor {
     }
 
     String messageShown() {
-        return message.getText().strip();
+        return form.messageShown();
     }
 
     String stateShown() {
@@ -367,34 +338,6 @@ public final class JobsEditor {
     // ---- the form
 
     private void build() {
-        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.getAccessibleContext().setAccessibleName("Jobs");
-        list.setCellRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int i, final boolean sel, final boolean focus) {
-                final JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
-                if (value instanceof Row r) {
-                    final boolean bad = i < rows.size() && !problems(i).isEmpty();
-                    final KitJobs.Entry e = facts.get(r.was);
-                    final boolean failed = e != null && e.failed();
-                    c.setText(Plain.text((bad ? "✗ " : "") + (r.name.isBlank() ? "(no name)" : r.name) + "   " + r.job().when()
-                            + (e != null && e.running() ? " · running" : "")));
-                    if (!sel && (bad || failed)) {
-                        c.setForeground(Theme.DANGER);
-                    } else if (!sel && !r.enabled) {
-                        c.setForeground(Theme.MUTED_STRONG);
-                    }
-                    c.setIcon(Icons.folder("folder-jobs"));
-                    c.setToolTipText(failed ? "Its last run ended with exit " + e.lastExit() : null);
-                }
-                return c;
-            }
-        });
-        list.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                load();
-            }
-        });
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(final MouseEvent e) {
@@ -417,15 +360,20 @@ public final class JobsEditor {
         });
         add.addActionListener(e -> add());
         remove.addActionListener(e -> remove());
-
-        final JScrollPane listScroll = new JScrollPane(list);
-        listScroll.setPreferredSize(new Dimension(260, 260));
-        final JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
-        listButtons.add(add);
-        listButtons.add(remove);
-        final JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
-        left.add(listScroll, BorderLayout.CENTER);
-        left.add(listButtons, BorderLayout.SOUTH);
+        final JPanel left = FormRows.listSide(list, Row.class, (c, r, i, sel) -> {
+            final boolean bad = i < rows.size() && !problems(i).isEmpty();
+            final KitJobs.Entry e = facts.get(r.was);
+            final boolean failed = e != null && e.failed();
+            c.setText(Plain.text((bad ? "✗ " : "") + (r.name.isBlank() ? "(no name)" : r.name) + "   "
+                    + r.job().when() + (e != null && e.running() ? " · running" : "")));
+            if (!sel && (bad || failed)) {
+                c.setForeground(Theme.DANGER);
+            } else if (!sel && !r.enabled) {
+                c.setForeground(Theme.MUTED_STRONG);
+            }
+            c.setIcon(Icons.folder("folder-jobs"));
+            c.setToolTipText(failed ? "Its last run ended with exit " + e.lastExit() : null);
+        }, "Jobs", 260, this::load, add, remove);
 
         final JPanel week = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
         for (int d = 0; d < 7; d++) {
@@ -453,93 +401,28 @@ public final class JobsEditor {
         }));
         env.setLineWrap(false);
 
-        final JPanel form = new JPanel(new GridBagLayout());
-        int y = 0;
-        y = row(form, y, "Name", name, KitJob.NAME_FIELD, "The job's name: lower case, digits and -; unique");
-        y = row(form, y, "Description", description, KitJob.DESCRIPTION_FIELD, "One line on what it does, at most 80 characters");
-        y = row(form, y, "Runs", when, KitJob.DAYS_FIELD, "The days it runs on and the time it starts; all seven days: daily");
-        inputs.put(KitJob.TIME_FIELD, time);
-        labels.put(KitJob.TIME_FIELD, "Time");
-        y = row(form, y, "Program", withButton(program, chooseProgram), KitJob.COMMAND_FIELD,
-                lines("The program it runs, a path inside the kit, such as bin/kb-drift", "{scheduler} anywhere becomes launchd, systemd or schtasks"));
-        y = row(form, y, "Arguments", arguments, "arguments", "The program's arguments, separated by spaces; quote one that holds a space");
-        y = row(form, y, "Environment", new JScrollPane(env), KitJob.ENV_FIELD, "Variables it adds, one NAME=value per line");
-        y = row(form, y, "Log", log, KitJob.LOG_FIELD, "The file its output goes to, inside the kit; empty: .kit-jobs/<name>.log");
-        y = row(form, y, "Enabled", enabled, "enabled", "Off pauses the job: it stays in the list, unloaded from the scheduler");
-        final GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 1;
-        g.gridy = y;
-        g.anchor = GridBagConstraints.LINE_START;
-        g.insets = new Insets(Theme.GAP, 0, 0, 0);
-        message.getAccessibleContext().setAccessibleName("Problem");
-        form.add(message, g);
-        g.gridy = y + 1;
-        g.insets = new Insets(2, 0, 0, 0);
-        state.setForeground(Theme.MUTED_STRONG);
-        state.getAccessibleContext().setAccessibleName("Job state");
-        form.add(state, g);
-        g.gridy = y + 2;
-        g.weighty = 1;
-        form.add(new JPanel(), g);
+        form.row("Name", name, name, KitJob.NAME_FIELD, "The job's name: lower case, digits and -; unique");
+        form.row("Description", description, description, KitJob.DESCRIPTION_FIELD,
+                "One line on what it does, at most 80 characters");
+        form.row("Runs", when, when, KitJob.DAYS_FIELD,
+                "The days it runs on and the time it starts; all seven days: daily");
+        form.input(KitJob.TIME_FIELD, time, "Time");
+        form.row("Program", FormRows.withButton(program, chooseProgram), program, KitJob.COMMAND_FIELD,
+                FormRows.lines("The program it runs, a path inside the kit, such as bin/kb-drift",
+                        "{scheduler} anywhere becomes launchd, systemd or schtasks"));
+        form.row("Arguments", arguments, arguments, "arguments",
+                "The program's arguments, separated by spaces; quote one that holds a space");
+        form.row("Environment", new JScrollPane(env), env, KitJob.ENV_FIELD,
+                "Variables it adds, one NAME=value per line");
+        form.row("Log", log, log, KitJob.LOG_FIELD,
+                "The file its output goes to, inside the kit; empty: .kit-jobs/<name>.log");
+        form.row("Enabled", enabled, enabled, "enabled",
+                "Off pauses the job: it stays in the list, unloaded from the scheduler");
+        form.footer(state, "Job state");
 
-        for (final JTextComponent f : List.of(name, description, time, program, arguments, env, log)) {
-            f.getDocument().addDocumentListener(new DocumentListener() {
-                @Override
-                public void insertUpdate(final DocumentEvent e) {
-                    store();
-                }
-
-                @Override
-                public void removeUpdate(final DocumentEvent e) {
-                    store();
-                }
-
-                @Override
-                public void changedUpdate(final DocumentEvent e) {
-                    store();
-                }
-            });
-        }
+        FormRows.onEdit(this::store, List.of(name, description, time, program, arguments, env, log));
         enabled.addActionListener(e -> store());
-
-        body.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
-        body.add(left, BorderLayout.WEST);
-        body.add(form, BorderLayout.CENTER);
-    }
-
-    private int row(final JPanel form, final int y, final String label, final JComponent field, final String key, final String tip) {
-        final GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 0;
-        g.gridy = y;
-        g.anchor = GridBagConstraints.LINE_END;
-        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
-        final JLabel caption = new JLabel(label);
-        caption.setToolTipText(tip);
-        form.add(caption, g);
-        g.gridx = 1;
-        g.anchor = GridBagConstraints.LINE_START;
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.weightx = 1;
-        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
-        form.add(field, g);
-        final JComponent input = key.equals(KitJob.DAYS_FIELD) ? field : field(key);
-        input.setToolTipText(tip);
-        input.getAccessibleContext().setAccessibleName(label);
-        caption.setLabelFor(input);
-        inputs.put(key, input);
-        labels.put(key, label);
-        return y + 1;
-    }
-
-    private static JPanel withButton(final JComponent field, final JButton button) {
-        final JPanel p = new JPanel(new BorderLayout(4, 0));
-        p.add(field, BorderLayout.CENTER);
-        p.add(button, BorderLayout.EAST);
-        return p;
-    }
-
-    private static String lines(final String... lines) {
-        return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
+        FormRows.lay(body, left, form.panel());
     }
 
     /** Fills the fields with the selected job's; with none selected they are empty and off. */
@@ -600,23 +483,10 @@ public final class JobsEditor {
     /** Shows the selected job's problems and state, marks the list, and enables what applies. */
     private void refresh() {
         final int i = list.getSelectedIndex();
-        final Map<String, String> p = i < 0 ? Map.of() : problems(i);
-        inputs.forEach((key, field) -> field.putClientProperty("JComponent.outline", p.containsKey(key) ? "error" : null));
-        final Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
-        final String text = !refused.isEmpty() ? refused : first != null ? labels.getOrDefault(first.getKey(), first.getKey()) + ": " + first.getValue() : "";
-        message.setText(text.isEmpty() ? " " : Plain.text(text));
-        message.setForeground(Theme.DANGER);
+        form.show(i < 0 ? Map.of() : problems(i), why -> true, refused, "");
         state.setText(i < 0 ? " " : Plain.text(stateOf(rows.get(i))));
         list.repaint();
         changed.run();
-    }
-
-    private static JButton tool(final String icon, final String tip) {
-        final JButton b = new JButton(Icons.get(icon));
-        b.putClientProperty("JButton.buttonType", "toolBarButton");
-        b.setToolTipText(tip);
-        b.getAccessibleContext().setAccessibleName(tip);
-        return b;
     }
 
     /** For tests: the problems of the selected job as the form shows them, in field order. */

@@ -14,6 +14,8 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.ui.kit.format.Versions;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [MermaidDiagrams] draws Mermaid text to cached PNGs with `mmdc`, off the EDT, one drawing at a time.
@@ -244,13 +246,13 @@ class MermaidDiagramsTest {
     }
 
     /// [MermaidDiagrams#key] is a 32-character key equal for the text with blank lines around it and different for
-    /// other text; [MermaidDiagrams#compareVersions] compares Node versions numerically.
+    /// other text; [Versions#compare] compares Node versions numerically.
     @Test
     void theKeyFollowsTheTextNotItsSurroundingBlankLines() {
         assertThat(MermaidDiagrams.key(FLOW)).isEqualTo(MermaidDiagrams.key("\n" + FLOW + "\n\n"))
                 .isNotEqualTo(MermaidDiagrams.key("flowchart LR\n    A --> C\n")).hasSize(32);
-        assertThat(MermaidDiagrams.compareVersions("v22.20.0", "v20.9.1")).isPositive();
-        assertThat(MermaidDiagrams.compareVersions("v9.0.0", "v10.0.0")).isNegative();
+        assertThat(Versions.compare("v22.20.0", "v20.9.1")).isPositive();
+        assertThat(Versions.compare("v9.0.0", "v10.0.0")).isNegative();
     }
 
     /// [HtmlPane#diagramHtml] scales a ready picture to the pane's width keeping its ratio, shows a pending one's

@@ -3,30 +3,20 @@ package dev.marregui.comando.ui.dialogs.folders;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
-import java.awt.FlowLayout;
 import java.awt.Window;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.WindowConstants;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.ui.dialogs.FormRows;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
@@ -65,25 +55,12 @@ public final class FoldersDialog {
             }
         });
         dialog = new JDialog(owner, title, Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        dialog.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(final WindowEvent e) {
-                cancel();
-            }
-        });
         final JButton cancel = new JButton("Cancel");
         cancel.addActionListener(e -> cancel());
-        save.putClientProperty("JButton.buttonType", "default");
         save.addActionListener(e -> save());
         editor.onChange(() -> save.setEnabled(saveOffered(editor)));
         save.setEnabled(saveOffered(editor));
-        final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
-        buttons.add(cancel);
-        buttons.add(save);
-        final JPanel south = new JPanel(new BorderLayout());
-        south.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
-        south.add(buttons, BorderLayout.EAST);
+        final JPanel south = FormRows.south(cancel, save);
         if (!kitFolders.isEmpty()) {
             // the kit's folders back at the top, as comando set them at the first start on the kit; the user's stay
             final JButton kit = new JButton(USE_KIT);
@@ -91,20 +68,7 @@ public final class FoldersDialog {
             kit.addActionListener(e -> editor.addFirst(kitFolders));
             south.add(kit, BorderLayout.WEST);
         }
-        final JPanel content = new JPanel(new BorderLayout());
-        content.add(editor.component(), BorderLayout.CENTER);
-        content.add(south, BorderLayout.SOUTH);
-        dialog.setContentPane(content);
-        final JComponent root = dialog.getRootPane();
-        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
-        root.getActionMap().put("cancel", new AbstractAction() {
-            @Override
-            public void actionPerformed(final ActionEvent e) {
-                cancel();
-            }
-        });
-        dialog.pack();
-        dialog.setLocationRelativeTo(owner);
+        FormRows.frame(dialog, owner, editor.component(), south, this::cancel);
     }
 
     /**

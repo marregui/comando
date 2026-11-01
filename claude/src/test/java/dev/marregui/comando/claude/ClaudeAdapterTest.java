@@ -314,18 +314,19 @@ class ClaudeAdapterTest {
         return f;
     }
 
-    /// A process that exits while a child still holds its output open has its exit handled only after the drain
-    /// bound; a start in between replaces it. The replaced process's token is revoked when its exit is handled, and
-    /// the newer process keeps its own: a replaced run leaves no live bearer token behind.
+    /// A process that exits while a child still holds its output open has its exit handled only once the output closes
+    /// (the drain bound, here a minute, does not end it first); a start in between replaces it. The replaced process's
+    /// token is revoked when its exit is handled, and the newer process keeps its own: a replaced run leaves no live
+    /// bearer token behind. The child holds the output until the test creates `release`, so no step races a clock.
     @Test
     void aReplacedProcessHasItsTokenRevokedAtItsExit() throws Exception {
         final Path exe = tmp.resolve("replaced-claude.sh");
         Files.writeString(exe, """
                 #!/bin/sh
-                # stands in for claude -p: the first run exits at once while a child keeps its stdout open, so its exit
-                # is handled only after the drain bound; a later run reads its input until it closes
+                # stands in for claude -p: the first run exits at once while a child keeps its stdout open until the
+                # test creates release, so its exit is handled only then; a later run reads its input until it closes
                 if [ ! -f "$PWD/first.pid" ]; then
-                  sleep 3 &
+                  ( while [ ! -f "$PWD/release" ]; do sleep 0.05; done ) &
                   echo $$ > "$PWD/first.pid"
                   exit 0
                 fi
@@ -333,22 +334,28 @@ class ClaudeAdapterTest {
                 """);
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, transcripts, gateway,
-                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
-        final SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
-        adapter.start(spec);
-        sink.await(Intent.SessionStarted.class, WAIT);
-        final Path pidFile = tmp.resolve("first.pid");
-        Awaitility.await().atMost(WAIT).until(() -> Files.exists(pidFile) && !Files.readString(pidFile).isBlank());
-        final long pid = Long.parseLong(Files.readString(pidFile).strip());
-        Awaitility.await().atMost(WAIT).until(() -> ProcessHandle.of(pid).map(h -> !h.isAlive()).orElse(true));
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT), Duration.ofMinutes(1));
+        final Path release = tmp.resolve("release");
+        try {
+            final SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
+            adapter.start(spec);
+            sink.await(Intent.SessionStarted.class, WAIT);
+            final Path pidFile = tmp.resolve("first.pid");
+            Awaitility.await().atMost(WAIT).until(() -> Files.exists(pidFile) && !Files.readString(pidFile).isBlank());
+            final long pid = Long.parseLong(Files.readString(pidFile).strip());
+            Awaitility.await().atMost(WAIT).until(() -> ProcessHandle.of(pid).map(h -> !h.isAlive()).orElse(true));
 
-        adapter.start(spec); // within the drain bound: the first process's exit is not handled yet
-        sink.await(Intent.SessionStarted.class, e -> sink.of(Intent.SessionStarted.class).size() == 2, WAIT);
-        assertThat(revoked).as("the first exit is still pending").doesNotContain("token-work");
+            adapter.start(spec); // the child still holds the first process's output: its exit is not handled yet
+            sink.await(Intent.SessionStarted.class, e -> sink.of(Intent.SessionStarted.class).size() == 2, WAIT);
+            assertThat(revoked).as("the first exit is still pending").doesNotContain("token-work");
 
-        Awaitility.await().atMost(WAIT).untilAsserted(() -> assertThat(revoked).contains("token-work"));
-        assertThat(revoked).as("the newer process keeps its token").doesNotContain("token-work-2");
-        assertThat(sink.of(Intent.SessionExited.class)).as("the replaced process says nothing to the window").isEmpty();
+            Files.writeString(release, "");
+            Awaitility.await().atMost(WAIT).untilAsserted(() -> assertThat(revoked).contains("token-work"));
+            assertThat(revoked).as("the newer process keeps its token").doesNotContain("token-work-2");
+            assertThat(sink.of(Intent.SessionExited.class)).as("the replaced process says nothing to the window").isEmpty();
+        } finally {
+            Files.writeString(release, ""); // the child never outlives the test
+        }
     }
 
     /// A child of Claude Code that ignores SIGTERM is killed at close although Claude Code itself exits on the

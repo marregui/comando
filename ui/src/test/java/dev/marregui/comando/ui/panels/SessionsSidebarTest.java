@@ -61,6 +61,7 @@ import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.States;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.format.Versions;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -922,7 +923,7 @@ class SessionsSidebarTest {
 
 
     /// A running session on an older CLI than another session gets an amber `↑` and a details line saying so; a stopped
-    /// one gets none; [SessionRow#compareVersions] compares numerically and treats empty as oldest.
+    /// one gets none; [Versions#compare] compares numerically and treats empty as oldest.
     @Test
     void aRowSaysWhichCliVersionItRunsAndWhenAnotherSessionRunsANewerOne() {
         final long started = 1_760_000_000_000L;
@@ -940,21 +941,21 @@ class SessionsSidebarTest {
         assertThat(SessionRow.titleHtml(older.withStatus(Status.CLOSED, ""), true, false, 0, newest))
                 .as("a stopped session runs no Claude Code").doesNotContain("↑");
 
-        assertThat(SessionRow.compareVersions("2.1.303", "2.1.302")).isPositive();
-        assertThat(SessionRow.compareVersions("2.2.0", "2.1.303")).isPositive();
-        assertThat(SessionRow.compareVersions("2.1.10", "2.1.9")).as("by number, not text").isPositive();
-        assertThat(SessionRow.compareVersions("", "2.1.303")).isNegative();
+        assertThat(Versions.compare("2.1.303", "2.1.302")).isPositive();
+        assertThat(Versions.compare("2.2.0", "2.1.303")).isPositive();
+        assertThat(Versions.compare("2.1.10", "2.1.9")).as("by number, not text").isPositive();
+        assertThat(Versions.compare("", "2.1.303")).isNegative();
         assertThat(SessionRow.newestCli(List.of())).isEmpty();
     }
 
-    /// [SessionRow#compareVersions] treats a missing part as 0 and reads only the leading digits of a part, so a
+    /// [Versions#compare] treats a missing part as 0 and reads only the leading digits of a part, so a
     /// suffixed build compares by its number.
     @Test
     void versionsCompareByTheirNumbersWithMissingPartsAsZero() {
-        assertThat(SessionRow.compareVersions("2.1.303", "2.1.303")).isZero();
-        assertThat(SessionRow.compareVersions("2.1", "2.1.0")).as("a missing part is 0").isZero();
-        assertThat(SessionRow.compareVersions("2.1.4-beta", "2.1.3")).as("the digits before a suffix").isPositive();
-        assertThat(SessionRow.compareVersions("2.1.303", "")).isPositive();
+        assertThat(Versions.compare("2.1.303", "2.1.303")).isZero();
+        assertThat(Versions.compare("2.1", "2.1.0")).as("a missing part is 0").isZero();
+        assertThat(Versions.compare("2.1.4-beta", "2.1.3")).as("the digits before a suffix").isPositive();
+        assertThat(Versions.compare("2.1.303", "")).isPositive();
     }
 
     private static SessionState running(final String name, final String cliVersion, final long started) {

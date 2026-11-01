@@ -104,6 +104,27 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     private record Caller(String session, Semaphore running) {
     }
 
+    /**
+     * The place one request holds, given back once. A request whose body has been read whole gives it back before its
+     * answer is sent, so a client that sends its next request the moment it has the answer never finds its own place
+     * still taken; any other keeps it until the exchange is closed, as closing drains a body not read.
+     */
+    private final class Place {
+        private final Caller caller;
+        private boolean held = true;
+
+        private Place(final Caller caller) {
+            this.caller = caller;
+        }
+
+        private void release() {
+            if (held) {
+                held = false;
+                McpServer.this.release(caller);
+            }
+        }
+    }
+
     private final McpTools tools;
     private final HttpServer http;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -226,6 +247,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
                 }
                 return;
             }
+            final Place place = new Place(caller);
             try (ex) {
                 if (caller == null) {
                     send(ex, 401, null);
@@ -236,14 +258,14 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
                     return;
                 }
                 switch (ex.getRequestMethod()) {
-                    case "POST" -> post(ex, caller.session(), arrival);
+                    case "POST" -> post(ex, place, caller.session(), arrival);
                     case "DELETE" -> send(ex, 200, null);
                     default -> send(ex, 405, null); // no server-initiated stream
                 }
             } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "cannot answer an MCP request [method=" + ex.getRequestMethod() + ", path=" + ex.getRequestURI().getPath() + ']', e);
             } finally {
-                release(caller);
+                place.release();
             }
         } finally {
             arrival.disarm();
@@ -303,7 +325,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         }
     }
 
-    private void post(final HttpExchange ex, final String session, final Deadline arrival) throws IOException {
+    private void post(final HttpExchange ex, final Place place, final String session, final Deadline arrival) throws IOException {
         final byte[] body;
         try (final InputStream in = ex.getRequestBody()) {
             body = in.readNBytes(MAX_BODY + 1);
@@ -327,18 +349,18 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         try {
             request = json.readTree(body);
         } catch (final JacksonException e) {
-            send(ex, 400, error(null, -32700, "parse error"));
+            send(ex, place, 400, error(null, -32700, "parse error"));
             return;
         }
         if (request == null || !request.isObject()) {
-            send(ex, 400, error(null, -32600, "a request is one JSON-RPC object"));
+            send(ex, place, 400, error(null, -32600, "a request is one JSON-RPC object"));
             return;
         }
         if (!request.has("id")) {
             if ("notifications/cancelled".equals(request.path("method").asString(""))) {
                 tools.cancelled(callKey(session, request.path("params").path("requestId")));
             }
-            send(ex, 202, null); // a notification or a response; nothing to answer
+            send(ex, place, 202, null); // a notification or a response; nothing to answer
             return;
         }
         final JsonNode id = request.get("id");
@@ -355,7 +377,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
             case "tools/call" -> result(id, call(session, params, callKey(session, id)));
             default -> error(id, -32601, "method not found: " + method);
         };
-        send(ex, 200, response);
+        send(ex, place, 200, response);
     }
 
     private ObjectNode initialize(final JsonNode params) {
@@ -405,6 +427,12 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         e.put("code", code);
         e.put("message", message);
         return r;
+    }
+
+    /** Gives back the place of a request whose body has been read whole, then answers it. */
+    private void send(final HttpExchange ex, final Place place, final int status, final JsonNode body) throws IOException {
+        place.release();
+        send(ex, status, body);
     }
 
     private void send(final HttpExchange ex, final int status, final JsonNode body) throws IOException {

@@ -75,13 +75,9 @@ final class PanelRules {
             }
             // removing the last open panel (by the user, or its file deleted outside) leaves an empty one in its place
             // nextId starts again at every run, while closed panels keep their ids: skip any id a panel holds
-            PanelId fresh = new PanelId("p-" + s.nextId());
-            s = s.withIdTaken();
-            while (s.panel(fresh).isPresent() || s.closedPanel(fresh).isPresent()) {
-                fresh = new PanelId("p-" + s.nextId());
-                s = s.withIdTaken();
-            }
-            final PanelState empty = new PanelState(fresh, defaultTitle(s), panel.get().connection(), "");
+            final Shared.Fresh fresh = freshPanel(s);
+            s = fresh.state();
+            final PanelState empty = new PanelState(fresh.id(), defaultTitle(s), panel.get().connection(), "");
             s = s.withPanels(List.of(panel.get(), empty), s.focused());
         }
         final List<Effect> effects = new ArrayList<>();

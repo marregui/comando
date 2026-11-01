@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import dev.marregui.comando.core.result.ColumnKind;
+import dev.marregui.comando.core.result.ResultText;
 import dev.marregui.comando.core.result.ResultView;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -62,26 +63,6 @@ final class ResultViews {
 
     /** The first {@link #MAX_TABLE_ROWS} rows as text, SQL NULL as a null cell, apart from the text {@code null}. */
     static ViewSpec.Table table(final ResultView r) {
-        final List<String> columns = new ArrayList<>(r.columnCount());
-        for (int c = 0; c < r.columnCount(); c++) {
-            columns.add(r.columnName(c));
-        }
-        final int n = Math.min(r.rowCount(), MAX_TABLE_ROWS);
-        final List<List<String>> rows = new ArrayList<>(n);
-        final StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < n; i++) {
-            final List<String> row = new ArrayList<>(columns.size());
-            for (int c = 0; c < columns.size(); c++) {
-                if (r.isNull(i, c)) {
-                    row.add(null);
-                    continue;
-                }
-                sb.setLength(0);
-                r.format(i, c, sb);
-                row.add(sb.toString());
-            }
-            rows.add(row);
-        }
-        return new ViewSpec.Table(columns, rows);
+        return new ViewSpec.Table(ResultText.columns(r), ResultText.rows(r, MAX_TABLE_ROWS));
     }
 }

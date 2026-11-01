@@ -57,6 +57,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private final TranscriptRegistry transcripts;
     private final McpGateway mcp;
     private final ClaudeSettings settings;
+    /** How long after a process's exit a child of it may hold its stdout open ({@link ClaudeProcess#DRAIN_MILLIS}). */
+    private final Duration drain;
     private final ObjectMapper json = new ObjectMapper();
     private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
     private final ScheduledExecutorService timer =
@@ -150,10 +152,17 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     };
 
     public ClaudeAdapter(final IntentSink sink, final TranscriptRegistry transcripts, final McpGateway mcp, final ClaudeSettings settings) {
+        this(sink, transcripts, mcp, settings, Duration.ofMillis(ClaudeProcess.DRAIN_MILLIS));
+    }
+
+    /** As the public constructor, with {@code drain} in place of {@link ClaudeProcess#DRAIN_MILLIS}; for tests. */
+    ClaudeAdapter(final IntentSink sink, final TranscriptRegistry transcripts, final McpGateway mcp, final ClaudeSettings settings,
+                  final Duration drain) {
         this.sink = sink;
         this.transcripts = transcripts;
         this.mcp = mcp;
         this.settings = settings;
+        this.drain = drain;
         deleteStaleConfigs(settings.runDir());
     }
 
@@ -680,7 +689,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             s.mapper.resetStreams();
             run.process = ClaudeProcess.start(s.name, argv, workDir, launch, helpers,
                     line -> s.run(() -> onLine(s, line)),
-                    code -> s.run(() -> onExit(s, run, code)));
+                    code -> s.run(() -> onExit(s, run, code)), drain);
             s.current = run;
             started.put(run, s.name);
             s.live = true;
