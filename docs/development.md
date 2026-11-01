@@ -238,8 +238,9 @@ The documents are comando's specification as much as its manual, so I keep them 
 | Rule | How |
 |---|---|
 | a flat set | every document but the root `README.md` and `INSTALL.md` sits in `docs/`, with one entry point, [docs/README.md](README.md); the only folders are `images/` and `adr/` |
-| one canonical place | each concept is described in one document and linked from the others; the tutorial alone repeats, because it teaches by walking the window, and it links to where each step is described |
+| one canonical place | each concept is described in one document, [§7.2](#72-where-each-concept-lives) says which, and the others link to it in at most a line; the tutorial alone repeats, because it teaches by walking the window and Help ▸ Tutorial shows its links as plain text, so it must stand on its own |
 | true to the code | a claim about behaviour is checked against the code when it is written, and a change to the code changes the document in the same commit |
+| links resolve | every relative link, image and anchor in `README.md`, `INSTALL.md`, `docs/` and `adr/` lands on a file and a heading that exist; a link never points at `#` alone |
 | my voice | first person where I explain a choice; exact and factual where a rule is stated |
 | decisions | one record per decision in `adr/`, dated, with who decided; [adr/README.md](adr/README.md) is the index, checked by `AdrIndexTest` |
 | the tutorial ships | `docs/tutorial.md` is copied into the `ui` jar for Help ▸ Tutorial (`ui/build.gradle.kts`), so the app and the docs show one text; it is the one documentation change CI builds |
@@ -272,3 +273,32 @@ gold:
 | `brain-overview.svg`, `brain-anatomy.svg`, `brain-flows.svg`, `brain-reflect.svg`, `brain-loop.svg` | a session and its five parts; the brain's parts and who writes them; every flow; `/reflect`; the learning loop | [Kit and brain](kit-and-brain.md) |
 | `modules.svg` | the modules and what each depends on | [Architecture](architecture.md) |
 | `command-flow.svg` | one command's path through intents, the reducer and the ports | [Architecture](architecture.md) |
+
+### 7.2 Where each concept lives
+
+When a feature lands, its description goes to the one document below that owns the concept, and every other mention
+becomes a link. A document that is not the owner keeps only what its reader needs to follow its own text.
+
+| Concept | Owner |
+|---|---|
+| why comando exists, what it does at a glance | [README](../README.md) |
+| installing, upgrading and uninstalling comando; offering a kit | [Install](../INSTALL.md) |
+| a first walk through the window | [Tutorial](tutorial.md), which repeats on purpose |
+| the window, panels, themes and their file format, the sidebar and its tabs, keys on every desktop | [Workbench](workbench.md) §1, §2 |
+| how a block is classified and where it goes, where results land | [Workbench](workbench.md) §2 |
+| what the user does with a database: connections, cancel, results, plots, the schema explorer | [Workbench](workbench.md) §3 |
+| instances, the comando Edge, what travels between instances and the question protocol | [Workbench](workbench.md) §4 |
+| the terminal and Gradle runs (command, output bound, stop) | [Workbench](workbench.md) §5 |
+| the Files tab and git changes | [Workbench](workbench.md) §6 |
+| what is kept on disk: the data root and each file in it | [Workbench](workbench.md) §7 |
+| the `claude -p` process contract: arguments, MCP configuration, stderr, threads | [Claude Code](claude-code.md) §1 |
+| the checkpoint | [Claude Code](claude-code.md) §2 |
+| the MCP tools; the metrics the sessions write and what comando reads back | [Claude Code](claude-code.md) §3 |
+| approvals, permission rules, read-only SQL, production connections, secrets | [Claude Code](claude-code.md) §4 |
+| a kit's parts and what each does in a session | [Kit and brain](kit-and-brain.md) §2 |
+| the root, its launch environment, a kit's upgrade, backups and jobs | [Kit and brain](kit-and-brain.md) §3 |
+| the brain, its rules, its flows, `/reflect`, the learning loop | [Kit and brain](kit-and-brain.md) §4 to §7 |
+| modules, state and intents, effects, ports, threads, ownership and exit | [Architecture](architecture.md) §2 to §7 |
+| each module's classes, interface, own threads and tests; the database mechanism (cancel handshake, storage by column, catalogue choice) | [Architecture](architecture.md) §8 to §15 |
+| prerequisites, Gradle tasks, CI, configuration properties, code rules, quality gates, these rules and the pictures | [Development](development.md) |
+| why a thing is the way it is | [Decisions](adr/README.md) |
