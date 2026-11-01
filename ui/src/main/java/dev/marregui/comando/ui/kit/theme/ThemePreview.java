@@ -37,7 +37,7 @@ public final class ThemePreview {
             g.setPaint(tint.ramp(y + pad, y + h - pad, false));
             g.fillRect(x + pad, y + pad, 3, h - 2 * pad);
             final int left = x + pad + 3 + pad;
-            final Font heading = Theme.serif().deriveFont(text.getSize2D() + 2f);
+            final Font heading = Theme.serif().deriveFont(Theme.size(text.getSize2D(), Theme.TextSize.SUBTITLE));
             g.setFont(heading);
             final FontMetrics hm = g.getFontMetrics();
             final int line = y + pad + hm.getAscent();
@@ -65,7 +65,7 @@ public final class ThemePreview {
             g.setColor(((OnGround) Theme.CARD_BORDER).on(ground));
             g.setStroke(new BasicStroke(1f));
             g.draw(card);
-            g.setFont(text.deriveFont(text.getSize2D() - 1f));
+            g.setFont(Theme.font(text, Theme.TextSize.SMALL));
             final FontMetrics tm = g.getFontMetrics();
             g.setColor(Theme.fixed(Theme.MUTED, light));
             g.drawString("a card, muted", left + pad, cardTop + (cardH + tm.getAscent() - tm.getDescent()) / 2);

@@ -53,8 +53,18 @@ public record FakeResult(long requestId, List<String> names, List<ColumnKind> ki
         return (Boolean) rows.get(row).get(column);
     }
 
+    /**
+     * As the real result answers it: a TEXT cell's value, null for a SQL NULL; any other cell's display text, as
+     * {@link #format} writes it (a timestamp formatted, a SQL NULL as {@code null}).
+     */
     @Override
     public String getText(final int row, final int column) {
-        return String.valueOf(rows.get(row).get(column));
+        if (kinds.get(column) == ColumnKind.TEXT) {
+            final Object v = rows.get(row).get(column);
+            return v == null ? null : v.toString();
+        }
+        final StringBuilder sb = new StringBuilder();
+        format(row, column, sb);
+        return sb.toString();
     }
 }

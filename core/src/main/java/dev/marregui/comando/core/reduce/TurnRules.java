@@ -36,7 +36,17 @@ final class TurnRules {
     /** The message of a turn the user interrupted, as the stream mapper reports it. */
     static final String INTERRUPTED = "interrupted";
 
+    /** The user's own prompt from {@code panel}. */
     static Transition runPrompt(final Clock clock, final AppState s, final PanelState panel, final String prompt) {
+        return runPrompt(clock, s, panel, prompt, "");
+    }
+
+    /**
+     * A prompt from {@code panel}, sent by {@code from} (empty for the user). A session that is not running starts for
+     * it; a stopped session starts only for the user or one of its creators (record 44: stopping is the user's circuit
+     * breaker, whichever tool reaches the session).
+     */
+    static Transition runPrompt(final Clock clock, final AppState s, final PanelState panel, final String prompt, final String from) {
         final String subject = Notice.panel(panel.id().value());
         if (panel.session().isEmpty()) {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "Panel " + panel.title()
@@ -54,6 +64,10 @@ final class TurnRules {
         }
         final List<Effect> effects = new ArrayList<>();
         if (!session.status().isUsable()) {
+            final Optional<String> breaker = startRefusal(s, session, from);
+            if (breaker.isPresent()) {
+                return Transition.of(notice(clock, s, Notice.Level.WARN, breaker.get(), subject));
+            }
             effects.add(new Effect.StartClaude(session.spec()));
             session = session.withStatus(Status.OPENING, "");
         }
@@ -68,12 +82,19 @@ final class TurnRules {
             // typed, sent by the button or by another session alike: the session is no longer due, and the automatic
             // checkpoint waits for the context to drop below its threshold again; the session is locked until the
             // command's turn, and every turn queued before it, has ended (record 130)
-            session = session.withReflection(Reflection.checkpointed(session.contextTokens(), session.contextWindow()))
+            session = session.withReflection(Reflection.checkpointed())
                     .withCheckpointArmed(false)
                     .withCheckpointTurns(session.pendingTurns());
         } else {
             // a prompt after the checkpoint: the user goes on in this conversation, which is not compacted
             session = session.withCheckpointCompacts(false);
+        }
+        // a prompt sent or queued meanwhile runs in place of the carry-on prompt; the automatic checkpoint, and its
+        // /compact, set it again (see checkpoint and turnEnded)
+        session = session.withCheckpointContinues(false);
+        if (!prompt.equals(Reducer.CONTINUE_PROMPT)) {
+            // someone's prompt, not the carry-on: the automatic checkpoint may follow a turn again
+            session = session.withCarriedOn(false);
         }
         if (carries) {
             session = session.withSpec(session.spec().withCarried(""));
@@ -97,26 +118,27 @@ final class TurnRules {
      * prompt since its clear: there is nothing new to compact, and the command runs alone.
      */
     static Transition checkpoint(final Clock clock, final AppState s, final String name) {
-        return checkpoint(clock, s, name, false);
+        return checkpoint(clock, s, name, false, "");
     }
 
     /**
      * The checkpoint; {@code automatic} adds {@link SessionSpec#AUTO_ARGUMENT} to the command, so a command that knows it
-     * asks the user nothing and holds its decisions back (record 131).
+     * asks the user nothing and holds its decisions back (record 131), and, once the compaction that follows has ended
+     * normally, the session is prompted to carry on ({@link Reducer#CONTINUE_PROMPT}, record 129's amendment).
      */
-    static Transition checkpoint(final Clock clock, final AppState s, final String name, final boolean automatic) {
+    static Transition checkpoint(final Clock clock, final AppState s, final String name, final boolean automatic, final String from) {
         final Optional<SessionState> found = s.session(name);
         if (found.isEmpty()) {
             return Transition.of(s);
         }
         final String command = found.get().spec().checkpoint();
-        final Transition t = sessionCommand(clock, s, name, automatic && !command.isBlank() ? command + ' ' + SessionSpec.AUTO_ARGUMENT : command);
+        final Transition t = sessionCommand(clock, s, name, automatic && !command.isBlank() ? command + ' ' + SessionSpec.AUTO_ARGUMENT : command, from);
         final boolean sent = t.effects().stream().anyMatch(e -> e instanceof Effect.SendToClaude);
         if (!sent || !found.get().spec().carried().isEmpty()) {
             return t;
         }
         return t.state().session(name)
-                .map(x -> new Transition(t.state().withSession(x.withCheckpointCompacts(true)), t.effects()))
+                .map(x -> new Transition(t.state().withSession(x.withCheckpointCompacts(true).withCheckpointContinues(automatic)), t.effects()))
                 .orElse(t);
     }
 
@@ -147,6 +169,75 @@ final class TurnRules {
         };
     }
 
+    /**
+     * Why a prompt from {@code from} must not start {@code session}, which is not running: only the user or one of its
+     * creators starts a session again (record 44); empty when it may.
+     */
+    private static Optional<String> startRefusal(final AppState s, final SessionState session, final String from) {
+        if (from.isEmpty() || session.status().isUsable() || s.creators(session.name()).contains(from)) {
+            return Optional.empty();
+        }
+        return Optional.of(from + " did not create session " + session.name() + ", which is not running; only the user or its creator starts it "
+                + "(record 44)");
+    }
+
+    /**
+     * Why a prompt from {@code from} in {@code panel} is not sent, as {@link #runPrompt} says it; empty when it would be.
+     */
+    static Optional<String> promptRefusal(final AppState s, final PanelState panel, final String from) {
+        if (panel.session().isEmpty()) {
+            return Optional.of("Panel " + panel.title() + " has no session");
+        }
+        final Optional<SessionState> found = s.session(panel.session());
+        if (found.isEmpty()) {
+            return Optional.of("No session called " + panel.session());
+        }
+        if (found.get().status() == Status.CLOSING) {
+            return Optional.of("Session " + found.get().name() + " is stopping");
+        }
+        return startRefusal(s, found.get(), from);
+    }
+
+    /**
+     * Why {@code command} from {@code from} does not reach session {@code name}, as {@link #sessionCommand} decides it;
+     * empty when it would be sent.
+     */
+    static Optional<String> commandRefusal(final AppState s, final String name, final String command, final String from) {
+        final Optional<SessionState> found = s.session(name);
+        if (found.isEmpty()) {
+            return Optional.of("No session called " + name);
+        }
+        if (command.isBlank()) {
+            return Optional.of("Session " + name + " has no command to send: its checkpoint command is empty");
+        }
+        if (found.get().status() == Status.CLOSING) {
+            return Optional.of("Session " + name + " is stopping");
+        }
+        final Optional<PanelState> panel = s.panelsBoundToSession(name).stream().findFirst().or(() -> s.closedPanelOfSession(name));
+        if (panel.isEmpty()) {
+            return Optional.of("Session " + name + " has no panel; open it to send " + command);
+        }
+        return promptRefusal(s, panel.get(), from);
+    }
+
+    /** The agent an intent came from through an action tool; empty for the user's gestures and every other intent. */
+    static String from(final Intent i) {
+        return switch (i) {
+            case Intent.RunText r -> r.from();
+            case Intent.Checkpoint c -> c.from();
+            case Intent.SessionCommand c -> c.from();
+            case Intent.SettleDecision d -> d.from();
+            case Intent.StartFresh f -> f.from();
+            case Intent.SaveSession v -> v.from();
+            case Intent.SetSessionModel m -> m.from();
+            case Intent.SetSessionEffort e -> e.from();
+            case Intent.RemoveSession r -> r.from();
+            case Intent.RemovePanel r -> r.from();
+            case Intent.ClearTranscript c -> c.from();
+            default -> "";
+        };
+    }
+
     private static boolean locked(final AppState s, final String name) {
         return !name.isEmpty() && s.session(name).map(SessionState::isCheckpointing).orElse(false);
     }
@@ -156,6 +247,11 @@ final class TurnRules {
      * it there.
      */
     static Transition sessionCommand(final Clock clock, final AppState s, final String name, final String command) {
+        return sessionCommand(clock, s, name, command, "");
+    }
+
+    /** As {@link #sessionCommand(Clock, AppState, String, String)}, sent by {@code from}: see {@link #runPrompt}. */
+    static Transition sessionCommand(final Clock clock, final AppState s, final String name, final String command, final String from) {
         final Optional<SessionState> found = s.session(name);
         if (found.isEmpty() || command.isBlank() || found.get().status() == Status.CLOSING) {
             return Transition.of(s);
@@ -166,7 +262,7 @@ final class TurnRules {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "Session " + name + " has no panel; open it to send "
                     + command, Notice.session(name)));
         }
-        return runPrompt(clock, s, panel.get(), command);
+        return runPrompt(clock, s, panel.get(), command, from);
     }
 
     /**
@@ -195,10 +291,14 @@ final class TurnRules {
     }
 
     /**
-     * A turn ended. The checkpoint's turn, once finished, sends {@code /compact}; a turn that leaves the context at or
-     * above {@code threshold} (0 or below: never) runs the checkpoint, once per crossing (record 129).
+     * A turn ended. The checkpoint's turn, once finished, sends {@code /compact}; the automatic checkpoint's compaction,
+     * once it has ended normally with nothing queued, sends {@link Reducer#CONTINUE_PROMPT}; a turn that leaves the
+     * context at or above {@code percent} of the session's context window (0 or below: never) runs the checkpoint, once
+     * per crossing, at the turn the session falls due (records 129, 131). A crossing starts at a turn whose last model
+     * call read less than the threshold, and the carry-on is followed by no automatic checkpoint until someone prompts
+     * the session again.
      */
-    static Transition turnEnded(final Clock clock, AppState s, final Intent.SessionTurnEnded i, final long threshold) {
+    static Transition turnEnded(final Clock clock, AppState s, final Intent.SessionTurnEnded i, final int percent) {
         Optional<SessionState> found = s.session(i.name());
         if (found.isEmpty()) {
             return Transition.of(s);
@@ -220,7 +320,10 @@ final class TurnRules {
                         i.contextTokens() >= 0 ? i.contextTokens() : found.get().contextTokens(),
                         i.contextWindow() > 0 ? i.contextWindow() : found.get().contextWindow(), now)
                 .withActivity("", now);
-        x = x.withReflection(x.reflection().afterTurn(x.contextTokens(), x.contextWindow()));
+        // a context a model call read: a compaction's own count leaves out the system prompt and the tools, which the
+        // next call reads again, so neither the session falling due nor the automatic checkpoint goes by it (record 129)
+        final boolean read = i.contextTokens() > 0 && !i.estimated();
+        x = x.withReflection(x.reflection().afterTurn(read ? x.contextTokens() : -1L, x.contextWindow(), percent));
         AppState next = s.withSession(x);
         final List<Effect> effects = new ArrayList<>();
         // the user's own interrupt is an outcome, not a failure
@@ -233,19 +336,30 @@ final class TurnRules {
         if (checkpointDone) {
             x = x.withCheckpointCompacts(false);
         }
+        // the automatic checkpoint's /compact has ended once nothing runs: the session carries on when it ended
+        // normally; an error or an interrupt keeps the session where it stopped (record 129's amendment)
+        final boolean compaction = found.get().checkpointContinues() && !found.get().checkpointCompacts() && !x.isBusy();
+        final boolean continues = compaction && ran && !i.error() && !x.isAwaitingHandOff() && x.status().isUsable();
+        // the automatic origin goes on to the compaction only when it is sent; every other end of the checkpoint ends it
+        final boolean compactionContinues = compacts && x.checkpointContinues();
+        if (compaction || checkpointDone) {
+            x = x.withCheckpointContinues(false);
+        }
         // the turns that ended count down to the checkpoint's own, interrupted or failed alike; with nothing left to
         // run, none is under way (record 130)
         final int ended = Math.max(0, found.get().pendingTurns() - x.pendingTurns());
         x = x.withCheckpointTurns(x.isBusy() ? Math.max(0, x.checkpointTurns() - ended) : 0);
-        // the context fell below the threshold (a compaction, a new conversation): the next crossing checkpoints again
-        final boolean above = threshold > 0 && x.contextTokens() >= threshold;
-        if (threshold > 0 && !above) {
+        // the context a model call read fell below the threshold (after a compaction, in a new conversation): the next
+        // crossing checkpoints again; a compaction's own count never re-arms, or the checkpoint would follow its own
+        // carry-on without end
+        final boolean above = Reflection.above(x.contextTokens(), x.contextWindow(), percent);
+        if (percent > 0 && x.contextWindow() > 0 && read && !above) {
             x = x.withCheckpointArmed(true);
         }
         // at the threshold, the session's own turn finished: nothing queued, no background work out, no checkpoint
-        // under way, and a checkpoint command to run
-        final boolean automatic = above && x.checkpointArmed() && !checkpointDone && !x.checkpointCompacts() && !i.error() && !x.isBusy()
-                && !x.isAwaitingHandOff() && x.status().isUsable() && !x.spec().checkpoint().isBlank();
+        // under way, a checkpoint command to run, and someone's prompt since the last carry-on
+        final boolean automatic = above && x.checkpointArmed() && !x.carriedOn() && !checkpointDone && !x.checkpointCompacts() && !i.error()
+                && !x.isBusy() && !x.isAwaitingHandOff() && x.status().isUsable() && !x.spec().checkpoint().isBlank();
         next = next.withSession(x);
         if (interrupted) {
             next = notice(clock, next, Notice.Level.INFO, i.name() + ": interrupted", Notice.session(i.name()));
@@ -260,7 +374,8 @@ final class TurnRules {
         // the compaction, or the automatic checkpoint, runs from the session's panel as the Compact and Checkpoint
         // buttons do: the Session tab shows it
         final Transition follow = compacts ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
-                : automatic ? checkpoint(clock, next, i.name(), true) : null;
+                : continues ? sessionCommand(clock, next, i.name(), Reducer.CONTINUE_PROMPT)
+                : automatic ? checkpoint(clock, next, i.name(), true, "") : null;
         if (follow != null) {
             next = follow.state();
             effects.addAll(follow.effects());
@@ -270,9 +385,15 @@ final class TurnRules {
                 x = x.withCheckpointArmed(false);
                 next = next.withSession(x);
             }
+            if (continues) {
+                // sent or refused, the next automatic checkpoint waits for a prompt of the user's or another session's
+                x = x.withCarriedOn(true);
+                next = next.withSession(x);
+            }
             if (compacts) {
-                // the compaction is the checkpoint's last turn: the session stays locked until it ends
-                x = x.withCheckpointTurns(x.pendingTurns());
+                // the compaction is the checkpoint's last turn: the session stays locked until it ends; the automatic
+                // checkpoint's carries on after it
+                x = x.withCheckpointTurns(x.pendingTurns()).withCheckpointContinues(compactionContinues);
                 next = next.withSession(x);
             }
         }

@@ -60,6 +60,11 @@ final class StreamMapper {
     /** The context size: input tokens of the last main-thread API call; -1 until one is seen. */
     private long contextTokens = -1;
     /**
+     * {@link #contextTokens} is a compaction's own count ({@code post_tokens}), not what a model call read, until the
+     * next call reports its own.
+     */
+    private boolean contextEstimated;
+    /**
      * The context window the last turn reported, or the one the stored conversation's last turn kept; 0 when unknown.
      */
     private long contextWindow;
@@ -119,6 +124,7 @@ final class StreamMapper {
                 // /clear: a system/init with the new conversation's id follows; the old context no longer applies, and
                 // the clear's turn makes no model call to report the new one
                 contextTokens = 0L;
+                contextEstimated = false;
                 note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asString("clear") + "); a new one starts");
             }
             default -> LOG.log(System.Logger.Level.DEBUG, "event ignored [session=" + session + ", type=" + type + ']');
@@ -183,6 +189,7 @@ final class StreamMapper {
             if (tokens <= 0) {
                 tokens = kept.get()[0];
                 contextTokens = tokens;
+                contextEstimated = false;
             }
         }
         if (tokens > 0) {
@@ -292,8 +299,10 @@ final class StreamMapper {
                 final JsonNode m = e.path("compact_metadata");
                 note(Block.NoteKind.COMPACT, "Compacted " + m.path("trigger").asString("") + ": "
                         + m.path("pre_tokens").asLong(0) + " → " + m.path("post_tokens").asLong(0) + " tokens");
-                // the context before compaction no longer applies; 0 means unknown until the next call reports it
+                // the context before compaction no longer applies; 0 means unknown until the next call reports it. The
+                // count leaves out the system prompt and the tools, so it is shown, never taken as what a call read
                 contextTokens = Math.max(0L, m.path("post_tokens").asLong(0));
+                contextEstimated = true;
             }
             case "hook_response" -> {
                 final String out = e.path("output").asString("").strip();
@@ -316,6 +325,13 @@ final class StreamMapper {
             }
             case "background_tasks_changed" -> backgroundTasks(e.path("tasks"));
             case "permission_denied" -> note(Block.NoteKind.DENIED, "Denied: " + e.path("tool_name").asString("tool"));
+            case "informational" -> {
+                // a plain-text banner of the loop (2.1.316: a model the organisation restricts replaced by another)
+                final String text = e.path("content").asString("").strip();
+                if (!text.isEmpty()) {
+                    note(Block.NoteKind.INFO, (e.path("level").asString("").equals("warning") ? "Warning: " : "") + clip(text, 2_000));
+                }
+            }
             default -> LOG.log(System.Logger.Level.DEBUG, "system event ignored [session=" + session + ", subtype=" + subtype + ']');
         }
     }
@@ -438,6 +454,7 @@ final class StreamMapper {
                     + usage.path("cache_read_input_tokens").asLong(0);
             if (tokens > 0) {
                 contextTokens = tokens;
+                contextEstimated = false;
                 if (!replaying) {
                     // the session bar follows each model call, not only the turn's end (record 120)
                     sink.dispatch(new Intent.SessionContext(session, tokens, contextWindow));
@@ -684,7 +701,7 @@ final class StreamMapper {
             contextWindow = window;
         }
         sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(0),
-                tokens, window, error, message, error ? "" : e.path("result").asString("")));
+                tokens, window, error, message, error ? "" : e.path("result").asString(""), contextEstimated));
         turnMetric(e, tokens, window, error, subtype);
     }
 
@@ -713,8 +730,14 @@ final class StreamMapper {
         metrics.write(m);
     }
 
+    /**
+     * What a failed turn says. Claude Code marks an interrupt by its {@code terminal_reason} ({@code aborted_streaming},
+     * {@code aborted_tools}); an {@code error_during_execution} without one is a crash or a startup failure, told by its
+     * subtype and {@code errors}.
+     */
     private static String errorText(final JsonNode e) {
-        if (e.path("terminal_reason").asString("").equals("aborted_tools") || e.path("subtype").asString("").equals("error_during_execution")) {
+        final String reason = e.path("terminal_reason").asString("");
+        if (reason.equals("aborted_streaming") || reason.equals("aborted_tools")) {
             return "interrupted";
         }
         final String r = e.path("result").asString("");

@@ -83,7 +83,7 @@ public final class KitGit implements AutoCloseable {
             }
             final Git.Run remotes = git.run(repo, List.of("remote"));
             return remotes.exit() == 0 && !text(remotes).isEmpty();
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             return false;
         }
     }

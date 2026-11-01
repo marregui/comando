@@ -4,11 +4,13 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
@@ -282,7 +284,7 @@ public final class EditorPanel extends JPanel {
     }
 
     /** The tooltip of the sessions sidebar's menu item that has a session rewrite its panel. */
-    static final String POLISH_TIP = "Have the session rewrite the panel's text as a professional Markdown document";
+    public static final String POLISH_TIP = "Have the session rewrite the panel's text as a professional Markdown document";
 
     /**
      * The prompt that has the panel's session rewrite {@code text}, the whole of the panel titled {@code title}, as a
@@ -290,7 +292,7 @@ public final class EditorPanel extends JPanel {
      * sentences addressed to Claude dropped, nothing of its own added but the questions the text leaves open; then a
      * few lines on what changed beyond wording.
      */
-    static String polishPrompt(final String title, final String text) {
+    public static String polishPrompt(final String title, final String text) {
         return "Rewrite the text below, the whole text of the comando panel \"" + title + "\", as a professional Markdown "
                 + "document, and replace the panel's text with it (comando's ui_set_editor, panel \"" + title + "\"). Keep the "
                 + "author's intent and every fact; correct spelling and names, checking them where you can; give it a title "
@@ -452,9 +454,9 @@ public final class EditorPanel extends JPanel {
             return;
         }
         watched = v;
-        final java.awt.Dimension[] extent = {v.getExtentSize()};
+        final Dimension[] extent = {v.getExtentSize()};
         v.addChangeListener(e -> {
-            final java.awt.Dimension now = v.getExtentSize();
+            final Dimension now = v.getExtentSize();
             // laid out with a size: a tab never shown has none, and nothing scrolls it
             if (reloading || !isLog() || now.height <= 0) {
                 return;
@@ -470,7 +472,7 @@ public final class EditorPanel extends JPanel {
             followsEnd = viewAtEnd(v);
         });
         editor.area().addHierarchyListener(e -> {
-            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && editor.area().isShowing()
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && editor.area().isShowing()
                     && isLog() && followsEnd) {
                 Edt.later(this::showEndFollowing);
             }

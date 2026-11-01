@@ -5,7 +5,9 @@ import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.KeyEvent;
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,15 +21,18 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JPasswordField;
 import javax.swing.JRootPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.LookAndFeel;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -36,9 +41,11 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.KitRoot;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.Attribute;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -47,11 +54,13 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.States;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.shell.ComandoUi;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -61,6 +70,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Enter saves and ⌘⏎ saves and assigns; Escape, the close button and opening another form ask before discarding.
 /// - New and clone open their own form; reopening the resource being edited keeps the edits.
 /// - Assign and Start save an unsaved form first and say so; an invalid form says why; Test reads the unsaved form.
+/// - A connection pointed elsewhere keeps its password only when it was typed into the form, not carried as filled.
+/// - A save the reducer would refuse, as while the session runs its checkpoint, keeps the form open with the reason.
+/// - The working folder's own `.claude` settings are named under the context line, with the mode they set.
 /// - The message shows the latest notice about the resource after the click.
 /// - Only the model takes typed values; a new start on a stored conversation warns.
 /// - A new session's folder and the folder chooser's start follow the focused panel, the last used, or home.
@@ -338,6 +350,65 @@ class ResourceDialogTest {
         assertThat(sink.of(Intent.SaveConnection.class)).isEmpty();
     }
 
+    /// A connection pointed at another host with its password typed again in the form keeps it: the save says the
+    /// password was given, and the reducer keeps it on the new target (record 20, D2).
+    @Test
+    void aRetargetWithTheRetypedPasswordKeepsIt() {
+        final Intent.SaveConnection save = retarget(true);
+        assertThat(save.passwordGiven()).as("typed into the password field").isTrue();
+        assertThat(applied(save).password()).isEqualTo("s3cret");
+    }
+
+    /// A connection pointed at another host whose password field was left as the form filled it drops the password:
+    /// the save says it was not given, and the reducer drops it, with a notice to enter it again (record 20, D2).
+    @Test
+    void aRetargetWithoutATypedPasswordDropsIt() {
+        final Intent.SaveConnection save = retarget(false);
+        assertThat(save.passwordGiven()).as("carried as filled").isFalse();
+        assertThat(applied(save).password()).isEmpty();
+    }
+
+    /// A save forgets what was typed: a password typed and saved for the same target does not count for a later save
+    /// that points the connection elsewhere with the password left as it is.
+    @Test
+    void aSaveForgetsWhatWasTyped() {
+        final RecordingSink sink = new RecordingSink();
+        final ResourceDialog<ConnectionSpec> d = connections(sink);
+        d.prepare(LAB, "lab");
+        text(d, "password").setText("s3cret");
+        click(d, "Save");
+        d.prepare(LAB, "lab");
+        text(d, "host").setText("elsewhere");
+        click(d, "Save");
+        assertThat(sink.of(Intent.SaveConnection.class)).extracting(Intent.SaveConnection::passwordGiven).containsExactly(true, false);
+    }
+
+    /// `lab` at `h` with the stored password `s3cret`, beside `local`.
+    private static final AppState LAB = States.twoPanels().withConnections(List.of(ConnectionState.closed(States.LOCAL),
+            ConnectionState.closed(new ConnectionSpec("lab", "h", 5432, "sales", "app", "s3cret", false, "prefer"))));
+
+    /// The save the dialog sends when `lab` is pointed at `elsewhere`, its password typed again or left as filled.
+    private static Intent.SaveConnection retarget(final boolean retype) {
+        final RecordingSink sink = new RecordingSink();
+        final ResourceDialog<ConnectionSpec> d = connections(sink);
+        d.prepare(LAB, "lab");
+        assertThat(new String(((JPasswordField) text(d, "password")).getPassword())).as("filled with the stored password").isEqualTo("s3cret");
+        text(d, "host").setText("elsewhere");
+        if (retype) {
+            text(d, "password").setText("s3cret");
+        }
+        click(d, "Save");
+        final Intent.SaveConnection save = sink.of(Intent.SaveConnection.class).getFirst();
+        assertThat(save.spec().host()).isEqualTo("elsewhere");
+        assertThat(save.spec().password()).as("the form's text is the same either way").isEqualTo("s3cret");
+        return save;
+    }
+
+    /// The connection `save` leaves in the state, applied by the reducer.
+    private static ConnectionSpec applied(final Intent.SaveConnection save) {
+        return new Reducer(new FakeClock()).apply(LAB, save).state().connection("lab").orElseThrow().spec();
+    }
+
     /// Start on a dirty form sends SaveSession with the edit, then StartSession, and says `Saved and starting`.
     @Test
     void startWithUnsavedChangesSavesFirst() {
@@ -394,7 +465,6 @@ class ResourceDialogTest {
         d.prepare(s, "n");
         assertThat(combo(d, "model").isEditable()).isTrue();
         assertThat(combo(d, "effort").isEditable()).isFalse();
-        assertThat(combo(d, "permissionMode").isEditable()).isFalse();
         assertThat(picker(d).isEditable()).isFalse();
         assertThat(isShownIn(picker(d), d.content())).isTrue();
 
@@ -411,7 +481,8 @@ class ResourceDialogTest {
     /// A new session starts in the kit's folder, as the user's sessions do, with More folded (record 125). The form
     /// asks the name first; each empty choice shows the default it stands for, the kit's or Claude Code's model once a
     /// start reported it; a label with more to say carries the ⓘ and its text; the dialog says where every session
-    /// runs, asks no budget, and an edit keeps a stored budget.
+    /// runs and the permission mode the kit sets, which it does not ask, asks no budget, and an edit keeps a stored
+    /// budget.
     @Test
     void aNewSessionStartsInTheKitsFolderAndTheFormSaysWhatItsDefaultsAre(@TempDir final Path kit) {
         final KitRoot before = KitRoot.current();
@@ -425,11 +496,11 @@ class ResourceDialogTest {
             assertThat(text(d, "workDir").getText()).isEqualTo(kit.toString());
             assertThat(isShownIn(text(d, "workDir"), d.content())).as("More folded: the kit's folder needs no look").isFalse();
             assertThat(one(d.content(), JLabel.class, l -> "context".equals(l.getName())).getText()).startsWith("Runs on folder ")
-                    .contains("instance ");
+                    .contains("instance ").as("the kit's permission mode, read-only (record 7)")
+                    .endsWith("permissions: bypassPermissions, runs every tool unasked (the kit's settings.json)");
             final List<String> order = SessionKind.INSTANCE.attributes().stream().map(Attribute::key).toList();
             assertThat(order.subList(0, 2)).as("the name first, then the conversation").containsExactly("name", "claudeSessionId");
             assertThat(shown(combo(d, "effort"))).isEqualTo("medium · the kit's default");
-            assertThat(shown(combo(d, "permissionMode"))).isEqualTo("bypassPermissions · the kit's default: runs every tool unasked");
             assertThat(combo(d, "model").getClientProperty("JTextField.placeholderText")).as("an open choice shows it while empty")
                     .isEqualTo("claude-opus-5-5 · Claude Code's default");
             final JLabel name = one(d.content(), JLabel.class, l -> "about:name".equals(l.getName()));
@@ -447,8 +518,7 @@ class ResourceDialogTest {
             assertThat(d.explainer().shown()).as("a second click closes it").isNull();
             assertThat(all(d.content(), JTextField.class, t -> "budgetUsd".equals(t.getName()))).as("no budget asked").isEmpty();
 
-            final AppState budgeted = States.twoPanels().withSessions(List.of(SessionState.closed(new SessionSpec("api", kit.toString(), "", "", "",
-                    List.of(), 2.5, "", StartMode.NEW, SessionSpec.DEFAULT_CHECKPOINT, ""))));
+            final AppState budgeted = States.twoPanels().withSessions(List.of(SessionState.closed(new SessionSpec("api", kit.toString(), "", "", 2.5, "", StartMode.NEW, SessionSpec.DEFAULT_CHECKPOINT, ""))));
             d.prepare(budgeted, "api");
             combo(d, "effort").setSelectedItem("high");
             click(d, "Save");
@@ -485,6 +555,43 @@ class ResourceDialogTest {
         click(d, "Save");
         assertThat(sink.of(Intent.SaveSession.class)).hasSize(1);
         assertThat(d.explainer().shown()).as("saved: the dialog closes, its card with it").isNull();
+    }
+
+    /// A session whose checkpoint runs takes no save (record 130): Save keeps the form open with the reason and sends
+    /// nothing the reducer would drop, so the edit is not reported saved and lost.
+    @Test
+    void saveOnASessionRunningItsCheckpointKeepsTheFormOpenWithTheReason() {
+        final SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
+                .withStatus(Status.OPEN, "").withTurns(1, 1L).withCheckpointTurns(1);
+        assertThat(work.isCheckpointing()).isTrue();
+        final PanelId own = new PanelId("own");
+        final AppState s = AppState.initial(List.of(new PanelState(own, "work", "", "work")), List.of(), List.of(work)).withFocused(own);
+        final RecordingSink sink = new RecordingSink();
+        final ResourceDialog<SessionSpec> d = sessions(sink);
+        d.prepare(s, "work");
+        text(d, "checkpoint").setText("/reflect --deep");
+        click(d, "Save");
+        assertThat(sink.of(Intent.SaveSession.class)).as("nothing sent the reducer would drop").isEmpty();
+        assertThat(one(d.content(), JLabel.class, l -> "message".equals(l.getName())).getText())
+                .isEqualTo("work runs its checkpoint; Save once it has ended");
+    }
+
+    /// The session dialog's context names the kit's permission mode; under it, a working folder with its own
+    /// `.claude/settings.local.json` setting a mode is named, with that mode overriding the kit's (Claude Code reads the
+    /// project's settings on top of the kit's); another folder without them clears the line.
+    @Test
+    void aWorkingFoldersOwnSettingsAreNamedUnderTheContextLine(@TempDir final Path work) throws Exception {
+        final Path claude = Files.createDirectories(work.resolve(".claude"));
+        Files.writeString(claude.resolve("settings.local.json"), "{\"permissions\": {\"defaultMode\": \"bypassPermissions\"}}");
+        final ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
+        d.prepare(States.twoPanels(), "work");
+        SwingUtilities.invokeAndWait(() -> text(d, "workDir").setText(work.toString()));
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> !d.projectShown().isEmpty());
+        assertThat(d.projectShown()).contains("/settings.local.json on top of the kit's")
+                .endsWith("its permissions: bypassPermissions (settings.local.json) overrides the kit's");
+        final Path plain = Files.createDirectories(work.resolve("plain"));
+        SwingUtilities.invokeAndWait(() -> text(d, "workDir").setText(plain.toString()));
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> d.projectShown().isEmpty());
     }
 
     /// The conversation is picked, never typed (record 125, 2026-10-31): a new session offers a new conversation first,
@@ -581,7 +688,7 @@ class ResourceDialogTest {
                     s.sessions().forEach(x -> m.put(x.name(), x.status()));
                     return m;
                 },
-                Intent.SaveSession::new,
+                (previous, spec, typed) -> new Intent.SaveSession(previous, spec),
                 null,
                 Intent.StartSession::new,
                 Intent.StopSession::new,
@@ -607,7 +714,7 @@ class ResourceDialogTest {
                     s.connections().forEach(x -> m.put(x.name(), x.status()));
                     return m;
                 },
-                Intent.SaveConnection::new,
+                ComandoUi::saveConnection,
                 Intent.TestConnection::new,
                 Intent.OpenConnection::new,
                 Intent.CloseConnection::new,

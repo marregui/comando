@@ -65,7 +65,7 @@ final class RunSettings {
                     return Optional.of(new Ran(e.path("message").path("model").asString(""), effort));
                 }
             }
-        } catch (IOException | JacksonException e) {
+        } catch (final IOException | JacksonException e) {
             // a line cut by the tail's start, or a file being rewritten: the next message reads again
         }
         return Optional.empty();
@@ -81,7 +81,7 @@ final class RunSettings {
         if (!Files.isDirectory(projectsDir)) {
             return null;
         }
-        try (var projects = Files.newDirectoryStream(projectsDir)) {
+        try (final var projects = Files.newDirectoryStream(projectsDir)) {
             for (final Path project : projects) {
                 final Path candidate = project.resolve(conversationId + ".jsonl");
                 if (Files.isRegularFile(candidate)) {
@@ -96,7 +96,7 @@ final class RunSettings {
     }
 
     private static String tail(final Path f) throws IOException {
-        try (RandomAccessFile raf = new RandomAccessFile(f.toFile(), "r")) {
+        try (final RandomAccessFile raf = new RandomAccessFile(f.toFile(), "r")) {
             final long length = raf.length();
             final int n = (int) Math.min(length, TAIL);
             final byte[] bytes = new byte[n];

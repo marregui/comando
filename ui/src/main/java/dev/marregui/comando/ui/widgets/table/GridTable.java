@@ -377,7 +377,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
     }
 
     private static void writeCsv(final Path file, final TableSource s, final int rows, final int[] order) throws IOException {
-        try (BufferedWriter w = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+        try (final BufferedWriter w = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             final StringBuilder sb = new StringBuilder();
             for (int c = 0; c < s.columnCount(); c++) {
                 sb.setLength(0);

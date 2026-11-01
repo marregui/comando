@@ -43,12 +43,20 @@ public record AppConfig(Path home, String claudeExecutable, KitRoot root, boolea
         final Path standard = Path.of(System.getProperty("user.home"), ".comando").toAbsolutePath().normalize();
         // normalised: a data root written ./x or a/../b names one folder
         final Path home = chosen.toAbsolutePath().normalize();
-        final String keychain = System.getProperty("comando.keychain");
         return new AppConfig(home,
                 claude != null && !claude.isBlank() ? claude : ClaudeSettings.findExecutable(),
                 KitJson.resolve(),
                 Boolean.getBoolean("comando.recordIntents"),
-                keychain != null ? Boolean.parseBoolean(keychain) : home.equals(standard));
+                keychain(System.getProperty("comando.keychain"), home, standard));
+    }
+
+    /**
+     * Whether passwords go to the OS secret store: as {@code -Dcomando.keychain} says when it is set (any value but
+     * {@code true}, an empty one included, is no), else only on the standard data root, so a test root never writes the
+     * user's keychain.
+     */
+    static boolean keychain(final String property, final Path home, final Path standard) {
+        return property != null ? Boolean.parseBoolean(property) : home.equals(standard);
     }
 
     public Path runDir() {

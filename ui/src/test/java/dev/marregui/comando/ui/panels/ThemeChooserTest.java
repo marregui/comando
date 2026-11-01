@@ -3,12 +3,18 @@ package dev.marregui.comando.ui.panels;
 import java.awt.Dimension;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.ThemeFiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// under the swatch (record 128).
 /// - The six dark themes and their six light twins share slots, in the dark themes' order.
 /// - A theme no twin pairs follows the pairs, in its mode.
+/// - A twin named on either side pairs the two themes.
 /// - The toggle chooses the twin of the theme chosen, or the mode's first theme.
 /// - The popover lies under the anchor, right-aligned with it, kept on the anchor's screen, above it when there is no
 ///   room below; on no screen it is left where it falls.
@@ -70,5 +77,34 @@ class ThemeChooserTest {
         assertThat(ThemeChooser.flipped(some, Optional.of(NamedTheme.MIDNIGHT_BLUE), true)).as("a slot left empty")
                 .contains(NamedTheme.PAPER_OCHRE);
         assertThat(ThemeChooser.flipped(List.of(NamedTheme.GRAPHITE_GOLD), Optional.of(NamedTheme.GRAPHITE_GOLD), true)).isEmpty();
+    }
+
+    /// A user's dark theme naming a light one as its twin, which names none, pairs with it as a light theme naming its
+    /// dark twin does: the two share a slot, and the toggle turns one into the other.
+    @Test
+    void aTwinNamedOnTheDarkSidePairsTheThemesAsOnTheLightSide(@TempDir final Path folder) throws IOException {
+        Files.writeString(folder.resolve("a-ink.json"), theme("ink", "dark", "#14101A", ""));
+        Files.writeString(folder.resolve("b-pine.json"), theme("pine", "dark", "#0C1511", "parchment"));
+        Files.writeString(folder.resolve("c-parchment.json"), theme("parchment", "light", "#F4EFE4", ""));
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
+        assertThat(read.problems()).isEmpty();
+        final List<NamedTheme> all = new ArrayList<>(NamedTheme.builtIn());
+        all.addAll(read.themes());
+        final NamedTheme pine = read.themes().get(1);
+        final NamedTheme parchment = read.themes().get(2);
+        final List<NamedTheme> dark = ThemeChooser.slots(all, false);
+        final List<NamedTheme> light = ThemeChooser.slots(all, true);
+        assertThat(dark.indexOf(pine)).as("pine and its twin in one slot").isEqualTo(light.indexOf(parchment)).isEqualTo(6);
+        assertThat(ThemeChooser.flipped(all, Optional.of(pine), true)).contains(parchment);
+        assertThat(ThemeChooser.flipped(all, Optional.of(parchment), false)).contains(pine);
+    }
+
+    private static String theme(final String id, final String mode, final String ground, final String twin) {
+        final boolean light = mode.equals("light");
+        return """
+                {"id": "%s", "label": "%s", "mode": "%s", %s"ground": {"color": "%s"},
+                 "tint": {"highlight": "%s", "body": "%s", "shade": "%s"}}
+                """.formatted(id, id, mode, twin.isEmpty() ? "" : "\"twin\": \"" + twin + "\", ", ground,
+                light ? "#3D2900" : "#CFF5DC", light ? "#2A1C00" : "#62CC94", light ? "#5E4210" : "#339966");
     }
 }

@@ -64,7 +64,7 @@ final class SubagentFiles {
         if (sessionId.isEmpty() || toolUseId.isEmpty() || !Files.isDirectory(projectsDir)) {
             return Optional.empty();
         }
-        try (var projects = Files.newDirectoryStream(projectsDir)) {
+        try (final var projects = Files.newDirectoryStream(projectsDir)) {
             for (final Path project : projects) {
                 final Path dir = project.resolve(sessionId).resolve("subagents");
                 if (Files.isDirectory(dir)) {
@@ -81,7 +81,7 @@ final class SubagentFiles {
     }
 
     private static Optional<Found> findIn(final Path dir, final String toolUseId, final ObjectMapper json) throws IOException {
-        try (var metas = Files.newDirectoryStream(dir, "agent-*" + META)) {
+        try (final var metas = Files.newDirectoryStream(dir, "agent-*" + META)) {
             for (final Path meta : metas) {
                 final JsonNode m = readMeta(meta, json);
                 if (m != null && toolUseId.equals(m.path("toolUseId").asString(""))) {
@@ -101,7 +101,7 @@ final class SubagentFiles {
                 return null;
             }
             return json.readTree(Files.readAllBytes(meta));
-        } catch (IOException | JacksonException e) {
+        } catch (final IOException | JacksonException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + meta + ']', e);
             return null;
         }
@@ -121,7 +121,7 @@ final class SubagentFiles {
         long cacheCreate = 0;
         final Set<String> seen = new HashSet<>();
         final Set<String> models = new TreeSet<>();
-        try (BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        try (final BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             String line;
             while ((line = in.readLine()) != null) {
                 final JsonNode n = parse(line, json);
@@ -143,7 +143,7 @@ final class SubagentFiles {
                 cacheRead += u.path("cache_read_input_tokens").asLong(0);
                 cacheCreate += u.path("cache_creation_input_tokens").asLong(0);
             }
-        } catch (IOException | UncheckedIOException e) {
+        } catch (final IOException | UncheckedIOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read [file=" + file + ']', e);
         }
         out.put("calls", calls);
@@ -246,7 +246,7 @@ final class SubagentFiles {
          * A file shorter than what was read was replaced, and is read again from its start.
          */
         void read() throws IOException {
-            try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+            try (final FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
                 final long size = ch.size();
                 if (offset < 0 || size < offset) {
                     reset();

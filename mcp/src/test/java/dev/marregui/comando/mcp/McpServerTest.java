@@ -1,13 +1,21 @@
 package dev.marregui.comando.mcp;
 
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -22,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-import dev.marregui.comando.core.dispatch.Target;
+import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -33,6 +41,8 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.reduce.Reducer;
+import dev.marregui.comando.core.reduce.Transition;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -58,6 +68,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - A permission call raises an approval card and answers with the user's decision and the rule it saves.
 /// - A cancelled, unanswered or closing-time approval is denied and its card withdrawn.
 /// - The view tools turn their input into view intents.
+/// - At most a bound of requests run at once, and a smaller bound of one session's; one past either is refused at once.
+/// - A request whose body does not arrive in time has its connection closed, and its place comes back; one whose
+///   headers do not arrive in time too, and the connections open at once are bounded.
 class McpServerTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);
@@ -70,6 +83,12 @@ class McpServerTest {
     private final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
     private McpServer server;
     private McpGateway.Ticket ticket;
+    /** Raw connections a test opened, closed after it. */
+    private final List<Socket> held = new ArrayList<>();
+
+    /** The error every query fails with, when set: a batch whose later statement the server refuses. */
+    private volatile String failWith;
+    private volatile QueryPort.Rows answer;
 
     private final QueryPort db = new QueryPort() {
         @Override
@@ -77,7 +96,12 @@ class McpServerTest {
             synchronized (queries) {
                 queries.add(spec.name() + ": " + sql);
             }
-            return CompletableFuture.completedFuture(new Rows(List.of("x"), List.of(List.of("1"), List.of("2")), -1L, false));
+            final String failure = failWith;
+            if (failure != null) {
+                return CompletableFuture.failedFuture(new SQLException(failure));
+            }
+            final QueryPort.Rows given = answer;
+            return CompletableFuture.completedFuture(given != null ? given : new Rows(List.of("x"), List.of(List.of("1"), List.of("2")), -1L, false));
         }
 
         @Override
@@ -101,7 +125,10 @@ class McpServerTest {
     }
 
     @AfterEach
-    void stop() {
+    void stop() throws Exception {
+        for (final Socket s : held) {
+            s.close();
+        }
         server.close();
     }
 
@@ -188,6 +215,138 @@ class McpServerTest {
         // Claude Code 2.1.296 asks for server/discover first and falls back to initialize on this error
         assertThat(rpc("server/discover", "{}").path("error").path("code").asInt()).isEqualTo(-32601);
         assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", null).statusCode()).isEqualTo(202);
+    }
+
+    /// At most the bound of requests run at once: with a bound of one, a request made while an approval waits for the
+    /// user is answered 503 at once with `Retry-After`, and once the approval is answered requests run again.
+    @Test
+    void requestsPastTheBoundAreRefusedAtOnce() throws Exception {
+        server.close();
+        tools = new McpTools(sink, state::get, transcripts, db, AuditLog.none(), new FakeClock(), Duration.ofMinutes(5));
+        server = McpServer.start(tools, 0, "test", 1);
+        ticket = server.register("work");
+        final CompletableFuture<JsonNode> waiting = CompletableFuture.supplyAsync(() -> {
+            try {
+                return tool("approve", "{\"tool_name\":\"Bash\",\"input\":{\"command\":\"ls\"},\"tool_use_id\":\"t1\"}");
+            } catch (final Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        final Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
+        final HttpResponse<String> refused = post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"ping\"}", null);
+        assertThat(refused.statusCode()).isEqualTo(503);
+        assertThat(refused.headers().firstValue("Retry-After")).contains("1");
+        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
+        waiting.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"ping\"}", null).statusCode()).isEqualTo(200);
+    }
+
+    /// One session's client that holds requests open without sending their bodies takes at most its own bound: with
+    /// room for two requests and one per session, `rogue`'s second request is refused 503 at once, and `work`'s pings
+    /// still answer 200 while `rogue` holds its first.
+    @Test
+    void oneSessionHoldingRequestsOpenLeavesRoomForTheOthers() throws Exception {
+        restart(new McpServer.Bounds(2, 1, Duration.ofMinutes(1)));
+        final McpGateway.Ticket rogue = server.register("rogue");
+        final List<Socket> sockets = List.of(bodiless(rogue.token()), bodiless(rogue.token()));
+        assertThat(firstAnswer(sockets).getValue()).as("rogue's request past its own bound").isEqualTo(503);
+        assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}", null).statusCode()).isEqualTo(200);
+        assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}", null).statusCode()).isEqualTo(200);
+    }
+
+    /// A request that announces a body and sends none has its connection closed once its deadline (here 500 ms) passes,
+    /// and the place it held comes back: `rogue`'s own ping answers 200 after it.
+    @Test
+    void aRequestWhoseBodyDoesNotArriveIsClosedAtItsDeadline() throws Exception {
+        restart(new McpServer.Bounds(4, 1, Duration.ofMillis(500)));
+        final McpGateway.Ticket rogue = server.register("rogue");
+        final List<Socket> sockets = List.of(bodiless(rogue.token()), bodiless(rogue.token()));
+        final Map.Entry<Socket, Integer> refused = firstAnswer(sockets);
+        assertThat(refused.getValue()).as("rogue's request past its own bound").isEqualTo(503);
+        final Socket holder = sockets.get(0) == refused.getKey() ? sockets.get(1) : sockets.get(0);
+        holder.setSoTimeout((int) WAIT.toMillis());
+        int end;
+        try {
+            end = holder.getInputStream().read();
+        } catch (final SocketException e) {
+            end = -1; // a reset is a close too
+        }
+        assertThat(end).as("the held request's connection is closed, nothing answered").isEqualTo(-1);
+        assertThat(post(rogue.token(), "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}", null).statusCode()).isEqualTo(200);
+    }
+
+    /// A connection that sends a request line and one header and never ends its headers, with no credential, is closed
+    /// once the request's deadline (here 300 ms) passes: the JDK reads the headers before any handler runs, and the
+    /// deadline covers them too, so such a client holds no socket and no thread past it.
+    @Test
+    void aRequestWhoseHeadersDoNotArriveIsClosedAtItsDeadline() throws Exception {
+        restart(new McpServer.Bounds(4, 1, Duration.ofMillis(300)));
+        final URI url = URI.create(server.url());
+        final Socket s = new Socket(url.getHost(), url.getPort());
+        held.add(s);
+        s.getOutputStream().write(("POST " + url.getPath() + " HTTP/1.1\r\nHost: 127.0.0.1\r\n").getBytes(StandardCharsets.US_ASCII));
+        s.getOutputStream().flush();
+        s.setSoTimeout(3000);
+        int end;
+        try {
+            end = s.getInputStream().read();
+        } catch (final SocketTimeoutException e) {
+            end = -2; // still open
+        } catch (final SocketException e) {
+            end = -1; // a reset is a close too
+        }
+        assertThat(end).as("closed by the deadline (-1), not still open at 3 s (-2)").isEqualTo(-1);
+        assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"ping\"}", null).statusCode()).as("the server still answers")
+                .isEqualTo(200);
+    }
+
+    /// The connections open at once are bounded: the JDK's server is made with its connection bound set, which it reads
+    /// once, so connections that send nothing, which reach no handler and no deadline, cannot grow without a bound.
+    @Test
+    void theOpenConnectionsAreBounded() {
+        assertThat(System.getProperty(McpServer.MAX_CONNECTIONS_PROPERTY)).as("set before the JDK's server was made")
+                .isEqualTo(Integer.toString(McpServer.MAX_CONNECTIONS));
+        assertThat(McpServer.MAX_CONNECTIONS).as("above the requests that run at once").isGreaterThan(McpServer.MAX_REQUESTS);
+    }
+
+    private void restart(final McpServer.Bounds bounds) throws Exception {
+        server.close();
+        tools = new McpTools(sink, state::get, transcripts, db, AuditLog.none(), new FakeClock(), Duration.ofMinutes(5));
+        server = McpServer.start(tools, 0, "test", bounds);
+        ticket = server.register("work");
+    }
+
+    /// A raw connection that sends a POST from `token` announcing a body of 100 bytes and sends no body.
+    private Socket bodiless(final String token) throws Exception {
+        final URI url = URI.create(server.url());
+        final Socket s = new Socket(url.getHost(), url.getPort());
+        held.add(s);
+        final OutputStream out = s.getOutputStream();
+        out.write(("POST " + url.getPath() + " HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer " + token
+                + "\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+        out.flush();
+        return s;
+    }
+
+    /// The first of `sockets` the server answers within [#WAIT], with the status of its answer.
+    private static Map.Entry<Socket, Integer> firstAnswer(final List<Socket> sockets) throws Exception {
+        final long end = System.nanoTime() + WAIT.toNanos();
+        while (System.nanoTime() - end < 0) {
+            for (final Socket s : sockets) {
+                final InputStream in = s.getInputStream();
+                s.setSoTimeout(50);
+                final int first;
+                try {
+                    first = in.read();
+                } catch (final SocketTimeoutException e) {
+                    continue;
+                }
+                s.setSoTimeout((int) WAIT.toMillis());
+                final String line = (char) first + new String(in.readNBytes(11), StandardCharsets.US_ASCII); // "HTTP/1.1 503"
+                return Map.entry(s, Integer.parseInt(line.substring(9, 12)));
+            }
+        }
+        throw new AssertionError("no request was answered in " + WAIT);
     }
 
     /// A Bash permission call raises a tool approval for the session summarised as its command; allowing it for the
@@ -297,15 +456,17 @@ class McpServerTest {
         }
     }
 
-    /// The table tool answers without error and shows a lower-placement table view for the session, nulls as `null`.
+    /// The table tool answers without error and shows a lower-placement table view for the session; a JSON `null` is SQL
+    /// NULL, a null cell, told apart from the text `"null"`.
     @Test
     void tableBecomesAViewIntent() throws Exception {
-        final JsonNode r = tool("ui_show_table", "{\"title\":\"top\",\"columns\":[\"a\",\"b\"],\"rows\":[[1,\"x\"],[2,null]]}");
+        final JsonNode r = tool("ui_show_table", "{\"title\":\"top\",\"columns\":[\"a\",\"b\"],\"rows\":[[1,\"x\"],[2,null],[3,\"null\"]]}");
         assertThat(r.path("isError").asBoolean(false)).isFalse();
         final Intent.ShowView show = sink.await(Intent.ShowView.class, WAIT);
         assertThat(show.session()).isEqualTo("work");
         assertThat(show.placement()).isEqualTo(Placement.LOWER);
-        assertThat(show.spec()).isEqualTo(new ViewSpec.Table(List.of("a", "b"), List.of(List.of("1", "x"), List.of("2", "null"))));
+        assertThat(show.spec()).isEqualTo(new ViewSpec.Table(List.of("a", "b"),
+                List.of(List.of("1", "x"), Arrays.asList("2", null), List.of("3", "null"))));
     }
 
     /// A table row of the wrong width, a plot with unequal x and y, and a path no file system can name are tool errors
@@ -513,6 +674,15 @@ class McpServerTest {
         assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
     }
 
+    /// A shown query result keeps SQL NULL as a null cell, told apart from the text `"null"` (FUI-11).
+    @Test
+    void aShownResultKeepsSqlNullApartFromTheTextNull() throws Exception {
+        answer = new QueryPort.Rows(List.of("x"), List.of(Arrays.asList((String) null), List.of("null")), -1L, false);
+        tool("db_run_sql", "{\"sql\":\"SELECT x FROM t\",\"show\":true,\"title\":\"xs\"}");
+        assertThat(sink.await(Intent.ShowView.class, WAIT).spec())
+                .isEqualTo(new ViewSpec.Table(List.of("x"), List.of(Arrays.asList((String) null), List.of("null"))));
+    }
+
     /// A write raises an SQL-write approval; denying it with a reason answers a tool error carrying the reason, and
     /// nothing runs.
     @Test
@@ -577,6 +747,25 @@ class McpServerTest {
         assertThat(queries).as("a late allow runs nothing").isEmpty();
     }
 
+    /// A DDL batch that fails part-way may have run its earlier statements: the schema is reloaded all the same, so
+    /// completion and the explorer do not keep the schema from before, and the call answers the server's error.
+    @Test
+    void aDdlBatchThatFailsPartWayStillReloadsTheSchema() throws Exception {
+        failWith = "syntax error at end of input";
+        final CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
+            try {
+                return tool("db_run_sql", "{\"sql\":\"CREATE TABLE a (x INT); CREATE TABLE b (bad\"}");
+            } catch (final Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        server.resolve(sink.await(Intent.ApprovalRequested.class, WAIT).approval(), ApprovalDecision.allowOnce());
+        final JsonNode r = call.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        assertThat(r.path("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("syntax error at end of input");
+        assertThat(sink.of(Intent.SchemaChanged.class)).extracting(Intent.SchemaChanged::connection).containsExactly("local");
+    }
+
     /// A write on a connection marked production is refused as a tool error naming it, with no approval card.
     @Test
     void productionConnectionsRefuseWrites() throws Exception {
@@ -611,8 +800,9 @@ class McpServerTest {
         });
     }
 
-    /// `session_send` appends the prompt, headed with the sender, to the other session's panel and runs it there as a
-    /// prompt, with no approval card, and answers which panel and the block to read after.
+    /// `session_send` hands the prompt, headed with the sender, to the other session as a prompt from another session,
+    /// which the reducer appends to that session's panel and runs there, with no approval card; it answers which panel
+    /// and the block to read after.
     @Test
     void aPromptToAnotherSessionIsAddedToItsPanelAndRunThereHeadedWithTheSenderWithoutACard() throws Exception {
         reviewsInPanelTwo();
@@ -622,8 +812,24 @@ class McpServerTest {
         assertThat(sink.of(Intent.ApprovalRequested.class)).as("the sessions are trusted with each other: nothing is asked").isEmpty();
         final String prompt = "[from session work]\nReview the diff";
         assertThat(text(r)).contains("sent to reviews in panel two").contains("\"after\": 1");
-        assertThat(sink.of(Intent.EditPanel.class)).containsExactly(new Intent.EditPanel(States.P2, prompt, EditMode.APPEND, "work"));
-        assertThat(sink.of(Intent.RunText.class)).containsExactly(new Intent.RunText(States.P2, prompt, Target.CLAUDE));
+        assertThat(sink.of(Intent.PromptSession.class)).containsExactly(new Intent.PromptSession("reviews", prompt, "work"));
+        final Transition t = new Reducer(new FakeClock()).apply(state.get(), sink.of(Intent.PromptSession.class).getFirst());
+        assertThat(t.effects()).anyMatch(e -> e instanceof Effect.SendToClaude c && c.name().equals("reviews") && c.text().equals(prompt));
+    }
+
+    /// A prompt `session_send` sends to a session whose checkpoint runs goes through and queues behind the checkpoint
+    /// (record 130): the tool says it waits for its turn, and the reducer sends it to Claude.
+    @Test
+    void aPromptToASessionWhoseCheckpointRunsQueuesAndRuns() throws Exception {
+        reviewsInPanelTwo();
+        final Reducer reducer = new Reducer(new FakeClock());
+        state.set(reducer.apply(state.get(), new Intent.Checkpoint("reviews")).state());
+        assertThat(state.get().session("reviews").orElseThrow().isCheckpointing()).as("precondition: the checkpoint runs").isTrue();
+        final JsonNode r = tool("session_send", "{\"session\":\"reviews\",\"text\":\"Review the diff\"}");
+        assertThat(r.path("isError").asBoolean()).isFalse();
+        assertThat(text(r)).contains("the prompt waits for its turn");
+        final Transition t = reducer.apply(state.get(), sink.of(Intent.PromptSession.class).getFirst());
+        assertThat(t.effects()).anyMatch(e -> e instanceof Effect.SendToClaude c && c.name().equals("reviews") && c.text().contains("Review the diff"));
     }
 
     /// Stopping a session is the user's circuit breaker: a prompt to a stopped session is a tool error saying it is not
@@ -637,7 +843,7 @@ class McpServerTest {
         final JsonNode r = tool("session_send", "{\"session\":\"reviews\",\"text\":\"again\"}");
         assertThat(r.path("isError").asBoolean()).isTrue();
         assertThat(text(r)).contains("not running");
-        assertThat(sink.of(Intent.RunText.class)).as("nothing runs, so nothing starts the session").isEmpty();
+        assertThat(sink.of(Intent.PromptSession.class)).as("nothing runs, so nothing starts the session").isEmpty();
     }
 
     /// A prompt to the caller itself, to an unknown session (the answer names the known ones), to a session without an

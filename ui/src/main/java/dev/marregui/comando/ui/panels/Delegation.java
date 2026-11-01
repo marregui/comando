@@ -15,7 +15,8 @@ import dev.marregui.comando.ui.widgets.transcript.ToolText;
 /**
  * A session's delegation, as its card outlines it (record 109): the sub-agents its own turns started, the latest
  * {@link #SHOWN}, each with its state and how many tool calls ran inside it at any depth. Read from the session's
- * transcript, so the loaded window bounds it.
+ * whole transcript, every block of it, not the 2,000-block window its transcript view shows: about a millisecond for
+ * 20,000 blocks, read again when the transcript has grown while the card shows.
  */
 final class Delegation {
 

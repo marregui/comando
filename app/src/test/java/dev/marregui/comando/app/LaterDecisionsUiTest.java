@@ -54,8 +54,11 @@ class LaterDecisionsUiTest {
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("work", home.toString())));
             Awaitility.await("the session").atMost(Duration.ofSeconds(10)).until(() -> loop.state().session("work").isPresent());
             loop.dispatch(new Intent.DecisionHeldBack("work", "Merge the two feedback entries?", "both say SVG only"));
+            Awaitility.await("held").atMost(Duration.ofSeconds(10)).until(() -> !loop.state().later().isEmpty());
+            // the id comes from the state's counter, never given twice (record 131)
+            final String row = "decision-" + loop.state().later().getFirst().id();
             Awaitility.await("the Later row").atMost(Duration.ofSeconds(10))
-                    .until(() -> onEdt(() -> first(Component.class, c -> "decision-1".equals(c.getName()))) != null);
+                    .until(() -> onEdt(() -> first(Component.class, c -> row.equals(c.getName()))) != null);
             assertThat(onEdt(LaterDecisionsUiTest::approvalsTitle)).isEqualTo("Approvals (1 later)");
             assertThat(loop.state().lowerTab()).as("nothing comes forward").isEqualTo(LowerTab.SESSION);
             Awaitility.await("decisions.json").atMost(Duration.ofSeconds(10))
@@ -73,10 +76,11 @@ class LaterDecisionsUiTest {
             awaitWindow(loop);
             Awaitility.await("read back at start").atMost(Duration.ofSeconds(10))
                     .until(() -> loop.state().later().stream().map(Decision::title).toList().equals(List.of("Merge the two feedback entries?")));
+            final String name = "decision-" + loop.state().later().getFirst().id();
             Awaitility.await("its row").atMost(Duration.ofSeconds(10))
-                    .until(() -> onEdt(() -> first(Component.class, c -> "decision-1".equals(c.getName()))) != null);
+                    .until(() -> onEdt(() -> first(Component.class, c -> name.equals(c.getName()))) != null);
             SwingUtilities.invokeAndWait(() -> {
-                final Component row = first(Component.class, c -> "decision-1".equals(c.getName()));
+                final Component row = first(Component.class, c -> name.equals(c.getName()));
                 final List<AbstractButton> dismiss = new ArrayList<>();
                 collect(row, AbstractButton.class, b -> "dismiss".equals(b.getName()), dismiss);
                 dismiss.getFirst().doClick();

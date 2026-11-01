@@ -40,7 +40,7 @@ class HelpFilesTest {
         Files.writeString(file, "edited", StandardCharsets.UTF_8);
         HelpFiles.writeTutorial(home);
         assertThat(Files.readString(file, StandardCharsets.UTF_8)).as("the build's tutorial wins").isEqualTo(text);
-        try (var left = Files.list(file.getParent())) {
+        try (final var left = Files.list(file.getParent())) {
             assertThat(left).containsExactly(file);
         }
     }
@@ -59,7 +59,7 @@ class HelpFilesTest {
         });
         assertThat(Files.readString(file, StandardCharsets.UTF_8)).startsWith("#");
         assertThat(moves).hasSize(2);
-        try (var left = Files.list(file.getParent())) {
+        try (final var left = Files.list(file.getParent())) {
             assertThat(left).containsExactly(file);
         }
     }

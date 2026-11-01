@@ -23,7 +23,7 @@
 
   <text x="60" y="56" class="cap" fill="#6CC69A">KIT</text>
   <text x="60" y="88" class="h">How sessions behave: one repository, loaded where Claude Code looks</text>
-  <text x="60" y="112" class="s">A kit is a Claude Code setup kept in git and versioned by tags. comando runs every session on it; the brain sits beside it, never in it.</text>
+  <text x="60" y="112" class="s">A kit is a Claude Code setup kept in git. comando runs every session on it; the brain sits in its folder, never in its repository.</text>
 
   <!-- parts -->
   <text x="60" y="170" class="cap" fill="#6CC69A">PARTS</text>
@@ -37,8 +37,8 @@
     <text x="60" y="422" class="m">bin/</text><text x="230" y="422" class="s">scripts on the Bash tool's PATH</text>
     <text x="60" y="458" class="m">tools/</text><text x="230" y="458" class="s">each script's code and its test</text>
     <text x="60" y="494" class="m">templates/</text><text x="230" y="494" class="s">agent spec, knowledge-base set templates</text>
-    <text x="60" y="530" class="m">comando-kit.json</text><text x="230" y="530" class="s">all comando reads: name, brain, folders, jobs</text>
-    <text x="60" y="566" class="m">INSTALL.md</text><text x="230" y="566" class="s">install, upgrade, uninstall; the brain's skeleton</text>
+    <text x="60" y="530" class="m">comando-kit.json</text><text x="230" y="530" class="s">the manifest: name, brain, folders, jobs</text>
+    <text x="60" y="566" class="m">INSTALL.md</text><text x="230" y="566" class="s">its Upgrade section, for the kit session</text>
   </g>
   <line x1="600" y1="160" x2="600" y2="580" stroke="#262626"/>
 
@@ -103,7 +103,7 @@
   <text x="640" y="520" class="cap" fill="#6CC69A">OUTSIDE ANY SESSION</text>
   <g class="s">
     <text x="640" y="552">comando reads comando-kit.json at start: the brain's folder, the Files tab's folders, the jobs.</text>
-    <text x="640" y="574">The kit's installer writes the jobs to the platform's scheduler; each runs headless and leaves a report in the brain.</text>
+    <text x="640" y="574">The kit's jobs tool writes the jobs to the platform's scheduler; each runs headless and leaves a report in the brain.</text>
   </g>
 
   <!-- kit vs brain -->
@@ -113,7 +113,7 @@
     <text x="90" y="716" class="cap" fill="#6CC69A">THE KIT</text>
     <text x="90" y="746" class="t">how sessions behave</text>
     <text x="90" y="776" class="s">written by the user, deliberately; each change reviewed and committed</text>
-    <text x="90" y="798" class="s">versioned by tags vMAJOR.MINOR.PATCH; upgraded by a session named kit</text>
+    <text x="90" y="798" class="s">versioned by commits, tags when shared; upgraded by a session named kit</text>
     <text x="90" y="820" class="s">the same kit can run many people's sessions</text>
     <text x="90" y="852" class="q">a kit is a recipe: it says how, never what was learned</text>
 

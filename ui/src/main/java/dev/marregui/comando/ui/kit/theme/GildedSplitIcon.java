@@ -8,7 +8,7 @@ import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import javax.swing.Icon;
 
@@ -58,12 +58,9 @@ public final class GildedSplitIcon implements Icon {
         }
     }
 
-    /** The theme of the other mode {@code t} pairs with: its twin, or the dark theme whose twin it is. */
+    /** The theme of the other mode {@code t} pairs with, as the chooser pairs them. */
     private static Optional<NamedTheme> twinOf(final NamedTheme t) {
-        if (t.twin.isPresent()) {
-            return NamedTheme.withId(t.twin.get());
-        }
-        return Arrays.stream(NamedTheme.values()).filter(o -> o.twin.map(t.id::equals).orElse(false)).findFirst();
+        return NamedTheme.twinOf(List.of(NamedTheme.values()), t);
     }
 
     @Override

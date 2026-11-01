@@ -19,7 +19,10 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.claude.ClaudeSettings;
+import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.KitRoot;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.Notice;
 
 import static org.awaitility.Awaitility.await;
 /** Throwaway probe: Add session, click the name field, type, report text, caret and focus. */
@@ -31,12 +34,12 @@ public final class ProbeNewSession {
         app.start();
         Thread.sleep(2500);
         final var loop = app.loop();
-        loop.dispatch(new dev.marregui.comando.core.intent.Intent.SaveSession("", dev.marregui.comando.core.model.SessionSpec.fresh("standard", System.getProperty("user.home")).withModel("haiku")));
-        loop.dispatch(new dev.marregui.comando.core.intent.Intent.BindSession(loop.state().focused(), "standard"));
+        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("standard", System.getProperty("user.home")).withModel("haiku")));
+        loop.dispatch(new Intent.BindSession(loop.state().focused(), "standard"));
         final Thread pump = new Thread(() -> {
             try {
                 for (int i = 0; ; i++) {
-                    loop.dispatch(new dev.marregui.comando.core.intent.Intent.Notify(dev.marregui.comando.core.state.Notice.Level.INFO, "tick " + i, false));
+                    loop.dispatch(new Intent.Notify(Notice.Level.INFO, "tick " + i, false));
                     Thread.sleep(40);
                 }
             } catch (final InterruptedException e) {

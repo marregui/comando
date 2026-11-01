@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
@@ -37,6 +39,7 @@ import dev.marregui.comando.app.EmbeddedEdge.Entry;
 import dev.marregui.comando.app.EmbeddedEdge.Located;
 import dev.marregui.comando.app.EmbeddedEdge.Ports;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -53,6 +56,9 @@ import static org.awaitility.Awaitility.await;
 /// - a busy port, a missing distribution or an Edge that never answers starts nothing
 /// - closing comando stops the Edge this instance started, and only that one
 class EmbeddedEdgeTest {
+
+    /// The admin API's password the configuration tests write.
+    private static final String PASSWORD = "p4ssw0rd-of-this-install";
 
     private static final Duration WAIT = Duration.ofSeconds(30);
 
@@ -86,7 +92,8 @@ class EmbeddedEdgeTest {
 
         final Intent.Notify up = toggle(edge, sink);
 
-        assertThat(up.text()).isEqualTo("Edge is up: MQTT 127.0.0.1:" + ports.mqtt() + ", UI http://localhost:" + ports.api() + " (admin/hivemq)");
+        assertThat(up.text()).isEqualTo("Edge is up: MQTT 127.0.0.1:" + ports.mqtt() + ", UI http://localhost:" + ports.api()
+                + " (user admin, its password in " + HomeDir.shorten(root.resolve("admin-password").toString()) + ")");
         final Path home = root.resolve("hivemq-edge-1");
         final String config = Files.readString(root.resolve("conf/config.xml"));
         for (final int port : List.of(ports.mqtt(), ports.websocket(), ports.api())) {
@@ -115,13 +122,44 @@ class EmbeddedEdgeTest {
         assertThat(edge.running()).isFalse();
     }
 
+    /// The admin API has one account, comando's: a password made at the first start of this install, kept owner-only
+    /// in the Edge's root and reused at the next start, in a `users` block with the admin role and local login stated,
+    /// so Edge's built-in `admin`/`hivemq` account, which an absent user source turns on, is never live; the folder
+    /// that holds `config.xml` is the user's alone, and the notice names the password's file, never the password.
+    @Test
+    void theAdminApiHasOnlyComandosAccountWithAPasswordOfThisInstall() throws Exception {
+        final Path root = dir.resolve("a/edge");
+        final RecordingSink sink = new RecordingSink();
+        final EmbeddedEdge edge = edge(root, dir.resolve("a"), "", sink, zip("hivemq-edge-1"));
+
+        final Intent.Notify up = toggle(edge, sink);
+        final Path file = root.resolve("admin-password");
+        final String password = Files.readString(file).strip();
+        assertThat(password).hasSizeGreaterThanOrEqualTo(24).doesNotContain("hivemq");
+        assertThat(up.text()).doesNotContain(password);
+        assertThat(Files.getPosixFilePermissions(file)).isEqualTo(PosixFilePermissions.fromString("rw-------"));
+        assertThat(Files.getPosixFilePermissions(root.resolve("conf"))).isEqualTo(PosixFilePermissions.fromString("rwx------"));
+        final String config = Files.readString(root.resolve("conf/config.xml"));
+        assertThat(config).contains("<username-authentication><enabled>true</enabled></username-authentication>",
+                "<users><user><username>admin</username><password>" + password + "</password><roles><role>admin</role></roles></user></users>");
+        assertThat(config).doesNotContain(">hivemq<");
+        toggle(edge, sink);
+
+        // the user's saved settings stay; the admin API, the user source with it, is comando's again, its password kept
+        Files.writeString(root.resolve("conf/config.xml"), config.replace("<password>" + password + "</password>", "<password>hivemq</password>"));
+        toggle(edge, sink);
+        assertThat(Files.readString(file).strip()).isEqualTo(password);
+        assertThat(Files.readString(root.resolve("conf/config.xml"))).contains("<password>" + password + "</password>").doesNotContain(">hivemq<");
+        toggle(edge, sink);
+    }
+
     /// A click says at once what it does, before the start's work; while the start runs the Edge is busy and its
     /// status says so, and a second click only says to wait.
     @Test
     void aStartIsSaidAtOnceAndTheEdgeIsBusyUntilItEnds() throws Exception {
         final Path root = dir.resolve("a/edge");
         final RecordingSink sink = new RecordingSink();
-        final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
         final Path zip = zip("hivemq-edge-1");
         final Predicate<Ports> written = pidWritten(root);
         final EmbeddedEdge edge = new EmbeddedEdge(root, dir.resolve("a"), "", sink, registry, ports, () -> Located.of(zip), p -> {
@@ -158,18 +196,18 @@ class EmbeddedEdgeTest {
         Files.writeString(shipped.resolve("logback.xml"), "<configuration/>");
         Files.writeString(shipped.resolve("config.xml"), "<hivemq/>");
         final Path conf = dir.resolve("conf");
-        EmbeddedEdge.prepareConfig(shipped, conf, ports);
+        EmbeddedEdge.prepareConfig(shipped, conf, ports, PASSWORD);
         assertThat(conf.resolve("logback.xml")).hasContent("<configuration/>");
         final String saved = Files.readString(conf.resolve("config.xml")).replace("<port>" + ports.mqtt() + "</port>", "<port>1883</port>")
                 .replace("</hivemq>", "<protocol-adapters><protocol-adapter><adapterId>plc-1</adapterId></protocol-adapter></protocol-adapters></hivemq>");
         Files.writeString(conf.resolve("config.xml"), saved);
 
-        EmbeddedEdge.prepareConfig(shipped, conf, ports);
+        EmbeddedEdge.prepareConfig(shipped, conf, ports, PASSWORD);
 
         final String config = Files.readString(conf.resolve("config.xml"));
         assertThat(config).contains("<adapterId>plc-1</adapterId>", "<port>" + ports.mqtt() + "</port>").doesNotContain("<port>1883</port>");
         assertThat(config.indexOf("mqtt-listeners")).isLessThan(config.indexOf("protocol-adapters"));
-        assertThat(EmbeddedEdge.enforce("not xml", ports)).as("unparseable: the template").contains("<port>" + ports.api() + "</port>");
+        assertThat(EmbeddedEdge.enforce("not xml", ports, PASSWORD)).as("unparseable: the template").contains("<port>" + ports.api() + "</port>");
     }
 
     /// A saved configuration that does not parse is replaced by the template and kept beside it, each such file under
@@ -178,10 +216,10 @@ class EmbeddedEdgeTest {
     void anUnparseableConfigurationIsKeptBesideTheTemplate() throws Exception {
         final Path conf = Files.createDirectories(dir.resolve("conf"));
         Files.writeString(conf.resolve("config.xml"), "<hivemq><first>");
-        EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports);
+        EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports, PASSWORD);
         assertThat(Files.readString(conf.resolve("config.xml"))).contains("<port>" + ports.mqtt() + "</port>");
         Files.writeString(conf.resolve("config.xml"), "<hivemq><second>");
-        EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports);
+        EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports, PASSWORD);
         assertThat(conf.resolve("config.xml.unparsed-1")).hasContent("<hivemq><first>");
         assertThat(conf.resolve("config.xml.unparsed-2")).hasContent("<hivemq><second>");
     }
@@ -191,10 +229,10 @@ class EmbeddedEdgeTest {
     @Test
     void aFailedConfigurationWriteLeavesTheSavedFileIntact() throws Exception {
         final Path conf = Files.createDirectories(dir.resolve("conf"));
-        final String saved = EmbeddedEdge.config(ports).replace("</hivemq>", "<protocol-adapters/></hivemq>");
+        final String saved = EmbeddedEdge.config(ports, PASSWORD).replace("</hivemq>", "<protocol-adapters/></hivemq>");
         Files.writeString(conf.resolve("config.xml"), saved);
 
-        assertThatThrownBy(() -> EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports, (from, to, options) -> {
+        assertThatThrownBy(() -> EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports, PASSWORD, (from, to, options) -> {
             throw new IOException("killed mid-move");
         })).isInstanceOf(IOException.class);
 
@@ -329,7 +367,7 @@ class EmbeddedEdgeTest {
         final Path root = dir.resolve("a/edge");
         final RecordingSink sink = new RecordingSink();
         final EmbeddedEdge edge = edge(root, dir.resolve("a"), "", sink, zip("hivemq-edge-1"));
-        try (ServerSocket holder = new ServerSocket()) {
+        try (final ServerSocket holder = new ServerSocket()) {
             holder.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), ports.mqtt()));
 
             final Intent.Notify refused = toggle(edge, sink);
@@ -377,6 +415,26 @@ class EmbeddedEdgeTest {
         assertThat(registry).doesNotExist();
     }
 
+    /// The processes the Edge started go with it: a child its `run.sh` left running is ended when the toggle stops the
+    /// Edge, not left behind under init.
+    @Test
+    void stoppingTheEdgeEndsTheProcessesItStarted() throws Exception {
+        final Path root = dir.resolve("a/edge");
+        final RecordingSink sink = new RecordingSink();
+        final EmbeddedEdge edge = edge(root, dir.resolve("a"), "", sink, zip("hivemq-edge-1", "sleep 300 &\necho $! > child.pid\n"));
+        toggle(edge, sink);
+        final long child = Long.parseLong(Files.readString(root.resolve("hivemq-edge-1/child.pid")).strip());
+        try {
+            assertThat(ProcessHandle.of(child).filter(ProcessHandle::isAlive)).as("the child runs").isPresent();
+
+            assertThat(toggle(edge, sink).text()).isEqualTo("Edge is down");
+
+            await().atMost(Duration.ofSeconds(10)).until(() -> ProcessHandle.of(child).filter(ProcessHandle::isAlive).isEmpty());
+        } finally {
+            ProcessHandle.of(child).ifPresent(ProcessHandle::destroyForcibly);
+        }
+    }
+
     /// An Edge whose admin API never answers within the bound is stopped, its registry removed, and the failure said.
     @Test
     void anEdgeThatNeverAnswersIsStopped() throws Exception {
@@ -412,7 +470,7 @@ class EmbeddedEdgeTest {
             }
             asked.incrementAndGet();
             x.sendResponseHeaders(200, release.length);
-            try (OutputStream out = x.getResponseBody()) {
+            try (final OutputStream out = x.getResponseBody()) {
                 out.write(release);
             }
         });
@@ -440,7 +498,7 @@ class EmbeddedEdgeTest {
             final Located refused = EmbeddedEdge.locate(null, null, elsewhere, url, "00" + sha.substring(2), sink);
             assertThat(refused.zip()).isNull();
             assertThat(refused.problem()).contains("SHA-256", "-Dcomando.edge.zip", "COMANDO_EDGE_ZIP");
-            try (Stream<Path> left = Files.list(elsewhere)) {
+            try (final Stream<Path> left = Files.list(elsewhere)) {
                 assertThat(left).as("neither the zip nor its .part").isEmpty();
             }
 
@@ -457,8 +515,9 @@ class EmbeddedEdgeTest {
     }
 
     /// The pinned release, downloaded from hivemq.com and started for real on free loopback ports: its admin API
-    /// answers and its MQTT listener accepts a connection; the toggle stops it. Opt-in, as it downloads 359 MB the
-    /// first time (`./gradlew :app:test -PedgeLiveTest=true`); `-Dcomando.edge.zip` is not read here.
+    /// answers, signs in comando's account with this install's password and refuses the release's default
+    /// `admin`/`hivemq`, and its MQTT listener accepts a connection; the toggle stops it. Opt-in, as it downloads
+    /// 359 MB the first time (`./gradlew :app:test -PedgeLiveTest=true`); `-Dcomando.edge.zip` is not read here.
     @Test
     void thePinnedReleaseStartsForReal() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("comando.edgeLiveTest"), "set -Dcomando.edgeLiveTest=true to download and run the release");
@@ -470,7 +529,10 @@ class EmbeddedEdgeTest {
         edges.add(edge);
         final Intent.Notify up = toggle(edge, sink, Duration.ofMinutes(15));
         assertThat(up.text()).as(up.text()).contains("Edge is up", "127.0.0.1:" + ports.mqtt());
-        try (Socket s = new Socket()) {
+        final String password = Files.readString(dir.resolve("live/edge").resolve(EmbeddedEdge.PASSWORD_FILE)).strip();
+        assertThat(signIn(ports.api(), EmbeddedEdge.ADMIN_USER, password)).as("this install's password").isEqualTo(200);
+        assertThat(signIn(ports.api(), "admin", "hivemq")).as("the release's default account").isNotEqualTo(200);
+        try (final Socket s = new Socket()) {
             s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), ports.mqtt()), 2_000);
         }
         assertThat(toggle(edge, sink).text()).isEqualTo("Edge is down");
@@ -485,7 +547,7 @@ class EmbeddedEdgeTest {
     /// Up once the fake `run.sh` of a home under `root` has written the pid of a live process.
     private static Predicate<Ports> pidWritten(final Path root) {
         return p -> {
-            try (Stream<Path> homes = Files.list(root)) {
+            try (final Stream<Path> homes = Files.list(root)) {
                 return homes.map(h -> h.resolve("edge.pid")).filter(Files::isRegularFile).anyMatch(EmbeddedEdgeTest::names);
             } catch (final IOException e) {
                 return false;
@@ -496,7 +558,7 @@ class EmbeddedEdgeTest {
     private static boolean names(final Path pidFile) {
         try {
             return ProcessHandle.of(Long.parseLong(Files.readString(pidFile).strip())).filter(ProcessHandle::isAlive).isPresent();
-        } catch (IOException | NumberFormatException e) {
+        } catch (final IOException | NumberFormatException e) {
             return false;
         }
     }
@@ -532,9 +594,32 @@ class EmbeddedEdgeTest {
         }
     }
 
+    /// The status the admin API answers a sign-in of `user` with `password`.
+    private static int signIn(final int port, final String user, final String password) throws IOException {
+        final HttpURLConnection c = (HttpURLConnection) URI.create("http://127.0.0.1:" + port + "/api/v1/auth/authenticate").toURL().openConnection();
+        c.setConnectTimeout(2_000);
+        c.setReadTimeout(5_000);
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        c.setDoOutput(true);
+        try (final OutputStream out = c.getOutputStream()) {
+            out.write(("{\"userName\":\"" + user + "\",\"password\":\"" + password + "\"}").getBytes(StandardCharsets.UTF_8));
+        }
+        try {
+            return c.getResponseCode();
+        } finally {
+            c.disconnect();
+        }
+    }
+
     /// A distribution with one top folder: `bin/run.sh` with the shipped JMX port records its environment and pid in
     /// the home and becomes `sleep`, so the recorded pid is the process comando started; `conf/config.xml` as shipped.
     private Path zip(final String top) throws IOException {
+        return zip(top, "");
+    }
+
+    /// As [#zip(String)], with `before` run in the home before the pid is recorded.
+    private Path zip(final String top, final String before) throws IOException {
         final Path zip = dir.resolve(top + "-" + System.nanoTime() + ".zip");
         final String run = """
                 #!/bin/bash
@@ -542,10 +627,10 @@ class EmbeddedEdgeTest {
                 cd "$(dirname "${BASH_SOURCE[0]}")/.."
                 rm -f edge.pid
                 env > env.txt
-                echo $$ > edge.pid
+                %secho $$ > edge.pid
                 exec sleep 300
-                """;
-        try (OutputStream out = Files.newOutputStream(zip); ZipOutputStream z = new ZipOutputStream(out)) {
+                """.formatted(before);
+        try (final OutputStream out = Files.newOutputStream(zip); final ZipOutputStream z = new ZipOutputStream(out)) {
             for (final Map.Entry<String, String> e : Map.of(top + "/bin/run.sh", run, top + "/conf/config.xml", "<hivemq/>\n").entrySet()) {
                 z.putNextEntry(new ZipEntry(e.getKey()));
                 z.write(e.getValue().getBytes(StandardCharsets.UTF_8));
@@ -564,7 +649,7 @@ class EmbeddedEdgeTest {
     }
 
     private static int freePort() throws IOException {
-        try (ServerSocket s = new ServerSocket(0)) {
+        try (final ServerSocket s = new ServerSocket(0)) {
             return s.getLocalPort();
         }
     }

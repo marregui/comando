@@ -8,6 +8,8 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,8 +28,10 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
+import javax.swing.ListCellRenderer;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -202,7 +206,7 @@ class SessionsSidebarTest {
         assertThat(tree.isRootVisible()).isFalse();
         assertThat(tree.getRowCount()).as("one row per folder").isEqualTo(2);
         SwingUtilities.invokeAndWait(() -> tree.expandRow(0));
-        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Scratchpad")));
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Scratchpad"), Map.of("Scratchpad", List.of())));
 
         final ViewSpec.TreeNode doc = new ViewSpec.TreeNode("READ-01-X.md", "1 kB", "comando-file:/s/2026-10-14/READ-01-X.md#0", List.of());
         final ViewSpec.TreeNode read = new ViewSpec.TreeNode("Scratchpad", "/s", List.of(
@@ -253,7 +257,7 @@ class SessionsSidebarTest {
         final Rectangle power = bounds(sidebar, SessionRow.Control.POWER);
         click(list, power, 1);
         assertThat(intents).containsExactly(new Intent.StartSession("edge"));
-        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Disconnected; click to connect (starts the session)");
+        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Stopped; click to start it");
         final Rectangle row = cell(list, 0);
         assertThat(list.getToolTipText(event(list, new Rectangle(row.x + 30, row.y + 4, 4, 4), 0)))
                 .as("over the text no tooltip: the row's card shows there, as a tab's").isNull();
@@ -465,7 +469,7 @@ class SessionsSidebarTest {
         final int widest = on(() -> {
             int most = 0;
             for (int i = 0; i < list.getModel().getSize(); i++) {
-                final Component r = ((javax.swing.ListCellRenderer<Object>) list.getCellRenderer()).getListCellRendererComponent((JList<Object>) list,
+                final Component r = ((ListCellRenderer<Object>) list.getCellRenderer()).getListCellRendererComponent((JList<Object>) list,
                         list.getModel().getElementAt(i), i, false, false);
                 most = Math.max(most, r.getPreferredSize().width);
             }
@@ -580,7 +584,7 @@ class SessionsSidebarTest {
         assertThat(SessionRow.Control.values()).as("the state icon and the ⓘ: the rest is in the menu")
                 .containsExactly(SessionRow.Control.POWER, SessionRow.Control.INFO);
         final Rectangle power = s[0].controlBounds(0, SessionRow.Control.POWER);
-        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
+        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Running; click to stop the session");
     }
 
     /// Sessions sort running first, then by name ignoring case; dragging a row sends `OrderSessions` and keeps that
@@ -767,9 +771,9 @@ class SessionsSidebarTest {
         assertThat(icons).containsExactly(Icons.get("claude"), Icons.get("claude-off"));
         assertThat(SessionIcons.of(Status.OPENING)).isEqualTo("claude-starting");
         assertThat(SessionIcons.of(Status.FAILED)).isEqualTo("claude-failed");
-        assertThat(SessionRow.powerTip(running)).isEqualTo("Connected; click to disconnect (stops the session)");
+        assertThat(SessionRow.powerTip(running)).isEqualTo("Running; click to stop the session");
         assertThat(SessionRow.powerTip(running.withTurns(1, started).withActivity("Bash", started)))
-                .isEqualTo("Working: Bash; connected; click to disconnect (stops the session)");
+                .isEqualTo("Working: Bash; running; click to stop the session");
     }
 
     /// A production connection shows a "prod" mark, in the accent colour when focused; the icon follows the state, the
@@ -1176,8 +1180,8 @@ class SessionsSidebarTest {
                 shownCards.add("left");
             }
         };
-        final long now = java.time.Instant.parse("2026-10-30T10:00:00Z").toEpochMilli();
-        final java.time.ZoneId utc = java.time.ZoneOffset.UTC;
+        final long now = Instant.parse("2026-10-30T10:00:00Z").toEpochMilli();
+        final ZoneId utc = ZoneOffset.UTC;
         final InstancesState.Instance me = new InstancesState.Instance("main", "comando", "2.0.0", "", "a710bbf", false, "2026-10-30T07:00:00Z",
                 List.of(new InstancesState.Member("work", true)), true, true, 0L);
         final InstancesState.Member consult = new InstancesState.Member("consult-main", true, "OPEN", "running Bash", now - 125_000, "opus", "high", 42,
@@ -1349,8 +1353,8 @@ class SessionsSidebarTest {
         final JList<?> sessions = search(root, JList.class, l -> l.getModel().getSize() > 0 && l.getModel().getElementAt(0) instanceof SessionState);
         final JList<?> connections = search(root, JList.class, l -> l.getModel().getSize() > 0 && l.getModel().getElementAt(0) instanceof ConnectionState);
         for (final JList<?> list : List.of(sessions, connections)) {
-            final javax.swing.JScrollPane sp = (javax.swing.JScrollPane) SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane.class, list);
-            assertThat(sp.getHorizontalScrollBarPolicy()).isEqualTo(javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+            final JScrollPane sp = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, list);
+            assertThat(sp.getHorizontalScrollBarPolicy()).isEqualTo(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
             SwingUtilities.invokeAndWait(() -> {
                 sp.setSize(120, 300);

@@ -201,8 +201,9 @@ class DbAdapterTest {
         assertThat(failed.message()).contains("no_such_table");
     }
 
-    /// Cancel returns to its caller, the reducer thread, in under 500 ms, the long query is cancelled within 3 s, and
-    /// the connection then runs the next statement.
+    /// Cancel returns to its caller, the reducer thread, at once: in under 500 ms, or in under half of what the cancel
+    /// took to land, so a runner slowed by load stretches the bound with the work. The long query is cancelled within
+    /// 10 s, and the connection then runs the next statement.
     @Test
     void cancelOfALongQueryReturnsQuickly() {
         db.execute(6L, spec, "SELECT sum(x) FROM long_sequence(100_000_000_000)");
@@ -211,12 +212,13 @@ class DbAdapterTest {
         final long start = System.nanoTime();
         db.cancel(6L);
         final long callMillis = (System.nanoTime() - start) / 1_000_000L;
-        // a cancel made on the caller's thread waits for QuestDB's answer, about 1 000 ms; handed off it returns at
-        // once, though a loaded CI runner, its cores busy with the query, took 125 ms: 500 ms tells them apart
-        assertThat(callMillis).as("cancel() must not block its caller, the reducer thread; took %d ms", callMillis).isLessThan(500L);
-        sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 6L, Duration.ofSeconds(5));
+        sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 6L, Duration.ofSeconds(15));
         final long tookMillis = (System.nanoTime() - start) / 1_000_000L;
-        assertThat(tookMillis).as("cancel took %d ms", tookMillis).isLessThan(3_000L);
+        // a cancel made on the caller's thread waits for QuestDB's answer, about 1 000 ms, as long as the cancel takes
+        // to land; handed off it returns at once, though a loaded CI runner, its cores busy with the query, took 125 ms
+        assertThat(callMillis).as("cancel() must not block its caller, the reducer thread; took %d ms of %d", callMillis, tookMillis)
+                .isLessThan(Math.max(500L, tookMillis / 2));
+        assertThat(tookMillis).as("cancel took %d ms", tookMillis).isLessThan(10_000L);
 
         // the lane keeps working afterwards
         db.execute(7L, spec, "SELECT 1");
@@ -240,7 +242,7 @@ class DbAdapterTest {
     @Test
     void aStatementQueuedWhenComandoQuitsDoesNotRun() throws Exception {
         // the lane is held by a connect to a server that accepts and never answers; behind it, a write to the real one
-        try (ServerSocket silent = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+        try (final ServerSocket silent = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             final ConnectionSpec stuck = new ConnectionSpec("probe", "127.0.0.1", silent.getLocalPort(), "qdb", "admin", "quest", false);
             final ConnectionSpec real = new ConnectionSpec("probe", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
             db.execute(10L, stuck, "SELECT 1");

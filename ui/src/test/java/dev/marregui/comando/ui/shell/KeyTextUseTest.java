@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [dev.marregui.comando.ui.kit.format.KeyText], so a desktop other than macOS reads its own keys ("Ctrl+Shift+T", not
 /// "⌘⇧T"). A new string with a key written as macOS writes it fails here, on any desktop, unless its statement passes
 /// it through `KeyText.of` or it is one of the constants below, each read through `KeyText` where it is used.
-/// - Every string literal in `src/main` naming ⌘, ⌃ or ⌥ goes through `KeyText.of` or is a listed constant.
+/// - Every string literal in `src/main` naming ⌘, ⌃, ⌥ or ⇧ goes through `KeyText.of` or is a listed constant.
 /// - The listed constants are translated where they are read.
 /// - The scanner finds literals and text blocks and skips comments.
 class KeyTextUseTest {
@@ -51,13 +51,13 @@ class KeyTextUseTest {
     @Test
     void everyKeyNamedInAStringGoesThroughKeyText() throws IOException {
         final List<String> untranslated = new ArrayList<>();
-        try (Stream<Path> files = Files.walk(SOURCES)) {
+        try (final Stream<Path> files = Files.walk(SOURCES)) {
             for (final Path f : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
                 final String rel = SOURCES.relativize(f).toString().replace('\\', '/');
                 final Source src = Source.of(Files.readString(f));
                 for (final int[] lit : src.literals) {
                     final String text = src.text.substring(lit[0], lit[1]);
-                    if (text.chars().noneMatch(c -> c == '⌘' || c == '⌃' || c == '⌥')) {
+                    if (text.chars().noneMatch(c -> c == '⌘' || c == '⌃' || c == '⌥' || c == '⇧')) {
                         continue;
                     }
                     final String statement = src.statementAround(lit[0], lit[1]);

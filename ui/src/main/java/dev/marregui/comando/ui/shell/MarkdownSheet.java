@@ -15,7 +15,7 @@ final class MarkdownSheet {
 
     /** The sheet's Markdown, its keys named as this desktop names them. */
     static String markdown() {
-        try (InputStream in = MarkdownSheet.class.getResourceAsStream("markdown-sheet.md")) {
+        try (final InputStream in = MarkdownSheet.class.getResourceAsStream("markdown-sheet.md")) {
             if (in == null) {
                 throw new IllegalStateException("markdown-sheet.md is missing from the build");
             }

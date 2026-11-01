@@ -29,15 +29,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /// [FoldersEditor] edits the folders the Files tab shows, checking each before it can be saved.
-/// - An unchanged list is valid, clean and saves as it was.
+/// - An unchanged list is valid, clean and saves as it was; the window offers Save once it is valid and changed, or
+///   names an index file Save creates.
 /// - A missing, relative or outside folder, an empty or taken name and an index outside the folder block the save and
 ///   say why.
 /// - The kit's folders the list lacks go first, once, and the user's stay.
 /// - Adding chooses the folder first and names it uniquely with its index guessed; a cancelled choice adds nothing.
 /// - Removing and moving change only the list, never the disk.
 /// - The listing file counts only with the Trash; the facts say which repository holds the folder.
-/// - Only folders inside the config folder are picked, and a refused pick changes nothing.
-/// - An index named but missing is created at save unless its folder is missing; every field's label explains it.
+/// - Only folders inside the config folder, or the kit's or the brain's, are picked, and a refused pick changes
+///   nothing.
+/// - An index named but missing is created at save unless its folder is missing, or it lies outside the kit and the
+///   brain (none without a kit); every field's label explains it.
 class FoldersEditorTest {
 
     private final List<Path> chosen = new ArrayList<>();
@@ -92,6 +95,40 @@ class FoldersEditorTest {
         assertThat(on(e, FoldersEditor::valid)).isTrue();
         assertThat(on(e, FoldersEditor::dirty)).isFalse();
         assertThat(on(e, FoldersEditor::folders)).contains(List.of(a, b));
+    }
+
+    /// The window offers Save once the list is valid and changed, as the kit jobs window does: not for the list as it
+    /// was, and again once a folder is added.
+    @Test
+    void theWindowOffersSaveOnceTheListIsValidAndChanged(@TempDir final Path dir) throws Exception {
+        final FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
+        final FolderRoot kit = new FolderRoot("Kit", Files.createDirectories(dir.resolve("kit")).toString(), "", List.of());
+        final FoldersEditor e = editor(List.of(a), new RepoChanges());
+        settled(e);
+        assertThat(on(e, FoldersDialog::saveOffered)).as("unchanged").isFalse();
+        on(e, (FoldersEditor x) -> x.addFirst(List.of(kit)));
+        settled(e);
+        assertThat(on(e, FoldersDialog::saveOffered)).as("a folder added").isTrue();
+    }
+
+    /// An unchanged list whose entry names a missing index file says Save creates it, and the window offers Save, since
+    /// saving then changes something on disk.
+    @Test
+    void aMissingIndexOfAnUnchangedListIsOfferedToSave(@TempDir final Path dir) throws Exception {
+        final FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(dir.resolve("skills")).toString(), "INDEX.md", List.of());
+        final FoldersEditor e = editor(List.of(skills), new RepoChanges());
+        settled(e);
+        await().atMost(Duration.ofSeconds(10)).until(() -> on(e, FoldersEditor::messageShown).equals("INDEX.md does not exist yet: Save creates it"));
+        assertThat(on(e, FoldersEditor::dirty)).isFalse();
+        assertThat(on(e, FoldersEditor::indexesToCreate)).isTrue();
+        assertThat(on(e, FoldersDialog::saveOffered)).as("the message says Save creates the index").isTrue();
+    }
+
+    /// The window is titled by what it holds, the Files tab's folders, not by one folder they may lie outside of, and
+    /// the palette's command reads "Configure Files tab folders".
+    @Test
+    void theWindowIsTitledByWhatItHolds() {
+        assertThat(FoldersDialog.title()).isEqualTo("Files tab folders");
     }
 
     /// A missing folder, a taken name, a blank name, an index climbing out and a relative path each show their problem
@@ -242,6 +279,38 @@ class FoldersEditorTest {
         assertThat(on(e, (FoldersEditor x) -> ((JTextField) x.field(FoldersEditor.PATH)).isEditable())).as("chosen, not typed").isFalse();
     }
 
+    /// With a kit and a brain beside Claude Code's folder, a folder in the brain, which may lie anywhere, is added; one
+    /// in none of the three is refused, naming them.
+    @Test
+    void aFolderInTheBrainOutsideClaudesFolderIsAddedAndOneInNoRootIsNot(@TempDir final Path dir) throws Exception {
+        final Path claude = Files.createDirectories(dir.resolve(".claude"));
+        final Path kit = Files.createDirectories(dir.resolve("comando-kit"));
+        final Path brain = Files.createDirectories(dir.resolve("comando-brain"));
+        final AtomicReference<FoldersEditor> made = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> made.set(new FoldersEditor(List.of(), List.of(claude, kit, brain), new RepoChanges(),
+                new FoldersEditor.Chooser() {
+                    @Override
+                    public Optional<Path> folder(final Component owner, final Path start) {
+                        return chosen.isEmpty() ? Optional.empty() : Optional.of(chosen.removeFirst());
+                    }
+
+                    @Override
+                    public Optional<Path> file(final Component owner, final Path start) {
+                        return folder(owner, start);
+                    }
+                })));
+        final FoldersEditor e = made.get();
+        settled(e);
+        chosen.add(Files.createDirectories(brain.resolve("MEMORY")));
+        SwingUtilities.invokeAndWait(e::add);
+        assertThat(on(e, (FoldersEditor x) -> x.list().getModel().getSize())).as("in the brain: added").isEqualTo(1);
+        chosen.add(Files.createDirectories(dir.resolve("elsewhere")));
+        SwingUtilities.invokeAndWait(e::add);
+        assertThat(on(e, (FoldersEditor x) -> x.list().getModel().getSize())).as("in no root: not added").isEqualTo(1);
+        assertThat(on(e, FoldersEditor::messageShown)).endsWith("elsewhere is outside " + claude + ", " + kit + " or " + brain
+                + ": not added");
+    }
+
     /// A chosen folder outside the config folder is not added and says so, a chosen index outside the folder is not
     /// taken, and an index inside it is taken relative to the folder, the message then clearing.
     @Test
@@ -287,6 +356,28 @@ class FoldersEditorTest {
         assertThat(on(e, FoldersEditor::valid)).isFalse();
     }
 
+    /// Without a kit no root is one Save creates an index in: the default folder's missing `CLAUDE.md` in the user's own
+    /// Claude Code folder is said not to exist and not to be created, and an unchanged list offers no Save, since saving
+    /// would change nothing.
+    @Test
+    void withoutAKitAMissingIndexIsNotOfferedToCreate(@TempDir final Path dir) throws Exception {
+        final Path claude = Files.createDirectories(dir.resolve(".claude"));
+        final AtomicReference<FoldersEditor> made = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> made.set(new FoldersEditor(FolderRoot.defaults(claude), List.of(claude), List.of(), new RepoChanges(),
+                new FoldersEditor.Chooser() {
+                    @Override
+                    public Optional<Path> folder(final Component owner, final Path start) {
+                        return Optional.empty();
+                    }
+                })));
+        final FoldersEditor e = made.get();
+        settled(e);
+        await().atMost(Duration.ofSeconds(10)).until(() -> on(e, FoldersEditor::messageShown)
+                .equals("CLAUDE.md does not exist: Save creates an index only in the kit or the brain"));
+        assertThat(on(e, FoldersEditor::indexesToCreate)).isFalse();
+        assertThat(on(e, FoldersDialog::saveOffered)).as("nothing to save").isFalse();
+    }
+
     /// Each of the eight field labels carries a non-blank tooltip, the index and listing tips naming their rules.
     @Test
     void everyFieldsNameExplainsItUnderTheMouse(@TempDir final Path dir) throws Exception {
@@ -300,7 +391,7 @@ class FoldersEditorTest {
         });
         assertThat(tips.keySet()).containsExactly("Name", "Folder", "Index file", "Leave out", "Icon", "Trash", "Listed in", "Group");
         assertThat(tips.values()).allSatisfy(t -> assertThat(t).isNotBlank());
-        assertThat(tips.get("Index file")).contains("Named but missing: Save creates it").contains("Empty: the folder has no index");
+        assertThat(tips.get("Index file")).contains("Named but missing in the kit or the brain: Save creates it").contains("Empty: the folder has no index");
         assertThat(tips.get("Listed in")).contains("An entry moved to the Trash takes its lines out");
     }
 

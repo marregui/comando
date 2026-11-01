@@ -298,7 +298,7 @@ public final class SessionsSidebar {
                     boundToFocused(s),
                     state == null ? 0 : state.pendingApprovals(s.name()), selected,
                     selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
-                    newestCli());
+                    paintedNewestCli);
             r.hovered(index == hoveredSession);
             return r;
         });
@@ -642,7 +642,10 @@ public final class SessionsSidebar {
         return rail.getPreferredSize().width;
     }
 
-    /** The newest Claude Code version the rows were last painted against. */
+    /**
+     * The newest Claude Code version the rows are painted against: worked out once per render, not once per row of each
+     * paint, which the spinner repeats 12 times a second while a session works.
+     */
     private String paintedNewestCli = "";
 
     public void render(final AppState s) {
@@ -1147,7 +1150,7 @@ public final class SessionsSidebar {
         if (SessionBar.showsCheckpoint(s)) {
             m.add(tipped(item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", SessionBar.checkpointIcon(s),
                     () -> intents.dispatch(new Intent.Checkpoint(s.name()))), SessionBar.checkpointTip(s)))
-                    .setEnabled(free);
+                    .setEnabled(SessionBar.canCheckpoint(s));
         }
         if (s.status().isUsable()) {
             m.add(tipped(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),
@@ -1167,11 +1170,11 @@ public final class SessionsSidebar {
         efforts.setEnabled(free);
         m.add(efforts);
         m.addSeparator();
-        m.add(item("Copy details", "copy", () -> clipboard.accept(details(s))));
+        m.add(item("Copy details", "copy", () -> copyDetails(s)));
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.sessions().edit(s.name()))).setEnabled(free);
-        m.add(item("Clone…", "copy", () -> dialogs.sessions().cloneOf(s.name())));
-        m.add(item("Remove…", "close", () -> sessionActions.remove(s))).setEnabled(free);
+        m.add(item("Clone…", "copy", () -> cloneSession(s)));
+        m.add(item("Remove…", "close", () -> removeSession(s))).setEnabled(free);
         return m;
     }
 
@@ -1210,12 +1213,45 @@ public final class SessionsSidebar {
         m.add(item("Test", "check", () -> intents.dispatch(new Intent.TestConnection(c.spec()))));
         m.add(item("Explore the schema", "tree", () -> dialogs.exploreSchema(c.name())));
         m.addSeparator();
-        m.add(item("Copy details", "copy", () -> clipboard.accept(ConnectionRow.details(c))));
+        m.add(item("Copy details", "copy", () -> copyDetails(c)));
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.connections().edit(c.name())));
-        m.add(item("Clone…", "copy", () -> dialogs.connections().cloneOf(c.name())));
-        m.add(item("Remove…", "close", () -> connectionActions.remove(c)));
+        m.add(item("Clone…", "copy", () -> cloneConnection(c)));
+        m.add(item("Remove…", "close", () -> removeConnection(c)));
         return m;
+    }
+
+    /** Puts {@code s}'s details on the clipboard: the session's menu's Copy details, and the palette's. */
+    public void copyDetails(final SessionState s) {
+        clipboard.accept(details(s));
+    }
+
+    /** Opens the session dialog on an unsaved copy of {@code s}: the session's menu's Clone…, and the palette's. */
+    public void cloneSession(final SessionState s) {
+        dialogs.sessions().cloneOf(s.name());
+    }
+
+    /** Asks, then removes {@code s} with its own panel: the session's menu's Remove…, and the palette's. */
+    public void removeSession(final SessionState s) {
+        sessionActions.remove(s);
+    }
+
+    /**
+     * Puts {@code c}'s details, never its password, on the clipboard: the connection's menu's Copy details, and the
+     * palette's.
+     */
+    public void copyDetails(final ConnectionState c) {
+        clipboard.accept(ConnectionRow.details(c));
+    }
+
+    /** Opens the connection dialog on an unsaved copy of {@code c}: the connection's menu's Clone…, and the palette's. */
+    public void cloneConnection(final ConnectionState c) {
+        dialogs.connections().cloneOf(c.name());
+    }
+
+    /** Asks, then removes {@code c}: the connection's menu's Remove…, and the palette's. */
+    public void removeConnection(final ConnectionState c) {
+        connectionActions.remove(c);
     }
 
     /** A list that says what to do while it is empty. */

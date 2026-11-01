@@ -3,10 +3,13 @@ package dev.marregui.comando.app;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.Rectangle;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.logging.Logger;
 import javax.swing.JFrame;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -36,7 +39,7 @@ class OwnLogUiTest {
     void comandosOwnLogShowsWhatIsLoggedWhileItIsOpen() throws Exception {
         final AppConfig config = new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false);
         Logging.configure(config.logDir());
-        final java.util.logging.Logger log = java.util.logging.Logger.getLogger("dev.marregui.comando.OwnLogUiTest");
+        final Logger log = Logger.getLogger("dev.marregui.comando.OwnLogUiTest");
         for (int i = 0; i < 300; i++) {
             log.info("filler " + i);
         }
@@ -50,14 +53,14 @@ class OwnLogUiTest {
             loop.dispatch(new Intent.OpenFile("", file.toString(), 0));
             Awaitility.await("the log's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().startsWith("comando-0"));
             final RSyntaxTextArea area = onEdt(() -> find(frame(), RSyntaxTextArea.class, a -> a.isShowing() && !a.isEditable()));
+            // the read that shows the text records its stamp: a line written after it is a change the panel sees
             Awaitility.await("the log shown").atMost(WAIT).until(() -> onEdt(area::getText).contains("filler 299"));
-            Thread.sleep(1_500);
 
             log.info("written while the log is open");
             Awaitility.await("the new line shows").atMost(WAIT).until(() -> onEdt(area::getText).contains("written while the log is open"));
             final JViewport v = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, area);
             Awaitility.await("the view at the end").atMost(WAIT).until(() -> onEdt(() -> {
-                final java.awt.Rectangle seen = v.getViewRect();
+                final Rectangle seen = v.getViewRect();
                 return seen.y + seen.height >= v.getView().getHeight() - 2 * area.getLineHeight();
             }));
         } finally {
@@ -77,8 +80,8 @@ class OwnLogUiTest {
                     .ifPresent(p -> loop.dispatch(new Intent.FocusPanel(p.id())));
             Awaitility.await("in front").atMost(WAIT).until(() -> loop.state().focusedPanel().title().startsWith("comando-0"));
             final RSyntaxTextArea area = Awaitility.await("its text").atMost(WAIT).until(
-                    () -> onEdt(() -> find(frame(), RSyntaxTextArea.class, a -> a.isShowing() && !a.isEditable())), java.util.Objects::nonNull);
-            Thread.sleep(1_500);
+                    () -> onEdt(() -> find(frame(), RSyntaxTextArea.class, a -> a.isShowing() && !a.isEditable())), Objects::nonNull);
+            Awaitility.await("the log shown again").atMost(WAIT).until(() -> onEdt(area::getText).contains("filler 299"));
             log.info("written after the restart");
             Awaitility.await("the line after the restart shows").atMost(WAIT).until(() -> onEdt(area::getText).contains("written after the restart"));
         } finally {

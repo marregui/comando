@@ -23,7 +23,7 @@
 
   <text x="30" y="30" class="cap">BRAIN · THE WHOLE PICTURE</text>
   <text x="30" y="58" class="h">A comando session, the kit and the brain</text>
-  <text x="30" y="80" class="s">Who runs what, who writes what, what flows where. Solid boxes run; dashed boxes are files on disk. Paths are the defaults: root ~/.claude, data root ~/.comando.</text>
+  <text x="30" y="80" class="s">Who runs what, who writes what, what flows where. Solid boxes run; dashed boxes are files on disk. Paths are the defaults: kit ~/comando-kit, brain ~/comando-brain, data root ~/.comando.</text>
 
   <g transform="translate(0,24)">
   <!-- comando -->
@@ -37,7 +37,7 @@
   <text x="57" y="234" class="s">Session strand (one per session)</text>
   <text x="57" y="252" class="s">writes stdin, reads stdout line by line,</text>
   <text x="57" y="270" class="s">stop: interrupt → SIGTERM 3 s → KILL 2 s</text>
-  <text x="57" y="288" class="s">checkpoint at 400k: /reflect then /compact</text>
+  <text x="57" y="288" class="s">checkpoint at 40 %: /reflect --auto, /compact</text>
   <rect x="45" y="312" width="300" height="88" rx="6" fill="#1E1E1E" stroke="#6FAEE8"/>
   <text x="57" y="334" class="s">MCP server (HTTP, localhost, token/run)</text>
   <text x="57" y="352" class="m">approve  ui_*  session_*</text>
@@ -64,8 +64,8 @@
   <text x="455" y="154" class="m">--output-format stream-json</text>
   <text x="455" y="170" class="m">--session-id | --resume  --name</text>
   <text x="455" y="186" class="m">--mcp-config  --permission-prompt-tool</text>
-  <text x="455" y="202" class="m">env CLAUDE_CONFIG_DIR, COMANDO_CREATED_BY,</text>
-  <text x="455" y="218" class="m">    CONTEXT_CHECKPOINT_BY</text>
+  <text x="455" y="202" class="m">env CLAUDE_CONFIG_DIR, COMANDO_BRAIN,</text>
+  <text x="455" y="218" class="m">    COMANDO_HOME, COMANDO_CREATED_BY, …</text>
   <rect x="455" y="232" width="330" height="70" rx="6" fill="#1E1E1E" stroke="#D98E5F"/>
   <text x="467" y="254" class="s">Model turn loop: context = system prompt</text>
   <text x="467" y="272" class="s">+ CLAUDE.md + MEMORY.md index</text>
@@ -122,7 +122,7 @@
 
   <!-- jobs -->
   <rect x="880" y="530" width="320" height="160" rx="10" fill="#141B17" stroke="#6CC69A" stroke-width="1.2"/>
-  <text x="895" y="556" class="t">Scheduled jobs (launchd, headless)</text>
+  <text x="895" y="556" class="t">Scheduled jobs (scheduler, headless)</text>
   <text x="895" y="580" class="s">transcript retention</text>
   <text x="1050" y="580" class="s">daily</text>
   <text x="895" y="600" class="s">KB drift check</text>
@@ -131,13 +131,11 @@
   <text x="1050" y="620" class="s">weekly</text>
   <text x="895" y="640" class="s">recall replay</text>
   <text x="1050" y="640" class="s">weekly</text>
-  <text x="895" y="660" class="s">daily brief</text>
-  <text x="1050" y="660" class="s">workdays</text>
   <text x="895" y="680" class="l">not comando sessions; reports only</text>
 
   <!-- brain -->
   <rect x="1270" y="90" width="300" height="600" rx="10" fill="#1D1B13" stroke="#E7C55A" stroke-width="1.2"/>
-  <text x="1285" y="116" class="t">BRAIN &lt;root&gt;/&lt;brain&gt; (own repo)</text>
+  <text x="1285" y="116" class="t">BRAIN $COMANDO_BRAIN (own repo)</text>
   <rect x="1285" y="130" width="270" height="130" rx="6" fill="#1E1E1E" stroke="#E7C55A" class="dash"/>
   <text x="1297" y="152" class="t">MEMORY/</text>
   <text x="1297" y="172" class="s">working context: state, preferences,</text>
@@ -215,7 +213,7 @@
   <text x="45" y="786" class="t">Other comando instances on this machine — each with its own kit, brain and data root</text>
   <rect x="60" y="806" width="380" height="200" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1"/>
   <text x="75" y="830" class="t">Main instance</text>
-  <text x="75" y="852" class="m">~/.comando  ~/.claude  ~/.claude/BRAIN</text>
+  <text x="75" y="852" class="m">~/.comando  ~/comando-kit  ~/comando-brain</text>
   <text x="75" y="878" class="s">session calls instance_ask {instance, text}</text>
   <text x="75" y="898" class="s">publishes presence (retained, last will)</text>
   <text x="75" y="922" class="l">only the text a session chose to send</text>
@@ -228,7 +226,7 @@
   <text x="625" y="946" class="s">one per machine; ~/.comando-edge.json</text>
   <rect x="1160" y="806" width="380" height="200" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1"/>
   <text x="1175" y="830" class="t">Instance b</text>
-  <text x="1175" y="852" class="m">~/.comando_b  ~/.claude_b  ~/.claude_b/BRAIN</text>
+  <text x="1175" y="852" class="m">its own data root, kit and brain</text>
   <text x="1175" y="878" class="s">prompts its session consult-&lt;asker&gt;</text>
   <text x="1175" y="898" class="s">in a visible panel; replies with the turn</text>
   <text x="1175" y="922" class="l">a kit guard: no session reads or</text>

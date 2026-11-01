@@ -32,6 +32,15 @@ public interface Setup {
         throw new IOException("no kit in this window");
     }
 
+    /**
+     * Rewrites the kit's {@code comando-kit.json} without the entries comando left out at the start
+     * ({@link KitRoot#problems}), keeping the rest and the old file beside it; answers what it took out. Throws when the
+     * file is refused whole, which dropping entries cannot repair. Takes effect at the next start.
+     */
+    default List<String> repairKit() throws IOException {
+        throw new IOException("no kit in this window");
+    }
+
     /** The kit's scheduled jobs as {@code kit.py} reports them; {@link KitJobs#NONE} without a kit. */
     default KitJobs jobs() {
         return KitJobs.NONE;

@@ -27,7 +27,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   --name <session name> \
   --mcp-config <run>/<session>-<uuid>.mcp.json --permission-prompt-tool mcp__comando__approve \
   --append-system-prompt <comando's UI instructions> \
-  [--model m] [--effort e] [--permission-mode p] [--add-dir d]... [--max-budget-usd n]
+  [--model m] [--effort e] [--max-budget-usd n]
 ```
 
 - **Start mode.** A new session gets a fresh id; a session resumes its own conversation. An imported conversation is
@@ -35,7 +35,13 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   conversation ([record 4](adr/0004-a-session-open-in-another-terminal.md)).
 - **Not `--bare`.** The session loads CLAUDE.md, hooks, plugins, skills and the user's MCP servers as a terminal session
   does. The login is the CLI's own; comando stores no key.
-- **The root.** Every `claude` comando starts runs on the root
+- **Permissions.** No `--permission-mode` and no `--add-dir`: a session runs under the root's `settings.json` and, as
+  Claude Code does for any session, its working folder's own `.claude/settings.json` and `settings.local.json`, which
+  apply on top of the kit's and may change the mode and widen the rules
+  ([record 7](adr/0007-default-permission-mode.md), amended). An agent may give a session any working folder, so the
+  kit's rules are not a bound on what a session it creates may do; the session dialog names the project's files and the
+  mode they set ([Workbench §1.1](workbench.md#11-one-model-for-connections-sessions-and-folders)).
+- **The root.** Every `claude` comando starts runs on the root, with `COMANDO_HOME` set to this instance's data root
   ([Kit and brain §3.1](kit-and-brain.md#31-the-root)); the `kit` session's exception is in
   [§3.4](kit-and-brain.md#34-version-and-upgrade).
 - **An agent's session.** A session with a creator (`createdBy`) runs with `COMANDO_CREATED_BY=<creator>`, so a kit's
@@ -75,6 +81,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 | `user` with `tool_result` | the result on its tool card; the card turns done or failed |
 | `user` with text | the compaction summary, local command output or the interrupt marker, as notes |
 | `system/compact_boundary`, `hook_response`, `api_retry`, `permission_denied` | a note of that kind |
+| `system/informational` | an INFO note with its text (at most 2 000 characters), prefixed "Warning: " at level `warning`: a banner of the loop, such as a model the organisation restricts replaced by another (2.1.316) |
 | `result` | the pending `SessionRanAt` first; a turn end (its duration, after the error text when it failed or was interrupted; no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
 | `rate_limit_event` | a note when its status is not `allowed` |
 | `conversation_reset` | a note "Conversation cleared"; the context size becomes 0 until a call reports the new one |
@@ -89,20 +96,22 @@ of text and shown to 400 lines.
   session is busy while it is above zero. A turn that ends with nothing queued posts "Turn finished" or "Turn failed:
   <message>" as a desktop notification while the window is not active; a turn that handed its work to the background
   notifies when the turn Claude Code starts after that work ends, and a result while no turn ran notifies nothing.
-- **Interrupt** writes a `control_request` with subtype `interrupt`. The turn ends with a `result` marked interrupted;
-  its turn end reads "interrupted · <time>" in the transcript's ivory, not red; the session stays open and no "Turn
-  failed" notification is sent.
+- **Interrupt** writes a `control_request` with subtype `interrupt`. The turn ends with a `result` marked interrupted
+  (`terminal_reason` `aborted_streaming` or `aborted_tools`; an `error_during_execution` without one is a crash or a
+  startup failure, told by its subtype and errors); its turn end reads "interrupted · <time>" in the transcript's ivory,
+  not red; the session stays open and no "Turn failed" notification is sent.
 - **Stop** interrupts, closes stdin, sends SIGTERM after 3 s and SIGKILL 2 s later. A prompt sent while stopping is
   refused with a notice and stays in the editor. A process that cannot start is reported once, naming `COMANDO_CLAUDE`
   or the run directory when those are the cause. A tool call left running when the process ends reads "no result: the
-  session ended before the tool returned".
+  session ended before the tool returned". Once the process's input has closed, a prompt is answered with an error note
+  and its turn ends "session input closed".
 - **Slash commands** (`/compact`, `/clear`, `/model x`, `/effort x`) are sent as prompts; `/compact` and `/clear` work
   under `-p`. `/clear` writes `conversation_reset`, ends its turn with no model call and reports the new conversation
   in a new `system/init`: comando zeroes the context, notes the clear, and resumes the new id from then on, saying the
   previous one can be imported again.
 - **Versions.** At start `claude --version` runs with a 5 s bound on its exit and 1 s more for its output. A version
-  outside the tested line (2.1.296 up to, not including, 2.2.0) gets a warning, not a refusal; features are read from
-  `system/init`'s capabilities.
+  outside the tested line (2.1.316 up to, not including, 2.2.0; 2.1.316, the newest Claude Code on the release's day, is
+  the release's minimum) gets a warning, not a refusal; features are read from `system/init`'s capabilities.
 
 ### 1.4 Stored conversations
 
@@ -148,17 +157,33 @@ session's panel, as the palette's "Compact the conversation" does: the same conv
 it and shows the compaction, and the panel's text stays
 ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)).
 
-comando runs the same sequence by itself, the checkpoint command with `--auto` then `/compact`, when a turn ends with the context at
-or above the checkpoint threshold: `sessions.checkpointThresholdTokens` in comando's `settings.json`, 400,000 tokens by
-default, 0 for never, changed with the palette's "Checkpoint threshold…". It runs once per crossing: any checkpoint
-command sent disarms it, and a turn that ends below the threshold arms it again. It waits while a prompt is queued (the
-check repeats at that prompt's end) or background work is out, and does not run after a failed or interrupted turn or
-for a session without a checkpoint command. A session launched while the threshold is above 0 gets
-`CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that would checkpoint at that size on its own leaves it
-to comando; every other process has the variable taken out, and a session keeps what it was launched with.
+The checkpoint threshold is a share of the session's own context window: `sessions.checkpointThresholdPercent` in
+comando's `settings.json`, 40 % by default, 10 to 100, changed with the palette's "Checkpoint threshold…", which asks
+for a percentage and refuses any other value with the reason (a stored value under 10, as an earlier version's 0, reads
+as 10); there is no off, so every session is checkpointed
+([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md), amended). When a turn ends with the context at or above
+it, the session falls due (the session bar's context and checkpoint turn purple,
+[Workbench §1.2](workbench.md#12-panels)) and comando runs the same sequence by itself, the checkpoint command with
+`--auto` then `/compact`, and once that compaction has ended normally it sends the session one prompt from its panel,
+"Continue the work the checkpoint paused, from the summary above: its next step first." (`Reducer.CONTINUE_PROMPT`), so
+the work the checkpoint paused goes on. That carry-on turn is an ordinary one: the session is not locked and the turn
+notifies at its end as any turn does, while the compaction's own turn, followed at once by it, notifies nothing. Only
+the automatic checkpoint carries on; after the Checkpoint button, a typed checkpoint or **Settle** the session waits for
+the next prompt. The automatic checkpoint runs once per crossing: any checkpoint command sent leaves the session not due
+and disarmed, and a turn that ends below the threshold, a fresh start or `/clear` arms it again. Only a context size a
+model call read arms it: the count Claude Code reports after a compaction (`post_tokens`, `SessionTurnEnded.estimated`)
+is shown but never arms it. After a carry-on (`SessionState.carriedOn`), a turn that ends above the threshold starts no
+automatic checkpoint until a prompt from the user or another session has run. A session whose context window is not
+known yet falls due at no size. It waits while a prompt is queued (the check repeats at that prompt's end) or background
+work is out, and does not run after a failed or interrupted turn or for a session without a checkpoint command. Every
+session comando launches gets `CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that would checkpoint at
+that size on its own leaves it to comando; every other process has the variable taken out, and a session keeps what it
+was launched with.
 
 The conversation is not compacted when a prompt is sent before the checkpoint's turn ends, the turn fails or is
-interrupted, the process ends, or the answer is blank (a warning says so). A summary an earlier checkpoint carried
+interrupted, the process ends, or the answer is blank (a warning says so). No carry-on prompt is sent in those cases
+either, nor when a prompt was sent or queued during the checkpoint or its compaction (that prompt runs instead), nor
+when the compaction failed, was interrupted or the process ended. A summary an earlier checkpoint carried
 ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)) still goes in front of the next prompt that is
 not a slash command, and that prompt's block (`SessionSpec.carried`) shows the prompt as typed; while the summary waits,
 a checkpoint runs its command alone. A checkpoint typed by hand, or sent by another session, is a prompt like any other
@@ -196,7 +221,7 @@ typed command carry no argument and ask as before; answering their cards is what
 | Origin | an `Origin` naming a host other than `localhost`, `127.0.0.1` or `::1` gets 403, so a web page cannot call the tools; the CLI sends none |
 | Protocol versions | `2025-03-26`, `2025-06-18`, `2025-11-25`; `initialize` answers the client's when supported, else `2025-06-18` |
 | Methods | `initialize`, `tools/list`, `tools/call`, `ping`; notifications get 202; anything else, including the `server/discover` Claude Code sends first, gets method-not-found |
-| Implementation | JSON-RPC over the JDK's `HttpServer` and Jackson, a virtual thread per request; no MCP library |
+| Implementation | JSON-RPC over the JDK's `HttpServer` and Jackson, a virtual thread per request, at most 256 at once and 16 per session token (one past either gets 503 and `Retry-After: 1`); a request has 5 s to arrive, from its first byte, headers included, to its body's last, else its connection is closed; at most 1 024 connections are open at once; no MCP library |
 
 ### 3.2 The tools
 
@@ -213,7 +238,7 @@ typed command carry no argument and ask as before; answering their cards is what
 | `ui_get_state` | none | panels with bindings and last run, connections, sessions (busy, `waitingOn`), open views |
 | `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes and the lower share change after the same pause; Restore layout in the palette undoes it |
 | `ui_close_view` | `id` | closes a view this session placed; the user's or pinned views are refused |
-| `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§4.2](#42-sql-from-claude)); returns the first result as tab-separated text in PostgreSQL COPY text form (`\N` is SQL NULL; a tab, newline, carriage return or backslash in a value is escaped); `show` also opens it as a table, NULL shown as `null` |
+| `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§4.2](#42-sql-from-claude)); returns the first result as tab-separated text in PostgreSQL COPY text form (`\N` is SQL NULL; a tab, newline, carriage return or backslash in a value is escaped); `show` also opens it as a table, SQL NULL shown as `null` in muted italics, told apart from the text `null` |
 | `db_describe` | `table`, `connection` | a table's columns and types, in the COPY text form of `db_run_sql` |
 | `session_send` | `session`, `text` | prompts another running session with an open panel, headed `[from session <sender>]`, without a card ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)); returns a cursor for `session_read` |
 | `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks after a cursor, or the last 40; `wait_seconds` (≤ 600) waits until its turns are over |
@@ -228,7 +253,7 @@ sends for the same gesture:
 
 | Area | Tools |
 |---|---|
-| sessions | `session_new` (name, work dir, model, effort, permission mode, extra directories, checkpoint, and an optional first `prompt` that starts it), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
+| sessions | `session_new` (name, work dir, model, effort, checkpoint, and an optional first `prompt` that starts it; no permission mode and no extra directories: the kit's and the working folder's settings hold them, [§1.1](#11-the-process)), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
 | panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
 | decisions held back | `decision_hold` (title, detail; the calling session's automatic checkpoint holds a decision back), `decisions_settled` (ids), `decision_settle`, `decision_dismiss` (id; the Later group's buttons); `ui_get_state` lists `later` with ids ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
@@ -237,19 +262,33 @@ sends for the same gesture:
 | servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 
+- **What an action answers.** An action asks the reducer first whether it would refuse the intent (`Reducer.refusal`:
+  the checkpoint lock, a name another panel holds, a stopped session another session would start, a command with nothing
+  to send, no session to settle in) and answers that refusal as a tool error; otherwise it answers `sent: <intent>`, and
+  the intent is applied in order after what the window queued before it. A refusal that arises after the answer, a
+  checkpoint that began meanwhile, is a warning notice naming the caller
+  ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md), amended).
 - **Creator.** A session made by `session_new` or `session_import` records its caller in `createdBy` (`sessions.json`;
-  empty for the user); an edit keeps it.
+  empty for the user); an edit keeps it. Renaming a session renames it in its children's `createdBy`, and removing one
+  hands its children to its own creator, so no chain breaks; removing a session the user made records its name as the
+  `family` of the sessions it made, and theirs (`sessions.json`), so they stay one family.
 - **First prompt.** `session_new`'s `prompt` goes out as `PromptSession`, which the reducer sends to the session's own
   panel, the one created with it ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)), whatever panel the
   user has focused meanwhile.
-- **Rule 1.** `approval_answer` refuses a card raised by the caller, or by a session the caller created, directly or
-  through others.
+- **Rule 1.** `approval_answer` refuses a card for any caller in the asker's creation family: the asker, its creators,
+  and every session it or any of its creators made, directly or through others, so siblings and cousins too, however
+  long the chain of creators (the walk up it has no depth limit and stops on a loop); only the user or an unrelated
+  session answers it ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md), amended).
 - **Rule 2.** A destructive tool (marked * above) runs only for a caller the user granted it in the data root's
   `agents.json`, `{"grants": {"<caller>": ["destructive"]}}`, read at each call; `session_clear` and `session_remove`
   also run for the session's creator, directly or through others, so a caller cleans up the sessions it made.
-- **Start rule.** `session_start` and `session_fresh` run only for the session's creator; stopping and interrupting are
-  open to every caller ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)'s breaker, amended).
-- **Notice.** Every act names its caller in the status bar (`foreman: session new — …`).
+- **Start rule.** A stopped session starts again only for the user or one of its creators, by whichever action reaches
+  it: `session_start`, `session_fresh`, and `panel_run` into its panel, `session_command`, `session_checkpoint` and
+  `decision_settle`, which would start it; the reducer refuses the start and the tool answers the refusal. Stopping and
+  interrupting are open to every caller ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)'s breaker,
+  amended).
+- **Notice.** Every act but a read, a refusal and `decision_hold` names its caller in the status bar
+  (`foreman: session new — …`); a decision held back brings nothing forward ([§4.1](#41-approval-cards)).
 - **Not yet.** The Files tab's git changes and entries (open a change, delete, roll back, remove, unstage) and the
   folders window; `Actions.NOT_YET` names each with the reason, and `ActionParityTest` fails for any other intent the
   window sends without an action.
@@ -259,9 +298,11 @@ sends for the same gesture:
   ([Workbench §4.1](workbench.md#41-the-comando-edge)); otherwise each says so and how to start it. The instance asked
   makes `consult-<asker>` on the first question (in the home folder, created by `peer:<asker>`), prompts it with
   `PromptSession`, so its user sees the question in that session's panel, and replies when the turn ends: `ok` with the
-  text (at most 64 kB), `refused` for an asker its user denied in `agents.json` (`{"peers": {"deny": ["<id>"]}}`),
-  `timeout` when the turn has not ended within 600 s, `error` otherwise. A brainstorm has no tool of its own: a session
-  asks each instance in turn and passes the others' answers on, as `instance_ask`'s description says.
+  text (at most 64 kB), `refused` for an asker its user denied in `agents.json` (`{"peers": {"deny": ["<id>"]}}`; the
+  asker is the one the question names, which the comando Edge does not check, so the list refuses an instance that names
+  itself truly and is not access control), `timeout` when the turn has not ended within 600 s, `error` otherwise. A
+  brainstorm has no tool of its own: a session asks each instance in turn and passes the others' answers on, as
+  `instance_ask`'s description says.
 - **What an agent sees.** `ui_get_state` adds each session's model, effort and creator, the closed panels, the pending
   approval cards (id, session, kind, tool, summary), the Files tab's folders, the local servers and the other instances
   on the comando Edge (`instances`: connected, and each one's name, id, role, version, busy, whether it is refused,
@@ -310,6 +351,7 @@ answers.
 | question | `AskUserQuestion` | Answer (⏎ or A, once every question has one), Skip (D or Esc); each question's Other answer is a plain text box in the editors' font, five lines of 120 characters (⏎ a new line; undo, redo, cut, copy, paste, select all; only Answer sends it), gone with the card; answers return in `updatedInput.answers` |
 | plan | `ExitPlanMode` | Approve plan (⏎ or A), "Approve, auto-accept edits" (`setMode` `acceptEdits` for the session), Keep planning (D or Esc) |
 | SQL write | `db_run_sql`, not read-only | Run (⏎ or A), Deny (D or Esc); the card names the connection and statement |
+| connection | `connection_save` clearing `production` or lowering the TLS mode | Allow (⏎ or A), Deny (D or Esc), by the user only: `approval_answer` refuses it for every agent; the card names the connection, what would weaken, and the connection as it would be saved ([§4.2](#42-sql-from-claude)) |
 
 "For session" and "Always" return an `addRules` update with destination `session` or `localSettings`. The rules follow
 how Claude Code matches them and never allow more than the command could do (`PermissionRules`):
@@ -328,12 +370,16 @@ how Claude Code matches them and never allow more than the command could do (`Pe
   while empty; ⌘⏎ denies with the note. ↑ and ↓ move between cards. The keyboard is never taken from outside the tab.
 - A new card brings the Approvals tab forward; the keyboard stays where it is, so typing in the editor goes on. While a
   card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
-- The Approvals tab is one queue for the window, in groups ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): the focused panel's session's cards first,
-  under its name; then each other session's cards under its name, the group holding the oldest card first; then
-  **Later**, the decisions automatic checkpoints held back, under each session's name, each with its title, detail and
-  age, **Settle** (sends that session its checkpoint command without `--auto`, so it asks; the focused panel's session
-  when the decision's own is gone; off while that session's checkpoint runs) and **Dismiss** (drops it unasked). The
-  title counts both, "Approvals (2 · 3 later)"; a decision held back brings nothing forward and posts no notice.
+- The Approvals tab is one queue for the window, in groups
+  ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): the focused panel's session's cards first, under its
+  name; then each other session's cards under its name, the group holding the oldest card first; then **Later**, the
+  decisions automatic checkpoints held back, under each session's name, each with its title, detail and age, **Settle**
+  (sends that session its checkpoint command without `--auto`, so it asks; the focused panel's session when the
+  decision's own is gone or has no checkpoint command; its tooltip names the session it sends to ("Runs the checkpoint
+  of work"; "Runs main's checkpoint; c has no checkpoint command"; "Runs main's checkpoint; session c was removed");
+  off while that session's checkpoint runs, its tooltip saying to Settle once it has ended, and off with the reducer's
+  reason as its tooltip when no session can take it) and **Dismiss** (drops it unasked). The title counts both, "Approvals
+  (2 · 3 later)"; a decision held back brings nothing forward and posts no notice.
 - The Approvals tab comes forward at its top, the focused session's oldest card first, however it is brought forward (a new card, a
   click, ⌃2); a card arriving while it is in front, or while the keyboard is in a card, moves nothing.
 - Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the
@@ -365,7 +411,13 @@ check guards against mistakes and is not access control. Text with several state
 ordinary connection, refused on a production one.
 
 A production connection frames its panels in red, shows a red "prod" on its sidebar row, refuses Claude's writes, and
-runs the user's own statements as typed.
+runs the user's own statements as typed. An agent does not clear the flag unasked: a `connection_save` that clears
+`production`, or lowers the TLS mode (weakest to strongest: `disable`, `allow`, `prefer`, `require`, `verify-ca`,
+`verify-full`), raises a connection card, and nothing changes until the user allows it; a card denied, unanswered, or
+answered after the connection changed leaves it as it was
+([record 23](adr/0023-sql-from-claude-lexical-policy-production-refused.md), amended). `connection_save` keeps every
+field the call leaves out, the production flag and the TLS mode included, except the password of a call that changes the
+host, port, database or user without a `password` argument ([§4.3](#43-secrets)).
 
 ### 4.3 Secrets
 
@@ -373,7 +425,7 @@ runs the user's own statements as typed.
 |---|---|
 | Claude login | Claude Code's own; comando never sees an API key |
 | MCP tokens | the session's MCP configuration under `run/`, mode `0600`; deleted when the process exits and at exit; files a killed comando left are deleted at the next start |
-| Database passwords | the macOS login keychain, service `comando`, account = connection name, through `/usr/bin/security`; `connections.json` keeps an empty password. Used for the default data root, and for another only with `-Dcomando.keychain=true`; otherwise the password stays in `connections.json` |
+| Database passwords | the macOS login keychain, service `comando`, account = the connection's name and its target (`name user@host:port/db`, each part URL-encoded), through `/usr/bin/security`; an item under the bare name, written by an earlier comando, is never read and is deleted at the next save, so a password stored before this version is entered once more; `connections.json` keeps an empty password. Used for the default data root, and for another only with `-Dcomando.keychain=true`; otherwise the password stays in `connections.json`. A password belongs to the host, port, database and user it was given for: a save that changes one of them drops it, and its keychain item, unless the save gives it again, and a notice asks for it: from the dialog, only typing in the password field gives it again (the field is filled with the stored password, so one left as the form filled it is not given); from `connection_save`, a `password` argument does; a stored password is only ever used for the target it was given for, so one a failed delete left behind is never sent elsewhere; while `connections.json` is of a later version nothing is written to the keychain or deleted from it ([record 20](adr/0020-passwords-in-the-macos-keychain-through-security.md), amended) |
 | Intent log | every `password` field blanked |
 
 The keychain tool takes the password as an argument, so it is visible in the process list for the milliseconds the tool

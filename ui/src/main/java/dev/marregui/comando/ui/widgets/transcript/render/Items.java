@@ -102,6 +102,13 @@ final class Items {
         }
 
         @Override
+        void dropLayout() {
+            built = null;
+            origin = null;
+            text = null;
+        }
+
+        @Override
         int doLayout(final int w, final Style s) {
             if (built != s) {
                 built = s;
@@ -127,6 +134,11 @@ final class Items {
         }
 
         @Override
+        void findTexts(final List<String> out) {
+            out.add(Rich.detab(prompt().text()));
+        }
+
+        @Override
         String text() {
             return prompt().text();
         }
@@ -149,7 +161,8 @@ final class Items {
         private static final int GUTTER = 14;
         /** A report's frame reaches this far above, below and right of its text. */
         private static final int FRAME = 10;
-        private List<Paras.View> views = List.of();
+        /** Null until the first layout: a block far from the view is never parsed. */
+        private List<Paras.View> views;
         private int[] tops = new int[0];
         /**
          * True when this text ends its turn: the report, on the transcript's ground with a bar of the tint down its
@@ -159,16 +172,28 @@ final class Items {
 
         TextItem(final Block.AssistantText b) {
             super(b);
-            views = Paras.reuse(MarkdownDoc.parse(b.text()), List.of());
         }
 
+        /** Streamed text reuses the paragraphs it had; a text never parsed waits for its first layout. */
         @Override
         void changed(final Block previous, final Block next) {
             final String before = ((Block.AssistantText) previous).text();
             final String after = ((Block.AssistantText) next).text();
-            if (!before.equals(after)) {
+            if (views != null && !before.equals(after)) {
                 views = Paras.reuse(MarkdownDoc.parse(after), views);
             }
+        }
+
+        /** Whether the text has been parsed into paragraphs: at its first layout, until it lets its layout go; for tests. */
+        boolean parsed() {
+            return views != null;
+        }
+
+        private List<Paras.View> views() {
+            if (views == null) {
+                views = Paras.reuse(MarkdownDoc.parse(text()), List.of());
+            }
+            return views;
         }
 
         /** Frames this text as its turn's report, or not; the next layout makes room for the frame. */
@@ -187,22 +212,30 @@ final class Items {
             return report ? GUTTER : 0;
         }
 
+        /** The paragraphs go too: parsed again from the block at the next layout. */
+        @Override
+        void dropLayout() {
+            views = null;
+            tops = new int[0];
+        }
+
         @Override
         int doLayout(final int w, final Style style) {
             final Style s = style.outside();
-            tops = new int[views.size()];
+            final List<Paras.View> paras = views();
+            tops = new int[paras.size()];
             final int inner = report ? w - GUTTER - FRAME : w;
             int y = report ? FRAME : 4;
-            for (int i = 0; i < views.size(); i++) {
+            for (int i = 0; i < paras.size(); i++) {
                 if (i > 0) {
-                    final boolean listRun = views.get(i).para() instanceof Para.Text t
+                    final boolean listRun = paras.get(i).para() instanceof Para.Text t
                             && t.kind() == Para.Kind.ITEM
-                            && views.get(i - 1).para() instanceof Para.Text p
+                            && paras.get(i - 1).para() instanceof Para.Text p
                             && p.kind() == Para.Kind.ITEM;
                     y += listRun ? s.paraGap / 3 : s.paraGap;
                 }
                 tops[i] = y;
-                y += views.get(i).layout(inner, s);
+                y += paras.get(i).layout(inner, s);
             }
             return y + (report ? FRAME : 4);
         }
@@ -215,21 +248,37 @@ final class Items {
                 g.fillRect(x, y, 3, height);
             }
             x += inset();
-            for (int i = 0; i < views.size(); i++) {
+            final List<Paras.View> paras = views();
+            for (int i = 0; i < paras.size(); i++) {
                 final int top = y + tops[i];
-                final int bottom = i + 1 < views.size() ? y + tops[i + 1] : y + height;
+                final int bottom = i + 1 < paras.size() ? y + tops[i + 1] : y + height;
                 if (bottom < clip.y || top > clip.y + clip.height) {
                     continue;
                 }
-                views.get(i).paint(g, x, top, clip, marks);
+                paras.get(i).paint(g, x, top, clip, marks);
             }
         }
 
         @Override
         void collect(int x, final int y, final List<Placed> out) {
             x += inset();
-            for (int i = 0; i < views.size(); i++) {
-                views.get(i).collect(x, y + tops[i], this, out);
+            final List<Paras.View> paras = views();
+            for (int i = 0; i < paras.size(); i++) {
+                paras.get(i).collect(x, y + tops[i], this, out);
+            }
+        }
+
+        /** The paragraphs the views hold when laid out; else parsed for this find and not kept. */
+        @Override
+        void findTexts(final List<String> out) {
+            if (views != null) {
+                for (final Paras.View v : views) {
+                    Paras.findTexts(v.para(), out);
+                }
+            } else {
+                for (final Para p : MarkdownDoc.parse(text(), false)) {
+                    Paras.findTexts(p, out);
+                }
             }
         }
 
@@ -292,6 +341,14 @@ final class Items {
         }
 
         @Override
+        void dropLayout() {
+            built = null;
+            header = null;
+            body = List.of();
+            bodyLines = List.of();
+        }
+
+        @Override
         int doLayout(final int w, final Style s) {
             if (built != s || stale) {
                 final Block.Thinking t = thinking();
@@ -350,6 +407,15 @@ final class Items {
             }
             for (int i = 0; i < body.size() && i < bodyTops.length; i++) {
                 out.add(new Placed(body.get(i), x + 22, y + bodyTops[i], this));
+            }
+        }
+
+        @Override
+        void findTexts(final List<String> out) {
+            if (shown()) {
+                for (final String line : thinking().text().split("\n", -1)) {
+                    out.add(Rich.detab(line));
+                }
             }
         }
 
@@ -490,6 +556,13 @@ final class Items {
         }
 
         @Override
+        void dropLayout() {
+            built = null;
+            line = null;
+            full = null;
+        }
+
+        @Override
         int doLayout(final int w, final Style s) {
             if (built != s) {
                 built = s;
@@ -557,6 +630,13 @@ final class Items {
         @Override
         void collect(final int x, final int y, final List<Placed> out) {
             out.add(new Placed(fold.isOpen() ? full : line, x + textX(), y + 2, this));
+        }
+
+        @Override
+        void findTexts(final List<String> out) {
+            final String t = shown();
+            final int eol = t.indexOf('\n');
+            out.add(Rich.detab(fold.isOpen() ? clipLines(t, MAX_RESULT_LINES) : eol >= 0 ? t.substring(0, eol) : t));
         }
 
         /** Closed, the whole line opens it; open, the icon and the arrow close it and the text stays selectable. */
@@ -643,6 +723,11 @@ final class Items {
         }
 
         @Override
+        void dropLayout() {
+            header = null;
+        }
+
+        @Override
         int doLayout(final int w, final Style s) {
             header = new TextBox(new Rich(s.small, s.outside).append(title() + (fold.isOpen() ? "  ▾" : "  ▸"))).noWrap();
             final int inner = Math.max(40, w - TEXT_X);
@@ -680,6 +765,15 @@ final class Items {
             }
             for (int i = 0; i < hooks.size() && i < tops.length; i++) {
                 hooks.get(i).collect(x + TEXT_X, y + tops[i], out);
+            }
+        }
+
+        @Override
+        void findTexts(final List<String> out) {
+            if (fold.isOpen()) {
+                for (final NoteItem hook : hooks) {
+                    hook.findTexts(out);
+                }
             }
         }
 
@@ -750,6 +844,11 @@ final class Items {
         }
 
         @Override
+        void dropLayout() {
+            label = null;
+        }
+
+        @Override
         int doLayout(final int w, final Style s) {
             label = new TextBox(new Rich(s.small, color(s)).append(summary())).noWrap();
             labelWidth = label.naturalWidth();
@@ -771,6 +870,11 @@ final class Items {
         @Override
         void collect(final int x, final int y, final List<Placed> out) {
             out.add(new Placed(label, labelX(x), y + 6, this));
+        }
+
+        @Override
+        void findTexts(final List<String> out) {
+            out.add(Rich.detab(summary()));
         }
 
         @Override

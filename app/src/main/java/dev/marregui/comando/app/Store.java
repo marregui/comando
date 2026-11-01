@@ -1,12 +1,14 @@
 package dev.marregui.comando.app;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -30,6 +32,7 @@ import tools.jackson.core.type.TypeReference;
 
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -38,6 +41,7 @@ import dev.marregui.comando.core.model.KitFolders;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.VersionedLines;
 import dev.marregui.comando.core.port.PersistencePort;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.state.PanelState;
@@ -94,6 +98,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      */
     private final ExecutorService secretsWriter = Threads.strand("store-secrets");
     private final ConcurrentHashMap<String, String> texts = new ConcurrentHashMap<>();
+    /** The files of a later version the user was told of, so each is told once. */
+    private final Set<Path> toldRefused = ConcurrentHashMap.newKeySet();
 
     /**
      * The writer, a timed strand. A delayed write still waiting at shutdown is dropped, not run: {@link #close} writes
@@ -152,10 +158,24 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private volatile List<PanelState> closedMeta = List.of();
     private volatile boolean closed;
     private final Secrets secrets;
-    /** Names whose passwords the secret store holds, as of the last save; written by the store-secrets thread only. */
-    private Set<String> secretNames = new HashSet<>();
-    /** Connections whose password the secret store could not be asked for; their items are never deleted. */
-    private final Set<String> unreadSecrets = ConcurrentHashMap.newKeySet();
+    /**
+     * Each connection's account in the secret store ({@link #account}), by its name, as of the load and then of the last
+     * save; written at the load, before any save, and then by the store-secrets thread only.
+     */
+    private Map<String, String> secretAccounts = new HashMap<>();
+    /**
+     * The names whose item under the bare name, the account comando used before an account named its target, was
+     * deleted in this run; the store-secrets thread's own.
+     */
+    private final Set<String> bareDeleted = new HashSet<>();
+    /**
+     * The connections whose stored password the secret store could not give at start, each as it was read: the target
+     * (host, port, database, user) that password was given for. A save keeps such an item only while the connection
+     * still names that target; pointed elsewhere, the item is deleted. Whether that delete succeeds or not, the old
+     * target's password never follows the connection to the new one at a later start: an item's account names the
+     * target it was given for, and a connection reads only its own target's (record 20).
+     */
+    private final Map<String, ConnectionSpec> unreadSecrets = new ConcurrentHashMap<>();
 
     Store(final Path home) {
         this(home, Secrets.NONE);
@@ -163,15 +183,16 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     Store(final Path home, final Secrets secrets) {
         this.secrets = secrets;
-        connections = new JsonFile<>(home.resolve("connections.json"), new TypeReference<>() {
+        // each file's schema and version: record 133
+        connections = new JsonFile<>(home.resolve("connections.json"), "connections", 1, new TypeReference<>() {
         });
-        sessions = new JsonFile<>(home.resolve("sessions.json"), new TypeReference<>() {
+        sessions = new JsonFile<>(home.resolve("sessions.json"), "sessions", 1, new TypeReference<>() {
         });
-        folders = new JsonFile<>(home.resolve("folders.json"), new TypeReference<>() {
+        folders = new JsonFile<>(home.resolve("folders.json"), "folders", 1, new TypeReference<>() {
         });
-        decisions = new JsonFile<>(home.resolve("decisions.json"), new TypeReference<>() {
+        decisions = new JsonFile<>(home.resolve("decisions.json"), "decisions", 1, new TypeReference<>() {
         });
-        panels = new JsonFile<>(home.resolve("panels.json"), new TypeReference<>() {
+        panels = new JsonFile<>(home.resolve("panels.json"), "panels", 1, new TypeReference<>() {
         });
         kitFolders = home.resolve("kit-folders");
         files = new PanelFiles(home.resolve("panels"), text -> notices.accept(text));
@@ -226,12 +247,25 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             return new Loaded(seeded.panels(), seeded.connections(), seeded.sessions(), shut);
         }
         final List<ConnectionSpec> c = orEmpty(connections.read()).stream().map(this::withSecret).toList();
-        secretNames = new HashSet<>(c.stream().map(ConnectionSpec::name).toList());
+        final Map<String, String> accounts = new HashMap<>();
+        c.forEach(x -> accounts.put(x.name(), account(x)));
+        secretAccounts = accounts;
         final List<SessionSpec> s = orEmpty(sessions.read());
+        tellRefused(connections, sessions);
+        // a panel binds to a connection and a session by name: with either file of a later version unread, the bindings
+        // are blanked for this run only, and panels.json is kept as it is so a later comando finds them (record 133)
+        for (final JsonFile<?> later : List.of(connections, sessions)) {
+            if (!later.refused().isEmpty()) {
+                panels.refuse(PANELS_JSON + " is kept as it is and not written while comando runs: its panels name what "
+                        + later.path().getFileName() + " holds, which is of a later version");
+            }
+        }
         List<PanelState> p = new ArrayList<>();
         List<PanelState> shut = new ArrayList<>();
         final List<String> gone = new ArrayList<>();
-        for (final StoredPanel sp : orEmpty(panels.read())) {
+        // read once: the file holds the text of panels whose file could not be written, which grows with it
+        final List<StoredPanel> stored = orEmpty(panels.read());
+        for (final StoredPanel sp : stored) {
             if (sp.id() == null || sp.id().isBlank()) {
                 continue;
             }
@@ -246,7 +280,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             (isClosed ? shut : p).add(panel);
             texts.put(sp.id(), textOf(sp, title));
         }
-        final List<String> adopted = adoptLooseFiles(orEmpty(panels.read()), shut);
+        tellRefused(panels);
+        final List<String> adopted = adoptLooseFiles(stored, shut);
         if (!adopted.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "files in panels/ without a panel, listed as closed panels [files=" + adopted + ']');
             notices.accept(String.join(", ", adopted) + (adopted.size() == 1 ? " has" : " have")
@@ -294,7 +329,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         if (sp.file() != null && !sp.file().isBlank()) {
             try {
                 fromFile = files.read(sp.id(), title, sp.file());
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "cannot read the panel file, the panel saves to another file [file="
                         + files.dir().resolve(sp.file()) + ']', e);
                 notices.accept("Cannot read " + sp.file() + "; the panel " + title + " saves to another file");
@@ -326,7 +361,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         if (!Files.isDirectory(files.dir())) {
             return adopted;
         }
-        try (var listing = Files.list(files.dir())) {
+        try (final var listing = Files.list(files.dir())) {
             for (final Path f : listing.sorted().toList()) {
                 final String name = f.getFileName().toString();
                 if (name.startsWith(".") || !Files.isRegularFile(f) || named.stream().anyMatch(n -> sameFile(n, f))) {
@@ -338,7 +373,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     texts.put(id.value(), files.read(id.value(), title, name));
                     shut.add(new PanelState(id, title, "", ""));
                     adopted.add(name);
-                } catch (IOException | RuntimeException e) {
+                } catch (final IOException | RuntimeException e) {
                     LOG.log(System.Logger.Level.WARNING, "cannot read a file of panels/, left alone [file=" + f + ']', e);
                 }
             }
@@ -415,23 +450,28 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             return;
         }
         try {
-            secretsWriter.execute(() -> write(connections, secrets.available() ? toSecretStore(copy) : copy));
+            // a connections.json of a later version is kept as it is, and so are the secret store's items it names
+            // (record 133): nothing is moved, written or deleted there while it is
+            secretsWriter.execute(() -> write(connections, secrets.available() && connections.refused().isEmpty() ? toSecretStore(copy) : copy));
         } catch (final RejectedExecutionException e) {
             LOG.log(System.Logger.Level.WARNING, "store closed, connections write dropped");
         }
     }
 
-    /** A password stored in the file is empty when the secret store holds it. */
+    /**
+     * A password stored in the file is empty when the secret store holds it, under the account of the connection's name
+     * and target: an item given for another target is never read for this one.
+     */
     private ConnectionSpec withSecret(final ConnectionSpec spec) {
         if (!secrets.available() || !spec.password().isEmpty()) {
             return spec;
         }
         try {
-            return secrets.read(spec.name()).map(spec::withPassword).orElse(spec);
+            return secrets.read(account(spec)).map(spec::withPassword).orElse(spec);
         } catch (final Secrets.Unreadable e) {
             // unknown is not "no password": remember it, so the next save does not delete the stored item
             LOG.log(System.Logger.Level.WARNING, "connection password not loaded [connection=" + spec.name() + ']', e);
-            unreadSecrets.add(spec.name());
+            unreadSecrets.put(spec.name(), spec);
             return spec;
         }
     }
@@ -441,30 +481,59 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * A password the store refuses stays in the file rather than being lost. Runs on the {@code store-secrets} strand.
      */
     private List<ConnectionSpec> toSecretStore(final List<ConnectionSpec> specs) {
-        final Set<String> names = new HashSet<>();
+        final Map<String, String> accounts = new HashMap<>();
         final List<ConnectionSpec> out = new ArrayList<>(specs.size());
         for (final ConnectionSpec s : specs) {
-            names.add(s.name());
+            final String account = account(s);
+            final String before = secretAccounts.get(s.name());
+            final ConnectionSpec unread = unreadSecrets.get(s.name());
+            accounts.put(s.name(), account);
             if (s.password().isEmpty()) {
-                if (!unreadSecrets.contains(s.name())) {
-                    secrets.delete(s.name());
+                if (unread == null || !unread.sameTarget(s)) {
+                    secrets.delete(before != null ? before : account);
+                    unreadSecrets.remove(s.name());
                 }
                 out.add(s);
             } else {
-                final boolean stored = secrets.write(s.name(), s.password());
+                final boolean stored = secrets.write(account, s.password());
                 if (stored) {
                     unreadSecrets.remove(s.name());
+                }
+                if (before != null && !before.equals(account)) {
+                    // the item of the target the connection named before
+                    secrets.delete(before);
                 }
                 out.add(stored ? s.withPassword("") : s);
             }
         }
-        for (final String gone : secretNames) {
-            if (!names.contains(gone) && !unreadSecrets.contains(gone)) {
-                secrets.delete(gone);
+        // an item under the bare name names no target, so it is never read; it is deleted once a run
+        for (final String name : accounts.keySet()) {
+            if (bareDeleted.add(name) && !accounts.containsValue(name)) {
+                secrets.delete(name);
             }
         }
-        secretNames = names;
+        secretAccounts.forEach((gone, account) -> {
+            if (!accounts.containsKey(gone) && !unreadSecrets.containsKey(gone)) {
+                secrets.delete(account);
+            }
+        });
+        secretAccounts = accounts;
         return out;
+    }
+
+    /**
+     * The account in the secret store of {@code spec}'s password: the connection's name and the target the password was
+     * given for, {@code name user@host:port/database}, each part URL-encoded so no two connections share one. A
+     * connection pointed elsewhere has another account, so the item of its old target, should deleting it fail (a locked
+     * keychain), is never read for the new one (record 20).
+     */
+    static String account(final ConnectionSpec spec) {
+        return encoded(spec.name()) + ' ' + encoded(spec.user()) + '@' + encoded(spec.host()) + ':' + spec.port() + '/'
+                + encoded(spec.database());
+    }
+
+    private static String encoded(final String part) {
+        return URLEncoder.encode(part, StandardCharsets.UTF_8);
     }
 
     @Override
@@ -478,6 +547,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      */
     List<FolderRoot> loadFolders(final Path claudeDir) {
         final List<FolderRoot> read = folders.read();
+        tellRefused(folders);
         foldersSeen = Stamp.of(folders.path());
         foldersDefaulted = read == null;
         if (read == null) {
@@ -487,40 +557,156 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * The folders at the first start on a kit's root: when {@code loaded} shows none of the kit's folders, the kit's go
-     * first and are saved; the user's own entries stay. Once per root, so a folder the user takes out stays out; the
-     * folders' window puts them back. With no folders file the default list is not the user's: the kit's folders
-     * replace it, since its one folder is the kit's own root and would otherwise count as the kit already shown.
+     * The folders at a start on a kit's root. At the first start on a root, when {@code loaded} shows none of the kit's
+     * folders, the kit's go first and are saved; the user's own entries stay. Once per root, so a folder the user takes
+     * out stays out; the folders' window puts them back. With no folders file the default list is not the user's: the
+     * kit's folders replace it, since its one folder is the kit's own root and would otherwise count as the kit already
+     * shown. At every start, a kit folder that still shows where the kit put it last follows the kit and the brain to
+     * where they put it now ({@link #follow}): a brain moved by {@code COMANDO_BRAIN} or the manifest, or another kit,
+     * takes its folders with it (Miguel's decision D10 of the first-release review).
      */
     List<FolderRoot> withKitFolders(final List<FolderRoot> loaded, final KitRoot root) {
         final List<FolderRoot> kit = root.folders();
         final String key = root.dir().toString();
-        // with no folders file the user never chose a list: the kit's folders apply even on a root recorded before, so
-        // a home whose root was recorded while the default list hid them gets them
-        if (kit.isEmpty() || (!foldersDefaulted && kitRootsDone().contains(key))) {
+        final VersionedLines.Read done = kitRootsDone();
+        // a file of a later comando is kept as it is: the kit's folders are not added again behind its back
+        if (!done.refused().isEmpty()) {
+            if (toldRefused.add(kitFolders)) {
+                notices.accept(done.refused());
+            }
             return loaded;
         }
-        final List<FolderRoot> merged = KitFolders.atStart(foldersDefaulted ? List.of() : loaded, kit);
-        try {
-            Files.createDirectories(kitFolders.getParent());
-            Files.writeString(kitFolders, key + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (final IOException e) {
-            // added again at the next start: the user's list is still kept
-            LOG.log(System.Logger.Level.WARNING, "cannot write [file=" + kitFolders + ']', e);
+        if (kit.isEmpty()) {
+            return loaded;
         }
-        if (!merged.equals(loaded)) {
+        final KitPlaces before = KitPlaces.of(done.lines());
+        // with no folders file the user never chose a list: the kit's folders apply even on a root recorded before, so
+        // a home whose root was recorded while the default list hid them gets them
+        final boolean first = foldersDefaulted || !before.roots().contains(key);
+        final List<FolderRoot> placed = first ? KitFolders.atStart(foldersDefaulted ? List.of() : loaded, kit) : loaded;
+        final List<FolderRoot> merged = follow(placed, before.paths(), kit);
+        final KitPlaces now = before.with(key, kit);
+        if (!now.equals(before)) {
+            try {
+                Files.createDirectories(kitFolders.getParent());
+                AtomicFiles.writeString(kitFolders, VersionedLines.text(KIT_FOLDERS, KIT_FOLDERS_VERSION, now.lines()));
+            } catch (final IOException e) {
+                // added again at the next start: the user's list is still kept
+                LOG.log(System.Logger.Level.WARNING, "cannot write [file=" + kitFolders + ']', e);
+            }
+        }
+        if (!placed.equals(loaded)) {
             LOG.log(System.Logger.Level.INFO, "the Files tab gains the kit's folders [root=" + key + ", folders="
                     + KitFolders.missing(loaded, kit).stream().map(FolderRoot::name).toList() + ']');
+        }
+        if (!merged.equals(placed)) {
+            LOG.log(System.Logger.Level.INFO, "the kit's folders follow the kit and the brain [root=" + key + ", folders="
+                    + merged.stream().filter(f -> !placed.contains(f)).map(FolderRoot::name).toList() + ']');
+        }
+        if (!merged.equals(loaded)) {
             saveFolders(merged);
         }
         return merged;
     }
 
-    private List<String> kitRootsDone() {
+    /**
+     * {@code have} with each folder that shows where the kit put its folder of that name last ({@code last}, by name)
+     * moved to where the kit puts it now; a folder the user pointed elsewhere, or that the kit no longer has, stays as
+     * it is.
+     */
+    static List<FolderRoot> follow(final List<FolderRoot> have, final Map<String, String> last, final List<FolderRoot> kit) {
+        final Map<String, String> now = new HashMap<>();
+        kit.forEach(k -> now.put(k.name(), k.path()));
+        final List<FolderRoot> out = new ArrayList<>(have.size());
+        for (final FolderRoot f : have) {
+            final String was = last.get(f.name());
+            final String to = now.get(f.name());
+            final boolean moves = was != null && to != null && !samePath(was, to) && samePath(f.path(), was);
+            out.add(moves ? new FolderRoot(f.name(), to, f.index(), f.excludes(), f.icon(), f.deletable(), f.listedIn(), f.group()) : f);
+        }
+        return List.copyOf(out);
+    }
+
+    private static boolean samePath(final String a, final String b) {
+        return Path.of(HomeDir.expand(a)).toAbsolutePath().normalize().equals(Path.of(HomeDir.expand(b)).toAbsolutePath().normalize());
+    }
+
+    /** {@code kit-folders}: the kit roots whose folders were added once, and where the kit put each folder last. */
+    private VersionedLines.Read kitRootsDone() {
         try {
-            return Files.isRegularFile(kitFolders) ? Files.readAllLines(kitFolders, StandardCharsets.UTF_8).stream().map(String::strip).toList() : List.of();
+            return VersionedLines.read(kitFolders, KIT_FOLDERS_VERSION);
         } catch (final IOException e) {
-            return List.of();
+            LOG.log(System.Logger.Level.WARNING, "cannot read [file=" + kitFolders + ']', e);
+            return new VersionedLines.Read(List.of(), "");
+        }
+    }
+
+    /**
+     * {@code kit-folders}' format and version (record 133): a kit root a line, the roots whose folders the Files tab
+     * gained once; and, since version 2, a line {@code folder<TAB>name<TAB>path} for each folder of the kit comando ran
+     * on last, where the kit put it. A file of version 1 has roots only.
+     */
+    static final String KIT_FOLDERS = "kit-folders";
+    static final int KIT_FOLDERS_VERSION = 2;
+
+    /**
+     * What {@code kit-folders} holds: the roots whose folders were added once, in order, and the path of each folder of
+     * the kit comando ran on last, by name.
+     */
+    record KitPlaces(List<String> roots, Map<String, String> paths) {
+
+        /** The start of a line that records a folder's place. */
+        static final String FOLDER = "folder\t";
+
+        KitPlaces {
+            roots = List.copyOf(roots);
+            paths = Collections.unmodifiableMap(new LinkedHashMap<>(paths));
+        }
+
+        /** The places as {@code kit-folders}' lines give them. */
+        static KitPlaces of(final List<String> lines) {
+            final List<String> roots = new ArrayList<>();
+            final Map<String, String> paths = new LinkedHashMap<>();
+            for (final String l : lines) {
+                if (!l.startsWith(FOLDER)) {
+                    roots.add(l);
+                    continue;
+                }
+                final String[] parts = l.substring(FOLDER.length()).split("\t", 2);
+                if (parts.length == 2) {
+                    paths.put(parts[0], parts[1]);
+                }
+            }
+            return new KitPlaces(roots, paths);
+        }
+
+        /**
+         * These places with {@code root} recorded and the folders' places replaced by {@code kit}'s; a folder whose name
+         * or path holds a tab or a line break is not recorded, and so never follows.
+         */
+        KitPlaces with(final String root, final List<FolderRoot> kit) {
+            final List<String> r = new ArrayList<>(roots);
+            if (!r.contains(root)) {
+                r.add(root);
+            }
+            final Map<String, String> p = new LinkedHashMap<>();
+            for (final FolderRoot k : kit) {
+                if (recordable(k.name()) && recordable(k.path())) {
+                    p.put(k.name(), k.path());
+                }
+            }
+            return new KitPlaces(r, p);
+        }
+
+        private static boolean recordable(final String text) {
+            return text.indexOf('\t') < 0 && text.indexOf('\n') < 0 && text.indexOf('\r') < 0 && text.strip().equals(text);
+        }
+
+        /** The lines of {@code kit-folders}: the roots, then the folders' places. */
+        List<String> lines() {
+            final List<String> out = new ArrayList<>(roots);
+            paths.forEach((name, path) -> out.add(FOLDER + name + '\t' + path));
+            return out;
         }
     }
 
@@ -555,7 +741,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         submit(() -> {
             write(folders, List.copyOf(specs));
             foldersSeen = Stamp.of(folders.path());
-            createIndexes(specs, HomeDir.claudeDir()).forEach(f -> LOG.log(System.Logger.Level.INFO, "created the index [file=" + f + ']'));
+            createIndexes(specs, indexRoots(KitRoot.current())).forEach(f -> LOG.log(System.Logger.Level.INFO, "created the index [file=" + f + ']'));
         });
     }
 
@@ -563,27 +749,84 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * The decisions automatic checkpoints held back (record 131); none without a readable {@code decisions.json} (an
      * unreadable one is moved aside).
      */
-    List<Decision> loadDecisions() {
-        return orEmpty(decisions.read()).stream().filter(d -> d != null).toList();
-    }
-
-    @Override
-    public void saveDecisions(final List<Decision> held) {
-        submit(() -> write(decisions, List.copyOf(held)));
+    Decisions loadDecisions() {
+        final List<Decision> held = orEmpty(decisions.read()).stream().filter(d -> d != null).toList();
+        tellRefused(decisions);
+        return new Decisions(held, decisions.number(LAST_ID));
     }
 
     /**
-     * Creates the index file each folder inside {@code claudeDir} names but does not have, when the file's own folder
-     * exists: a title and how the file is kept, which {@code /reflect} then fills. Folders elsewhere and files that
-     * exist are left as they are; a file that cannot be written is logged. Answers the files created.
+     * The decisions held back as {@code decisions.json} keeps them, and the highest id comando gave one, so none is
+     * given again after a restart.
      */
+    record Decisions(List<Decision> held, long lastId) {
+        Decisions {
+            held = List.copyOf(held);
+        }
+    }
+
+    /** The field of {@code decisions.json} that keeps the highest id given. */
+    static final String LAST_ID = "lastId";
+
+    @Override
+    public void saveDecisions(final List<Decision> held, final long lastId) {
+        submit(() -> {
+            try {
+                if (decisions.refused().isEmpty()) {
+                    decisions.write(List.copyOf(held), Map.of(LAST_ID, lastId));
+                }
+            } catch (final IOException e) {
+                LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + decisions.path() + ']', e);
+                notices.accept("Cannot write " + decisions.path().getFileName() + ": " + reason(e) + "; it is written again with the next change");
+            }
+        });
+    }
+
+    /**
+     * Tells the user of each file kept as it is because a later comando wrote it (record 133), once, as it is read at
+     * the start.
+     */
+    @SafeVarargs
+    private void tellRefused(final JsonFile<? extends List<?>>... files) {
+        for (final JsonFile<? extends List<?>> f : files) {
+            if (!f.refused().isEmpty() && toldRefused.add(f.path())) {
+                notices.accept(f.refused());
+            }
+        }
+    }
+
+    /**
+     * Where saving the folders creates a missing index file: the kit's folder and its brain, which may lie anywhere
+     * (D10); nowhere without a kit, so a user's own Claude Code folder never gains a {@code CLAUDE.md} that every session
+     * of theirs would then load.
+     */
+    static List<Path> indexRoots(final KitRoot root) {
+        if (root.kit().isEmpty()) {
+            return List.of();
+        }
+        final List<Path> roots = new ArrayList<>(List.of(root.dir()));
+        root.brain().ifPresent(roots::add);
+        return List.copyOf(roots);
+    }
+
+    /** As {@link #createIndexes(List, List)} for the folders inside {@code claudeDir} alone. */
     static List<Path> createIndexes(final List<FolderRoot> specs, final Path claudeDir) {
-        final Path claude = claudeDir.toAbsolutePath().normalize();
+        return createIndexes(specs, List.of(claudeDir));
+    }
+
+    /**
+     * Creates the index file each folder inside one of {@code roots} (the kit's folder, the brain) names but does not
+     * have, when the file's own folder exists: a title and how the file is kept, which {@code /reflect} then fills.
+     * Folders elsewhere and files that exist are left as they are; a file that cannot be written is logged. Answers the
+     * files created.
+     */
+    static List<Path> createIndexes(final List<FolderRoot> specs, final List<Path> roots) {
+        final List<Path> inside = roots.stream().map(r -> r.toAbsolutePath().normalize()).toList();
         final List<Path> created = new ArrayList<>();
         for (final FolderRoot f : specs) {
             final Path dir = Path.of(f.path()).toAbsolutePath().normalize();
             final Optional<Path> index = f.indexFile().map(i -> i.toAbsolutePath().normalize());
-            if (!dir.startsWith(claude) || index.isEmpty() || !index.get().startsWith(dir)
+            if (inside.stream().noneMatch(dir::startsWith) || index.isEmpty() || !index.get().startsWith(dir)
                     || Files.exists(index.get()) || !Files.isDirectory(index.get().getParent())) {
                 continue;
             }
@@ -592,7 +835,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         + "`: one line per entry, `- [name](path) — what it holds`. `/reflect` keeps it current.\n",
                         StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
                 created.add(index.get());
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot create the index [file=" + index.get() + ']', e);
             }
         }
@@ -681,7 +924,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     try {
                         files.name(id, was.title(), reserved(open));
                         files.write(id, text);
-                    } catch (IOException | RuntimeException e) {
+                    } catch (final IOException | RuntimeException e) {
                         // naming (a rename's move, the folder's listing) or writing failed: the text waits in
                         // panels.json under the stored name, a document's absolute path, so it comes back on its own
                         // file, never in panels/
@@ -718,7 +961,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             texts.remove(id);
             try {
                 files.remove(id);
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "cannot delete the removed panel's file [panel=" + id + ']', e);
                 notices.accept("Cannot delete the removed panel's file: " + reason(e));
             }
@@ -802,7 +1045,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 }
                 final long seen = edits.getOrDefault(id, 0L);
                 files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o, seen))));
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot check the panel's file [panel=" + p.title() + ']', e);
             }
         }
@@ -878,7 +1121,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 try {
                     PanelFiles.replace(file.toAbsolutePath().normalize(), text);
                     done.complete(null);
-                } catch (IOException | RuntimeException e) {
+                } catch (final IOException | RuntimeException e) {
                     LOG.log(System.Logger.Level.ERROR, "cannot write [file=" + file + ']', e);
                     done.complete(reason(e));
                 }
@@ -901,7 +1144,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 try {
                     persistPanels();
                     done.complete(null);
-                } catch (IOException | RuntimeException e) {
+                } catch (final IOException | RuntimeException e) {
                     LOG.log(System.Logger.Level.ERROR, "cannot save the panels", e);
                     done.complete(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
                 }
@@ -941,7 +1184,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private void writePanels() {
         try {
             persistPanels();
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.ERROR, "cannot save the panels", e);
         }
     }
@@ -995,7 +1238,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             }
             out.add(new StoredPanel(id, p.title(), p.connection(), p.session(), name, content, isClosed));
         }
-        for (Iterator<StoredPanel> it = unsaved.values().iterator(); it.hasNext(); ) {
+        for (final Iterator<StoredPanel> it = unsaved.values().iterator(); it.hasNext(); ) {
             final StoredPanel u = it.next();
             try {
                 files.name(u.id(), u.title(), open);
@@ -1007,7 +1250,10 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             }
         }
         try {
-            panels.write(out);
+            // a panels.json kept as it is (record 133) is not written, nor retried: the panels' own files still are
+            if (panels.refused().isEmpty()) {
+                panels.write(out);
+            }
             failing.remove(PANELS_JSON);
         } catch (final IOException e) {
             LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + panels.path() + ']', e);
@@ -1035,8 +1281,14 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         }
     }
 
-    /** Writes a settings file; a failure is told, and the next change writes the whole list again. */
+    /**
+     * Writes a settings file; a failure is told, and the next change writes the whole list again. A file of a later
+     * version is not written: the start told the user why (record 133).
+     */
     private <T> void write(final JsonFile<T> file, final T value) {
+        if (!file.refused().isEmpty()) {
+            return;
+        }
         try {
             file.write(value);
         } catch (final IOException e) {

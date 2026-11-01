@@ -11,9 +11,11 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
+import javax.swing.text.DefaultCaret;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 import javax.swing.text.Position;
+import javax.swing.undo.AbstractUndoableEdit;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SquiggleUnderlineHighlightPainter;
@@ -22,6 +24,7 @@ import org.fife.ui.rtextarea.Gutter;
 import org.fife.ui.rtextarea.IconRowEvent;
 import org.fife.ui.rtextarea.IconRowListener;
 import org.fife.ui.rtextarea.RTextScrollPane;
+import org.fife.ui.rtextarea.RUndoManager;
 
 import dev.marregui.comando.core.dispatch.Blocks;
 import dev.marregui.comando.core.dispatch.Classifier;
@@ -221,19 +224,20 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
 
     /**
      * Replaces the text with its file's new content without reporting a change: one undoable edit, so ⌘Z brings
-     * back the text it replaced; the caret and the view stay where they were, within the new text.
+     * back the text it replaced; the caret and the view stay where they were, within the new text. The undo history
+     * starts at the reload and holds the two texts only: a document a session edits is reloaded at every version, and
+     * a history of whole-text replacements grew by hundreds of megabytes.
      */
     public void reload(final String text) {
         final int caret = area.getCaretPosition();
         final Rectangle view = area.getVisibleRect();
+        final String replaced = area.getText();
         silent = true;
         try {
-            area.beginAtomicEdit();
-            try {
-                area.setText(text);
-            } finally {
-                area.endAtomicEdit();
-            }
+            area.setText(text);
+            area.discardAllEdits();
+            area.getUndoManager().addEdit(new FileReload(replaced, text));
+            area.getUndoManager().updateActions();
             area.setCaretPosition(Math.min(caret, area.getDocument().getLength()));
             ranEnd = null;
         } finally {
@@ -243,23 +247,66 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         refreshMarkers();
     }
 
+    /** A reload: undone by setting the text it replaced, redone by setting it again; an undo is the user's edit. */
+    private final class FileReload extends AbstractUndoableEdit {
+
+        private final String before;
+        private final String after;
+
+        FileReload(final String before, final String after) {
+            this.before = before;
+            this.after = after;
+        }
+
+        @Override
+        public void undo() {
+            super.undo();
+            put(before);
+        }
+
+        @Override
+        public void redo() {
+            super.redo();
+            put(after);
+        }
+
+        @Override
+        public String getPresentationName() {
+            return "Reload";
+        }
+
+        /**
+         * Sets {@code text} with the undo manager not listening: the edit it makes is this one's, not a new one.
+         * (Turning the manager off would discard its edits, this one among them.)
+         */
+        private void put(final String text) {
+            final RUndoManager undo = area.getUndoManager();
+            area.getDocument().removeUndoableEditListener(undo);
+            try {
+                area.setText(text);
+            } finally {
+                area.getDocument().addUndoableEditListener(undo);
+            }
+        }
+    }
+
     /**
      * Adds {@code tail} at the end without reporting a change, as a log grows: the caret and the selection stay on the
      * text they were on, and the view where it was. Not undoable: no one typed it.
      */
     public void grow(final String tail) {
         // the caret stays still: moved, even back to where it was, it would scroll the view to itself
-        final javax.swing.text.DefaultCaret caret = area.getCaret() instanceof javax.swing.text.DefaultCaret c ? c : null;
+        final DefaultCaret caret = area.getCaret() instanceof DefaultCaret c ? c : null;
         final int policy = caret == null ? -1 : caret.getUpdatePolicy();
         silent = true;
         try {
             if (caret != null) {
-                caret.setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);
+                caret.setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
             }
             area.getDocument().insertString(area.getDocument().getLength(), tail, null);
             area.discardAllEdits();
             ranEnd = null;
-        } catch (final javax.swing.text.BadLocationException e) {
+        } catch (final BadLocationException e) {
             throw new IllegalStateException("the end of the text is always a place to insert at", e);
         } finally {
             if (caret != null) {

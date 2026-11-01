@@ -30,8 +30,8 @@ public record Action(String tool, Kind kind, String description, List<Arg> args,
         DESTRUCTIVE
     }
 
-    /** The JSON types an argument takes. */
-    public enum Type { STRING, INTEGER, BOOLEAN, STRINGS, OBJECT, ANY }
+    /** The JSON types an argument takes: {@code STRINGS} and {@code INTEGERS} are arrays of strings and of integers. */
+    public enum Type { STRING, INTEGER, BOOLEAN, STRINGS, INTEGERS, OBJECT }
 
     /**
      * One argument of an action.

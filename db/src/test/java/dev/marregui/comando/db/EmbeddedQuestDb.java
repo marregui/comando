@@ -1,23 +1,24 @@
 package dev.marregui.comando.db;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import io.questdb.ServerMain;
 
-/** A QuestDB server in a temporary directory, Postgres wire on a free port, everything else off. */
+/**
+ * A QuestDB server in a temporary directory, Postgres wire on a port the system picks at the bind (no port is chosen
+ * first and bound later, which another test fork could take in between), everything else off.
+ */
 final class EmbeddedQuestDb implements AutoCloseable {
 
     private final ServerMain server;
     private final int pgPort;
 
     EmbeddedQuestDb(final Path root) throws IOException {
-        pgPort = freePort();
         final Path conf = Files.createDirectories(root.resolve("conf"));
         Files.writeString(conf.resolve("server.conf"), String.join("\n",
-                "pg.net.bind.to=127.0.0.1:" + pgPort,
+                "pg.net.bind.to=127.0.0.1:0",
                 "http.enabled=false",
                 "http.min.enabled=false",
                 "line.tcp.enabled=false",
@@ -28,16 +29,15 @@ final class EmbeddedQuestDb implements AutoCloseable {
                 ""));
         server = new ServerMain("-d", root.toString());
         server.start(false);
+        pgPort = server.getPgWireServerPort();
+        if (pgPort <= 0) {
+            server.close();
+            throw new IOException("QuestDB did not report its Postgres port [port=" + pgPort + ']');
+        }
     }
 
     int pgPort() {
         return pgPort;
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        }
     }
 
     @Override

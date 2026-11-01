@@ -54,8 +54,8 @@ intelligence and automation.
 A block is a run of lines between blank lines. comando decides where a block goes and marks it in the gutter before it
 runs: ⌘⏎ or a click on the mark lets comando decide, ⌘⇧⏎ sends it to Claude, ⌥⏎ runs it as SQL.
 
-comando runs every session on the kit when it finds one; [Kit and brain](docs/kit-and-brain.md) describes the kit and
-the brain, and mine are private.
+comando runs every session on the kit when it finds one. [Kit and brain](docs/kit-and-brain.md) describes the kit and
+the brain well enough for Claude Code to create both; no kit is published, and mine stay private.
 
 ## What it does
 
@@ -80,7 +80,7 @@ Install comando from https://github.com/marregui/comando/releases/latest
 ```
 
 Claude Code follows [INSTALL.md](INSTALL.md): it downloads the file for this system with `gh`, installs it, checks that
-it starts, and asks whether to install a kit. Then **Help ▸ Tutorial** opens *comando in ten minutes*.
+it starts, and asks whether to create a kit and a brain. Then **Help ▸ Tutorial** opens *comando in ten minutes*.
 
 | System | Release file | Tested |
 |---|---|---|
@@ -89,8 +89,9 @@ it starts, and asks whether to install a kit. Then **Help ▸ Tutorial** opens *
 | Windows, x64 | `comando-<version>-windows-x64.zip`, installed to `%LOCALAPPDATA%\comando` | packaged only |
 
 Each file carries its own Java runtime and is unsigned. Every system needs the
-[Claude Code](https://github.com/anthropics/claude-code) CLI (tested from 2.1.296; a version from 2.2.0 on is flagged as
-untested). comando's data stays in `~/.comando`.
+[Claude Code](https://github.com/anthropics/claude-code) CLI, at least the newest version on the day the release was
+made ([INSTALL.md §1](INSTALL.md#1-prerequisites)); trouble with a later one is reported as an issue on
+`marregui/comando`. comando's data stays in `~/.comando`.
 
 ## Build from source
 
@@ -113,7 +114,7 @@ brain, the architecture, development, and the decision records.
 
 Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea and AutoComplete, JediTerm and pty4j, commonmark-java,
 java-diff-utils, Jackson, the PostgreSQL JDBC driver, QuestDB and the HiveMQ MQTT client. Eight Gradle modules (core,
-testkit, db, claude, mcp, tools, ui, app): about 68 000 lines of Java and 43 000 of tests. CI builds, tests and
+testkit, db, claude, mcp, tools, ui, app): about 72 000 lines of Java and 48 000 of tests. CI builds, tests and
 replays the window on Linux and macOS for every push to `main` and every pull request, except changes to documentation
 alone; a version tag builds the packages for macOS, Linux and Windows and publishes them as a release.
 

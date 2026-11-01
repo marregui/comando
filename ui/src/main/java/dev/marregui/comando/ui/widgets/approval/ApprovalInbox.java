@@ -17,8 +17,10 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,17 +116,39 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
      * @param session   the focused panel's session, whose cards come first; empty when the panel has none
      * @param later     the decisions held back, oldest first
      * @param locked    the decisions whose Settle the reducer refuses now: their session's checkpoint runs (record 130)
+     * @param refused   the other decisions whose Settle the reducer refuses now, with why (no session to settle it in)
+     * @param targets   the session each decision's Settle goes to, as the reducer chooses it (record 131)
+     * @param gone      the decisions whose own session was removed, so that Settle goes elsewhere
      */
-    public record Queue(List<Approval> approvals, String session, List<Decision> later, Set<Long> locked) {
+    public record Queue(List<Approval> approvals, String session, List<Decision> later, Set<Long> locked,
+                        Map<Long, String> refused, Map<Long, String> targets, Set<Long> gone) {
         public Queue {
             approvals = List.copyOf(approvals);
             session = session == null ? "" : session;
             later = List.copyOf(later);
             locked = locked == null ? Set.of() : Set.copyOf(locked);
+            refused = refused == null ? Map.of() : Map.copyOf(refused);
+            targets = targets == null ? Map.of() : Map.copyOf(targets);
+            gone = gone == null ? Set.of() : Set.copyOf(gone);
+        }
+
+        public Queue(final List<Approval> approvals, final String session, final List<Decision> later,
+                     final Set<Long> locked, final Map<Long, String> refused, final Map<Long, String> targets) {
+            this(approvals, session, later, locked, refused, targets, Set.of());
+        }
+
+        public Queue(final List<Approval> approvals, final String session, final List<Decision> later,
+                     final Set<Long> locked, final Map<Long, String> refused) {
+            this(approvals, session, later, locked, refused, Map.of());
+        }
+
+        public Queue(final List<Approval> approvals, final String session, final List<Decision> later,
+                     final Set<Long> locked) {
+            this(approvals, session, later, locked, Map.of(), Map.of());
         }
 
         public Queue(final List<Approval> approvals, final String session, final List<Decision> later) {
-            this(approvals, session, later, Set.of());
+            this(approvals, session, later, Set.of(), Map.of(), Map.of());
         }
     }
 
@@ -133,7 +157,14 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
     private static final int AGE_TICK_MILLIS = 30_000;
     private static final int MENU = Platform.menuShortcutMask();
     private static final String EMPTY = "No approvals waiting. Permission requests from every session arrive here.";
-    private static final String SETTLE_TIP = "Sends %s its checkpoint command, which asks what was held back";
+    /**
+     * Where Settle sends (record 131): the decision's own session, or, when it is gone or has no checkpoint command, the
+     * focused panel's; one line of at most 80 characters with names of 24.
+     */
+    private static final String SETTLE_TIP = "Runs the checkpoint of %s";
+    private static final String SETTLE_ELSEWHERE = "Runs %s's checkpoint; %s has no checkpoint command";
+    private static final String SETTLE_GONE = "Runs %s's checkpoint; session %s was removed";
+    private static final String SETTLE_LOCKED = "The session runs its checkpoint; Settle once it has ended";
     private static final String LATER_NOTE = "Held back by automatic checkpoints. Settle asks the session now.";
     /** The Other answer's size: a paragraph of five lines, 120 characters wide. */
     static final int OTHER_ROWS = 5;
@@ -222,7 +253,8 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         final Set<Long> held = new HashSet<>();
         for (final Decision d : queue.later()) {
             held.add(d.id());
-            decisions.computeIfAbsent(d.id(), k -> new DecisionRow(d)).settleable(!queue.locked().contains(d.id()));
+            decisions.computeIfAbsent(d.id(), k -> new DecisionRow(d)).settleable(queue.locked().contains(d.id()),
+                    queue.refused().get(d.id()), queue.targets().getOrDefault(d.id(), d.session()), queue.gone().contains(d.id()));
         }
         decisions.values().removeIf(r -> !held.contains(r.decision.id()));
         answered.retainAll(ids);
@@ -254,8 +286,9 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
     }
 
     /**
-     * Lays the groups out in order. A component already in its place stays, so the card the keyboard is in keeps it
-     * while cards of other groups come and go; the rest are moved into place and what is no longer shown goes.
+     * Lays the groups out in order. A component that stays is never taken out of the list, only moved within it, so
+     * the card the keyboard is in keeps it while cards above it or of other groups come and go; what is no longer shown
+     * goes.
      */
     private void lay(final Queue queue) {
         final List<Component> want = new ArrayList<>();
@@ -296,14 +329,27 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             }
         }
         names.keySet().retainAll(named);
-        for (int i = 0; i < want.size(); i++) {
-            if (i >= list.getComponentCount() || list.getComponent(i) != want.get(i)) {
-                // a component shown further down is moved up from there
-                list.add(want.get(i), i);
+        // what is no longer shown goes first; then each component is put in its place without leaving the list:
+        // list.add would take a child out and put it back, and a focus owner taken out passes the keyboard on
+        final Set<Component> shown = Collections.newSetFromMap(new IdentityHashMap<>());
+        shown.addAll(want);
+        for (int i = list.getComponentCount() - 1; i >= 0; i--) {
+            if (!shown.contains(list.getComponent(i))) {
+                list.remove(i);
             }
         }
-        while (list.getComponentCount() > want.size()) {
-            list.remove(list.getComponentCount() - 1);
+        for (int i = 0; i < want.size(); i++) {
+            final Component c = want.get(i);
+            if (i < list.getComponentCount() && list.getComponent(i) == c) {
+                continue;
+            }
+            if (c.getParent() == list) {
+                // moved within the list: no removeNotify, the focus stays
+                list.setComponentZOrder(c, i);
+            } else {
+                // new to the list: added, as it holds no focus yet (setComponentZOrder refuses a component of no window)
+                list.add(c, i);
+            }
         }
     }
 
@@ -497,7 +543,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             head.setIcon(Icons.get(switch (a.kind()) {
                 case QUESTION -> "question";
                 case PLAN -> "plan";
-                case SQL_WRITE -> "database";
+                case SQL_WRITE, CONNECTION -> "database";
                 case TOOL -> "warning";
             }));
             age.setName("age");
@@ -519,6 +565,8 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                     yield sp;
                 }
                 case SQL_WRITE -> code(in.path("sql").asString(""), "sql", 8);
+                // what the agent would weaken, then the connection as it would be saved
+                case CONNECTION -> code(Json.pretty(in), "json", 10);
                 case TOOL -> {
                     final Diffs.Edit edit = Diffs.edit(a.toolName(), in);
                     if (edit != null) {
@@ -625,6 +673,10 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 }
                 case SQL_WRITE -> {
                     buttons.add(button("Run  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
+                    buttons.add(button("Deny  D", "deny", this::deny, false));
+                }
+                case CONNECTION -> {
+                    buttons.add(button("Allow  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
                     buttons.add(button("Deny  D", "deny", this::deny, false));
                 }
                 case TOOL -> {
@@ -955,11 +1007,18 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             add(buttons, BorderLayout.SOUTH);
         }
 
-        /** Settle off while the session it would go to runs its checkpoint, which refuses it (record 130). */
-        void settleable(final boolean on) {
-            settle.setEnabled(on);
-            settle.setToolTipText(Plain.text(on ? SETTLE_TIP.formatted(decision.session())
-                    : "The session runs its checkpoint; Settle once it has ended"));
+        /**
+         * Settle off while the session it would go to runs its checkpoint, which refuses it (record 130), or while the
+         * reducer refuses it for {@code refused} (null when it does not); the tooltip says why, or names
+         * {@code target}, the session it sends to, and when that is another, why: the decision's own session has no
+         * checkpoint command, or was removed ({@code gone}).
+         */
+        void settleable(final boolean locked, final String refused, final String target, final boolean gone) {
+            settle.setEnabled(!locked && refused == null);
+            final String s = decision.session();
+            final String tip = locked ? SETTLE_LOCKED : refused != null ? refused
+                    : target.equals(s) ? SETTLE_TIP.formatted(s) : (gone ? SETTLE_GONE : SETTLE_ELSEWHERE).formatted(target, s);
+            settle.setToolTipText(Plain.text(tip));
         }
 
         @Override
@@ -1031,6 +1090,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 final String connection = Json.parse(a.inputJson()).path("connection").asString("");
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
+            case CONNECTION -> "wants to change connection " + a.summary();
             case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();
         };
     }

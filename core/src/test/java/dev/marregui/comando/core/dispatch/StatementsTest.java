@@ -42,4 +42,12 @@ class StatementsTest {
         // a backslash in a standard string is a plain character, and a word ending in E is no escape prefix
         assertThat(Statements.split("SELECT 'a\\'; SELECT type'x\\'; SELECT 3")).hasSize(3);
     }
+
+    /// A carriage return ends a `--` comment, as in PostgreSQL's lexer, so the statement after it is counted.
+    @Test
+    void aCarriageReturnEndsALineComment() {
+        assertThat(Statements.split("SELECT 1 -- note\r; DROP TABLE t")).containsExactly("SELECT 1 -- note", "DROP TABLE t");
+        assertThat(Statements.lineCommentEnd("a -- b\rc", 2)).isEqualTo(6);
+        assertThat(Statements.lineCommentEnd("a -- b", 2)).isEqualTo(-1);
+    }
 }

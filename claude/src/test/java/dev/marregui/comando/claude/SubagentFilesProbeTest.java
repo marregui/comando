@@ -13,7 +13,6 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 
 /// [SubagentFiles] against generated inputs: every JSON type in every field read, line ends, and the cut at the limit.
 /// - a field of any JSON type neither throws nor stops the next valid line rendering
@@ -67,7 +66,7 @@ class SubagentFilesProbeTest {
                     if (!md.contains("SENTINEL")) {
                         failures.add(t + " <- " + v + ": sentinel lost");
                     }
-                } catch (Exception | Error e) {
+                } catch (final Exception | Error e) {
                     failures.add(t + " <- " + v + ": " + e);
                 }
             }
@@ -75,8 +74,8 @@ class SubagentFilesProbeTest {
         assertThat(failures).isEmpty();
     }
 
-    /// Meta files whose fields hold each JSON type never make [SubagentFiles#find] or [SubagentFiles#finished] throw,
-    /// also for an id no file has.
+    /// Meta files whose fields hold each JSON type never make [SubagentFiles#find] or [SubagentFiles#finished] throw:
+    /// an id no file has is not found, and an empty meta file is not finished.
     @Test
     void everyJsonTypeInMetaFieldsFindsWithoutThrowing() throws IOException {
         final Path projects = tmp.resolve("projects");
@@ -89,8 +88,9 @@ class SubagentFilesProbeTest {
         }
         Files.writeString(dir.resolve("agent-empty.meta.json"), "");
         Files.write(dir.resolve("agent-bin.meta.json"), new byte[]{(byte) 0xC3, (byte) 0x28, 0, (byte) 0xFF});
-        assertThatCode(() -> SubagentFiles.find(projects, "conv-1", "toolu_none", json)).doesNotThrowAnyException();
-        assertThatCode(() -> SubagentFiles.finished(dir.resolve("agent-empty.meta.json"), json)).doesNotThrowAnyException();
+        assertThat(SubagentFiles.find(projects, "conv-1", "toolu_none", json)).isEmpty();
+        assertThat(SubagentFiles.finished(dir.resolve("agent-empty.meta.json"), json)).isFalse();
+        assertThat(SubagentFiles.finished(dir.resolve("agent-bin.meta.json"), json)).isFalse();
     }
 
     /// A meta file with the number `7` as `toolUseId` is found for the id `"7"`, and an object `description` reads as
@@ -183,7 +183,7 @@ class SubagentFilesProbeTest {
         final String lastPrefix = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"LAST";
         final String lastSuffix = "\"}]}}\n";
         final int pad = size - first.length() - lastPrefix.length() - lastSuffix.length();
-        try (OutputStream out = Files.newOutputStream(f)) {
+        try (final OutputStream out = Files.newOutputStream(f)) {
             out.write((first + lastPrefix + "p".repeat(pad) + lastSuffix).getBytes(StandardCharsets.UTF_8));
         }
         assertThat(Files.size(f)).isEqualTo(size);

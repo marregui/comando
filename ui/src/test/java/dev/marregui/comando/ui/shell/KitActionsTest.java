@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.KitRoot;
+import dev.marregui.comando.core.model.KitVersion;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -29,7 +32,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// bar's tip.
 /// - The upgrade makes the kit's session in the root and sends it the prompt; a session called `kit` elsewhere is not
 ///   taken.
-/// - The upgrade has reported once the session took the prompt and finished, or stopped.
+/// - The upgrade has reported once the session took the prompt and finished, or stopped; a failed turn is told after
+///   the render, and restarts nothing.
+/// - A repair of the manifest names the entries it took out, and Repair is not offered again once it rewrote it.
+/// - An upgrade the kit does not read afterwards restarts nothing and says what the kit reads.
 /// - Sessions on the old kit are restarted once stopped, except the kit's own and busy ones.
 /// - A brain folder shown through a link is inside the brain.
 class KitActionsTest {
@@ -52,6 +58,11 @@ class KitActionsTest {
 
     private final List<Intent> sent = new CopyOnWriteArrayList<>();
     private final AtomicReference<AppState> state = new AtomicReference<>();
+    /** What git says of the kit, as the test sets it. */
+    private volatile Setup.Status status = Setup.Status.NONE;
+    /** What a repair of the manifest answers, or the failure it throws, as the test sets it. */
+    private volatile List<String> repairs = List.of();
+    private volatile IOException repairFails;
 
     private KitActions actions(final KitRoot root) {
         final Setup setup = new Setup() {
@@ -62,7 +73,15 @@ class KitActionsTest {
 
             @Override
             public Setup.Status status() {
-                return Setup.Status.NONE;
+                return status;
+            }
+
+            @Override
+            public List<String> repairKit() throws IOException {
+                if (repairFails != null) {
+                    throw repairFails;
+                }
+                return repairs;
             }
 
             @Override
@@ -136,6 +155,85 @@ class KitActionsTest {
         assertThat(running.next(busy)).contains(running);
         assertThat(running.next(idle)).as("reported").isEmpty();
         assertThat(running.next(session("kit", "/r", Status.CLOSED, 0))).as("stopped").isEmpty();
+    }
+
+    /// An upgrade whose turn failed is told as a failure, never as an upgrade, and offers no restart; the report comes
+    /// after the render that saw the turn end, not inside it, so no question opens in the middle of a render.
+    @Test
+    void anUpgradeWhoseTurnFailedIsToldAfterTheRenderAndRestartsNothing(@TempDir final Path tmp) throws Exception {
+        final KitActions kit = actions(new KitRoot(tmp, Optional.of(KIT), tmp));
+        kit.send(with(session("kit", tmp.toString(), Status.CLOSED, 0)), new KitRoot(tmp, Optional.of(KIT), tmp), "v1.3.0");
+        sent.clear();
+        final SessionState busy = session("kit", tmp.toString(), Status.OPEN, 1);
+        final SessionState failed = session("kit", tmp.toString(), Status.OPEN, 0).withLastTurnError("API Error: 529 overloaded");
+        final List<Intent> duringRender = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            kit.render(with(busy, session("a", "/w", Status.OPEN, 0)));
+            kit.render(with(failed, session("a", "/w", Status.OPEN, 0)));
+            duringRender.addAll(sent);
+        });
+        assertThat(duringRender).as("nothing told inside the render").isEmpty();
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> !sent.isEmpty());
+        assertThat(sent).singleElement().isInstanceOfSatisfying(Intent.Notify.class, n -> {
+            assertThat(n.level()).isEqualTo(Notice.Level.WARN);
+            assertThat(n.text()).isEqualTo("The kit's session reported an error on the upgrade to v1.3.0: API Error: 529 overloaded; "
+                    + "no session was restarted");
+        });
+    }
+
+    /// A repair says which entries it took out of the manifest, in the words the question named them, and that
+    /// nothing was needed when none were.
+    @Test
+    void aRepairNamesTheEntriesItTookOut() {
+        assertThat(KitActions.repaired("~/kit/comando-kit.json", List.of())).isEqualTo("~/kit/comando-kit.json needed no repair");
+        assertThat(KitActions.repaired("~/kit/comando-kit.json", List.of("folders[2].path: not inside the root",
+                "folders[3].name: used twice"))).isEqualTo("~/kit/comando-kit.json rewritten without these 2 entries: "
+                + "folders[2].path: not inside the root; folders[3].name: used twice; restart comando to read it");
+    }
+
+    /// Once a repair has rewritten the manifest, Repair is no longer offered, since the entries read at the start are
+    /// gone from the file until the next start; a repair that failed offers it again.
+    @Test
+    void repairIsNotOfferedAgainAfterItRewroteTheManifest(@TempDir final Path tmp) throws Exception {
+        final KitRoot.Manifest bad = new KitRoot.Manifest("marregui", "BRAIN", List.of(), List.of(), List.of(), List.of(),
+                List.of("folders[2].path: not inside the root"));
+        final KitActions kit = actions(new KitRoot(tmp, Optional.of(bad), tmp));
+        assertThat(kit.canRepair()).as("an entry left out at the start").isTrue();
+
+        repairFails = new IOException("refused whole");
+        SwingUtilities.invokeAndWait(() -> kit.rewrite("~/kit/comando-kit.json"));
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> sent.size() == 1);
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(kit.canRepair()).as("the repair failed: offered again").isTrue();
+
+        repairFails = null;
+        repairs = List.of("folders[2].path: not inside the root");
+        SwingUtilities.invokeAndWait(() -> kit.rewrite("~/kit/comando-kit.json"));
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> sent.size() == 2);
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(((Intent.Notify) sent.get(1)).text()).startsWith("~/kit/comando-kit.json rewritten without this entry");
+        assertThat(kit.canRepair()).as("rewritten: nothing to repair until the next start").isFalse();
+    }
+
+    /// An upgrade the kit's session reported on, while the kit reads another version than the one asked for, says so
+    /// and restarts nothing: no question opens.
+    @Test
+    void anUpgradeTheKitDoesNotReadRestartsNothing(@TempDir final Path tmp) throws Exception {
+        final KitActions kit = actions(new KitRoot(tmp, Optional.of(KIT), tmp));
+        status = new Setup.Status(new KitVersion("v1.2.0", List.of(), ""), false, false);
+        state.set(with(session("kit", tmp.toString(), Status.CLOSED, 0), session("a", "/w", Status.OPEN, 0)));
+        kit.send(with(session("kit", tmp.toString(), Status.CLOSED, 0)), new KitRoot(tmp, Optional.of(KIT), tmp), "v1.3.0");
+        sent.clear();
+        SwingUtilities.invokeAndWait(() -> {
+            kit.render(with(session("kit", tmp.toString(), Status.OPEN, 1), session("a", "/w", Status.OPEN, 0)));
+            kit.render(with(session("kit", tmp.toString(), Status.OPEN, 0), session("a", "/w", Status.OPEN, 0)));
+        });
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> !sent.isEmpty());
+        assertThat(sent).singleElement().isInstanceOfSatisfying(Intent.Notify.class, n -> {
+            assertThat(n.level()).isEqualTo(Notice.Level.WARN);
+            assertThat(n.text()).isEqualTo("The kit's session has reported on the upgrade to v1.3.0, but the kit reads v1.2.0; "
+                    + "no session was restarted");
+        });
     }
 
     /// [KitActions#toRestart] picks only an open, idle session that is not the kit's; a restart stops it, waits through

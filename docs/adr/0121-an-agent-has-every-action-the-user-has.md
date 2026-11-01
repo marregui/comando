@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted; increment 1 built, increments 2–4 proposed (§3) | Miguel and Claude |
+| 2026-10-29 | accepted; increment 1 built, increments 2–4 proposed (§3); amended 2026-11-01 (see Amendments: rule 1 covers the asker's whole creation family) | Miguel and Claude |
 
 ## 1. Context
 
@@ -52,3 +52,23 @@ grant); built in increments, this one first.
 - A person and an agent can do the same things; what differs is who decides on approvals and on destroying work.
 - Adding a feature to the window means adding its action, or saying in the registry why there is none.
 - `SessionSpec` gains a field; `sessions.json` written before it reads with `createdBy` empty (the user).
+
+## Amendments
+
+2026-11-01, first-release review, and Miguel's decisions D1 and D2:
+
+| Rule | Amended to | Why |
+|---|---|---|
+| rule 1: approvals | refused for any caller in the asker's creation family: the asker, its creators, and every session it or any of its creators made, directly or through others, so siblings and cousins too (`AppState.sameFamily`); only the user or an unrelated session answers; a card that weakens a connection's guards (`ApprovalKind.CONNECTION`) only the user answers ([record 23](0023-sql-from-claude-lexical-policy-production-refused.md)). Miguel's decision of the first-release review, 2026-11-01 | a session the asker's family made is the family's own work: through it the asker would decide its own card |
+| record 44's circuit breaker | holds for every action that would start a stopped session: `panel_run` into its panel, `session_command`, `session_checkpoint` and `decision_settle` run on a stopped session only for the user or one of its creators; the reducer refuses the start (`TurnRules.runPrompt`), and the tool answers the refusal | `session_start` alone kept it, and two other tools started the session the user had stopped |
+| permissions (D1) | `session_new` and `session_edit` take no `permission_mode` and no `add_dirs`; every session runs under the kit's `settings.json` rules ([record 7](0007-default-permission-mode.md)) | a permission mode is the user's to hand over, and an `act` tool handed it to any caller |
+| connections (D2) | `connection_save` keeps the fields it does not name; a change of host, port, database or user drops the stored password; clearing production or lowering TLS raises a card ([records 20](0020-passwords-in-the-macos-keychain-through-security.md) and [23](0023-sql-from-claude-lexical-policy-production-refused.md)) | the keychain's password and the production guard protect the user from the agent that calls |
+| what an action answers | an action asks the reducer first whether it would refuse the intent (`Reducer.refusal`: the checkpoint lock, a name another panel holds, a stopped session another session would start, a command with nothing to send, no session to settle in) and answers that refusal as a tool error; otherwise it answers `sent: <intent>`. A refusal that arises after the answer, a checkpoint that began meanwhile, is a notice naming the caller | "done" was answered from the dispatch alone, for work the reducer then refused |
+| `decisions_settled` | `ids` is typed an array of integers in the tool's schema, and an array sent as JSON text is read too | the schema said nothing, and Claude Code sends arrays as text at times |
+
+Tested in `ActionToolsTest`, `DecisionToolsTest` and `ReducerTest`.
+
+2026-11-01, the first-release review's last round: the creation family survives the removal of its root.
+Removing a session the user made records its name as the `family` of the sessions it made, and of theirs
+(`SessionSpec.family`, kept in `sessions.json`), so siblings and cousins stay one family for rule 1. The walk up the
+creators follows every link to the root, with no depth limit, and stops on a loop. Tested in `ReducerFamilyTest`.

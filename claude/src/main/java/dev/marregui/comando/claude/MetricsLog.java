@@ -15,12 +15,17 @@ import java.util.function.LongSupplier;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
+
+import dev.marregui.comando.core.files.OwnerOnly;
+import dev.marregui.comando.core.loop.Queues;
 
 /**
  * What the sessions spend and how their work ends, kept to calibrate who does what (record 110): one JSON object a
  * line, {@code metrics-<UTC date>.jsonl} in the data root's {@code metrics} folder, appended whole. Each object has
- * {@code ts} (UTC, ISO 8601), {@code event} ({@code turn}, {@code agent}, {@code usage}) and the event's fields.
+ * {@code ts} (UTC, ISO 8601), {@code event} ({@code turn}, {@code agent}, {@code usage}, {@code queues}) and the
+ * event's fields.
  * Written from the sessions' strands and the plan-usage strand; one line a write, under a lock, so lines never
  * interleave. Money fields are kept as they arrive and shown nowhere.
  */
@@ -70,7 +75,6 @@ public final class MetricsLog {
             return Optional.empty();
         }
         LocalDate day = LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC);
-        final String needle = "\"conversation\":\"" + id + "\"";
         for (int i = 0; i < CONTEXT_DAYS; i++, day = day.minusDays(1)) {
             final Path file = dir.resolve("metrics-" + day + ".jsonl");
             if (!Files.isRegularFile(file)) {
@@ -80,19 +84,36 @@ public final class MetricsLog {
                 final List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
                 for (int j = lines.size() - 1; j >= 0; j--) {
                     final String line = lines.get(j);
-                    if (line.contains(needle) && line.contains("\"event\":\"turn\"")) {
-                        final JsonNode e = json.readTree(line);
+                    // the text only skips lines that cannot be the one; the event's own fields decide
+                    if (!line.contains(id)) {
+                        continue;
+                    }
+                    final JsonNode e = json.readTree(line);
+                    if (e.path("event").asString("").equals("turn") && e.path("conversation").asString("").equals(id)) {
                         final long context = e.path("context").asLong(-1);
                         if (context > 0) {
                             return Optional.of(new long[]{context, e.path("window").asLong(0)});
                         }
                     }
                 }
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read metrics [file=" + file + ']', e);
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * A {@code queues} event: each unbounded queue's depth when read and its peak since the reading before
+     * ({@link Queues}), so each can be bounded later from how it is used.
+     */
+    public void queues(final List<Queues.Reading> readings) {
+        final ObjectNode e = event("queues");
+        final ArrayNode list = e.putArray("queues");
+        for (final Queues.Reading r : readings) {
+            list.addObject().put("name", r.name()).put("depth", r.depth()).put("peak", r.peak());
+        }
+        write(e);
     }
 
     /** Appends {@code event} as one line to today's file; a failure is logged, never thrown. */
@@ -102,10 +123,13 @@ public final class MetricsLog {
         }
         final Path file = dir.resolve("metrics-" + LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC) + ".jsonl");
         try {
-            Files.createDirectories(dir);
+            // owner-only (rule 15), also when the folder was deleted while comando runs
+            if (!Files.isDirectory(dir)) {
+                OwnerOnly.folder(dir);
+            }
             Files.writeString(file, json.writeValueAsString(event) + "\n", StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException | JacksonException e) {
+        } catch (final IOException | JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write metrics [file=" + file + ']', e);
         }
     }

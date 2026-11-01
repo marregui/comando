@@ -7,6 +7,7 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
@@ -124,12 +125,12 @@ class FilesTabGroupsTest {
 
         tree.expandRow(0);
         assertThat(rows(tree)).containsExactly("BRAIN", "Scratchpad", "KB", "Memory", "KIT");
-        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("BRAIN")));
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("BRAIN"), Map.of("BRAIN", List.of())));
         tab.show(BRAIN, folder("BRAIN", folder("EVAL", file("/b/EVAL/run.md")), folder(".cache", file("/b/.cache/x")), file("/b/README.md")));
         assertThat(rows(tree)).as("its other folders, no file, nothing hidden").containsExactly("BRAIN", "Scratchpad", "KB", "Memory", "EVAL", "KIT");
 
         tree.expandRow(row(tree, "Memory"));
-        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "BRAIN")));
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "BRAIN"), Map.of("Memory", List.of(), "BRAIN", List.of())));
         assertThat(tab.rowIcon((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getPathForRow(row(tree, "Memory")).getLastPathComponent()).getUserObject()))
                 .as("a group's folder keeps its icon").contains("folder-memory");
         assertThat(tab.header((DefaultMutableTreeNode) tree.getPathForRow(row(tree, "KIT")).getLastPathComponent())).as("a hairline before KIT").isEmpty();
@@ -198,7 +199,7 @@ class FilesTabGroupsTest {
         final JTree tree = tab.tree().tree();
         tab.reveal(Path.of("/b/MEMORY/topic/notes.md"));
         assertThat(rows(tree)).as("opened as far as read").containsExactly("BRAIN", "Scratchpad", "KB", "Memory", FilesTab.READING, "KIT");
-        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "BRAIN")));
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "BRAIN"), Map.of("Memory", List.of(), "BRAIN", List.of())));
         tab.show(MEMORY, folder("Memory", folder("topic", file("/b/MEMORY/topic/a.md"), file("/b/MEMORY/topic/notes.md")), file("/b/MEMORY/MEMORY.md")));
         assertThat(tree.getSelectionPath()).isNotNull();
         assertThat(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getSelectionPath().getLastPathComponent()).getUserObject()).label())

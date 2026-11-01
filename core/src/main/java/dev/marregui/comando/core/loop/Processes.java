@@ -128,7 +128,7 @@ public final class Processes {
 
     /** The first {@code max} bytes of {@code file}. */
     private static byte[] head(final Path file, final int max) throws IOException {
-        try (InputStream in = Files.newInputStream(file)) {
+        try (final InputStream in = Files.newInputStream(file)) {
             return in.readNBytes(max);
         }
     }

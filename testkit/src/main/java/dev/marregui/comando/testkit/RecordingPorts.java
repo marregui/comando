@@ -260,7 +260,7 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void saveDecisions(final List<Decision> decisions) {
+    public void saveDecisions(final List<Decision> decisions, final long lastId) {
         record("save.decisions " + decisions.size());
     }
 

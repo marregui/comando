@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted | Miguel and Claude |
+| 2026-10-28 | accepted; amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -34,3 +34,11 @@ writes after each change; `PanelFiles` reads the export folder through it and `C
 preferences untouched, the file winning afterwards; a change read by the next window, mutation-checked with the theme's
 write removed; an unreadable file kept aside), `WindowLayoutTest`, and `UiKeysTest`, whose theme test keeps the theme in
 a data root's `settings.json` across windows.
+
+## Amendments
+
+2026-11-01, Miguel's decision D5 of the first-release review ([record 133](0133-every-stored-file-has-a-schema-and-a-version.md)):
+`settings.json` names its schema's version under `version`, first among its keys; a file without it is version 1. A
+file of a later version, written by a newer comando, is kept as it is and never written: the window runs on the
+defaults and says so. The checkpoint threshold it keeps is a percentage, `sessions.checkpointThresholdPercent`
+([record 129](0129-a-checkpoint-reflects-then-compacts.md), amended). Tested in `SettingsTest`.

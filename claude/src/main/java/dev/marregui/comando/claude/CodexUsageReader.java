@@ -98,7 +98,7 @@ final class CodexUsageReader {
                 final ByteArrayOutputStream line = new ByteArrayOutputStream();
                 final byte[] buf = new byte[8192];
                 // polled, not a blocking read: a read blocked on the pipe would outlive the timeout
-                while (System.nanoTime() < deadline) {
+                while (deadline - System.nanoTime() > 0) {
                     final int ready = out.available();
                     if (ready == 0) {
                         if (!p.isAlive() && out.available() == 0) {
@@ -140,16 +140,28 @@ final class CodexUsageReader {
         }
     }
 
-    /** Gives the server 1 s to exit on its closed input, then SIGTERM, then SIGKILL 2 s later. */
+    /**
+     * Gives the server 1 s to exit on its closed input, then SIGTERM, then SIGKILL 2 s later, to it and to the processes
+     * it started. Those are read while it lives (the JDK finds descendants by pid, and an ended process's pid may be
+     * another's); a handle keeps its process's start time, so a later signal reaches no other.
+     */
     private static void stop(final Process p) {
+        List<ProcessHandle> children = List.of();
         try {
             if (!p.waitFor(1, TimeUnit.SECONDS)) {
+                children = p.isAlive() ? p.descendants().toList() : List.of();
+                children.forEach(ProcessHandle::destroy);
                 p.destroy();
                 if (!p.waitFor(2, TimeUnit.SECONDS)) {
+                    children.forEach(ProcessHandle::destroyForcibly);
                     p.destroyForcibly();
                 }
             }
         } catch (final InterruptedException e) {
+            if (children.isEmpty() && p.isAlive()) {
+                children = p.descendants().toList();
+            }
+            children.forEach(ProcessHandle::destroyForcibly);
             p.destroyForcibly();
             Thread.currentThread().interrupt();
         }

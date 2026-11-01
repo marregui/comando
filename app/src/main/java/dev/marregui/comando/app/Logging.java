@@ -3,7 +3,6 @@ package dev.marregui.comando.app;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.logging.ConsoleHandler;
@@ -14,6 +13,8 @@ import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+
+import dev.marregui.comando.core.files.OwnerOnly;
 
 /**
  * Routes {@link System.Logger} (backed by java.util.logging) to a rotating file under the data root and
@@ -31,7 +32,8 @@ final class Logging {
         root.setLevel(Level.INFO);
         final Formatter format = new Line();
         try {
-            Files.createDirectories(dir);
+            // the user's alone (rule 15): the log names files, prompts' first lines and tool calls
+            OwnerOnly.folder(dir);
             // 1 MiB a file, so the log always opens in a panel (Help ▸ Show the log), whose limit is 2 MiB; 10
             // files, the count a notice's click searches for its entry (HelpFiles.LOGS)
             final FileHandler file = new FileHandler(dir.resolve("comando-%g.log").toString(), 1024 * 1024, 10, true);

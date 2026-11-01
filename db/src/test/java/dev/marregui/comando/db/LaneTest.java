@@ -40,7 +40,7 @@ class LaneTest {
     /// within its statement timeout plus the margin, and the lane runs the next query on a new connection.
     @Test
     void aQueryToAServerThatStopsAnsweringEndsAtItsBoundAndTheLaneTakesTheNextRun() throws Exception {
-        try (PgStub server = new PgStub()) {
+        try (final PgStub server = new PgStub()) {
             final ScheduledExecutorService timer = Threads.timedStrand("lane-test-timer");
             final ExecutorService cancellers = Threads.strand("lane-test-cancel");
             final DbSettings settings = new DbSettings(0, 1_000, 500, 60, 1_000L);
@@ -75,7 +75,7 @@ class LaneTest {
     /// description fails within its bound plus the margin, and the lane runs the next query on a new connection.
     @Test
     void aDescriptionOnAServerThatStopsAnsweringEndsAtItsBoundAndTheLaneTakesTheNextRun() throws Exception {
-        try (PgStub server = new PgStub()) {
+        try (final PgStub server = new PgStub()) {
             final ScheduledExecutorService timer = Threads.timedStrand("lane-test-timer");
             final ExecutorService cancellers = Threads.strand("lane-test-cancel");
             final DbSettings settings = new DbSettings(0, 1_000, 500, 60, 1_000L);

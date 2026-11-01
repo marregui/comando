@@ -65,7 +65,7 @@ class ShownTimerTest {
 
     /// Hiding a showing owner stops the timer and keeps the want.
     @Test
-    void hiddenStops() {
+    void hidingTheOwnerStopsTheTimerAndKeepsTheWant() {
         owner.showing(true);
         timer.want(true);
         owner.showing(false);
@@ -75,7 +75,7 @@ class ShownTimerTest {
 
     /// `want(false)` and `stop()` stop a running timer while the owner still shows.
     @Test
-    void unwantedStops() {
+    void anUnwantedOrStoppedTimerStopsWhileTheOwnerShows() {
         owner.showing(true);
         timer.want(true);
         timer.want(false);

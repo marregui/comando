@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -75,8 +76,10 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
  * click selects; a double click (or Enter) opens a file in a panel, and a double click opens or closes a folder;
  * nothing opens a panel but a file asked for. Each kind of file has its icon, and a folder's index file leads it,
  * offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
- * ({@link Intent.WatchFolders}), so a closed folder costs nothing; the tree follows them as the tools adapter reads
- * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
+ * ({@link Intent.WatchFolders}), so a closed folder costs nothing, and of an open one only as deep as it shows: its
+ * entries, and those of each subfolder that shows, so a subfolder inside a closed one is read once it is opened. The
+ * tree follows them as the tools adapter reads them, keeping what the user opened and selected, and the newest day
+ * folder is open at a folder's first read. A
  * folder's row has the icon it was configured with. In a git repository, what git ignores is left out; every name has
  * one colour, red only for a file in conflict, and how a file differs from {@code HEAD} is said by the marks after the
  * names leading down to it: the rising arrow for a change, the dot for a new file (record 98). A repository's top
@@ -85,7 +88,7 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
  * repository holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a top-level
  * row's menu shows those changes and, from the window, backs the brain or the kit up, as the unit they are: the folders
  * inside offer neither (record 118). A changed file's menu compares it with {@code HEAD}. Every folder lies inside
- * Claude Code's folder: the tab is no browser of code repositories.
+ * Claude Code's folder, the kit's or the brain's, which may lie anywhere: the tab is no browser of code repositories.
  *
  * <p>With a kit, a Jobs row is the first inside the kit's row (record 118): the kit's scheduled jobs at a glance
  * (record 117), its detail what runs next, its marks a pending change (the dot) and a failed last run (the name in
@@ -174,6 +177,8 @@ final class FilesTab {
     private Set<String> indexNames = Set.of();
     /** The latest tree read of each folder, by name. */
     private final Map<String, ViewSpec.TreeNode> read = new HashMap<>();
+    /** The folders whose latest tree was read only as deep as it showed: a closed subfolder's entries are not in it. */
+    private final Set<String> partlyRead = new HashSet<>();
     /** Folders whose newest day was opened, the first time their row was open with their tree read; never again. */
     private final Set<String> dayOpened = new HashSet<>();
     /** Folders read for the filter and not yet arrived: each is asked for once, not at every keystroke. */
@@ -182,6 +187,10 @@ final class FilesTab {
     private Set<String> foundRows = Set.of();
     /** The open folders as last sent in {@link Intent.WatchFolders}; the adapter starts watching none. */
     private List<String> watched = List.of();
+    /** The open folders' open subfolders as last sent in {@link Intent.WatchFolders}, by folder name. */
+    private Map<String, List<String>> watchedOpen = Map.of();
+    /** A look at the watch is posted to follow the filter's text, after the edit under way. */
+    private boolean watchPending;
     /** True while code, not the user, expands rows: a restored row neither opens its index nor changes the watch. */
     private boolean restoring;
     private boolean built;
@@ -252,15 +261,18 @@ final class FilesTab {
         tree.tree().addTreeExpansionListener(new TreeExpansionListener() {
             @Override
             public void treeExpanded(final TreeExpansionEvent e) {
-                if (!restoring && isFolderRow(e.getPath())) {
-                    folderOf(e.getPath()).ifPresent(x -> openNewestDay(x.name()));
+                if (!restoring) {
+                    if (isFolderRow(e.getPath())) {
+                        folderOf(e.getPath()).ifPresent(x -> openNewestDay(x.name()));
+                    }
+                    // a subfolder opened is read, with one level inside it, as its folder's tree is read
                     watchOpen(false);
                 }
             }
 
             @Override
             public void treeCollapsed(final TreeExpansionEvent e) {
-                if (!restoring && isFolderRow(e.getPath())) {
+                if (!restoring) {
                     watchOpen(false);
                 }
             }
@@ -351,6 +363,7 @@ final class FilesTab {
         final Set<String> keep = new HashSet<>(renamed);
         all.stream().filter(allBefore::contains).forEach(f -> keep.add(f.name()));
         read.keySet().retainAll(keep);
+        partlyRead.retainAll(keep);
         dayOpened.retainAll(keep);
         requested.retainAll(keep);
         rebuild();
@@ -417,8 +430,8 @@ final class FilesTab {
                 }
             }
             if (next == null) {
-                if (!read.containsKey(f.name())) {
-                    return; // its tree is on its way: show() goes on
+                if (!read.containsKey(f.name()) || notRead(node)) {
+                    return; // its tree, or this folder's part of it, is on its way: show() goes on
                 }
                 revealing = null;
                 tell.tell(tree.tree(), below(tree, at), "The Files tab does not show " + rel + " (left out, or not read)");
@@ -433,6 +446,12 @@ final class FilesTab {
         tree.tree().setSelectionPath(at);
         tree.tree().scrollPathToVisible(at);
         tree.tree().requestFocusInWindow();
+    }
+
+    /** Whether {@code node} is a subfolder whose entries were not read, as the folder holding it was closed. */
+    private static boolean notRead(final DefaultMutableTreeNode node) {
+        return node.getChildCount() == 1 && ((DefaultMutableTreeNode) node.getChildAt(0)).getUserObject() instanceof ViewSpec.TreeNode n
+                && n.label().equals(ViewSpec.TreeNode.MORE) && n.detail().equals(ViewSpec.TreeNode.NOT_READ);
     }
 
     /** Whether {@code f} leaves {@code file} out: a name on its way that the folder excludes. */
@@ -452,6 +471,9 @@ final class FilesTab {
         if (t != null) {
             read.put(to, t);
         }
+        if (partlyRead.remove(from)) {
+            partlyRead.add(to);
+        }
         if (dayOpened.remove(from)) {
             dayOpened.add(to);
         }
@@ -470,6 +492,11 @@ final class FilesTab {
         }
         final String name = folder.name();
         read.put(name, folderTree);
+        if (partial(folderTree)) {
+            partlyRead.add(name);
+        } else {
+            partlyRead.remove(name);
+        }
         requested.remove(name);
         rebuild();
         openNewestDay(name);
@@ -477,6 +504,8 @@ final class FilesTab {
         if (searching()) {
             refilter(false);
         }
+        // a subfolder the rebuild could not open again is no longer read
+        watchOpen(false);
     }
 
     /** The open folders' git repositories as read: the marks of changed and new files and of the folders above them. */
@@ -990,6 +1019,8 @@ final class FilesTab {
             } finally {
                 restoring = false;
             }
+            // the day opened is read as deep as it shows
+            watchOpen(false);
         }
     }
 
@@ -1012,7 +1043,11 @@ final class FilesTab {
         return null;
     }
 
-    /** The open folders, in their order; sent when they changed, or when {@code force} and any is open. */
+    /**
+     * The open folders, in their order, each with its open subfolders so it is read only as deep as it shows; sent
+     * when they changed, or when {@code force} and any is open. While the filter has text, the open folders are read
+     * whole, as it searches every level.
+     */
     private void watchOpen(final boolean force) {
         final List<String> open = new ArrayList<>();
         for (final FolderRoot f : all) {
@@ -1021,10 +1056,38 @@ final class FilesTab {
                 open.add(f.name());
             }
         }
-        if (!open.equals(watched) || force && !open.isEmpty()) {
+        final Map<String, List<String>> inside = searching() ? Map.of() : openInside(open);
+        if (!open.equals(watched) || !inside.equals(watchedOpen) || force && !open.isEmpty()) {
             watched = List.copyOf(open);
-            intents.dispatch(new Intent.WatchFolders(watched));
+            watchedOpen = inside;
+            intents.dispatch(new Intent.WatchFolders(watched, watchedOpen));
         }
+    }
+
+    /**
+     * By name, for each of the folders {@code open}, the absolute paths of its subfolders open in the tree, sorted; a
+     * subfolder inside a closed one is not open, as it does not show.
+     */
+    private Map<String, List<String>> openInside(final List<String> open) {
+        final Map<String, List<String>> inside = new HashMap<>();
+        open.forEach(name -> inside.put(name, new ArrayList<>()));
+        final DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
+        final Enumeration<TreePath> expanded = tree.tree().getExpandedDescendants(new TreePath(root));
+        while (expanded != null && expanded.hasMoreElements()) {
+            final TreePath p = expanded.nextElement();
+            final DefaultMutableTreeNode n = (DefaultMutableTreeNode) p.getLastPathComponent();
+            if (n == root || isFolderRow(n)) {
+                continue;
+            }
+            final Optional<FolderRoot> f = folderOf(p);
+            final Optional<Path> dir = folderPath(n);
+            if (f.isPresent() && dir.isPresent() && inside.containsKey(f.get().name())) {
+                inside.get(f.get().name()).add(dir.get().toAbsolutePath().normalize().toString());
+            }
+        }
+        final Map<String, List<String>> sorted = new HashMap<>();
+        inside.forEach((name, paths) -> sorted.put(name, paths.stream().sorted().toList()));
+        return Map.copyOf(sorted);
     }
 
     /** The folder of the nearest folder row on {@code path}, the node's own when it is one. */
@@ -1132,6 +1195,9 @@ final class FilesTab {
         if (!j.error().isEmpty()) {
             return "cannot be read";
         }
+        if (j.jobs().isEmpty()) {
+            return "none";
+        }
         final String count = j.jobs().size() == 1 ? "1 job" : j.jobs().size() + " jobs";
         if (!j.running().isEmpty()) {
             return count + " · running " + String.join(", ", j.running());
@@ -1151,6 +1217,8 @@ final class FilesTab {
             tip = "Last run failed: " + String.join(", ", j.failed()) + "; double-click to see the jobs";
         } else if (j.pending()) {
             tip = "The scheduler lags the manifest; right-click to apply pending changes";
+        } else if (j.jobs().isEmpty()) {
+            tip = "No scheduled jobs in comando-kit.json; double-click to add one";
         } else {
             tip = j.nextUp().map(e -> "Next: " + e.job().name() + " " + day(e.next()) + "; double-click to configure the jobs")
                     .orElse("Double-click to configure the kit's scheduled jobs");
@@ -1285,6 +1353,15 @@ final class FilesTab {
     }
 
     private void filterChanged() {
+        // the open folders are read whole while the filter has text, and as deep as they show again once it is cleared;
+        // once the edit is done, as a replaced text clears the field for a moment, which must not read them again
+        if (!watchPending) {
+            watchPending = true;
+            SwingUtilities.invokeLater(() -> {
+                watchPending = false;
+                watchOpen(false);
+            });
+        }
         if (searching()) {
             readUnread();
             refilter(true);
@@ -1294,13 +1371,35 @@ final class FilesTab {
         }
     }
 
-    /** Reads, once, the folders never read, so the filter searches the closed ones too. */
+    /**
+     * Reads, once, every closed folder never read or last read only as deep as it showed, so the filter searches every
+     * level of the closed ones too; the open ones are watched whole while the filter has text.
+     */
     private void readUnread() {
         final List<String> unread = all.stream().map(FolderRoot::name)
-                .filter(name -> !read.containsKey(name) && requested.add(name)).toList();
+                .filter(name -> !open(name) && (!read.containsKey(name) || partlyRead.contains(name)) && requested.add(name)).toList();
         if (!unread.isEmpty()) {
             intents.dispatch(new Intent.BrowseFolders(unread));
         }
+    }
+
+    /** Whether folder {@code name}'s row is open in the folders' tree. */
+    private boolean open(final String name) {
+        final TreePath row = folderRow(name);
+        return row != null && tree.tree().isExpanded(row);
+    }
+
+    /** Whether {@code t} holds a subfolder whose entries were not read, as it was closed at the read. */
+    static boolean partial(final ViewSpec.TreeNode t) {
+        if (t.label().equals(ViewSpec.TreeNode.MORE) && t.detail().equals(ViewSpec.TreeNode.NOT_READ)) {
+            return true;
+        }
+        for (final ViewSpec.TreeNode c : t.children()) {
+            if (partial(c)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

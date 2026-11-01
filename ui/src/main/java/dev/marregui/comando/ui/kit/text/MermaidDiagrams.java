@@ -28,10 +28,13 @@ import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * Mermaid diagrams drawn by {@code mmdc} (the Mermaid command-line renderer) into a cache folder, once per diagram
- * text, for the Markdown preview: Swing's HTML renderer runs no JavaScript, so it shows the picture {@code mmdc} made.
+ * text and mode, for the Markdown preview: in Mermaid's dark theme on a dark theme, its default one on a light theme,
+ * so lines and arrows show on either ground. Swing's HTML renderer runs no JavaScript, so it shows the picture
+ * {@code mmdc} made.
  * A diagram not drawn yet is drawn on the {@code mermaid} strand, one at a time, within {@link #TIMEOUT}; whoever
  * asked hears when it is ready. A diagram {@code mmdc} rejects is remembered with the reason, so it is not drawn
  * again until its text changes. Until {@link #install} runs, and where {@code mmdc} is not installed, no diagram is
@@ -43,7 +46,7 @@ public final class MermaidDiagrams {
     /** Pixels per point: the picture is drawn twice as large and shown at half, sharp on a Retina screen. */
     static final int SCALE = 2;
     /** Part of every cache key: a change of how diagrams are drawn draws them again. */
-    private static final String STYLE = "dark|transparent|" + SCALE;
+    private static final String STYLE = "transparent|" + SCALE;
     static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_REASON_CHARS = 200;
 
@@ -117,12 +120,17 @@ public final class MermaidDiagrams {
      * callback is handed in meanwhile.
      */
     public Diagram diagram(final String source, final Runnable whenReady) {
+        return diagram(source, Theme.light(), whenReady);
+    }
+
+    /** As {@link #diagram(String, Runnable)}, drawn for a light theme when {@code light}, else for a dark one. */
+    Diagram diagram(final String source, final boolean light, final Runnable whenReady) {
         if (drawer == null) {
             return new Diagram.Unavailable(mmdc == null && cache != null
                     ? "install mermaid-cli (npm install -g @mermaid-js/mermaid-cli) to see this diagram drawn"
                     : "diagrams are not drawn here");
         }
-        final String key = key(source);
+        final String key = key(source, light);
         final String failed = failures.get(key);
         if (failed != null) {
             return new Diagram.Unavailable(failed);
@@ -148,7 +156,7 @@ public final class MermaidDiagrams {
         });
         if (first[0]) {
             try {
-                drawer.execute(() -> draw(key, source, png));
+                drawer.execute(() -> draw(key, source, png, light));
             } catch (final RejectedExecutionException e) {
                 waiting.remove(key);
                 return new Diagram.Unavailable("comando is closing");
@@ -157,7 +165,7 @@ public final class MermaidDiagrams {
         return new Diagram.Pending();
     }
 
-    private void draw(final String key, final String source, final Path png) {
+    private void draw(final String key, final String source, final Path png, final boolean light) {
         if (Files.isRegularFile(png)) {
             // asked again while the last drawing of it finished: it is there
             finish(key);
@@ -172,7 +180,7 @@ public final class MermaidDiagrams {
             try {
                 Files.writeString(in, source, StandardCharsets.UTF_8);
                 final ProcessBuilder pb = new ProcessBuilder(mmdc.toString(), "-q", "-i", in.toString(), "-o", out.toString(),
-                        "-t", "dark", "-b", "transparent", "-s", Integer.toString(SCALE))
+                        "-t", light ? "default" : "dark", "-b", "transparent", "-s", Integer.toString(SCALE))
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(err.toFile());
                 // mmdc is a node script and an app started from Finder has no node on its PATH: mmdc's folder first
@@ -195,7 +203,7 @@ public final class MermaidDiagrams {
                 Files.deleteIfExists(out);
                 Files.deleteIfExists(err);
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             // any failure is the diagram's, told once: a key left waiting would show as drawing forever
             failures.put(key, "cannot draw it: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         } catch (final InterruptedException e) {
@@ -256,11 +264,16 @@ public final class MermaidDiagrams {
         p.destroyForcibly();
     }
 
-    /** The cache file name of a diagram: its text and how it is drawn, hashed. */
+    /** The cache file name of a diagram drawn for a dark theme: its text and how it is drawn, hashed. */
     static String key(final String source) {
+        return key(source, false);
+    }
+
+    /** The cache file name of a diagram: its text, the mode it is drawn for and how it is drawn, hashed. */
+    static String key(final String source, final boolean light) {
         try {
             final MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            sha.update(STYLE.getBytes(StandardCharsets.UTF_8));
+            sha.update(((light ? "default|" : "dark|") + STYLE).getBytes(StandardCharsets.UTF_8));
             sha.update((byte) 0);
             sha.update(source.strip().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(sha.digest(), 0, 16);
@@ -271,7 +284,7 @@ public final class MermaidDiagrams {
 
     /** A PNG's size in pixels from its header, or zeros when it cannot be read. */
     private static int[] size(final Path png) {
-        try (ImageInputStream in = ImageIO.createImageInputStream(png.toFile())) {
+        try (final ImageInputStream in = ImageIO.createImageInputStream(png.toFile())) {
             final Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
                 return new int[]{0, 0};
@@ -296,7 +309,7 @@ public final class MermaidDiagrams {
         final List<Path> candidates = new ArrayList<>(Platform.onPath("mmdc"));
         final Path nvm = Path.of(System.getProperty("user.home"), ".nvm", "versions", "node");
         if (Files.isDirectory(nvm)) {
-            try (Stream<Path> versions = Files.list(nvm)) {
+            try (final Stream<Path> versions = Files.list(nvm)) {
                 versions.sorted((a, b) -> compareVersions(b.getFileName().toString(), a.getFileName().toString()))
                         .forEach(v -> candidates.add(v.resolve("bin").resolve("mmdc")));
             } catch (final IOException e) {

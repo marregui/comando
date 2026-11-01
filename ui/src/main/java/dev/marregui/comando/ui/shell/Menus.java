@@ -12,6 +12,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
 import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
 import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
@@ -19,10 +20,10 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
 /**
  * The menu bar, the icons and tooltips of its entries, and where every other command belongs. The bar holds only what
  * has no key and no control in the window, and what macOS expects in a menu: after the application menu macOS draws,
- * Edit (the clipboard and undo) and Help, the palette and the help, flat. The theme, the shell, the refreshing plots,
- * the embedded server and the Edge are buttons at the tab row's right end instead ({@link #corner}). Every other
- * command keeps its key, its control and the palette, and is listed by its area ("Session", "Results") in the palette
- * and the keyboard shortcuts.
+ * Edit (the clipboard and undo) and Help, the palette and the help, flat. The theme, the refreshing plots, the
+ * embedded server and the Edge are buttons at the tab row's right end instead ({@link #corner}); the shell has none
+ * (record 114, amended 2026-11-01). Every other command keeps its key, its control and the palette, and is listed by
+ * its area ("Session", "Results") in the palette and the keyboard shortcuts.
  * <p>
  * Every item has an icon and a one-line tooltip: what it does, and one fact its label does not say; macOS shows both
  * in its menu bar.
@@ -60,14 +61,25 @@ final class Menus {
             Map.entry("kit.upgrade", "kit"),
             Map.entry("kit.backup", "export"),
             Map.entry("kit.backupKit", "export"),
+            Map.entry("kit.repair", "warning"),
             Map.entry("view.export", "export"),
             Map.entry("run", "play"),
             Map.entry("run.stop", "stop"),
             Map.entry("panel.new", "add"),
             Map.entry("file.close", "close"),
             Map.entry("session.toggle", "plug"),
+            Map.entry("session.checkpoint", "checkpoint"),
+            Map.entry("session.fresh", "fresh"),
+            Map.entry("session.rewrite", "markdown"),
+            Map.entry("session.copyDetails", "copy"),
+            Map.entry("session.clone", "copy"),
+            Map.entry("session.remove", "close"),
             Map.entry("view.changes", "diff"),
             Map.entry("connection.toggle", "plug"),
+            Map.entry("connection.test", "check"),
+            Map.entry("connection.copyDetails", "copy"),
+            Map.entry("connection.clone", "copy"),
+            Map.entry("connection.remove", "close"),
             Map.entry("terminal.start", "terminal-start"),
             Map.entry("terminal.stop", "terminal-stop"),
             Map.entry("terminal.restart", "terminal-restart"));
@@ -169,14 +181,19 @@ final class Menus {
         }
         put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle", "terminal.start", "terminal.stop", "terminal.restart");
         put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "transcript.clear", "panel.bindSession", "session.dialog",
-                "session.import", "session.checkpointThreshold");
+                "session.import", "session.checkpointThreshold", "session.checkpoint", "session.fresh", "session.rewrite", "session.copyDetails",
+                "session.clone", "session.remove");
+        for (final TranscriptWidget.Move m : TranscriptWidget.Move.values()) {
+            a.put(m.id, "Session");
+        }
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
-        put(a, "Connection", "server.start", "server.stop", "edge.start", "edge.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
+        put(a, "Connection", "server.start", "server.stop", "edge.start", "edge.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog",
+                "connection.test", "connection.copyDetails", "connection.clone", "connection.remove");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");
-        put(a, "Kit", "kit.upgrade", "kit.backup", "kit.backupKit");
+        put(a, "Kit", "kit.upgrade", "kit.backup", "kit.backupKit", "kit.repair");
         put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");

@@ -58,7 +58,7 @@ class SubagentViewTest {
         final Path projects = tmp.resolve("projects");
         subagents = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
         final Path exe = tmp.resolve("fake-claude.sh");
-        try (InputStream in = getClass().getResourceAsStream("/fake-claude.sh")) {
+        try (final InputStream in = getClass().getResourceAsStream("/fake-claude.sh")) {
             Files.write(exe, in.readAllBytes());
         }
         exe.toFile().setExecutable(true);

@@ -58,6 +58,14 @@ public final class LocalLinks {
         return file.getFileName() == null ? Optional.empty() : Optional.of(file);
     }
 
+    /**
+     * Whether {@code destination} names a file relative to a folder, as {@link #file} reads it: not an absolute path,
+     * a {@code file:} URL, a web address or anything else that names no file.
+     */
+    public static boolean isRelative(final String destination) {
+        return file(null, destination).isEmpty() && file(Path.of("/"), destination).isPresent();
+    }
+
     private static int indexOfAny(final String s, final char a, final char b) {
         final int i = s.indexOf(a);
         final int j = s.indexOf(b);

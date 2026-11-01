@@ -64,6 +64,39 @@ final class Paras {
         return r;
     }
 
+    /** Adds the text of each box the view of {@code p} places, in its order, as its {@code collect} does. */
+    static void findTexts(final Para p, final List<String> out) {
+        switch (p) {
+            case Para.Text t -> {
+                final String s = spansText(t.spans());
+                if (!s.isEmpty()) {
+                    out.add(s);
+                }
+            }
+            case Para.Code c -> out.add(Rich.detab(c.text()));
+            case Para.Table t -> {
+                final int columns = t.rows().stream().mapToInt(List::size).max().orElse(0);
+                for (final List<List<Span>> row : t.rows()) {
+                    for (int c = 0; c < columns; c++) {
+                        out.add(spansText(c < row.size() ? row.get(c) : List.of()));
+                    }
+                }
+            }
+            case Para.Rule r -> {
+                // nothing to find
+            }
+        }
+    }
+
+    /** The text {@link #rich} makes of {@code spans}: the spans' text, tabs expanded across them. */
+    private static String spansText(final List<Span> spans) {
+        final StringBuilder sb = new StringBuilder();
+        for (final Span sp : spans) {
+            sb.append(sp.text());
+        }
+        return Rich.detab(sb.toString());
+    }
+
     static void paintBox(final Graphics2D g, final TextBox b, final int x, final int y, final Rectangle clip, final Marks marks) {
         final int[] sel = marks.selection(b);
         b.paint(g, x, y, clip.y - y, clip.y + clip.height - y, sel[0], sel[1], marks.finds(b), marks.currentFind(b));

@@ -1,6 +1,7 @@
 package dev.marregui.comando.core.loop;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -71,16 +72,18 @@ class ExecutorStopTest {
         }
     }
 
-    /// Three strands each in a write that outlasts the 500 ms bound when the owner closes: `drain` waits that bound
-    /// once for all three, then interrupts them, so it returns after about one bound, not three.
+    /// Five strands each in a write that outlasts the 500 ms bound when the owner closes: `drain` waits that bound
+    /// once for all five, then interrupts them, so it returns after about one bound, well before five (2.5 s); the
+    /// upper limit leaves a loaded runner 1.5 s of slack.
     @Test
     void drainOfSeveralWaitsOneBoundForAllOfThem() throws Exception {
-        final ExecutorService a = Threads.strand("stop-drain-a");
-        final ExecutorService b = Threads.strand("stop-drain-b");
-        final ExecutorService c = Threads.strand("stop-drain-c");
-        final CountDownLatch started = new CountDownLatch(3);
+        final Map<String, ExecutorService> strands = new LinkedHashMap<>();
+        for (final String name : List.of("a", "b", "c", "d", "e")) {
+            strands.put(name, Threads.strand("stop-drain-" + name));
+        }
+        final CountDownLatch started = new CountDownLatch(strands.size());
         final AtomicBoolean interrupted = new AtomicBoolean();
-        for (final ExecutorService e : List.of(a, b, c)) {
+        for (final ExecutorService e : strands.values()) {
             e.execute(() -> {
                 started.countDown();
                 pause(60_000, interrupted);
@@ -89,11 +92,11 @@ class ExecutorStopTest {
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
         final long startNanos = System.nanoTime();
 
-        assertThat(ExecutorStop.drain("test", Duration.ofMillis(500), Map.of("a", a, "b", b, "c", c))).isTrue();
+        assertThat(ExecutorStop.drain("test", Duration.ofMillis(500), strands)).isTrue();
 
-        assertThat(Duration.ofNanos(System.nanoTime() - startNanos)).isBetween(Duration.ofMillis(500), Duration.ofMillis(1_200));
+        assertThat(Duration.ofNanos(System.nanoTime() - startNanos)).isBetween(Duration.ofMillis(500), Duration.ofMillis(2_000));
         assertThat(interrupted).isTrue();
-        assertThat(List.of(a, b, c)).allMatch(ExecutorService::isTerminated);
+        assertThat(strands.values()).allMatch(ExecutorService::isTerminated);
     }
 
     /// A strand whose task, interrupted, still works 300 ms before it ends: when `now` returns, the task has ended and

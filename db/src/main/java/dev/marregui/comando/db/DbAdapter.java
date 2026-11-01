@@ -135,7 +135,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
             return;
         }
         testers.start("db-test-" + spec.name(), () -> {
-            try (Connection c = DriverManager.getConnection(spec.jdbcUrl(), Lane.driverProperties(spec))) {
+            try (final Connection c = DriverManager.getConnection(spec.jdbcUrl(), Lane.driverProperties(spec))) {
                 final boolean ok = c.isValid(10);
                 sink.dispatch(new Intent.ConnectionTested(spec.name(), ok, ok ? "reachable" : "not valid"));
             } catch (final SQLException e) {

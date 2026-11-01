@@ -475,7 +475,7 @@ class HtmlPaneTest {
             final AttributeSet a = e.getAttributes();
             if (a.getAttribute(StyleConstants.NameAttribute) == HTML.Tag.IMG) {
                 assertThat(found).as("one image").isEmpty();
-                for (Enumeration<?> names = a.getAttributeNames(); names.hasMoreElements(); ) {
+                for (final Enumeration<?> names = a.getAttributeNames(); names.hasMoreElements(); ) {
                     final Object name = names.nextElement();
                     if (name instanceof HTML.Attribute) {
                         found.put(name.toString(), String.valueOf(a.getAttribute(name)));

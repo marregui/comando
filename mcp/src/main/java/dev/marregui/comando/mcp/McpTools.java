@@ -27,7 +27,6 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.dispatch.Classifier;
-import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
@@ -126,17 +125,22 @@ public final class McpTools {
         this.audit = audit;
         this.clock = clock;
         this.approvalTimeout = approvalTimeout;
-        try (var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
+        try (final var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
             final ArrayNode first = (ArrayNode) json.readTree(in);
             final Set<String> names = new LinkedHashSet<>();
             first.forEach(d -> names.add(d.path("name").asString("")));
             builtIn = Set.copyOf(names);
-            actions = new ActionTools(sink, state);
+            actions = new ActionTools(sink, state, (session, kind, tool, input, summary) -> ask(session, kind, tool, input, summary, ""));
             definitions = first.deepCopy();
             definitions.addAll(actions.definitions(builtIn));
         } catch (final IOException e) {
             throw new UncheckedIOException("cannot read the tool definitions", e);
         }
+    }
+
+    /** The first tools' names, from {@code tools.json}; every other action of the registry is {@link ActionTools}'. */
+    Set<String> builtIn() {
+        return builtIn;
     }
 
     ArrayNode definitions() {
@@ -650,13 +654,14 @@ public final class McpTools {
             // session never starts it again (record 44)
             return Outcome.fail("session " + to + " is not running; a session another session prompts must be running: the user starts it");
         }
-        // a log panel takes no text, so the user would not see the prompt there
-        final List<PanelState> panels = s.panelsBoundToSession(to).stream().filter(p -> !readOnly.test(p.id())).toList();
-        if (panels.isEmpty()) {
+        // the prompt goes through the session's own panel, where the reducer puts it (PromptSession); a log panel takes no
+        // text, so the user would not see the prompt there
+        final Optional<PanelState> home = s.homePanel(to).filter(p -> !readOnly.test(p.id()));
+        if (home.isEmpty()) {
             return Outcome.fail("session " + to + " has no open panel that takes text; the prompt goes through its panel so the user "
                     + "sees it: the user opens one for it first");
         }
-        final PanelState panel = panels.getFirst();
+        final PanelState panel = home.get();
         final String prompt = fromLine(session) + '\n' + text;
         final ObjectNode input = json.createObjectNode();
         input.put("session", to);
@@ -664,9 +669,10 @@ public final class McpTools {
         input.put("text", prompt);
         audit.record(session, "call", "session_send", input.toString(), "sent");
         final int cursor = transcripts.of(to).size();
-        sink.dispatch(new Intent.EditPanel(panel.id(), prompt, EditMode.APPEND, session));
-        sink.dispatch(new Intent.RunText(panel.id(), prompt, Target.CLAUDE));
-        final boolean busy = s.session(to).map(SessionState::isBusy).orElse(false);
+        // PromptSession, not RunText: a prompt from another session goes through while the session's checkpoint runs, and
+        // queues behind it (record 130); RunText from a locked session's panel is refused
+        sink.dispatch(new Intent.PromptSession(to, prompt, session));
+        final boolean busy = s.session(to).map(x -> x.isBusy() || x.isCheckpointing()).orElse(false);
         return Outcome.ok("sent to " + to + " in panel " + panel.title() + (busy ? "; it is busy, so the prompt waits for its turn" : "")
                 + "; read what it does with session_read {\"session\": \"" + to + "\", \"after\": " + cursor + ", \"wait_seconds\": 300}");
     }
@@ -816,9 +822,9 @@ public final class McpTools {
         return String.join(", ", s.connections().stream().map(ConnectionState::name).toList());
     }
 
-    /** The rows as a table view shows them: SQL NULL as the text {@code null}, as a panel's result shows it. */
+    /** The rows as a table view shows them: a SQL NULL stays a null cell, told apart from the text "null" (FUI-11). */
     private static List<List<String>> viewRows(final QueryPort.Rows rows) {
-        return rows.rows().stream().map(row -> row.stream().map(c -> c == null ? "null" : c).toList()).toList();
+        return rows.rows(); // ViewSpec.Table copies each row and keeps its null cells
     }
 
     /**

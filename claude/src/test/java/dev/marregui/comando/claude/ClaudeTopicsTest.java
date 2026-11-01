@@ -100,7 +100,7 @@ class ClaudeTopicsTest {
         final AtomicInteger running = new AtomicInteger();
         final AtomicInteger most = new AtomicInteger();
         final List<String> read = new CopyOnWriteArrayList<>();
-        try (ClaudeTopics topics = new ClaudeTopics(source -> {
+        try (final ClaudeTopics topics = new ClaudeTopics(source -> {
             most.accumulateAndGet(running.incrementAndGet(), Math::max);
             try {
                 release.await(5, TimeUnit.SECONDS);

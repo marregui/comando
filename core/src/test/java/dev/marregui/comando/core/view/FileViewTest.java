@@ -54,7 +54,7 @@ class FileViewTest {
         assertThatThrownBy(() -> FileView.read(dir.resolve("nope.md"), 0)).hasMessage("no such file");
         assertThatThrownBy(() -> FileView.read(dir, 0)).hasMessage("not a file");
         final Path big = dir.resolve("big.log");
-        try (RandomAccessFile f = new RandomAccessFile(big.toFile(), "rw")) {
+        try (final RandomAccessFile f = new RandomAccessFile(big.toFile(), "rw")) {
             f.setLength(FileView.MAX_BYTES + 1);
         }
         assertThatThrownBy(() -> FileView.read(big, 0)).hasMessage("larger than 4 MB");

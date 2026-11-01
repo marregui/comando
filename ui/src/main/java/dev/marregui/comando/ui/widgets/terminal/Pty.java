@@ -37,7 +37,7 @@ final class Pty extends ProcessTtyConnector {
     static void preload() {
         try {
             Class.forName("com.pty4j.unix.PtyHelpers", true, Pty.class.getClassLoader());
-        } catch (ClassNotFoundException | LinkageError e) {
+        } catch (final ClassNotFoundException | LinkageError e) {
             System.getLogger(Pty.class.getName()).log(System.Logger.Level.DEBUG, "pty4j preload skipped: " + e);
         }
     }

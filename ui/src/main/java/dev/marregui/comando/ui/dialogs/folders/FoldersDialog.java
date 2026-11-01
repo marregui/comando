@@ -23,7 +23,6 @@ import javax.swing.WindowConstants;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
@@ -33,8 +32,9 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 /**
  * The Files tab's folders inside Claude Code's folder in a window over comando's: the {@link FoldersEditor}, Cancel
  * and Save, and {@link #USE_KIT} when comando runs on a kit. Save writes {@code folders.json} once, when something
- * changed, and is on only while every entry passes; Cancel, Esc and the window's close drop the edits, asking first
- * when there are any. EDT only.
+ * changed or an entry names an index file that does not exist yet in the kit or the brain (Save creates it), and is on
+ * only then and while every entry passes; Cancel, Esc and the window's close drop the edits, asking first when there
+ * are any. EDT only.
  */
 public final class FoldersDialog {
 
@@ -48,15 +48,15 @@ public final class FoldersDialog {
     private final ResourceActions.Questions questions;
     private final String title;
 
-    private FoldersDialog(final Window owner, final List<FolderRoot> folders, final RepoChanges repos, final IntentSink intents, final List<FolderRoot> kitFolders) {
+    private FoldersDialog(final Window owner, final List<FolderRoot> folders, final RepoChanges repos, final IntentSink intents,
+                          final List<FolderRoot> kitFolders, final List<Path> roots, final List<Path> indexRoots) {
         this.intents = intents;
         this.questions = ResourceActions.Questions.MODAL;
         this.title = title();
-        final String claude = HomeDir.shorten(HomeDir.claudeDir().toString());
-        editor = new FoldersEditor(folders, HomeDir.claudeDir(), repos, new FoldersEditor.Chooser() {
+        editor = new FoldersEditor(folders, roots, indexRoots, repos, new FoldersEditor.Chooser() {
             @Override
             public Optional<Path> folder(final Component parent, final Path start) {
-                return FileChoosers.directory(parent, "Choose a folder inside " + claude, start);
+                return FileChoosers.directory(parent, "Choose a folder", start);
             }
 
             @Override
@@ -76,8 +76,8 @@ public final class FoldersDialog {
         cancel.addActionListener(e -> cancel());
         save.putClientProperty("JButton.buttonType", "default");
         save.addActionListener(e -> save());
-        editor.onChange(() -> save.setEnabled(editor.valid()));
-        save.setEnabled(editor.valid());
+        editor.onChange(() -> save.setEnabled(saveOffered(editor)));
+        save.setEnabled(saveOffered(editor));
         final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
         buttons.add(cancel);
         buttons.add(save);
@@ -107,16 +107,35 @@ public final class FoldersDialog {
         dialog.setLocationRelativeTo(owner);
     }
 
-    /** The window's title: Claude Code's folder's folders ("~/.claude folders"). */
+    /**
+     * The window's title: what it holds, the Files tab's folders, which lie in Claude Code's folder, the kit or the
+     * brain, each anywhere (Miguel's decision of 2026-11-01), so no one folder names them.
+     */
     public static String title() {
-        return HomeDir.shorten(HomeDir.claudeDir().toString()) + " folders";
+        return "Files tab folders";
     }
 
     /**
-     * Opens the window over {@code owner}; returns when it closes. Offers {@link #USE_KIT} when the kit has folders.
+     * Opens the window over {@code owner}; returns when it closes. Offers {@link #USE_KIT} when the kit has folders. A
+     * folder lies in one of {@code roots}: Claude Code's folder, and the kit's and the brain's, which may lie anywhere.
+     * Save creates an index file named but missing only inside one of {@code indexRoots}: the kit's folder and the
+     * brain, none without a kit.
      */
-    public static void show(final Window owner, final List<FolderRoot> folders, final RepoChanges repos, final IntentSink intents, final List<FolderRoot> kitFolders) {
-        new FoldersDialog(owner, folders, repos, intents, kitFolders).dialog.setVisible(true);
+    public static void show(final Window owner, final List<FolderRoot> folders, final RepoChanges repos, final IntentSink intents,
+                            final List<FolderRoot> kitFolders, final List<Path> roots, final List<Path> indexRoots) {
+        new FoldersDialog(owner, folders, repos, intents, kitFolders, roots, indexRoots).dialog.setVisible(true);
+    }
+
+    /**
+     * Save is on when the list is valid and saving changes something, as in the kit jobs window: the list differs from
+     * what was saved, or an entry names an index file that does not exist yet, which Save creates.
+     */
+    static boolean saveOffered(final FoldersEditor editor) {
+        return editor.valid() && changesSomething(editor);
+    }
+
+    private static boolean changesSomething(final FoldersEditor editor) {
+        return editor.dirty() || editor.indexesToCreate();
     }
 
     private void save() {
@@ -124,7 +143,7 @@ public final class FoldersDialog {
         if (folders.isEmpty()) {
             return;
         }
-        if (editor.dirty()) {
+        if (changesSomething(editor)) {
             intents.dispatch(new Intent.SaveFolders(folders.get(), editor.base()));
         }
         dialog.dispose();

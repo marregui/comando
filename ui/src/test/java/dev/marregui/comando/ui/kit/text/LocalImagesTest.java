@@ -171,7 +171,7 @@ class LocalImagesTest {
         assertThat(again).as("changed on disk: drawn again").isNotEqualTo(p)
                 .isInstanceOfSatisfying(LocalImages.Picture.Ready.class,
                         r -> assertThat(new Color(readImage(r.file()).getRGB(120, 60), true)).isEqualTo(Color.BLUE));
-        try (var files = Files.list(cache)) {
+        try (final var files = Files.list(cache)) {
             assertThat(files.map(f -> f.getFileName().toString())).as("no temporary files left").allMatch(n -> n.endsWith(".png") && !n.startsWith("."));
         }
     }
@@ -206,7 +206,7 @@ class LocalImagesTest {
         final Path broken = svg("broken.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect");
         assertThat(read(images, broken)).isInstanceOf(LocalImages.Picture.Unavailable.class);
         final Path big = dir.resolve("big.png");
-        try (RandomAccessFile f = new RandomAccessFile(big.toFile(), "rw")) {
+        try (final RandomAccessFile f = new RandomAccessFile(big.toFile(), "rw")) {
             f.setLength(LocalImages.MAX_BYTES + 1);
         }
         assertThat(read(images, big)).isEqualTo(new LocalImages.Picture.Unavailable("big.png is over 32 MB"));
@@ -256,7 +256,7 @@ class LocalImagesTest {
     }
 
     private static List<Path> pngsIn(final Path dir) throws Exception {
-        try (var files = Files.list(dir)) {
+        try (final var files = Files.list(dir)) {
             return files.filter(f -> f.getFileName().toString().endsWith(".png")).toList();
         }
     }

@@ -50,6 +50,7 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JToolTip;
@@ -86,7 +87,6 @@ import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.TopicPort;
-import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
@@ -228,7 +228,7 @@ class UiKeysTest {
         final IntentLog.Replay replay = IntentLog.read(Path.of(getClass().getResource("/replay/snapshot.jsonl").toURI()));
         final RecordingPorts ports = new RecordingPorts();
         final Deferred effects = new Deferred();
-        final StateLoop loop = new StateLoop(replay.initial(), new Reducer(Clock.SYSTEM), effects);
+        final StateLoop loop = replay.loop(Clock.SYSTEM, effects);
         final List<Intent> sent = new CopyOnWriteArrayList<>();
         final IntentSink recording = i -> {
             sent.add(i);
@@ -260,8 +260,8 @@ class UiKeysTest {
     void aDocumentToReadTakesTheWholeHeightUntilTheLowerAreaIsAskedFor() throws Exception {
         final Window w = open("mac");
         settle(w);
-        final javax.swing.JSplitPane split = await("the lower split", () -> find(w.frame(), javax.swing.JSplitPane.class,
-                sp -> sp.getOrientation() == javax.swing.JSplitPane.VERTICAL_SPLIT).orElse(null), WAIT_MILLIS);
+        final JSplitPane split = await("the lower split", () -> find(w.frame(), JSplitPane.class,
+                sp -> sp.getOrientation() == JSplitPane.VERTICAL_SPLIT).orElse(null), WAIT_MILLIS);
         final Component lowerArea = onEdt(split::getBottomComponent);
         final PanelId first = w.loop().state().focused();
         assertThat(onEdt(lowerArea::isVisible)).as("the session's panel shows the lower area").isTrue();
@@ -297,6 +297,16 @@ class UiKeysTest {
         assertThat(onEdt(() -> split.getHeight() - split.getDividerLocation())).isGreaterThan(60);
     }
 
+    /// Every act of a session's or a connection's menu in the sidebar is in the palette too: copy details, clone,
+    /// remove, and a connection's test.
+    @Test
+    void theSidebarMenusActsAreInThePalette() throws Exception {
+        final Window w = open("mac");
+        final List<String> ids = onEdt(() -> w.ui().commands().stream().map(Command::id).toList());
+        assertThat(ids).contains("session.copyDetails", "session.clone", "session.remove", "connection.test",
+                "connection.copyDetails", "connection.clone", "connection.remove");
+    }
+
     private static Map<String, KeyStroke> keys(final Window w) {
         final Map<String, KeyStroke> keys = new LinkedHashMap<>();
         for (final Command c : w.ui().commands()) {
@@ -312,12 +322,12 @@ class UiKeysTest {
     @Test
     void theOtherDesktopsKeysAreMacOssWithCtrlForCmdButForTheMovedOnesAndNoTwoCommandsShareAKey() throws Exception {
         Map<String, KeyStroke> mac;
-        try (Window w = open("mac")) {
+        try (final Window w = open("mac")) {
             mac = keys(w);
         }
         open.clear();
         Map<String, KeyStroke> other;
-        try (Window w = open("linux")) {
+        try (final Window w = open("linux")) {
             other = keys(w);
         }
         open.clear();

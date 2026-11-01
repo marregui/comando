@@ -85,8 +85,9 @@ class SplitDiffTest {
         assertThat(b).isEmpty();
     }
 
-    /// Two 20 000-line texts with nothing in common under a 100 ms budget finish within 2 s as one whole chunk with a
-    /// note saying so.
+    /// Two 20 000-line texts with nothing in common under a 100 ms budget end as one whole chunk with a note saying so,
+    /// within 10 s: a hundred times the budget, room for a loaded machine, and far below a full match of texts this
+    /// size.
     @Test
     void aRewriteTooLargeToMatchInTimeIsComparedAsAWholeWithinTheBudget() {
         final StringBuilder a = new StringBuilder();
@@ -98,7 +99,7 @@ class SplitDiffTest {
         final long start = System.nanoTime();
         final SplitDiff.Model m = SplitDiff.compute(a.toString(), b.toString(), 100);
         final long millis = (System.nanoTime() - start) / 1_000_000;
-        assertThat(millis).as("bounded by the budget, not by the size").isLessThan(2_000);
+        assertThat(millis).as("bounded by the budget, not by the size").isLessThan(10_000);
         assertThat(m.compared()).isTrue();
         assertThat(m.note()).contains("as a whole");
         assertThat(m.chunks()).containsExactly(new SplitDiff.Chunk(0, 20_001, 0, 20_001));

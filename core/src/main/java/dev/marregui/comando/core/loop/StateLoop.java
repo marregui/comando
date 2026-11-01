@@ -2,7 +2,6 @@ package dev.marregui.comando.core.loop;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -80,6 +79,8 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     }
 
     private final LinkedBlockingQueue<Intent> queue = new LinkedBlockingQueue<>();
+    /** The queue's depth and peak, for the metrics log ({@link Queues}). */
+    private final Queues.Gauge queued = Queues.gauge("intents");
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<IntentObserver> observers = new CopyOnWriteArrayList<>();
     private final Reducer reducer;
@@ -92,6 +93,11 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     private final Consumer<Stall> stalls;
     private volatile AppState state;
     private volatile boolean halted;
+    /**
+     * Set by {@link #close} when the loop's thread outlives the wait for it: the parts that close after the loop are
+     * going, so the intents still applied hand out no effects from then on. Read by the loop's thread per effect.
+     */
+    private volatile boolean outlived;
     /**
      * The {@link Error} that stopped the loop's thread; null while it runs. Written once, by the loop's thread as it
      * stops; read by {@link #dispatch} on any thread, to refuse intents from then on, and by tests.
@@ -144,6 +150,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             return;
         }
         if (!halted) {
+            queued.added();
             queue.add(intent);
         }
     }
@@ -180,11 +187,13 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             Intent intent;
             try {
                 intent = queue.take();
+                queued.removed();
             } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
             if (intent == STOP) {
+                Queues.drop("intents", queued);
                 return;
             }
             try {
@@ -227,6 +236,11 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             }
             state = t.state();
             for (final Effect effect : t.effects()) {
+                if (outlived) {
+                    LOG.log(System.Logger.Level.DEBUG, "effect dropped, the loop outlived its close [effect="
+                            + effect.getClass().getSimpleName() + ']');
+                    continue;
+                }
                 enter(start, "effect " + effect.getClass().getSimpleName());
                 try {
                     effects.handle(effect);
@@ -318,18 +332,36 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         return sb.toString();
     }
 
-    /** Stops after the intents already queued. Idempotent. */
+    /** How long {@link #close} waits for the loop to apply what was queued before it. */
+    static final long CLOSE_MILLIS = 2_000;
+
+    /** Whether the loop's thread outlived {@link #close}, so its effects are dropped; for tests. */
+    boolean outlived() {
+        return outlived;
+    }
+
+    /**
+     * Stops after the intents already queued, waiting {@link #CLOSE_MILLIS} at most. A loop still running then is
+     * logged with its stack and hands out no effects from then on. Idempotent.
+     */
     @Override
     public void close() {
         if (halted) {
             return;
         }
         halted = true; // later dispatches are dropped; everything queued before the marker still applies
+        queued.added();
         queue.add(STOP);
         try {
-            thread.join(TimeUnit.SECONDS.toMillis(2));
+            thread.join(CLOSE_MILLIS);
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+        if (thread.isAlive()) {
+            // the parts after the loop close now: what it still applies reaches none of them
+            outlived = true;
+            LOG.log(System.Logger.Level.WARNING, "the reducer did not stop within " + CLOSE_MILLIS
+                    + " ms; its effects are dropped from now on:\n" + format(thread.getStackTrace()));
         }
         // a failure counted since its last line is told before the loop goes
         reduceFailures.flush();

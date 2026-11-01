@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,6 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.Clock;
-import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
@@ -42,6 +42,7 @@ import dev.marregui.comando.ui.shell.ComandoUi;
 import dev.marregui.comando.ui.shell.Setup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// Replays recorded intent logs against the real Swing shell, with every adapter replaced by a recording fake. Needs a
 /// display: run with `./gradlew :app:uiTest` (on Linux under `xvfb-run`).
@@ -76,7 +77,7 @@ class UiReplayTest {
         final IntentLog.Replay replay = IntentLog.read(Path.of(getClass().getResource("/replay/snapshot.jsonl").toURI()));
         final RecordingPorts ports = new RecordingPorts();
         final Deferred effects = new Deferred();
-        try (StateLoop loop = new StateLoop(replay.initial(), new Reducer(Clock.SYSTEM), effects)) {
+        try (final StateLoop loop = replay.loop(Clock.SYSTEM, effects)) {
             final ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(loop, loop::state, loop, new TranscriptRegistry(), new ResultRegistry(),
                     new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, null, null, Setup.NONE,
                     "replay", null, null, () -> { }));
@@ -88,14 +89,17 @@ class UiReplayTest {
                     loop.dispatch(i);
                 }
                 final AppState end = settle(loop);
-                Thread.sleep(500);
-                SwingUtilities.invokeAndWait(() -> check(end));
+                // the window shows the settled state once the render it posted has run: wait for it, bounded
+                await().atMost(Duration.ofSeconds(10)).ignoreExceptions().untilAsserted(() -> SwingUtilities.invokeAndWait(() -> check(end)));
                 shoot(Path.of("build/reports/replay/snapshot.png"));
             }
         }
     }
 
-    /** Waits until the state stops changing; the loop has no other idle signal. */
+    /**
+     * Waits until the state stops changing for 100 ms; the loop has no other idle signal. Fails when it still changes
+     * after 5 s, rather than checking the window against a state on its way.
+     */
     private static AppState settle(final StateLoop loop) throws InterruptedException {
         AppState s = loop.state();
         for (int i = 0; i < 50; i++) {
@@ -106,7 +110,7 @@ class UiReplayTest {
             }
             s = next;
         }
-        return s;
+        throw new AssertionError("the state still changed after 5 s of replay");
     }
 
     private static void check(final AppState s) {

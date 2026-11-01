@@ -30,21 +30,26 @@ final class DecisionRules {
     private DecisionRules() {
     }
 
-    /** A session's checkpoint held a decision back: it joins the Later group, newest last. A blank title is dropped. */
+    /**
+     * A session's checkpoint held a decision back: it joins the Later group, newest last. A blank title is dropped. Its
+     * id comes from the state's counter, which never goes back, so an id read earlier never names a newer decision.
+     */
     static Transition heldBack(final Clock clock, final AppState s, final Intent.DecisionHeldBack i) {
         if (i.title() == null || i.title().isBlank()) {
             return Transition.of(s);
         }
-        long id = 1;
+        // the counter starts above every id a kept decision holds, here and across restarts (read)
+        AppState counted = s;
         for (final Decision d : s.later()) {
-            id = Math.max(id, d.id() + 1);
+            counted = counted.withIdsFrom(d.id() + 1);
         }
+        final long id = counted.nextId();
         final List<Decision> next = new ArrayList<>(s.later());
         next.add(new Decision(id, i.session(), i.title().strip(), i.detail() == null ? "" : i.detail().strip(), clock.millis()));
         while (next.size() > MAX_KEPT) {
             next.removeFirst();
         }
-        return saved(s.withLater(next));
+        return saved(counted.withIdTaken().withLater(next));
     }
 
     /** A checkpoint the user started settled these decisions; ids no longer kept change nothing. */
@@ -54,9 +59,16 @@ final class DecisionRules {
         return rest.size() == s.later().size() ? Transition.of(s) : saved(s.withLater(rest));
     }
 
-    /** The decisions {@code decisions.json} holds, read at start; nothing is written back. */
+    /**
+     * The decisions {@code decisions.json} holds, read at start; nothing is written back. Ids given from then on start
+     * above the highest one given before.
+     */
     static Transition read(final AppState s, final Intent.DecisionsRead i) {
-        return Transition.of(s.withLater(i.decisions()));
+        AppState next = s.withLater(i.decisions()).withIdsFrom(i.lastId() + 1);
+        for (final Decision d : i.decisions()) {
+            next = next.withIdsFrom(d.id() + 1);
+        }
+        return Transition.of(next);
     }
 
     /** Dismiss: the decision leaves unasked. */
@@ -76,7 +88,7 @@ final class DecisionRules {
                     : notice(clock, s, Notice.Level.WARN, "No session to settle it in: open a session with a checkpoint command"));
         }
         final String command = s.session(target.get()).map(x -> x.spec().checkpoint()).orElse("");
-        return TurnRules.sessionCommand(clock, s, target.get(), command);
+        return TurnRules.sessionCommand(clock, s, target.get(), command, i.from());
     }
 
     /**
@@ -97,6 +109,7 @@ final class DecisionRules {
     }
 
     private static Transition saved(final AppState next) {
-        return new Transition(next, List.of(new Effect.SaveDecisions(next.later())));
+        // every id given so far is below the counter
+        return new Transition(next, List.of(new Effect.SaveDecisions(next.later(), next.nextId() - 1)));
     }
 }

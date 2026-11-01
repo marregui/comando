@@ -306,6 +306,14 @@ class ToolCallItem extends Item {
     }
 
     @Override
+    void dropLayout() {
+        built = null;
+        title = null;
+        input = null;
+        result = null;
+    }
+
+    @Override
     int doLayout(final int w, final Style s) {
         final Block.ToolCall c = call();
         if (built != s) {
@@ -377,32 +385,49 @@ class ToolCallItem extends Item {
         if (diff != null) {
             return diff(diff, s);
         }
+        // what the call is given names files and addresses as its result does: links (record 108)
+        return new Rich(s.monoSmall, c.name().equals("Bash") ? s.accent : s.text).append(plainInput(c, in)).linked(s.link);
+    }
+
+    /** What a call that edits nothing is given, as its card shows it: the command, the prompt, or the JSON. */
+    private static String plainInput(final Block.ToolCall c, final JsonNode in) {
         return switch (c.name()) {
-            // what the call is given names files and addresses as its result does: links (record 108)
-            case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asString("")).linked(s.link);
-            case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asString("")).linked(s.link);
-            default -> in.isObject() && !in.isEmpty()
-                    ? new Rich(s.monoSmall, s.text).append(Items.clipLines(Json.pretty(in), Items.MAX_INPUT_LINES)).linked(s.link)
-                    : new Rich(s.monoSmall, s.text);
+            case "Bash" -> "$ " + in.path("command").asString("");
+            case "Agent", "Task" -> in.path("prompt").asString("");
+            default -> in.isObject() && !in.isEmpty() ? Items.clipLines(Json.pretty(in), Items.MAX_INPUT_LINES) : "";
         };
     }
 
-    private static Rich diff(final List<String> unified, final Style s) {
-        final List<String> lines = unified.stream().map(Rich::detab).toList();
+    /** The text of the input box, as {@link #inputRich} makes it, without fonts or links. */
+    private static String inputText(final Block.ToolCall c, final JsonNode in) {
+        final List<String> diff = editDiff(c, in);
+        return Rich.detab(diff != null ? diffText(diff.stream().map(Rich::detab).toList()) : plainInput(c, in));
+    }
+
+    /** An edit's unified diff as the card shows it: at most {@link Items#MAX_INPUT_LINES} lines, then how many more. */
+    private static String diffText(final List<String> lines) {
         final StringBuilder text = new StringBuilder();
-        final List<Color> backgrounds = new ArrayList<>();
         final int shown = Math.min(lines.size(), Items.MAX_INPUT_LINES);
         for (int i = 0; i < shown; i++) {
-            final String l = lines.get(i);
-            text.append(i == 0 ? "" : "\n").append(l);
-            backgrounds.add(Diffs.isAdded(i, l) ? Theme.content().added : Diffs.isRemoved(i, l) ? Theme.content().removed : null);
+            text.append(i == 0 ? "" : "\n").append(lines.get(i));
         }
         if (lines.isEmpty()) {
             text.append("(no changes)");
         } else if (shown < lines.size()) {
             text.append("\n… ").append(lines.size() - shown).append(" more lines");
         }
-        final Rich r = new Rich(s.monoSmall, s.text).append(text.toString()).lineBackgrounds(backgrounds);
+        return text.toString();
+    }
+
+    private static Rich diff(final List<String> unified, final Style s) {
+        final List<String> lines = unified.stream().map(Rich::detab).toList();
+        final List<Color> backgrounds = new ArrayList<>();
+        final int shown = Math.min(lines.size(), Items.MAX_INPUT_LINES);
+        for (int i = 0; i < shown; i++) {
+            final String l = lines.get(i);
+            backgrounds.add(Diffs.isAdded(i, l) ? Theme.content().added : Diffs.isRemoved(i, l) ? Theme.content().removed : null);
+        }
+        final Rich r = new Rich(s.monoSmall, s.text).append(diffText(lines)).lineBackgrounds(backgrounds);
         int at = 0;
         for (int i = 0; i < shown; i++) {
             final String l = lines.get(i);
@@ -415,14 +440,16 @@ class ToolCallItem extends Item {
     }
 
     private static Rich resultRich(final Block.ToolCall c, final Style s) {
+        final Color color = c.status() == Block.ToolStatus.ERROR && !c.isSubagent() ? Theme.DANGER : s.muted;
+        return new Rich(s.monoSmall, color).append(plainResult(c)).linked(s.link);
+    }
+
+    /** The result as the card shows it: a sub-agent's report, or the result clipped to its lines. */
+    private static String plainResult(final Block.ToolCall c) {
         if (c.resultText().isEmpty()) {
-            return new Rich(s.monoSmall, s.muted);
+            return "";
         }
-        if (c.isSubagent()) {
-            return new Rich(s.monoSmall, s.muted).append("Report: " + Items.clipLines(c.resultText(), 60)).linked(s.link);
-        }
-        return new Rich(s.monoSmall, c.status() == Block.ToolStatus.ERROR ? Theme.DANGER : s.muted)
-                .append(Items.clipLines(c.resultText(), Items.MAX_RESULT_LINES)).linked(s.link);
+        return c.isSubagent() ? "Report: " + Items.clipLines(c.resultText(), 60) : Items.clipLines(c.resultText(), Items.MAX_RESULT_LINES);
     }
 
     /** The status layout for {@code text}, rebuilt only when the text or the style changed. */
@@ -507,6 +534,25 @@ class ToolCallItem extends Item {
         }
         for (int i = 0; i < children.size() && i < childTops.length; i++) {
             children.get(i).collect(bx + CHILD_INDENT, cy + childTops[i], out);
+        }
+    }
+
+    @Override
+    void findTexts(final List<String> out) {
+        if (!fold.isOpen()) {
+            return;
+        }
+        final Block.ToolCall c = call();
+        final String in = inputText(c, Json.parse(c.inputJson()));
+        if (!in.isEmpty()) {
+            out.add(in);
+        }
+        final String result = Rich.detab(plainResult(c));
+        if (!result.isEmpty()) {
+            out.add(result);
+        }
+        for (final Item child : children) {
+            child.findTexts(out);
         }
     }
 

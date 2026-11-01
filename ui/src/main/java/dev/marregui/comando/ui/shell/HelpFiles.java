@@ -74,7 +74,7 @@ final class HelpFiles {
 
     static Path writeTutorial(final Path home, final Move move) throws IOException {
         String text;
-        try (InputStream in = HelpFiles.class.getResourceAsStream(TUTORIAL_RESOURCE)) {
+        try (final InputStream in = HelpFiles.class.getResourceAsStream(TUTORIAL_RESOURCE)) {
             if (in == null) {
                 throw new IOException("the tutorial is not in this build");
             }

@@ -5,10 +5,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import javax.swing.JComponent;
@@ -26,7 +28,8 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
  * One terminal per editor panel, shown for the focused panel. A shell starts the first time its panel's
  * terminal is shown, in the working directory of the panel's session at that moment, else the home
  * directory; an exit bar and a restart use the directory of the panel's session in the latest rendered
- * state when the bar shows and when Restart is clicked.
+ * state when the bar shows and when Restart is clicked. A shell the user stopped stays stopped until it is
+ * started, restarted or clicked, or its tab is shown again.
  */
 public final class TerminalTabs {
 
@@ -35,6 +38,10 @@ public final class TerminalTabs {
     private final Map<PanelId, TerminalWidget> terminals = new HashMap<>();
     private final Function<Path, TerminalWidget> factory;
     private PanelId shown;
+    /** The panels whose shell the user stopped: a render does not start them again. */
+    private final Set<PanelId> stopped = new HashSet<>();
+    /** The panel whose terminal the last render showed with the Terminal tab in front; null when the tab was not. */
+    private PanelId visibleFor;
     /** The latest state rendered or acted on: where each terminal's exit bar and Restart read the directory. */
     private AppState last;
 
@@ -52,9 +59,10 @@ public final class TerminalTabs {
     }
 
     /**
-     * Shows the focused panel's terminal; starts its shell when {@code visible} and not yet started. Every
-     * terminal whose shell is not running takes its panel's current directory, so the next start, a send
-     * or a restart opens the shell where the panel's session works.
+     * Shows the focused panel's terminal; starts its shell when {@code visible} and not yet started, unless the user
+     * stopped it and the tab has stayed in front on the same panel since. Every terminal whose shell is not running
+     * takes its panel's current directory, so the next start, a send or a restart opens the shell where the panel's
+     * session works.
      */
     public void render(final AppState s, final boolean visible) {
         last = s;
@@ -64,7 +72,13 @@ public final class TerminalTabs {
             }
         }
         final TerminalWidget t = show(s);
-        if (visible && !t.isStarted()) {
+        final PanelId id = s.focused();
+        if (t.isStarted() || visible && !id.equals(visibleFor)) {
+            // started again by a click, or its tab shown anew: a stop no longer holds
+            stopped.remove(id);
+        }
+        visibleFor = visible ? id : null;
+        if (visible && !t.isStarted() && !stopped.contains(id)) {
             t.start();
         }
     }
@@ -113,6 +127,7 @@ public final class TerminalTabs {
     /** Restarts the focused panel's shell in the working directory of the panel's session now. */
     public void restartFocused(final AppState s) {
         final TerminalWidget t = show(s);
+        stopped.remove(s.focused());
         t.close();
         t.setDirectory(directory(s, s.focusedPanel()));
         t.start();
@@ -127,16 +142,21 @@ public final class TerminalTabs {
     /** Starts the focused panel's shell, when it is not running, in the working directory of the panel's session. */
     public void startFocused(final AppState s) {
         final TerminalWidget t = show(s);
+        stopped.remove(s.focused());
         if (!t.isRunning()) {
             t.start();
         }
     }
 
-    /** Stops the focused panel's shell and what runs in it, and frees its emulator. */
+    /**
+     * Stops the focused panel's shell and what runs in it, and frees its emulator; it stays stopped until it is
+     * started, restarted or clicked, or its tab is shown again.
+     */
     public void stopFocused() {
         final TerminalWidget t = focused();
         if (t != null) {
             t.close();
+            stopped.add(shown);
         }
     }
 
@@ -146,6 +166,7 @@ public final class TerminalTabs {
      */
     public void focusShown(final AppState s) {
         final TerminalWidget t = show(s);
+        stopped.remove(s.focused());
         if (!t.isRunning()) {
             t.start();
         }
@@ -209,6 +230,7 @@ public final class TerminalTabs {
             t.close();
             cards.remove(t.component());
         }
+        stopped.remove(panel);
         if (panel.equals(shown)) {
             shown = null;
         }
@@ -218,7 +240,9 @@ public final class TerminalTabs {
         terminals.values().forEach(TerminalWidget::close);
         terminals.clear();
         cards.removeAll();
+        stopped.clear();
         shown = null;
+        visibleFor = null;
     }
 
     TerminalWidget terminal(final PanelId panel) {

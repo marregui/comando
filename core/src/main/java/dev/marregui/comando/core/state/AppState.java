@@ -1,9 +1,12 @@
 package dev.marregui.comando.core.state;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
@@ -120,6 +123,63 @@ public record AppState(
 
     public Optional<ViewState> view(final long id) {
         return find(views, v -> v.id() == id);
+    }
+
+    /**
+     * Who created {@code session}, then who created that one, and so on up to the family's root, nearest first; the
+     * user is not in it, so a session the user made has none (record 121). The walk follows every link, however deep;
+     * a chain that loops ends where a name comes again, so it always ends, within the number of sessions.
+     */
+    public Set<String> creators(final String session) {
+        final Set<String> chain = new LinkedHashSet<>();
+        String at = session;
+        while (true) {
+            final Optional<SessionState> x = session(at);
+            if (x.isEmpty() || x.get().spec().createdBy().isEmpty() || !chain.add(x.get().spec().createdBy())) {
+                break;
+            }
+            at = x.get().spec().createdBy();
+        }
+        return Collections.unmodifiableSet(chain);
+    }
+
+    /**
+     * The root of {@code session}'s creation family: the last of its {@link #creators}, or itself when it has none;
+     * when that root is a session that a removal cut off from its own root, the family that removal recorded
+     * ({@link dev.marregui.comando.core.model.SessionSpec#family}). A name that is no session (a client) is its own
+     * root.
+     */
+    public String familyRoot(final String session) {
+        String top = session;
+        for (final String x : creators(session)) {
+            top = x;
+        }
+        final Optional<SessionState> root = session(top);
+        return root.isPresent() && !root.get().spec().family().isEmpty() ? root.get().spec().family() : top;
+    }
+
+    /**
+     * Whether {@code a} and {@code b} belong to one creation family: one is the other, their chains of creators
+     * ({@link #creators}, each with the session itself) meet, or they have one {@link #familyRoot}. A family is a
+     * session, its creator chain, and every session it or any of its creators made, so siblings and cousins are in it,
+     * also after the user removed their root; the user is in none (record 121, rule 1). A caller that is no session (a
+     * client) is its own chain.
+     */
+    public boolean sameFamily(final String a, final String b) {
+        if (a.equals(b)) {
+            return true;
+        }
+        final Set<String> lineage = new LinkedHashSet<>(creators(a));
+        lineage.add(a);
+        if (lineage.contains(b)) {
+            return true;
+        }
+        for (final String x : creators(b)) {
+            if (lineage.contains(x)) {
+                return true;
+            }
+        }
+        return familyRoot(a).equals(familyRoot(b));
     }
 
     /** The open panels bound to the session: its own panel first, then the documents attached to it. */
@@ -261,6 +321,12 @@ public record AppState(
     /** Returns this state with the id counter advanced; the id handed out is {@link #nextId()} of the receiver. */
     public AppState withIdTaken() {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, later, views, lowerTab, notice, notices, instances, nextId + 1);
+    }
+
+    /** Returns this state with the id counter at least {@code next}: ids given before a restart are not given again. */
+    public AppState withIdsFrom(final long next) {
+        return next <= nextId ? this
+                : new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, later, views, lowerTab, notice, notices, instances, next);
     }
 
     /** The instances on the comando Edge as last read. */

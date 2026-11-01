@@ -20,9 +20,10 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 
 /**
  * Plots that refresh: the panel's query runs again every few seconds when it is not running, and each
- * finished run of that query replaces the plot, without moving the lower panel's tab. Closing the plot's
- * tab stops it, and so does running another statement in the panel: the refresh never replaces the
- * user's newer result. EDT only.
+ * finished run of that query replaces the plot, without moving the lower panel's tab; a run with no rows
+ * leaves the plot as it was. Closing the plot's tab stops it, and so does running another statement in the
+ * panel: the refresh never replaces the user's newer result. A failed query, a failed connection or a result
+ * with nothing to plot stops it with a notice. EDT only.
  */
 final class LivePlots {
 
@@ -141,13 +142,20 @@ final class LivePlots {
                 continue;
             }
             l.plotted = run.requestId();
+            if (r.rowCount() == 0) {
+                // a period with no rows keeps the plot as it was and the refresh going
+                continue;
+            }
             try {
                 // the first plot opens its tab; later data replaces it without moving the user
                 intents.dispatch(l.shown ? new Intent.RefreshView(l.title, ResultViews.plot(r))
                         : new Intent.ShowView("", l.title, ResultViews.plot(r), Placement.LOWER));
                 l.shown = true;
             } catch (final IllegalArgumentException e) {
+                // the result has nothing to plot; every period would say the same
                 stop(l.panel);
+                final String why = "Live plot " + l.title + " stopped: " + e.getMessage();
+                intents.dispatch(new Intent.Notify(Notice.Level.WARN, why, false, Notice.panel(l.panel.value())));
             }
         }
     }

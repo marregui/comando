@@ -18,6 +18,7 @@ import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.FakeResult;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.States;
+import dev.marregui.comando.ui.widgets.table.TableSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// [ResultViews] turns a SQL result into a plot or a table view; [LivePlots] keeps such a plot live.
 /// - A time column is the x axis and numeric columns are series, nulls as NaN.
 /// - A result with no numeric or time column, or no result, cannot be plotted.
-/// - A table keeps the formatted cells.
+/// - A table keeps the formatted cells, SQL NULL as NULL, apart from the text `null`.
 /// - A live plot reruns and replots its own query until its tab closes, and stops when the user runs another.
 class ResultViewsTest {
 
@@ -60,7 +61,7 @@ class ResultViewsTest {
     void tableKeepsFormattedCells() {
         final ViewSpec.Table t = ResultViews.table(result(1));
         assertThat(t.columns()).containsExactly("ts", "name", "price", "qty");
-        assertThat(t.rows().get(1)).containsExactly("1970-01-01T00:00:02.000000Z", "b", "null", "4");
+        assertThat(t.rows().get(1)).as("SQL NULL a null cell").containsExactly("1970-01-01T00:00:02.000000Z", "b", null, "4");
     }
 
     /// A completed run of the plot's query shows the view under its title; a run of another query while the tab is open
@@ -110,5 +111,19 @@ class ResultViewsTest {
         assertThat(sink.of(Intent.RefreshSql.class)).hasSize(1);
         assertThat(live.size()).isZero();
         assertThat(sink.of(Intent.Notify.class).getLast().text()).contains("ran another statement");
+    }
+
+    /// A kept result tells SQL NULL from the text `null`: the cell that was NULL in the live result is NULL in the kept
+    /// tab, and the text `null` stays text, so ⌘⇧S writes the one as an empty field and the other as `null`.
+    @Test
+    void aKeptResultTellsSqlNullFromTheTextNull() {
+        final FakeResult r = new FakeResult(1, List.of("v"), List.of(ColumnKind.TEXT),
+                List.of(Arrays.asList((Object) "null"), Arrays.asList((Object) null)));
+        final TableSource kept = TableSource.of(ResultViews.table(r));
+        assertThat(kept.isNull(0, 0)).as("the text 'null'").isFalse();
+        assertThat(kept.isNull(1, 0)).as("SQL NULL").isTrue();
+        final StringBuilder text = new StringBuilder();
+        kept.format(0, 0, text);
+        assertThat(text).hasToString("null");
     }
 }

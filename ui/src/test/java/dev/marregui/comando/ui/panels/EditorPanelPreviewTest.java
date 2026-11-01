@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
@@ -129,10 +131,10 @@ class EditorPanelPreviewTest {
         return seen.y + seen.height >= v.getView().getHeight() - 20;
     }
 
-    private static void layOut(final java.awt.Component c) {
+    private static void layOut(final Component c) {
         c.doLayout();
-        if (c instanceof java.awt.Container k) {
-            for (final java.awt.Component child : k.getComponents()) {
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
                 layOut(child);
             }
         }

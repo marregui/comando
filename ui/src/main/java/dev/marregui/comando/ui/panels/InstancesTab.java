@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -68,7 +69,10 @@ import dev.marregui.comando.core.state.InstancesState.Member;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.Debouncer;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.text.Tooltips;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -406,7 +410,7 @@ final class InstancesTab {
         } else if (!in.present()) {
             final JMenuItem forget = new JMenuItem("Forget " + in.name());
             forget.setToolTipText("List it no more; it comes back when it is present again");
-            forget.addActionListener(a -> port.get().forget(in.slug()));
+            forget.addActionListener(a -> forget(in.slug()));
             m.add(forget);
             m.addSeparator();
         } else {
@@ -416,7 +420,7 @@ final class InstancesTab {
             final boolean denied = shown != null && shown.denied().contains(in.slug());
             final JCheckBoxMenuItem refuse = new JCheckBoxMenuItem("Refuse questions from " + in.name(), denied);
             refuse.setToolTipText("agents.json peers.deny in this instance's data root");
-            refuse.addActionListener(a -> port.get().deny(in.slug(), refuse.isSelected()));
+            refuse.addActionListener(a -> deny(in.slug(), refuse.isSelected()));
             m.add(refuse);
             m.addSeparator();
         }
@@ -432,8 +436,29 @@ final class InstancesTab {
         final Object typed = JOptionPane.showInputDialog(root, "What " + in.name() + " is for, as the other instances see it:", "Set the role",
                 JOptionPane.PLAIN_MESSAGE, null, null, in.role());
         if (typed instanceof String text) {
-            port.get().role(text.strip());
+            role(text.strip());
         }
+    }
+
+    /**
+     * Refuses, or stops refusing, the questions of {@code instance}. Off the EDT, as forgetting and setting the role:
+     * each reads and writes a file of the data root; the outcome comes back as a notice.
+     */
+    void deny(final String instance, final boolean denied) {
+        final InstancesPort p = port.get();
+        UiErrands.start("instances-deny", () -> p.deny(instance, denied));
+    }
+
+    /** Lists {@code instance}, which left, no more. */
+    void forget(final String instance) {
+        final InstancesPort p = port.get();
+        UiErrands.start("instances-forget", () -> p.forget(instance));
+    }
+
+    /** Sets what this instance is for. */
+    void role(final String role) {
+        final InstancesPort p = port.get();
+        UiErrands.start("instances-role", () -> p.role(role));
     }
 
     /** The row under {@code (x, y)}, its icon or text, or null; the selection stays. */
@@ -617,7 +642,7 @@ final class InstancesTab {
         if (m.busy()) {
             return "busy" + (m.activity().isEmpty() ? "" : ": " + m.activity()) + (m.turnStarted() > 0 ? " · " + span(Duration.ofMillis(now - m.turnStarted())) : "");
         }
-        return m.status().isEmpty() || m.status().equals("OPEN") ? "idle" : m.status().toLowerCase(java.util.Locale.ROOT);
+        return m.status().isEmpty() || m.status().equals("OPEN") ? "idle" : m.status().toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -695,7 +720,7 @@ final class InstancesTab {
     static String since(final String started, final Instant now) {
         try {
             return span(Duration.between(Instant.parse(started), now));
-        } catch (DateTimeParseException | NullPointerException e) {
+        } catch (final DateTimeParseException | NullPointerException e) {
             return "";
         }
     }
@@ -777,7 +802,12 @@ final class InstancesTab {
         }
     }
 
+    /** A row's text comes from the instance it names, a peer's among them: text, never HTML (own rule 6). */
     private final class RowRenderer extends DefaultTreeCellRenderer {
+        RowRenderer() {
+            Plain.only(this);
+        }
+
         @Override
         public Component getTreeCellRendererComponent(final JTree t, final Object value, final boolean sel, final boolean expanded, final boolean leaf, final int row, final boolean focus) {
             super.getTreeCellRendererComponent(t, value, sel, expanded, leaf, row, focus);
@@ -806,13 +836,19 @@ final class InstancesTab {
         }
     }
 
+    /** A question's line and tooltip come from the peer that asked it: text, never HTML (own rule 6). */
     private static final class ConsultRenderer extends DefaultListCellRenderer {
+        ConsultRenderer() {
+            Plain.only(this);
+        }
+
         @Override
         public Component getListCellRendererComponent(final JList<?> list, final Object value, final int index, final boolean sel, final boolean focus) {
             super.getListCellRendererComponent(list, value, index, sel, focus);
             if (value instanceof Consult c) {
                 setText(line(c, System.currentTimeMillis()));
-                setToolTipText(c.question().length() > 400 ? c.question().substring(0, 400) + "…" : c.question());
+                final String q = c.question();
+                setToolTipText(Tooltips.wrapped(q.length() > 400 ? q.substring(0, 400) + "…" : q));
                 if (!sel) {
                     setForeground(switch (c.status()) {
                         case WAITING -> Theme.INFO;

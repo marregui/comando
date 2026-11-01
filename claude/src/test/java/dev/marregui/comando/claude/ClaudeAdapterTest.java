@@ -2,6 +2,7 @@ package dev.marregui.comando.claude;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -9,7 +10,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import org.awaitility.Awaitility;
@@ -79,7 +82,7 @@ class ClaudeAdapterTest {
 
     private ClaudeAdapter adapter(final String script) throws IOException {
         final Path exe = tmp.resolve(script);
-        try (InputStream in = getClass().getResourceAsStream("/" + script)) {
+        try (final InputStream in = getClass().getResourceAsStream("/" + script)) {
             Files.write(exe, in.readAllBytes());
         }
         exe.toFile().setExecutable(true);
@@ -105,7 +108,7 @@ class ClaudeAdapterTest {
         final SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
         a.start(spec);
         sink.await(Intent.SessionStarted.class, WAIT);
-        try (Stream<Path> files = Files.list(runDir)) {
+        try (final Stream<Path> files = Files.list(runDir)) {
             final Path config = files.findFirst().orElseThrow();
             assertThat(Files.readString(config)).contains("Bearer token-work", "\"timeout\":3600000");
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(config))).isEqualTo("rw-------");
@@ -127,16 +130,17 @@ class ClaudeAdapterTest {
         a.stop("work");
         final Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
         assertThat(exit.exitCode()).isZero();
-        try (Stream<Path> files = Files.list(runDir)) {
+        try (final Stream<Path> files = Files.list(runDir)) {
             assertThat(files).isEmpty();
         }
         assertThat(registered).containsExactly("+work", "-work");
     }
 
-    /// A session launched while the checkpoint threshold is above 0 gets `CONTEXT_CHECKPOINT_BY=comando`; one launched
-    /// at 0 has the variable taken out, whatever the environment comando started with holds.
+    /// Once comando runs the checkpoints (the window's threshold, always on), a session launched gets
+    /// `CONTEXT_CHECKPOINT_BY=comando`; one launched by an adapter that does not (a test's, a tool's) has the variable
+    /// taken out, whatever the environment comando started with holds.
     @Test
-    void aSessionLaunchedWhileTheThresholdIsOnLeavesTheCheckpointToComando() throws Exception {
+    void aSessionLaunchedWhileComandoCheckpointsLeavesTheCheckpointToComando() throws Exception {
         final Path exe = tmp.resolve("env-claude.sh");
         Files.writeString(exe, """
                 #!/bin/sh
@@ -145,26 +149,71 @@ class ClaudeAdapterTest {
                 cat > /dev/null
                 """);
         exe.toFile().setExecutable(true);
-        final AtomicLong threshold = new AtomicLong(400_000L);
         adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
-        adapter.checkpointThreshold(threshold::get);
-
-        final Path on = Files.createDirectories(tmp.resolve("on"));
-        adapter.start(SessionSpec.fresh("on", on.toString()));
-        Awaitility.await("the session on").atMost(WAIT).until(() -> Files.exists(on.resolve("checkpoint-by.txt"))
-                && !Files.readString(on.resolve("checkpoint-by.txt")).isEmpty());
-        assertThat(Files.readString(on.resolve("checkpoint-by.txt"))).isEqualTo("comando");
-
-        threshold.set(0L);
         final Path off = Files.createDirectories(tmp.resolve("off"));
         adapter.start(SessionSpec.fresh("off", off.toString()));
         Awaitility.await("the session off").atMost(WAIT).until(() -> Files.exists(off.resolve("checkpoint-by.txt"))
                 && !Files.readString(off.resolve("checkpoint-by.txt")).isEmpty());
         assertThat(Files.readString(off.resolve("checkpoint-by.txt"))).isEqualTo("absent");
 
+        adapter.checkpointByComando();
+        final Path on = Files.createDirectories(tmp.resolve("on"));
+        adapter.start(SessionSpec.fresh("on", on.toString()));
+        Awaitility.await("the session on").atMost(WAIT).until(() -> Files.exists(on.resolve("checkpoint-by.txt"))
+                && !Files.readString(on.resolve("checkpoint-by.txt")).isEmpty());
+        assertThat(Files.readString(on.resolve("checkpoint-by.txt"))).isEqualTo("comando");
+
         adapter.stop("on");
         adapter.stop("off");
         sink.await(Intent.SessionExited.class, e -> sink.of(Intent.SessionExited.class).size() == 2, WAIT);
+    }
+
+    /// Esc and Stop turn reach the live process: an interrupt is a control request on its input, sent while the turn
+    /// runs, before the session is stopped; an interrupt for a session comando does not know sends nothing.
+    @Test
+    void anInterruptReachesTheLiveProcessAsAControlRequest() throws Exception {
+        final Path exe = tmp.resolve("stdin-claude.sh");
+        Files.writeString(exe, """
+                #!/bin/sh
+                # stands in for claude -p: keeps every input line until the input closes
+                cat >> "$PWD/stdin.txt"
+                """);
+        exe.toFile().setExecutable(true);
+        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        final Path work = Files.createDirectories(tmp.resolve("work"));
+        final Path stdin = work.resolve("stdin.txt");
+        adapter.start(SessionSpec.fresh("work", work.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+
+        adapter.interrupt("unknown");
+        adapter.interrupt("work");
+
+        Awaitility.await("the interrupt").atMost(WAIT).until(() -> Files.exists(stdin)
+                && Files.readString(stdin).contains("\"type\":\"control_request\""));
+        assertThat(Files.readAllLines(stdin)).singleElement().asString().contains("\"subtype\":\"interrupt\"");
+        adapter.stop("work");
+        sink.await(Intent.SessionExited.class, WAIT);
+    }
+
+    /// Clearing a transcript empties it and leaves the process running: the next prompt's answer is the only one shown.
+    @Test
+    void aClearedTranscriptShowsOnlyWhatCameAfter() throws Exception {
+        final ClaudeAdapter a = adapter("fake-claude.sh");
+        a.start(SessionSpec.fresh("work", tmp.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+        a.send("work", "ping", "panel one");
+        sink.await(Intent.SessionTurnEnded.class, WAIT);
+        assertThat(blocks("work")).filteredOn(Block.AssistantText.class::isInstance).hasSize(1);
+
+        a.clearTranscript("work");
+        Awaitility.await("the clear").atMost(WAIT).until(() -> transcripts.of("work").size() == 0);
+        a.send("work", "ping again", "panel one");
+        sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 2, WAIT);
+
+        assertThat(blocks("work")).filteredOn(Block.AssistantText.class::isInstance)
+                .extracting(b -> ((Block.AssistantText) b).text()).containsExactly("pong 2");
+        a.stop("work");
+        sink.await(Intent.SessionExited.class, WAIT);
     }
 
     /// A preface, the summary an earlier checkpoint carried (record 86), goes to Claude in front of the prompt; the
@@ -195,11 +244,11 @@ class ClaudeAdapterTest {
         assertThat(runDir.resolve("old-crash.mcp.json")).doesNotExist();
         a.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
-        try (Stream<Path> files = Files.list(runDir)) {
+        try (final Stream<Path> files = Files.list(runDir)) {
             assertThat(files).hasSize(1);
         }
         a.close();
-        try (Stream<Path> files = Files.list(runDir)) {
+        try (final Stream<Path> files = Files.list(runDir)) {
             assertThat(files).isEmpty();
         }
         assertThat(registered).containsExactly("+work", "-work");
@@ -207,9 +256,62 @@ class ClaudeAdapterTest {
         a.start(SessionSpec.fresh("late", tmp.toString()));
         a.send("late", "hello", "scratch");
         assertThat(registered).as("a session asked for after close never starts").containsExactly("+work", "-work");
-        try (Stream<Path> files = Files.list(runDir)) {
+        try (final Stream<Path> files = Files.list(runDir)) {
             assertThat(files).isEmpty();
         }
+    }
+
+    /// A prompt routed to a running session while the adapter closes (the reducer routes effects until the state loop
+    /// closes, after the adapter) leaves no `claude` process, configuration file or registration behind once close
+    /// returns. Close is held in its first executor stop, as a sub-agent read that does not answer an interrupt holds
+    /// it, so the prompt lands after close began.
+    @Test
+    void aPromptRoutedWhileTheAdapterClosesLeavesNoClaudeProcessBehind() throws Exception {
+        final Path exe = tmp.resolve("pid-claude.sh");
+        Files.writeString(exe, "#!/bin/sh\necho $$ > claude.pid.tmp && mv claude.pid.tmp claude.pid\n"
+                + "while IFS= read -r line; do :; done\nexit 0\n");
+        assertThat(exe.toFile().setExecutable(true)).isTrue();
+        adapter = new ClaudeAdapter(sink, transcripts, gateway, new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        adapter.start(SessionSpec.fresh("work", tmp.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+        final Path pidFile = tmp.resolve("claude.pid");
+        Awaitility.await().atMost(WAIT).until(() -> Files.isRegularFile(pidFile));
+        final long pid = Long.parseLong(Files.readString(pidFile).strip());
+        try {
+            final ScheduledExecutorService subagents = (ScheduledExecutorService) field("subagents").get(adapter);
+            final CountDownLatch held = new CountDownLatch(1);
+            subagents.execute(() -> {
+                held.countDown();
+                final long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(1_500);
+                while (end - System.nanoTime() > 0) {
+                    try {
+                        Thread.sleep(20);
+                    } catch (final InterruptedException e) {
+                        // a directory scan does not answer an interrupt either
+                    }
+                }
+            });
+            assertThat(held.await(5, TimeUnit.SECONDS)).isTrue();
+            final Thread closer = Thread.ofVirtual().start(adapter::close);
+            final Field closed = field("closed");
+            Awaitility.await().atMost(WAIT).until(() -> closed.getBoolean(adapter));
+            adapter.send("work", "late prompt", "panel one");
+            assertThat(closer.join(Duration.ofSeconds(20))).isTrue();
+
+            assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)).as("claude process alive after close returned").isFalse();
+            assertThat(registered).containsExactly("+work", "-work");
+            try (final Stream<Path> files = Files.list(runDir)) {
+                assertThat(files).as("no configuration with its bearer token").isEmpty();
+            }
+        } finally {
+            ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
+        }
+    }
+
+    private static Field field(final String name) throws NoSuchFieldException {
+        final Field f = ClaudeAdapter.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return f;
     }
 
     /// A process that exits while a child still holds its output open has its exit handled only after the drain
@@ -345,7 +447,7 @@ class ClaudeAdapterTest {
                 """);
         a.loadHistory(SessionSpec.imported("old", tmp.toString(), "abc"));
         final long deadline = System.nanoTime() + WAIT.toNanos();
-        while (transcripts.of("old").size() < 3 && System.nanoTime() < deadline) {
+        while (transcripts.of("old").size() < 3 && deadline - System.nanoTime() > 0) {
             Thread.sleep(20);
         }
         assertThat(blocks("old")).startsWith(new Block.UserPrompt("earlier question", "", ""),
@@ -440,7 +542,7 @@ class ClaudeAdapterTest {
                 """);
         a.loadHistory(SessionSpec.imported("old", tmp.toString(), "abd"));
         final long deadline = System.nanoTime() + WAIT.toNanos();
-        while (transcripts.of("old").size() < 3 && System.nanoTime() < deadline) {
+        while (transcripts.of("old").size() < 3 && deadline - System.nanoTime() > 0) {
             Thread.sleep(20);
         }
 

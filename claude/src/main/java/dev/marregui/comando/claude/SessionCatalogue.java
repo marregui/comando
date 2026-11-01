@@ -48,7 +48,7 @@ public final class SessionCatalogue {
             return List.of();
         }
         List<Path> files;
-        try (Stream<Path> projects = Files.list(projectsDir)) {
+        try (final Stream<Path> projects = Files.list(projectsDir)) {
             files = projects.filter(Files::isDirectory)
                     .flatMap(SessionCatalogue::transcripts)
                     .sorted(Comparator.comparingLong(SessionCatalogue::modified).reversed())
@@ -69,7 +69,7 @@ public final class SessionCatalogue {
     }
 
     private static Stream<Path> transcripts(final Path project) {
-        try (Stream<Path> s = Files.list(project)) {
+        try (final Stream<Path> s = Files.list(project)) {
             return s.filter(p -> p.getFileName().toString().endsWith(".jsonl") && Files.isRegularFile(p)).toList().stream();
         } catch (final IOException e) {
             return Stream.empty();
@@ -92,7 +92,7 @@ public final class SessionCatalogue {
         String title = "";
         String lastPrompt = "";
         long size;
-        try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
+        try (final RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
             size = raf.length();
             for (final String line : lines(raf, 0, (int) Math.min(size, HEAD_BYTES), false)) {
                 final JsonNode n = parse(line);

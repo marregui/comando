@@ -51,7 +51,7 @@ class ActionParityTest {
     @Test
     void everyIntentTheWindowSendsIsOfferedOrSaysWhyNot() throws IOException {
         final Set<String> sent = new TreeSet<>();
-        try (Stream<Path> files = Files.walk(Path.of("../ui/src/main/java"))) {
+        try (final Stream<Path> files = Files.walk(Path.of("../ui/src/main/java"))) {
             for (final Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 final Matcher m = SENT.matcher(Files.readString(f));
                 while (m.find()) {

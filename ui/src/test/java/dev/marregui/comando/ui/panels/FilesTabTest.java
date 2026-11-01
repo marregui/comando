@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.AbstractButton;
@@ -46,8 +47,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [FilesTab]: the configured folders as a read-only tree, with a filter, menus that open, and git marks.
 /// - each kind of entry has its icon, and every icon a folder may have is drawn
 /// - opening a folder watches it and opens no file; later reads keep the tree as the user left it
+/// - an open subfolder is watched with its folder; a reveal waits for a subfolder not read
 /// - a folder edited or renamed while open is watched again and keeps or drops its tree accordingly
-/// - the filter searches every folder, asks for each unread folder once, and clearing it restores the tree
+/// - the filter searches every folder, asks once for each folder unread or closed after a partial read, and clearing
+///   it restores the tree
 /// - names wider than the tab scroll sideways
 /// - the tab has no buttons; its menus open, and only a deletable folder's selection goes to the Trash after asking
 /// - while filtering, the menu acts on the entry picked in the filter's tree
@@ -119,7 +122,7 @@ class FilesTabTest {
         f.edt(() -> f.tree().expandRow(0));
         assertThat(f.labels()).as("an unread folder says so until its tree arrives").containsExactly("KB", FilesTab.READING, "Notes");
         assertThat(f.opened).as("opening a folder opens no panel, its index neither").isEmpty();
-        assertThat(f.intents).last().isEqualTo(new Intent.WatchFolders(List.of("KB")));
+        assertThat(f.intents).last().isEqualTo(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of())));
 
         f.intents.clear();
         f.opened.clear();
@@ -129,11 +132,13 @@ class FilesTabTest {
         f.edt(() -> f.show("KB", folder("KB", folder("2026-10-15", file("a.md")), folder("2026-10-16", file("b.md"), file("c.md")), file("ALPHA.md"))));
         assertThat(f.labels()).as("a later read keeps the tree as the user left it")
                 .containsExactly("KB", "2026-10-15", "2026-10-16", "b.md", "c.md", "ALPHA.md", "Notes");
-        assertThat(f.intents).as("rows restored by a read do not change what is watched").isEmpty();
+        assertThat(f.intents).as("the newest day opened is read as deep as it shows; rows restored by a later read change nothing")
+                .containsExactly(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of(dir.resolve("2026-10-16").toAbsolutePath().normalize().toString()))));
 
         f.edt(() -> f.show("Gone", folder("Gone")));
         assertThat(f.labels()).as("a folder no longer configured is ignored").doesNotContain("Gone");
 
+        f.intents.clear();
         f.edt(() -> f.tree().collapseRow(0));
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of()));
 
@@ -141,6 +146,47 @@ class FilesTabTest {
         assertThat(f.labels()).as("unread until its tree arrives").containsExactly("KB", "Notes", FilesTab.READING);
         f.edt(() -> f.show("Notes", new ViewSpec.TreeNode("Notes", "/n", List.of())));
         assertThat(f.labels()).as("an empty folder says so").containsExactly("KB", "Notes", FilesTab.EMPTY);
+    }
+
+    /// Opening a subfolder sends its path with its folder's watch, so the adapter reads it and one level inside it;
+    /// closing it takes the path out again.
+    @Test
+    void openingASubfolderWatchesItsPathAndClosingItTakesItOut() throws Exception {
+        final Fixture f = new Fixture(new FolderRoot("KB", "/kb", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", notRead("deep")), file("a.md"))));
+        f.intents.clear();
+
+        f.edt(() -> f.tree().expandRow(1));
+        assertThat(f.labels()).containsExactly("KB", "tools", "deep", "a.md");
+        assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of("/kb/tools"))));
+
+        f.edt(() -> f.tree().collapseRow(1));
+        assertThat(f.intents).last().isEqualTo(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of())));
+    }
+
+    /// Revealing a file inside a subfolder that was not read opens the way to it and waits: once the read with that
+    /// subfolder's entries arrives, the file is selected.
+    @Test
+    void revealWaitsForASubfolderNotReadAndSelectsTheFileOnceItIsRead() throws Exception {
+        final Fixture f = new Fixture(new FolderRoot("KB", "/kb", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", notRead("deep")), file("a.md"))));
+        f.intents.clear();
+
+        f.edt(() -> f.tab.reveal(Path.of("/kb/tools/deep/x.md")));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", folder("deep", file("x.md"))), file("a.md"))));
+        final String[] selected = new String[1];
+        f.edt(() -> selected[0] = f.tree().getSelectionPath() == null ? null
+                : ((ViewSpec.TreeNode) ((DefaultMutableTreeNode) f.tree().getSelectionPath().getLastPathComponent()).getUserObject()).label());
+        assertThat(selected[0]).as("selected once its folder's entries arrive").isEqualTo("x.md");
+        assertThat(f.intents).as("the way opened is watched, so the adapter reads it")
+                .contains(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of("/kb/tools", "/kb/tools/deep"))));
+    }
+
+    /** A subfolder whose entries were not read: the folder holding it was closed. */
+    private static ViewSpec.TreeNode notRead(final String name) {
+        return new ViewSpec.TreeNode(name, "", List.of(new ViewSpec.TreeNode(ViewSpec.TreeNode.MORE, ViewSpec.TreeNode.NOT_READ, List.of())));
     }
 
     /// A folder whose settings change while open is watched again and its old tree dropped; removing it unwatches it,
@@ -155,7 +201,7 @@ class FilesTabTest {
 
         f.render(new FolderRoot("KB", "/kb", "", List.of("tools")), new FolderRoot("Notes", "/n", "", List.of()));
         assertThat(f.intents).as("same names, new settings: watched again so the adapter reads it at once")
-                .containsExactly(new Intent.WatchFolders(List.of("KB")));
+                .containsExactly(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of())));
         assertThat(f.labels()).as("its old tree is dropped").containsExactly("KB", FilesTab.READING, "Notes");
 
         f.intents.clear();
@@ -177,8 +223,10 @@ class FilesTabTest {
         f.intents.clear();
 
         f.edt(() -> f.tab.filter().setText("plan"));
-        assertThat(f.intents).as("the folders never read are read once, so the filter searches them too")
-                .containsExactly(new Intent.BrowseFolders(List.of("KB")));
+        f.edt(() -> {
+        });
+        assertThat(f.intents).as("the folders never read are read once and the open ones whole, so the filter searches every level")
+                .containsExactly(new Intent.BrowseFolders(List.of("KB")), new Intent.WatchFolders(List.of("Scratchpad")));
         assertThat(f.foundLabels()).containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md");
 
         f.edt(() -> f.show("KB", folder("KB", folder("plans", file("q4.md")), file("design.md"))));
@@ -187,14 +235,45 @@ class FilesTabTest {
 
         f.intents.clear();
         f.edt(() -> f.tab.filter().setText("plann"));
-        assertThat(f.intents).as("every folder read: nothing more to read").isEmpty();
+        f.edt(() -> {
+        });
+        assertThat(f.intents).as("every folder read: nothing more to read, and a replaced text reads nothing again").isEmpty();
         f.edt(() -> f.tab.filter().setText("zzz"));
         assertThat(f.foundLabels()).containsExactly(FilesTab.NO_MATCH);
 
         f.edt(() -> f.tab.filter().setText(""));
+        f.edt(() -> {
+        });
+        assertThat(f.intents).as("cleared: the open folders are read as deep as they show again")
+                .last().isEqualTo(new Intent.WatchFolders(List.of("Scratchpad"), Map.of("Scratchpad", List.of("/s/2026-10-16"))));
         assertThat(f.tab.tree().component().isVisible()).isTrue();
         assertThat(f.tab.found().component().isVisible()).isFalse();
         assertThat(f.labels()).containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md", "notes.md", "KB");
+    }
+
+    /// A folder read while open with a subfolder closed holds that subfolder unread; closed then, it is read whole once
+    /// for the filter, which then finds a file inside that subfolder; a later text reads nothing again.
+    @Test
+    void aClosedFolderLastReadInPartIsReadWholeOnceForTheFilter() throws Exception {
+        final FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        final Fixture f = new Fixture(kb);
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", notRead("deep")), file("a.md"))));
+        f.edt(() -> f.tree().collapseRow(0));
+        f.intents.clear();
+
+        f.edt(() -> f.tab.filter().setText("x.md"));
+        f.edt(() -> {
+        });
+        assertThat(f.intents).as("its partial tree cannot answer for tools/deep").contains(new Intent.BrowseFolders(List.of("KB")));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", folder("deep", file("x.md"))), file("a.md"))));
+        assertThat(f.foundLabels()).containsExactly("KB", "tools", "deep", "x.md");
+
+        f.intents.clear();
+        f.edt(() -> f.tab.filter().setText("x.m"));
+        f.edt(() -> {
+        });
+        assertThat(f.intents).as("read whole: not read again").noneMatch(i -> i instanceof Intent.BrowseFolders);
     }
 
     /// Both the tree and the filter's tree show a horizontal bar when narrower than a name and none when wide enough.
@@ -381,7 +460,7 @@ class FilesTabTest {
         f.intents.clear();
         f.render(new FolderRoot("Base", "/kb", "", List.of()), new FolderRoot("Notes", "/n", "", List.of()));
         assertThat(f.labels()).containsExactly("Base", "a.md", "Notes");
-        assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of("Base")));
+        assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of("Base"), Map.of("Base", List.of())));
     }
 
     /// Modified and untracked files keep the default colour; only a conflicted file is [Theme#DANGER], and nothing is
@@ -573,7 +652,7 @@ class FilesTabTest {
 
         f.intents.clear();
         f.edt(() -> f.tree().expandRow(1));
-        assertThat(f.intents).as("an open folder is read").containsExactly(new Intent.WatchFolders(List.of("app")));
+        assertThat(f.intents).as("an open folder is read").containsExactly(new Intent.WatchFolders(List.of("app"), Map.of("app", List.of())));
         final ViewSpec.TreeNode java = new ViewSpec.TreeNode("A.java", "", "comando-file:/r/A.java#0", List.of());
         f.edt(() -> f.show("app", folder("app", java)));
         assertThat(f.labels()).containsExactly("Memory", "app", "A.java");

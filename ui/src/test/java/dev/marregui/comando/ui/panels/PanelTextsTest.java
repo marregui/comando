@@ -84,9 +84,9 @@ class PanelTextsTest {
         assertThat(SessionBar.checkpointIcon(x)).isEqualTo("checkpoint");
         assertThat(SessionBar.checkpointTip(x))
                 .isEqualTo("Checkpoint: sends /reflect, then compacts the conversation");
-        final SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L));
+        final SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L, 40));
         assertThat(SessionBar.checkpointIcon(due)).isEqualTo("checkpoint-due");
-        assertThat(SessionBar.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect, then compacts the conversation");
+        assertThat(SessionBar.checkpointTip(due)).isEqualTo("Checkpoint due, the context passed the checkpoint threshold: sends /reflect, then compacts the conversation");
         assertThat(SessionBar.checkpointTip(x.withSpec(x.spec().withCarried("the summary"))))
                 .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
     }

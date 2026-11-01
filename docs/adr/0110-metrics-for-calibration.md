@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted on 2026-10-29 | Miguel and Claude |
+| 2026-10-28 | accepted on 2026-10-29; amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -43,3 +43,12 @@ does not carry.
 
 Tested in `MetricsTest` (a turn's and a sub-agent's events and fields, a background one ended by its notification, a
 replay writing nothing, a sub-agent's spend each message once, no data root).
+
+## Amendments
+
+2026-11-01, Miguel's decision D6 of the first-release review: a fourth event, `queues`, measures comando's unbounded
+queues before any is bounded: the reducer's intent queue, every strand (a session's among them) and each `claude`
+process's stdin, each with its `name`, its `depth` when read and its `peak` since the reading before (`core`'s
+`Queues`). `App` reads them every minute on its `kit-check` strand and writes the event only when the reading changed.
+One gauge is kept per queue: when a queue is made again under a name in use, the newest gauge of that name is read. A
+bound for each queue is set later from how it is used. Tested in `QueuesTest` and `MetricsTest`.

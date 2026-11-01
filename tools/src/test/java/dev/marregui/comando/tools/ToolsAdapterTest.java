@@ -7,7 +7,9 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
@@ -32,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   the run going.
 /// - Each run reads the settings again; a console closed during its run is released when the run ends.
 /// - Folder trees are sent when read and when changed, ordered (the index first, folders, day folders by date, files),
-///   without hidden, build and excluded entries.
+///   without hidden, build and excluded entries; a watched folder is read only as deep as the Files tab shows it.
 /// - An unreadable folder or subfolder says so in its tree; a large, deep or linked folder is bounded and says so.
 /// - Entries go to the Trash and leave their lines in the nearest listing; nothing goes without a Trash or outside the
 ///   folder.
@@ -253,7 +256,7 @@ class ToolsAdapterTest {
         final FolderRoot a = folder("A", Files.createDirectories(dir.resolve("a")));
         final FolderRoot b = folder("B", Files.createDirectories(dir.resolve("b")));
         Files.writeString(dir.resolve("a").resolve("PLAN.md"), "# plan");
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             tools.readFolders(List.of(a, b));
             sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("B"), WAIT);
             sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("A"), WAIT);
@@ -278,6 +281,74 @@ class ToolsAdapterTest {
             assertThat(edited.tree().children()).as("a folder watched with new settings is read with them at once")
                     .extracting(ViewSpec.TreeNode::label).containsExactly("PLAN.md");
         }
+    }
+
+    /// A folder read as deep as the Files tab shows lists the top folder and each subfolder that shows, inside the top
+    /// folder or an open one, and nothing inside a subfolder that is closed: that subfolder holds one entry saying so.
+    @Test
+    void aFolderReadAsDeepAsItShowsListsNothingInsideAClosedSubfolder(@TempDir final Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("open").resolve("inner").resolve("deep"));
+        Files.createDirectories(dir.resolve("closed").resolve("inner"));
+        Files.writeString(dir.resolve("closed").resolve("inner").resolve("x.md"), "x");
+        final List<Path> listed = new CopyOnWriteArrayList<>();
+        final Set<String> open = Set.of(dir.resolve("open").toString());
+
+        final ViewSpec.TreeNode tree = FolderTree.tree(folder("A", dir), d -> {
+            listed.add(d);
+            return Files.list(d);
+        }, p -> false, d -> open.contains(d.toString()));
+
+        assertThat(listed).as("the top folder, the subfolders it shows, and those the open one shows")
+                .containsExactlyInAnyOrder(dir, dir.resolve("open"), dir.resolve("open").resolve("inner"), dir.resolve("closed"));
+        final ViewSpec.TreeNode notRead = new ViewSpec.TreeNode(ViewSpec.TreeNode.MORE, ViewSpec.TreeNode.NOT_READ, List.of());
+        assertThat(child(tree, "closed", "inner").children()).containsExactly(notRead);
+        assertThat(child(tree, "open", "inner", "deep").children()).containsExactly(notRead);
+        assertThat(FolderTree.tree(folder("A", dir), Files::list, p -> false, FolderTree.WHOLE)).as("read whole, every level")
+                .satisfies(t -> assertThat(child(t, "closed", "inner").children()).extracting(ViewSpec.TreeNode::label).containsExactly("x.md"));
+    }
+
+    /// A folder watched as deep as the tab shows is polled that deep: a file written inside a subfolder of a closed one
+    /// is not read, while one written at the top is.
+    @Test
+    void aPollReadsNothingInsideASubfolderOfAClosedOne(@TempDir final Path dir) throws Exception {
+        final Path inner = Files.createDirectories(dir.resolve("a").resolve("closed").resolve("inner"));
+        final FolderRoot a = folder("A", dir.resolve("a"));
+        try (final ToolsAdapter tools = adapter()) {
+            tools.watchFolders(List.of(a), Map.of("A", List.of()));
+            sink.await(Intent.FolderLoaded.class, WAIT);
+            tools.pollFolders(Duration.ofMillis(20));
+            Files.writeString(inner.resolve("x.md"), "x");
+            Files.writeString(dir.resolve("a").resolve("top.md"), "top");
+            final Intent.FolderLoaded polled = sink.await(Intent.FolderLoaded.class, l -> l.tree().children().size() == 2, WAIT);
+            assertThat(child(polled.tree(), "closed", "inner").children()).as("nothing inside the closed subfolder is read")
+                    .extracting(ViewSpec.TreeNode::detail).containsExactly(ViewSpec.TreeNode.NOT_READ);
+        }
+    }
+
+    /// Opening a subfolder of a watched folder reads the folder at once, the subfolder with one level inside it.
+    @Test
+    void openingASubfolderReadsItAtOnce(@TempDir final Path dir) throws Exception {
+        final Path inner = Files.createDirectories(dir.resolve("a").resolve("closed").resolve("inner"));
+        Files.writeString(inner.resolve("x.md"), "x");
+        final FolderRoot a = folder("A", dir.resolve("a"));
+        try (final ToolsAdapter tools = adapter()) {
+            tools.watchFolders(List.of(a), Map.of("A", List.of()));
+            sink.await(Intent.FolderLoaded.class, WAIT);
+            sink.clear();
+            tools.watchFolders(List.of(a), Map.of("A", List.of(dir.resolve("a").resolve("closed").toString())));
+            final Intent.FolderLoaded opened = sink.await(Intent.FolderLoaded.class, WAIT);
+            assertThat(child(opened.tree(), "closed", "inner").children()).as("the subfolder opened is read at once, one level inside it")
+                    .extracting(ViewSpec.TreeNode::label).containsExactly("x.md");
+        }
+    }
+
+    /** The node at {@code labels} below {@code tree}, one label per level. */
+    private static ViewSpec.TreeNode child(final ViewSpec.TreeNode tree, final String... labels) {
+        ViewSpec.TreeNode at = tree;
+        for (final String label : labels) {
+            at = at.children().stream().filter(c -> c.label().equals(label)).findFirst().orElseThrow(() -> new AssertionError("no " + label));
+        }
+        return at;
     }
 
     /// A missing folder's tree holds one `✗ cannot be read: no such folder` node, reads as unreadable, and raises no
@@ -369,7 +440,7 @@ class ToolsAdapterTest {
         assertThat(folder.text()).as("a file inside a folder asked for goes with it").isEqualTo("Moved work to the Trash; 1 line out of 2026-10-18/ALPHA.md");
         assertThat(trashed).containsExactly(read, work);
         assertThat(day.resolve("ALPHA.md")).content().doesNotContain("work/");
-        try (var left = Files.list(day)) {
+        try (final var left = Files.list(day)) {
             assertThat(left.map(p -> p.getFileName().toString())).as("no temporary file left").containsExactly("ALPHA.md");
         }
     }
@@ -540,5 +611,17 @@ class ToolsAdapterTest {
         assertThat(docs.link()).as("not offered as a file").isEmpty();
         assertThat(docs.children()).as("not followed").isEmpty();
         assertThat(docs.detail()).isEqualTo("link to a folder, not followed");
+    }
+
+    /// A file's detail is its size; a symbolic link to a file shows the size of the file it leads to, and a link that
+    /// leads nowhere is a file of no known size.
+    @Test
+    void aFileShowsItsSizeAndALinkToAFileTheSizeOfItsTarget(@TempDir final Path dir) throws Exception {
+        Files.writeString(dir.resolve("a.md"), "x".repeat(2_048));
+        Files.createSymbolicLink(dir.resolve("b.md"), dir.resolve("a.md"));
+        Files.createSymbolicLink(dir.resolve("c.md"), dir.resolve("gone.md"));
+        final List<ViewSpec.TreeNode> files = FolderTree.tree(folder("Root", dir)).children();
+        assertThat(files).extracting(ViewSpec.TreeNode::label).containsExactly("a.md", "b.md", "c.md");
+        assertThat(files).extracting(ViewSpec.TreeNode::detail).containsExactly(Formats.bytes(2_048), Formats.bytes(2_048), "");
     }
 }

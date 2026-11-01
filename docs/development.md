@@ -17,7 +17,7 @@ how the code is organised is in [Architecture](architecture.md).
 | Need | For | Note |
 |---|---|---|
 | JDK 25 | building, and running from Gradle | the build names a JDK 25 toolchain and provisions none: Gradle finds an installed JDK 25 or stops |
-| Claude Code CLI | sessions | looked for at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else `claude` on the `PATH`; `COMANDO_CLAUDE` overrides. Tested from 2.1.296 up to, not including, 2.2.0; another version is named in a warning at start |
+| Claude Code CLI | sessions | looked for at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else `claude` on the `PATH`; `COMANDO_CLAUDE` overrides. Tested from 2.1.316, the newest on the release's day and the release's minimum, up to, not including, 2.2.0; another version is named in a warning at start |
 | Codex CLI | Codex's usage in the status bar | optional; looked for at `~/.local/bin/codex`, `/opt/homebrew/bin/codex`, `/usr/local/bin/codex`, else `codex` on the `PATH`; `COMANDO_CODEX` overrides |
 | Docker | the PostgreSQL adapter test (Testcontainers) | optional; without it that test is skipped |
 | macOS | the login keychain, `:app:dmg` | everything else runs on Linux too, with Ctrl for ⌘ ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)). CI builds and tests on macOS and Linux; Windows has a package, built by the release workflow, and no test run |
@@ -80,6 +80,9 @@ runs one JVM per test class, one at a time, as its windows share one desktop.
 | `LowerDividerUiTest` | the divider above the lower panel is each panel's own ([record 115](adr/0115-the-lower-divider-per-panel.md)) |
 | `LocateUiTest` | a panel's Locate button selects its file in the Files tab or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
 | `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |
+| `LayoutKeeperUiTest` | the sidebar's width kept in `settings.json` comes back at the start (a value that is no number gives the default); a session's arrangement hides the sidebar to its rail and shows it again at its kept width; the width left is saved a second after the window last changed size and the next window opens with it |
+| `QuitTeardownUiTest` | a step of the window's teardown or close that throws stops neither the quit nor the closing of the window's errands |
+| `FocusRouterUiTest` | a view opened in the lower area while the keyboard is in a panel's text takes nothing from it, and closing it in the background moves nothing ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |
 
 ## 3. Continuous integration
 
@@ -101,11 +104,12 @@ the ui jar carries. The PostgreSQL adapter test runs on Ubuntu only: macOS runne
 |---|---|---|---|
 | `comando.home` | system property | — | the data root; wins over `COMANDO_HOME`; a leading `~` is the home folder |
 | `COMANDO_HOME` | environment | `~/.comando` | the data root; a leading `~` is the home folder |
-| `comando.name`, `COMANDO_NAME` | system property, environment | the data root's `instance.json` `name` (written by the kit's `kit.py instance new`), else its folder: none for `~/.comando`, `b` for `~/.comando_b` | the instance's name: the Dock's, the menu bar's and the window's `comando · b` (a name that says comando, `Comando Expert`, as it is), and the Dock badge, its first letter ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
+| `comando.name`, `COMANDO_NAME` | system property, environment | the data root's `instance.json` `name` (written by whoever creates the instance), else its folder: none for `~/.comando`, `b` for `~/.comando_b` | the instance's name: the Dock's, the menu bar's and the window's `comando · b` (a name that says comando, `Comando Expert`, as it is), and the Dock badge, its first letter ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
 | `COMANDO_CLAUDE` | environment | the search in [§1](#1-prerequisites) | the Claude Code executable |
 | `COMANDO_CODEX` | environment | the search in [§1](#1-prerequisites) | the Codex executable, read for the status bar's usage |
 | `comando.edge.zip`, `COMANDO_EDGE_ZIP` | system property, environment | the pinned open-source HiveMQ Edge 2026.15 release, downloaded once into `edge/dist/` of the data root and checked against its published SHA-256 | the Edge distribution the comando Edge is installed from; the property wins ([Workbench §4.1](workbench.md#41-the-comando-edge)) |
-| `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of `~/.claude` or `~/.claude/comando-kit` ([Kit and brain §3.1](kit-and-brain.md#31-the-root)) |
+| `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of the folders it looks in (`~/.claude`, `~/comando-kit`, `~/.claude/comando-kit`) ([Kit and brain §3.1](kit-and-brain.md#31-the-root)) |
+| `COMANDO_BRAIN` | environment | unset | the brain's folder, over the manifest's `brain`; used only with a kit ([Kit and brain §3.1](kit-and-brain.md#31-the-root)) |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain (macOS); elsewhere they stay in `connections.json` |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |
 | `comando.prefsNode` | system property | `dev/marregui/comando`; `dev/marregui/comando-<folder>` for another data root, named by its folder | the Java preferences node read once into the data root's `settings.json` when that file does not exist yet ([record 106](adr/0106-settings-in-the-data-root.md)) |
@@ -151,12 +155,13 @@ the table below. Rules 12 to 15 cover what a desktop application meets and the s
 14. The MCP server binds `127.0.0.1` only, answers only a request that carries a session's bearer token, refuses a
     browser `Origin` that is not loopback and bounds a request body.
 15. A password lives in the keychain (`Secrets`); a token comando issues lives in memory and in files created
-    owner-only (`rw-------`). Neither reaches a log line, a notice, the intent log or the audit log.
+    owner-only (`rw-------`). Neither reaches a log line, a notice, the intent log or the audit log. Every owner-only
+    file or folder is made through `core`'s `OwnerOnly`, the one helper every module uses.
 
 | Part | comando |
 |---|---|
 | 1. Version | v2.0.3, JDK 25. No `AGENTS.md` or `CLAUDE.md` in the repository yet to point an agent here (§12) |
-| 2. Hot paths | A path is hot when the p99 of its frame-time gate exceeds 4 ms. Hot: the transcript renderer (`ui.widgets.transcript.render`: `TranscriptCanvas`, `TextBox`; layouts kept, only the clip painted), `:ui:transcriptGate`, p99 3.39 ms on the gate's document and 4.75 ms on a 1,500-line code fence ([Architecture §14.5.3](architecture.md#1453-the-frame-time-gate)); the plot (`ui.widgets.plot`: `PlotCanvas`), `:ui:plotGate`, p99 28–32 ms over three runs on an M2 Max, over its 16 ms budget: a crosshair move repaints and re-reduces every series (2026-10-31). Not hot: the grid (`GridTable`), `:ui:gridGate`, p99 1.4–1.5 ms. `Transcript`, which the transcript renderer reads, publishes with release-acquire ordering (a volatile write after the data); so does `ColumnarResult`, which the grid reads. G-1 to G-3 and G-10.7 apply on the hot paths only; what they leave open there is in [§5.1](#51-not-applied) |
+| 2. Hot paths | A path is hot when the p99 of its frame-time gate exceeds 4 ms. Hot: the transcript renderer (`ui.widgets.transcript.render`: `TranscriptCanvas`, `TextBox`; layouts kept within a window around the view and let go beyond it, only the clip painted), `:ui:transcriptGate`, p99 3.39 ms on the gate's document and 4.75 ms on a 1,500-line code fence ([Architecture §14.5.3](architecture.md#1453-the-frame-time-gate)); the plot (`ui.widgets.plot`: `PlotCanvas`), `:ui:plotGate`, p99 28–32 ms over three runs on an M2 Max, over its 16 ms budget: a crosshair move repaints and re-reduces every series (2026-10-31). Not hot: the grid (`GridTable`), `:ui:gridGate`, p99 1.4–1.5 ms. `Transcript`, which the transcript renderer reads, publishes with release-acquire ordering (a volatile write after the data); so does `ColumnarResult`, which the grid reads. G-1 to G-3 and G-10.7 apply on the hot paths only; what they leave open there is in [§5.1](#51-not-applied) |
 | 3. Applied and enforced | Enforced by the build or a test: G-10.10 (`-Xlint:all -Werror`, `serial` excluded with its reason beside the flag in `build.gradle.kts`; doclint not yet); G-9.5 (the `this-escape` lint); G-10.2, G-10.8's braces and G-10.11 (the standard's Checkstyle configuration, copied to `config/checkstyle/checkstyle.xml`, on main and test code; any report fails `build`); G-7.10 (`ThreadBudgetTest`: no platform thread and none of the threads `Threads` made alive after close, read from `Threads.alive()`). Applied and checked by review only, no checker in the repository: G-11.7 (every test documented with `///`), G-10.5 (test methods named for the behaviour they prove), G-10.2 on what Checkstyle does not report (fields, try-with-resources variables, multi-catch parameters, basic-for initialisers), G-10.11's fully qualified names. Measured at run time, not enforced: G-7.11 (`EdtWatchdog` logs a stall of the EDT over 200 ms with its length when it ends, and the EDT's stack at 1 s, 2 s for a stall in the JDK's drawing; the `StateLoop` watchdog logs an intent still applying at 1 s with the loop's stack) |
 | 4. Departures kept on purpose | G-14.6 and G-14.11: no JFR code ([§6](#6-quality)). |
 | 5. Not applied | [§5.1](#51-not-applied): each rule with its sites and why, and either the condition under which it does not fit or the change that must apply it |
@@ -188,19 +193,12 @@ on. Counts are of 2026-10-31, after the tool commit that added `final` and order
 | G-10.12 | rule | `HtmlPane`'s 150 ms debounce has no comment on what set it (`ExecutorStop.WAIT`, `ThreadBudgetTest`'s strand exit, `Lane.QUERY_SECONDS`, `ClaudeAdapter`'s stop grace and `TerminalWidget.KILL_GRACE_MILLIS` each say they are unmeasured) | Never measured | a change to `HtmlPane` |
 | G-1.1, G-1.3, G-3.7 | rule, hot path | transcript: boxed-key maps and null tests on the paint path (`TranscriptCanvas`, `TextBox`, `Finder`) | The transcript turned hot on its 1,500-line fence (4.75 ms) | a change to the file |
 | G-2.3, G-3.1, G-10.7 | rule, hot path | plot: tick text formatted per frame, a `Path2D` and lambdas per series per repaint (`PlotCanvas`); `TextBox` lambdas | The plot is over its budget; its fix is one change | the plot's frame-time fix |
-| G-4.3 | defect | `App`'s close loop: an `Error` from one part stops the rest | Found 2026-10-30 | a change to `App` |
-| G-7.12 | defect | `Peers` publishes under `presenceLock`; `ClaudeProcess` hands a line over under `handOver` | Found 2026-10-30 | a change to the file |
-| G-13.6, G-13.7 | defect | `MetricsLog` matches a substring; `Git.notInHead` decides from git's text, not its exit code | Found 2026-10-30 | a change to the file |
-| G-14.9 | defect | `nanoTime` values compared with `<` or `>` (12 sites) | Found 2026-10-31 | a change to the file |
 | G-15.2, G-15.12 | defect | Edge MQTT reconnect: no jitter, no attempt limit | Disputed: the standard's v3 backlog asks whether "reconnects while the Edge runs" is a stop condition | the standard's answer |
-| G-15.4 | defect | the peer inbox is not deduplicated by correlation id | Found 2026-10-31 | a change to `Peers` |
-| G-15.6 | defect | intent queue, session strands, `ClaudeProcess` stdin: unbounded | The policy for a queue the EDT feeds is not decided | that decision |
-| G-15.7, G-15.9 | defect | registry removal not fenced; stored and peer formats carry no version | Found 2026-10-30 | the next change to a stored or peer format |
-| G-16.13 | defect | `McpServer` hands each request to a virtual thread, without a bound | Found 2026-10-31 | a change to `McpServer` |
-| own rule 12 | defect | `EmbeddedEdge` stops its recorded pid only; a process the Edge started is not ended | Found 2026-10-31 | a change to `EmbeddedEdge` |
+| G-15.6 | rule | intent queue, strands (a session's among them, timed strands included), `ClaudeProcess` stdin: unbounded | Measured, bound later per use pattern (Miguel's decision D6, 2026-11-01): each reports its depth and peak to the metrics log's `queues` event | the bound each queue's use calls for |
+| G-15.7 | defect | registry removal not fenced | Found 2026-10-30 | a change to `EmbeddedEdge`'s registry |
 | G-5.3, G-6.5 | rule | log messages not shaped `[key=value]`; `Pty` has no logger of its own | Predates the standard | a change to the file |
 | G-10.1, G-10.5 | rule | member order in `PlotGate`; `tl` prefix and `length()` names | Predates the standard | a change to the file |
-| G-11.5 | rule | 14 sleep polls and 4 unbounded joins in tests | Predates the standard | a change to the test |
+| G-11.5 | rule | 34 `Thread.sleep` calls in `*Test.java` files (16 inside a loop, 14 fixed waits, among them waits that check nothing happens, 4 in helpers) and 5 unbounded joins (3 `Thread.join()`, 2 `CompletableFuture.join()`), counted 2026-11-01 with `grep`; the hand-run mains `ProbeNewSession`, `Snapshot` and the three gates hold 24 more and are not tests | Predates the standard | a change to the test |
 | G-13.5 | rule | `StateLoop.failure()`, `McpTools.pending()`: surface for tests only, not marked | Found 2026-10-31 | a change to the file |
 | G-13.8 | rule | `Watchdog`'s `finally` untested; `Transcript`'s growth limit untested (2^31 blocks cannot be built in a test) | The first needs a fault-injecting look | a change to `Watchdog` |
 | G-14.1, G-14.4 | rule | peer answers and kit backups log failures only; `context` and `window` metrics without unit | Found 2026-10-31 | a change to the file |
@@ -299,6 +297,7 @@ becomes a link. A document that is not the owner keeps only what its reader need
 | a kit's parts and what each does in a session | [Kit and brain](kit-and-brain.md) §2 |
 | the root, its launch environment, a kit's upgrade, backups and jobs | [Kit and brain](kit-and-brain.md) §3 |
 | the brain, its rules, its flows, `/reflect`, the learning loop | [Kit and brain](kit-and-brain.md) §4 to §7 |
+| creating a default kit and brain, checking one the user brings, a kit after a comando upgrade; signing a root in | [Kit and brain](kit-and-brain.md) §8, §3.1 for signing in |
 | modules, state and intents, effects, ports, threads, ownership and exit | [Architecture](architecture.md) §2 to §7 |
 | each module's classes, interface, own threads and tests; the database mechanism (cancel handshake, storage by column, catalogue choice) | [Architecture](architecture.md) §8 to §15 |
 | prerequisites, Gradle tasks, CI, configuration properties, code rules, quality gates, these rules and the pictures | [Development](development.md) |

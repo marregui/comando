@@ -61,7 +61,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.CancelCommand e -> tools.cancelRun(e.runId());
             case Effect.ForgetCommand e -> tools.forgetRun(e.runId());
             case Effect.ReadFolders e -> tools.readFolders(e.folders());
-            case Effect.WatchFolders e -> tools.watchFolders(e.folders());
+            case Effect.WatchFolders e -> tools.watchFolders(e.folders(), e.open());
             case Effect.DeleteFiles e -> tools.deleteFiles(e.folder(), e.paths());
             case Effect.RollBack e -> tools.rollBack(e.root(), e.changes());
             case Effect.RemoveFiles e -> tools.removeFiles(e.root(), e.paths());
@@ -70,7 +70,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.ReadChange e -> tools.readChange(e.root(), e.change(), e.ask());
             case Effect.SaveConnections e -> persistence.saveConnections(e.specs());
             case Effect.SaveFolders e -> persistence.saveFolders(e.folders());
-            case Effect.SaveDecisions e -> persistence.saveDecisions(e.decisions());
+            case Effect.SaveDecisions e -> persistence.saveDecisions(e.decisions(), e.lastId());
             case Effect.SaveSessions e -> persistence.saveSessions(e.specs());
             case Effect.SavePanels e -> persistence.savePanels(e.panels(), e.closed());
         }

@@ -17,6 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   after.
 /// - A change is written at flush, atomically, and read by the next window.
 /// - An unreadable file is kept aside and the settings start empty.
+/// - The file names its version; a later one is kept as it is, with what the user is told once.
+/// - The checkpoint threshold is a percentage.
 class SettingsTest {
 
     /// The earlier preferences, in memory: the test never touches the user's preferences store.
@@ -70,5 +72,48 @@ class SettingsTest {
         final Settings s = Settings.open(file, legacy);
         assertThat(s.values()).isEmpty();
         assertThat(home.resolve("settings.json.unreadable")).hasContent("{ not json");
+    }
+
+    /// The file names its schema's version first (record 133); a file of a later version is kept as it is, its values
+    /// not read, and nothing written over it.
+    @Test
+    void theFileNamesItsVersionAndALaterOneIsKeptAsItIs(@TempDir final Path home) throws Exception {
+        final Path file = home.resolve("settings.json");
+        final Settings s = Settings.open(file, legacy);
+        s.put("tools.gradle", "build");
+        s.flush();
+        assertThat(Files.readString(file)).containsSubsequence("\"version\" : 1", "\"tools.gradle\" : \"build\"");
+        assertThat(Settings.open(file, legacy).values()).as("the version is no setting").containsOnlyKeys("tools.gradle");
+        assertThat(Settings.open(file, legacy).refusal()).as("its own version reads").isEmpty();
+
+        final String later = "{\"version\": 2, \"tools.gradle\": \"check\"}";
+        Files.writeString(file, later);
+        final Settings newer = Settings.open(file, legacy);
+        assertThat(newer.values()).isEmpty();
+        assertThat(newer.refusal()).as("what the user is told once").isEqualTo("settings.json is of version 2, written by a later comando;"
+                + " this one reads version 1. It is kept as it is and nothing is saved to it until a comando that reads it runs;"
+                + " the window runs on its defaults");
+        newer.put("tools.gradle", "test");
+        newer.flush();
+        assertThat(Files.readString(file)).isEqualTo(later);
+    }
+
+    /// The checkpoint threshold is a share of the context window in percent, 40 until chosen (record 129), 10 to 100;
+    /// the token count an earlier version kept is not read, and a choice removes it.
+    @Test
+    void theCheckpointThresholdIsAPercentageAndTheOldTokenCountIsNotRead(@TempDir final Path home) {
+        final Settings s = Settings.open(home.resolve("settings.json"), legacy);
+        s.putInt(WindowLayout.CHECKPOINT_THRESHOLD_TOKENS, 400_000);
+        final WindowLayout layout = new WindowLayout(s);
+        assertThat(layout.checkpointThreshold()).isEqualTo(40);
+        layout.checkpointThreshold(55);
+        assertThat(new WindowLayout(Settings.open(home.resolve("settings.json"), legacy)).checkpointThreshold()).isEqualTo(55);
+        assertThat(s.values()).doesNotContainKey(WindowLayout.CHECKPOINT_THRESHOLD_TOKENS);
+        layout.checkpointThreshold(250);
+        assertThat(layout.checkpointThreshold()).as("at most the whole window").isEqualTo(100);
+        s.putInt(WindowLayout.CHECKPOINT_THRESHOLD, 0);
+        assertThat(layout.checkpointThreshold()).as("an earlier version's 0, no checkpoint, reads as the minimum").isEqualTo(10);
+        layout.checkpointThreshold(5);
+        assertThat(layout.checkpointThreshold()).as("at least the minimum").isEqualTo(10);
     }
 }

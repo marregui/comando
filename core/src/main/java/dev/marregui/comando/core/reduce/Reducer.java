@@ -2,7 +2,8 @@ package dev.marregui.comando.core.reduce;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.LongSupplier;
+import java.util.Optional;
+import java.util.function.IntSupplier;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
@@ -10,14 +11,15 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /**
  * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which only stamps
  * notices and activity, the home folder, where a file link or a Gradle run without a session starts, and the checkpoint
- * threshold, a setting of the window: the same state, intent, time, home and threshold always give the same
- * transition.
+ * threshold, a setting of the window in percent of a session's context window: the same state, intent, time, home and
+ * threshold always give the same transition.
  *
  * <p>Request identity drops stale results: every SQL run gets an id from the state's counter, a panel holds one run,
  * and an event for an id that is no longer a panel's run is dropped.</p>
@@ -28,23 +30,37 @@ import dev.marregui.comando.core.view.ViewSpec;
 public final class Reducer {
 
     /**
-     * The context, in tokens, at or above which a turn's end runs the session's checkpoint, then {@code /compact}
-     * (record 129), unless the setting says otherwise.
+     * The prompt an automatic checkpoint sends from the session's panel once its compaction has ended normally, so the
+     * session carries on with the work the checkpoint paused (Miguel, 2026-11-01: after an automatic checkpoint, not the
+     * button's). Generic: comando knows no kit.
      */
-    public static final long CHECKPOINT_THRESHOLD_TOKENS = 400_000L;
+    public static final String CONTINUE_PROMPT = "Continue the work the checkpoint paused, from the summary above: its next step first.";
 
     private final Clock clock;
-    /** The checkpoint threshold in force, read at each turn's end; 0 or below runs no automatic checkpoint. */
-    private final LongSupplier checkpointThreshold;
+    /** The threshold of a reducer whose sessions never fall due: tests and tools only. */
+    private static final IntSupplier NEVER = () -> 0;
 
-    /** A reducer that runs no automatic checkpoint: tests and tools. */
+    /**
+     * The checkpoint threshold in force, in percent of each session's context window, read at each turn's end: the
+     * session falls due and its automatic checkpoint runs there (record 129). Read through {@link Reflection#clamp}, so
+     * the window's setting is never below 10 % (D3: no off); only {@link #NEVER} makes neither happen.
+     */
+    private final IntSupplier checkpointThreshold;
+
+    /** A reducer whose sessions never fall due nor checkpoint by themselves: tests and tools. */
     public Reducer(final Clock clock) {
-        this(clock, () -> 0L);
+        this.clock = clock;
+        this.checkpointThreshold = NEVER;
     }
 
-    public Reducer(final Clock clock, final LongSupplier checkpointThreshold) {
+    public Reducer(final Clock clock, final IntSupplier checkpointThreshold) {
         this.clock = clock;
         this.checkpointThreshold = checkpointThreshold;
+    }
+
+    /** The threshold this turn's end runs at: the window's setting within 10–100 %, or 0 for a reducer that never checkpoints. */
+    private int threshold() {
+        return checkpointThreshold == NEVER ? 0 : Reflection.clamp(checkpointThreshold.getAsInt());
     }
 
     public Transition apply(final AppState s, final Intent intent) {
@@ -91,18 +107,56 @@ public final class Reducer {
     }
 
     /**
+     * The session a Settle of decision {@code id} goes to, as the reducer will choose it: the decision's own while it
+     * has a checkpoint command, else the focused panel's session when it has one; empty when the decision is gone or
+     * neither has. For the window to name where Settle sends before it is pressed.
+     */
+    public static Optional<String> settleTarget(final AppState s, final long id) {
+        return DecisionRules.target(s, id);
+    }
+
+    /**
      * Whether {@code intent} acts on a session whose checkpoint runs and is therefore refused (record 130): the
-     * reducer drops it silently, so a caller that is not the window, an agent's action tool, asks first and answers
-     * "locked".
+     * reducer drops it, so a caller that is not the window, an agent's action tool, asks first and answers "locked". A
+     * checkpoint can begin between the tool's question and the intent's turn in the queue: the reducer then posts a
+     * notice naming the agent the intent came from, where the intent names one.
      */
     public static boolean refusedWhileCheckpointing(final AppState s, final Intent intent) {
         return TurnRules.refused(s, intent);
     }
 
-    private Transition reduce(final AppState s, final Intent intent) {
-        // a session whose checkpoint runs takes only an interrupt or a stop from the window (record 130)
+    /**
+     * Why the reducer would refuse {@code intent} on {@code s}, in the words of its notice; empty when it would apply
+     * it. An agent's action tool asks before it sends, so a refusal is the tool's answer and not only a notice the agent
+     * never reads: the checkpoint lock (record 130), a session or panel name taken (record 88), a stopped session that
+     * another session would start (record 44), a command with nothing to send or no session to settle a decision in.
+     * The answer holds for {@code s}; intents queued before this one may still change the outcome.
+     */
+    public static Optional<String> refusal(final AppState s, final Intent intent) {
         if (TurnRules.refused(s, intent)) {
-            return Transition.of(s);
+            return Optional.of("the session is running its checkpoint (record 130); only session_interrupt or session_stop act on it until "
+                    + "the checkpoint and its compaction end");
+        }
+        return switch (intent) {
+            case Intent.SaveSession i -> SessionRules.saveRefusal(s, i).map(SessionRules.Refusal::reason);
+            case Intent.Checkpoint i -> TurnRules.commandRefusal(s, i.name(), s.session(i.name()).map(x -> x.spec().checkpoint()).orElse(""), i.from());
+            case Intent.SessionCommand i -> TurnRules.commandRefusal(s, i.name(), i.command(), i.from());
+            case Intent.SettleDecision i -> DecisionRules.target(s, i.id())
+                    .map(n -> TurnRules.commandRefusal(s, n, s.session(n).map(x -> x.spec().checkpoint()).orElse(""), i.from()))
+                    .orElseGet(() -> Optional.of(s.decision(i.id()).isEmpty() ? "No decision " + i.id()
+                            : "No session to settle it in: open a session with a checkpoint command"));
+            case Intent.RunText i -> QueryRules.promptRefusal(s, i);
+            default -> Optional.empty();
+        };
+    }
+
+    private Transition reduce(final AppState s, final Intent intent) {
+        // a session whose checkpoint runs takes only an interrupt or a stop from the window (record 130); an agent's
+        // intent that its tool let through before the lock began is told, as the agent was answered "sent"
+        if (TurnRules.refused(s, intent)) {
+            final String from = TurnRules.from(intent);
+            return Transition.of(from.isEmpty() ? s : Shared.notice(clock, s, Notice.Level.WARN, from + ": "
+                    + intent.getClass().getSimpleName() + " not applied: the session is running its checkpoint (record 130)", ""));
         }
         return switch (intent) {
             case Intent.AddPanel i -> PanelRules.addPanel(s, i);
@@ -159,14 +213,14 @@ public final class Reducer {
             case Intent.OpenSubagent i -> SessionRules.openSubagent(clock, s, i);
 
             case Intent.PromptSession i -> TurnRules.promptSession(clock, s, i);
-            case Intent.Checkpoint i -> TurnRules.checkpoint(clock, s, i.name());
-            case Intent.SessionCommand i -> TurnRules.sessionCommand(clock, s, i.name(), i.command());
+            case Intent.Checkpoint i -> TurnRules.checkpoint(clock, s, i.name(), false, i.from());
+            case Intent.SessionCommand i -> TurnRules.sessionCommand(clock, s, i.name(), i.command(), i.from());
             case Intent.InterruptSession i -> TurnRules.interruptSession(clock, s, i.name());
             case Intent.ClearTranscript i -> TurnRules.clearTranscript(clock, s, i.name());
             case Intent.SessionActivity i -> TurnRules.sessionActivity(clock, s, i);
             case Intent.SessionTasksChanged i -> TurnRules.sessionTasksChanged(clock, s, i);
             case Intent.SessionTurnRunning i -> TurnRules.sessionTurnRunning(clock, s, i);
-            case Intent.SessionTurnEnded i -> TurnRules.turnEnded(clock, s, i, checkpointThreshold.getAsLong());
+            case Intent.SessionTurnEnded i -> TurnRules.turnEnded(clock, s, i, threshold());
 
             case Intent.ApprovalRequested i -> ApprovalRules.approvalRequested(clock, s, i.approval());
             case Intent.ApprovalAnswered i -> ApprovalRules.approvalAnswered(s, i);

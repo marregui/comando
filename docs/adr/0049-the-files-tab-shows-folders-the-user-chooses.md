@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; bar, sync interval and order amended by [record 51](0051-folder-buttons-together-read-only-folders-icons.md); the click and the index replaced by [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md); amended 2026-10-28 (see Amendments); bar, folder dialog and configuration row removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); the bound raised by [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel and Claude |
+| 2026-10-16 | accepted; bar, sync interval and order amended by [record 51](0051-folder-buttons-together-read-only-folders-icons.md); the click and the index replaced by [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md); amended 2026-10-28 (see Amendments); bar, folder dialog and configuration row removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); the bound raised by [record 68](0068-git-changes-and-a-side-by-side-diff.md); the row "sync" amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -58,3 +58,12 @@ configured folder's index file name rather than `ALPHA.md`.
 while a row is wider than the tab, and none when every row fits. Before, a long name was cut at the edge, and its end
 was seen only by widening the sidebar. The sidebar's lists keep no horizontal scroll bar. Miguel asked; tested in
 `FilesTabTest`.
+
+2026-11-01, first-release review: an open folder is read only as deep as the tab shows it. The tab's watch
+carries, by folder, the subfolders open in it; such a folder is read one level deep, plus each open subfolder and one
+level inside it, so every row shown has its entries and its count, and a subfolder not read holds one `…` entry so it
+can still be opened. Opening or closing a subfolder reads that folder again at once; a reveal into a subfolder not read
+yet waits for its read. A folder with no entry is read whole: an agent's `folders_browse`, a replay, and every open
+folder while the filter has text, so the filter still searches every level. Measured before the change: a 20 000-entry
+folder cost 172 ms a read, about 77 ms after the one-lstat-per-entry fix; the partial read's poll cost is not measured.
+Tested in `ToolsAdapterTest`, `FilesTabTest` and `ReducerTest`.

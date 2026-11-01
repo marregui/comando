@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted | Miguel and Claude |
+| 2026-10-27 | accepted; the command's name amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -43,3 +43,8 @@ rule, a name used once) and `StoreTest` (a file written without the key, an olde
 The four checkouts were taken out of the author's `folders.json` by hand on 2026-10-27. Another user's older file
 shows its repositories as folders outside `~/.claude` until they are taken out in the window. `Snapshot` no longer
 paints the repositories window; `DocImages` keeps its sample repository at `~/.claude/lane`.
+
+## Amendments
+
+2026-11-01, [record 73](0073-the-claude-folders-window-explains-and-creates-the-index.md)'s amendment of the same
+day: the command Configure ~/.claude folders is now Configure Files tab folders, the window titled by what it holds.

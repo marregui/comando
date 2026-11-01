@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - handler and observer failures do not halt later intents
 /// - an `Error` stops the loop loudly, and later intents are refused with one error line
 /// - stalls identify their slowest part
+/// - a loop that outlives its close is logged and hands out no more effects
 class StateLoopTest {
 
     /// Two SQL intents are reduced in queue order, with each transition's effects delivered before its state listener.
@@ -35,7 +36,7 @@ class StateLoopTest {
     void appliesIntentsInOrderPublishesStateAndHandsEffectsOutBeforeListeners() throws Exception {
         final List<String> order = new CopyOnWriteArrayList<>();
         final CountDownLatch done = new CountDownLatch(2);
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> order.add("effect " + e.getClass().getSimpleName()))) {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> order.add("effect " + e.getClass().getSimpleName()))) {
             loop.addListener((prev, next) -> {
                 order.add("state " + next.nextId());
                 done.countDown();
@@ -62,7 +63,7 @@ class StateLoopTest {
                 throw new IllegalStateException("adapter down");
             }
         };
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), failing)) {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), failing)) {
             loop.addListener((prev, next) -> done.countDown());
             loop.start();
             loop.dispatch(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
@@ -75,7 +76,7 @@ class StateLoopTest {
     @Test
     void aFailingObserverDoesNotStopTheLoop() throws Exception {
         final CountDownLatch done = new CountDownLatch(2);
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
         })) {
             loop.addObserver(intent -> {
                 if (intent instanceof Intent.FocusPanel f && f.panel().equals(States.P2)) {
@@ -119,7 +120,7 @@ class StateLoopTest {
         };
         final Logger log = Logger.getLogger(StateLoop.class.getName());
         log.addHandler(capture);
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
         })) {
             final AppState before = loop.state();
             loop.addObserver(intent -> {
@@ -165,6 +166,69 @@ class StateLoopTest {
         assertThat(loop.state()).isSameAs(before);
     }
 
+    /// A loop held in an effect past the close's wait is logged with its stack, and from then on hands out no effect:
+    /// neither the rest of the held intent's effects nor those of the intent queued behind it, which still applies.
+    @Test
+    void aLoopThatOutlivesItsCloseIsLoggedAndHandsOutNoMoreEffects() throws Exception {
+        final List<String> handled = new CopyOnWriteArrayList<>();
+        final List<String> warnings = new CopyOnWriteArrayList<>();
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final CountDownLatch applied = new CountDownLatch(1);
+        final Handler capture = new Handler() {
+            @Override
+            public void publish(final LogRecord entry) {
+                if (entry.getLevel() == Level.WARNING) {
+                    warnings.add(entry.getMessage());
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        final Logger log = Logger.getLogger(StateLoop.class.getName());
+        log.addHandler(capture);
+        final StateLoop.EffectHandler held = e -> {
+            handled.add(e.getClass().getSimpleName());
+            if (e instanceof Effect.OpenDb) {
+                entered.countDown();
+                try {
+                    release.await(10, TimeUnit.SECONDS);
+                } catch (final InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        };
+        final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), held).start();
+        try {
+            loop.addListener((previous, next) -> {
+                if (next.runs().size() == 2) {
+                    applied.countDown();
+                }
+            });
+            loop.dispatch(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
+            loop.dispatch(new Intent.RunText(States.P2, "SELECT 2", Target.AUTO));
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            loop.close();
+            assertThat(loop.outlived()).isTrue();
+            assertThat(warnings).anySatisfy(w -> assertThat(w).startsWith("the reducer did not stop within 2000 ms")
+                    .contains("StateLoopTest"));
+
+            release.countDown();
+            assertThat(applied.await(5, TimeUnit.SECONDS)).as("the queued intent still applies").isTrue();
+            assertThat(handled).containsExactly("OpenDb");
+        } finally {
+            release.countDown();
+            log.removeHandler(capture);
+        }
+    }
+
     /// An `ExecuteSql` handler lasting 120 ms exceeds the 60 ms stall limit and reports that effect once after it ends.
     @Test
     void anIntentPastTheStallLimitIsToldOnceItEndsWithItsSlowestPart() {
@@ -174,7 +238,7 @@ class StateLoopTest {
                 hold(120);
             }
         };
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), slow, 60, 10_000, stalls::add)) {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), slow, 60, 10_000, stalls::add)) {
             loop.applyNow(new Intent.FocusPanel(States.P2));
             assertThat(stalls).isEmpty();
 
@@ -200,7 +264,7 @@ class StateLoopTest {
                 hold(700);
             }
         };
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), blocking, 50, 300, s -> {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), blocking, 50, 300, s -> {
             stalls.add(s);
             if (s.ended()) {
                 ended.countDown();
@@ -233,7 +297,7 @@ class StateLoopTest {
             }
         };
         final long before = System.currentTimeMillis();
-        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), blocking, 50, 300, null).start()) {
+        try (final StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), blocking, 50, 300, null).start()) {
             loop.addListener((previous, next) -> {
                 if (next.notice().kind().equals("log")) {
                     noticed.countDown();
@@ -252,7 +316,7 @@ class StateLoopTest {
     /** Work that takes {@code millis}: the loop's thread is held, as a port that blocks would hold it. */
     private static void hold(final long millis) {
         final long until = System.nanoTime() + millis * 1_000_000;
-        while (System.nanoTime() < until) {
+        while (until - System.nanoTime() > 0) {
             Thread.onSpinWait();
         }
     }

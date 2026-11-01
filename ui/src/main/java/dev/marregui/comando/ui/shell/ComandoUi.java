@@ -15,13 +15,15 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.LongConsumer;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
 import javax.swing.JFrame;
@@ -37,7 +39,9 @@ import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.RepoStatus;
@@ -122,6 +126,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final int lowerTabKey = Platform.macKeys() ? InputEvent.CTRL_DOWN_MASK : InputEvent.ALT_DOWN_MASK;
     /** How long closing waits for the event thread to close the window. */
     private static final Duration CLOSE_BOUND = Duration.ofSeconds(5);
+    /** The connection kind's password attribute, the connection dialog's one secret field. */
+    private static final String PASSWORD = "password";
 
     /** What the shell needs from the application. */
     public record Dependencies(
@@ -148,8 +154,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private volatile TopicPort topics = TopicPort.NONE;
     /** The other comando instances, for the sidebar's Instances tab. */
     private volatile InstancesPort instances = InstancesPort.NONE;
-    /** Where the checkpoint threshold goes (record 129); nowhere until {@link #checkpointThreshold} sets it. */
-    private volatile LongConsumer checkpointThreshold = tokens -> {
+    /**
+     * Where the checkpoint threshold goes, in percent of a session's context window (record 129); nowhere until
+     * {@link #checkpointThreshold} sets it.
+     */
+    private volatile IntConsumer checkpointThreshold = percent -> {
     };
     private final HelpActions help;
     private final KitActions kit;
@@ -170,6 +179,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private FocusRouter focus;
     private PanelFiles files;
     private QuitFlow quitFlow;
+    /** Told the name of each step of closing before it runs ({@link #beforeEachStep}); nothing by default. */
+    private volatile Consumer<String> beforeStep = what -> {
+    };
     private Notifier notifier;
     private ResourceDialog<ConnectionSpec> connectionsDialog;
     private ResourceDialog<SessionSpec> sessionsDialog;
@@ -252,7 +264,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * Hands {@code sink} the checkpoint threshold kept in the settings, now and each time the palette changes it
      * (record 129); set before {@link #start}.
      */
-    public void checkpointThreshold(final LongConsumer sink) {
+    public void checkpointThreshold(final IntConsumer sink) {
         checkpointThreshold = sink;
         sink.accept(windowLayout.checkpointThreshold());
     }
@@ -261,6 +273,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Theme.install();
         for (final String problem : themeProblems) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Theme file left out: " + problem, false));
+        }
+        // a file of a later comando is kept as it is and not written: told once, at the window's start (record 133)
+        for (final String later : List.of(windowLayout.settingsRefusal(), openedFiles.refusal())) {
+            if (!later.isEmpty()) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, later, false));
+            }
         }
         final WidgetContext ctx = new WidgetContext(deps.intents(), actions);
         widgets.register("table", ViewSpec.Table.class, c -> new TableViewWidget());
@@ -383,6 +401,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.watchOpened(openedFiles);
         final StatusBar status = new StatusBar(deps.intents(), this::noticeTarget);
         final SessionBar sessionBar = new SessionBar(deps.intents());
+        sessionBar.checkpointThreshold(windowLayout::checkpointThreshold);
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         kit.attach(sidebar::kitRelease);
@@ -421,7 +440,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 ConnectionKind.INSTANCE,
                 s -> s.connections().stream().map(ConnectionState::spec).toList(),
                 s -> statuses(s.connections().stream().map(c -> Map.entry(c.name(), c.status())).toList()),
-                Intent.SaveConnection::new,
+                ComandoUi::saveConnection,
                 Intent.TestConnection::new,
                 Intent.OpenConnection::new,
                 Intent.CloseConnection::new,
@@ -430,7 +449,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 SessionKind.INSTANCE,
                 s -> s.sessions().stream().map(SessionState::spec).toList(),
                 s -> statuses(s.sessions().stream().map(x -> Map.entry(x.name(), x.status())).toList()),
-                Intent.SaveSession::new,
+                (previous, spec, typed) -> new Intent.SaveSession(previous, spec),
                 null,
                 Intent.StartSession::new,
                 Intent.StopSession::new,
@@ -743,15 +762,38 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         LayoutKeeper.fadeTo(theme, this::render);
     }
 
-    /** A checkpoint threshold was chosen in the palette: kept in the settings and handed on (record 129). */
-    void checkpointThresholdChosen(final long tokens) {
-        windowLayout.checkpointThreshold(tokens);
+    /**
+     * A checkpoint threshold was chosen in the palette, in percent of a session's context window: kept in the settings
+     * and handed on (record 129).
+     */
+    void checkpointThresholdChosen(final int percent) {
+        windowLayout.checkpointThreshold(percent);
         checkpointThreshold.accept(windowLayout.checkpointThreshold());
+    }
+
+    /**
+     * The connection dialog's save. The password field is filled with the stored password, so only typing into it says
+     * the password was given again: a connection pointed at another host, port, database or user keeps a password typed
+     * in the form, and drops one carried along as the form was filled, with its keychain item (record 20, Miguel's
+     * decision D2 of the first-release review).
+     */
+    public static Intent saveConnection(final String previous, final ConnectionSpec spec, final Set<String> typed) {
+        return new Intent.SaveConnection(previous, spec, typed.contains(PASSWORD));
     }
 
     /** The Files tab's folders in their window; saving replaces them. */
     void editFolders() {
-        FoldersDialog.show(parts.frame(), deps.state().get().folders(), repoChanges, deps.intents(), deps.setup().root().folders());
+        final KitRoot root = deps.setup().root();
+        final List<Path> roots = new ArrayList<>(List.of(HomeDir.claudeDir()));
+        // Save creates a missing index only in the kit and its brain: never in a user's own Claude Code folder (D10)
+        final List<Path> indexRoots = new ArrayList<>();
+        if (root.kit().isPresent()) {
+            roots.add(root.dir());
+            indexRoots.add(root.dir());
+            root.brain().ifPresent(indexRoots::add);
+        }
+        root.brain().ifPresent(roots::add);
+        FoldersDialog.show(parts.frame(), deps.state().get().folders(), repoChanges, deps.intents(), root.folders(), roots, indexRoots);
     }
 
     /** The user asked for the explorer: it shows, even in a side pane the user hid earlier. */
@@ -824,22 +866,67 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** Ends the shells and live plots and closes the window, without quitting the application. */
     @Override
     public void close() {
-        // bounded: an event thread stuck at quit must not keep the process, and comando's lock, alive forever
-        final boolean closed = Edt.runAndWait(() -> {
-            if (parts == null) {
-                return;
+        try {
+            // bounded: an event thread stuck at quit must not keep the process, and comando's lock, alive forever
+            final boolean closed = Edt.runAndWait(() -> {
+                if (parts == null) {
+                    return;
+                }
+                teardown();
+                step("jobs", jobs::stop);
+                step("comparison window", parts.diffWindow()::dispose);
+                parts.frame().dispose();
+                // told after the steps, the window gone, and outside their guard, so a test can fail the close itself
+                beforeStep.accept("close");
+            }, CLOSE_BOUND);
+            if (!closed) {
+                LOG.log(System.Logger.Level.WARNING, "cannot close the window, the event thread is busy; quitting without it [seconds="
+                        + CLOSE_BOUND.toSeconds() + ']');
             }
-            teardown();
-            jobs.stop();
-            parts.diffWindow().dispose();
-            parts.frame().dispose();
-        }, CLOSE_BOUND);
-        if (!closed) {
-            LOG.log(System.Logger.Level.WARNING, "cannot close the window, the event thread is busy; quitting without it [seconds="
-                    + CLOSE_BOUND.toSeconds() + ']');
+        } catch (final RuntimeException e) {
+            // a close never throws (architecture §7): what failed is logged, the rest still closes
+            LOG.log(System.Logger.Level.WARNING, "the window did not close cleanly", e);
+        } finally {
+            // the gestures' errands still running: interrupted and waited for, bounded
+            UiErrands.closeAll();
         }
-        // the gestures' errands still running: interrupted and waited for, bounded
-        UiErrands.closeAll();
+    }
+
+    /**
+     * Writes the comparison window's edits, waiting a bounded time; for a part that closes before the store, so the
+     * edits reach their file on the shutdown hook's path too, where the window itself closes last. Any thread.
+     */
+    public void saveEdits() {
+        try {
+            Edt.runAndWait(() -> {
+                if (parts != null) {
+                    parts.diffWindow().saveNow();
+                }
+            }, CLOSE_BOUND);
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits", e);
+        }
+    }
+
+    /**
+     * Runs {@code hook} with the name of each step of closing just before the step, on the EDT; for tests, which make
+     * a step fail by throwing from it. It is also told {@code "teardown"} before the teardown's steps and
+     * {@code "close"} after the close's, outside every step's guard, so a test can make the teardown or the close
+     * itself fail.
+     * Set before the quit.
+     */
+    void beforeEachStep(final Consumer<String> hook) {
+        beforeStep = hook;
+    }
+
+    /** Runs one step of closing; a step that throws is logged and the next steps still run. */
+    private void step(final String what, final Runnable step) {
+        try {
+            beforeStep.accept(what);
+            step.run();
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "closing the window: " + what + " failed", e);
+        }
     }
 
     /**
@@ -851,21 +938,35 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             return;
         }
         tornDown = true;
-        parts.diffWindow().saveNow(); // the comparison's edits reach their file before the store closes
-        tickTimer.stop();
-        layout.stop();
-        KeyboardFocusManager.getCurrentKeyboardFocusManager().removePropertyChangeListener("permanentFocusOwner", focusListener);
-        parts.lower().terminals().closeAll();
-        parts.livePlots().stopAll();
-        if (watchdog != null) {
-            watchdog.close();
-        }
-        keyPriority.close();
-        deps.loop().removeListener(stateListener);
-        deps.schemas().removeListener(schemaListener);
-        if (watched != null) {
-            watched.removeListener(transcriptListener);
-            watched = null;
-        }
+        // told before the steps and outside their guard, so a test can fail the teardown itself
+        beforeStep.accept("teardown");
+        // the comparison's edits reach their file before the store closes on the quit path only: on the shutdown
+        // hook's path the store closes first, and the edits are kept only if the application calls saveEdits before it
+        step("comparison's edits", parts.diffWindow()::saveNow);
+        // each step on its own: one that throws leaves the others to run
+        step("tick", () -> {
+            if (tickTimer != null) {
+                tickTimer.stop();
+            }
+        });
+        step("layout", layout::stop);
+        step("focus listener", () -> KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .removePropertyChangeListener("permanentFocusOwner", focusListener));
+        step("terminals", parts.lower().terminals()::closeAll);
+        step("live plots", parts.livePlots()::stopAll);
+        step("watchdog", () -> {
+            if (watchdog != null) {
+                watchdog.close();
+            }
+        });
+        step("key priority", keyPriority::close);
+        step("listeners", () -> {
+            deps.loop().removeListener(stateListener);
+            deps.schemas().removeListener(schemaListener);
+            if (watched != null) {
+                watched.removeListener(transcriptListener);
+                watched = null;
+            }
+        });
     }
 }

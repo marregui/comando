@@ -4,6 +4,7 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.FontMetrics;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -423,7 +424,7 @@ class ApprovalInboxTest {
             assertThat(card.getHeight()).as("the card grows to hold the confirmation").isGreaterThan(before);
             for (final String name : List.of("confirm-always", "confirm-cancel")) {
                 final Component b = named(card, name);
-                final java.awt.Rectangle r = SwingUtilities.convertRectangle(b.getParent(), b.getBounds(), card);
+                final Rectangle r = SwingUtilities.convertRectangle(b.getParent(), b.getBounds(), card);
                 assertThat(r.height).as(name + " has its height").isEqualTo(b.getPreferredSize().height);
                 assertThat(r.y + r.height).as(name + " lies inside the card").isLessThanOrEqualTo(card.getHeight());
                 assertThat(r.x + r.width).as(name + " lies inside the card's width").isLessThanOrEqualTo(card.getWidth());

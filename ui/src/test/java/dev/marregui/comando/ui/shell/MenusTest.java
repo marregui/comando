@@ -104,8 +104,8 @@ class MenusTest {
         }
     }
 
-    /// No id is placed twice, [Menus#areas] holds no menu item, every corner command has an area, and sample commands
-    /// map to their areas.
+    /// No id is placed twice, [Menus#areas] holds no menu item, every corner command has an area, sample commands map
+    /// to their areas, and every act of a session's or a connection's menu in the sidebar has its place in the palette.
     @Test
     void aCommandIsInAMenuOrInAnAreaNeverBoth() {
         final List<String> placed = ids(Menus.bar());
@@ -115,6 +115,12 @@ class MenusTest {
                 .containsKeys(Menus.corner(true, true).stream().flatMap(List::stream).toArray(String[]::new));
         assertThat(Menus.areas()).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
                 .containsEntry("panel.9", "Panels").containsEntry("theme.slate_silver", "Theme").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
+        assertThat(Menus.areas()).as("the session bar's and the session menu's acts, in the palette too")
+                .containsEntry("session.checkpoint", "Session").containsEntry("session.fresh", "Session").containsEntry("session.rewrite", "Session")
+                .containsEntry("session.copyDetails", "Session").containsEntry("session.clone", "Session").containsEntry("session.remove", "Session");
+        assertThat(Menus.areas()).as("the connection menu's acts, in the palette too")
+                .containsEntry("connection.test", "Connection").containsEntry("connection.copyDetails", "Connection")
+                .containsEntry("connection.clone", "Connection").containsEntry("connection.remove", "Connection");
     }
 
     /// Every menu and submenu is non-empty, starts and ends with an entry, and has no two separators in a row.

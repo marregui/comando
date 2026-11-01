@@ -23,6 +23,7 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.text.Plain;
 
 /**
  * The kit in the window: its name and version in the status bar, its upgrade, which a session in the root does when
@@ -35,6 +36,7 @@ final class KitActions {
     static final String UPGRADE = "Upgrade the kit…";
     static final String BACK_UP = "Back up the brain";
     static final String BACK_UP_KIT = "Back up the kit";
+    static final String REPAIR = "Repair comando-kit.json…";
 
     private final ComandoUi.Dependencies deps;
     private final Supplier<JFrame> frame;
@@ -46,6 +48,11 @@ final class KitActions {
     private Upgrade upgrade;
     /** Sessions stopped to start again on the new kit, started once they have stopped. */
     private final Set<String> restarting = new LinkedHashSet<>();
+    /**
+     * A repair of {@code comando-kit.json} is under way or has rewritten it: the entries read at the start are no longer
+     * the file's, so Repair is not offered again until the next start reads it; a repair that failed offers it again.
+     */
+    private boolean repaired;
 
     /** An upgrade under way: the release asked for, and whether the kit's session has taken the prompt. */
     record Upgrade(String tag, boolean running) {
@@ -113,6 +120,60 @@ final class KitActions {
         return deps.setup().root().kit().isPresent() && shown.canBackUpKit();
     }
 
+    /**
+     * Whether the kit's {@code comando-kit.json} has entries comando left out at the start, which {@link #repair} can
+     * take out of the file, and no repair has taken them out since.
+     */
+    boolean canRepair() {
+        final KitRoot root = deps.setup().root();
+        return root.kit().isPresent() && !root.problems().isEmpty() && !repaired;
+    }
+
+    /**
+     * Asks the user, naming each entry comando left out of {@code comando-kit.json} and why, whether to rewrite the
+     * file without them (record 133); on yes, rewrites it off the EDT, the old file kept beside it. A notice says what
+     * was taken out, or why the file was left as it is.
+     */
+    void repair() {
+        final KitRoot root = deps.setup().root();
+        if (!canRepair()) {
+            return;
+        }
+        final Path file = root.dir().resolve(KitRoot.FILE);
+        final String where = HomeDir.shorten(file.toString());
+        final int answer = JOptionPane.showConfirmDialog(frame.get(), Plain.text("comando left these entries of " + where + " out:\n\n- "
+                        + String.join("\n- ", root.problems()) + "\n\nRewrite the file without them? The old file stays beside it as "
+                        + KitRoot.FILE + ".bak-<time>; the change shows at the next start."),
+                REPAIR.replace("…", ""), JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) {
+            return;
+        }
+        rewrite(where);
+    }
+
+    /**
+     * Rewrites the manifest at {@code where} off the EDT, saying what was taken out; Repair is off from now on, and on
+     * again only when the rewrite failed.
+     */
+    void rewrite(final String where) {
+        repaired = true;
+        UiErrands.start("kit-repair", () -> {
+            try {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, repaired(where, deps.setup().repairKit()), false));
+            } catch (final IOException | RuntimeException e) {
+                Edt.later(() -> repaired = false);
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, where + " was left as it is: " + e.getMessage(), e));
+            }
+        });
+    }
+
+    /** What a repair of the manifest at {@code where} says: each entry it took out, as the question named them. */
+    static String repaired(final String where, final List<String> out) {
+        return out.isEmpty() ? where + " needed no repair"
+                : where + " rewritten without " + (out.size() == 1 ? "this entry" : "these " + out.size() + " entries") + ": "
+                + String.join("; ", out) + "; restart comando to read it";
+    }
+
     /** The prompt the kit's session is sent. */
     static String prompt(final Path root, final String tag) {
         return "Upgrade the kit at " + root + " to " + tag + ", following " + root.resolve("INSTALL.md") + " section Upgrade. Report what changed.";
@@ -169,7 +230,11 @@ final class KitActions {
             if (next.isEmpty()) {
                 final String tag = upgrade.tag();
                 upgrade = null;
-                reported(s, tag, kit != null && kit.status().isUsable());
+                final boolean answered = kit != null && kit.status().isUsable();
+                final String error = kit == null ? "" : kit.lastTurnError();
+                // told after this render, not inside it: a question asked here would run newer renders inside this one,
+                // which then finishes with the state it started with
+                Edt.later(() -> reported(tag, answered, error));
             } else {
                 upgrade = next.get();
             }
@@ -191,22 +256,44 @@ final class KitActions {
                 .map(SessionState::name).toList();
     }
 
-    private void reported(final AppState s, final String tag, final boolean answered) {
-        refresh();
-        if (!answered) {
-            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The kit's session stopped before it reported on the upgrade to " + tag,
+    /**
+     * The kit's session has reported on the upgrade to {@code tag}: stopped first, or its turn failed with
+     * {@code error}, it is told and nothing restarts; else the kit's version is read again, and only a kit now at
+     * {@code tag} offers to restart the sessions running on the old one.
+     */
+    private void reported(final String tag, final boolean answered, final String error) {
+        if (!answered || !error.isEmpty()) {
+            refresh();
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, !answered
+                    ? "The kit's session stopped before it reported on the upgrade to " + tag
+                    : "The kit's session reported an error on the upgrade to " + tag + ": " + error + "; no session was restarted",
                     false, Notice.session(KitRoot.UPGRADE_SESSION)));
             return;
         }
-        final List<String> names = toRestart(s);
+        UiErrands.start("kit-status", () -> {
+            final Setup.Status now = deps.setup().status();
+            show(now);
+            Edt.later(() -> offerRestarts(tag, now.version().shown()));
+        });
+    }
+
+    /** Offers the restarts once the kit reads {@code version}, the release asked for; else says what it reads. */
+    private void offerRestarts(final String tag, final String version) {
+        if (!version.equals(tag)) {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The kit's session has reported on the upgrade to " + tag
+                    + ", but the kit reads " + (version.isEmpty() ? "no version" : version) + "; no session was restarted",
+                    false, Notice.session(KitRoot.UPGRADE_SESSION)));
+            return;
+        }
+        final List<String> names = toRestart(deps.state().get());
         if (names.isEmpty() || frame.get() == null) {
             return;
         }
         final Object[] options = {"Restart them", "Not now"};
-        final int pick = JOptionPane.showOptionDialog(frame.get(), "The kit's session has reported on the upgrade to " + tag + ".\nRestart the "
+        final int pick = JOptionPane.showOptionDialog(frame.get(), "The kit is at " + tag + ".\nRestart the "
                         + (names.size() == 1 ? "session" : names.size() + " sessions") + " running on the old kit (" + String.join(", ", names)
                         + ")? Each resumes its conversation on the new kit; a session busy now is left as it is.",
-                "Kit upgraded", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                "Kit upgraded to " + tag, JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
         if (pick == 0) {
             restart(names);
         }
@@ -249,7 +336,7 @@ final class KitActions {
             try {
                 final String done = backup.run();
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, what + " at " + where + ": " + done, false));
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "The " + what.toLowerCase(Locale.ROOT) + " at " + where
                         + " was not backed up: " + e.getMessage(), e));
             }

@@ -13,7 +13,7 @@ public final class Fixtures {
 
     public static List<String> stream(final String name) {
         final String path = "/fixtures/stream/" + name + ".jsonl";
-        try (InputStream in = Fixtures.class.getResourceAsStream(path)) {
+        try (final InputStream in = Fixtures.class.getResourceAsStream(path)) {
             if (in == null) {
                 throw new IllegalArgumentException("no fixture " + path);
             }

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,7 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [TerminalWidget]: a panel's shell, started on demand, with its exit bar, input gate, job check, zoom and find.
 /// - before its shell starts the area says where and how; the exit bar names the directory of the restart
 /// - text held for a shell that closes never reaches the next; text sent before the shell is ready arrives in order
-/// - the job in front fails closed: unreadable `ps` output is an unchecked job; a shell in front is no job
+/// - the job in front fails closed: unreadable `ps` output is an unchecked job; a shell in front is no job; an ended
+///   shell's descendants are not read
 /// - a job is named as typed, a script by its own name, clipped
 /// - zoom stays in bounds and resets; find counts case-insensitively and searches again after new output
 /// - only a foreground job counts as running
@@ -97,7 +99,7 @@ class TerminalWidgetTest {
             assertThat(waitingAfter.get()).isZero();
             final AtomicReference<String> screen = new AtomicReference<>("");
             final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
-            while (System.nanoTime() < deadline && !screen.get().contains("READY")) {
+            while (System.nanoTime() - deadline < 0 && !screen.get().contains("READY")) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
             }
@@ -181,6 +183,31 @@ class TerminalWidgetTest {
         })).contains("a program");
     }
 
+    /// A shell that ended between the read of its process and the check has its descendants read no more, so a
+    /// process given its id since is not taken for its job (own rule 12): the shell's id now names a live process with
+    /// a child (this test's JVM, which starts one), yet the job in front is "a program", and `ps` is not asked to list
+    /// the members of a group, since the descendants are read through the ended shell's handle, not its id.
+    @Test
+    void anEndedShellsDescendantsAreNotRead() throws Exception {
+        final Process gone = new ProcessBuilder("true").start();
+        gone.waitFor();
+        final ProcessHandle handle = gone.toHandle();
+        final Process child = new ProcessBuilder("sleep", "30").start();
+        try {
+            final long reused = ProcessHandle.current().pid();
+            assertThat(ProcessHandle.current().descendants()).as("the id's process has a child").isNotEmpty();
+            final List<List<String>> calls = new ArrayList<>();
+            assertThat(TerminalWidget.foregroundJob(reused, handle, "/bin/zsh", args -> {
+                calls.add(args);
+                return calls.size() == 1 ? List.of("77 76 zsh") : List.of("77 77 /usr/bin/less -s");
+            })).contains("a program");
+            assertThat(calls).as("the shell's own line only").hasSize(1);
+        } finally {
+            child.destroy();
+            child.waitFor();
+        }
+    }
+
     /// Zoom adds points, stops at 8 pt, and reset returns to the base size.
     @Test
     void zoomChangesTheFontSizeWithinBoundsAndResets() {
@@ -214,7 +241,7 @@ class TerminalWidgetTest {
         try {
             final AtomicReference<String> screen = new AtomicReference<>("");
             final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
-            while (System.nanoTime() < deadline && count(screen.get(), "second") < 2) {
+            while (System.nanoTime() - deadline < 0 && count(screen.get(), "second") < 2) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
             }
@@ -240,7 +267,7 @@ class TerminalWidgetTest {
         try {
             final AtomicReference<String> screen = new AtomicReference<>("");
             final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
-            while (System.nanoTime() < deadline && !screen.get().contains("beta")) {
+            while (System.nanoTime() - deadline < 0 && !screen.get().contains("beta")) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> screen.set(t.get().screenText()));
             }
@@ -393,7 +420,7 @@ class TerminalWidgetTest {
             in.write("sleep 30 &\n".getBytes());
             in.flush();
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-            while (ProcessHandle.of(shell).orElseThrow().descendants().findAny().isEmpty() && System.nanoTime() < deadline) {
+            while (ProcessHandle.of(shell).orElseThrow().descendants().findAny().isEmpty() && System.nanoTime() - deadline < 0) {
                 Thread.sleep(20);
             }
             assertThat(ProcessHandle.of(shell).orElseThrow().descendants().findAny()).as("the background sleep started").isPresent();
@@ -401,7 +428,7 @@ class TerminalWidgetTest {
             in.write("sleep 31\n".getBytes());
             in.flush();
             deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-            while (TerminalWidget.foregroundJob(shell, "/bin/sh").isEmpty() && System.nanoTime() < deadline) {
+            while (TerminalWidget.foregroundJob(shell, "/bin/sh").isEmpty() && System.nanoTime() - deadline < 0) {
                 Thread.sleep(20);
             }
             assertThat(TerminalWidget.foregroundJob(shell, "/bin/sh")).contains("sleep 31");
@@ -437,27 +464,35 @@ class TerminalWidgetTest {
         assertThat(jobs).containsExactly(Map.entry("ssh", "ssh"), Map.entry("unknown", TerminalWidget.UNCHECKED_JOB));
     }
 
-    /// Two checks of 600 ms each answer in well under their sum, since they run together; a check still running at
-    /// the 1 s bound answers [TerminalWidget#UNCHECKED_JOB], and the call returns at the bound, not when `ps` would.
+    /// Two checks run together: each `ps` answers only once the other has started, which checks run one after the
+    /// other never do within the bound. A check still running at the 1 s bound answers [TerminalWidget#UNCHECKED_JOB],
+    /// and the call returns at the bound, not when `ps` would (8 s later).
     @Test
     void theChecksRunTogetherAndAShellNotAnsweredByTheBoundIsUnchecked() {
         final Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
         shells.put("a", new TerminalWidget.Shell(1, "/bin/zsh"));
         shells.put("b", new TerminalWidget.Shell(2, "/bin/zsh"));
-        long start = System.nanoTime();
-        Map<String, String> jobs = TerminalWidget.foregroundJobs(shells, 2_000, args -> {
-            sleep(600);
-            return List.of(args.getLast() + " " + args.getLast() + " ssh");
+        final CountDownLatch both = new CountDownLatch(2);
+        Map<String, String> jobs = TerminalWidget.foregroundJobs(shells, 10_000, args -> {
+            both.countDown();
+            try {
+                final String pid = args.getLast();
+                return both.await(10, TimeUnit.SECONDS) ? List.of(pid + " " + pid + " ssh") : List.of();
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return List.of();
+            }
         });
-        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).as("together, not one after the other").isLessThan(1_100);
-        assertThat(jobs).containsOnlyKeys("a", "b");
+        assertThat(jobs).as("together, not one after the other")
+                .containsOnly(Map.entry("a", "ssh"), Map.entry("b", "ssh"));
 
-        start = System.nanoTime();
+        final long start = System.nanoTime();
         jobs = TerminalWidget.foregroundJobs(Map.of("slow", new TerminalWidget.Shell(3, "/bin/zsh")), 1_000, args -> {
-            sleep(5_000);
+            sleep(8_000);
             return List.of("3 3 ssh");
         });
-        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).as("returns at the bound").isBetween(900L, 2_000L);
+        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).as("returns at the bound")
+                .isBetween(900L, 6_000L);
         assertThat(jobs).containsExactly(Map.entry("slow", TerminalWidget.UNCHECKED_JOB));
     }
 

@@ -12,6 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.model.PlanUsage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// The usage reader turns account rate-limit replies into `PlanUsage` windows.
 ///
@@ -124,6 +125,18 @@ class CodexUsageReaderTest {
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).isEqualTo("'codex app-server' did not answer within 300 ms");
+    }
+
+    /// A server stopped past its deadline takes the processes it started with it: a child that would outlive it (here
+    /// a `sleep` the script waits on) ends too.
+    @Test
+    void aStoppedServerTakesItsChildrenWithIt() throws Exception {
+        final Path pid = dir.resolve("child.pid");
+        final Path exe = script("parent", "sleep 30 &\necho $! > '" + pid + "'\nwait\n");
+        final PlanUsage u = CodexUsageReader.read(exe.toString(), JSON, Duration.ofMillis(300), MADRID);
+        assertThat(u.problem()).isEqualTo("'codex app-server' did not answer within 300 ms");
+        final long child = Long.parseLong(Files.readString(pid).strip());
+        await().atMost(Duration.ofSeconds(5)).until(() -> ProcessHandle.of(child).map(h -> !h.isAlive()).orElse(true));
     }
 
     /// A missing executable gives a failed read, not an exception.

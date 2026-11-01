@@ -13,8 +13,13 @@ import java.util.Set;
  * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
  * opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED},
  * the icon of its row, whether its entries may go to the Trash and the file each of its folders lists them in. The
- * folders are configured in {@code folders.json} and lie inside Claude Code's folder ({@link HomeDir#claudeDir}); the
- * Files tab shows them, and moves entries of a deletable folder to the Trash.
+ * folders are configured in {@code folders.json}, each by its full path; the Files tab shows them, and moves entries of
+ * a deletable folder to the Trash.
+ *
+ * <p>A kit's folders come from its {@code comando-kit.json} ({@link KitRoot#folders}): there each names its {@code
+ * root}, {@code kit} (the default) or {@code brain}, and a path relative to that root, so the folder follows its root
+ * when the kit or the brain moves ({@code COMANDO_BRAIN}; Miguel's decision D10 of the first-release review, record
+ * 80). Without a kit there is no brain, and no folder of one.</p>
  *
  * <p>The record takes any name and path, as read from a hand-edited {@code folders.json}; {@link
  * dev.marregui.comando.core.resource.FolderKind} holds the rules (a name, a full path, an index inside the folder), and

@@ -118,10 +118,16 @@ class KitJobsCliTest {
         assertThat(Files.readString(install.resolve("argv.txt")).lines()).containsExactly("job", "run", "a", "--root", root.toString());
     }
 
-    /// A root with no `install/kit.py`, a `kit.py` that fails and one that prints no list each read as no jobs with
-    /// the reason: the row then says they cannot be read.
+    /// A root with no `install/kit.py` whose manifest lists jobs, a `kit.py` that fails and one that prints no list each
+    /// read as no jobs with the reason: the row then says they cannot be read. A kit with neither the tool nor a job
+    /// has nothing to read and nothing wrong.
     @Test
     void whatCannotBeReadSaysWhy(@TempDir final Path root) throws IOException {
+        assertThat(new KitJobsCli(root).read()).as("no manifest, no tool").isEqualTo(KitJobs.NONE);
+        Files.writeString(root.resolve("comando-kit.json"), "{\"kit\": 1, \"name\": \"k\"}");
+        assertThat(new KitJobsCli(root).read()).as("a manifest without jobs").isEqualTo(KitJobs.NONE);
+        Files.writeString(root.resolve("comando-kit.json"), "{\"kit\": 1, \"name\": \"k\", \"jobs\": [{\"name\": \"a\", "
+                + "\"schedule\": {\"daily\": \"07:00\"}, \"command\": [\"bin/a\"]}]}");
         assertThat(new KitJobsCli(root).read().error()).contains("no install/kit.py");
         fake(root, "", 2);
         assertThat(new KitJobsCli(root).read().error()).isEqualTo("said on stderr");

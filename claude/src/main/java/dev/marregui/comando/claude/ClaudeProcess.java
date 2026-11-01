@@ -9,16 +9,19 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
-import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.files.OwnerOnly;
+import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.loop.Queues;
 
 /**
  * One headless {@code claude -p} process: stdout lines go to {@code onLine}, stdin lines come from a queue, stderr goes
@@ -28,8 +31,9 @@ import dev.marregui.comando.core.loop.Threads;
  *
  * <p>Threads: stdout is read on a platform thread, the one operating-system thread a session costs: a read of a process
  * pipe holds its thread even from a virtual thread (measured on JDK 25). The stdin writer waits on its queue and the
- * exit on the process, both on virtual threads, which hold no operating-system thread while they wait. stderr needs no
- * thread: the file is read once, at the exit, and deleted.</p>
+ * exit on the process, both errands of the owner's {@link Errands} (virtual threads, which hold no operating-system
+ * thread while they wait), so the owner's close interrupts and collects them. stderr needs no thread: the file is read
+ * once, at the exit, and deleted.</p>
  */
 final class ClaudeProcess {
 
@@ -43,16 +47,23 @@ final class ClaudeProcess {
 
     private final Process process;
     private final LinkedBlockingQueue<String> stdin = new LinkedBlockingQueue<>();
+    /** The stdin writer has ended (the pipe closed, or its input did): no line is queued after. Guarded by {@link #stdin}. */
+    private boolean writerGone;
+    /** The stdin queue's name and its depth and peak, for the metrics log ({@link Queues}). */
+    private final String stdinName;
+    private final Queues.Gauge stdinQueued;
     /** Where stderr goes while the process runs; read and deleted at the exit. */
     private final Path stderrFile;
     /** The last {@link #STDERR_LINES} lines of stderr, read at the exit. */
     private volatile String stderrTail = "";
+    /** Set when the exit stopped waiting for stdout: a line read later is not handed over. */
+    private final AtomicBoolean drained = new AtomicBoolean();
     /**
-     * Set when the exit stopped waiting for stdout: a line read later is not handed over. Guarded by {@link #handOver}.
+     * Lines being handed over now: raised before the reader looks at {@link #drained}, so the exit, which sets it first,
+     * waits for a hand-over already past the look and no line is handed over after the exit; no lock is held while the
+     * caller's {@code onLine} runs.
      */
-    private boolean drained;
-    /** Held while a line is handed over and while {@link #drained} is set, so no line is handed over after the exit. */
-    private final Object handOver = new Object();
+    private final AtomicInteger handing = new AtomicInteger();
     /**
      * The descendants recorded while Claude Code lived ({@link #recordTree}, {@link #terminate}), kept for
      * {@link #terminate} and {@link #kill}: once Claude Code exits they are no longer its descendants, and one that
@@ -62,35 +73,45 @@ final class ClaudeProcess {
     /** Guards {@link #tree}: the stopping thread records it, the timer's thread signals it. */
     private final Object treeLock = new Object();
 
-    private ClaudeProcess(final Process process, final Path stderrFile) {
+    private ClaudeProcess(final Process process, final Path stderrFile, final String name) {
         this.process = process;
         this.stderrFile = stderrFile;
+        this.stdinName = "claude-stdin-" + name;
+        this.stdinQueued = Queues.gauge(stdinName);
     }
 
+    /**
+     * Starts the process; its stdin writer and its exit waiter run as {@code helpers}' errands. Throws when the process
+     * cannot start, or when {@code helpers} has closed, the process then ended at once.
+     */
     static ClaudeProcess start(final String name, final List<String> argv, final Path workDir, final RootLaunch launch,
-                               final Consumer<String> onLine, final IntConsumer onExit) throws IOException {
-        final Path stderrFile = Files.createTempFile("comando-claude-", ".stderr",
-                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+                               final Errands helpers, final Consumer<String> onLine, final IntConsumer onExit) throws IOException {
+        final Path stderrFile = OwnerOnly.tempFile("comando-claude-", ".stderr");
         Process process;
         try {
             final ProcessBuilder pb = new ProcessBuilder(argv).directory(workDir.toFile()).redirectError(stderrFile.toFile());
             launch.environment(pb.environment());
             process = pb.start();
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             Files.deleteIfExists(stderrFile);
             throw e;
         }
-        final ClaudeProcess p = new ClaudeProcess(process, stderrFile);
+        final ClaudeProcess p = new ClaudeProcess(process, stderrFile, name);
+        if (helpers.start("claude-in-" + name, p::writeStdin) == null) {
+            p.kill();
+            p.dropStderr();
+            throw new IOException("comando is closing");
+        }
         final Thread reader = Thread.ofPlatform().name("claude-out-" + name).daemon(true).start(() -> p.readStdout(onLine));
-        Threads.fork("claude-in-" + name, p::writeStdin);
-        Threads.fork("claude-exit-" + name, () -> {
+        final Thread exit = helpers.start("claude-exit-" + name, () -> {
             int code;
             try {
                 code = p.process.waitFor();
                 if (!reader.join(Duration.ofMillis(DRAIN_MILLIS))) {
-                    // under the hand-over's lock: a line being handed over finishes first, and none follows the exit
-                    synchronized (p.handOver) {
-                        p.drained = true;
+                    p.drained.set(true);
+                    // a line already past its look at drained is handed over first, and none follows the exit
+                    while (p.handing.get() > 0) {
+                        Thread.sleep(1);
                     }
                     LOG.log(System.Logger.Level.WARNING, "claude exited but a child still holds its output open; stopped reading it [session="
                             + name + ", exit=" + code + ']');
@@ -103,21 +124,30 @@ final class ClaudeProcess {
             p.readStderrTail();
             onExit.accept(code);
         });
+        if (exit == null) {
+            // closed between the two errands: nothing will wait for the exit, so the process ends now
+            p.kill();
+            p.closeInput();
+            throw new IOException("comando is closing");
+        }
         return p;
     }
 
     private void readStdout(final Consumer<String> onLine) {
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8), 1 << 16)) {
+        try (final BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8), 1 << 16)) {
             String line;
             while ((line = in.readLine()) != null) {
                 if (line.isBlank()) {
                     continue;
                 }
-                synchronized (handOver) {
-                    if (drained) {
+                handing.incrementAndGet();
+                try {
+                    if (drained.get()) {
                         return;
                     }
                     onLine.accept(line);
+                } finally {
+                    handing.decrementAndGet();
                 }
             }
         } catch (final IOException e) {
@@ -126,9 +156,10 @@ final class ClaudeProcess {
     }
 
     private void writeStdin() {
-        try (BufferedWriter out = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+        try (final BufferedWriter out = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
             while (true) {
                 final String line = stdin.take();
+                stdinQueued.removed();
                 if (line == END) {
                     return;
                 }
@@ -140,12 +171,19 @@ final class ClaudeProcess {
             LOG.log(System.Logger.Level.DEBUG, "stdin closed [cause=" + e.getMessage() + ']');
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
+        } finally {
+            // nothing writes the queue from now on: it takes no more lines, and its gauge goes with it
+            synchronized (stdin) {
+                writerGone = true;
+                stdin.clear();
+            }
+            Queues.drop(stdinName, stdinQueued);
         }
     }
 
     /** Keeps the last lines of stderr, read from the end of its file, and deletes the file. */
     private void readStderrTail() {
-        try (RandomAccessFile f = new RandomAccessFile(stderrFile.toFile(), "r")) {
+        try (final RandomAccessFile f = new RandomAccessFile(stderrFile.toFile(), "r")) {
             final long length = f.length();
             final long from = Math.max(0L, length - STDERR_TAIL_BYTES);
             final byte[] end = new byte[(int) (length - from)];
@@ -170,13 +208,26 @@ final class ClaudeProcess {
         }
     }
 
-    void send(final String line) {
-        stdin.add(line);
+    /** Queues {@code line} for the process's stdin; false, the line dropped, once the writer has ended. */
+    boolean send(final String line) {
+        return queue(line);
     }
 
     /** Ends input: Claude Code finishes the turn in progress and exits. */
     void closeInput() {
-        stdin.add(END);
+        queue(END);
+    }
+
+    private boolean queue(final String line) {
+        synchronized (stdin) {
+            if (writerGone) {
+                LOG.log(System.Logger.Level.DEBUG, "stdin closed, line dropped [queue=" + stdinName + ']');
+                return false;
+            }
+            stdinQueued.added();
+            stdin.add(line);
+            return true;
+        }
     }
 
     boolean isAlive() {

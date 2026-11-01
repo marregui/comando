@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; §2 built (§2.1 amended 2026-10-31), §3 proposed for the packaging work | Miguel and Claude |
+| 2026-10-30 | accepted; §2 built (§2.1 amended 2026-10-31, §2's permission mode and extra folders amended 2026-11-01, see Amendments), §3 proposed for the packaging work | Miguel and Claude |
 
 ## 1. Context
 
@@ -60,3 +60,12 @@ beside it. Every session then runs on that kit, in its folder by default (§2). 
 - A new session needs a name and nothing else; what it runs with is on screen before Save.
 - A user who wants a project's own `CLAUDE.md` and branch opens More and picks the project's folder.
 - `session_new` keeps `work_dir` required: an agent names the folder it means.
+
+## Amendments
+
+2026-11-01, Miguel's decision D1 of the first-release review: the dialog asks neither **Permission mode** nor **Extra
+folders**, and More holds Working directory and Checkpoint prompt. The kit's `settings.json` sets the permission mode
+for every session ([record 7](0007-default-permission-mode.md)); the line above the form shows it, read-only, after the
+kit, brain and instance: "… · permissions: bypassPermissions, runs every tool unasked (the kit's settings.json)". More
+opens by itself when the folder is not the kit's or the checkpoint prompt is not `/reflect`. Tested in
+`ResourceKindTest` and `ResourceDialogTest`.

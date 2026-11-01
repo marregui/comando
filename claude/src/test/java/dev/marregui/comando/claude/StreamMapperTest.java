@@ -129,16 +129,50 @@ class StreamMapperTest {
         assertThat(empty.of(Intent.SessionContext.class)).as("nothing known, nothing sent").hasSize(1);
     }
 
+    /// A turn that ends in `error_during_execution` without an abort's `terminal_reason` failed (a crash or a startup
+    /// failure, as Claude Code documents it): it reads as a failure with the subtype and the CLI's `errors`, not as the
+    /// user's interrupt; with `aborted_streaming` or `aborted_tools` it reads "interrupted".
+    @Test
+    void anErrorThatEndsTheLoopIsAFailureUnlessTheTurnWasAborted() {
+        mapper.accept("{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true,\"stop_reason\":null,"
+                + "\"errors\":[\"sandbox required but unavailable\"],\"total_cost_usd\":0,\"duration_ms\":5,\"num_turns\":0}");
+        mapper.accept("{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true,\"terminal_reason\":\"aborted_streaming\","
+                + "\"total_cost_usd\":0,\"duration_ms\":5,\"num_turns\":1}");
+        mapper.accept("{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true,\"terminal_reason\":\"aborted_tools\","
+                + "\"total_cost_usd\":0,\"duration_ms\":5,\"num_turns\":1}");
+        assertThat(sink.of(Intent.SessionTurnEnded.class)).allMatch(Intent.SessionTurnEnded::error)
+                .extracting(Intent.SessionTurnEnded::message)
+                .containsExactly("error_during_execution; sandbox required but unavailable", "interrupted", "interrupted");
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::text)
+                .containsExactly("error_during_execution; sandbox required but unavailable", "interrupted", "interrupted");
+    }
+
+    /// A plain-text banner of the loop (`system/informational`, recorded from 2.1.316: a model the organisation
+    /// restricts replaced by another) reaches the transcript as a note; a `warning` level says so in front.
+    @Test
+    void anInformationalBannerReachesTheTranscript() {
+        mapper.accept("{\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"Model \\\"claude-nonexistent-model-x\\\" is restricted "
+                + "by your organization's settings. Using claude-opus-5-5 instead.\",\"isMeta\":false,\"level\":\"warning\",\"session_id\":\"s\"}");
+        mapper.accept("{\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"Plan mode on\",\"level\":\"info\",\"session_id\":\"s\"}");
+        mapper.accept("{\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"  \",\"level\":\"info\",\"session_id\":\"s\"}");
+        assertThat(blocks(Block.Note.class)).extracting(Block.Note::text).containsExactly(
+                "Warning: Model \"claude-nonexistent-model-x\" is restricted by your organization's settings. Using claude-opus-5-5 instead.",
+                "Plan mode on");
+    }
+
     /// A recorded run with a queued prompt, a compaction and an interrupt folds the queued prompt into the running
-    /// turn's one answer, notes the compaction, interrupt and command, shows the compacted size until the next call
-    /// reports one, ends the last turn as interrupted with its running tool in error, and reports the activity as
-    /// requesting and compacting.
+    /// turn's one answer, notes the compaction, interrupt and command, shows the compacted size, marked as Claude
+    /// Code's own count, until the next call reports one, ends the last turn as interrupted with its running tool in
+    /// error, and reports the activity as requesting and compacting.
     @Test
     void queuedPromptCompactionAndInterruptRecording() {
         Fixtures.stream("queued-compact-interrupt").forEach(mapper::accept);
         // after /compact the context is the compacted size until the next call reports one
         assertThat(sink.of(Intent.SessionTurnEnded.class)).extracting(Intent.SessionTurnEnded::contextTokens)
                 .containsExactly(34_824L, 35_205L, 3_812L, 31_921L);
+        // the compacted size is Claude Code's own count, not a call's: the next call reads about eight times more
+        assertThat(sink.of(Intent.SessionTurnEnded.class)).extracting(Intent.SessionTurnEnded::estimated)
+                .containsExactly(false, false, true, false);
 
         // the prompt sent mid-turn was folded into the running turn: one answer
         assertThat(blocks(Block.AssistantText.class)).extracting(Block.AssistantText::text).contains("ALPHA\nBRAVO");

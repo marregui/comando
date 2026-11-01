@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - completed schema changes reload the affected connection
 /// - session layout changes respect the currently focused panel
 /// - removed resources clear notices bound to them
+/// - a refused save's notice is about the session the save concerns
 class ReducerNoticeAndLayoutTest {
 
     private final FakeClock clock = new FakeClock();
@@ -55,6 +56,28 @@ class ReducerNoticeAndLayoutTest {
     private void otherOnP2() {
         state = state.withSessions(List.of(state.session("work").orElseThrow(), SessionState.closed(SessionSpec.fresh("other", "/tmp"))))
                 .withPanel(state.panel(P2).orElseThrow().withSession("other"));
+    }
+
+    /// A refused save names the session it is about: a new one by its own name; an edit by the edited session, unless
+    /// that session is gone or the new name is another session's, which leaves the notice about none of them.
+    @Test
+    void aRefusedSaveNamesTheSessionItIsAbout() {
+        otherOnP2();
+        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
+        assertThat(state.notice().subject()).as("a new session whose name is taken").isEqualTo(Notice.session("other"));
+
+        apply(new Intent.SaveSession("work", SessionSpec.fresh("other", "/tmp")));
+        assertThat(state.notice().text()).isEqualTo("A session called other exists");
+        assertThat(state.notice().subject()).as("renamed to another session's name").isEmpty();
+
+        apply(new Intent.SaveSession("ghost", SessionSpec.fresh("ghost", "/tmp")));
+        assertThat(state.notice().subject()).as("a session that is gone").isEmpty();
+
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SaveSession("work", SessionSpec.fresh("renamed", "/tmp")));
+        assertThat(state.notice().text()).isEqualTo("Stop session work before renaming it");
+        assertThat(state.notice().subject()).as("a running session renamed").isEqualTo(Notice.session("work"));
     }
 
     /// An error for panel `p1` stays standing across unrelated information, while both notices remain in chronological

@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
 import javax.swing.text.BadLocationException;
@@ -19,8 +21,11 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.result.ResultView;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
@@ -39,6 +44,7 @@ import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
+import dev.marregui.comando.ui.panels.SessionBar;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 import dev.marregui.comando.ui.panels.TerminalTabs;
 import dev.marregui.comando.ui.panels.Workspace;
@@ -49,6 +55,7 @@ import dev.marregui.comando.ui.widget.capability.FindBar;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
+import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
 /**
  * The window's command table: every command with its label, key and when it can run, registered once; and what the
@@ -59,6 +66,8 @@ final class Commands {
     private static final int SHIFT = InputEvent.SHIFT_DOWN_MASK;
     private static final int CTRL = InputEvent.CTRL_DOWN_MASK;
     private static final int ALT = InputEvent.ALT_DOWN_MASK;
+    /** A whole percentage as typed: digits, with a {@code %} after them allowed; no sign, grouping or fraction. */
+    private static final Pattern PERCENT = Pattern.compile("(\\d+)\\s*%?");
 
     private final ComandoUi ui;
     private final ComandoUi.Dependencies deps;
@@ -157,7 +166,7 @@ final class Commands {
         cmd("run.stop", "Stop", key(KeyEvent.VK_PERIOD, shortcut), () -> deps.intents().dispatch(new Intent.CancelRun(focusedId())),
                 this::canStop);
         // panel: its session
-        cmd("session.toggle", "Connect or disconnect", null, () -> focusedSession().ifPresent(x ->
+        cmd("session.toggle", "Start or stop the session", null, () -> focusedSession().ifPresent(x ->
                 deps.intents().dispatch(x.status().isUsable() ? new Intent.StopSession(x.name()) : new Intent.StartSession(x.name()))),
                 () -> focusedSession().isPresent());
         cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, shortcut | SHIFT),
@@ -165,11 +174,40 @@ final class Commands {
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
         // the Session tab emptied, the conversation going on: from the palette only, once a turn has ended (record 104)
         cmd("transcript.clear", "Clear the Session tab", null, lower::clearTranscript, lower::canClearTranscript);
+        // through the conversation the transcript in front shows; a component that has the key itself (the editor) keeps it
+        for (final TranscriptWidget.Move m : TranscriptWidget.Move.values()) {
+            cmd(m.id, m.label, m.key, () -> {
+                final TranscriptWidget t = focus.capability(TranscriptWidget.class);
+                if (t != null) {
+                    t.move(m);
+                }
+            }, () -> focus.capability(TranscriptWidget.class) != null);
+        }
         // as the session's menu in the sidebar: only a running session has a conversation to compact, and not while its
         // checkpoint runs (record 130)
         cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
                         deps.intents().dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))),
-                () -> focusedSession().filter(x -> x.status().isUsable() && !x.isCheckpointing()).isPresent());
+                () -> focusedSession().filter(Commands::canCompact).isPresent());
+        // as the session bar's buttons and the session's menu, with the same enablement: off while the checkpoint runs
+        // (record 130)
+        cmd("session.checkpoint", "Checkpoint", null, () -> focusedSession().ifPresent(x ->
+                        deps.intents().dispatch(new Intent.Checkpoint(x.name()))),
+                () -> focusedSession().filter(SessionBar::canCheckpoint).isPresent());
+        cmd("session.fresh", "Start a new conversation", null, () -> focusedSession().ifPresent(x ->
+                        deps.intents().dispatch(new Intent.StartFresh(x.name()))),
+                () -> focusedSession().filter(Commands::canStartFresh).isPresent());
+        cmd("session.rewrite", "Rewrite the panel as a document", null, this::rewritePanel,
+                () -> focusedSession().filter(x -> canRewrite(x, focusedText())).isPresent());
+        // the rest of the session's menu in the sidebar, with its enablement: copy and clone read the session, so they
+        // stay on while its checkpoint runs; removing it waits (record 130)
+        cmd("session.copyDetails", "Copy the session's details", null, () -> focusedSession().ifPresent(x -> {
+            parts.sidebar().copyDetails(x);
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Copied " + x.name() + "'s details", false));
+        }), () -> focusedSession().isPresent());
+        cmd("session.clone", "Clone the session…", null, () -> focusedSession().ifPresent(parts.sidebar()::cloneSession),
+                () -> focusedSession().isPresent());
+        cmd("session.remove", "Remove the session…", null, () -> focusedSession().ifPresent(parts.sidebar()::removeSession),
+                () -> focusedSession().filter(Commands::canRemove).isPresent());
         // every session's: the context at which a turn's end runs the checkpoint, then /compact (record 129)
         cmd("session.checkpointThreshold", "Checkpoint threshold…", null, this::checkpointThreshold);
         for (final String m : SessionSpec.MODELS) {
@@ -202,6 +240,17 @@ final class Commands {
                 name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
         cmd("connection.dialog", "Connection settings…", key(KeyEvent.VK_O, shortcut | SHIFT),
                 () -> ui.openConnections(deps.state().get().focusedPanel().connection()));
+        // the rest of the connection's menu in the sidebar, on the focused panel's connection
+        cmd("connection.test", "Test the connection", null, () -> focusedConnection().ifPresent(c ->
+                deps.intents().dispatch(new Intent.TestConnection(c.spec()))), () -> focusedConnection().isPresent());
+        cmd("connection.copyDetails", "Copy the connection's details", null, () -> focusedConnection().ifPresent(c -> {
+            parts.sidebar().copyDetails(c);
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Copied " + c.name() + "'s details", false));
+        }), () -> focusedConnection().isPresent());
+        cmd("connection.clone", "Clone the connection…", null, () -> focusedConnection().ifPresent(parts.sidebar()::cloneConnection),
+                () -> focusedConnection().isPresent());
+        cmd("connection.remove", "Remove the connection…", null, () -> focusedConnection().ifPresent(parts.sidebar()::removeConnection),
+                () -> focusedConnection().isPresent());
         if (deps.server() != null) {
             cmd("server.start", "Start embedded QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning() && !deps.server().busy());
             cmd("server.stop", "Stop embedded QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning() && !deps.server().busy());
@@ -226,6 +275,7 @@ final class Commands {
         cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
         cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
         cmd("kit.backupKit", KitActions.BACK_UP_KIT, null, kit::backUpKit, kit::canBackUpKit);
+        cmd("kit.repair", KitActions.REPAIR, null, kit::repair, kit::canRepair);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         cmd("terminal.start", "Start the shell", null, () -> lower.terminals().startFocused(deps.state().get()),
                 () -> !lower.terminals().focusedRunning());
@@ -346,6 +396,31 @@ final class Commands {
         return s.session(s.focusedPanel().session());
     }
 
+    private Optional<ConnectionState> focusedConnection() {
+        final AppState s = deps.state().get();
+        return s.connection(s.focusedPanel().connection());
+    }
+
+    /** Compact, as the session's menu: a running session, not while its checkpoint runs (record 130). */
+    static boolean canCompact(final SessionState x) {
+        return x.status().isUsable() && !x.isCheckpointing();
+    }
+
+    /** Start a new conversation, as the session bar's button and the session's menu: stopped, with one to leave. */
+    static boolean canStartFresh(final SessionState x) {
+        return SessionBar.showsFresh(x) && !x.isCheckpointing();
+    }
+
+    /** Rewrite, as the session's menu: a running session, not while its checkpoint runs, and a panel text to rewrite. */
+    static boolean canRewrite(final SessionState x, final String text) {
+        return canCompact(x) && !text.isBlank();
+    }
+
+    /** Remove…, as the session's menu: not while the session's checkpoint runs (record 130). */
+    static boolean canRemove(final SessionState x) {
+        return !x.isCheckpointing();
+    }
+
     private boolean canStop() {
         final AppState s = deps.state().get();
         return s.runOf(s.focused()).map(r -> r.status().isActive()).orElse(false)
@@ -391,29 +466,76 @@ final class Commands {
     }
 
     /**
-     * Asks for the context, in tokens, at which a session's turn end runs its checkpoint, then {@code /compact}; 0 runs
-     * none (record 129). Kept across restarts; a session started from then on is told who checkpoints it.
+     * Asks for the share of a session's context window, in percent, at which the session falls due and its turn end
+     * runs its checkpoint, then {@code /compact} (record 129): from {@link Reflection#MIN_PERCENT} to 100;
+     * anything else is refused with the reason and the threshold kept. Kept across restarts; a session started from
+     * then on is told who checkpoints it.
      */
     private void checkpointThreshold() {
         final String answer = (String) JOptionPane.showInputDialog(parts.frame(),
-                Plain.text("Context, in tokens, at which a turn's end runs the session's checkpoint, then /compact; 0 for never:"),
-                "Checkpoint threshold", JOptionPane.PLAIN_MESSAGE, null, null, Long.toString(windowLayout.checkpointThreshold()));
+                Plain.text("Share of a session's context window, in percent, at which it falls due and a turn's end runs its checkpoint, "
+                        + "then /compact; " + Reflection.MIN_PERCENT + " to 100:"),
+                "Checkpoint threshold", JOptionPane.PLAIN_MESSAGE, null, null, Integer.toString(windowLayout.checkpointThreshold()));
         if (answer == null || answer.isBlank()) {
             return;
         }
-        long tokens;
-        try {
-            tokens = Long.parseLong(answer.strip().replace("_", "").replace(",", ""));
-        } catch (final NumberFormatException e) {
-            tokens = -1L;
-        }
-        if (tokens < 0 || tokens > Integer.MAX_VALUE) {
-            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Checkpoint threshold kept: " + answer.strip() + " is not a number of tokens", false));
+        final Optional<String> refused = thresholdRefusal(answer);
+        if (refused.isPresent()) {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, refused.get(), false));
             return;
         }
-        ui.checkpointThresholdChosen(tokens);
-        deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, tokens == 0 ? "No automatic checkpoint"
-                : "Checkpoint, then /compact, at " + String.format("%,d", tokens) + " tokens of context", false));
+        final int percent = thresholdOf(answer);
+        ui.checkpointThresholdChosen(percent);
+        deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Checkpoint, then /compact, at " + percent
+                + "% of a session's context window", false));
+    }
+
+    /**
+     * Why a checkpoint threshold typed as {@code answer} is refused, in the words of its notice; empty for a whole
+     * percentage from {@link Reflection#MIN_PERCENT} to 100, a {@code %} after it allowed.
+     */
+    static Optional<String> thresholdRefusal(final String answer) {
+        final String typed = answer.strip();
+        if (!PERCENT.matcher(typed).matches()) {
+            return Optional.of("Checkpoint threshold kept: " + typed + " is not a whole percentage");
+        }
+        final int percent = thresholdOf(typed);
+        if (percent < Reflection.MIN_PERCENT || percent > 100) {
+            return Optional.of("Checkpoint threshold kept: " + typed + " is outside " + Reflection.MIN_PERCENT
+                    + " to 100; every session checkpoints, at " + Reflection.MIN_PERCENT + "% of its window at the earliest");
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The percentage typed as {@code answer}, digits with a {@code %} after them allowed; one past 999 reads as the
+     * largest {@code int}, so that it is outside every range.
+     */
+    static int thresholdOf(final String answer) {
+        final Matcher m = PERCENT.matcher(answer.strip());
+        if (!m.matches()) {
+            throw new IllegalArgumentException("not a whole percentage: " + answer);
+        }
+        final String digits = m.group(1);
+        return digits.length() > 3 ? Integer.MAX_VALUE : Integer.parseInt(digits);
+    }
+
+    /**
+     * Has the focused panel's session rewrite the panel's whole text as a professional Markdown document, as the
+     * session's menu does ({@link EditorPanel#polishPrompt}).
+     */
+    private void rewritePanel() {
+        final PanelState p = deps.state().get().focusedPanel();
+        final String text = focusedText();
+        if (!text.isBlank()) {
+            deps.intents().dispatch(new Intent.RunText(p.id(), EditorPanel.polishPrompt(p.title(), text), Target.CLAUDE));
+        }
+    }
+
+    /** The focused panel's text; empty before its editor exists. */
+    private String focusedText() {
+        final EditorPanel p = parts.workspace().focused();
+        return p == null ? "" : p.editor().text();
     }
 
     /** Types the editor's selection, or the line under the caret, into the panel's shell and runs it. */

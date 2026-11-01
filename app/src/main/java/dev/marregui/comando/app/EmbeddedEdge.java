@@ -21,8 +21,10 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HexFormat;
@@ -54,9 +56,11 @@ import org.xml.sax.InputSource;
 
 import tools.jackson.core.JacksonException;
 
+import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ServerSwitch;
@@ -91,9 +95,23 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         }
     }
 
-    /** The registry's content: the Edge's process, when it started, and the instance that started it. */
-    record Entry(long pid, String owner, String name, Ports ports, String started) {
+    /**
+     * The registry's content: its schema's version (record 133; an entry without one is version 1), the Edge's process,
+     * when it started, and the instance that started it.
+     */
+    record Entry(int version, long pid, String owner, String name, Ports ports, String started) {
+        Entry {
+            version = version <= 0 ? 1 : version;
+        }
+
+        /** An entry of the schema this comando writes. */
+        Entry(final long pid, final String owner, final String name, final Ports ports, final String started) {
+            this(REGISTRY_VERSION, pid, owner, name, ports, started);
+        }
     }
+
+    /** The registry's schema version this comando reads and writes; a later one is read by no instance of this one. */
+    static final int REGISTRY_VERSION = 1;
 
     /** A distribution zip, or why there is none. */
     record Located(Path zip, String problem) {
@@ -121,6 +139,11 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     /** A process whose start differs from the recorded one by more than this is another process on a reused pid. */
     private static final Duration SAME_PROCESS = Duration.ofSeconds(2);
     private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
+    /** The admin API's one account (its password in {@link #PASSWORD_FILE}). */
+    static final String ADMIN_USER = "admin";
+    /** The admin API's password, in the Edge's root, readable by the user alone. */
+    static final String PASSWORD_FILE = "admin-password";
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final Path root;
     private final String owner;
@@ -355,11 +378,11 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         Instant began;
         try {
             final Path home = install(d.zip());
-            prepareConfig(home.resolve("conf"), root.resolve("conf"), ports);
+            prepareConfig(home.resolve("conf"), root.resolve("conf"), ports, adminPassword(root));
             patchJmxPort(home.resolve("bin").resolve("run.sh"), ports.jmx());
             began = Instant.now();
             p = spawn(home);
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start the Edge [root=" + root + "]: " + e.getMessage(), e));
             return;
         }
@@ -382,7 +405,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         if (failure.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "Edge up [pid=" + p.pid() + ", ports=" + ports + ']');
             intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Edge is up: MQTT 127.0.0.1:" + ports.mqtt() + ", UI http://localhost:"
-                    + ports.api() + " (admin/hivemq)", false));
+                    + ports.api() + " (user " + ADMIN_USER + ", its password in " + HomeDir.shorten(root.resolve(PASSWORD_FILE).toString()) + ")", false));
             return;
         }
         if (terminate(h)) {
@@ -395,7 +418,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     private String awaitReady(final Process p) {
         final long deadline = System.nanoTime() + readyWithin.toNanos();
         try {
-            while (System.nanoTime() < deadline) {
+            while (deadline - System.nanoTime() > 0) {
                 if (up.test(ports)) {
                     return "";
                 }
@@ -424,9 +447,22 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
 
     /**
      * SIGTERM to the recorded process, then up to {@link #STOP_WAIT} for it to exit, then SIGKILL; true once it is
-     * gone. Only a process this code started and recorded comes here.
+     * gone. Only a process this code started and recorded comes here. The processes it started go with it: read while
+     * it lives (an ended process's pid may be another's), each signalled with it, and SIGKILLed once it has gone, so a
+     * child that outlives it is not left behind; a handle keeps its process's start time, so no other process is hit.
      */
     private static boolean terminate(final ProcessHandle h) {
+        final List<ProcessHandle> children = h.isAlive() ? h.descendants().toList() : List.of();
+        children.forEach(ProcessHandle::destroy);
+        try {
+            return stopped(h);
+        } finally {
+            children.forEach(ProcessHandle::destroyForcibly);
+        }
+    }
+
+    /** SIGTERM to {@code h}, then up to {@link #STOP_WAIT} for it to exit, then SIGKILL; true once it is gone. */
+    private static boolean stopped(final ProcessHandle h) {
         h.destroy();
         try {
             h.onExit().get(STOP_WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -437,7 +473,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
             try {
                 h.onExit().get(5, TimeUnit.SECONDS);
                 return true;
-            } catch (TimeoutException | ExecutionException again) {
+            } catch (final TimeoutException | ExecutionException again) {
                 return !h.isAlive();
             } catch (final InterruptedException again) {
                 Thread.currentThread().interrupt();
@@ -489,7 +525,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     static void download(final URI url, final String sha256, final Path zip) throws IOException, InterruptedException {
         Files.createDirectories(zip.getParent());
         final Path part = zip.resolveSibling(zip.getFileName() + ".part");
-        try (HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT_WITHIN).build()) {
+        try (final HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT_WITHIN).build()) {
             final HttpResponse<Path> r = http.send(HttpRequest.newBuilder(url).GET().build(), HttpResponse.BodyHandlers.ofFile(part));
             if (r.statusCode() != 200) {
                 throw new IOException("HTTP " + r.statusCode());
@@ -506,7 +542,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     }
 
     private static String sha256(final Path f) throws IOException {
-        try (InputStream in = Files.newInputStream(f)) {
+        try (final InputStream in = Files.newInputStream(f)) {
             final MessageDigest d = MessageDigest.getInstance("SHA-256");
             final byte[] buf = new byte[1 << 16];
             for (int n; (n = in.read(buf)) > 0; ) {
@@ -572,7 +608,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
      */
     private static String unzip(final Path zip, final Path into) throws IOException {
         String top = null;
-        try (ZipFile z = new ZipFile(zip.toFile())) {
+        try (final ZipFile z = new ZipFile(zip.toFile())) {
             for (final ZipEntry e : z.stream().toList()) {
                 final Path target = into.resolve(e.getName()).normalize();
                 if (!target.startsWith(into) || target.equals(into)) {
@@ -588,7 +624,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
                     Files.createDirectories(target);
                 } else {
                     Files.createDirectories(target.getParent());
-                    try (InputStream in = z.getInputStream(e)) {
+                    try (final InputStream in = z.getInputStream(e)) {
                         Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
                     }
                     if (target.getParent().getFileName().toString().equals("bin") && target.toString().endsWith(".sh")) {
@@ -609,15 +645,20 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         if (!Files.exists(dir)) {
             return;
         }
-        try (Stream<Path> all = Files.walk(dir)) {
+        try (final Stream<Path> all = Files.walk(dir)) {
             for (final Path p : all.sorted(Comparator.reverseOrder()).toList()) {
                 Files.delete(p);
             }
         }
     }
 
-    /** The configuration comando's Edge starts with: both MQTT listeners and the admin API, on loopback. */
-    static String config(final Ports ports) {
+    /**
+     * The configuration comando's Edge starts with: both MQTT listeners and the admin API, on loopback. The admin API's
+     * one account is comando's, {@link #ADMIN_USER} with {@code password} and the admin role, and local login is stated
+     * on: Edge turns its built-in {@code admin}/{@code hivemq} account on only when no user source is configured and
+     * local login is not stated, and refuses to start when it is stated with none (Edge 2026.15, {@code ApiConfigurator}).
+     */
+    static String config(final Ports ports, final String password) {
         return """
                 <?xml version="1.0"?>
                 <hivemq>
@@ -628,9 +669,35 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
                     <admin-api>
                         <enabled>true</enabled>
                         <listeners><http-listener><port>%d</port><bind-address>127.0.0.1</bind-address></http-listener></listeners>
+                        <username-authentication><enabled>true</enabled></username-authentication>
+                        <users><user><username>%s</username><password>%s</password><roles><role>admin</role></roles></user></users>
                     </admin-api>
                 </hivemq>
-                """.formatted(ports.mqtt(), ports.websocket(), ports.api());
+                """.formatted(ports.mqtt(), ports.websocket(), ports.api(), ADMIN_USER, password);
+    }
+
+    /**
+     * The admin API's password for the Edge in {@code root}: made at the first start of this install (24 random bytes,
+     * URL-safe Base64, nothing XML would escape), kept in {@link #PASSWORD_FILE}, readable by the user alone (rule 15),
+     * and read again at every later start. It reaches no log and no notice.
+     */
+    static String adminPassword(final Path root) throws IOException {
+        final Path file = root.resolve(PASSWORD_FILE);
+        if (Files.isRegularFile(file)) {
+            final String kept = Files.readString(file).strip();
+            if (kept.matches("[A-Za-z0-9_-]{16,}")) {
+                OwnerOnly.narrow(file);
+                return kept;
+            }
+            LOG.log(System.Logger.Level.WARNING, "the Edge's admin password file does not hold a password; a new one is made [file=" + file + ']');
+        }
+        final byte[] bytes = new byte[24];
+        RANDOM.nextBytes(bytes);
+        final String made = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        Files.createDirectories(root);
+        AtomicFiles.writeString(file, made + "\n");
+        OwnerOnly.narrow(file);
+        return made;
     }
 
     /**
@@ -638,18 +705,21 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
      * {@code conf/}; {@code config.xml} is comando's template the first time, after that the saved one with only its
      * MQTT listeners and admin API set to comando's ports, which the instances need to find one another (record 122).
      */
-    static void prepareConfig(final Path shipped, final Path conf, final Ports ports) throws IOException {
-        prepareConfig(shipped, conf, ports, Files::move);
+    static void prepareConfig(final Path shipped, final Path conf, final Ports ports, final String password) throws IOException {
+        prepareConfig(shipped, conf, ports, password, Files::move);
     }
 
     /**
-     * As {@link #prepareConfig(Path, Path, Ports)}, {@code config.xml} moved into place by {@code mover}: whole or not
-     * at all, so a kill mid-write leaves the user's saved settings as they were.
+     * As {@link #prepareConfig(Path, Path, Ports, String)}, {@code config.xml} moved into place by {@code mover}: whole
+     * or not at all, so a kill mid-write leaves the user's saved settings as they were. The folder is the user's alone:
+     * {@code config.xml} holds the admin API's password, and the Edge's own saves write it at the Edge's umask.
      */
-    static void prepareConfig(final Path shipped, final Path conf, final Ports ports, final AtomicFiles.Mover mover) throws IOException {
+    static void prepareConfig(final Path shipped, final Path conf, final Ports ports, final String password, final AtomicFiles.Mover mover)
+            throws IOException {
         Files.createDirectories(conf);
+        OwnerOnly.narrow(conf);
         if (Files.isDirectory(shipped)) {
-            try (Stream<Path> files = Files.walk(shipped)) {
+            try (final Stream<Path> files = Files.walk(shipped)) {
                 for (final Path f : files.toList()) {
                     final Path target = conf.resolve(shipped.relativize(f).toString());
                     if (Files.isDirectory(f)) {
@@ -662,12 +732,12 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         }
         final Path config = conf.resolve("config.xml");
         if (!Files.isRegularFile(config)) {
-            AtomicFiles.write(config, config(ports).getBytes(StandardCharsets.UTF_8), mover);
+            AtomicFiles.write(config, config(ports, password).getBytes(StandardCharsets.UTF_8), mover);
             return;
         }
         String next;
         try {
-            next = merged(Files.readString(config), ports);
+            next = merged(Files.readString(config), ports, password);
         } catch (final Exception e) {
             // the settings the Edge's own UI saved are not lost: the file stays beside the template that replaces it,
             // under a name of its own, so a later unparseable file never overwrites an earlier one
@@ -677,31 +747,35 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
             }
             Files.copy(config, kept);
             LOG.log(System.Logger.Level.WARNING, "cannot parse the Edge's config.xml, the template replaces it [kept=" + kept + ']', e);
-            next = config(ports);
+            next = config(ports, password);
         }
         AtomicFiles.write(config, next.getBytes(StandardCharsets.UTF_8), mover);
+        OwnerOnly.narrow(config);
     }
 
     /**
      * {@code xml} with its {@code mqtt-listeners} and {@code admin-api} replaced by comando's, in place, and everything
      * else as it was; the template when {@code xml} does not parse.
      */
-    static String enforce(final String xml, final Ports ports) {
+    static String enforce(final String xml, final Ports ports, final String password) {
         try {
-            return merged(xml, ports);
+            return merged(xml, ports, password);
         } catch (final Exception e) {
             LOG.log(System.Logger.Level.WARNING, "cannot parse the Edge's config.xml, the template replaces it", e);
-            return config(ports);
+            return config(ports, password);
         }
     }
 
-    /** {@code xml} with comando's listeners and admin API in place; throws when {@code xml} does not parse. */
-    private static String merged(final String xml, final Ports ports) throws Exception {
+    /**
+     * {@code xml} with comando's listeners and admin API in place, the admin API's account with it; throws when
+     * {@code xml} does not parse.
+     */
+    private static String merged(final String xml, final Ports ports, final String password) throws Exception {
         final DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
         f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         f.setExpandEntityReferences(false);
         final Document doc = f.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
-        final Document ours = f.newDocumentBuilder().parse(new InputSource(new StringReader(config(ports))));
+        final Document ours = f.newDocumentBuilder().parse(new InputSource(new StringReader(config(ports, password))));
         final Element top = doc.getDocumentElement();
         for (final String name : List.of("mqtt-listeners", "admin-api")) {
             final Node replacement = doc.importNode(ours.getElementsByTagName(name).item(0), true);
@@ -762,13 +836,13 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
      * without it fails on that, refusing a start the Edge itself would make.
      */
     static boolean taken(final int port) {
-        try (Socket s = new Socket()) {
+        try (final Socket s = new Socket()) {
             s.connect(new InetSocketAddress(LOOPBACK, port), 200);
             return true;
         } catch (final IOException e) {
             // nobody answers; whether it can be bound decides
         }
-        try (ServerSocket s = new ServerSocket()) {
+        try (final ServerSocket s = new ServerSocket()) {
             s.setReuseAddress(true);
             s.bind(new InetSocketAddress(LOOPBACK, port));
             return false;
@@ -793,13 +867,18 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         }
     }
 
-    /** The registry's entry, or null when there is none. */
+    /** The registry's entry, or null when there is none; throws when it does not read or is of a later version. */
     private Entry read() throws IOException {
+        final Entry e;
         try {
-            return Files.isRegularFile(registry) ? JsonFile.JSON.readValue(registry.toFile(), Entry.class) : null;
-        } catch (final JacksonException e) {
-            throw new IOException(e.getMessage(), e);
+            e = Files.isRegularFile(registry) ? JsonFile.JSON.readValue(registry.toFile(), Entry.class) : null;
+        } catch (final JacksonException ex) {
+            throw new IOException(ex.getMessage(), ex);
         }
+        if (e != null && e.version() > REGISTRY_VERSION) {
+            throw new IOException("it is of version " + e.version() + ", written by a later comando; this one reads version " + REGISTRY_VERSION);
+        }
+        return e;
     }
 
     /** The entry's process when it lives and is the one recorded, not another on its pid. */

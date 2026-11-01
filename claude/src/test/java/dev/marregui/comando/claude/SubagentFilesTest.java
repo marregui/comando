@@ -43,7 +43,7 @@ class SubagentFilesTest {
         Files.writeString(project.resolve("conv-1.jsonl"), "");
         subagents = Files.createDirectories(project.resolve("conv-1/subagents"));
         for (final String f : List.of("agent-a1.jsonl", "agent-a1.meta.json", "agent-a2.meta.json", "agent-a3.meta.json")) {
-            try (InputStream in = getClass().getResourceAsStream("/subagents/" + f)) {
+            try (final InputStream in = getClass().getResourceAsStream("/subagents/" + f)) {
                 Files.write(subagents.resolve(f), in.readAllBytes());
             }
         }
@@ -117,7 +117,7 @@ class SubagentFilesTest {
     @Test
     void aFileOverTheLimitShowsItsTaskThenOnlyItsTailAndSaysSo() throws IOException {
         final Path f = subagents.resolve("agent-huge.jsonl");
-        try (Writer w = Files.newBufferedWriter(f, StandardCharsets.UTF_8)) {
+        try (final Writer w = Files.newBufferedWriter(f, StandardCharsets.UTF_8)) {
             w.write(userText("THE FIRST PROMPT") + "\n");
             final String filler = assistantText("filler " + "z".repeat(1000));
             for (long written = 0; written < 3L * 1024 * 1024; written += filler.length() + 1) {
@@ -208,7 +208,7 @@ class SubagentFilesTest {
         Files.writeString(f, assistantText("EARLY") + "\n");
         final SubagentFiles.Conversation c = new SubagentFiles.Conversation(f, json, SubagentFiles.SCAN_BYTES);
         c.read();
-        try (RandomAccessFile raf = new RandomAccessFile(f.toFile(), "rw")) {
+        try (final RandomAccessFile raf = new RandomAccessFile(f.toFile(), "rw")) {
             raf.seek(0);
             raf.write("xxxxxxxx".getBytes(StandardCharsets.UTF_8)); // the early line, now not JSON
             raf.seek(raf.length());

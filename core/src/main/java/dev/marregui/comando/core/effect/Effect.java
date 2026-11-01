@@ -1,6 +1,8 @@
 package dev.marregui.comando.core.effect;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
@@ -144,10 +146,20 @@ public sealed interface Effect {
         }
     }
 
-    /** Reads these folders every few seconds, and no others. */
-    record WatchFolders(List<FolderRoot> folders) implements Effect {
+    /**
+     * Reads these folders every few seconds, and no others; a folder with an entry in {@code open} (by name, its open
+     * subfolders' absolute paths) only as deep as the Files tab shows it, any other whole.
+     */
+    record WatchFolders(List<FolderRoot> folders, Map<String, List<String>> open) implements Effect {
         public WatchFolders {
             folders = List.copyOf(folders);
+            open = open == null ? Map.of() : open.entrySet().stream()
+                    .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
+        }
+
+        /** Every folder read whole. */
+        public WatchFolders(final List<FolderRoot> folders) {
+            this(folders, Map.of());
         }
     }
 
@@ -235,8 +247,11 @@ public sealed interface Effect {
         }
     }
 
-    /** The decisions held back, to {@code decisions.json} (record 131). */
-    record SaveDecisions(List<Decision> decisions) implements Effect {
+    /**
+     * The decisions held back, to {@code decisions.json} (record 131), with an id at or above every id given so far, so
+     * the next run gives none of them again.
+     */
+    record SaveDecisions(List<Decision> decisions, long lastId) implements Effect {
         public SaveDecisions {
             decisions = List.copyOf(decisions);
         }

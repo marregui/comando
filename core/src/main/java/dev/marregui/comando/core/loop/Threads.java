@@ -3,11 +3,16 @@ package dev.marregui.comando.core.loop;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * comando's threads by kind ({@code docs/architecture.md} §6). Two event loops (the EDT, the reducer), one
@@ -72,19 +77,107 @@ public final class Threads {
 
     /**
      * A strand: one virtual thread running its tasks in order, for one resource (a connection, the store, a renderer).
+     * Its queue is unbounded and measured: {@link Queues} holds its depth and peak under the strand's name until the
+     * strand terminates.
      */
     public static ExecutorService strand(final String name) {
-        return Executors.newSingleThreadExecutor(virtualFactory(name));
+        return new Strand(name, virtualFactory(name));
+    }
+
+    /** A strand's executor: one thread, an unbounded queue counted as tasks join and leave it. */
+    private static final class Strand extends ThreadPoolExecutor {
+
+        private final String name;
+        private final Queues.Gauge queued;
+
+        Strand(final String name, final ThreadFactory threads) {
+            super(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), threads);
+            this.name = name;
+            this.queued = Queues.gauge(name);
+        }
+
+        @Override
+        public void execute(final Runnable task) {
+            queued.added();
+            try {
+                super.execute(task);
+            } catch (final RejectedExecutionException e) {
+                queued.removed();
+                throw e;
+            }
+        }
+
+        @Override
+        protected void beforeExecute(final Thread t, final Runnable r) {
+            queued.removed();
+            super.beforeExecute(t, r);
+        }
+
+        @Override
+        protected void terminated() {
+            Queues.drop(name, queued);
+            super.terminated();
+        }
     }
 
     /**
      * A strand that also runs tasks after a delay or at a period. Its thread is virtual: waiting for the next task it
      * holds no operating-system thread, and its timers are kept by the JDK's one delay thread. A task cancelled before
-     * it runs leaves the queue at once.
+     * it runs leaves the queue at once. Its queue is unbounded and measured as a strand's is: {@link Queues} holds its
+     * depth (the tasks waiting, delayed and periodic ones included) and peak under the strand's name until it
+     * terminates.
      */
     public static ScheduledExecutorService timedStrand(final String name) {
-        final ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, virtualFactory(name));
-        e.setRemoveOnCancelPolicy(true);
-        return e;
+        return new TimedStrand(name, virtualFactory(name));
+    }
+
+    /**
+     * A timed strand's executor: one thread; its queue, kept by the JDK, is sampled when a task joins it and when it is
+     * read, since a cancel or a shutdown empties it without telling.
+     */
+    private static final class TimedStrand extends ScheduledThreadPoolExecutor {
+
+        private final String name;
+        private final Queues.Gauge queued;
+
+        TimedStrand(final String name, final ThreadFactory threads) {
+            super(1, threads);
+            this.name = name;
+            this.queued = Queues.sampled(name, () -> getQueue().size());
+            setRemoveOnCancelPolicy(true);
+        }
+
+        // execute and submit schedule with no delay, so these four are every way a task joins the queue
+
+        @Override
+        public ScheduledFuture<?> schedule(final Runnable command, final long delay, final TimeUnit unit) {
+            return sampled(super.schedule(command, delay, unit));
+        }
+
+        @Override
+        public <V> ScheduledFuture<V> schedule(final Callable<V> callable, final long delay, final TimeUnit unit) {
+            return sampled(super.schedule(callable, delay, unit));
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(final Runnable command, final long initialDelay, final long period, final TimeUnit unit) {
+            return sampled(super.scheduleAtFixedRate(command, initialDelay, period, unit));
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(final Runnable command, final long initialDelay, final long delay, final TimeUnit unit) {
+            return sampled(super.scheduleWithFixedDelay(command, initialDelay, delay, unit));
+        }
+
+        private <F> F sampled(final F future) {
+            queued.sample();
+            return future;
+        }
+
+        @Override
+        protected void terminated() {
+            Queues.drop(name, queued);
+            super.terminated();
+        }
     }
 }

@@ -37,7 +37,7 @@ final class AppIcon {
 
     /** The icon, or null when the resource cannot be read. */
     static BufferedImage load() {
-        try (InputStream in = AppIcon.class.getResourceAsStream("/icons/comando.png")) {
+        try (final InputStream in = AppIcon.class.getResourceAsStream("/icons/comando.png")) {
             return in == null ? null : ImageIO.read(in);
         } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read the app icon", e);

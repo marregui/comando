@@ -33,7 +33,7 @@ class PanelFilesTest {
     }
 
     private List<String> names() throws Exception {
-        try (Stream<Path> files = Files.list(dir())) {
+        try (final Stream<Path> files = Files.list(dir())) {
             return files.map(p -> p.getFileName().toString()).sorted().toList();
         }
     }
@@ -44,7 +44,7 @@ class PanelFilesTest {
     void eachPanelsTextIsAMarkdownFileNamedAfterItsTitleAndPanelsJsonHoldsNoText() throws Exception {
         final PanelId spec = new PanelId("a");
         final PanelId notes = new PanelId("b");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(spec, "lane spec", "", ""), new PanelState(notes, "notes", "", "")), List.of());
             store.changed(spec, "# Lane\n\nSELECT 1;\n");
@@ -56,7 +56,7 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("notes.md"))).isEqualTo("todo");
         final String json = Files.readString(home.resolve("panels.json"));
         assertThat(json).contains("\"file\" : \"lane spec.md\"").doesNotContain("content").doesNotContain("SELECT 1");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("lane spec", "notes");
             assertThat(store.load(spec)).isEqualTo("# Lane\n\nSELECT 1;\n");
@@ -72,7 +72,7 @@ class PanelFilesTest {
         Files.writeString(home.resolve("sessions.json"), "[]");
         Files.writeString(home.resolve("panels.json"), """
                 [{"id":"p","title":"main","connection":"","session":"","content":"SELECT 42;"}]""");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             assertThat(store.load(new PanelId("p"))).isEqualTo("SELECT 42;");
         }
@@ -86,7 +86,7 @@ class PanelFilesTest {
     void aRenamedPanelMovesItsFileAndEqualTitlesGetNumberedNames() throws Exception {
         final PanelId one = new PanelId("1");
         final PanelId two = new PanelId("2");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(one, "Draft", "", ""), new PanelState(two, "draft", "", "")), List.of());
             store.changed(one, "first");
@@ -109,7 +109,7 @@ class PanelFilesTest {
         Files.createDirectories(dir());
         Files.writeString(dir().resolve("spec.md"), "kept from an earlier panel");
         final PanelId id = new PanelId("n");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
             store.changed(id, "new");
@@ -125,7 +125,7 @@ class PanelFilesTest {
     void anEditMadeOutsideComandoIsKeptAsideAndTheUserIsTold() throws Exception {
         final PanelId id = new PanelId("x");
         final List<String> notices = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             store.load();
             store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
@@ -151,7 +151,7 @@ class PanelFilesTest {
     void aClosedPanelKeepsItsFileWithItsLastTextBlankOrNotAndComesBackClosed() throws Exception {
         final PanelId full = new PanelId("f");
         final PanelId blank = new PanelId("b");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(full, "full", "", ""), new PanelState(blank, "blank", "", "")), List.of());
             store.changed(full, "saved");
@@ -170,7 +170,7 @@ class PanelFilesTest {
         }
         assertThat(names()).as("nothing is deleted on close").containsExactly("blank.md", "full.md");
         assertThat(Files.readString(dir().resolve("full.md"))).isEqualTo("typed just before closing");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.closed()).extracting(PanelState::title).containsExactly("full", "blank");
             assertThat(store.load(full)).isEqualTo("typed just before closing");
@@ -191,7 +191,7 @@ class PanelFilesTest {
         Files.writeString(home.resolve("panels.json"), """
                 [{"id":"m","title":"main","connection":"","session":"","file":"main.md"}]""");
         final List<String> notices = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             final Store.Loaded loaded = store.load();
             assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("main");
@@ -215,7 +215,7 @@ class PanelFilesTest {
         Files.writeString(home.resolve("sessions.json"), "[]");
         Files.writeString(home.resolve("panels.json"), """
                 [{"id":"s","title":"spec","connection":"","session":"","file":"spec.md"}]""");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             store.saveNow().get(5, TimeUnit.SECONDS);
             final List<PanelState> all = new ArrayList<>(loaded.panels());
@@ -242,7 +242,7 @@ class PanelFilesTest {
     void aPanelsFolderWithoutTheJsonFilesIsAdoptedAsClosedPanels() throws Exception {
         Files.createDirectories(dir());
         Files.writeString(dir().resolve("notes.md"), "kept");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.closed()).extracting(PanelState::title).containsExactly("notes");
         }
@@ -258,7 +258,7 @@ class PanelFilesTest {
         final PanelState own = new PanelState(new PanelId("o"), "spec", "", "");
         final Set<PosixFilePermission> writable = Files.getPosixFilePermissions(docs);
         try {
-            try (Store store = new Store(home)) {
+            try (final Store store = new Store(home)) {
                 store.load();
                 assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
                 store.savePanels(List.of(own, new PanelState(id, "PLAN", "", "", true)), List.of());
@@ -272,7 +272,7 @@ class PanelFilesTest {
         } finally {
             Files.setPosixFilePermissions(docs, writable);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             store.saveNow().get(5, TimeUnit.SECONDS);
             final PanelState back = loaded.panels().stream().filter(p -> p.id().equals(id)).findFirst().orElseThrow();
@@ -295,7 +295,7 @@ class PanelFilesTest {
                 [{"id":"d","title":"PLAN","connection":"","session":"","file":"%s","content":"typed, never written"}]""".formatted(doc));
         final Set<PosixFilePermission> readable = Files.getPosixFilePermissions(doc);
         Files.setPosixFilePermissions(doc, PosixFilePermissions.fromString("---------"));
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.saveNow().get(5, TimeUnit.SECONDS);
             assertThat(store.file(new PanelId("d"))).contains(doc);
@@ -316,7 +316,7 @@ class PanelFilesTest {
         Files.writeString(home.resolve("panels.json"), """
                 [{"id":"l","title":"x.log","connection":"","session":"","file":"%s"}]""".formatted(log));
         final List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
             assertThat(store.load(new PanelId("l"))).isEqualTo("one\n");
@@ -339,7 +339,7 @@ class PanelFilesTest {
     void anEditAfterAnOutsideChangeReportIsNotReplacedEvenOnceItIsSaved() throws Exception {
         final PanelId id = new PanelId("w");
         final List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
             store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
@@ -361,7 +361,7 @@ class PanelFilesTest {
     void anEditAfterADeletionReportKeepsThePanelEvenOnceItIsSaved() throws Exception {
         final PanelId id = new PanelId("e");
         final List<PanelTexts.Deleted> deleted = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onDeleted(deleted::add);
             store.load();
             store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
@@ -382,7 +382,7 @@ class PanelFilesTest {
     @Test
     void aNewPanelGetsItsFileAtOnceEvenEmptyAndARemovedOneLosesIt() throws Exception {
         final PanelId id = new PanelId("e");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(id, "empty", "", "")), List.of());
             store.saveNow().get(5, TimeUnit.SECONDS);
@@ -416,7 +416,7 @@ class PanelFilesTest {
     void removingADocumentsPanelNeverDeletesTheDocument() throws Exception {
         final Path doc = Files.writeString(home.resolve("PLAN.md"), "# plan");
         final PanelId id = new PanelId("d");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
             store.savePanels(List.of(new PanelState(id, "PLAN", "", "", true)), List.of());
@@ -437,7 +437,7 @@ class PanelFilesTest {
                 [{"id":"o","title":"open","connection":"","session":"","file":"open.md"},
                  {"id":"c","title":"closed","connection":"","session":"","file":"closed.md","closed":true}]""");
         final List<String> notices = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             final Store.Loaded loaded = store.load();
             assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("open");
@@ -454,7 +454,7 @@ class PanelFilesTest {
     void aSpecOpensFromTheFolderOnlyAndKeepsItsName() throws Exception {
         final Path elsewhere = Files.writeString(home.resolve("other.md"), "no");
         final PanelId id = new PanelId("o");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             // put in the folder while comando runs: loose until the next start, so ⌘O binds it
             Files.writeString(Files.createDirectories(dir()).resolve("Release plan.md"), "# Release");
@@ -481,7 +481,7 @@ class PanelFilesTest {
     void anOutsideEditIsReportedOnceAndTakingItMakesItThePanelsText() throws Exception {
         final PanelId id = new PanelId("w");
         final List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
             store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
@@ -514,7 +514,7 @@ class PanelFilesTest {
     void anOutsideEditMeetingUnsavedEditsIsNotTakenAndIsKeptAside() throws Exception {
         final PanelId id = new PanelId("u");
         final List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
             store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
@@ -538,7 +538,7 @@ class PanelFilesTest {
         final PanelId open = new PanelId("d");
         final PanelId shut = new PanelId("s");
         final List<PanelTexts.Deleted> deleted = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onDeleted(deleted::add);
             store.load();
             store.savePanels(List.of(new PanelState(open, "spec", "", "")), List.of(new PanelState(shut, "old", "", "")));
@@ -568,7 +568,7 @@ class PanelFilesTest {
     void aClosedPanelTakesAnOutsideEditAtOnce() throws Exception {
         final PanelId id = new PanelId("c");
         final List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
             store.savePanels(List.of(), List.of(new PanelState(id, "spec", "", "")));
@@ -593,7 +593,7 @@ class PanelFilesTest {
         final PanelId own = new PanelId("o");
         final List<String> notices = new CopyOnWriteArrayList<>();
         final List<PanelTexts.Deleted> deleted = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             store.onDeleted(deleted::add);
             store.load();
@@ -630,7 +630,7 @@ class PanelFilesTest {
                  {"id":"u","title":"ALPHA","connection":"","session":"","file":"%s","content":"typed, never saved"},
                  {"id":"p","title":"spec","connection":"","session":"","file":"spec.md"}]""".formatted(gone, alsoGone));
         final List<String> notices = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             final Store.Loaded loaded = store.load();
             assertThat(loaded.panels()).extracting(p -> p.id().value()).containsExactly("u", "p");
@@ -645,7 +645,7 @@ class PanelFilesTest {
     void aNewPanelClosedBeforeItsFirstSaveStillReachesAFile() throws Exception {
         final PanelId kept = new PanelId("k");
         final PanelId quick = new PanelId("q");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(kept, "kept", "", "")), List.of());
             store.changed(kept, "x");
@@ -670,7 +670,7 @@ class PanelFilesTest {
         Files.createDirectories(dir());
         final Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
         try {
-            try (Store store = new Store(home)) {
+            try (final Store store = new Store(home)) {
                 store.onNotice(notices::add);
                 store.load();
                 store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
@@ -682,7 +682,7 @@ class PanelFilesTest {
         } finally {
             Files.setPosixFilePermissions(dir(), writable);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             assertThat(store.load(id)).isEqualTo("typed while panels/ refuses writes");
         }
@@ -694,7 +694,7 @@ class PanelFilesTest {
     void aReopenedPanelHasItsLastTextAndItsFileIsNeverBoundToAnotherPanel() throws Exception {
         final PanelId closing = new PanelId("c");
         final PanelState spec = new PanelState(closing, "spec", "", "");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(spec), List.of());
             store.changed(closing, "v1");
@@ -720,7 +720,7 @@ class PanelFilesTest {
         Files.createDirectories(dir());
         final Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
         try {
-            try (Store store = new Store(home)) {
+            try (final Store store = new Store(home)) {
                 store.load();
                 store.savePanels(List.of(new PanelState(kept, "kept", "", ""), new PanelState(closing, "closing", "", "")), List.of());
                 store.changed(closing, "v1");
@@ -734,7 +734,7 @@ class PanelFilesTest {
         } finally {
             Files.setPosixFilePermissions(dir(), writable);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("kept");
             assertThat(loaded.closed()).extracting(PanelState::title).containsExactly("closing");
@@ -745,7 +745,7 @@ class PanelFilesTest {
     /// A file already bound to one panel is refused to a second, which is told it is already open.
     @Test
     void aFileOpenInOnePanelIsNotBoundToASecond() throws Exception {
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             // put in the folder while comando runs: loose until the next start, so ⌘O binds it
             final Path spec = Files.writeString(Files.createDirectories(dir()).resolve("spec.md"), "# spec");
@@ -762,7 +762,7 @@ class PanelFilesTest {
         final PanelId fresh = new PanelId("f");
         Files.createDirectories(dir());
         final Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(closed, "spec", "", "")), List.of());
             Files.setPosixFilePermissions(dir(), PosixFilePermissions.fromString("r-xr-xr-x"));
@@ -822,7 +822,7 @@ class PanelFilesTest {
         Files.createDirectories(dir());
         final Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
         try {
-            try (Store store = new Store(home)) {
+            try (final Store store = new Store(home)) {
                 store.load();
                 store.savePanels(List.of(new PanelState(id, "a", "", "")), List.of());
                 store.changed(id, "v1");
@@ -838,7 +838,7 @@ class PanelFilesTest {
         } finally {
             Files.setPosixFilePermissions(dir(), writable);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.closed()).extracting(PanelState::title).containsExactly("b");
             assertThat(store.load(id)).isEqualTo("v2, renamed and closed");
@@ -851,7 +851,7 @@ class PanelFilesTest {
     void aPanelsJsonThatCannotBeWrittenIsToldAndTriedAgain() throws Exception {
         final PanelId id = new PanelId("j");
         final List<String> notices = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             store.load();
             store.saveNow().get(5, TimeUnit.SECONDS);
@@ -884,7 +884,7 @@ class PanelFilesTest {
         final Path doc = Files.writeString(day.resolve("READ-01-X.md"), "# read me");
         final PanelId id = new PanelId("x");
         final List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
             assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
@@ -911,7 +911,7 @@ class PanelFilesTest {
         }
         assertThat(doc).as("blank, but not comando's to delete").exists();
         assertThat(Files.readString(home.resolve("panels.json"))).doesNotContain("READ-01-X");
-        try (Stream<Path> files = Files.list(day)) {
+        try (final Stream<Path> files = Files.list(day)) {
             assertThat(files.map(p -> p.getFileName().toString())).as("no temporary files left").containsExactly("READ-01-X.md");
         }
     }
@@ -922,14 +922,14 @@ class PanelFilesTest {
     void aPanelOnAFileElsewhereComesBackOnThatFileAfterARestart() throws Exception {
         final Path doc = Files.writeString(Files.createDirectories(home.resolve("SCRATCHPAD")).resolve("PLAN.md"), "# plan");
         final PanelId id = new PanelId("p");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.open(id, doc).get(5, TimeUnit.SECONDS);
             store.savePanels(List.of(new PanelState(id, "PLAN", "", "")), List.of());
             store.changed(id, "# plan v2");
             store.saveNow().get(5, TimeUnit.SECONDS);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             assertThat(store.load(id)).isEqualTo("# plan v2");
             assertThat(store.file(id)).contains(doc);

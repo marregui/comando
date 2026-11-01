@@ -9,9 +9,13 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -60,7 +64,9 @@ import dev.marregui.comando.ui.widget.Unmountable;
  * differences, or, for Markdown, both rendered as a panel's preview renders them. The working tree's side may be
  * edited: the differences are worked out again as it changes, undo and redo go back and forth through every edit made
  * here (⌘Z, ⌘⇧Z), and the text is written every second while it has edits, and on leaving the file (another file,
- * closing the window, quitting comando); beside the side's title it says "edited" until written, then "saved". Roll
+ * closing the window, quitting comando); beside the side's title it says "edited" until written, then "saved". Edits
+ * whose write failed as the window left their file are kept and written again every second until a write succeeds;
+ * the file shown again meanwhile shows them, not yet written. Roll
  * back, in that side's menu, puts {@code HEAD}'s text in its place, as one edit that undo takes back, saves it and
  * takes the file out of the index; a file {@code HEAD} does not have, or one git renamed, goes back through git, its
  * version to the Trash. Remove moves the file to the Trash, from the same menu. A read of the file while it has edits
@@ -129,13 +135,21 @@ public final class ChangeEditor implements Unmountable {
     private boolean following;
     /** Counts the comparisons asked for; only the newest is shown when its work ends. */
     private long asked;
+    /** Edits of files no longer shown whose write failed, by file: written again every second until one succeeds. */
+    private final Map<Path, Unsaved> unsaved = new LinkedHashMap<>();
+    /** The files of {@link #unsaved} being written now, so a slow write is not started again on top of itself. */
+    private final Set<Path> writing = new HashSet<>();
+
+    /** The edits of a file no longer shown, not yet written. */
+    private record Unsaved(String root, RepoStatus.FileChange change, String text) {
+    }
     private String counted = "";
 
     public ChangeEditor(final IntentSink intents, final Writer writer, final ResourceActions.Questions questions) {
         this.intents = intents;
         this.writer = writer;
         this.questions = questions;
-        previous = arrow("↑", "Previous difference (⇧F7)", diff::previous);
+        previous = arrow("↑", KeyText.of("Previous difference (⇧F7)"), diff::previous);
         next = arrow("↓", "Next difference (F7)", diff::next);
         rollBack = menuItem("Roll back to HEAD", "rollback", this::rollBack);
         remove = menuItem("Move to the Trash…", "trash", this::remove);
@@ -145,6 +159,7 @@ public final class ChangeEditor implements Unmountable {
             if (edited) {
                 save();
             }
+            writeUnsaved();
         });
         autosave.start();
         build();
@@ -241,6 +256,8 @@ public final class ChangeEditor implements Unmountable {
             save();
         }
         final RepoStatus.FileChange c = texts.change();
+        // edits of this file whose write failed while another file was shown come back as edits still to write
+        final Unsaved kept = again ? null : unsaved.remove(Path.of(texts.root()).resolve(c.path()));
         final boolean same = again && texts.note().isEmpty() && diff.left().getText().equals(texts.before())
                 && diff.right().getText().equals(texts.after());
         shown = texts;
@@ -275,20 +292,27 @@ public final class ChangeEditor implements Unmountable {
         updateButtons();
         final long mine = ++asked;
         final String before = texts.before();
-        final String after = texts.after();
+        final String after = kept == null ? texts.after() : kept.text();
         UiErrands.start("diff-compute", () -> {
             final SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
             Edt.later(() -> {
                 if (mine == asked) {
-                    apply(c, m, again);
+                    apply(c, m, again, kept);
+                } else if (kept != null) {
+                    unsaved.putIfAbsent(Path.of(kept.root()).resolve(kept.change().path()), kept);
                 }
             });
         });
     }
 
-    /** Shows a comparison worked out for {@code c}. */
-    private void apply(final RepoStatus.FileChange c, final SplitDiff.Model m, final boolean again) {
+    /** Shows a comparison worked out for {@code c}; {@code kept}, when not null, its edits not yet written. */
+    private void apply(final RepoStatus.FileChange c, final SplitDiff.Model m, final boolean again,
+                       final Unsaved kept) {
         if (!m.compared()) {
+            if (kept != null) {
+                // not editable here: the edits wait to be written as they did
+                unsaved.putIfAbsent(Path.of(kept.root()).resolve(kept.change().path()), kept);
+            }
             note.setText(Plain.text(m.note()));
             counted = "";
             editable = false;
@@ -306,6 +330,10 @@ public final class ChangeEditor implements Unmountable {
             loading = false;
         }
         count(m);
+        if (kept != null) {
+            edited = true;
+            say(Said.FAILED);
+        }
         showMode();
         if (renderedShown()) {
             renderSides();
@@ -374,6 +402,9 @@ public final class ChangeEditor implements Unmountable {
                 edited = true;
                 updateButtons();
                 say(Said.FAILED);
+            } else {
+                // the window shows another file now: the edits wait, and are written again every second
+                unsaved.putIfAbsent(Path.of(r).resolve(c.path()), new Unsaved(r, c, text));
             }
             return;
         }
@@ -387,11 +418,58 @@ public final class ChangeEditor implements Unmountable {
         }
     }
 
+    /**
+     * Writes the edits of the file shown and every edit of another file still waiting to be written; completes with
+     * null once all are written, else with why the first was not. For quitting.
+     */
+    public CompletableFuture<String> saveAll() {
+        final CompletableFuture<String> mine = save();
+        final CompletableFuture<String> others = writeUnsaved();
+        return mine.thenCombine(others, (a, b) -> a != null ? a : b);
+    }
+
     /** Drops the edits not yet written, as when the file is rolled back or removed from elsewhere. */
     public void discard() {
         edited = false;
         updateButtons();
         say(Said.NOTHING);
+    }
+
+    /** Drops the edits waiting to be written of {@code paths} in {@code root}, changed elsewhere. */
+    public void forget(final String root, final Collection<String> paths) {
+        for (final String p : paths) {
+            unsaved.remove(Path.of(root).resolve(p));
+        }
+    }
+
+    /**
+     * Writes again the edits of files no longer shown whose write failed; one that succeeds is done, one that fails
+     * again waits for the next second, with a notice as each failed write of the file shown has.
+     */
+    private CompletableFuture<String> writeUnsaved() {
+        final List<CompletableFuture<String>> writes = new ArrayList<>();
+        for (final Map.Entry<Path, Unsaved> e : List.copyOf(unsaved.entrySet())) {
+            final Path file = e.getKey();
+            final Unsaved u = e.getValue();
+            if (!writing.add(file)) {
+                continue;
+            }
+            writes.add(writer.write(file, u.text()).thenApply(reason -> {
+                Edt.later(() -> {
+                    writing.remove(file);
+                    if (reason == null) {
+                        unsaved.remove(file, u);
+                    } else {
+                        intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR,
+                                "Cannot save " + file.getFileName() + ": " + reason, null));
+                    }
+                });
+                return reason;
+            }));
+        }
+        return CompletableFuture.allOf(writes.toArray(CompletableFuture[]::new))
+                .thenApply(x -> writes.stream().map(CompletableFuture::join).filter(Objects::nonNull)
+                        .findFirst().orElse(null));
     }
 
     /** What the working tree's side says of its edits. */

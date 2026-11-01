@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-26 | accepted | Miguel and Claude |
+| 2026-10-26 | accepted; the rule "no light theme" replaced by [record 127](0127-light-themes.md) | Miguel and Claude |
 
 ## 1. Context
 

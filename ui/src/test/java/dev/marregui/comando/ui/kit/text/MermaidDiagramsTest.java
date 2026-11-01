@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The same callback handed in again while drawing runs once.
 /// - A rejection, an unreadable picture or a timeout is remembered as unavailable with its reason, not retried.
 /// - A timed-out `mmdc` is stopped with the processes it started.
-/// - Without `mmdc` the reason says how to install it; the dark theme is asked for.
+/// - Without `mmdc` the reason says how to install it; Mermaid's dark theme is asked for on a dark theme, its default
+///   on a light one.
 /// - The cache key ignores surrounding blank lines; the preview fits the pane or shows the source under a note.
 class MermaidDiagramsTest {
 
@@ -73,7 +74,7 @@ class MermaidDiagramsTest {
             assertThat(again).isEqualTo(new MermaidDiagrams.Diagram.Ready(
                     dir.resolve("cache").resolve(MermaidDiagrams.key(FLOW) + ".png"), 200, 60));
             assertThat(runs()).as("drawn once").isEqualTo(1);
-            try (var files = Files.list(dir.resolve("cache"))) {
+            try (final var files = Files.list(dir.resolve("cache"))) {
                 assertThat(files.map(p -> p.getFileName().toString())).as("no temporary files left")
                         .containsExactly(MermaidDiagrams.key(FLOW) + ".png");
             }
@@ -141,9 +142,10 @@ class MermaidDiagramsTest {
         return exe;
     }
 
-    /// `mmdc` is called with `-t dark`.
+    /// `mmdc` is called with `-t dark` for a dark theme and `-t default` for a light one, whose lines show on a pale
+    /// ground; the two pictures are kept apart, so the same text is drawn once per mode.
     @Test
-    void aDiagramIsDrawnInMermaidsDarkTheme() throws Exception {
+    void aDiagramIsDrawnInMermaidsDarkThemeOnADarkThemeAndItsDefaultOnALightOne() throws Exception {
         final Path picture = dir.resolve("picture.png");
         ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
         final MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
@@ -157,9 +159,16 @@ class MermaidDiagramsTest {
                 """.formatted(dir.resolve("themes"), picture)));
         try {
             final CountDownLatch dark = new CountDownLatch(1);
-            diagrams.diagram(FLOW, dark::countDown);
+            diagrams.diagram(FLOW, false, dark::countDown);
             assertThat(dark.await(10, TimeUnit.SECONDS)).isTrue();
-            assertThat(Files.readAllLines(dir.resolve("themes"))).containsExactly("dark");
+            final CountDownLatch light = new CountDownLatch(1);
+            assertThat(diagrams.diagram(FLOW, true, light::countDown)).as("not the dark picture")
+                    .isInstanceOf(MermaidDiagrams.Diagram.Pending.class);
+            assertThat(light.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(Files.readAllLines(dir.resolve("themes"))).containsExactly("dark", "default");
+            assertThat(diagrams.diagram(FLOW, false, () -> { })).isInstanceOf(MermaidDiagrams.Diagram.Ready.class);
+            assertThat(diagrams.diagram(FLOW, true, () -> { })).isInstanceOf(MermaidDiagrams.Diagram.Ready.class);
+            assertThat(MermaidDiagrams.key(FLOW, true)).isNotEqualTo(MermaidDiagrams.key(FLOW, false));
         } finally {
             diagrams.close();
         }

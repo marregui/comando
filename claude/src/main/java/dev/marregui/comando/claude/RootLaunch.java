@@ -27,6 +27,14 @@ import dev.marregui.comando.core.model.KitRoot;
  * A session launched while comando runs the checkpoint at the context threshold gets
  * {@code CONTEXT_CHECKPOINT_BY=comando} (record 129), so a hook that would checkpoint on its own at that size leaves it
  * to comando; every other process has the variable taken out.
+ * <p>
+ * Every process gets {@code COMANDO_HOME=<data root>}, the instance's own, beside {@code CLAUDE_CONFIG_DIR}: an
+ * instance is isolated, so a kit's hook that reads comando's files (its sessions, the Files tab's folders) reads this
+ * instance's, whatever data root comando was started with ({@code -Dcomando.home}, {@code COMANDO_HOME} or
+ * {@code ~/.comando}). With a kit, every process gets {@code COMANDO_BRAIN=<brain>} too, the brain the instance
+ * resolved ({@link KitRoot#brain}: Miguel's decision D10 of the first-release review), and {@code autoMemoryDirectory}
+ * is its {@code MEMORY}; without a kit there is no brain, whatever {@code COMANDO_BRAIN} comando was started with, and
+ * the variable is taken out.
  */
 public final class RootLaunch {
 
@@ -35,11 +43,13 @@ public final class RootLaunch {
     static final String MEMORY_SETTING = "autoMemoryDirectory";
     static final String CREATED_BY = "COMANDO_CREATED_BY";
     static final String CHECKPOINT_BY = "CONTEXT_CHECKPOINT_BY";
+    static final String DATA_ROOT = "COMANDO_HOME";
+    static final String BRAIN = KitRoot.BRAIN_ENV;
     static final String COMANDO = "comando";
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** The environment comando was started with, and no settings: tests, and tools started without a root. */
-    public static final RootLaunch INHERIT = new RootLaunch(null, Optional.empty(), false, Optional.empty(), "", false);
+    public static final RootLaunch INHERIT = new RootLaunch(null, Optional.empty(), false, Optional.empty(), "", false, null);
 
     /** The root sessions run on, when it is not the user's own folder; null for none. */
     private final Path configDir;
@@ -51,20 +61,24 @@ public final class RootLaunch {
     private final String createdBy;
     /** comando runs the session's checkpoint at the context threshold. */
     private final boolean checkpointByComando;
+    /** The instance's data root, passed as {@code COMANDO_HOME}; null to leave the variable as inherited. */
+    private final Path dataRoot;
 
     private RootLaunch(final Path configDir, final Optional<KitRoot> root, final boolean usersOwn, final Optional<Path> memory, final String createdBy,
-                       final boolean checkpointByComando) {
+                       final boolean checkpointByComando, final Path dataRoot) {
         this.configDir = configDir;
         this.root = root;
         this.usersOwn = usersOwn;
         this.memory = memory;
         this.createdBy = createdBy;
         this.checkpointByComando = checkpointByComando;
+        this.dataRoot = dataRoot;
     }
 
-    /** Every {@code claude} on {@code root}. */
-    public static RootLaunch on(final KitRoot root) {
-        return new RootLaunch(root.own() ? null : root.dir(), Optional.of(root), false, root.memory(), "", false);
+    /** Every {@code claude} on {@code root}, of the instance whose data root is {@code dataRoot}. */
+    public static RootLaunch on(final KitRoot root, final Path dataRoot) {
+        return new RootLaunch(root.own() ? null : root.dir(), Optional.of(root), false, root.memory(), "", false,
+                dataRoot.toAbsolutePath().normalize());
     }
 
     /**
@@ -74,7 +88,7 @@ public final class RootLaunch {
     public RootLaunch forSession(final String name, final String workDir) {
         if (root.isPresent() && name.equals(KitRoot.UPGRADE_SESSION) && root.get().isRoot(workDir)
                 && root.get().dir().startsWith(root.get().userDir())) {
-            return new RootLaunch(null, root, true, Optional.empty(), createdBy, checkpointByComando);
+            return new RootLaunch(null, root, true, Optional.empty(), createdBy, checkpointByComando, dataRoot);
         }
         return this;
     }
@@ -82,12 +96,12 @@ public final class RootLaunch {
     /** This launch for a session {@code createdBy} made, an agent's name; empty for a person's session. */
     public RootLaunch madeBy(final String createdBy) {
         final String by = createdBy == null ? "" : createdBy.strip();
-        return by.equals(this.createdBy) ? this : new RootLaunch(configDir, root, usersOwn, memory, by, checkpointByComando);
+        return by.equals(this.createdBy) ? this : new RootLaunch(configDir, root, usersOwn, memory, by, checkpointByComando, dataRoot);
     }
 
     /** This launch for a session whose checkpoint comando runs at the context threshold, or not. */
     public RootLaunch checkpointBy(final boolean comando) {
-        return comando == checkpointByComando ? this : new RootLaunch(configDir, root, usersOwn, memory, createdBy, comando);
+        return comando == checkpointByComando ? this : new RootLaunch(configDir, root, usersOwn, memory, createdBy, comando, dataRoot);
     }
 
     /**
@@ -127,10 +141,19 @@ public final class RootLaunch {
     }
 
     /**
-     * Sets the process's environment: the root's folder, or the user's own for the upgrade; the session's maker; who
-     * runs the checkpoint at the context threshold.
+     * Sets the process's environment: the root's folder, or the user's own for the upgrade; the instance's data root;
+     * the session's maker; who runs the checkpoint at the context threshold.
      */
     public void environment(final Map<String, String> env) {
+        if (dataRoot != null) {
+            env.put(DATA_ROOT, dataRoot.toString());
+        }
+        final Optional<Path> brain = root.flatMap(KitRoot::brain);
+        if (brain.isPresent()) {
+            env.put(BRAIN, brain.get().toString());
+        } else if (root.isPresent()) {
+            env.remove(BRAIN);
+        }
         if (usersOwn) {
             env.remove(CONFIG_DIR);
         } else if (configDir != null) {
@@ -150,12 +173,14 @@ public final class RootLaunch {
 
     /**
      * The environment's changes, for the log and tests: {@code CLAUDE_CONFIG_DIR=<root>}, its removal, or none; then
-     * {@code COMANDO_CREATED_BY=<creator>} for an agent's session, and {@code CONTEXT_CHECKPOINT_BY=comando} for a
-     * session whose checkpoint comando runs.
+     * {@code COMANDO_HOME=<data root>}, {@code COMANDO_BRAIN=<brain>}, {@code COMANDO_CREATED_BY=<creator>} for an
+     * agent's session, and {@code CONTEXT_CHECKPOINT_BY=comando} for a session whose checkpoint comando runs.
      */
     @Override
     public String toString() {
-        final String dir = usersOwn ? "-" + CONFIG_DIR : configDir != null ? CONFIG_DIR + '=' + configDir : "inherit";
+        final String config = usersOwn ? "-" + CONFIG_DIR : configDir != null ? CONFIG_DIR + '=' + configDir : "inherit";
+        final String home = dataRoot == null ? config : config + ' ' + DATA_ROOT + '=' + dataRoot;
+        final String dir = root.flatMap(KitRoot::brain).map(b -> home + ' ' + BRAIN + '=' + b).orElse(home);
         final String by = createdBy.isEmpty() ? dir : dir + ' ' + CREATED_BY + '=' + createdBy;
         return checkpointByComando ? by + ' ' + CHECKPOINT_BY + '=' + COMANDO : by;
     }

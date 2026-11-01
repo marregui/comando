@@ -1,6 +1,8 @@
 package dev.marregui.comando.core.view;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -14,11 +16,12 @@ public sealed interface ViewSpec {
     /** The view type name used by the MCP tools and the widget registry. */
     String type();
 
-    /** Rows Claude holds, as text. */
+    /** Rows Claude holds, as text; a null cell is SQL NULL. */
     record Table(List<String> columns, List<List<String>> rows) implements ViewSpec {
         public Table {
             columns = List.copyOf(columns);
-            rows = rows.stream().map(List::copyOf).toList();
+            // a null cell is SQL NULL, told apart from the text "null"
+            rows = rows.stream().map(r -> Collections.unmodifiableList(new ArrayList<>(r))).toList();
             for (final List<String> row : rows) {
                 if (row.size() != columns.size()) {
                     throw new IllegalArgumentException("row width " + row.size() + " differs from column count " + columns.size());
@@ -124,6 +127,11 @@ public sealed interface ViewSpec {
         public static final String FILE_SCHEME = "comando-file:";
         /** The label of the entry that ends a folder read only in part. */
         public static final String MORE = "…";
+        /**
+         * The detail of the {@link #MORE} entry that is all a folder holds when it was not read: the folder holding it is
+         * closed in the Files tab. It goes once that folder is open and read.
+         */
+        public static final String NOT_READ = "not read while the folder holding it is closed";
 
         public TreeNode {
             Objects.requireNonNull(label, "label");

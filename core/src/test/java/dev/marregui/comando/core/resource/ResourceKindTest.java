@@ -36,7 +36,7 @@ class ResourceKindTest {
 
     /// A connection with TLS verification round-trips through attributes without changing any field.
     @Test
-    void connectionRoundTrip() {
+    void aConnectionSurvivesItsDialogFieldsUnchanged() {
         final ConnectionSpec spec = new ConnectionSpec("lab", "10.0.0.5", 8812, "qdb", "admin", "s3cret", true, "verify-full");
         assertThat(ConnectionKind.INSTANCE.fromAttributes(ConnectionKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
     }
@@ -129,14 +129,13 @@ class ResourceKindTest {
     /// Session attributes retain all explicit fields, preserve an empty checkpoint, and give the default checkpoint to
     /// a stored session that has none.
     @Test
-    void sessionRoundTrip() {
-        final SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", "acceptEdits",
-                List.of("/a", "/b"), 15.0, "id-1", StartMode.RESUME, "/reflect", "");
+    void aSessionSurvivesItsDialogFieldsWithItsCheckpoint() {
+        final SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", 15.0, "id-1", StartMode.RESUME, "/reflect", "");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
-        final SessionSpec silent = new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, "", "");
+        final SessionSpec silent = new SessionSpec("edge", "/Users/x/edge", "", "", 0.0, "", StartMode.NEW, "", "");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(silent)).checkpoint())
                 .as("an emptied checkpoint stays empty: the button is hidden").isEmpty();
-        assertThat(new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, null, null).checkpoint())
+        assertThat(new SessionSpec("edge", "/Users/x/edge", "", "", 0.0, "", StartMode.NEW, null, null).checkpoint())
                 .as("a spec read from a file written before the field existed gets the default").isEqualTo("/reflect");
     }
 
@@ -170,25 +169,37 @@ class ResourceKindTest {
     void onlyTheModelAcceptsTypedValues() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .extracting(Attribute::key, Attribute::editable)
-                .containsExactly(Tuple.tuple("model", true), Tuple.tuple("effort", false),
-                        Tuple.tuple("permissionMode", false));
+                .containsExactly(Tuple.tuple("model", true), Tuple.tuple("effort", false));
         assertThat(ConnectionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .allMatch(a -> !a.editable());
         assertThat(Attribute.of("x", "X", Attribute.Kind.TEXT, false, "").editable()).isTrue();
     }
 
-    /// The conversation comes first; More holds the folder, the extra folders and the checkpoint prompt, and opens
-    /// only when one of them differs from a new session's: a folder other than the kit's, extra folders, another prompt.
+    /// The conversation comes first; More holds the folder and the checkpoint prompt, and opens only when one of them
+    /// differs from a new session's: a folder other than the kit's, another prompt.
     @Test
-    void moreHoldsTheFoldersAndThePromptAndOpensWhenOneDiffers() {
+    void moreHoldsTheFolderAndThePromptAndOpensWhenOneDiffers() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(Attribute::advanced).extracting(Attribute::key)
-                .containsExactly("workDir", "addDirs", "checkpoint");
+                .containsExactly("workDir", "checkpoint");
         final String kit = KitRoot.current().dir().toString();
         assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", kit)))).isFalse();
         assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", kit, "id-1")))).isFalse();
         assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", "/elsewhere")))).isTrue();
         assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", kit).withCheckpoint("/compact")))).isTrue();
         assertThat(ConnectionKind.INSTANCE.attributes()).noneMatch(Attribute::advanced);
+    }
+
+    /// The dialog asks no permission mode and no extra folders: every session runs under the kit's `settings.json`
+    /// rules (record 7), and the context line shows the mode they set, read-only, with what it does, or Claude Code's
+    /// default when they set none.
+    @Test
+    void theSessionDialogShowsTheKitsPermissionModeAndAsksNone() {
+        assertThat(SessionKind.INSTANCE.attributes()).extracting(Attribute::key).doesNotContain("permissionMode", "addDirs");
+        assertThat(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", "/w"))).doesNotContainKeys("permissionMode", "addDirs");
+        assertThat(SessionKind.permission(new SessionKind.Defaults("", "", "acceptEdits")))
+                .isEqualTo("permissions: acceptEdits, edits files without asking and asks for the rest (the kit's settings.json)");
+        assertThat(SessionKind.permission(SessionKind.Defaults.NONE)).isEqualTo("permissions: default, asks before each tool (the kit's settings.json)");
+        assertThat(SessionKind.INSTANCE.context()).contains("· permissions: ");
     }
 
     /// Choosing a new conversation over a stored one says the next start begins a new one, while fresh sessions

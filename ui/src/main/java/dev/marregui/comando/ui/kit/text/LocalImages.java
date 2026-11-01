@@ -186,7 +186,7 @@ public final class LocalImages {
         }
         try {
             return extension(name).equals(SVG) ? drawSvg(key) : rasterSize(file);
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "picture not shown [file=" + file + ']', e);
             return new Picture.Unavailable("cannot read " + name + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         }
@@ -194,7 +194,7 @@ public final class LocalImages {
 
     /** A PNG, JPEG or GIF is shown as it is: only its size is read, from its header. */
     private static Picture rasterSize(final Path file) throws IOException {
-        try (ImageInputStream in = ImageIO.createImageInputStream(file.toFile())) {
+        try (final ImageInputStream in = ImageIO.createImageInputStream(file.toFile())) {
             final Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
                 return new Picture.Unavailable(file.getFileName() + " is not a picture comando can read");
@@ -219,7 +219,7 @@ public final class LocalImages {
         }
         final Path png = cache.resolve(cacheName(key));
         SVGDocument doc;
-        try (InputStream in = Files.newInputStream(key.file())) {
+        try (final InputStream in = Files.newInputStream(key.file())) {
             final LoaderContext context = LoaderContext.builder().externalResourcePolicy(beside(key.file())).build();
             doc = new SVGLoader().load(in, key.file().toUri(), context);
         }

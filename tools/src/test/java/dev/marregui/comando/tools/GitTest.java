@@ -73,7 +73,7 @@ class GitTest {
     @Test
     void statusListsEveryKindOfChangeAndTheIgnoredFolder(@TempDir final Path dir) throws Exception {
         final Path root = repo(dir.toRealPath());
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             final Git.Read read = git.status(root);
             final RepoStatus s = read.status();
             assertThat(s.error()).isEmpty();
@@ -93,7 +93,7 @@ class GitTest {
     @Test
     void textsAreHeadsVersionAndTheWorkingTrees(@TempDir final Path dir) throws Exception {
         final Path root = repo(dir.toRealPath());
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             final ChangeTexts modified = git.texts(root, new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED));
             assertThat(modified.note()).isEmpty();
             assertThat(modified.before()).contains("x = 1");
@@ -116,7 +116,7 @@ class GitTest {
         final Path root = dir.toRealPath();
         git(root, "init", "-q");
         Files.write(root.resolve("b.bin"), new byte[]{1, 0, 2});
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("b.bin", "", RepoStatus.Kind.UNTRACKED));
             assertThat(t.note()).contains("binary");
             assertThat(t.after()).isEmpty();
@@ -130,7 +130,7 @@ class GitTest {
         git(root, "init", "-q");
         Files.writeString(root.resolve("a.txt"), "a\n");
         git(root, "add", "a.txt");
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             assertThat(git.status(root).status().changes()).containsExactly(new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.ADDED));
             final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED));
             assertThat(t.before()).isEmpty();
@@ -160,7 +160,7 @@ class GitTest {
         assertThat(p.waitFor(30, TimeUnit.SECONDS)).isTrue();
         assumeTrue(!said.isBlank() && !said.startsWith("fatal:"), () -> "git has no German messages here: " + said);
 
-        try (Git git = new Git(german.toString())) {
+        try (final Git git = new Git(german.toString())) {
             final ChangeTexts t = git.texts(root.toRealPath(), new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED));
             assertThat(t.note()).as("git said in German: %s", said).isEmpty();
             assertThat(t.before()).isEmpty();
@@ -172,7 +172,7 @@ class GitTest {
     @Test
     void aMissingGitIsAStatusThatSaysSo(@TempDir final Path dir) throws Exception {
         final Path root = repo(dir.toRealPath());
-        try (Git git = new Git(dir.resolve("no-such-git").toString())) {
+        try (final Git git = new Git(dir.resolve("no-such-git").toString())) {
             final RepoStatus s = git.status(root).status();
             assertThat(s.error()).isNotEmpty();
             assertThat(s.changes()).isEmpty();
@@ -252,14 +252,49 @@ class GitTest {
                 new RepoStatus.FileChange("orig", "", RepoStatus.Kind.DELETED));
     }
 
-    /// [Git#notInHead] is true for a path missing from `HEAD` and for no `HEAD` at all, and false for a submodule's
-    /// path and for a dubious-ownership refusal, so those fail visibly.
+    /// A failed read of a `HEAD` version is "nothing before" only when git's exit code says `HEAD` holds no such path
+    /// (a path missing from it, or no `HEAD` at all); git's message decides nothing, so a refusal worded as a missing
+    /// path (as a dubious-ownership or a broken repository's would be in another locale) fails visibly.
     @Test
-    void onlyAPathMissingFromHeadReadsAsNothingBefore() {
-        assertThat(Git.notInHead("fatal: path 'nope' does not exist in 'HEAD'")).isTrue();
-        assertThat(Git.notInHead("fatal: invalid object name 'HEAD'.")).isTrue();
-        assertThat(Git.notInHead("fatal: Not a valid object name HEAD:sub")).as("a submodule").isFalse();
-        assertThat(Git.notInHead("fatal: detected dubious ownership in repository")).isFalse();
+    void onlyGitsExitCodeMakesAPathMissingFromHead(@TempDir final Path dir) throws Exception {
+        final Path root = dir.toRealPath().resolve("repo");
+        Files.createDirectories(root);
+        git(root, "init", "-q");
+        Files.writeString(root.resolve("a.txt"), "a\n");
+        final RepoStatus.FileChange changed = new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED);
+        try (final Git git = new Git()) {
+            assertThat(git.texts(root, changed)).as("no HEAD at all").satisfies(t -> {
+                assertThat(t.note()).isEmpty();
+                assertThat(t.before()).isEmpty();
+            });
+            git(root, "add", "a.txt");
+            git(root, "commit", "-q", "-m", "first");
+            Files.writeString(root.resolve("b.txt"), "b\n");
+            assertThat(git.texts(root, new RepoStatus.FileChange("b.txt", "", RepoStatus.Kind.MODIFIED))).as("a path HEAD lacks")
+                    .satisfies(t -> {
+                        assertThat(t.note()).isEmpty();
+                        assertThat(t.before()).isEmpty();
+                        assertThat(t.after()).isEqualTo("b\n");
+                    });
+        }
+        final String missing = "echo \"fatal: path 'a.txt' does not exist in 'HEAD'\" >&2\nexit 128\n";
+        try (final Git refusing = new Git(fakeGit(dir, "refusing", "exit 128", missing).toString());
+             final Git saysOtherwise = new Git(fakeGit(dir, "terse", "exit 1", "echo 'fatal: something else' >&2\nexit 128\n").toString())) {
+            assertThat(refusing.texts(root, changed).note()).as("worded as missing, refused by its exit code")
+                    .isEqualTo("the HEAD version cannot be read: fatal: path 'a.txt' does not exist in 'HEAD'");
+            assertThat(saysOtherwise.texts(root, changed)).as("worded otherwise, missing by its exit code").satisfies(t -> {
+                assertThat(t.note()).isEmpty();
+                assertThat(t.before()).isEmpty();
+            });
+        }
+    }
+
+    /// A git stand-in: `rev-parse` runs `revParse`; every other command runs `rest`.
+    private static Path fakeGit(final Path dir, final String name, final String revParse, final String rest) throws IOException {
+        final Path exe = dir.resolve(name + ".sh");
+        Files.writeString(exe, "#!/bin/sh\ncase \"$*\" in *rev-parse*) " + revParse + ";; esac\n" + rest);
+        assertThat(exe.toFile().setExecutable(true)).isTrue();
+        return exe;
     }
 
     /// A removed submodule lists as DELETED, and its texts carry the note `a submodule: not compared`.
@@ -272,7 +307,7 @@ class GitTest {
         git(root, "update-index", "--add", "--cacheinfo", "160000,0123456789abcdef0123456789abcdef01234567,sub");
         git(root, "commit", "-q", "-m", "with a submodule");
         git(root, "update-index", "--force-remove", "sub");
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             assertThat(git.status(root).status().changes()).containsExactly(new RepoStatus.FileChange("sub", "", RepoStatus.Kind.DELETED));
             final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("sub", "", RepoStatus.Kind.DELETED));
             assertThat(t.note()).isEqualTo("a submodule: not compared");
@@ -291,7 +326,7 @@ class GitTest {
         git(root, "commit", "-q", "-m", "lf");
         Files.writeString(root.resolve("t.txt"), "one\r\nTWO\r\n");
         Files.createSymbolicLink(root.resolve("link"), Path.of("t.txt"));
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             final ChangeTexts t = git.texts(root, new RepoStatus.FileChange("t.txt", "", RepoStatus.Kind.MODIFIED));
             assertThat(t.after()).isEqualTo("one\nTWO\n");
             final ChangeTexts link = git.texts(root, new RepoStatus.FileChange("link", "", RepoStatus.Kind.UNTRACKED));

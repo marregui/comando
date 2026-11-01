@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.async;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -11,6 +12,7 @@ import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// [EdtWatchdog] probes the event dispatch thread and reports a stall with its kind, length, place and stack.
 /// - A hang past its limit is reported once, with its stack, and its end with the whole length.
@@ -79,24 +81,28 @@ class EdtWatchdogTest {
         final List<Long> ended = new CopyOnWriteArrayList<>();
         final EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> ended.add(millis));
         try {
-            Thread.sleep(300);
+            assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
             SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> w.probeWaitMillis() >= 1_100));
-            Thread.sleep(300);
+            // the end is told at the watchdog's next look after the EDT answers: waited for, not timed
+            await("the stall's end").atMost(Duration.ofSeconds(10)).until(() -> !ended.isEmpty());
         } finally {
             w.close();
         }
         assertThat(ended).singleElement().satisfies(m -> assertThat(m).isGreaterThanOrEqualTo(1_000L));
     }
 
-    /// An EDT busy for 130 ms when the first probe is posted answers between the 100 ms and 200 ms checks, so nothing
-    /// is reported; five rounds guard against a lucky schedule.
+    /// An EDT busy for 130 ms when the first probe is posted is no stall: no hang is reported, and no stall ends whose
+    /// wait was below the 200 ms threshold. A loaded machine may stretch the 130 ms past the threshold, which then is
+    /// a stall of at least 200 ms, told as one; five rounds guard against a lucky schedule.
     @Test
     void aWaitBelowTheThresholdIsNotReported() throws Exception {
         final List<String> stacks = new CopyOnWriteArrayList<>();
+        final List<Long> stalls = new CopyOnWriteArrayList<>();
         SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
         for (int round = 0; round < 5; round++) {
             SwingUtilities.invokeLater(() -> sleep(130));
-            final EdtWatchdog w = new EdtWatchdog(stall -> stacks.add(stall.millis() + " " + stall.stack()));
+            final EdtWatchdog w = new EdtWatchdog(stall -> stacks.add(stall.millis() + " " + stall.stack()),
+                    (stall, millis) -> stalls.add(stall.millis()));
             try {
                 Thread.sleep(400);
             } finally {
@@ -104,6 +110,8 @@ class EdtWatchdogTest {
             }
         }
         assertThat(stacks).isEmpty();
+        assertThat(stalls).as("waits told as stalls")
+                .allSatisfy(m -> assertThat(m).isGreaterThanOrEqualTo(EdtWatchdog.THRESHOLD_MILLIS));
     }
 
     /// An EDT held by the window's build before the first probe answers ends as kind [EdtWatchdog.Kind#STARTUP] with no
@@ -227,7 +235,7 @@ class EdtWatchdogTest {
      */
     private static void holdEdtUntil(final BooleanSupplier seen) {
         final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (!seen.getAsBoolean() && System.nanoTime() < end) {
+        while (!seen.getAsBoolean() && System.nanoTime() - end < 0) {
             sleep(10);
         }
     }

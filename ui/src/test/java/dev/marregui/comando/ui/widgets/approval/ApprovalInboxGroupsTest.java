@@ -2,9 +2,12 @@ package dev.marregui.comando.ui.widgets.approval;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.event.ContainerAdapter;
+import java.awt.event.ContainerEvent;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
@@ -30,8 +33,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [ApprovalInbox] as one queue in three groups (record 131).
 /// - this session's cards first under its name, then the other sessions' under each name, the oldest group first, then
 ///   Later, the decisions held back, under each session's name
-/// - Up and Down and the first card follow that order; a card in its place stays while other groups change
+/// - Up and Down and the first card follow that order; a card in its place stays while other groups change, and is
+///   never taken out of the list while a card above it leaves
 /// - a decision shows its title as text, its detail muted and its age; Settle and Dismiss dispatch their intents
+/// - Settle's tooltip names the session it sends to, and why another when the decision's own has no checkpoint command
+///   or was removed
 /// - decisions alone show the list, not the empty text, and take no keyboard
 class ApprovalInboxGroupsTest {
 
@@ -162,6 +168,34 @@ class ApprovalInboxGroupsTest {
         assertThat(settle.isEnabled()).isTrue();
     }
 
+    /// Settle's tooltip names the session it sends to, as the reducer chooses it (record 131): the decision's own, or
+    /// the focused panel's when its own has no checkpoint command; a decision the reducer refuses for no session to
+    /// settle it in has Settle off with that reason.
+    @Test
+    void settleSaysWhereItSendsAndWhyItIsOff() throws Exception {
+        final String nowhere = "No session to settle it in: open a session with a checkpoint command";
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD, Set.of(),
+                Map.of(9L, nowhere), Map.of(8L, "work", 7L, "main"))));
+        final AbstractButton refused = (AbstractButton) named(item("decision-9"), "settle");
+        final AbstractButton open = (AbstractButton) named(item("decision-8"), "settle");
+        assertThat(refused.isEnabled()).isFalse();
+        assertThat(refused.getToolTipText()).isEqualTo(nowhere);
+        assertThat(open.isEnabled()).isTrue();
+        assertThat(open.getToolTipText()).isEqualTo("Runs the checkpoint of work");
+        assertThat(((AbstractButton) named(item("decision-7"), "settle")).getToolTipText()).as("its own session has none")
+                .isEqualTo("Runs main's checkpoint; c has no checkpoint command");
+    }
+
+    /// When the decision's own session was removed, Settle's tooltip names the session it sends to and says the own one
+    /// was removed, not that it lacks a checkpoint command.
+    @Test
+    void settleSaysTheDecisionsOwnSessionWasRemoved() throws Exception {
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD, Set.of(),
+                Map.of(), Map.of(7L, "main"), Set.of(7L))));
+        assertThat(((AbstractButton) named(item("decision-7"), "settle")).getToolTipText())
+                .isEqualTo("Runs main's checkpoint; session c was removed");
+    }
+
     /// A decision shows its title as text even when it starts like HTML, its detail muted, and its age, which ticks;
     /// decisions alone show the list, not the empty text.
     @Test
@@ -210,6 +244,47 @@ class ApprovalInboxGroupsTest {
             }
         }
         return out;
+    }
+
+    /// A card above the one the keyboard is in leaves, of another group or of the same one: the staying card is never
+    /// taken out of the list and put back, which would move the keyboard out of it (AWT's `removeNotify` passes the
+    /// focus on).
+    @Test
+    void aStayingCardIsNotTakenOutWhenACardAboveLeaves() throws Exception {
+        for (final String second : List.of("b", "work")) {
+            final ApprovalInbox box = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus);
+            try {
+                SwingUtilities.invokeAndWait(() -> box.render(new ApprovalInbox.Queue(List.of(bash(2, "work", T0), bash(5, second, T0 + 1)),
+                        "work", List.of())));
+                final List<String> removed = new ArrayList<>();
+                SwingUtilities.invokeAndWait(() -> listOf(box).addContainerListener(new ContainerAdapter() {
+                    @Override
+                    public void componentRemoved(final ContainerEvent e) {
+                        removed.add(String.valueOf(e.getChild().getName()));
+                    }
+                }));
+                SwingUtilities.invokeAndWait(() -> box.render(new ApprovalInbox.Queue(List.of(bash(5, second, T0 + 1)), "work", List.of())));
+                assertThat(removed).as("taken out of the list, card 5 of session " + second).doesNotContain("approval-5")
+                        .contains("approval-2");
+                assertThat(order(box)).as("the staying card in its place").contains("approval-5");
+            } finally {
+                box.unmount();
+            }
+        }
+    }
+
+    private static List<String> order(final ApprovalInbox box) throws Exception {
+        final List<String> names = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            for (final Component c : listOf(box).getComponents()) {
+                names.add(String.valueOf(c.getName()));
+            }
+        });
+        return names;
+    }
+
+    private static Container listOf(final ApprovalInbox box) {
+        return (Container) ((JScrollPane) find(box.component(), c -> c instanceof JScrollPane)).getViewport().getView();
     }
 
     private Container list() {

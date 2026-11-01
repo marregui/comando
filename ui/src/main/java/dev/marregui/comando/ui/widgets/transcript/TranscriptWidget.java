@@ -2,14 +2,23 @@ package dev.marregui.comando.ui.widgets.transcript;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.event.ActionEvent;
 import java.awt.event.HierarchyEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
+import javax.swing.AbstractAction;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.core.intent.Intent;
@@ -19,6 +28,7 @@ import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
+import dev.marregui.comando.ui.kit.text.LocalLinks;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
@@ -33,9 +43,10 @@ import dev.marregui.comando.ui.widgets.transcript.render.Style;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 
 /**
- * A session's transcript as structured blocks, painted by {@link TranscriptCanvas}. Holds the last
- * {@link #WINDOW} blocks, with a button for earlier ones; replaces items in place when the writer replaced
- * a block; follows the end while the user is at the end.
+ * A session's transcript as structured blocks, painted by {@link TranscriptCanvas}. Holds the whole conversation, every
+ * block an item, laid out near the view only; replaces items in place when the writer replaced a block; follows the end
+ * while the user is at the end, and otherwise keeps the block at the top of the view where it is while blocks arrive or
+ * change. {@link Move} goes to the first or last block, the previous or next prompt, or a page up or down.
  *
  * <p>Whether to follow is remembered rather than read from the scroll bar alone: a transcript loaded while its
  * tab is hidden has a scroll pane that was never laid out, so its bar reads "at the top" and a later turn would
@@ -49,12 +60,30 @@ import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
  */
 public final class TranscriptWidget implements Widget<TranscriptView>, Searchable, Copyable, Zoomable {
 
-    static final int WINDOW = 2000;
+    /** A way through the conversation, with its key: the same in the widget and in the palette (Session ▸ …). */
+    public enum Move {
+        FIRST("first", "Go to the first block", KeyStroke.getKeyStroke(KeyEvent.VK_HOME, 0)),
+        LAST("last", "Go to the latest block and follow it", KeyStroke.getKeyStroke(KeyEvent.VK_END, 0)),
+        PREVIOUS_PROMPT("previousPrompt", "Go to the previous prompt", KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.ALT_DOWN_MASK)),
+        NEXT_PROMPT("nextPrompt", "Go to the next prompt", KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.ALT_DOWN_MASK)),
+        PAGE_UP("pageUp", "Page up the transcript", KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_UP, 0)),
+        PAGE_DOWN("pageDown", "Page down the transcript", KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_DOWN, 0));
+
+        /** The command's id: {@code transcript.} and this. */
+        public final String id;
+        public final String label;
+        public final KeyStroke key;
+
+        Move(final String id, final String label, final KeyStroke key) {
+            this.id = "transcript." + id;
+            this.label = label;
+            this.key = key;
+        }
+    }
 
     private final WidgetContext context;
     private final TranscriptCanvas canvas = new TranscriptCanvas(this::openLink);
     private final JScrollPane scroll = new JScrollPane(canvas);
-    private final JButton earlier = new JButton();
     private final JButton latest = new JButton("↓ Latest");
     private final JPanel root = new JPanel(new BorderLayout());
     private final AgentStrip strip = new AgentStrip(canvas::reveal, id -> openLink(TranscriptCanvas.SUBAGENT_SCHEME + id),
@@ -62,7 +91,6 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private final Overlay overlay = new Overlay(root);
     private Transcript transcript;
     private String session = "";
-    private int windowStart;
     private int built;
     /** Follow the end on the next change; set from the scroll bar only while the pane is showing. */
     private boolean following = true;
@@ -79,9 +107,6 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         scroll.getViewport().setOpaque(true);
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        earlier.putClientProperty("JButton.buttonType", "borderless");
-        earlier.addActionListener(e -> showEarlier());
-        earlier.setVisible(false);
         latest.setToolTipText("Scroll to the latest block and follow it");
         latest.setFocusable(false);
         latest.addActionListener(e -> followLatest());
@@ -89,9 +114,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
         north.setOpaque(false);
         strip.setAlignmentX(0f);
-        earlier.setAlignmentX(0f);
         north.add(strip);
-        north.add(earlier);
         root.add(north, BorderLayout.NORTH);
         root.add(new Layered(scroll, latest), BorderLayout.CENTER);
         scroll.getVerticalScrollBar().getModel().addChangeListener(e -> barChanged());
@@ -101,6 +124,17 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
                 SwingUtilities.invokeLater(this::scrollToEnd);
             }
         });
+        for (final Move m : Move.values()) {
+            // while the keyboard is in the transcript, over the scroll pane's own page keys; elsewhere the window's
+            // command of the same key, when the component with the keyboard does not take the key first
+            scroll.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(m.key, m.id);
+            scroll.getActionMap().put(m.id, new AbstractAction() {
+                @Override
+                public void actionPerformed(final ActionEvent e) {
+                    move(m);
+                }
+            });
+        }
         Capabilities.mark(overlay, this);
         overlay.showEmpty("No session bound to this panel. Bind one from the sidebar, then type a prompt below.");
     }
@@ -177,7 +211,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         if (view == null || view.transcript() == null) {
             transcript = null;
             session = "";
-            reset(0);
+            reset();
             overlay.showEmpty("No session bound to this panel. Bind one from the sidebar, then type a prompt below.");
             return;
         }
@@ -187,7 +221,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
             }
             transcript = view.transcript();
             session = view.session();
-            reset(Math.max(0, transcript.size() - WINDOW));
+            reset();
         }
         if (transcript.size() == 0) {
             overlay.showEmpty(whenEmpty.isEmpty() ? "Session " + session + " has no conversation yet. Type a prompt below, or run text from the editor." : whenEmpty);
@@ -197,14 +231,12 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         sync();
     }
 
-    private void reset(final int start) {
+    private void reset() {
         canvas.clear();
         canvas.setWaiting(waiting);
         canvas.setBackgroundTasks(tasks);
         following = true;
-        windowStart = start;
-        built = start;
-        updateEarlierButton();
+        built = 0;
         updateLatest();
         updateStrip();
     }
@@ -215,7 +247,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         }
         boolean follow = following;
         final int n = transcript.size();
-        for (int i = windowStart; i < built; i++) {
+        for (int i = 0; i < built; i++) {
             final Block b = transcript.get(i);
             if (b != null && canvas.blockAt(i) != b) {
                 canvas.update(i, b);
@@ -266,35 +298,58 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         scrollToEnd();
     }
 
-    private void showEarlier() {
-        final int from = Math.max(0, windowStart - WINDOW);
-        final int end = built;
-        reset(from);
-        for (int i = from; i < end; i++) {
-            final Block b = transcript.get(i);
-            if (b != null) {
-                canvas.append(i, b);
-            }
+    /**
+     * Goes the way {@code m} names. Going to the latest block follows it, as the "Latest" button does; any other way
+     * follows only when it lands at the end.
+     */
+    public void move(final Move m) {
+        if (transcript == null || transcript.size() == 0) {
+            return;
         }
-        built = end;
-        following = false;
+        if (m == Move.LAST) {
+            followLatest();
+            return;
+        }
+        scroll.validate();
+        final JScrollBar bar = scroll.getVerticalScrollBar();
+        final int y = bar.getValue();
+        final int page = canvas.getScrollableBlockIncrement(canvas.getVisibleRect(), SwingConstants.VERTICAL, 1);
+        final int to = switch (m) {
+            case FIRST -> 0;
+            case PREVIOUS_PROMPT -> canvas.promptTop(y, false);
+            case NEXT_PROMPT -> canvas.promptTop(y, true);
+            case PAGE_UP -> Math.max(0, y - page);
+            case PAGE_DOWN -> y + page;
+            case LAST -> bar.getMaximum();
+        };
+        if (to < 0) {
+            return; // no prompt that way
+        }
+        bar.setValue(to);
+        following = atEnd();
         updateLatest();
-        SwingUtilities.invokeLater(() -> scroll.getVerticalScrollBar().setValue(0));
     }
 
-    private void updateEarlierButton() {
-        earlier.setVisible(windowStart > 0);
-        earlier.setText("Show " + Math.min(WINDOW, windowStart) + " earlier blocks (" + windowStart + " hidden)");
-    }
-
-    /** Follows a link in the transcript; package-private for tests. */
+    /**
+     * Follows a link in the transcript; package-private for tests. A Markdown link to a file the session's folder does
+     * not hold is looked for as a bare file reference is (record 111): sessions name files relative to the folder they
+     * worked in, which may lie deeper than their own.
+     */
     void openLink(final String href) {
         if (href.startsWith(SourceLinks.SCHEME)) {
             context.intents().dispatch(new Intent.OpenFile(session, SourceLinks.path(href), SourceLinks.line(href)));
         } else if (href.startsWith(TranscriptCanvas.SUBAGENT_SCHEME)) {
             context.intents().dispatch(new Intent.OpenSubagent(session, href.substring(TranscriptCanvas.SUBAGENT_SCHEME.length())));
         } else {
-            Links.open(href, Links.folderOf(session));
+            final Path folder = Links.folderOf(session);
+            final Optional<Path> file = folder == null || !LocalLinks.isRelative(href) ? Optional.empty()
+                    : LocalLinks.file(folder, href);
+            if (file.isPresent() && !Files.exists(file.get())) {
+                final Path relative = folder.toAbsolutePath().normalize().relativize(file.get());
+                context.intents().dispatch(new Intent.OpenFile(session, relative.toString(), 0));
+            } else {
+                Links.open(href, folder);
+            }
         }
     }
 
@@ -333,7 +388,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         canvas.clearFind();
     }
 
-    /** The selection when there is one, else the loaded blocks as Markdown. */
+    /** The selection when there is one, else every block as Markdown. */
     @Override
     public String copyText() {
         final String selected = canvas.selectionText();

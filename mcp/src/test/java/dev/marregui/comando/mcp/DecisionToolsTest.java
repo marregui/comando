@@ -28,8 +28,9 @@ import static org.assertj.core.api.Assertions.tuple;
 
 /// The decision tools (record 131): what an automatic checkpoint holds back for the user, and how it is settled.
 ///
-/// - `decision_hold` from a session holds the decision back under that session and answers its id; any other caller is refused
-/// - `decisions_settled` takes a JSON array of integers and refuses anything else
+/// - `decision_hold` from a session holds the decision back under that session and answers that it waits in the Later
+///   group; any other caller is refused
+/// - `decisions_settled` takes a JSON array of integers, or that array as JSON text, and refuses anything else
 /// - `decision_settle` is refused as locked while the target session's checkpoint runs; `decision_dismiss` removes one
 /// - `ui_get_state` lists the decisions held back under `later`
 class DecisionToolsTest {
@@ -81,15 +82,25 @@ class DecisionToolsTest {
         final McpTools.Outcome refused = call("claude-p", "decision_hold", "{\"title\":\"Anything?\"}");
         assertThat(refused.error()).isTrue();
         assertThat(refused.text()).contains("claude-p is not a session");
-        assertThat(call("work", "decision_hold", "{\"detail\":\"no title\"}").text()).contains("title is required");
+        assertThat(call("work", "decision_hold", "{\"detail\":\"no title\"}").text()).contains("needs \"title\"");
         assertThat(of(Intent.DecisionHeldBack.class)).isEmpty();
         assertThat(state.get().later()).isEmpty();
     }
 
     /// `decisions_settled` with `[1,3]` sends `DecisionsSettled([1, 3])`, and only decision 2 stays; a non-array, an
-    /// array holding a string and one holding a fraction are refused, and nothing more is sent.
+    /// array holding a string and one holding a fraction are refused, and nothing more is sent. Its schema says what it
+    /// takes: an array of integers.
     @Test
     void decisionsSettledTakesAnArrayOfIntegersOnly() throws Exception {
+        JsonNode schema = null;
+        for (final JsonNode d : tools.definitions()) {
+            if ("decisions_settled".equals(d.path("name").asString(""))) {
+                schema = d.path("inputSchema");
+            }
+        }
+        assertThat(schema).isNotNull();
+        assertThat(schema.path("properties").path("ids").path("type").asString()).isEqualTo("array");
+        assertThat(schema.path("properties").path("ids").path("items").path("type").asString()).isEqualTo("integer");
         for (final String title : List.of("One", "Two", "Three")) {
             call("work", "decision_hold", "{\"title\":\"" + title + "\"}");
         }
@@ -98,12 +109,27 @@ class DecisionToolsTest {
         assertThat(of(Intent.DecisionsSettled.class)).extracting(Intent.DecisionsSettled::ids).containsExactly(List.of(1L, 3L));
         assertThat(state.get().later()).extracting(Decision::title).containsExactly("Two");
 
-        for (final String bad : List.of("{\"ids\":2}", "{\"ids\":\"2\"}", "{\"ids\":[2,\"x\"]}", "{\"ids\":[2.5]}", "{}")) {
+        for (final String bad : List.of("{\"ids\":2}", "{\"ids\":\"2\"}", "{\"ids\":[2,\"x\"]}", "{\"ids\":[2.5]}")) {
             final McpTools.Outcome refused = call("work", "decisions_settled", bad);
             assertThat(refused.error()).as(bad).isTrue();
             assertThat(refused.text()).as(bad).contains("list of integers");
         }
+        final McpTools.Outcome none = call("work", "decisions_settled", "{}");
+        assertThat(none.error()).isTrue();
+        assertThat(none.text()).as("no ids at all").contains("needs \"ids\"");
         assertThat(of(Intent.DecisionsSettled.class)).hasSize(1);
+    }
+
+    /// Claude Code sends an array argument as JSON text at times: `"[2]"` settles decision 2 as `[2]` would.
+    @Test
+    void decisionsSettledTakesTheArrayAsJsonTextToo() throws Exception {
+        for (final String title : List.of("One", "Two")) {
+            call("work", "decision_hold", "{\"title\":\"" + title + "\"}");
+        }
+        final McpTools.Outcome ok = call("work", "decisions_settled", "{\"ids\":\"[2]\"}");
+        assertThat(ok.error()).as(ok.text()).isFalse();
+        assertThat(of(Intent.DecisionsSettled.class)).extracting(Intent.DecisionsSettled::ids).containsExactly(List.of(2L));
+        assertThat(state.get().later()).extracting(Decision::title).containsExactly("One");
     }
 
     /// `decision_settle` on a decision whose session runs its checkpoint is refused as locked (record 130) and sends
@@ -113,7 +139,8 @@ class DecisionToolsTest {
     void settleIsRefusedWhileTheSessionsCheckpointRunsAndDismissRemoves() throws Exception {
         call("work", "decision_hold", "{\"title\":\"One\"}");
         call("other", "decision_hold", "{\"title\":\"Two\"}");
-        final SessionState idle = state.get().session("work").orElseThrow();
+        // running: a Settle from another session starts no stopped session (record 44)
+        final SessionState idle = state.get().session("work").orElseThrow().withStatus(Status.OPEN, "");
         state.set(state.get().withSession(idle.withStatus(Status.OPEN, "").withTurns(1, 0).withCheckpointTurns(1)));
         final McpTools.Outcome locked = call("other", "decision_settle", "{\"id\":1}");
         assertThat(locked.error()).isTrue();

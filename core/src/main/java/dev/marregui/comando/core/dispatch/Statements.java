@@ -14,6 +14,21 @@ public final class Statements {
     private Statements() {
     }
 
+    /**
+     * The index of the line break that ends a {@code --} comment started before {@code from}, or -1 when the text ends
+     * first. PostgreSQL's lexer ends the comment at a carriage return as well as at a line feed, so a scanner that waits
+     * for {@code \n} alone takes a statement after a lone {@code \r} for comment text the server runs.
+     */
+    public static int lineCommentEnd(final String sql, final int from) {
+        for (int i = from; i < sql.length(); i++) {
+            final char c = sql.charAt(i);
+            if (c == '\n' || c == '\r') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /** The statements of {@code sql}, stripped, in order; empty for a blank or comment-only block. */
     public static List<String> split(final String sql) {
         final List<String> out = new ArrayList<>();
@@ -52,7 +67,7 @@ public final class Statements {
                     i = close < 0 ? n : close + tagEnd - i;
                 }
             } else if (c == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
-                final int eol = sql.indexOf('\n', i);
+                final int eol = lineCommentEnd(sql, i);
                 i = eol < 0 ? n : eol + 1;
             } else if (c == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
                 final int end = sql.indexOf("*/", i + 2);

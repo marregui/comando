@@ -19,6 +19,7 @@ import tools.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.core.model.KitRoot;
 
 /**
  * The kit's scheduled jobs through the root's {@code install/kit.py} (record 117), which alone writes
@@ -65,7 +66,8 @@ public final class KitJobsCli {
     /** The jobs as {@code kit.py} reports them, or a {@link KitJobs} with the reason it gave no list. */
     public KitJobs read() {
         if (!Files.isRegularFile(script())) {
-            return new KitJobs(true, List.of(), "the kit has no install/kit.py");
+            // a kit with no jobs needs no tool to install them: nothing to read, nothing wrong
+            return listsJobs() ? new KitJobs(true, List.of(), "the kit has no install/kit.py") : KitJobs.NONE;
         }
         try {
             final Processes.Result r = call(List.of("jobs", "--json"), null);
@@ -75,6 +77,19 @@ public final class KitJobsCli {
             return parse(r.out());
         } catch (final IOException e) {
             return new KitJobs(true, List.of(), e.getMessage() == null ? e.toString() : e.getMessage());
+        }
+    }
+
+    /** Whether the root's {@code comando-kit.json} lists a job, or cannot be read (then it may). */
+    private boolean listsJobs() {
+        final Path manifest = root.resolve(KitRoot.FILE);
+        if (!Files.isRegularFile(manifest)) {
+            return false;
+        }
+        try {
+            return !KitJson.read(manifest).jobs().isEmpty();
+        } catch (final IOException e) {
+            return true;
         }
     }
 

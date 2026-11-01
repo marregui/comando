@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the broker of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5 | Miguel and Claude |
+| 2026-10-29 | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the broker of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5; amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -75,3 +75,13 @@ published as digests, so the user reads one board instead of every instance.
 - A data root's backup value is stated, so a new instance's first backup knows what to take.
 - The comando Edge runs; what travels over it, trust and the bridge wait on a design pass of their own (topics, the
   board's rule) before they are built.
+
+## Amendments
+
+2026-11-01, Miguel's decision D9 of the first-release review: every instance is isolated, and only the comando Edge
+connects instances. Every process comando starts gets its homes from its instance: `CLAUDE_CONFIG_DIR`, the kit root
+(settings are part of the kit), and `COMANDO_HOME`, the instance's data root, whichever way comando was started
+(`-Dcomando.home`, `COMANDO_HOME` or `~/.comando`), over a value it inherited, and, with a kit, `COMANDO_BRAIN`, the
+brain's folder (decision D10) (`RootLaunch`). A hook therefore reads
+the files of its own instance. The data root does not choose the kit: §2.2's starting line names both. Tested in
+`RootLaunchTest`.

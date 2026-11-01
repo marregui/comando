@@ -31,14 +31,14 @@
     <circle cx="66" cy="192" r="3.5" fill="#E7C55A"/><text x="80" y="196">the user asks</text>
     <circle cx="166" cy="192" r="3.5" fill="#E7C55A"/><text x="180" y="196">a session ends</text>
     <circle cx="306" cy="192" r="3.5" fill="#6CC69A"/><text x="320" y="196">a context threshold: a kit hook reminds</text>
-    <circle cx="606" cy="192" r="3.5" fill="#6FAEE8"/><text x="620" y="196">comando's Checkpoint, or its threshold at a turn's end: /reflect, then /compact</text>
+    <circle cx="606" cy="192" r="3.5" fill="#6FAEE8"/><text x="620" y="196">comando: /reflect, or /reflect --auto at its threshold; then /compact</text>
   </g>
-  <text x="1080" y="166" class="cap" fill="#E7C55A">THREE DEPTHS</text>
+  <text x="1080" y="166" class="cap" fill="#E7C55A">DEPTHS</text>
   <g class="s">
-    <text x="1080" y="196">full: every step below</text>
-    <text x="1080" y="216">threshold run: Measure, Memory, liveness only</text>
-    <text x="1080" y="236">headless or --no-ask: feedback and user changes</text>
-    <text x="1080" y="252">queued in INDEX.md, asked next time</text>
+    <text x="1080" y="196">full, the user starts it: every step; asks held decisions</text>
+    <text x="1080" y="216">--auto: Measure, Memory, liveness only; asks nothing,</text>
+    <text x="1080" y="236">holds each decision with decision_hold</text>
+    <text x="1080" y="256">headless: as --auto; decisions wait in INDEX.md</text>
   </g>
 
   <!-- INPUTS -->
@@ -81,7 +81,7 @@
     <text x="330" y="542" class="q">in a future session?</text>
     <text x="330" y="566" class="s">rewrite the entry, never append</text>
     <text x="330" y="586" class="s">cues sharpened to triggers</text>
-    <text x="330" y="606" class="s">the lane: this topic's section</text>
+    <text x="330" y="606" class="s">the current work: this topic's section</text>
     <text x="330" y="626" class="s">session log via its tool</text>
     <text x="330" y="646" class="s">agent runs via their ledger</text>
     <text x="330" y="666" class="s">recall report's fixes applied</text>
@@ -91,21 +91,21 @@
 
     <text x="590" y="470" class="step">KB</text>
     <text x="590" y="494" class="mut" fill="#E7C55A">MUTATES KB</text>
-    <text x="590" y="524" class="s">only what this session proved</text>
-    <text x="590" y="542" class="s">against published code</text>
-    <text x="590" y="566" class="s">drift report, item by item,</text>
-    <text x="590" y="584" class="s">each spot-checked first</text>
+    <text x="590" y="524" class="s">only what this session proved;</text>
+    <text x="590" y="542" class="s">each statement through the gate:</text>
+    <text x="590" y="566" class="s">verified at its source, refuted</text>
+    <text x="590" y="584" class="s">by a reviewer, approved by the user</text>
     <text x="590" y="608" class="s">through the set's 99:</text>
     <text x="590" y="626" class="s">statement, header date,</text>
     <text x="590" y="644" class="s">register, change-log line</text>
-    <text x="590" y="668" class="q">a suspicion is written nowhere</text>
+    <text x="590" y="668" class="q">a run that cannot ask writes none</text>
 
     <text x="850" y="470" class="step">Scratchpad</text>
     <text x="850" y="494" class="mut" fill="#E7C55A">MUTATES SCRATCHPAD · KB</text>
-    <text x="850" y="524" class="s">task by task, in INDEX.md</text>
-    <text x="850" y="546" class="s">proved findings folded into KB</text>
-    <text x="850" y="566" class="s">folded artefacts deleted,</text>
-    <text x="850" y="584" class="s">one file at a time</text>
+    <text x="850" y="524" class="s">a collection: INDEX.md is the root set</text>
+    <text x="850" y="546" class="s">unpointed files folded, then Trash</text>
+    <text x="850" y="566" class="s">done tasks of any session: decisions</text>
+    <text x="850" y="584" class="s">settled, files trashed, entry gone</text>
     <text x="850" y="606" class="s">entries cut to State and Next</text>
     <text x="850" y="626" class="s">reports fold only when verified</text>
     <text x="850" y="646" class="s">FRICTION lines → a change</text>
@@ -114,11 +114,12 @@
     <text x="1110" y="470" class="step">Indexes</text>
     <text x="1110" y="494" class="mut" fill="#E7C55A">MUTATES ALL INDEXES</text>
     <text x="1110" y="524" class="s">MEMORY.md, each set's 00,</text>
-    <text x="1110" y="542" class="s">the day's INDEX.md</text>
-    <text x="1110" y="566" class="s">part of every write,</text>
-    <text x="1110" y="584" class="s">never a follow-up</text>
-    <text x="1110" y="608" class="s">an index check runs</text>
-    <text x="1110" y="628" class="s">after each write to BRAIN/</text>
+    <text x="1110" y="542" class="s">the day's INDEX.md, the Files</text>
+    <text x="1110" y="560" class="s">tab's index and listedIn files</text>
+    <text x="1110" y="584" class="s">part of every write,</text>
+    <text x="1110" y="602" class="s">never a follow-up</text>
+    <text x="1110" y="626" class="s">an index check runs</text>
+    <text x="1110" y="646" class="s">after each write to BRAIN/</text>
 
     <text x="1370" y="470" class="step">Report</text>
     <text x="1370" y="494" class="mut" fill="#9A9A9A">READS ONLY</text>
@@ -134,7 +135,7 @@
   <line x1="60" y1="780" x2="1540" y2="780" stroke="#2A2A2A"/>
   <text x="60" y="816" class="cap" fill="#E7C55A">WHY IT IS BUILT THIS WAY</text>
   <g class="s">
-    <text x="60" y="848">One writer for the KB: what is stated as fact passed one gate, in a session that checked it.</text>
+    <text x="60" y="848">One writer for the KB: what is stated as fact was verified, survived a reviewer and was approved by the user.</text>
     <text x="60" y="870">Memory and KB never point at each other: memory changes daily, the KB must read cold to anyone.</text>
     <text x="60" y="892">Rewrite, not append: a rule plus one line of evidence; displaced detail goes to the session log or archive/.</text>
     <text x="60" y="914">Budgets hold the index under what Claude Code loads at start; nothing is dropped to fit.</text>

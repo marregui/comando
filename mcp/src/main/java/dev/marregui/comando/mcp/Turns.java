@@ -37,7 +37,8 @@ final class Turns {
             if (!x.get().isBusy() && settled(t, after, size) && (t.get(size - 1) instanceof Block.TurnEnd || !x.get().status().isUsable())) {
                 return true;
             }
-            if (System.nanoTime() > deadline) {
+            // nanoTime values compare by their difference: they may wrap
+            if (System.nanoTime() - deadline > 0) {
                 return false;
             }
             try {

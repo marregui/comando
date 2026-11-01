@@ -90,6 +90,16 @@ public final class NamedTheme {
         offered = List.copyOf(all);
     }
 
+    /**
+     * The theme of the other mode {@code t} pairs with, among {@code themes}: the one its {@code twin} names, else the
+     * first whose {@code twin} names it. A twin may be named on either side (record 128).
+     */
+    public static Optional<NamedTheme> twinOf(final List<NamedTheme> themes, final NamedTheme t) {
+        final List<NamedTheme> other = themes.stream().filter(o -> o.ground.light != t.ground.light).toList();
+        return t.twin.flatMap(id -> other.stream().filter(o -> o.id.equals(id)).findFirst())
+                .or(() -> other.stream().filter(o -> o.twin.map(t.id::equals).orElse(false)).findFirst());
+    }
+
     /** The theme offered with id {@code id}, if one is. */
     public static Optional<NamedTheme> withId(final String id) {
         return offered.stream().filter(t -> t.id.equals(id)).findFirst();

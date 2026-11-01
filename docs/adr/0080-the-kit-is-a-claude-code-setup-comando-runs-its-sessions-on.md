@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-26 | accepted; amended 2026-10-27 (see Amendments) | Miguel and Claude |
+| 2026-10-26 | accepted; amended 2026-10-27 and 2026-11-01 (see Amendments: D8 and D10, kit and brain locations) | Miguel and Claude |
 
 ## 1. Context
 
@@ -75,3 +75,34 @@ folder, so the row "what the kit is" reads "the plugin" as those parts. The auth
 conforms when it has its layout ([Kit and brain §3](../kit-and-brain.md#3-comando-and-a-kit)). Conformance is documented, not checked;
 comando's code still reads only `comando-kit.json`. The agent that installs comando offers the reference kit or one the
 user names ([INSTALL.md §5](../../INSTALL.md#5-the-kit)). Miguel decided all three.
+
+2026-11-01, Miguel's decision D8 of the first-release review: no kit is published and none is offered. A kit conforms
+when it has the layout and the contract [Kit and brain](../kit-and-brain.md) describes (§2 the kit's parts, §3 what
+comando does with it), not when it has the author's layout; that document holds everything an agent needs to create a
+default kit and brain ([§8](../kit-and-brain.md#8-creating-a-kit-and-a-brain)) and to check a kit or a brain the user
+brings. The row "installing the kit" reads: after installing comando, the agent asks whether to create a kit and a
+brain and, on a yes, creates them from that document of the release just installed, or checks the ones the user names
+([INSTALL.md §5](../../INSTALL.md#5-the-kit)). The row "what the kit is" describes the author's kit, one kit among any
+that conform. This replaces the amendment of 2026-10-27 in "the author's kit is the reference" and "offers the reference
+kit or one the user names". Conformance stays documented; comando's code checks only `comando-kit.json`, against its
+schema ([record 133](0133-every-stored-file-has-a-schema-and-a-version.md)).
+
+2026-11-01, Miguel's decision D10 of the first-release review: the kit and the brain are two folders of their own,
+anywhere, and a new install never touches `~/.claude`. The kit is found by `CLAUDE_CONFIG_DIR`, else `~/.claude` when it
+holds `comando-kit.json`, else `~/comando-kit` (where a new install creates it), else `~/.claude/comando-kit` (kits made
+before). The brain is found by `COMANDO_BRAIN`, else the manifest's optional `brain` (absolute, `~/…` or relative to the
+kit), else the kit's `BRAIN`; a new install creates `~/comando-brain` and names it in the manifest. A Files-tab folder of
+the manifest names its `root`, `kit` (the default) or `brain`, so a brain `COMANDO_BRAIN` moves takes its folders with it.
+Every `claude` comando starts gets `COMANDO_BRAIN` beside `COMANDO_HOME`, and `autoMemoryDirectory` is the resolved
+brain's `MEMORY`. Built in `KitRoot.resolve` and `KitRoot.brain`/`folders`, `KitJson` and `RootLaunch`; tested in
+`KitRootTest`, `KitJsonTest` and `RootLaunchTest`.
+
+2026-11-01, the first-release review's last round, Miguel's decisions: there is no fall-through between kit
+folders, and a brain needs a kit. The first folder of the lookup that holds a `comando-kit.json` is the kit; when its
+manifest does not read, comando runs with no kit, on `~/.claude`, and a notice names the file and why, ending "Correct
+the file, then restart comando to run on the kit"; it never goes on to the next folder. With no kit there is no brain:
+`COMANDO_BRAIN` names nothing, and sessions get neither it nor `autoMemoryDirectory`. The brain's Files-tab folders
+follow the kit and the brain at every start, not only the first: `kit-folders` (version 2,
+[record 133](0133-every-stored-file-has-a-schema-and-a-version.md)) records where comando put each kit folder last, a
+folder still there moves with them, and one the user pointed elsewhere stays. Tested in `KitRootTest`, `KitJsonTest`,
+`RootLaunchTest` and `StoreTest`.

@@ -2,6 +2,7 @@ package dev.marregui.comando.core.intent;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.model.Approval;
@@ -51,8 +52,19 @@ public sealed interface Intent {
     /**
      * Removes a panel, open or closed: it leaves the list, and a panel of comando's own loses its file. A session's own
      * panel goes with its session (record 88).
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
      */
-    record RemovePanel(PanelId panel) implements Intent {
+    record RemovePanel(PanelId panel, String from) implements Intent {
+        public RemovePanel {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public RemovePanel(final PanelId panel) {
+            this(panel, "");
+        }
     }
 
     record RenamePanel(PanelId panel, String title) implements Intent {
@@ -97,8 +109,19 @@ public sealed interface Intent {
 
     /**
      * Runs text from a panel: SQL to its connection, anything else to its session; a null panel means the focused one.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture. A session
+     *             the user stopped is started again only for the user or a creator of it (record 44)
      */
-    record RunText(PanelId panel, String text, Target target) implements Intent {
+    record RunText(PanelId panel, String text, Target target, String from) implements Intent {
+        public RunText {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own run. */
+        public RunText(final PanelId panel, final String text, final Target target) {
+            this(panel, text, target, "");
+        }
     }
 
     /** Runs {@code sql} again in the panel without moving the lower panel to Results: a live plot's refresh. */
@@ -136,8 +159,18 @@ public sealed interface Intent {
 
     // ---- connections
 
-    /** Adds a connection, or replaces the one called {@code previousName} (empty for a new one). */
-    record SaveConnection(String previousName, ConnectionSpec spec) implements Intent {
+    /**
+     * Adds a connection, or replaces the one called {@code previousName} (empty for a new one).
+     *
+     * @param passwordGiven the save gives its password itself (an agent's {@code password} argument), so a password
+     *                      equal to the stored one is kept when the connection is pointed elsewhere; false when the spec
+     *                      may carry the stored one along (record 20)
+     */
+    record SaveConnection(String previousName, ConnectionSpec spec, boolean passwordGiven) implements Intent {
+        /** A save whose spec may carry the stored password along. */
+        public SaveConnection(final String previousName, final ConnectionSpec spec) {
+            this(previousName, spec, false);
+        }
     }
 
     record RemoveConnection(String name) implements Intent {
@@ -203,11 +236,38 @@ public sealed interface Intent {
 
     // ---- sessions
 
-    /** Adds a session, or replaces the one called {@code previousName} (empty for a new one). */
-    record SaveSession(String previousName, SessionSpec spec) implements Intent {
+    /**
+     * Adds a session, or replaces the one called {@code previousName} (empty for a new one).
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
+     */
+    record SaveSession(String previousName, SessionSpec spec, String from) implements Intent {
+        public SaveSession {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public SaveSession(final String previousName, final SessionSpec spec) {
+            this(previousName, spec, "");
+        }
     }
 
-    record RemoveSession(String name) implements Intent {
+    /**
+     * Removes a session, its panel and its process (record 88).
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
+     */
+    record RemoveSession(String name, String from) implements Intent {
+        public RemoveSession {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public RemoveSession(final String name) {
+            this(name, "");
+        }
     }
 
     /** Adds sessions found in the catalogue; a name or a conversation already present is skipped. */
@@ -223,19 +283,56 @@ public sealed interface Intent {
     record StopSession(String name) implements Intent {
     }
 
-    /** Starts a stopped session on a new conversation; the old one stays in Claude Code's files, importable again. */
-    record StartFresh(String name) implements Intent {
+    /**
+     * Starts a stopped session on a new conversation; the old one stays in Claude Code's files, importable again.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
+     */
+    record StartFresh(String name, String from) implements Intent {
+        public StartFresh {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public StartFresh(final String name) {
+            this(name, "");
+        }
     }
 
     /**
      * The Checkpoint button: sends the session's checkpoint command as a prompt from its panel; when that turn has
      * finished, {@code /compact} (record 129).
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture. A session
+     *             the user stopped is started again only for the user or a creator of it (record 44)
      */
-    record Checkpoint(String name) implements Intent {
+    record Checkpoint(String name, String from) implements Intent {
+        public Checkpoint {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own Checkpoint. */
+        public Checkpoint(final String name) {
+            this(name, "");
+        }
     }
 
-    /** Sends a Claude Code command ({@code /compact}) as a prompt from the session's panel. */
-    record SessionCommand(String name, String command) implements Intent {
+    /**
+     * Sends a Claude Code command ({@code /compact}) as a prompt from the session's panel.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture. A session
+     *             the user stopped is started again only for the user or a creator of it (record 44)
+     */
+    record SessionCommand(String name, String command, String from) implements Intent {
+        public SessionCommand {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own command. */
+        public SessionCommand(final String name, final String command) {
+            this(name, command, "");
+        }
     }
 
     /** Puts the sessions in this order; a session the list leaves out keeps its place after the named ones. */
@@ -248,16 +345,55 @@ public sealed interface Intent {
     record InterruptSession(String name) implements Intent {
     }
 
-    /** Empties the session's Session tab; the conversation is untouched. Refused while a turn runs. */
-    record ClearTranscript(String name) implements Intent {
+    /**
+     * Empties the session's Session tab; the conversation is untouched. Refused while a turn runs.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
+     */
+    record ClearTranscript(String name, String from) implements Intent {
+        public ClearTranscript {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public ClearTranscript(final String name) {
+            this(name, "");
+        }
     }
 
-    /** Changes the model; a running session also receives {@code /model <model>}. */
-    record SetSessionModel(String name, String model) implements Intent {
+    /**
+     * Changes the model; a running session also receives {@code /model <model>}.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
+     */
+    record SetSessionModel(String name, String model, String from) implements Intent {
+        public SetSessionModel {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public SetSessionModel(final String name, final String model) {
+            this(name, model, "");
+        }
     }
 
-    /** Changes the effort; a running session also receives {@code /effort <effort>}. */
-    record SetSessionEffort(String name, String effort) implements Intent {
+    /**
+     * Changes the effort; a running session also receives {@code /effort <effort>}.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture, so a
+     *             refusal under the checkpoint lock is told to the agent it came from (record 130)
+     */
+    record SetSessionEffort(String name, String effort, String from) implements Intent {
+        public SetSessionEffort {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own. */
+        public SetSessionEffort(final String name, final String effort) {
+            this(name, effort, "");
+        }
     }
 
     record SessionStarted(String name) implements Intent {
@@ -302,12 +438,21 @@ public sealed interface Intent {
      *                      compaction; negative when unknown (the previous value stands)
      * @param contextWindow the model's context window, 0 when the event did not carry it
      * @param result        the turn's last answer, as the event carries it; empty for a failed turn or one without text
+     * @param estimated     {@code contextTokens} is not what a model call read but Claude Code's own count after a
+     *                      compaction ({@code post_tokens}), which leaves out the system prompt and the tools: shown,
+     *                      never taken as the context falling below the checkpoint threshold
      */
     record SessionTurnEnded(String name, int queued, double costUsd, long contextTokens, long contextWindow, boolean error, String message,
-                            String result) implements Intent {
+                            String result, boolean estimated) implements Intent {
 
         public SessionTurnEnded {
             result = result == null ? "" : result;
+        }
+
+        /** A turn whose context, when known, is what its last model call read. */
+        public SessionTurnEnded(final String name, final int queued, final double costUsd, final long contextTokens, final long contextWindow, final boolean error,
+                                final String message, final String result) {
+            this(name, queued, costUsd, contextTokens, contextWindow, error, message, result, false);
         }
 
         /** A turn that ended without an answer to read: it failed before one, or nothing ran. */
@@ -354,18 +499,36 @@ public sealed interface Intent {
         }
     }
 
-    /** The decisions {@code decisions.json} holds, read at start. */
-    record DecisionsRead(List<Decision> decisions) implements Intent {
+    /**
+     * The decisions {@code decisions.json} holds, read at start, and the highest id comando ever gave one, so no id is
+     * given twice across restarts.
+     */
+    record DecisionsRead(List<Decision> decisions, long lastId) implements Intent {
         public DecisionsRead {
             decisions = List.copyOf(decisions);
+        }
+
+        public DecisionsRead(final List<Decision> decisions) {
+            this(decisions, 0L);
         }
     }
 
     /**
      * Settle: sends the checkpoint command of the decision's session, without the automatic argument, so the session
      * asks the user what was held back; the focused panel's session when the decision's session is gone.
+     *
+     * @param from the session or client that sent it through an action tool; empty for the user's own gesture. A session
+     *             the user stopped is started again only for the user or a creator of it (record 44)
      */
-    record SettleDecision(long id) implements Intent {
+    record SettleDecision(long id, String from) implements Intent {
+        public SettleDecision {
+            from = from == null ? "" : from;
+        }
+
+        /** The user's own Settle. */
+        public SettleDecision(final long id) {
+            this(id, "");
+        }
     }
 
     /** Dismiss: the decision leaves the Later group unasked. */
@@ -472,10 +635,22 @@ public sealed interface Intent {
         }
     }
 
-    /** The Files tab's open folders: these are read every few seconds, the others not at all. */
-    record WatchFolders(List<String> names) implements Intent {
+    /**
+     * The Files tab's open folders: these are read every few seconds, the others not at all. {@code open} gives, by
+     * folder name, the subfolders open in the tab (absolute paths): such a folder is read one level deep, plus its open
+     * subfolders and one level inside each, which is all the tab shows. A folder without an entry is read whole, as the
+     * filter needs.
+     */
+    record WatchFolders(List<String> names, Map<String, List<String>> open) implements Intent {
         public WatchFolders {
             names = List.copyOf(names);
+            open = open == null ? Map.of() : open.entrySet().stream()
+                    .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
+        }
+
+        /** Every folder read whole. */
+        public WatchFolders(final List<String> names) {
+            this(names, Map.of());
         }
     }
 

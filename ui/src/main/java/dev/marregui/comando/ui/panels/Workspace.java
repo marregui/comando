@@ -1001,7 +1001,7 @@ public final class Workspace {
     }
 
     private String takeHeading(final Path file) {
-        for (Iterator<Map.Entry<Path, String>> it = toHeading.entrySet().iterator(); it.hasNext(); ) {
+        for (final Iterator<Map.Entry<Path, String>> it = toHeading.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<Path, String> e = it.next();
             if (PanelTexts.samePath(e.getKey(), file)) {
                 it.remove();
@@ -1144,7 +1144,7 @@ public final class Workspace {
                     view.showHeading(heading);
                 }
                 if (file != null && !toEntry.isEmpty()) {
-                    for (Iterator<Map.Entry<Path, Long>> it = toEntry.entrySet().iterator(); it.hasNext(); ) {
+                    for (final Iterator<Map.Entry<Path, Long>> it = toEntry.entrySet().iterator(); it.hasNext(); ) {
                         final Map.Entry<Path, Long> e = it.next();
                         if (PanelTexts.samePath(e.getKey(), file)) {
                             it.remove();

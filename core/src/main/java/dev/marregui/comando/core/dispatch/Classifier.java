@@ -139,7 +139,7 @@ public final class Classifier {
         String s = text.strip();
         while (true) {
             if (s.startsWith("--")) {
-                final int eol = s.indexOf('\n');
+                final int eol = Statements.lineCommentEnd(s, 0);
                 s = eol < 0 ? "" : s.substring(eol + 1).strip();
             } else if (s.startsWith("/*")) {
                 final int end = s.indexOf("*/");
@@ -165,7 +165,7 @@ public final class Classifier {
                 final int close = body.indexOf(c, i + 1);
                 i = close < 0 ? n : close + 1;
             } else if (c == '-' && i + 1 < n && body.charAt(i + 1) == '-') {
-                final int eol = body.indexOf('\n', i);
+                final int eol = Statements.lineCommentEnd(body, i);
                 i = eol < 0 ? n : eol;
             } else if (c == '/' && i + 1 < n && body.charAt(i + 1) == '*') {
                 final int close = body.indexOf("*/", i + 2);

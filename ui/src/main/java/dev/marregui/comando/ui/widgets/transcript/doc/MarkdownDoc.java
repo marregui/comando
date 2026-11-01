@@ -51,42 +51,51 @@ public final class MarkdownDoc {
     }
 
     public static List<Para> parse(final String markdown) {
+        return parse(markdown, true);
+    }
+
+    /**
+     * The paragraphs of {@code markdown} with their text as {@link #parse} gives it; {@code links} false leaves out the
+     * links, which change no text but a {@code [[name]]} note's, so a find reads the text without looking for them.
+     */
+    public static List<Para> parse(final String markdown, final boolean links) {
         final List<Para> out = new ArrayList<>();
-        blocks(PARSER.parse(markdown), 0, out);
+        blocks(PARSER.parse(markdown), 0, links, out);
         return out;
     }
 
-    private static void blocks(final Node parent, final int depth, final List<Para> out) {
+    private static void blocks(final Node parent, final int depth, final boolean links, final List<Para> out) {
         for (Node n = parent.getFirstChild(); n != null; n = n.getNext()) {
-            block(n, depth, "", out);
+            block(n, depth, "", links, out);
         }
     }
 
-    private static void block(final Node n, final int depth, final String marker, final List<Para> out) {
+    private static void block(final Node n, final int depth, final String marker, final boolean links, final List<Para> out) {
         switch (n) {
-            case Heading h -> out.add(new Para.Text(Para.Kind.HEADING, h.getLevel(), depth, "", inlines(h)));
-            case Paragraph p -> out.add(new Para.Text(Para.Kind.PARAGRAPH, 0, depth, marker, inlines(p)));
+            case Heading h -> out.add(new Para.Text(Para.Kind.HEADING, h.getLevel(), depth, "", inlines(h, links)));
+            case Paragraph p -> out.add(new Para.Text(Para.Kind.PARAGRAPH, 0, depth, marker, inlines(p, links)));
             case FencedCodeBlock c -> out.add(new Para.Code(Fences.language(c.getInfo()), trimEnd(c.getLiteral()), depth));
             case IndentedCodeBlock c -> out.add(new Para.Code("", trimEnd(c.getLiteral()), depth));
             case HtmlBlock h -> out.add(new Para.Code("", trimEnd(h.getLiteral()), depth));
             case ThematicBreak t -> out.add(new Para.Rule(depth));
-            case BulletList l -> items(l, depth, false, 0, out);
-            case OrderedList l -> items(l, depth, true, l.getMarkerStartNumber() == null ? 1 : l.getMarkerStartNumber(), out);
+            case BulletList l -> items(l, depth, false, 0, links, out);
+            case OrderedList l -> items(l, depth, true, l.getMarkerStartNumber() == null ? 1 : l.getMarkerStartNumber(), links, out);
             case BlockQuote q -> {
                 for (Node c = q.getFirstChild(); c != null; c = c.getNext()) {
                     if (c instanceof Paragraph p) {
-                        out.add(new Para.Text(Para.Kind.QUOTE, 0, depth, "", inlines(p)));
+                        out.add(new Para.Text(Para.Kind.QUOTE, 0, depth, "", inlines(p, links)));
                     } else {
-                        block(c, depth + 1, "", out);
+                        block(c, depth + 1, "", links, out);
                     }
                 }
             }
-            case TableBlock t -> out.add(table(t, depth));
-            default -> blocks(n, depth, out);
+            case TableBlock t -> out.add(table(t, depth, links));
+            default -> blocks(n, depth, links, out);
         }
     }
 
-    private static void items(final Node list, final int depth, final boolean ordered, final int start, final List<Para> out) {
+    private static void items(final Node list, final int depth, final boolean ordered, final int start, final boolean links,
+                              final List<Para> out) {
         int number = start;
         for (Node item = list.getFirstChild(); item != null; item = item.getNext()) {
             if (!(item instanceof ListItem)) {
@@ -96,12 +105,12 @@ public final class MarkdownDoc {
             boolean first = true;
             for (Node c = item.getFirstChild(); c != null; c = c.getNext()) {
                 if (c instanceof Paragraph p) {
-                    out.add(new Para.Text(Para.Kind.ITEM, 0, depth + 1, first ? marker : "", inlines(p)));
+                    out.add(new Para.Text(Para.Kind.ITEM, 0, depth + 1, first ? marker : "", inlines(p, links)));
                 } else {
                     if (first) {
                         out.add(new Para.Text(Para.Kind.ITEM, 0, depth + 1, marker, List.of()));
                     }
-                    block(c, depth + 1, "", out);
+                    block(c, depth + 1, "", links, out);
                 }
                 first = false;
             }
@@ -111,7 +120,7 @@ public final class MarkdownDoc {
         }
     }
 
-    private static Para.Table table(final TableBlock t, final int depth) {
+    private static Para.Table table(final TableBlock t, final int depth, final boolean links) {
         final List<List<List<Span>>> rows = new ArrayList<>();
         for (Node section = t.getFirstChild(); section != null; section = section.getNext()) {
             if (section instanceof TableHead || section instanceof TableBody) {
@@ -120,7 +129,7 @@ public final class MarkdownDoc {
                         final List<List<Span>> cells = new ArrayList<>();
                         for (Node cell = row.getFirstChild(); cell != null; cell = cell.getNext()) {
                             if (cell instanceof TableCell) {
-                                cells.add(inlines(cell));
+                                cells.add(inlines(cell, links));
                             }
                         }
                         rows.add(cells);
@@ -133,25 +142,25 @@ public final class MarkdownDoc {
 
     // ---- inlines
 
-    private static List<Span> inlines(final Node parent) {
+    private static List<Span> inlines(final Node parent, final boolean links) {
         final List<Span> out = new ArrayList<>();
-        inline(parent, 0, "", out);
+        inline(parent, 0, "", links, out);
         return merge(out);
     }
 
-    private static void inline(final Node parent, final int style, final String href, final List<Span> out) {
+    private static void inline(final Node parent, final int style, final String href, final boolean links, final List<Span> out) {
         for (Node n = parent.getFirstChild(); n != null; n = n.getNext()) {
             switch (n) {
-                case Text t -> text(t.getLiteral(), style, href, out);
-                case Code c -> text(c.getLiteral(), style | Span.CODE, href, out);
-                case Emphasis e -> inline(e, style | Span.ITALIC, href, out);
-                case StrongEmphasis e -> inline(e, style | Span.BOLD, href, out);
-                case Link l -> inline(l, style, l.getDestination() == null ? "" : l.getDestination(), out);
-                case Image i -> inline(i, style | Span.ITALIC, href, out);
+                case Text t -> text(t.getLiteral(), style, href, links, out);
+                case Code c -> text(c.getLiteral(), style | Span.CODE, href, links, out);
+                case Emphasis e -> inline(e, style | Span.ITALIC, href, links, out);
+                case StrongEmphasis e -> inline(e, style | Span.BOLD, href, links, out);
+                case Link l -> inline(l, style, l.getDestination() == null ? "" : l.getDestination(), links, out);
+                case Image i -> inline(i, style | Span.ITALIC, href, links, out);
                 case SoftLineBreak b -> out.add(new Span("\n", style, href));
                 case HardLineBreak b -> out.add(new Span("\n", style, href));
                 case HtmlInline h -> out.add(new Span(h.getLiteral(), style, href));
-                default -> inline(n, isStrike(n) ? style | Span.STRIKE : style, href, out);
+                default -> inline(n, isStrike(n) ? style | Span.STRIKE : style, href, links, out);
             }
         }
     }
@@ -165,8 +174,9 @@ public final class MarkdownDoc {
      * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}). A code span is as written, as on the
      * rendered page: only its {@code path:line} references are links.
      */
-    private static void text(final String text, final int style, final String href, final List<Span> out) {
-        if (!href.isEmpty()) {
+    private static void text(final String text, final int style, final String href, final boolean links, final List<Span> out) {
+        if (!href.isEmpty() || (!links && ((style & Span.CODE) != 0 || !text.contains("[[")))) {
+            // without links, only a [[name]] note outside code changes the text: it reads as its label
             out.add(new Span(text, style, href));
             return;
         }

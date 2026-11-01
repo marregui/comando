@@ -53,8 +53,9 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
  * The Files tab's folders as a list with the selected one's fields beside it: add (a folder chosen first), remove,
- * move up and down, and the fields of an entry of {@code folders.json}. A folder lies inside Claude Code's folder
- * ({@code ~/.claude}) and is set only by choosing it. Each field is checked as it is typed, with {@link FolderKind}'s
+ * move up and down, and the fields of an entry of {@code folders.json}. A folder lies inside one of the roots: Claude
+ * Code's folder ({@code ~/.claude}), and with a kit the kit's folder and the brain's, which may lie anywhere (Miguel's
+ * decision of 2026-11-01); it is set only by choosing it. Each field is checked as it is typed, with {@link FolderKind}'s
  * rules, a name used once in {@code folders.json} and a folder that exists and can be read; a field that fails says
  * why beside it, the list marks its entry, and the list can be saved only when every entry passes. Whether a folder
  * exists, and the git repository it belongs to, are looked up off the EDT. EDT only.
@@ -110,7 +111,13 @@ public final class FoldersEditor {
     }
 
     private final List<FolderRoot> base;
-    private final Path claudeDir;
+    /** The folders a chosen folder must lie in; the first is where a choice starts. */
+    private final List<Path> roots;
+    /**
+     * The folders inside which Save creates an index file named but missing: the kit's folder and its brain; none
+     * without a kit, so a user's own Claude Code folder never gains one.
+     */
+    private final List<Path> indexRoots;
     private final RepoChanges repos;
     private final Chooser chooser;
     private final DefaultListModel<Row> rows = new DefaultListModel<>();
@@ -149,10 +156,25 @@ public final class FoldersEditor {
     /** True while code fills the fields, so filling them is not taken for an edit. */
     private boolean loading;
 
-    /** Edits {@code folders}, which lie inside {@code claudeDir}. */
+    /** Edits {@code folders}, which lie inside {@code claudeDir}, a kit's folder, where Save creates missing indexes. */
     public FoldersEditor(final List<FolderRoot> folders, final Path claudeDir, final RepoChanges repos, final Chooser chooser) {
+        this(folders, List.of(claudeDir), repos, chooser);
+    }
+
+    /** Edits {@code folders}, which lie inside one of {@code roots}, the first where a choice starts and all of them a kit's. */
+    public FoldersEditor(final List<FolderRoot> folders, final List<Path> roots, final RepoChanges repos, final Chooser chooser) {
+        this(folders, roots, roots, repos, chooser);
+    }
+
+    /**
+     * Edits {@code folders}, which lie inside one of {@code roots}, the first where a choice starts; Save creates a
+     * missing index file only inside one of {@code indexRoots}.
+     */
+    public FoldersEditor(final List<FolderRoot> folders, final List<Path> roots, final List<Path> indexRoots, final RepoChanges repos,
+                         final Chooser chooser) {
         this.base = List.copyOf(folders);
-        this.claudeDir = claudeDir.toAbsolutePath().normalize();
+        this.roots = roots.stream().map(r -> r.toAbsolutePath().normalize()).distinct().toList();
+        this.indexRoots = indexRoots.stream().map(r -> r.toAbsolutePath().normalize()).distinct().toList();
         this.repos = repos;
         this.chooser = chooser;
         add = tool("add", "Add a folder: choose it inside " + configShown());
@@ -226,6 +248,16 @@ public final class FoldersEditor {
         return false;
     }
 
+    /** Whether some entry names an index file the disk lacks, which Save creates, so that saving changes something. */
+    public boolean indexesToCreate() {
+        for (int i = 0; i < rows.size(); i++) {
+            if (indexToCreate(rows.get(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static Map<String, String> normalized(final Map<String, String> fields) {
         final Map<String, String> out = new LinkedHashMap<>();
         fields.forEach((k, v) -> out.put(k, v.strip()));
@@ -251,7 +283,7 @@ public final class FoldersEditor {
 
     /**
      * Entry {@code i}'s problems by field: a name missing or used twice in {@code folders.json}, a folder not chosen,
-     * not a full path, not there, not readable, still being looked up, or outside {@code ~/.claude}; an index outside
+     * not a full path, not there, not readable, still being looked up, or outside every root; an index outside
      * the folder or in a folder that does not exist; a listing file that is no file name.
      */
     Map<String, String> problems(final int i) {
@@ -281,8 +313,8 @@ public final class FoldersEditor {
                 out.put(PATH, "no such folder");
             } else if (!f.readable()) {
                 out.put(PATH, "cannot be read");
-            } else if (!Path.of(HomeDir.expand(p)).toAbsolutePath().normalize().startsWith(claudeDir)) {
-                out.put(PATH, "must be inside " + HomeDir.shorten(claudeDir.toString()));
+            } else if (!inside(Path.of(HomeDir.expand(p)).toAbsolutePath().normalize())) {
+                out.put(PATH, "must be inside " + configShown());
             }
         }
         final String ix = r.get(INDEX).strip();
@@ -313,13 +345,18 @@ public final class FoldersEditor {
 
     /** Adds a folder chosen first: named after it (made unique), its index the first guess found in it, selected. */
     void add() {
-        chooser.folder(body, claudeDir).ifPresent(this::add);
+        chooser.folder(body, roots.getFirst()).ifPresent(this::add);
     }
 
-    /** Adds {@code folder} after the others, selected; a folder outside {@code ~/.claude} is refused. */
+    /** Whether {@code dir}, absolute and normalised, lies in one of the roots. */
+    private boolean inside(final Path dir) {
+        return roots.stream().anyMatch(dir::startsWith);
+    }
+
+    /** Adds {@code folder} after the others, selected; a folder outside every root is refused. */
     void add(final Path folder) {
         final Path dir = folder.toAbsolutePath().normalize();
-        if (!dir.startsWith(claudeDir)) {
+        if (!inside(dir)) {
             refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not added");
             return;
         }
@@ -576,9 +613,9 @@ public final class FoldersEditor {
         path.setEditable(false); // chosen, never typed: it exists when chosen
         choosePath.addActionListener(e -> {
             final String p = HomeDir.expand(path.getText().strip());
-            final Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? claudeDir : Path.of(p);
+            final Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? roots.getFirst() : Path.of(p);
             chooser.folder(body, start).map(dir -> dir.toAbsolutePath().normalize()).ifPresent(dir -> {
-                if (!dir.startsWith(claudeDir)) {
+                if (!inside(dir)) {
                     refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not taken");
                 } else {
                     path.setText(HomeDir.shorten(dir.toString()));
@@ -597,7 +634,7 @@ public final class FoldersEditor {
         y = row(form, y, "Folder", withButton(path, choosePath), PATH, "The folder the row shows; chosen with …, only inside " + home);
         y = row(form, y, "Index file", withButton(index, chooseIndex), INDEX,
                 lines("The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
-                        "Named but missing: Save creates it, and /reflect keeps a line in it for each entry",
+                        "Named but missing in the kit or the brain: Save creates it, and /reflect keeps a line in it for each entry",
                         "Empty: the folder has no index"));
         y = row(form, y, "Leave out", excludes, EXCLUDES, lines("Names hidden from the tree wherever they appear, comma-separated, any case",
                 "Always hidden: names starting with a dot, " + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
@@ -691,9 +728,11 @@ public final class FoldersEditor {
         return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
     }
 
-    /** {@code ~/.claude}, or Claude Code's folder wherever it is, as shown. */
+    /** The roots as shown: {@code ~/.claude}, or "~/.claude, ~/comando-kit or ~/comando-brain". */
     private String configShown() {
-        return HomeDir.shorten(claudeDir.toString());
+        final List<String> shown = roots.stream().map(r -> HomeDir.shorten(r.toString())).toList();
+        return shown.size() == 1 ? shown.getFirst()
+                : String.join(", ", shown.subList(0, shown.size() - 1)) + " or " + shown.getLast();
     }
 
     /** A file chosen in the selected entry's folder, relative to it; one outside is refused, saying so. */
@@ -785,14 +824,32 @@ public final class FoldersEditor {
         changed.run();
     }
 
-    /** What Save does with {@code r} beyond {@code folders.json}: an index file named but missing is created. */
+    /**
+     * What Save does with {@code r} beyond {@code folders.json}: an index file named but missing is created in the kit
+     * or the brain, and left missing elsewhere.
+     */
     private String note(final Row r) {
-        final String ix = r.get(INDEX).strip();
-        final IndexFacts f = ix.isEmpty() ? null : indexes.get(indexPath(r).toString());
-        if (f == null || f.exists()) {
+        if (!indexMissing(r)) {
             return "";
         }
-        return ix + " does not exist yet: Save creates it";
+        return r.get(INDEX).strip() + (indexToCreate(r) ? " does not exist yet: Save creates it"
+                : " does not exist: Save creates an index only in the kit or the brain");
+    }
+
+    /** Whether {@code r} names an index file the disk lacks, as last looked up. */
+    private boolean indexMissing(final Row r) {
+        final String ix = r.get(INDEX).strip();
+        final IndexFacts f = ix.isEmpty() ? null : indexes.get(indexPath(r).toString());
+        return f != null && !f.exists();
+    }
+
+    /** Whether {@code r} names an index file the disk lacks inside one of the {@link #indexRoots}, which Save creates. */
+    private boolean indexToCreate(final Row r) {
+        if (!indexMissing(r)) {
+            return false;
+        }
+        final Path dir = Path.of(HomeDir.expand(r.get(PATH).strip())).toAbsolutePath().normalize();
+        return indexRoots.stream().anyMatch(dir::startsWith);
     }
 
     private String rowIcon(final Row r) {

@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntSupplier;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -61,6 +62,8 @@ public final class SessionBar {
     /** Opens the session dialog on a new session with the name given; the shell's. */
     private Consumer<String> newSession = name -> {
     };
+    /** The checkpoint threshold, in percent of the context window, as the window's setting has it (record 129). */
+    private IntSupplier threshold = () -> Reflection.DEFAULT_PERCENT;
     private PanelState panel;
     private AppState state;
 
@@ -165,9 +168,9 @@ public final class SessionBar {
         // the plug, as on the session's row in the sidebar: green while running, grey while not; a ▶ here would read as
         // Run
         toggle.setIcon(Icons.get(ss.status().isUsable() ? "plug" : "unplug"));
-        toggle.setToolTipText(ss.status().isUsable() ? "Connected; click to disconnect (stops the session)"
-                : "Disconnected; click to connect (starts the session)");
-        // shown from the first conversation on and never hidden again, so nothing after it moves; usable while stopped
+        toggle.setToolTipText(ss.status().isUsable() ? "Running; click to stop the session" : "Stopped; click to start it");
+        // shown while the session has a conversation to leave behind; a fresh start clears it, which hides the button
+        // until the new conversation's id arrives; usable while stopped
         fresh.setVisible(!ss.spec().claudeSessionId().isEmpty());
         fresh.setEnabled(showsFresh(ss));
         fresh.setToolTipText(showsFresh(ss) ? SessionRow.freshTip(ss) : "Start a new conversation; stop the session first");
@@ -187,9 +190,9 @@ public final class SessionBar {
         context.setVisible(true);
         context.setText(contextText(ss));
         context.setForeground(due ? Theme.THINKING : Theme.MUTED);
-        context.setToolTipText(contextTip(ss, due));
+        context.setToolTipText(contextTip(ss, due, threshold.getAsInt()));
         checkpoint.setVisible(showsCheckpoint(ss));
-        checkpoint.setEnabled(ss.status() != Status.CLOSING && free);
+        checkpoint.setEnabled(canCheckpoint(ss));
         checkpoint.setIcon(Icons.get(checkpointIcon(ss)));
         checkpoint.setToolTipText(checkpointTip(ss));
     }
@@ -297,9 +300,17 @@ public final class SessionBar {
         return "ctx " + Labels.tokens(ss.contextTokens()) + (share.isEmpty() ? "" : " (" + share + ")");
     }
 
-    /** How full the context is and how it relates to the checkpoint beside it. */
-    static String contextTip(final SessionState ss, final boolean due) {
-        final String threshold = Math.round(Reflection.THRESHOLD * 100) + "%";
+    /** Where the checkpoint threshold is read, in percent of the context window; the shell's setting. */
+    public void checkpointThreshold(final IntSupplier percent) {
+        threshold = percent;
+    }
+
+    /**
+     * How full the context is and how it relates to the checkpoint beside it, which falls due at {@code percent} of the
+     * context window.
+     */
+    static String contextTip(final SessionState ss, final boolean due, final int percent) {
+        final String threshold = percent + "%";
         final String used = ss.contextTokens() <= 0 ? "Context: unknown until a turn ends"
                 : "Context: " + SessionRow.contextText(ss) + " (" + Labels.tokens(ss.contextTokens())
                 + (ss.contextWindow() > 0 ? " of " + Labels.tokens(ss.contextWindow()) : "") + " tokens)";
@@ -311,12 +322,22 @@ public final class SessionBar {
     }
 
     /** The fresh-start button works while the session is stopped and has a conversation to leave behind. */
-    static boolean showsFresh(final SessionState ss) {
+    public static boolean showsFresh(final SessionState ss) {
         return !ss.status().isUsable() && ss.status() != Status.CLOSING && !ss.spec().claudeSessionId().isEmpty();
     }
 
-    static boolean showsCheckpoint(final SessionState ss) {
+    /** The checkpoint button shows for a session with a checkpoint command. */
+    public static boolean showsCheckpoint(final SessionState ss) {
         return !ss.spec().checkpoint().isEmpty();
+    }
+
+    /**
+     * Whether Checkpoint can run, the same on the session bar, the session's menu and the palette: the session has a
+     * checkpoint command, is not stopping, which the reducer refuses, and does not run its checkpoint already (record
+     * 130).
+     */
+    public static boolean canCheckpoint(final SessionState ss) {
+        return showsCheckpoint(ss) && ss.status() != Status.CLOSING && !ss.isCheckpointing();
     }
 
     /** Grey; purple once the checkpoint is due: the context filled past the threshold since the last one. */
@@ -332,7 +353,6 @@ public final class SessionBar {
         final String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
                 ? ", then compacts the conversation"
                 : "; the last checkpoint's summary still waits for the next prompt");
-        return ss.reflection().due() ? "Checkpoint due, context past " + Math.round(Reflection.THRESHOLD * 100) + "%: " + send
-                : "Checkpoint: " + send;
+        return ss.reflection().due() ? "Checkpoint due, the context passed the checkpoint threshold: " + send : "Checkpoint: " + send;
     }
 }

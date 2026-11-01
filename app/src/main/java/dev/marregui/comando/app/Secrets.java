@@ -14,8 +14,9 @@ import dev.marregui.comando.ui.kit.desktop.Platform;
 
 /**
  * Where connection passwords live. On macOS that is the login keychain, through the {@code security}
- * tool, under service {@code comando} and the connection's name; elsewhere, nowhere: the store keeps
- * the password in its connections file.
+ * tool, under service {@code comando} and an account naming the connection and the target its password
+ * was given for ({@code Store.account}); elsewhere, nowhere: the store keeps the password in its
+ * connections file. The methods take that account.
  */
 interface Secrets {
 
@@ -23,7 +24,7 @@ interface Secrets {
     boolean available();
 
     /**
-     * The stored password, or empty when the store holds none for {@code name}.
+     * The stored password, or empty when the store holds none for the account {@code name}.
      *
      * @throws Unreadable when the store could not be asked (locked, no user to unlock it, a timeout), so an
      *                    empty answer never stands for a password that may still be there
@@ -40,6 +41,10 @@ interface Secrets {
     /** Stores the password; false when the store refused it. */
     boolean write(String name, String password);
 
+    /**
+     * Deletes the password, when the store holds one. A delete that fails (a locked keychain) leaves an item no other
+     * target reads, its account naming its own.
+     */
     void delete(String name);
 
     Secrets NONE = new Secrets() {
@@ -107,7 +112,10 @@ interface Secrets {
 
         @Override
         public void delete(final String name) {
-            run(List.of(tool.toString(), "delete-generic-password", "-s", service, "-a", name));
+            final Result r = run(List.of(tool.toString(), "delete-generic-password", "-s", service, "-a", name));
+            if (r.exit() != 0 && r.exit() != ITEM_NOT_FOUND) {
+                LOG.log(System.Logger.Level.WARNING, "the keychain did not delete the password of " + name + " [exit=" + r.exit() + ']');
+            }
         }
 
         private record Result(int exit, String out) {

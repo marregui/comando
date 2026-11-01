@@ -26,13 +26,13 @@ class ClaudeVersionTest {
         assertThat(ClaudeVersion.parse("no version here")).isEmpty();
     }
 
-    /// The tested range includes `2.1.296` and later `2.1` patches but excludes the preceding patch and `2.2.0`,
-    /// establishing the lower-inclusive, upper-exclusive boundary.
+    /// The tested range starts at the release's minimum, `2.1.316` (D4), and includes later `2.1` patches but excludes
+    /// the preceding patch and `2.2.0`, establishing the lower-inclusive, upper-exclusive boundary.
     @Test
     void testedRangeIsHalfOpen() {
-        assertThat(new ClaudeVersion(2, 1, 296).tested()).isTrue();
+        assertThat(new ClaudeVersion(2, 1, 316).tested()).isTrue();
         assertThat(new ClaudeVersion(2, 1, 999).tested()).isTrue();
-        assertThat(new ClaudeVersion(2, 1, 295).tested()).isFalse();
+        assertThat(new ClaudeVersion(2, 1, 315).tested()).isFalse();
         assertThat(new ClaudeVersion(2, 2, 0).tested()).isFalse();
     }
 
@@ -47,7 +47,7 @@ class ClaudeVersionTest {
     @Test
     void aChildHoldingTheOutputOpenAfterTheExitDoesNotHoldTheCheck(@TempDir final Path dir) throws IOException {
         final Path script = dir.resolve("claude");
-        Files.writeString(script, "#!/bin/sh\necho '2.1.296 (Claude Code)'\nsleep 8 &\nexit 0\n");
+        Files.writeString(script, "#!/bin/sh\necho '2.1.316 (Claude Code)'\nsleep 8 &\nexit 0\n");
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwx------"));
 
         final String message = assertTimeoutPreemptively(Duration.ofSeconds(7), () -> ClaudeVersion.check(script.toString(), RootLaunch.INHERIT));

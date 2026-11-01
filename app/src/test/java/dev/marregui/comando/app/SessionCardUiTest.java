@@ -169,7 +169,7 @@ class SessionCardUiTest {
             // its ✕ closes it, and it follows no more
             clickInfo(list, onEdt(() -> rowOf(list, "work")));
             Awaitility.await("work's card").atMost(Duration.ofSeconds(3)).until(() -> "work".equals(cardTitle()));
-            SwingUtilities.invokeAndWait(() -> first(javax.swing.JButton.class, b -> "tab-card-close".equals(b.getName()) && b.isShowing()).doClick());
+            SwingUtilities.invokeAndWait(() -> first(JButton.class, b -> "tab-card-close".equals(b.getName()) && b.isShowing()).doClick());
             assertThat(card()).isNull();
             mouse(list, MouseEvent.MOUSE_MOVED, otherName, 0);
             Awaitility.await("no card without a click").during(Duration.ofMillis(600)).atMost(Duration.ofSeconds(2)).until(() -> card() == null);
@@ -342,7 +342,7 @@ class SessionCardUiTest {
      */
     private static void clickInfo(final JList<?> list, final int index) throws Exception {
         final Point at = onEdt(() -> {
-            final java.awt.Rectangle r = list.getCellBounds(index, index);
+            final Rectangle r = list.getCellBounds(index, index);
             return new Point(r.x + r.width - 14, r.y + r.height / 2);
         });
         mouse(list, MouseEvent.MOUSE_MOVED, at, 0);

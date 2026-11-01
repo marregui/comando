@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a click on a block's gutter mark runs the selection inside that block, otherwise the whole block
 /// - a session's append or insert keeps the caret and selection, forward or backward, and leaves the user's line alone
 /// - an insert lands as a block after the block that ran, or appends when nothing ran
-/// - a session's write, a replace, a clear and a reload are each one undo step
+/// - a session's write, a replace, a clear and a reload are each one undo step; a reload keeps only the text it replaced
 /// - completion opens in SQL being typed with a database open, not in prose
 /// - a source file is coloured as its language and marks no run targets
 /// - zoom stays between 8 and 40 points
@@ -387,6 +387,27 @@ class CommandEditorTest {
             e.area().undoLastAction();
             assertThat(e.text()).as("one step back").isEqualTo("SELECT 2;\n");
             assertThat(changes).as("an undo is the user's edit, and is saved").isNotEmpty().last().isEqualTo("SELECT 2;\n");
+            e.unmount();
+        });
+    }
+
+    /// A document a session edits is reloaded at every version: each reload keeps only the text it replaced to undo,
+    /// not the history before it, so a panel holds two texts however many versions arrive. One undo goes back to the
+    /// text the last reload replaced and stops there; redo brings the reloaded text again.
+    @Test
+    void aReloadKeepsOnlyTheTextItReplacedToUndo() {
+        onEdt(() -> {
+            final CommandEditor e = new CommandEditor();
+            e.load(TEXT);
+            e.area().insert("typed ", 0);
+            e.reload("version 1\n");
+            e.reload("version 2\n");
+            assertThat(e.area().canUndo()).isTrue();
+            e.area().undoLastAction();
+            assertThat(e.text()).isEqualTo("version 1\n");
+            assertThat(e.area().canUndo()).as("nothing before the last reload is kept").isFalse();
+            e.area().redoLastAction();
+            assertThat(e.text()).isEqualTo("version 2\n");
             e.unmount();
         });
     }

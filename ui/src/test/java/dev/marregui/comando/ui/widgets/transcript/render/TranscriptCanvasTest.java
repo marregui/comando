@@ -2,12 +2,15 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - thinking shows until the next item in its list takes its place, at the top level and inside a card
 /// - text outside a bubble or card reads in one colour; an answer's headings, marks and table heads take the tint
 /// - the text that ends a turn is its report, repainted in another tint on the transcript's ground
-/// - a whole session lays out; a width change or a rebuild lays out the view now and the rest when idle
+/// - a whole session lays out; a width change or a rebuild lays out the view now and the window around it when idle
 /// - sub-agent steps are quoted under their call in the Markdown
 /// - zoom keeps the text between 8 and 40 points and lays everything out again
 /// - find opens closed cards and keeps the reader's match while typing on; select all copies every box
@@ -227,10 +230,10 @@ class TranscriptCanvasTest {
         assertThat(canvas.contentHeight()).isGreaterThan(wide);
     }
 
-    /// After a width change the height is estimated within a factor of two; refining yields the same exact height as a
-    /// full layout at that width.
+    /// After a width change the height is estimated within a factor of two; the idle pass lays out the window around
+    /// the view at the new width and leaves the items far below it estimated; a full layout gives the exact height.
     @Test
-    void aWidthChangeLaysOutTheViewNowAndTheRestWhenIdle() {
+    void aWidthChangeLaysOutTheViewNowAndTheWindowAroundItWhenIdle() {
         load(SyntheticSession.steps(10_000));
         canvas.setSize(1000, 700);
         canvas.layoutFully(1000);
@@ -238,10 +241,14 @@ class TranscriptCanvasTest {
         assertThat(canvas.isEstimated()).isTrue();
         final int guessed = canvas.contentHeight();
         canvas.refineAll();
-        assertThat(canvas.isEstimated()).isFalse();
-        final int exact = canvas.contentHeight();
+        final List<Item> items = canvas.topLevel();
+        final int inner = items.getFirst().width();
+        assertThat(items.getLast().width()).as("far below the window the item is not laid out at the new width").isNotEqualTo(inner);
+        assertThat(canvas.isEstimated()).as("the rest keeps its estimates").isTrue();
         canvas.layoutFully(600);
-        assertThat(canvas.contentHeight()).isEqualTo(exact);
+        assertThat(canvas.isEstimated()).isFalse();
+        assertThat(items).allMatch(i -> i.width() == inner);
+        final int exact = canvas.contentHeight();
         // the guess is in the right range: within a factor of two of the exact height
         assertThat(guessed).isBetween(exact / 2, exact * 2);
     }
@@ -425,7 +432,7 @@ class TranscriptCanvasTest {
             }
         }
         paint(900, 200);
-        final java.util.Set<String> found = new java.util.LinkedHashSet<>();
+        final Set<String> found = new LinkedHashSet<>();
         int[] input = null;
         for (int y = 0; y < canvas.contentHeight(); y += 2) {
             for (int x = 0; x < 900; x += 3) {
@@ -450,7 +457,7 @@ class TranscriptCanvasTest {
     /// written.
     @Test
     void aToolsResultShowsItsLinks() {
-        final Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)
+        final Rich r = new Rich(new Font(Font.MONOSPACED, Font.PLAIN, 12), Color.GRAY)
                 .append("wrote /tmp/x.md\nsee https://example.org/y, [[notes]] and [guide](docs/guide.md)").linked(Color.BLUE);
         final String text = r.text();
         assertThat(r.linkAt(text.indexOf("example.org"))).isEqualTo("https://example.org/y");

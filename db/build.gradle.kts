@@ -3,6 +3,7 @@ dependencies {
     api(project(":core"))
     implementation(libs.postgresql)
     testImplementation(project(":testkit"))
+    testImplementation(libs.awaitility)
     testImplementation(libs.questdb)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.junit)

@@ -81,10 +81,10 @@ final class Git implements AutoCloseable {
         if (!Files.isDirectory(start)) {
             return List.of();
         }
-        try (Stream<Path> list = Files.list(start)) {
+        try (final Stream<Path> list = Files.list(start)) {
             return list.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) && Files.exists(p.resolve(".git")))
                     .sorted(Comparator.comparing(Path::toString)).limit(MAX_REPOS).toList();
-        } catch (IOException | UncheckedIOException e) {
+        } catch (final IOException | UncheckedIOException e) {
             return List.of();
         }
     }
@@ -218,7 +218,7 @@ final class Git implements AutoCloseable {
             if (r.exit() < 0) {
                 return ChangeTexts.noted(rootName, change, "git took longer than " + TIMEOUT_MILLIS / 1000 + " s to read the HEAD version");
             }
-            if (r.exit() != 0 && !notInHead(r.err())) {
+            if (r.exit() != 0 && !notInHead(root, change.headPath())) {
                 return ChangeTexts.noted(rootName, change, submodule(root, change.headPath()) ? "a submodule: not compared"
                         : "the HEAD version cannot be read: " + r.err().strip());
             }
@@ -260,10 +260,17 @@ final class Git implements AutoCloseable {
 
     private static final String LFS_POINTER = "version https://git-lfs.github.com/spec/";
 
-    /** Whether a failed read of a {@code HEAD} path says only that {@code HEAD}, or the path in it, is not there. */
-    static boolean notInHead(final String err) {
-        return err.contains("does not exist in 'HEAD'") || err.contains("invalid object name 'HEAD'")
-                || err.contains("exists on disk, but not in 'HEAD'");
+    /**
+     * Whether {@code HEAD} holds no {@code path}, or there is no {@code HEAD}, by the exit code of {@code git rev-parse
+     * --verify -q}: 1 when the name resolves to nothing. Any other failure (git refused the repository, or did not run)
+     * answers false, so the read that asked fails visibly.
+     */
+    private boolean notInHead(final Path root, final String path) {
+        try {
+            return run(root, List.of("rev-parse", "--verify", "-q", "HEAD:" + path)).exit() == 1;
+        } catch (final IOException e) {
+            return false;
+        }
     }
 
     /**
@@ -323,7 +330,7 @@ final class Git implements AutoCloseable {
             final Processes.Result r = Processes.run(cmd, env -> {
                 env.put("GIT_OPTIONAL_LOCKS", "0");
                 env.put("GIT_TERMINAL_PROMPT", "0");
-                // git's messages in English whatever the user's locale: notInHead reads them
+                // git's messages in English whatever the user's locale: the notes quote them
                 env.put("LC_ALL", "C");
             }, null, null, Duration.ofMillis(timeoutMillis), MAX_OUTPUT, 4_096, p -> {
                 started[0] = p;

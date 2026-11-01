@@ -75,10 +75,18 @@ public final class ColumnarResult implements ResultView {
         for (int c = 0; c < n; c++) {
             names[c] = md.getColumnLabel(c + 1);
             typeNames[c] = md.getColumnTypeName(c + 1);
-            sqlTypes[c] = md.getColumnType(c + 1);
+            sqlTypes[c] = sqlType(md.getColumnType(c + 1), typeNames[c]);
             kinds[c] = kindOf(sqlTypes[c]);
         }
         return new ColumnarResult(requestId, names, typeNames, kinds, sqlTypes);
+    }
+
+    /**
+     * The JDBC type a column is read as. The PostgreSQL driver reports a {@code timestamptz} column as
+     * {@link Types#TIMESTAMP} and refuses to read it as a {@code LocalDateTime}, so the type name decides.
+     */
+    static int sqlType(final int reported, final String typeName) {
+        return reported == Types.TIMESTAMP && "timestamptz".equalsIgnoreCase(typeName) ? Types.TIMESTAMP_WITH_TIMEZONE : reported;
     }
 
     static ColumnKind kindOf(final int sqlType) {

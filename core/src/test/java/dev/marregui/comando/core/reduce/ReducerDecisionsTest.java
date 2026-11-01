@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 /// [Reducer] keeps the decisions automatic checkpoints held back (record 131): the Approvals tab's Later group.
 ///
-/// - a decision held back is kept and saved, quietly, with an id unique among those kept
+/// - a decision held back is kept and saved, quietly, with an id never given before, across restarts too
 /// - settled and dismissed decisions leave; decisions read at start replace the list unsaved
 /// - Settle sends the checkpoint command without the automatic argument, to the decision's session or the focused one
 /// - Settle is refused while the target session's checkpoint runs
@@ -45,7 +45,7 @@ class ReducerDecisionsTest {
         assertThat(state.later()).extracting(Decision::id, Decision::session, Decision::title, Decision::detail)
                 .containsExactly(tuple(1L, "work", "Merge the two feedback entries?", "both say SVG only"),
                         tuple(2L, "work", "Archive the old lane?", ""));
-        assertThat(effects).containsExactly(new Effect.SaveDecisions(state.later()));
+        assertThat(effects).containsExactly(new Effect.SaveDecisions(state.later(), state.nextId() - 1));
         assertThat(state.lowerTab()).isEqualTo(LowerTab.SESSION);
 
         apply(new Intent.DecisionHeldBack("work", "  ", "no title"));
@@ -53,13 +53,33 @@ class ReducerDecisionsTest {
         assertThat(effects).isEmpty();
     }
 
-    /// Ids stay unique across restarts: after the decisions read at start, the next one takes the highest id plus one.
+    /// Ids stay unique across restarts: after the decisions read at start, the next one takes an id above both the
+    /// highest kept and the highest given before the restart, which `decisions.json` keeps.
     @Test
     void decisionsReadAtStartReplaceTheListUnsavedAndIdsGoOnAfterThem() {
         apply(new Intent.DecisionsRead(List.of(new Decision(7, "work", "Old one", "", 1L))));
         assertThat(effects).isEmpty();
         apply(new Intent.DecisionHeldBack("work", "New one", ""));
         assertThat(state.later()).extracting(Decision::id).containsExactly(7L, 8L);
+
+        state = States.twoPanels();
+        apply(new Intent.DecisionsRead(List.of(new Decision(7, "work", "Old one", "", 1L)), 12L));
+        apply(new Intent.DecisionHeldBack("work", "After a restart", ""));
+        assertThat(state.later()).extracting(Decision::id).as("12 was given before the restart").containsExactly(7L, 13L);
+    }
+
+    /// An id is never given twice: session `work` holds back 1 and 2, and its Settle checkpoint reads both ids; meanwhile
+    /// the user dismisses 2 and session `other` holds back a new decision; the checkpoint then settles 1 and 2. The new
+    /// decision, never asked, settled nor dismissed, still waits.
+    @Test
+    void aSettleWithIdsReadEarlierLeavesADecisionHeldBackSinceAlone() {
+        apply(new Intent.DecisionHeldBack("work", "One", ""));
+        apply(new Intent.DecisionHeldBack("work", "Two", ""));
+        final List<Long> readByTheCheckpoint = state.later().stream().map(Decision::id).toList();
+        apply(new Intent.DismissDecision(readByTheCheckpoint.get(1)));
+        apply(new Intent.DecisionHeldBack("other", "Three", ""));
+        apply(new Intent.DecisionsSettled(readByTheCheckpoint));
+        assertThat(state.later()).extracting(Decision::title).as("Three was neither asked, settled nor dismissed").containsExactly("Three");
     }
 
     /// Settled ids leave and the rest is saved; ids no longer kept change nothing; Dismiss removes one the same way.
@@ -70,14 +90,14 @@ class ReducerDecisionsTest {
         apply(new Intent.DecisionHeldBack("work", "Three", ""));
         apply(new Intent.DecisionsSettled(List.of(1L, 3L)));
         assertThat(state.later()).extracting(Decision::title).containsExactly("Two");
-        assertThat(effects).containsExactly(new Effect.SaveDecisions(state.later()));
+        assertThat(effects).containsExactly(new Effect.SaveDecisions(state.later(), state.nextId() - 1));
 
         apply(new Intent.DecisionsSettled(List.of(99L)));
         assertThat(effects).isEmpty();
 
         apply(new Intent.DismissDecision(2L));
         assertThat(state.later()).isEmpty();
-        assertThat(effects).containsExactly(new Effect.SaveDecisions(List.of()));
+        assertThat(effects).containsExactly(new Effect.SaveDecisions(List.of(), state.nextId() - 1));
     }
 
     /// At most [DecisionRules#MAX_KEPT] are kept: the oldest goes first.
@@ -102,17 +122,20 @@ class ReducerDecisionsTest {
         assertThat(state.later()).hasSize(1);
     }
 
-    /// A decision whose session is gone is settled in the focused panel's session; with neither, a warning says so and
-    /// nothing is sent.
+    /// A decision whose session is gone is settled in the focused panel's session, as [Reducer#settleTarget] names it
+    /// beforehand; with neither, a warning says so and nothing is sent.
     @Test
     void aDecisionWhoseSessionIsGoneIsSettledInTheFocusedSession() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.DecisionHeldBack("gone", "One", ""));
+        assertThat(Reducer.settleTarget(state, 1L)).as("named before it is pressed").contains("work");
         apply(new Intent.SettleDecision(1L));
         assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect", "one"));
 
         apply(new Intent.FocusPanel(P2));
+        assertThat(Reducer.settleTarget(state, 1L)).isEmpty();
+        assertThat(Reducer.settleTarget(state, 99L)).as("no such decision").isEmpty();
         apply(new Intent.SettleDecision(1L));
         assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
         assertThat(state.notice().level()).isEqualTo(Notice.Level.WARN);

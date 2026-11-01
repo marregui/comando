@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.regex.Pattern;
 import java.util.stream.BaseStream;
 import java.util.stream.StreamSupport;
 
@@ -62,11 +63,12 @@ class ThreadRulesTest {
                 .check(comando);
     }
 
-    /// No class but [Threads] calls `Thread.ofVirtual`, an `Executors` factory other than
-    /// `newVirtualThreadPerTaskExecutor`, or constructs a `ThreadPoolExecutor` or a `java.util.Timer`.
+    /// No class but [Threads] and its nested classes (its measured strand) calls `Thread.ofVirtual`, an `Executors`
+    /// factory other than `newVirtualThreadPerTaskExecutor`, or constructs a `ThreadPoolExecutor` or a `java.util.Timer`.
     @Test
     void virtualThreadsAndExecutorsComeFromTheThreadKit() {
         noClasses().that().doNotHaveFullyQualifiedName(Threads.class.getName())
+                .and().haveNameNotMatching(Pattern.quote(Threads.class.getName() + "$") + ".*")
                 .should().callMethod(Thread.class, "ofVirtual")
                 .orShould().callMethodWhere(target(owner(assignableTo(Executors.class))).and(target(name("newVirtualThreadPerTaskExecutor")).negate()))
                 .orShould().callConstructorWhere(target(owner(assignableTo(ThreadPoolExecutor.class))))

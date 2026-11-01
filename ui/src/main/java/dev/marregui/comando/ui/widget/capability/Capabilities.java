@@ -114,7 +114,7 @@ public final class Capabilities {
             String error = null;
             try {
                 export.writeTo(file);
-            } catch (IOException | RuntimeException ex) {
+            } catch (final IOException | RuntimeException ex) {
                 error = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
             }
             final String failed = error;

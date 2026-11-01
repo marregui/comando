@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.editor;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -185,15 +186,19 @@ final class SqlCompletion {
         }
         shown = schema;
         provider.clear();
+        // added in one call, which sorts once: one call per name sorts the whole list each time, seconds on the EDT
+        // for a schema of thousands of columns
+        final List<Completion> all = new ArrayList<>(KEYWORDS.size() + schema.tables().size());
         for (final String k : KEYWORDS) {
-            provider.addCompletion(new BasicCompletion(provider, k, "keyword"));
+            all.add(new BasicCompletion(provider, k, "keyword"));
         }
         for (final Schema.Table t : schema.tables()) {
-            provider.addCompletion(new BasicCompletion(provider, t.name(), "table, " + t.columns().size() + " columns"));
+            all.add(new BasicCompletion(provider, t.name(), "table, " + t.columns().size() + " columns"));
         }
         for (final Map.Entry<String, String> c : columns(schema).entrySet()) {
-            provider.addCompletion(new BasicCompletion(provider, c.getKey(), c.getValue()));
+            all.add(new BasicCompletion(provider, c.getKey(), c.getValue()));
         }
+        provider.addCompletions(all);
     }
 
     /** Each column name once, described by its type and its tables. */

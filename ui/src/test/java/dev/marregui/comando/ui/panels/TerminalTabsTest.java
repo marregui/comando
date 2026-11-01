@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - an exited shell restarts where its panel is bound now
 /// - a session directory that does not exist falls back to home
 /// - terminals without shells run no jobs; a job is named with its panel
+/// - a shell the user stopped stays stopped at the next render, and starts when its tab is shown again
 class TerminalTabsTest {
 
     private static final PanelId P1 = new PanelId("p1");
@@ -87,7 +88,7 @@ class TerminalTabsTest {
             final AtomicReference<Path> dir = new AtomicReference<>(edge);
             final AtomicBoolean running = new AtomicBoolean(true);
             final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
-            while (System.nanoTime() < deadline && (running.get() || !dir.get().equals(lane2))) {
+            while (System.nanoTime() - deadline < 0 && (running.get() || !dir.get().equals(lane2))) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> {
                     running.set(t.isRunning());
@@ -136,5 +137,34 @@ class TerminalTabsTest {
     void aJobIsNamedWithThePanelWhoseTerminalTabRunsIt() {
         assertThat(TerminalTabs.jobLine("man cat", "comando developer")).isEqualTo("man cat in comando developer's Terminal tab");
         assertThat(TerminalTabs.jobLine("vim x", "notes")).isEqualTo("vim x in notes' Terminal tab");
+    }
+
+    /// The palette's Stop the shell ends the focused panel's shell; the next render with the Terminal tab in front, as
+    /// any intent anywhere brings, leaves it stopped. Showing the tab again, after another tab was in front, starts it.
+    @Test
+    void aShellStoppedByTheUserStaysStoppedUntilItsTabIsShownAgain() throws Exception {
+        final AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", "")), List.of(), List.of());
+        final TerminalTabs tabs = new TerminalTabs(dir -> new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 30")));
+        final AtomicBoolean afterStop = new AtomicBoolean();
+        final AtomicBoolean afterRender = new AtomicBoolean();
+        final AtomicBoolean afterShowing = new AtomicBoolean();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                tabs.render(s, true);
+                assertThat(tabs.focusedRunning()).isTrue();
+                tabs.stopFocused();
+                afterStop.set(tabs.focusedRunning());
+                tabs.render(s, true);
+                afterRender.set(tabs.focusedRunning());
+                tabs.render(s, false);
+                tabs.render(s, true);
+                afterShowing.set(tabs.focusedRunning());
+            });
+            assertThat(afterStop).as("stopped").isFalse();
+            assertThat(afterRender).as("still stopped at the next render").isFalse();
+            assertThat(afterShowing).as("started as its tab is shown again").isTrue();
+        } finally {
+            SwingUtilities.invokeAndWait(tabs::closeAll);
+        }
     }
 }

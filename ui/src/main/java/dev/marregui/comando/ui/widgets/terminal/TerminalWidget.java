@@ -349,14 +349,23 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return Optional.empty();
         }
         try {
-            return foregroundJob(p.process().pid(), command.getFirst());
+            return foregroundJob(p.process().pid(), p.process().toHandle(), command.getFirst(), TerminalWidget::ps);
         } catch (final UnsupportedOperationException e) {
             return Optional.of(UNCHECKED_JOB);
         }
     }
 
-    /** A running shell as a job check needs it, read on the EDT so the check can run on another thread. */
-    public record Shell(long pid, String command) {
+    /**
+     * A running shell as a job check needs it, read on the EDT so the check can run on another thread: its process id
+     * (-1 when unknown), the command the pty started and its process handle, which carries the start time, so the check
+     * reads the shell's descendants only while that very process lives (own rule 12); null when unknown.
+     */
+    public record Shell(long pid, String command, ProcessHandle handle) {
+
+        /** A shell known by its process id alone, as the system lists it now; for tests. */
+        public Shell(final long pid, final String command) {
+            this(pid, command, pid < 0 ? null : ProcessHandle.of(pid).orElse(null));
+        }
     }
 
     /** The shell this terminal runs, while it runs; empty before a start and after the shell ended. */
@@ -366,9 +375,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return Optional.empty();
         }
         try {
-            return Optional.of(new Shell(p.process().pid(), command.getFirst()));
+            return Optional.of(new Shell(p.process().pid(), command.getFirst(), p.process().toHandle()));
         } catch (final UnsupportedOperationException e) {
-            return Optional.of(new Shell(-1, command.getFirst()));
+            return Optional.of(new Shell(-1, command.getFirst(), null));
         }
     }
 
@@ -386,8 +395,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
     static <K> Map<K, String> foregroundJobs(final Map<K, Shell> shells, final long boundMillis, final Function<List<String>, List<String>> ps) {
         final Map<K, Optional<String>> answered = new ConcurrentHashMap<>();
         final Map<K, Thread> forks = new LinkedHashMap<>();
-        shells.forEach((key, shell) -> forks.put(key, Threads.fork("terminal-job", () ->
-                answered.put(key, shell.pid() < 0 ? Optional.of(UNCHECKED_JOB) : foregroundJob(shell.pid(), shell.command(), ps)))));
+        shells.forEach((key, shell) -> forks.put(key,
+                Threads.fork("terminal-job", () -> answered.put(key, job(shell, ps)))));
         final long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(boundMillis);
         final Map<K, String> jobs = new LinkedHashMap<>();
         for (final Map.Entry<K, Thread> f : forks.entrySet()) {
@@ -399,6 +408,12 @@ public final class TerminalWidget implements Zoomable, Searchable {
             answered.getOrDefault(f.getKey(), Optional.of(UNCHECKED_JOB)).ifPresent(job -> jobs.put(f.getKey(), job));
         }
         return jobs;
+    }
+
+    /** The job {@code shell} runs in front, as {@link #foregroundJobs} reads it. */
+    private static Optional<String> job(final Shell shell, final Function<List<String>, List<String>> ps) {
+        return shell.pid() < 0 ? Optional.of(UNCHECKED_JOB)
+                : foregroundJob(shell.pid(), shell.handle(), shell.command(), ps);
     }
 
     /** {@link #foregroundJob(long, String, Function)} with the system's {@code ps}. */
@@ -422,6 +437,16 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * group, so the two groups match and this check cannot see the job: it reports none.
      */
     static Optional<String> foregroundJob(final long shellPid, final String shell, final Function<List<String>, List<String>> ps) {
+        return foregroundJob(shellPid, ProcessHandle.of(shellPid).orElse(null), shell, ps);
+    }
+
+    /**
+     * {@link #foregroundJob(long, String, Function)} for the shell whose process is {@code handle}, taken while it ran:
+     * its descendants are read only while that process lives, never those of a process given its id since; null reads
+     * none.
+     */
+    static Optional<String> foregroundJob(final long shellPid, final ProcessHandle handle, final String shell,
+                                          final Function<List<String>, List<String>> ps) {
         final List<String> self = ps.apply(List.of("-o", "tpgid=,pgid=,comm=", "-p", Long.toString(shellPid)));
         if (self.isEmpty()) {
             return Optional.of(UNCHECKED_JOB);
@@ -438,8 +463,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return Optional.empty();
         }
         final String foreground = ids[0];
-        final String pids = ProcessHandle.of(shellPid).map(h -> h.descendants().map(d -> Long.toString(d.pid()))
-                .collect(Collectors.joining(","))).orElse("");
+        final String pids = handle == null || !handle.isAlive() ? ""
+                : handle.descendants().map(d -> Long.toString(d.pid())).collect(Collectors.joining(","));
         if (pids.isEmpty()) {
             return Optional.of("a program");
         }

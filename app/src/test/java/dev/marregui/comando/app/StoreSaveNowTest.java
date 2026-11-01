@@ -27,7 +27,7 @@ class StoreSaveNowTest {
     @Test
     void saveNowWritesThePanelsBeforeItCompletes() throws Exception {
         final PanelId id = new PanelId("p-1");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.savePanels(List.of(new PanelState(id, "work", "", "")), List.of());
             store.changed(id, "SELECT 42;");
@@ -41,7 +41,7 @@ class StoreSaveNowTest {
     /// completes with a non-null reason.
     @Test
     void aFailedWriteCompletesWithTheReason() throws Exception {
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             Files.deleteIfExists(home.resolve("panels.json"));
             // a non-empty directory where the file goes: the replacing move cannot remove it

@@ -33,7 +33,7 @@ public final class TestReport {
         final List<String> skipped = new ArrayList<>();
         final Path root = Path.of("");
         List<Path> reports;
-        try (Stream<Path> files = Files.walk(root, 6)) {
+        try (final Stream<Path> files = Files.walk(root, 6)) {
             reports = files.filter(p -> RESULTS.matcher("/" + p.toString().replace('\\', '/')).find()).sorted().toList();
         }
         for (final Path report : reports) {

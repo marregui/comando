@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | accepted; the row "where" replaced by [record 71](0071-repositories-in-the-files-tab.md); the title, the problems line and the index creation amended by [record 73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | Miguel and Claude |
+| 2026-10-19 | accepted; the row "where" replaced by [record 71](0071-repositories-in-the-files-tab.md); the title, the problems line and the index creation amended by [record 73](0073-the-claude-folders-window-explains-and-creates-the-index.md); amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -39,3 +39,12 @@ open.
 repositories again. The check that a folder exists is the window's, not `FolderKind`'s: an entry in `folders.json`
 naming a missing folder still loads and shows "✗ cannot be read" in the tab, as before, but the window will not save
 the list until that folder is fixed or removed.
+
+## Amendments
+
+2026-11-01, Miguel's decision D10 of the first-release review: the kit and the brain are folders of their own, anywhere,
+so the window takes a folder inside the folder comando's sessions run on (the kit, else Claude Code's own `~/.claude`)
+and, with a kit, inside the brain's folder ([Kit and brain §3.1](../kit-and-brain.md#31-the-root)). The chooser starts
+in the first; + and … refuse a folder outside both, and the message line says so. Its title is "Files tab folders" and
+the command Configure Files tab folders, naming what the window holds rather than one of its roots. Tested in
+`FoldersEditorTest`.

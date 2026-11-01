@@ -4,14 +4,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Configuration of one Claude Code session. Empty strings mean "the CLI's configured default".
+ * Configuration of one Claude Code session. Empty strings mean "the CLI's configured default". How Claude asks before a
+ * tool, and which folders it may reach, is not a session's: the kit's {@code settings.json} rules hold for every session
+ * (record 7), so a session an agent creates has its creator's permissions by construction.
  *
  * @param name            unique name, the key panels bind to; also passed as {@code --name}
  * @param workDir         working directory of the CLI process
  * @param model           model alias or id ({@code --model})
  * @param effort          effort level ({@code --effort})
- * @param permissionMode  permission mode ({@code --permission-mode})
- * @param addDirs         extra working directories ({@code --add-dir})
  * @param budgetUsd       spend cap per process ({@code --max-budget-usd}); 0 means none
  * @param claudeSessionId Claude Code's session id once known; empty for a session never started
  * @param checkpoint      the prompt the Checkpoint button sends ("/reflect"); empty hides the button
@@ -20,20 +20,23 @@ import java.util.Objects;
  *                        summary, which goes in front of the next prompt; empty when nothing waits
  * @param createdBy       who created the session: empty for the user, else the session or client that called
  *                        {@code session_new} (record 121)
+ * @param family          the root of the session's creation family, recorded when the user removed that root: the
+ *                        removed session's name, so the sessions it made, and theirs, stay one family once their
+ *                        chain of creators no longer reaches it (record 121, rule 1); empty while the chain does, and
+ *                        for a session no removal cut off. Kept by every edit; only the reducer sets it
  */
 public record SessionSpec(
         String name,
         String workDir,
         String model,
         String effort,
-        String permissionMode,
-        List<String> addDirs,
         double budgetUsd,
         String claudeSessionId,
         StartMode startMode,
         String checkpoint,
         String carried,
-        String createdBy) {
+        String createdBy,
+        String family) {
 
     /** The checkpoint command of a session that never set one: what the Checkpoint button sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
@@ -56,14 +59,14 @@ public record SessionSpec(
         carried = carried == null ? "" : carried;
         // nor a creator: the user made it
         createdBy = createdBy == null ? "" : createdBy.strip();
+        // nor a family: no removal cut it off
+        family = family == null ? "" : family.strip();
         ConnectionSpec.requireName(name);
         Objects.requireNonNull(workDir, "workDir");
         Objects.requireNonNull(model, "model");
         Objects.requireNonNull(effort, "effort");
-        Objects.requireNonNull(permissionMode, "permissionMode");
         Objects.requireNonNull(claudeSessionId, "claudeSessionId");
         Objects.requireNonNull(startMode, "startMode");
-        addDirs = List.copyOf(addDirs);
         if (workDir.isBlank()) {
             throw new IllegalArgumentException("workDir is empty");
         }
@@ -76,14 +79,21 @@ public record SessionSpec(
         }
     }
 
+    /** A session no removal cut off from its creation family. */
+    public SessionSpec(final String name, final String workDir, final String model, final String effort, final double budgetUsd,
+                       final String claudeSessionId, final StartMode startMode, final String checkpoint, final String carried,
+                       final String createdBy) {
+        this(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, "");
+    }
+
     /** A session the user made: no creator recorded. */
-    public SessionSpec(final String name, final String workDir, final String model, final String effort, final String permissionMode, final List<String> addDirs, final double budgetUsd,
+    public SessionSpec(final String name, final String workDir, final String model, final String effort, final double budgetUsd,
                        final String claudeSessionId, final StartMode startMode, final String checkpoint, final String carried) {
-        this(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, "");
+        this(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, "");
     }
 
     public static SessionSpec fresh(final String name, final String workDir) {
-        return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, "", StartMode.NEW, DEFAULT_CHECKPOINT, "");
+        return new SessionSpec(name, workDir, "", "", 0.0, "", StartMode.NEW, DEFAULT_CHECKPOINT, "");
     }
 
     /**
@@ -91,7 +101,7 @@ public record SessionSpec(
      * summary still waits for the next prompt.
      */
     public SessionSpec restarted() {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, "", StartMode.NEW, checkpoint, carried, createdBy);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, "", StartMode.NEW, checkpoint, carried, createdBy, family);
     }
 
     /**
@@ -99,37 +109,42 @@ public record SessionSpec(
      * start forks it: two processes never write one conversation. The fork's own id is resumed after that.
      */
     public static SessionSpec imported(final String name, final String workDir, final String claudeSessionId) {
-        return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, claudeSessionId, StartMode.FORK, DEFAULT_CHECKPOINT, "");
+        return new SessionSpec(name, workDir, "", "", 0.0, claudeSessionId, StartMode.FORK, DEFAULT_CHECKPOINT, "");
     }
 
     public SessionSpec withName(final String newName) {
-        return new SessionSpec(newName, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy);
+        return new SessionSpec(newName, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, family);
     }
 
     /** After Claude Code reports its session id, later starts resume that conversation. */
     public SessionSpec resumable(final String sessionId) {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, sessionId, StartMode.RESUME, checkpoint, carried, createdBy);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, sessionId, StartMode.RESUME, checkpoint, carried, createdBy, family);
     }
 
     public SessionSpec withCheckpoint(final String newCheckpoint) {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, newCheckpoint, carried, createdBy);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, newCheckpoint, carried, createdBy, family);
     }
 
     /** The checkpoint's summary that goes in front of the next prompt; empty once it has gone. */
     public SessionSpec withCarried(final String newCarried) {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, newCarried, createdBy);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, newCarried, createdBy, family);
     }
 
     public SessionSpec withModel(final String newModel) {
-        return new SessionSpec(name, workDir, newModel, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy);
+        return new SessionSpec(name, workDir, newModel, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, family);
     }
 
     public SessionSpec withEffort(final String newEffort) {
-        return new SessionSpec(name, workDir, model, newEffort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy);
+        return new SessionSpec(name, workDir, model, newEffort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, family);
     }
 
     /** The same session, recorded as created by {@code creator} (a session or client name; empty for the user). */
     public SessionSpec withCreatedBy(final String creator) {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried, creator);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, creator, family);
+    }
+
+    /** The same session, recorded as of the creation family whose root was {@code root}, the removed session's name. */
+    public SessionSpec withFamily(final String root) {
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, root);
     }
 }

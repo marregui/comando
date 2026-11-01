@@ -77,6 +77,25 @@ public record ConnectionSpec(String name, String host, int port, String database
         return new ConnectionSpec(name, host, port, database, user, newPassword, prod, sslMode);
     }
 
+    /**
+     * Whether {@code other} logs in where this does: the same host, port, database and user. A stored password belongs
+     * to that target, and does not follow a connection pointed at another (record 20).
+     */
+    public boolean sameTarget(final ConnectionSpec other) {
+        return host.equals(other.host) && port == other.port && database.equals(other.database) && user.equals(other.user);
+    }
+
+    /**
+     * The TLS modes from weakest to strongest, as the driver orders them: a change to an earlier one weakens the
+     * connection's TLS (record 23 asks the user first when an agent does it).
+     */
+    public static final List<String> SSL_STRENGTH = List.of("disable", "allow", "prefer", "require", "verify-ca", "verify-full");
+
+    /** Whether this connection's TLS mode is weaker than {@code other}'s. */
+    public boolean weakerTls(final ConnectionSpec other) {
+        return SSL_STRENGTH.indexOf(sslMode) < SSL_STRENGTH.indexOf(other.sslMode);
+    }
+
     static void requireName(final String name) {
         Objects.requireNonNull(name, "name");
         if (name.isBlank()) {

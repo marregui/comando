@@ -11,7 +11,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -90,6 +93,16 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final String TIMEOUT = "timeout";
     static final String ERROR = "error";
     private static final Duration SEND_WITHIN = Duration.ofSeconds(10);
+    /**
+     * How long past the answer's bound a question still waits for its reply before it expires: a margin for a reply in
+     * flight over a broker that reconnects (a few seconds), taken wide so a slow answer is not cut.
+     */
+    private static final Duration EXPIRE_AFTER = Duration.ofSeconds(30);
+    /**
+     * How many questions' correlation data the inbox remembers, so a question delivered twice is answered once: a
+     * redelivery comes within seconds, and an instance is asked a handful of questions a minute, so 256 covers hours.
+     */
+    static final int INBOX_SEEN = 256;
     private static final Duration CLEAR_WITHIN = Duration.ofSeconds(2);
     private static final long POLL_MILLIS = 200;
     /** How much of a question the Instances tab keeps. */
@@ -146,13 +159,31 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private static final int LOOK_BACK = 4_000;
     /** The data root's file of the instances seen. */
     static final String SEEN_FILE = "instances-seen.json";
+    /**
+     * The schema version of the files this class writes, {@code instances-seen.json}, {@code instance.json} and
+     * {@code agents.json}, in their {@code version} key (record 133; a file without it is version 1). A file of a later
+     * version is kept as it is and never written.
+     */
+    static final int FILE_VERSION = 1;
+    /**
+     * The schema of the messages between instances, presence, question and reply, in their {@code schema} key (record
+     * 133; the presence's {@code version} is comando's release). A question of a later schema is refused; a presence or
+     * reply of a later schema is read for the keys this schema has, as it is shown and never stored.
+     */
+    static final int PEER_SCHEMA = 1;
 
     /** A reply to a question, as it travels. */
     record Reply(String status, String text, String instance, String session) {
     }
 
-    /** A question this instance asked, waiting for its reply. */
-    private record Asked(String peer, String peerName, CompletableFuture<Reply> reply) {
+    /**
+     * A question this instance asked, waiting for its reply.
+     *
+     * @param sentNanos when it was asked, by {@link System#nanoTime}: it expires {@link #EXPIRE_AFTER} past the answer's
+     *                  bound, so a reply lost with its peer (gone while this instance was off the Edge) is not waited
+     *                  for until comando quits
+     */
+    private record Asked(String peer, String peerName, CompletableFuture<Reply> reply, long sentNanos) {
     }
 
     private final PeerBroker broker;
@@ -163,6 +194,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private final String workDir;
     private final Path agentsFile;
     private final Duration answerWithin;
+    /** How long a question this instance asked waits for its reply before it expires: the answer's bound and margins. */
+    private final Duration expireWithin;
     private final String started = Instant.now().toString();
     private final ObjectMapper json = new ObjectMapper();
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
@@ -180,13 +213,25 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** The data root's {@code instances-seen.json} and {@code instance.json}; null until {@link #dataRoot} names them. */
     private volatile Path seenFile;
     private volatile Path instanceFile;
+    /** Whether {@code instances-seen.json} is of a later version: kept as it is, never written. Guarded by {@link #seen}. */
+    private boolean seenRefused;
     /** The other instances seen, present or not, by id; guarded by itself. */
-    private final Map<String, Seen> seen = new java.util.LinkedHashMap<>();
+    private final Map<String, Seen> seen = new LinkedHashMap<>();
     /** The prompt blocks answers are waiting on, so two equal questions in flight wait on a block each. */
     private final Set<Block> claimed = Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
     private final ScheduledExecutorService ticks = Threads.timedStrand("peers");
     private final Errands errands = new Errands("peers");
     private final Object presenceLock = new Object();
+    /**
+     * The asker and correlation data of the latest questions, oldest first, at most {@link #INBOX_SEEN}: MQTT delivers a
+     * question at least once, and one delivered again is not answered again. Guarded by itself.
+     */
+    private final Set<String> inboxSeen = Collections.newSetFromMap(new LinkedHashMap<>(16, 0.75f, false) {
+        @Override
+        protected boolean removeEldestEntry(final Map.Entry<String, Boolean> eldest) {
+            return size() > INBOX_SEEN;
+        }
+    });
     private final Object consultLock = new Object();
     private String lastPresence;
     private volatile boolean closed;
@@ -203,6 +248,12 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** As above, with the bound on a consult turn given; for tests. */
     Peers(final PeerBroker broker, final Me me, final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final String workDir, final Path agentsFile,
           final Duration answerWithin) {
+        this(broker, me, sink, state, transcripts, workDir, agentsFile, answerWithin, answerWithin.plus(SEND_WITHIN).plus(EXPIRE_AFTER));
+    }
+
+    /** As above, with how long a question asked waits for its reply given too; for tests. */
+    Peers(final PeerBroker broker, final Me me, final IntentSink sink, final Supplier<AppState> state, final TranscriptRegistry transcripts, final String workDir, final Path agentsFile,
+          final Duration answerWithin, final Duration expireWithin) {
         this.broker = broker;
         this.me = me;
         this.sink = sink;
@@ -211,6 +262,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         this.workDir = workDir;
         this.agentsFile = agentsFile;
         this.answerWithin = answerWithin;
+        this.expireWithin = expireWithin;
         this.role = me.role();
     }
 
@@ -227,13 +279,24 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 return;
             }
             try {
-                for (final JsonNode n : json.readTree(Files.readString(seenFile)).path("instances")) {
+                final JsonNode root = json.readTree(Files.readString(seenFile));
+                if (later(root)) {
+                    seenRefused = true;
+                    LOG.log(System.Logger.Level.WARNING, seenFile + " is of a later version; kept as it is, not written, and the instances seen "
+                            + "before are not listed");
+                    // the user is told once, naming the file, both versions and that nothing is saved to it (record 133)
+                    sink.dispatch(new Intent.Notify(Notice.Level.WARN, SEEN_FILE + " is of version " + root.path("version").asInt() + ", written by a "
+                            + "later comando; this one reads version " + FILE_VERSION + ". It is kept as it is and nothing is saved to it; the instances "
+                            + "seen before are not listed", false));
+                    return;
+                }
+                for (final JsonNode n : root.path("instances")) {
                     final Peer p = peer(n.path("slug").asString(""), n);
                     if (!p.slug().isEmpty() && !p.slug().equals(me.slug())) {
                         seen.put(p.slug(), new Seen(p, n.path("lastSeen").asLong(0L)));
                     }
                 }
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read " + seenFile + "; the instances seen before are not listed", e);
             }
         }
@@ -276,13 +339,28 @@ public final class Peers implements AutoCloseable, InstancesPort {
         ticks.scheduleWithFixedDelay(this::tick, PRESENCE_EVERY.toMillis(), PRESENCE_EVERY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** Connected, or again: the table is rebuilt from the retained presences that come, and this one's is sent. */
+    /**
+     * Connected, or again: the table is rebuilt from the retained presences that come, and this one's is sent from the
+     * ticks' strand, so presences leave in the order they were made.
+     */
     private void connected() {
         peers.clear();
         synchronized (presenceLock) {
             lastPresence = null;
         }
-        tick();
+        onTicks();
+    }
+
+    /** Runs a {@link #tick} on the ticks' strand, unless this has closed. */
+    private void onTicks() {
+        if (closed) {
+            return;
+        }
+        try {
+            ticks.execute(this::tick);
+        } catch (final RejectedExecutionException e) {
+            LOG.log(System.Logger.Level.DEBUG, "presence not sent: closing");
+        }
     }
 
     /** The kit's commit or description ({@code git describe}), sent in the presence from the next tick on. */
@@ -290,14 +368,21 @@ public final class Peers implements AutoCloseable, InstancesPort {
         kit = described == null ? "" : described.strip();
     }
 
-    /** Publishes presence when it changed since it was last sent, and tells the window what changed. */
+    /**
+     * Publishes presence when it changed since it was last sent, expires the questions whose reply cannot come any more,
+     * and tells the window what changed. The application runs it on the ticks' strand only, so presences are published
+     * in order, outside the lock.
+     */
     void tick() {
         // an exception escaping a periodic task cancels every later run
         try {
+            expire();
             show();
             if (closed || !broker.connected()) {
                 return;
             }
+            // the presence is built, compared and handed to the broker under one lock, so two ticks on different
+            // threads (a test's, the strand's) cannot hand the broker an older presence after the newer one it keeps
             synchronized (presenceLock) {
                 final String now = presenceJson();
                 if (now.equals(lastPresence)) {
@@ -316,8 +401,25 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
     }
 
+    /**
+     * Ends the questions asked longer ago than the answer's bound, the send's and {@link #EXPIRE_AFTER}: the peer
+     * answers within its bound or not at all, so a reply that has not come by then was lost (the peer left while this
+     * instance was off the Edge, and no presence of it comes again).
+     */
+    private void expire() {
+        final long now = System.nanoTime();
+        final long within = expireWithin.toNanos();
+        asked.forEach((id, a) -> {
+            if (now - a.sentNanos() > within) {
+                a.reply().complete(new Reply(ERROR, a.peerName() + " sent no reply within " + expireWithin.toSeconds() + " s; it may have left "
+                        + "the comando Edge", a.peerName(), ""));
+            }
+        });
+    }
+
     String presenceJson() {
         final ObjectNode p = json.createObjectNode();
+        p.put("schema", PEER_SCHEMA);
         p.put("name", me.name());
         p.put("slug", me.slug());
         p.put("version", me.version());
@@ -444,6 +546,19 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         final String from = slug(q.path("from").asString(""));
         final String fromName = q.path("name").asString(from);
+        // delivered at least once: the same question again (its asker and correlation data) is answered once
+        final String key = from + ' ' + new String(m.correlation(), StandardCharsets.UTF_8);
+        synchronized (inboxSeen) {
+            if (!inboxSeen.add(key)) {
+                LOG.log(System.Logger.Level.DEBUG, "a question delivered again, dropped [instance=" + from + ']');
+                return;
+            }
+        }
+        if (q.path("schema").asInt(1) > PEER_SCHEMA) {
+            send(m.responseTopic(), m.correlation(), new Reply(REFUSED, me.name() + " reads questions of schema " + PEER_SCHEMA + " and this one is of "
+                    + q.path("schema") + ": upgrade comando on " + me.name(), me.name(), ""));
+            return;
+        }
         final String id = UUID.randomUUID().toString();
         record(new InstancesState.Consult(id, InstancesState.Direction.ANSWERED, from, fromName, CONSULT + from,
                 McpTools.clip(q.path("text").asString(""), QUESTION_CHARS), InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
@@ -504,7 +619,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                     block = t.get(at);
                     break;
                 }
-                if (System.nanoTime() > deadline) {
+                if (System.nanoTime() - deadline > 0) {
                     return timeout(session);
                 }
                 try {
@@ -539,9 +654,11 @@ public final class Peers implements AutoCloseable, InstancesPort {
      * Waits for the reducer to have made {@code session}, at most {@link #MAKE_WITHIN} and never past {@code deadline}.
      */
     private boolean awaitSession(final String session, final long deadline) {
-        final long until = Math.min(deadline, System.nanoTime() + MAKE_WITHIN.toNanos());
+        // nanoTime values compare by their difference: they may wrap
+        final long now = System.nanoTime();
+        final long until = deadline - now < MAKE_WITHIN.toNanos() ? deadline : now + MAKE_WITHIN.toNanos();
         while (state.get().session(session).isEmpty()) {
-            if (System.nanoTime() > until) {
+            if (System.nanoTime() - until > 0) {
                 return false;
             }
             try {
@@ -581,6 +698,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     private void send(final String topic, final byte[] correlation, final Reply r) {
         final ObjectNode p = json.createObjectNode();
+        p.put("schema", PEER_SCHEMA);
         p.put("status", r.status());
         p.put("text", r.text());
         p.put("instance", r.instance());
@@ -592,20 +710,29 @@ public final class Peers implements AutoCloseable, InstancesPort {
         });
     }
 
-    /** Why {@code from} is refused, from {@code agents.json}'s {@code peers.deny}; an unreadable file refuses. */
+    /**
+     * Why {@code from} is refused, from {@code agents.json}'s {@code peers.deny}; an unreadable file refuses. The asker
+     * is the one the question names: the broker does not say who published it, so the list refuses a cooperating
+     * instance, not a local process that names another (record 123 accepts any local publisher until the peer channel
+     * has credentials).
+     */
     private Optional<String> refused(final String from) {
         final Path file = agentsFile;
         if (file == null || !Files.isRegularFile(file)) {
             return Optional.empty();
         }
         try {
-            for (final JsonNode d : json.readTree(Files.readString(file)).path("peers").path("deny")) {
+            final JsonNode root = json.readTree(Files.readString(file));
+            if (later(root)) {
+                return Optional.of(file + " is of a later version, so its deny list cannot be checked");
+            }
+            for (final JsonNode d : root.path("peers").path("deny")) {
                 if (from.equals(slug(d.asString("")))) {
                     return Optional.of("its user listed " + from + " in agents.json peers.deny");
                 }
             }
             return Optional.empty();
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             return Optional.of(file + " cannot be read, so its deny list cannot be checked: " + e.getMessage());
         }
     }
@@ -669,13 +796,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         final Peer p = peer.get();
         final String id = UUID.randomUUID().toString();
-        final Asked a = new Asked(p.slug(), p.name(), new CompletableFuture<>());
+        final Asked a = new Asked(p.slug(), p.name(), new CompletableFuture<>(), System.nanoTime());
         asked.put(id, a);
         record(new InstancesState.Consult(id, InstancesState.Direction.ASKED, p.slug(), p.name(), caller, McpTools.clip(text, QUESTION_CHARS),
                 InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
         a.reply().whenComplete((r, e) -> ended(id, r != null ? r : new Reply(ERROR, e == null ? "no reply" : String.valueOf(e.getMessage()),
                 p.name(), "")));
         final ObjectNode q = json.createObjectNode();
+        q.put("schema", PEER_SCHEMA);
         q.put("from", me.slug());
         q.put("name", me.name());
         q.put("session", caller);
@@ -683,7 +811,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         try {
             broker.publish(inboxTopic(p.slug()), q.toString().getBytes(StandardCharsets.UTF_8), false, replyTopic(me.slug()),
                     id.getBytes(StandardCharsets.UTF_8)).get(SEND_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (ExecutionException | TimeoutException e) {
+        } catch (final ExecutionException | TimeoutException e) {
             asked.remove(id);
             final String why = "the question did not reach " + p.name() + ": " + (e.getCause() == null ? e : e.getCause()).getMessage();
             a.reply().complete(new Reply(ERROR, why, p.name(), ""));
@@ -763,7 +891,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             setDenied(who, denied);
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, denied ? "Questions from " + who + " are refused now"
                     : "Questions from " + who + " are taken again", false));
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change " + agentsFile + ": " + e.getMessage(), e));
         }
         show();
@@ -796,14 +924,23 @@ public final class Peers implements AutoCloseable, InstancesPort {
             }
             final ObjectNode root = Files.isRegularFile(instanceFile) && json.readTree(Files.readString(instanceFile)) instanceof ObjectNode o
                     ? o : json.createObjectNode();
+            if (later(root)) {
+                throw new IOException("it is of a later version, written by a later comando; it is kept as it is");
+            }
+            root.put("version", FILE_VERSION);
             root.put("role", r);
             AtomicFiles.writeString(instanceFile, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
             role = r;
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, r.isEmpty() ? "This instance has no role now" : "This instance is for: " + r, false));
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change " + instanceFile + ": " + e.getMessage(), e));
         }
-        tick();
+        onTicks();
+    }
+
+    /** Whether a file's {@code version} is later than {@link #FILE_VERSION}; a file without one is version 1. */
+    static boolean later(final JsonNode root) {
+        return root != null && root.path("version").asInt(1) > FILE_VERSION;
     }
 
     /** Whether {@code a} and {@code b} name the same instance alike: what the remembered list keeps of it. */
@@ -825,16 +962,17 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** {@code instances-seen.json} as {@link #seen} has it: each instance's identity and when it was last seen. */
     private void writeSeen() {
         final Path file = seenFile;
-        if (file == null) {
+        if (file == null || seenRefused) {
             return;
         }
         final ObjectNode root = json.createObjectNode();
+        root.put("version", FILE_VERSION);
         final ArrayNode list = root.putArray("instances");
         seen.values().forEach(x -> list.addObject().put("slug", x.peer().slug()).put("name", x.peer().name()).put("version", x.peer().version())
                 .put("role", x.peer().role()).put("kit", x.peer().kit()).put("started", x.peer().started()).put("lastSeen", x.lastSeen()));
         try {
             AtomicFiles.writeString(file, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write " + file, e);
         }
     }
@@ -846,6 +984,10 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         final ObjectNode root = Files.isRegularFile(agentsFile) && json.readTree(Files.readString(agentsFile)) instanceof ObjectNode o
                 ? o : json.createObjectNode();
+        if (later(root)) {
+            throw new IOException("it is of a later version, written by a later comando; it is kept as it is");
+        }
+        root.put("version", FILE_VERSION);
         final ObjectNode peersNode = root.path("peers") instanceof ObjectNode o ? o : root.putObject("peers");
         final List<String> list = new ArrayList<>();
         peersNode.path("deny").forEach(d -> {
@@ -871,7 +1013,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             final List<String> out = new ArrayList<>();
             json.readTree(Files.readString(agentsFile)).path("peers").path("deny").forEach(d -> out.add(slug(d.asString(""))));
             return out;
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             return List.of();
         }
     }
@@ -909,7 +1051,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         final boolean connected = !closed && broker.connected();
         // with the link down, no presence is current: every instance is shown as last seen
         final List<Peer> present = connected ? others() : List.of();
-        final Set<String> here = new java.util.HashSet<>(present.stream().map(Peer::slug).toList());
+        final Set<String> here = new HashSet<>(present.stream().map(Peer::slug).toList());
         final List<InstancesState.Instance> others = new ArrayList<>(present.stream().map(p -> new InstancesState.Instance(p.slug(), p.name(),
                 p.version(), p.role(), p.kit(), p.busy(), p.started(), p.sessions(), p.edge(), true, 0L)).toList());
         synchronized (seen) {
@@ -980,7 +1122,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (broker.connected()) {
             try {
                 broker.publish(presenceTopic(me.slug()), new byte[0], true, null, null).get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (ExecutionException | TimeoutException e) {
+            } catch (final ExecutionException | TimeoutException e) {
                 LOG.log(System.Logger.Level.WARNING, "presence not cleared at close", e);
             } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();

@@ -1,6 +1,7 @@
 package dev.marregui.comando.core.port;
 
 import java.util.List;
+import java.util.Map;
 
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -24,8 +25,17 @@ public interface ToolPort {
     /** Reads {@code folders} once, now, each as a tree. */
     void readFolders(List<FolderRoot> folders);
 
-    /** Reads {@code folders} every few seconds from now on, and stops reading any other. */
+    /** Reads {@code folders} every few seconds from now on, each whole, and stops reading any other. */
     void watchFolders(List<FolderRoot> folders);
+
+    /**
+     * As {@link #watchFolders(List)}, a folder with an entry in {@code open} (by name, the absolute paths of its
+     * subfolders open in the Files tab) read one level deep plus those subfolders and one level inside each. A port
+     * that reads no folders in part reads them whole.
+     */
+    default void watchFolders(final List<FolderRoot> folders, final Map<String, List<String>> open) {
+        watchFolders(folders);
+    }
 
     /**
      * Reads from now on the git repositories that hold or sit directly inside {@code folders}, every configured folder:

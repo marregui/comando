@@ -31,14 +31,12 @@ public final class Actions {
             // ---- sessions: the Sessions tab, its menus, the session bar and the session dialog
             new Action("session_new", Kind.ACT,
                     "Creates a session, as Sessions ▸ New session… does, opens it in a panel of its own and, with prompt, starts it with that prompt. "
-                            + "The new session records this caller as its creator.",
+                            + "The new session records this caller as its creator; it runs under the kit's settings.json permission rules, as every "
+                            + "session does.",
                     List.of(Arg.required("name", Type.STRING, "unique; also the CLI's --name"),
                             Arg.required("work_dir", Type.STRING, "the folder the session runs in; ~/ expands"),
                             Arg.optional("model", Type.STRING, "empty: the CLI's default").among(withDefault(SessionSpec.MODELS)),
                             Arg.optional("effort", Type.STRING, "empty: the CLI's default").among(withDefault(SessionSpec.EFFORTS)),
-                            Arg.optional("permission_mode", Type.STRING, "empty: the CLI's default")
-                                    .among(List.of("", "default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions")),
-                            Arg.optional("add_dirs", Type.STRINGS, "extra directories, --add-dir"),
                             Arg.optional("checkpoint", Type.STRING, "the prompt the Checkpoint button sends; default /reflect"),
                             Arg.optional("prompt", Type.STRING, "a first prompt: the session starts and runs it")),
                     Set.of(Intent.SaveSession.class, Intent.PromptSession.class)),
@@ -46,7 +44,6 @@ public final class Actions {
                     "Changes a session's settings, as its Edit… dialog does; new_name renames it and its panel. Takes effect at its next start.",
                     List.of(SESSION, Arg.optional("new_name", Type.STRING, ""), Arg.optional("work_dir", Type.STRING, ""),
                             Arg.optional("model", Type.STRING, ""), Arg.optional("effort", Type.STRING, ""),
-                            Arg.optional("permission_mode", Type.STRING, ""), Arg.optional("add_dirs", Type.STRINGS, ""),
                             Arg.optional("checkpoint", Type.STRING, "")),
                     Set.of(Intent.SaveSession.class)),
             new Action("session_open", Kind.ACT, "Opens a session in a panel of its own, or focuses the panel it has, as a double click on its row does.",
@@ -136,7 +133,7 @@ public final class Actions {
             new Action("decisions_settled", Kind.ACT,
                     "Removes decisions from the Later group once a checkpoint the user started has asked them and the user answered. "
                             + "ui_get_state lists the decisions held back with their ids.",
-                    List.of(Arg.required("ids", Type.ANY, "the decisions' ids, a list of integers")),
+                    List.of(Arg.required("ids", Type.INTEGERS, "the decisions' ids, from ui_get_state")),
                     Set.of(Intent.DecisionsSettled.class)),
             new Action("decision_settle", Kind.ACT,
                     "Settle, as the Later group's button does: sends the checkpoint command of the decision's session, without --auto, so it asks "
@@ -149,13 +146,14 @@ public final class Actions {
 
             // ---- connections: the Connections tab and its dialog
             new Action("connection_save", Kind.ACT,
-                    "Adds or changes a database connection, as its dialog does; previous_name renames one.",
+                    "Adds or changes a database connection, as its dialog does; previous_name renames one. A change keeps the fields it does not name.",
                     List.of(Arg.required("name", Type.STRING, ""), Arg.optional("previous_name", Type.STRING, ""),
-                            Arg.required("host", Type.STRING, ""), Arg.optional("port", Type.INTEGER, "default 8812"),
-                            Arg.required("database", Type.STRING, ""), Arg.optional("user", Type.STRING, ""),
+                            Arg.optional("host", Type.STRING, "required for a new connection; kept when omitted"),
+                            Arg.optional("port", Type.INTEGER, "default 8812 for a new connection; kept when omitted"),
+                            Arg.optional("database", Type.STRING, "required for a new connection; kept when omitted"), Arg.optional("user", Type.STRING, ""),
                             Arg.optional("password", Type.STRING, "never shown"),
                             Arg.optional("production", Type.BOOLEAN, "a production connection refuses writes"),
-                            Arg.optional("ssl_mode", Type.STRING, "default prefer").among(List.of("", "prefer", "disable", "allow", "require", "verify-ca", "verify-full"))),
+                            Arg.optional("ssl_mode", Type.STRING, "default prefer for a new connection; kept when omitted").among(List.of("", "prefer", "disable", "allow", "require", "verify-ca", "verify-full"))),
                     Set.of(Intent.SaveConnection.class)),
             new Action("connection_test", Kind.READ, "Tests a connection's settings without saving them, as Test in its dialog does.",
                     List.of(Arg.required("name", Type.STRING, "a saved connection")), Set.of(Intent.TestConnection.class)),

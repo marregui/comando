@@ -54,7 +54,7 @@ class ClassifierTest {
             /model sonnet                                                | CLAUDE
             don't drop table t                                           | CLAUDE
             """)
-    void classifies(final String text, final Target expected) {
+    void eachBlockGoesToSqlOrToClaudeByItsShape(final String text, final Target expected) {
         assertThat(Classifier.classify(text.replace("\\n", "\n")).target()).isEqualTo(expected);
     }
 

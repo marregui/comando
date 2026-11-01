@@ -4,6 +4,8 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLabel;
@@ -11,6 +13,7 @@ import javax.swing.JViewport;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
@@ -21,6 +24,8 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
+import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
@@ -35,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - zoom stops at the font limits and turns back at once
 /// - the strip names running sub-agents, then background ones, and hides when none run; a chip click reveals its card
 /// - a sub-agent link asks for its transcript
+/// - a Markdown link to a file not in the session's folder is looked for as a bare file reference is
 class TranscriptWidgetTest {
 
     @BeforeAll
@@ -284,5 +290,31 @@ class TranscriptWidgetTest {
         w.openLink("subagent:toolu_9");
 
         assertThat(sink.of(Intent.OpenSubagent.class)).containsExactly(new Intent.OpenSubagent("work", "toolu_9"));
+    }
+
+    /// A Markdown link naming a file relative to a deeper folder than the session's own, which is not where the link
+    /// reads it from, sends `OpenFile` without a line, so the file is looked for as a bare reference is (record 111);
+    /// a link to a file that is there opens it in place, and a web link sends nothing.
+    @Test
+    void aMarkdownLinkToAFileNotInTheSessionsFolderIsLookedForAsABareReferenceIs(@TempDir final Path folder) throws Exception {
+        final Path here = Files.writeString(folder.resolve("here.md"), "# Here\n");
+        final List<Path> opened = new ArrayList<>();
+        Links.install((f, heading) -> opened.add(f), text -> { }, session -> session.equals("work") ? folder : null);
+        Links.browseWith(url -> { });
+        try {
+            final RecordingSink sink = new RecordingSink();
+            final TranscriptWidget w = new TranscriptWidget(new WidgetContext(sink, new ActionRegistry()));
+            w.render(new TranscriptView("work", new Transcript()));
+
+            w.openLink("harness/07-fleet-vision.md");
+            w.openLink("here.md");
+            w.openLink("https://example.org/x");
+
+            assertThat(sink.of(Intent.OpenFile.class)).containsExactly(new Intent.OpenFile("work", "harness/07-fleet-vision.md", 0));
+            assertThat(opened).containsExactly(here);
+        } finally {
+            Links.install((f, heading) -> { }, text -> { }, session -> null);
+            Links.browseWith(Browser::open);
+        }
     }
 }

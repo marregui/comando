@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import dev.marregui.comando.claude.KitJobsCli;
+import dev.marregui.comando.claude.KitJson;
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
 import dev.marregui.comando.core.model.KitRoot;
@@ -55,6 +56,12 @@ final class RootSetup implements Setup {
             throw new IOException("the root " + root.dir() + " has no kit");
         }
         return git.backUp(root.dir(), "Kit", LocalDate.now());
+    }
+
+    @Override
+    public List<String> repairKit() throws IOException {
+        // the problems the window showed, read at start: an entry the user did not see is not removed
+        return KitJson.repair(root.dir().resolve(KitRoot.FILE), root.kit().map(KitRoot.Manifest::problems).orElse(List.of()));
     }
 
     @Override

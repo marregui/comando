@@ -72,7 +72,8 @@ final class ViewSpecs {
             }
             final List<String> row = new ArrayList<>(names.size());
             for (final JsonNode v : r) {
-                row.add(v.isNull() ? "null" : v.isValueNode() ? v.asString("") : v.toString());
+                // JSON null is SQL NULL: a null cell, which the table shows as NULL, not the text "null"
+                row.add(v.isNull() ? null : v.isValueNode() ? v.asString("") : v.toString());
             }
             out.add(row);
             i++;

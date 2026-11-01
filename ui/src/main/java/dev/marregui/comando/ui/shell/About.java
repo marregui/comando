@@ -93,7 +93,7 @@ final class About {
 
     /** The content of {@code about.md} with this run's {@code values}. */
     static Content load(final Map<String, String> values) {
-        try (InputStream in = About.class.getResourceAsStream("about.md")) {
+        try (final InputStream in = About.class.getResourceAsStream("about.md")) {
             if (in == null) {
                 throw new IllegalStateException("about.md is missing from the build");
             }

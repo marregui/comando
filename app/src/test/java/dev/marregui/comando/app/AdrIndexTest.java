@@ -54,7 +54,7 @@ class AdrIndexTest {
     }
 
     private static List<String> records() throws IOException {
-        try (Stream<Path> s = Files.list(ADR)) {
+        try (final Stream<Path> s = Files.list(ADR)) {
             return s.map(p -> p.getFileName().toString()).filter(n -> n.matches("\\d{4}-.+\\.md")).sorted().toList();
         }
     }

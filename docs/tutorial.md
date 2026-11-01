@@ -39,8 +39,9 @@ repository:
 ./gradlew :app:run
 ```
 
-The window opens with one panel, **scratch**, holding a short welcome text. With a kit installed (`INSTALL.md` §5),
-the sessions run on the kit, and the Files tab opens on its folders, its KIT row naming the kit's commit.
+The window opens with one panel, **scratch**, holding a short welcome text. With a kit, which the install offers to
+create for you from the docs (`INSTALL.md` §5), the sessions run on the kit, and the Files tab opens on its folders,
+its KIT row naming the kit's commit.
 
 | Part | What it is |
 |---|---|
@@ -70,7 +71,7 @@ does; the menus grey out what cannot run now.
 |---|---|---|
 | **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel; a right click opens its menu, which does the rest; drag a row to order the list yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the ⓘ shows a card of its facts, without a summary; a double click on the name binds the connection to the focused panel |
-| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
+| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder, the kit's or the brain's; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a top-level row's right click shows the changes inside it |
 | **Instances** | the other comando instances on this machine and what their sessions are doing, while the comando Edge runs; then the questions they asked each other | a click on a row shows its card |
 
 The tabs' right-click menus:
@@ -80,7 +81,7 @@ The tabs' right-click menus:
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
 | **Connections** | New connection…, starting or stopping the embedded QuestDB and the comando Edge |
 | **Files** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
-| **Instances** | the window's commands; an instance's row asks it, refuses its questions or forgets one that left |
+| **Instances** | none of its own; an instance's row asks it, refuses its questions or forgets one that left |
 
 ### 1.2 The panel tabs and their cards
 
@@ -114,11 +115,13 @@ The bar under the lower tabs belongs to the focused panel's session. Next to its
 | Button | Does |
 |---|---|
 | **new conversation** | starts a stopped session on a new conversation; shown once it has one, greyed out while the session runs |
-| **checkpoint** | sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). Once that turn has finished, it sends `/compact`: the same conversation goes on, smaller, and the **Session** tab keeps it. comando does the same by itself when a turn ends with the context at 400k tokens or more, once each time it crosses; **Checkpoint threshold…** in the palette changes the figure, 0 turns it off. Until the checkpoint and its compaction have ended, the session's panel reads only and greys with its tab and the **Session** tab; **Stop** (⌘.) interrupts it and you carry on in the same conversation, nothing compacted |
+| **checkpoint** | sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). Once that turn has finished, it sends `/compact`: the same conversation goes on, smaller, and the **Session** tab keeps it. comando does the same by itself when a turn ends with the context at 40% of the session's window or more, once each time it crosses, and after that automatic checkpoint the session carries on with its work by itself; after the button it waits for your next prompt. **Checkpoint threshold…** in the palette changes the percentage, from 10 to 100. Until the checkpoint and its compaction have ended, the session's panel reads only and greys with its tab and the **Session** tab, whose grey lifts while the session has a card waiting for your answer; **Stop** (⌘.) interrupts it and you carry on in the same conversation, nothing compacted |
 
-The context and the checkpoint turn purple together when a checkpoint is due. Click the model or the effort to change
-it, even mid-session. To compact the conversation, use **Compact the conversation** in the palette or type
-`/compact`. **Rewrite ‹panel› as a document** is in the session's menu in the sidebar.
+The context and the checkpoint turn purple together when a checkpoint is due: a turn ended at or past that same
+threshold. Click the model or the effort to change it, even mid-session. To compact the conversation, use **Compact the
+conversation** in the palette or type `/compact`. **Rewrite ‹panel› as a document** is in the session's menu in the
+sidebar; the palette has it too, with **Checkpoint**, **Start a new conversation** and **Start or stop the session**, and
+so the rest of the session's and the connection's menus: copy details, clone, remove, and a connection's test.
 
 ### 1.4 Uncommitted changes
 
@@ -316,8 +319,10 @@ ends a turn has a bar of the tint beside it. The theme button at the top right c
 ([§1.6](#16-themes-of-your-own)); the editors', terminal's and diffs' colours follow.
 
 **⌘⇧.** interrupts a turn: the turn ends with an "interrupted" line and the session stays alive for the next prompt.
-While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows
-again.
+While you read further up, new output does not scroll the view, and the block at the top stays where it is; **↓ Latest**
+or **End** jumps back, and sending a prompt follows again. **Home** goes to the first block of the conversation, **⌥↑**
+and **⌥↓** to the previous and next prompt, **PgUp** and **PgDn** by a page; the editor keeps these keys for itself, so
+click in the transcript first (or press ⌃1).
 
 ## 6. Claude and your database
 
@@ -399,7 +404,7 @@ Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 | `decisions.json` | the decisions automatic checkpoints held back for you, listed under Later in the Approvals tab |
 | `instances-seen.json` | the other comando instances seen, so the Instances tab lists those that left until you forget them |
 | `questdb/` | the embedded QuestDB's data |
-| `edge/` | the comando Edge: its download, its installation, its configuration, data and logs |
+| `edge/` | the comando Edge: its download, its installation, its configuration, data and logs; `admin-password` holds the password of its web UI's user `admin` (on port 18080) |
 | `help/` | this tutorial |
 | `logs/` | comando's logs; **Help ▸ Show the log** opens them |
 
@@ -436,6 +441,9 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘B / ⌘\ | sidebar / side pane |
 | ⌘K | show or hide Uncommitted changes in the side pane |
 | ⌘F, ⌘G ⌘⇧G | find in the view, next, previous |
+| Home / End | the Session tab's first block / its latest, following it |
+| ⌥↑ / ⌥↓ | the Session tab's previous / next prompt |
+| PgUp / PgDn | a page up / down in the Session tab |
 | ⌘⇧C, ⌘⇧S | copy, export the view |
 | ⌘S | save the panel now |
 | ⌥⌘G | run Gradle tasks |

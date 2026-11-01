@@ -39,6 +39,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
@@ -137,11 +138,11 @@ public final class ThemeChooser {
     }
 
     /**
-     * Opens the chooser under {@code anchor}, right-aligned with it; {@code chosen} hears the theme picked, after the
-     * window closes.
+     * Opens the chooser under {@code anchor}, right-aligned with it; {@code chosen} hears each theme picked, at once,
+     * while the chooser stays open (record 128).
      */
     public static ThemeChooser show(final Component anchor, final Consumer<NamedTheme> chosen) {
-        final ThemeChooser c = new ThemeChooser(javax.swing.SwingUtilities.getWindowAncestor(anchor), chosen);
+        final ThemeChooser c = new ThemeChooser(SwingUtilities.getWindowAncestor(anchor), chosen);
         final Point at = anchor.getLocationOnScreen();
         final Rectangle anchorOnScreen = new Rectangle(at, anchor.getSize());
         c.dialog.setLocation(place(anchorOnScreen, c.dialog.getSize(), screenOf(at)));
@@ -202,7 +203,8 @@ public final class ThemeChooser {
 
     /**
      * The cards of one mode, in their slots: the pairs first, each theme of the mode at its pair's index, so that a
-     * dark theme and its twin share a slot; then the themes of the mode no pair holds, in order.
+     * dark theme and its twin share a slot, the twin named on either side ({@link NamedTheme#twinOf}); then the themes
+     * of the mode no pair holds, in order.
      */
     static List<NamedTheme> slots(final List<NamedTheme> themes, final boolean onLight) {
         final List<NamedTheme> paired = new ArrayList<>();
@@ -212,8 +214,7 @@ public final class ThemeChooser {
             if (d.ground.light) {
                 continue;
             }
-            final Optional<NamedTheme> twin = themes.stream().filter(t -> t.ground.light && !taken.contains(t)
-                    && t.twin.map(d.id::equals).orElse(false)).findFirst();
+            final Optional<NamedTheme> twin = NamedTheme.twinOf(themes, d).filter(t -> !taken.contains(t));
             if (twin.isPresent()) {
                 taken.add(twin.get());
                 paired.add(onLight ? twin.get() : d);
@@ -340,7 +341,8 @@ public final class ThemeChooser {
             try {
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                ThemePreview.paint(g, theme, RING, RING, PREVIEW_W, PREVIEW_H, getFont(), Theme.mono(getFont().getSize2D() - 1f));
+                ThemePreview.paint(g, theme, RING, RING, PREVIEW_W, PREVIEW_H, getFont(),
+                        Theme.mono(Theme.size(getFont().getSize2D(), Theme.TextSize.SMALL)));
                 final boolean hover = getModel().isRollover();
                 if (chosen || hover || isFocusOwner()) {
                     g.setColor(chosen ? theme.tint.body : Theme.MUTED);

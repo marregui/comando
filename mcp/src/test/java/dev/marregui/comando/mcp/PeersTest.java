@@ -1,5 +1,6 @@
 package dev.marregui.comando.mcp;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -149,6 +150,57 @@ class PeersTest {
         b.window.turn("consult-main", "now is the answer");
         final McpTools.Outcome reply = asking.get(WAIT.toSeconds(), TimeUnit.SECONDS);
         assertThat(reply.text()).contains("now is the answer").doesNotContain("earlier");
+    }
+
+    /// MQTT delivers a question at least once: the same question delivered twice, with the same asker and correlation
+    /// data, is answered once; another correlation is another question.
+    @Test
+    void aQuestionDeliveredTwiceIsAnsweredOnce() throws Exception {
+        node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final byte[] question = "{\"from\":\"main\",\"name\":\"comando\",\"session\":\"foreman\",\"text\":\"what is X?\"}".getBytes(StandardCharsets.UTF_8);
+        bus.publish(Peers.inboxTopic("b"), question, false, Peers.replyTopic("main"), "q-1".getBytes(StandardCharsets.UTF_8));
+        bus.publish(Peers.inboxTopic("b"), question, false, Peers.replyTopic("main"), "q-1".getBytes(StandardCharsets.UTF_8));
+        b.window.recorded.await(Intent.PromptSession.class, WAIT);
+        bus.publish(Peers.inboxTopic("b"), question, false, Peers.replyTopic("main"), "q-2".getBytes(StandardCharsets.UTF_8));
+        b.window.recorded.await(Intent.PromptSession.class, p -> b.window.recorded.of(Intent.PromptSession.class).size() == 2, WAIT);
+        Thread.sleep(300);
+        assertThat(b.window.recorded.of(Intent.PromptSession.class)).as("q-1 once, q-2 once").hasSize(2);
+    }
+
+    /// Messages between instances name their schema; a question of a later schema is refused with a reply that says
+    /// so, and no session is prompted.
+    @Test
+    void aQuestionOfALaterSchemaIsRefused() throws Exception {
+        node("", Peers.ANSWER_WITHIN);
+        final Node b = node("b", Peers.ANSWER_WITHIN);
+        final List<String> replies = new CopyOnWriteArrayList<>();
+        final Link listener = new Link(bus);
+        listener.subscribe(Peers.replyTopic("main"), m -> replies.add(new String(m.payload(), StandardCharsets.UTF_8)));
+        listener.connect();
+        bus.publish(Peers.inboxTopic("b"), "{\"schema\":2,\"from\":\"main\",\"name\":\"comando\",\"text\":\"q\"}".getBytes(StandardCharsets.UTF_8), false,
+                Peers.replyTopic("main"), "q-9".getBytes(StandardCharsets.UTF_8));
+        assertThat(replies).singleElement().asString().contains("\"status\":\"refused\"").contains("schema 1");
+        assertThat(b.window.recorded.of(Intent.PromptSession.class)).isEmpty();
+        assertThat(new String(bus.retained.get(Peers.presenceTopic("b")), StandardCharsets.UTF_8)).contains("\"schema\":1");
+    }
+
+    /// A question whose reply never comes, its peer gone while this instance was off the Edge so no presence clears it,
+    /// expires past the answer's bound and margins: `instance_reply` then answers that no reply came, and the
+    /// question waits no longer.
+    @Test
+    void aQuestionWhoseReplyCannotComeExpires() throws Exception {
+        final Node main = node("", "", Peers.ANSWER_WITHIN, Duration.ofMillis(200));
+        node("b", Peers.ANSWER_WITHIN);
+        final McpTools.Outcome asked = call(main, "instance_ask", "{\"instance\":\"b\",\"text\":\"what is X?\",\"wait_seconds\":0}");
+        final Matcher id = ID.matcher(asked.text());
+        assertThat(id.find()).as(asked.text()).isTrue();
+        Thread.sleep(300);
+        main.peers.tick();
+        final McpTools.Outcome reply = call(main, "instance_reply", "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":0}");
+        assertThat(reply.error()).isTrue();
+        assertThat(reply.text()).contains("sent no reply within");
+        assertThat(call(main, "instance_reply", "{\"id\":\"" + id.group(1) + "\",\"wait_seconds\":0}").text()).as("read once").contains("no question");
     }
 
     /// A peer denied in the receiving instance's `agents.json` gets a refusal naming the file; no session is made or
@@ -303,6 +355,22 @@ class PeersTest {
 
     /// An instance that leaves stays listed, not present, with when it was last seen; the data root remembers it across
     /// a restart, until the user forgets it; one present cannot be forgotten. The role set from the tab is written to
+    /// An `instances-seen.json` of a later version is kept as it is, and the user is told once, naming the file, both
+    /// versions and that nothing is saved to it (record 133); the instances seen before are not listed.
+    @Test
+    void aLaterInstancesSeenFileIsKeptAndTheUserIsTold() throws Exception {
+        final Node first = node("", Peers.ANSWER_WITHIN);
+        first.peers.close();
+        final Path file = first.home.resolve(Peers.SEEN_FILE);
+        Files.writeString(file, "{\"version\": 2, \"instances\": [{\"slug\": \"b\"}]}");
+        final Node later = node("", Peers.ANSWER_WITHIN);
+        assertThat(later.window.recorded.of(Intent.Notify.class))
+                .anyMatch(n -> n.text().startsWith("instances-seen.json is of version 2, written by a later comando; this one reads version 1"));
+        assertThat(later.peers.instances().others()).isEmpty();
+        later.peers.close();
+        assertThat(Files.readString(file)).as("kept as it is").isEqualTo("{\"version\": 2, \"instances\": [{\"slug\": \"b\"}]}");
+    }
+
     /// `instance.json`, its other keys kept, and goes out in the next presence.
     @Test
     void anInstanceThatLeftIsRememberedUntilForgottenAndTheRoleIsWrittenAndSent() throws Exception {
@@ -414,16 +482,22 @@ class PeersTest {
     }
 
     private Node node(final String name, final String role, final Duration answerWithin) throws Exception {
+        return node(name, role, answerWithin, answerWithin.plusSeconds(40));
+    }
+
+    private Node node(final String name, final String role, final Duration answerWithin, final Duration expireWithin) throws Exception {
         final Path home = Files.createDirectories(dir.resolve(name.isEmpty() ? "main" : name));
         final Window window = new Window();
         final Link link = new Link(bus);
         final Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0", role), window, window.state::get, window.transcripts, home.toString(),
-                home.resolve("agents.json"), answerWithin);
+                home.resolve("agents.json"), answerWithin, expireWithin);
         peers.dataRoot(home);
         final McpTools tools = new McpTools(window, window.state::get, window.transcripts, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         tools.peers(peers);
         peers.start();
         link.connect();
+        // the connect's own presence goes out on the ticks' strand; the test's sends it now, so the others see it at once
+        peers.tick();
         final Node n = new Node(window, link, peers, tools, home.resolve("agents.json"), home);
         nodes.add(n);
         return n;

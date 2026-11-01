@@ -1,7 +1,8 @@
 # Installing comando
 
 The recipe a Claude Code agent follows when a user asks it to "install comando" (from a release link, or with no link
-for the newest release). Run each step, report what it printed when it fails, and stop there.
+for the newest release). Run each step, report what it printed when it fails, and stop there; a failure in
+[§5](#5-the-kit) is reported and the recipe goes on at [§6](#6-start-comando).
 
 1. [Prerequisites](#1-prerequisites)
 2. [Choose the release and the file](#2-choose-the-release-and-the-file)
@@ -16,11 +17,13 @@ for the newest release). Run each step, report what it printed when it fails, an
 
 | Need | Check | When it is missing |
 |---|---|---|
-| Claude Code CLI | `claude --version` | the session running this recipe is Claude Code; comando finds `claude` at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH` |
+| Claude Code CLI, 2.1.316 or later | `claude --version` | the session running this recipe is Claude Code; comando finds `claude` at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH`. An older version: ask the user to update it (`claude update`) before going on |
 | GitHub CLI, signed in | `gh auth status` and `gh repo view marregui/comando --json name` | install `gh` (macOS `brew install gh`; Debian and Ubuntu `sudo apt-get install -y gh`; Windows `winget install --id GitHub.cli -e`), then ask the user to run `gh auth login` |
 | a desktop session | macOS; Linux with X11 or Wayland (XWayland); Windows 10 or 11 | comando is a window application |
 
-No Java is needed: each package carries its own runtime.
+No Java is needed: each package carries its own runtime. A comando release needs, at least, the newest Claude Code on
+the day it was released (2.1.316 above); trouble with a later Claude Code is reported as an issue on
+`marregui/comando`.
 
 ## 2. Choose the release and the file
 
@@ -116,23 +119,28 @@ and Ubuntu. A second start while comando runs only says that it is already runni
 
 ## 5. The kit
 
-The kit is a Claude Code setup for the way of working comando is built for: instructions, settings with their hooks,
-skills, agents, workflows and scripts. Its installer also creates a brain (memory, knowledge base, scratchpad), a folder
-of its own that the kit's repository does not hold. The reference kit is `marregui/comando-kit`; any kit with its
-layout serves ([Kit and brain](docs/kit-and-brain.md)). It installs into `~/.claude/comando-kit` and leaves the
-user's own `~/.claude` alone; comando finds it at its next start and runs its sessions on it.
-
-Ask the user: "comando is installed. Install the kit as well: the reference kit, `marregui/comando-kit`, or another kit
-you name?" On no, go to [§6](#6-start-comando). On yes, read the chosen kit's recipe and follow it; it asks the user for
-consent before it changes anything:
+The kit is the Claude Code setup comando runs every session on: instructions, settings with their hooks, the checkpoint
+skill, the manifest comando reads. The brain is what those sessions remember and know: memory, a knowledge base, a
+scratchpad. They are two folders of their own, `~/comando-kit` and `~/comando-brain`; the user's own `~/.claude` is
+never touched, so a user trying comando keeps their Claude Code setup as it was. No kit is published: you create both
+for the user from [Kit and brain](docs/kit-and-brain.md) of the installed release, read at its tag (`TAG` from
+[§2](#2-choose-the-release-and-the-file); later, `v` and the version **About comando** names):
 
 ```sh
-gh api -H 'Accept: application/vnd.github.raw' repos/<owner>/<repo>/contents/INSTALL.md
+gh api -H 'Accept: application/vnd.github.raw' "repos/marregui/comando/contents/docs/kit-and-brain.md?ref=$TAG"
 ```
 
-(`<owner>/<repo>` is `marregui/comando-kit` for the reference kit, `https://github.com/marregui/comando-kit`; it is
-private, so `gh` reads it for a user who has access. A kit kept elsewhere: its `INSTALL.md` from where the user names.)
-When the kit is installed while comando runs, quit comando and start it again so its sessions use the kit.
+Ask the user: "comando is installed. Create a kit and a brain for it now? They go in `~/comando-kit` and
+`~/comando-brain` and leave your own `~/.claude` alone." When the user already has a kit (a folder with a
+`comando-kit.json`), a brain, or both, ask where; check what they bring against that document's contract and report each
+gap with its fix ([§8.4](docs/kit-and-brain.md#84-a-kit-or-a-brain-the-user-brings)). On no, go to
+[§6](#6-start-comando); the user can ask for a kit later, and this section applies then.
+
+On yes, follow [§8.1](docs/kit-and-brain.md#81-the-steps) of that document: check the tools, show the plan as one table
+and ask once; create the kit in `~/comando-kit` and the brain in `~/comando-brain`, each a git repository of its own,
+with the files of its §8.2 and §8.3; run its checks; commit. Then ask the user to sign the kit's folder in, once, in
+their own terminal, with the commands of that document's [§3.1 *Signing in*](docs/kit-and-brain.md#31-the-root). When
+comando runs, quit it and start it again, so its sessions use the kit: the Files tab then shows the KIT and BRAIN rows.
 
 ## 6. Start comando
 
@@ -153,8 +161,10 @@ Tell the user how to start it, and that **Help ▸ Tutorial** inside comando tak
    Windows `Remove-Item -Recurse -Force "$env:LOCALAPPDATA\comando"` (the shortcut stays).
 4. Check that it starts, as in [§4](#4-check-that-it-starts).
 
-The data in `~/.comando` is kept and read by the new version. The kit has its own upgrade: when a newer release is
-out, comando says so on the KIT row and offers **Upgrade the kit…**.
+The data in `~/.comando` is kept and read by the new version. The kit and the brain are not touched. When the new
+release's [Kit and brain](docs/kit-and-brain.md) changes a contract section, ask a session to bring the kit in line with
+it ([§8.5](docs/kit-and-brain.md#85-after-a-comando-upgrade)). A kit kept on a remote with tags also gets **Upgrade the
+kit…** on the KIT row when a newer tag is out.
 
 ## 8. Uninstall
 
@@ -170,4 +180,7 @@ out, comando says so on the KIT row and offers **Upgrade the kit…**.
 3. Ask the user before removing their data: `~/.comando` holds their panels, connections, sessions and logs; on macOS
    the connection passwords are in the login keychain under the service `comando`
    (`security delete-generic-password -s comando`, once per saved password).
-4. The kit is removed by its own recipe, section Uninstall, in `~/.claude/comando-kit/INSTALL.md`.
+4. The kit and the brain stay. To remove them: back the brain up first (**Back up the brain**, or a copy of
+   `~/comando-brain`); when the kit has a jobs tool, remove its scheduled jobs with
+   `echo '[]' | python3 ~/comando-kit/install/kit.py jobs set --root ~/comando-kit` (exit 0 or 1); then ask the user to
+   move `~/comando-kit`, and `~/comando-brain` if they want it gone too, to the Trash. Never delete them yourself.

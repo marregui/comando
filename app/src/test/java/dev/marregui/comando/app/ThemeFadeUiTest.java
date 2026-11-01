@@ -8,7 +8,9 @@ import java.awt.Graphics2D;
 import java.awt.Window;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -211,8 +213,8 @@ class ThemeFadeUiTest {
             for (final NamedTheme t : new NamedTheme[]{NamedTheme.PAPER_OCHRE, NamedTheme.GRAPHITE_GOLD}) {
                 // the switch turns the window to the twin: its knob slides, then the fade runs
                 flip(t.ground.light);
-                Thread.sleep(250 + 160);
-                assertThat(onEdt(ThemeFadeUiTest::fading)).as("halfway, to " + t.label).isTrue();
+                Awaitility.await("the fade under way, to " + t.label).atMost(Duration.ofSeconds(2)).pollInterval(Duration.ofMillis(10))
+                        .until(() -> onEdt(ThemeFadeUiTest::fading));
                 final Component[] layer = onEdt(() -> frame().getLayeredPane().getComponentsInLayer(FADE_LAYER));
                 assertThat(layer).as("one picture over the window").hasSize(1)
                         .allMatch(c -> c.getClass().getName().endsWith("ThemeFade$Picture")).allMatch(Component::isOpaque);
@@ -302,14 +304,14 @@ class ThemeFadeUiTest {
 
     /** The picture of the new theme a fade's layer holds. */
     private static BufferedImage newPicture(final Component picture) throws Exception {
-        final java.lang.reflect.Field f = picture.getClass().getDeclaredField("now");
+        final Field f = picture.getClass().getDeclaredField("now");
         f.setAccessible(true);
         return (BufferedImage) f.get(picture);
     }
 
     /** The window's layered pane painted at the screen's scale, as the fade takes its pictures. */
     private static BufferedImage shoot(final JFrame f) {
-        final java.awt.geom.AffineTransform scale = f.getGraphicsConfiguration().getDefaultTransform();
+        final AffineTransform scale = f.getGraphicsConfiguration().getDefaultTransform();
         final JComponent pane = f.getLayeredPane();
         final BufferedImage img = new BufferedImage((int) Math.ceil(pane.getWidth() * scale.getScaleX()),
                 (int) Math.ceil(pane.getHeight() * scale.getScaleY()), BufferedImage.TYPE_INT_RGB);

@@ -138,7 +138,7 @@ final class PanelFiles {
                     deps.intents().dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
                     render.run();
                 });
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 // a path that is no path (a NUL in it) is told like a file that cannot be read
                 final String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot open " + path + ": " + why, e));

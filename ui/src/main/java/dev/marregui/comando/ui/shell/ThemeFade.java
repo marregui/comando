@@ -67,7 +67,7 @@ final class ThemeFade {
         pendingHalf = halfway;
         try {
             change.run();
-        } catch (RuntimeException | Error e) {
+        } catch (final RuntimeException | Error e) {
             // the theme half applied: the window as it is shows, never a picture left over it
             stop();
             throw e;

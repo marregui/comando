@@ -26,13 +26,13 @@ results), the session bar under it, and the status bar under everything.
 
 ### 1.1 One model for connections, sessions and folders
 
-A connection, a session and a folder of the Files tab are resources: configured, stored and listed in the sidebar.
-Each is written once as a resource kind. Connections and sessions are edited in one dialog; folders in a window of
-their own, Configure ~/.claude folders, which keeps them in `folders.json` ([§6](#6-the-files-tab)).
+A connection, a session and a folder of the Files tab are resources: configured, stored and listed in the sidebar. Each
+is written once as a resource kind. Connections and sessions are edited in one dialog; folders in a window of their own,
+Configure Files tab folders, which keeps them in `folders.json` ([§6](#6-the-files-tab)).
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | none |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -42,13 +42,19 @@ their own, Configure ~/.claude folders, which keeps them in `folders.json` ([§6
 with a hint under each field; fields set rarely sit under "▸ Advanced" ("▸ More" for a session). A session's form asks
 first its name, what it is for, then which conversation it continues and how Claude runs. Each empty choice shows the
 default it stands for (the kit's `settings.json`, or Claude Code's), and every field has an ⓘ that explains it. A line
-above the form names the kit, brain and instance every session runs on; a new session starts in the kit's folder, and
-no budget is asked ([record 125](adr/0125-the-session-dialog-asks-what-matters.md)). Save and ⏎ save the form and
-close the dialog; a form they refuse stays open with the reason. ⌘⏎ saves and then binds a connection
-to the focused panel, or brings a session's own panel forward (the button reads Assign to panel for a connection, Open
-its panel for a session). Esc or the close button asks before dropping unsaved changes. Connect or Start, and the
-Assign or Open button save a changed form first; Test tries the form as typed, without saving it. Their outcome shows
-on the line above the buttons.
+above the form names the kit, brain and instance every session runs on, and the permission mode the kit's
+`settings.json` sets, read-only, with what it does; the form asks no permission mode and no extra folders, since the
+kit's `settings.json` holds the permissions of every session ([record 7](adr/0007-default-permission-mode.md)). When the
+working folder has a `.claude/settings.json` or `settings.local.json` of its own, a second line names them: Claude Code
+applies them on top of the kit's, and their `permissions.defaultMode`, the local file's over the shared one, overrides
+the kit's mode; when that `.claude` folder is the kit itself, the line says its files are the kit's own, with no project
+settings on top. A new session starts in the kit's folder, and no budget is asked
+([record 125](adr/0125-the-session-dialog-asks-what-matters.md)). Save and ⏎ save the form and close the dialog; a form
+they refuse stays open with the reason, a save the reducer would drop (a session whose checkpoint runs) among them. ⌘⏎
+saves and then binds a connection to the focused panel, or brings a session's own panel forward (the button reads Assign
+to panel for a connection, Open its panel for a session). Esc or the close button asks before dropping unsaved changes.
+Connect or Start, and the Assign or Open button save a changed form first; Test tries the form as typed, without saving
+it. Their outcome shows on the line above the buttons.
 
 ### 1.2 Panels
 
@@ -86,9 +92,9 @@ Any number of document panels may be attached to a session
   closing a tab you are not at moves nothing ([record 112](adr/0112-closing-gives-the-keyboard-back.md)).
 - **The outline.** A Markdown document, and a panel's own text, have an outline button in the panel's tools: it shows
   the headings at the panel's right, one a line, indented by level, the first level in bold, read again as typing
-  pauses. A double click on one goes to it: the rendered page scrolls its heading to the top, the text puts its line at
-  the top with the caret on it. Whether panels open with it is the last choice made, kept in `settings.json`
-  ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)).
+  pauses. A double click on one, or Enter on the one selected, goes to it: the rendered page scrolls its heading to the
+  top, the text puts its line at the top with the caret on it. Whether panels open with it is the last choice made, kept
+  in `settings.json` ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)).
 - **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
 - **Links**, wherever text shows (a rendered page, a panel's text, the transcript, every card in it: a command, a
@@ -102,28 +108,35 @@ Any number of document panels may be attached to a session
   it: the text in lower case, punctuation dropped, each space a hyphen, `-1`, `-2` on a repeated heading) scrolls that
   heading to the top, in the same document or in the other one as it opens, or in its open panel (one showing its text
   stays as it is); `#` alone goes to the top. Until the reader scrolls, the heading stays at the top as pictures and
-  diagrams arrive above it. Front matter at the top of a page shows as a table of its keys and values.
+  diagrams arrive above it. Front matter at the top of a page shows as a table of its keys and values. In the
+  transcript, a link to a file the session's folder does not hold is looked for as a bare file reference is, in that
+  folder's tree and then the Files tab's folders; a `#heading` on such a link is dropped.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The session bar**, under the lower panel, shows the focused panel's session
   ([record 105](adr/0105-a-session-bar-under-the-lower-panel.md)). On the left: its chip, the session's state icon (as
   on its row: orange running, grey stopped, faint starting, red failed) with its name and ⎇ branch, whose menu is the
-  session chip's menu above; a plug (green when running) that starts or stops it; a fresh start, shown once the session
-  has a conversation and usable while it is stopped (a new conversation starts; the old one stays importable); then what
-  the session does, "working · 12 s", last, so that nothing moves as it changes. On the right: the model and the effort,
-  each a menu that changes it now and keeps it, as the session's menu in the sidebar does; the context ("ctx 412k
-  (41%)"), followed after every model call of a turn and, when a stored conversation is loaded, taken from its last call
-  or the metrics its last turn left, so a restart keeps it ("ctx –" only while nothing is known;
+  session chip's menu above; a plug (green when running) that starts or stops it, its tooltip "Running; click to stop
+  the session" or "Stopped; click to start it"; a fresh start, shown once the session has a conversation and usable
+  while it is stopped (a new conversation starts; the old one stays importable); then what the session does, "working ·
+  12 s", last, so that nothing moves as it changes. On the right: the model and the effort, each a menu that changes it
+  now and keeps it, as the session's menu in the sidebar does; the context ("ctx 412k (41%)"), followed after every
+  model call of a turn and, when a stored conversation is loaded, taken from its last call or the metrics its last turn
+  left, so a restart keeps it ("ctx –" only while nothing is known;
   [record 120](adr/0120-the-context-follows-each-model-call.md)); and right after it the checkpoint, shown while the
   session has a checkpoint command, `/reflect` by default
   ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)). The context and the checkpoint
-  turn purple together once a turn ended with the context at 60% of the window or more and the command was not sent
-  since; after a checkpoint the context has to drop below 60% and cross it again before the next one is due. What a
-  checkpoint does once its turn has finished, and when comando runs it by itself, is in [Claude Code §2](claude-code.md#2-the-checkpoint).
-  While it runs every control of the bar but the plug is off, and the activity, purple, reads "checkpoint · compacting
-  · 12 s · Stop to carry on" ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)).
-  Compact has no button: the palette's
-  "Compact the conversation", the session's menu and `/compact` do it. A panel without a session shows only the chip,
-  "no session ▾".
+  turn purple together once a turn ended with the context at the checkpoint threshold or more, 40% of the window unless
+  the palette's Checkpoint threshold… set another percentage, from 10 to 100 (a lower or other value is refused with the
+  reason and the threshold kept), and the command was not sent since; after a checkpoint the context has to drop below
+  the threshold and cross it again before the next one is due. At that same turn's end comando runs the checkpoint by
+  itself, and the session carries on with its work after it; what a checkpoint does once its turn has finished is in
+  [Claude Code §2](claude-code.md#2-the-checkpoint). While it runs every control of the bar but the plug is off, and the
+  activity, purple, reads "checkpoint · compacting · 12 s · Stop to carry on"
+  ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). Compact has no button: the palette's "Compact
+  the conversation", the session's menu and `/compact` do it. The palette also holds Start or stop the session,
+  Checkpoint, Start a new conversation, Rewrite the panel as a document, Copy the session's details, Clone the session…
+  and Remove the session…, each acting on the focused panel's session with the session menu's enablement.
+  A panel without a session shows only the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
   plans' usage and the work running in every session and query on the right. The kit's version is not here: it is on
   the Files tab's KIT row ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)).
@@ -150,9 +163,14 @@ Any number of document panels may be attached to a session
   request is answered, the red mark and the check until the tab is looked at. A waiting request or a failure bounces
   the Dock while the window is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
-  lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties
-  the Session tab once the turn has ended, while the conversation goes on
-  ([record 104](adr/0104-the-theme-beside-new-panel.md)).
+  lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties the
+  Session tab once the turn has ended, while the conversation goes on
+  ([record 104](adr/0104-the-theme-beside-new-panel.md)). The Session tab holds the whole conversation, with no button
+  for earlier blocks; only the part near the view is laid out ([record 24](adr/0024-the-window-belongs-to-the-user.md),
+  amended). It follows the end until you scroll, and "↓ Latest" returns. While you read further up, the block at the top
+  of the view keeps its place as blocks arrive or change. Keys move through it: Home, End, ⌥↑ ⌥↓ (prompts), PgUp PgDn
+  ([§2.3](#23-keys)). ⌘F counts and steps through the matches over the whole conversation, opening the closed cards that
+  hold one.
 - **The corner's buttons**, left of the swatch: stop refreshing plots, start or stop the embedded QuestDB, and start or stop the comando Edge ([§4.1](#41-the-comando-edge)); each shows what
   it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)). The
   shell has no button: it starts when its tab is shown ([§5.1](#51-terminal)).
@@ -178,14 +196,15 @@ ship with comando: six dark ones, Graphite and gold (the default), Espresso and 
 Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and a light twin for each
 ([record 127](adr/0127-light-themes.md)). The choice is kept across restarts.
 
-- **The look.** A dark theme puts the window on FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf`
-  elsewhere) on the theme's ground; a light theme puts it on the light look, its text dark and each window's title bar
-  light. The editors' and the terminal's colours, diffs and plots are derived from the tint and the ground: keywords in
-  the tint, six syntax categories of one weight, comments muted
+- **The look.** A dark theme puts the window on FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf` elsewhere)
+  on the theme's ground; a light theme puts it on the light look, its text dark and each window's title bar light. The
+  editors' and the terminal's colours, diffs and plots are derived from the tint and the ground: keywords in the tint,
+  six syntax categories of one weight, comments muted
   ([record 101](adr/0101-content-colours-derived-from-the-theme.md)). A rendered Markdown page takes the same colours,
-  its code blocks included; its Mermaid diagrams are drawn in Mermaid's dark theme by `mmdc` when it is installed, and
-  without it no diagram is drawn. Cards, borders and the prompt's bubble are laid over the ground and follow it. Text
-  sizes are steps of one scale and spacing a 4-point grid ([record 102](adr/0102-one-type-scale-and-a-grid.md)).
+  its code blocks included; its Mermaid diagrams are drawn by `mmdc` when it is installed, in Mermaid's dark theme on a
+  dark theme and its default one on a light theme, and without it no diagram is drawn. Cards, borders and the prompt's
+  bubble are laid over the ground and follow it. Text sizes are steps of one scale and spacing a 4-point grid
+  ([record 102](adr/0102-one-type-scale-and-a-grid.md)).
 - **The chooser.** The theme button sits at the top right, left of New panel: a gilded square split between the ground
   chosen and its twin's, its tooltip naming the theme. A click opens the chooser under it: a Dark | Light switch over a
   grid of that mode's cards, three to a row, each theme drawn small in its own colours, each light theme in its dark
@@ -240,8 +259,8 @@ left edge ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-t
 |---|---|
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB; Start the comando Edge, Stop the comando Edge |
-| Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([Kit and brain §3.5](kit-and-brain.md#35-scheduled-jobs)) |
-| Instances | the window's commands only; another instance's own menu asks it, refuses its questions, copies its id; one that left, forgets it; this instance's, sets its role; a session's row has none |
+| Files | Configure Files tab folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([Kit and brain §3.5](kit-and-brain.md#35-scheduled-jobs)) |
+| Instances | none of its own; another instance's own menu asks it, refuses its questions, copies its id; one that left, forgets it; this instance's, sets its role; a session's row has none |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
@@ -252,7 +271,8 @@ tab: the sessions, the panels without a session, the connections and the Files t
 a row is wider than the tab, and none while every row fits.
 
 **A session row** is one line: the state icon and the name
-([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops, is
+([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops (its tooltip
+says which: "…; click to stop the session", "Stopped; click to start it"), is
 Claude's mark at one size in every state: Claude's orange while the session runs, grey while it is stopped, faint while
 it starts or stops, red when it failed; it spins while the session works and shows the hourglass while it waits on
 background work. The name is dimmed while its own panel is not open and takes the accent colour while one of its panels
@@ -289,7 +309,7 @@ Everything else is in the row's menu:
 | Start, Stop | stopped, running | starts or stops the process |
 | Interrupt the turn | while a turn runs | as ⌘⇧. |
 | Start a new conversation | stopped, with a conversation to leave | the next start is a new conversation; the old one stays importable |
-| Checkpoint (Checkpoint, due) | the session has a checkpoint command | as the header's ([Claude Code §2](claude-code.md#2-the-checkpoint)) |
+| Checkpoint (Checkpoint, due) | the session has a checkpoint command | as the session bar's ([Claude Code §2](claude-code.md#2-the-checkpoint)) |
 | Compact the conversation | running | sends `/compact` from the session's panel |
 | Rewrite ‹panel› as a document | running, with a panel open; off while its text is blank | sends the panel's text to the session with an instruction to rewrite it as a Markdown document and put it in place with `ui_set_editor` ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)) |
 | Model: ‹family› ▸, Effort: ‹level› ▸ | always | each names what the session runs at; a choice saves and, on a running session, sends `/model` or `/effort` |
@@ -329,7 +349,11 @@ connected, grey while disconnected, faint while it connects or disconnects, red 
 row's right edge shows a card of facts without a summary: State, Database (`<database> on <host>:<port>`), User, TLS,
 Production, and the open Panels that use it. A double click on the name binds the connection to the focused panel. Its
 menu: Bind to the focused panel, Connect or Disconnect, Test, Explore the schema, Copy details (as ⌘C; never the
-password), Edit…, Clone…, Remove….
+password), Edit…, Clone…, Remove…; the palette has each on the focused panel's connection. A save that changes a
+connection's host, port, database or user drops its stored password, and its keychain item, unless the password was
+typed in the form: the field is filled with the stored password, so a password left as the form filled it counts as not
+given, and a notice asks for it; an agent that would clear Production or lower the TLS mode waits for a card
+([Claude Code §4.2](claude-code.md#42-sql-from-claude)).
 
 ## 2. Running text
 
@@ -372,6 +396,18 @@ Claude icon) 250 ms after the last keystroke, before anything runs. A statement 
 | ⌘⇧. | none | interrupts the session's turn |
 
 The run keys act while the keyboard is in the focused panel's editor.
+
+In the Session tab:
+
+| Key | Goes to |
+|---|---|
+| Home | the first block |
+| End | the latest block, and follows the end |
+| ⌥↑ / ⌥↓ | the previous / next prompt of the conversation; a subagent's prompt, inside its card, is skipped |
+| PgUp / PgDn | a page up / down |
+
+Each is also in the palette under Session. They act on the transcript in front when the component with the keyboard
+does not take the key itself; the editor keeps all of them as its own.
 
 Keys are written as macOS writes them. On other desktops each is the same with Ctrl for ⌘ (⌘⇧P is Ctrl+Shift+P), but
 for two that would be another command's there: the lower tabs ⌃1–⌃4 are Alt+1–4, and ⌃⏎ is Ctrl+Alt+⏎. In the
@@ -418,12 +454,14 @@ The grid and plots read the rows while the fetch continues; how a result is stor
 | Key | Does |
 |---|---|
 | ⌘J | plots the last result: x is the first time column, else the first numeric one; up to eight more numeric columns as series; at most 2 000 000 rows |
-| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; the corner's Stop refreshing plots stops them all, the plots staying as they are |
+| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; a run with no rows keeps the plot as it was and the refresh going; a result with nothing to plot, another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; the corner's Stop refreshing plots stops them all, the plots staying as they are |
 | ⌘⇧R | keeps the result in a tab of its own (at most 100 000 rows) |
 | ⌘⇧I | attaches the result to the editor ([§2.4](#24-where-things-land)) |
 | ⌘⇧S | exports the grid as CSV in the order shown, written off the EDT: SQL NULL as an empty field, empty text as `""` |
 
-A one-column `EXPLAIN` result shows as a tree by indentation, with a toggle back to rows.
+A SQL NULL cell reads `null` in muted italics, told apart from the text `null`, in the grid, in a kept result and in a
+table view, an agent's (`db_run_sql` with `show`, `ui_show_table`) included. A one-column `EXPLAIN` result shows as a
+tree by indentation, with a toggle back to rows.
 
 ### 3.3 Schema
 
@@ -459,12 +497,15 @@ open-source HiveMQ Edge release as the local broker every comando instance on th
   one `edge/installed` records. Its data and logs are `edge/data` and `edge/log`, beside the home (named to the Edge
   through `HIVEMQ_DATA_FOLDER` and `HIVEMQ_LOG_FOLDER`), so a newer zip replaces the home and keeps them.
 - **Its own ports**, none an Edge's default, every one bound to `127.0.0.1`: MQTT 18883, WebSocket 18800 (`/mqtt`), the
-  admin API and UI 18080 (the start's notice gives its login), JMX 18010. The configuration lives in `edge/conf`, beside
-  the data and outside the home (`HIVEMQ_CONFIG_FOLDER`): the first start writes comando's `config.xml` and copies the
-  shipped files the folder lacks; every start after that sets only its MQTT listeners and admin API to these ports and
-  keeps the rest (adapters, bridges, anything saved from the Edge's UI); a `config.xml` that does not parse is replaced by
-  the template and kept beside it as `config.xml.unparsed-<n>`. `bin/run.sh`'s JMX port is set. A port taken by
-  anything else refuses the start with a notice naming it; nothing else is touched.
+  admin API and UI 18080, JMX 18010. The admin API and UI have one account, user `admin`, whose password is made for
+  this install (24 random bytes, URL-safe Base64) and kept in `edge/admin-password`, owner-only, reused while it reads;
+  the start's notice names both, the password is never logged, and the Edge's default `admin`/`hivemq` is off. The
+  configuration lives in `edge/conf`, beside the data and outside the home (`HIVEMQ_CONFIG_FOLDER`): the first start
+  writes comando's `config.xml` and copies the shipped files the folder lacks; every start after that sets only its MQTT
+  listeners and admin API to these ports and keeps the rest (adapters, bridges, anything saved from the Edge's UI); a
+  `config.xml` that does not parse is replaced by the template and kept beside it as `config.xml.unparsed-<n>`.
+  `bin/run.sh`'s JMX port is set. A port taken by anything else refuses the start with a notice naming it; nothing else
+  is touched.
 - **One per machine:** `~/.comando-edge.json`, shared by every instance, names the running Edge's process, the data root
   that started it, that instance's name and the ports; written when the Edge starts, removed when it stops. Every
   instance's button shows it running. Only the instance that started it stops it; on another's button the tooltip
@@ -523,9 +564,10 @@ Runs go through `ToolPort` (`tools` module); the terminal lives in the UI becaus
 JediTerm on a pseudo-terminal from pty4j, one per panel, started the first time it is shown, as `$SHELL -l` (else
 `/bin/zsh`, else `/bin/sh`) in the session's directory, else home; `TERM=xterm-256color`, `TERM_PROGRAM=comando`. ⌃3
 shows it. ⌃⏎ in the editor types the selection or line into it and presses Enter, waiting until a starting shell has
-written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar. The palette's Start the shell, Stop the shell
-and Restart the shell act on the focused panel's shell; Stop ends what runs in it. The corner has no shell button
-([record 114](adr/0114-help-menu-and-corner-buttons.md), amended 2026-11-01).
+written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar. The palette's Start the
+shell, Stop the shell and Restart the shell act on the focused panel's shell; Stop ends what runs in it, and the shell
+stays stopped until it is started or restarted, its terminal clicked, or its tab shown again. The corner has no shell
+button ([record 114](adr/0114-help-menu-and-corner-buttons.md), amended 2026-11-01).
 
 ### 5.2 Gradle runs
 
@@ -548,7 +590,8 @@ session: the nearest directory at or above its working directory with an executa
 
 ## 6. The Files tab
 
-The folders the user chose inside `~/.claude`, one top-level row each, as a navigator of their folders and files
+The folders the user chose inside the folder comando's sessions run on, or the brain's, one top-level row each, as a
+navigator of their folders and files
 ([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md)). It is no browser of code
 repositories: those are read in an IDE ([record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The tab only
 shows and opens: it has no buttons, and writes nothing but the Trash of a deletable folder
@@ -558,35 +601,37 @@ a second, and while the view shows the end it stays there; scrolled up to read, 
 and the selection stay while the log grows below; back at the end it follows again; a file rolled over or truncated
 replaces the text.
 
-- **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
-  an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
+- **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path, an
+  optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
   plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`) and a group
-  (`group`): a group is one top-level row named in capitals, the folder itself for a group of one (KIT), else the
-  folder holding the group's folders (BRAIN), with them inside it, then its other folders, no file and nothing hidden; a
+  (`group`): a group is one top-level row named in capitals, the folder itself for a group of one (KIT), else the folder
+  holding the group's folders (BRAIN), with them inside it, then its other folders, no file and nothing hidden; a
   hairline parts one group's row from the next ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)); a
   group's row has no icon, and its detail is its repository's short commit, KIT's followed by the kit's newer release
-  when one is out ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)); a
-  `repository` key is ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
-  ([Kit and brain §3](kit-and-brain.md#3-comando-and-a-kit)). Without a kit and without `folders.json` there is one folder, Claude Code's (`~/.claude`),
-  opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and per-session state; an emptied list stays
-  empty. Here and below, `~/.claude` stands for the root comando's sessions run on ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
-- **Configuring.** The Files tab's menu (a right click on its tab) and the palette's Configure ~/.claude folders open
-  the `~/.claude` folders window (its title names Claude Code's folder wherever it is)
-  ([records 69, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md),
+  when one is out ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)); a `repository` key is
+  ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
+  ([Kit and brain §3](kit-and-brain.md#3-comando-and-a-kit)). Without a kit and without `folders.json` there is one
+  folder, Claude Code's (`~/.claude`), opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and
+  per-session state; an emptied list stays empty. Here and below, `~/.claude` stands for the root comando's sessions run
+  on (the kit, else Claude Code's own folder), and with a kit the folders may lie in the brain's folder as well,
+  wherever it is ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
+- **Configuring.** The Files tab's menu (a right click on its tab) and the palette's Configure Files tab folders open
+  the Files tab folders window ([records 69, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md),
   [record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The entries are on the left in the tab's order (+
   chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), and the selected one's fields on
   the right, each field's name explaining it under the mouse. Each field is checked as it is typed: a name used once in
-  `folders.json`; a folder that exists and can be read, set only by choosing it, inside `~/.claude` (an entry elsewhere,
-  as an older file's repository, is marked until taken out); an index inside it whose own folder exists; a listing file
-  name. A field that fails is outlined in red and one line under the form says why, or notes what Save will do. A pick
-  outside `~/.claude`, or a file outside the entry's folder, is not taken, and that line says so. The index file and the
-  listing file are typed or picked (…); a picked listing file gives its name. Under that line, the git repository
-  holding the folder: `repo: ~/.claude · master · 1 uncommitted`, or `repo: none`.
-- **Saving.** Save, on only when every entry passes, writes `folders.json` once, and creates the index file a folder
-  inside `~/.claude` names but does not have, with a title and one line on how it is kept. Cancel or Esc drop the edits,
-  asking first. The store checks `folders.json` every second: a change it did not write is read again and the tab
-  follows; an entry that breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders,
-  says why and stays where it is. A `readOnly` key is ignored.
+  `folders.json`; a folder that exists and can be read, set only by choosing it, inside `~/.claude` or, with a kit, the
+  brain's folder (an entry elsewhere, as an older file's repository, is marked until taken out); an index inside it
+  whose own folder exists; a listing file name. A field that fails is outlined in red and one line under the form says
+  why, or notes what Save will do. A pick outside those folders, or a file outside the entry's folder, is not taken, and
+  that line says so. The index file and the listing file are typed or picked (…); a picked listing file gives its name.
+  Under that line, the git repository holding the folder: `repo: ~/.claude · master · 1 uncommitted`, or `repo: none`.
+- **Saving.** Save, on once every entry passes and the list differs from the one saved or names an index file that does
+  not exist yet, writes `folders.json` once, and creates the index file a folder names but does not have, in the kit or the brain only (none without a kit), with a title
+  and one line on how it is kept. Cancel or Esc
+  drop the edits, asking first. The store checks `folders.json` every second: a change it did not write is read again
+  and the tab follows; an entry that breaks the rules is left out with a notice; a file that does not parse keeps the
+  tab's folders, says why and stays where it is. A `readOnly` key is ignored.
 - **Order.** At a folder's top level its index file comes first. Every level then lists folders not named after a date,
   date-named folders (`yyyy-MM-dd`) oldest first, then files, by name ignoring case. Hidden entries, `node_modules`,
   `build`, `target`, `__pycache__`, `out` and the folder's own exclusions are left out, and so is what git ignores in
@@ -602,9 +647,13 @@ replaces the text.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
   changed. A folder row's: Open ‹index file›. A top-level row's only: Show changes in it (off, as No changes in it, when
   it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's
-  also offers Back up the brain, KIT's Back up the kit and Upgrade the kit… ([Kit and brain §3.3](kit-and-brain.md#33-back-up-the-brain-and-the-kit)).
-  A group's folder inside its row and a subfolder offer neither: the brain and the kit are each one unit
-  ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
+  also offers Back up the brain, KIT's Back up the kit and Upgrade the kit…
+  ([Kit and brain §3.3](kit-and-brain.md#33-back-up-the-brain-and-the-kit)). A folder of `comando-kit.json` that breaks
+  the folders' rules is left out and named in a notice at start; the palette's Kit ▸ Repair comando-kit.json… rewrites
+  the file without those entries once you confirm, and a notice names each entry it took out, keeping the old one as
+  `comando-kit.json.bak-<time>`, one per repair, never overwritten
+  ([Kit and brain §2.4](kit-and-brain.md#24-the-manifest)). A group's folder inside its row and a subfolder offer
+  neither: the brain and the kit are each one unit ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
 - **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
   desktop's Trash after one question naming it; the folder's row never goes, and a selection reaching another folder
   offers nothing. Without a Trash nothing moves; nothing is deleted for good. With `listedIn` set, each entry moved
@@ -613,8 +662,11 @@ replaces the text.
   indented under an item; never inside a code block), and the notice gives the lines that still name it. A panel on a
   moved file is removed as for any file deleted outside.
 - **Sync.** Only folders whose rows are open are read: at once when opened, then every 5 s on `folder-poll`, sent only
-  when something changed. A tree carries the settings it was read with and is dropped if the folder was edited since;
-  reads are ticketed so an older one never overwrites a newer one. The tree keeps what the user opened and selected.
+  when something changed. Each is read as deep as its open subfolders show (one level, plus each open subfolder and one
+  level inside it); opening or closing a subfolder reads it again at once. While the filter has text every folder is
+  searched whole, one read in part and then closed included. A tree carries the settings it was read with and is dropped
+  if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree keeps what
+  the user opened and selected.
 - **Git.** In a git repository a name keeps the names' colour whatever git says of it; only a file in conflict is red
   ([record 98](adr/0098-the-sidebars-look.md)). How it differs is said by marks after the names: a new (untracked) file
   and every folder on the way down to it carry a dot in the tint after the name, so the closed folders to open are
@@ -651,9 +703,9 @@ replaces the text.
 The Changes view, titled Uncommitted changes, in the side pane, lists what the repositories of the Files tab's folders
 hold that their last commits do not, read only, as IntelliJ's commit view does
 ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)). ⌘K opens it on every folder's repository, and closes
-it when it shows them all. A row's double click in the Files tab shows what that row holds, and a folder's menu the
-changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)), each
-replacing what the view showed.
+it when it shows them all. A top-level row's double click in the Files tab, or Show changes in its menu, shows the
+changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md),
+[118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)), each replacing what the view showed.
 
 - **Repositories.** The one holding a folder, else those directly inside it; one row each, with its branch and its
   count, however many folders share it. Read every 5 s while the view is open, with the `git` command line
@@ -675,13 +727,15 @@ replacing what the view showed.
   The file's menu also opens it in a panel.
 - **Editing** ([record 72](adr/0072-the-comparison-window-edits-rolls-back-and-removes.md)). The working tree's side is
   an editor, the only one of the two: the differences are worked out again 250 ms after typing pauses, and ⌘Z and ⌘⇧Z
-  (⌘Y) go back and forth through every edit made there since the file was shown; the window has no buttons for them.
-  The text is written every second while it has edits, on ⌘S, and on leaving the file: another file, the window
-  closing, comando quitting (waiting up to 2 s). Beside the working tree's title, "● edited" (gold) shows while edits
-  wait, "✓ saved" (green) once they are written, "✗ not saved" (red) when a write fails, which a notice explains and
-  the next second tries again; on macOS the window's close button carries a dot meanwhile. A read of the file while it
-  has unsaved edits is not shown; a panel open on the same file takes the saved text as any change made outside it. A
-  removed file stays removed while its text is empty. Links, binary files and files not compared are not edited.
+  (⌘Y) go back and forth through every edit made there since the file was shown; the window has no buttons for them. The
+  text is written every second while it has edits, on ⌘S, and on leaving the file: another file, the window closing,
+  comando quitting (waiting up to 2 s). Beside the working tree's title, "● edited" (gold) shows while edits wait, "✓
+  saved" (green) once they are written, "✗ not saved" (red) when a write fails, which a notice explains and the next
+  second tries again; edits whose write failed as the window moved to another file are kept and written again every
+  second until a write succeeds, and that file shown again shows them; on macOS the window's close button carries a dot
+  meanwhile. A read of the file while it has unsaved edits is not shown; a panel open on the same file takes the saved
+  text as any change made outside it. A removed file stays removed while its text is empty. Links, binary files and
+  files not compared are not edited.
 - **Markdown.** A `.md` file's window offers both sides rendered (its eye button, ⌘⇧M), with the renderer an editor
   panel's preview uses, scrolled together by the share of their length; editing happens on the texts. What changed is
   shaded as in the texts: a block (paragraph, heading, list item, table cell, code block, diagram) whose source lines
@@ -700,34 +754,35 @@ replacing what the view showed.
 
 ### 7.1 The data root
 
-`-Dcomando.home`, else `COMANDO_HOME`, else `~/.comando`. Several instances each have their own: `~/.comando_b` is
-instance `b`, paired with the kit `~/.claude_b` and its brain `~/.claude_b/BRAIN`
-([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)), which also says what in a data root is worth
-backing up.
+`-Dcomando.home`, else `COMANDO_HOME`, else `~/.comando`. Several instances each have their own:
+`COMANDO_HOME=~/.comando_b CLAUDE_CONFIG_DIR=~/.claude_b comando` runs instance `b` on its own data root and its own
+kit; the data root does not choose the kit, and the brain, which applies only with a kit, is the one `COMANDO_BRAIN` or
+the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
+[Record 122](adr/0122-instances-name-kit-brain-data-root-edge.md) also says what in a data root is worth backing up.
 
 | Path | Holds |
 |---|---|
 | `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the specs and panel metadata (bindings, file name, closed) |
 | `panels/<title>.md` | each panel's text ([record 26](adr/0026-a-file-per-panel.md)) |
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
-| `instance.json` | the instance's name, `{"name": "Comando Expert", "slug": …, "root": …}`, written by the kit's `kit.py instance new`; read at start ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
-| `run/` | MCP configurations of running sessions (`0600`) |
-| `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |
-| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
+| `instance.json` | the instance's name and role, `{"name": "Comando Expert", "role": …}`, written by whoever creates the instance, the role also by this instance's row in the Instances tab; read at start ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
+| `run/` | MCP configurations of running sessions (`0600`); the folder is the user's alone (`rwx------`), set at each start |
+| `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision; the folder is the user's alone (`rwx------`), set at each start |
+| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry; the folder is the user's alone (`rwx------`), set at each start |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
-| `metrics/` | a file a day of the sessions' turns, sub-agents and plan usage, for the kit's calibration ([record 110](adr/0110-metrics-for-calibration.md)) |
-| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)), the checkpoint threshold ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
+| `metrics/` | a file a day of the sessions' turns, sub-agents and plan usage, and the queues' depths when they change, for the kit's calibration ([record 110](adr/0110-metrics-for-calibration.md)); the folder is the user's alone (`rwx------`), set at each start |
+| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)), the checkpoint threshold as a percentage, `sessions.checkpointThresholdPercent` ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `themes/` | your own themes, one JSON file each, read at start ([§1.3](#13-themes)) |
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
-| `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
+| `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out; and, since version 2, where the kit put each folder last, so a kit folder still there follows the kit and the brain at every start while one the user pointed elsewhere stays ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
 | `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
 | `decisions.json` | the decisions automatic checkpoints held back, until settled or dismissed ([Claude Code §4.1](claude-code.md#41-approval-cards)) |
 | `instances-seen.json` | the other instances seen, so the Instances tab lists those that left until **Forget** ([§4.3](#43-the-instances-tab)) |
 | `questdb/` | the embedded QuestDB's data |
-| `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)): `dist/` (the downloaded distribution), its home unzipped from it, `installed` (the zip and its time), `conf/`, `data/` and `log/`, kept across reinstalls, and `stdout.log` |
+| `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)): `dist/` (the downloaded distribution), its home unzipped from it, `installed` (the zip and its time), `conf/` (owner-only), `data/` and `log/`, kept across reinstalls, `admin-password` (the admin account's, owner-only) and `stdout.log` |
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay in
 `connections.json`; [Claude Code §4.3](claude-code.md#43-secrets)); `~/.comando-edge.json`, the registry of the one comando Edge,
@@ -745,9 +800,14 @@ and the backups of the brain and the kit, which commit in their own repositories
 
 `JsonFile` writes through `AtomicFiles`: a temporary file of a unique name in the same folder, moved over the old one
 atomically where the file system can, so a crash leaves old or new, never torn. A file that cannot be parsed at start is
-renamed `<name>.corrupt-<millis>`. `Store` writes from immutable snapshots: sessions and panels on one thread,
-connections on another, because a keychain call may wait on an unlock prompt. Specs are written at once; panel text 800
-ms after the first unsaved change. `Store.close()` writes what is pending.
+renamed `<name>.corrupt-<millis>`. Every file comando keeps names its schema's version
+([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md), which lists each file and its schema): a JSON
+file as `"version"`, a file of lines (`opened-files`, `kit-folders`) in its first line. A file written before versions
+reads as version 1; a file of a later version, written by a newer comando, is kept as it is, never written, and named in
+a notice; a later `connections.json` or `sessions.json` leaves `panels.json` unwritten too, so the panels' bindings
+stay. `Store` writes from immutable snapshots: sessions and panels on one thread, connections on another, because a
+keychain call may wait on an unlock prompt. Specs are written at once; panel text 800 ms after the first unsaved change.
+`Store.close()` writes what is pending.
 
 On a fresh data root comando writes a connection named local QuestDB and one panel, scratch, bound to it, with a
 welcome text.
@@ -773,6 +833,6 @@ in Git.
 | remove | the panel's own file is deleted; a document's file never is |
 | a write that fails | the text waits in `panels.json` and is retried every 5 s and on every save |
 | ⌘O, or a double click in the Files tab | opens the file in a panel titled after it; a file of `panels/` bound by name and titled without `.md`, any other bound by absolute path and titled with its extension (`reviewer.md`), so it never takes a session's or a panel's name; when that title is taken, the folder follows it (`README.md · docs`), then a number; a file already open brings its panel forward ([record 77](adr/0077-a-files-panel-keeps-its-extension.md)) |
-| edited outside comando | checked once a second; reloads into its panel when the panel has no unsaved edits (the caret stays, ⌘Z restores) ([record 27](adr/0027-panels-reload-files-changed-outside.md)); otherwise the next save moves the outside version aside as `<name> (outside comando <date time>).md` |
+| edited outside comando | checked once a second; reloads into its panel when the panel has no unsaved edits (the caret stays; ⌘Z restores the text the reload replaced, one step, and the history before it is not kept) ([record 27](adr/0027-panels-reload-files-changed-outside.md)); otherwise the next save moves the outside version aside as `<name> (outside comando <date time>).md` |
 | deleted outside comando | the panel is removed, unless it has unsaved edits, which its save writes back ([record 34](adr/0034-a-deleted-document-closes-its-panel.md)); a session's own panel is kept and its text written again, with a notice ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)) |
 | a file of `panels/` no panel names, at start | becomes a closed panel without a session, listed under the sessions, with a notice |

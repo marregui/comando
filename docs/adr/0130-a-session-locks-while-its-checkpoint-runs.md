@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-31 | accepted; built; amended by [record 131](0131-an-automatic-checkpoint-asks-nothing.md) (the Session tab's veil lifts while a card waits) | Miguel and Claude |
+| 2026-10-31 | accepted; built; amended by [record 131](0131-an-automatic-checkpoint-asks-nothing.md) (the Session tab's veil lifts while a card waits) and 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -71,3 +71,10 @@ sent; a second checkpoint locked through its `/compact` and unlocked when the co
 ## Amendments
 
 2026-11-01, [record 131](0131-an-automatic-checkpoint-asks-nothing.md): the Session tab's veil lifts while the checkpointing session has a waiting card, so the card looks as answerable as it is, and returns when none waits; what the reducer refuses is unchanged.
+
+2026-11-01, first-release review ([record 121](0121-an-agent-has-every-action-the-user-has.md), amended the same day):
+an agent's action asks `Reducer.refusal` before it sends anything and answers the refusal, the lock's among them;
+otherwise it answers `sent: <intent>`. An agent's intent that the lock refuses after that answer, a checkpoint that
+began meanwhile, posts a warning notice naming the agent and the intent not applied; the intent carries its caller
+(`from`) for that. A refusal from the window's own keys stays without a notice, as §4 decided. Tested in
+`ReducerTest`.

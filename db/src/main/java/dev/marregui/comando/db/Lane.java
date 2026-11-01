@@ -164,14 +164,14 @@ final class Lane implements AutoCloseable {
             // stopped answering, so it cannot hold the lane, and the next run opens the connection again if the
             // timeout broke it
             final boolean bounded = networkTimeout((querySeconds + QUERY_MARGIN_SECONDS) * 1000);
-            try (Statement st = connection.createStatement()) {
+            try (final Statement st = connection.createStatement()) {
                 st.setQueryTimeout(querySeconds);
                 st.setMaxRows(maxRows + 1);
                 if (!st.execute(sql)) {
                     out.complete(new QueryPort.Rows(List.of(), List.of(), st.getLargeUpdateCount(), false));
                     return;
                 }
-                try (ResultSet rs = st.getResultSet()) {
+                try (final ResultSet rs = st.getResultSet()) {
                     out.complete(textRows(rs, maxRows));
                 }
             } catch (final SQLException e) {
@@ -212,16 +212,16 @@ final class Lane implements AutoCloseable {
             final boolean bounded = networkTimeout((describeSeconds + QUERY_MARGIN_SECONDS) * 1000);
             try {
                 SQLException first;
-                try (Statement st = connection.createStatement()) {
+                try (final Statement st = connection.createStatement()) {
                     st.setQueryTimeout(describeSeconds);
-                    try (ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
+                    try (final ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
                         out.complete(textRows(rs, 10_000));
                         return;
                     }
                 } catch (final SQLException e) {
                     first = e;
                 }
-                try (ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
+                try (final ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
                     final List<List<String>> rows = new ArrayList<>();
                     while (rs.next()) {
                         // Arrays.asList, not List.of: a driver may answer SQL NULL for a type or nullability
@@ -249,7 +249,7 @@ final class Lane implements AutoCloseable {
         try {
             connection.setNetworkTimeout(Runnable::run, millis);
             return true;
-        } catch (SQLException | RuntimeException e) {
+        } catch (final SQLException | RuntimeException e) {
             return false;
         }
     }

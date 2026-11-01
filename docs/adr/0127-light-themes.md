@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built; five more light themes and the chooser by [record 128](0128-a-chooser-of-twelve-themes.md) | Miguel and Claude |
+| 2026-10-30 | accepted; built; five more light themes and the chooser by [record 128](0128-a-chooser-of-twelve-themes.md); amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -42,3 +42,9 @@ window, shown or not: it listened only while shown, so an editor in a tab behind
 one frame, a blink of the dark ground (Miguel: "if I switch to another tab it first renders the previous background
 which is dark, then the light one"; 68 % of the window's pixels on that frame, measured off screen). Not checked by a test: the title bar as
 drawn, and the transcript, cards and approvals on paper, which no off-screen session draws.
+
+## Amendments
+
+2026-11-01, first-release review: this record replaces the rule "no light theme" of
+[record 93](0093-comando-is-dark-throughout.md), whose status now says so; the rest of record 93 (no theme switch in
+the panel header or the comparison window) stands.

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-12 | accepted | Claude |
+| 2026-10-12 | accepted; amended 2026-11-01 (see Amendments) | Claude |
 
 ## 1. Context
 
@@ -28,3 +28,14 @@ The check, `SqlPolicy`, errs towards "not read-only". It cannot see the side eff
 |---|---|
 | a card for every statement | a card before every read |
 | every statement run unasked | a mistake could write to a database |
+
+## Amendments
+
+2026-11-01, Miguel's decision D2 of the first-release review: the production flag guards the database against the
+agent itself, so the agent does not clear it unasked. A `connection_save` that clears `production`, or lowers the TLS
+mode (weakest to strongest: `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`), raises an approval
+card (`ApprovalKind.CONNECTION`: the connection, what would weaken, the connection as it would be saved; Allow or Deny),
+and nothing changes until the user allows it; a card denied, unanswered, or answered after the connection changed
+leaves it as it was. The card is the user's alone: `approval_answer` refuses it for every session, of whatever family
+(D2's strict reading, settled by Claude-main in the review round on the fixes), so a second agent cannot allow what
+the first may not do. Tested in `ActionToolsTest`.

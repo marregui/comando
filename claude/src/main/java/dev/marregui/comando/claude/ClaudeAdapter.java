@@ -6,10 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,12 +21,13 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.LongSupplier;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -98,17 +99,17 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     /**
-     * The context threshold at which comando runs a session's checkpoint (record 129), read at each launch; 0 or
-     * below, the default, runs none.
+     * Whether comando runs the sessions' checkpoints (record 129): false, the default, for tests and tools, whose
+     * reducer never checkpoints; the window's threshold is always on (10 % or more, D3).
      */
-    private volatile LongSupplier checkpointThreshold = () -> 0L;
+    private volatile boolean checkpointByComando;
 
     /**
-     * Reads the checkpoint threshold from {@code tokens} at each launch: a session launched while it is above 0 gets
-     * {@code CONTEXT_CHECKPOINT_BY=comando}; called before the first session starts.
+     * From now on every session launched gets {@code CONTEXT_CHECKPOINT_BY=comando}: comando's reducer runs its
+     * checkpoint at the window's threshold; called before the first session starts.
      */
-    public void checkpointThreshold(final LongSupplier tokens) {
-        checkpointThreshold = tokens;
+    public void checkpointByComando() {
+        checkpointByComando = true;
     }
 
     /**
@@ -161,7 +162,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (runDir == null || !Files.isDirectory(runDir)) {
             return;
         }
-        try (var files = Files.newDirectoryStream(runDir, "*.mcp.json")) {
+        try (final var files = Files.newDirectoryStream(runDir, "*.mcp.json")) {
             for (final Path f : files) {
                 Files.deleteIfExists(f);
             }
@@ -169,6 +170,15 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             LOG.log(System.Logger.Level.DEBUG, "cannot clean [dir=" + runDir + ']', e);
         }
     }
+
+    /**
+     * Every run whose process started and whose exit is not handled yet, with its session's name: written on the
+     * session's strand, read by {@link #close} after the strands stop, so a run whose SIGTERM task never ran (a strand
+     * cut at its bound) is still ended.
+     */
+    private final Map<Run, String> started = new ConcurrentHashMap<>();
+    /** Each process's stdin writer and exit waiter; closed at the end of {@link #close}, after the processes. */
+    private final Errands helpers = new Errands("claude-process");
 
     /** One process of a session, with what belongs to it alone. Strand-confined. */
     private static final class Run {
@@ -231,10 +241,19 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     /**
      * The session, made on first use; one made during or after {@link #close} takes no task, so no process starts then.
+     * An existing session keeps its strand: close queues each process's SIGTERM there.
      */
     private Session session(final String name) {
-        final Session s = sessions.computeIfAbsent(name, Session::new);
-        if (closed) {
+        final Session known = sessions.get(name);
+        if (known != null) {
+            return known;
+        }
+        final boolean[] made = new boolean[1];
+        final Session s = sessions.computeIfAbsent(name, n -> {
+            made[0] = true;
+            return new Session(n);
+        });
+        if (made[0] && closed) {
             s.strand.shutdown();
         }
         return s;
@@ -287,7 +306,12 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         final ObjectNode message = line.putObject("message");
         message.put("role", "user");
         message.put("content", text);
-        s.current.process.send(line.toString());
+        if (!s.current.process.send(line.toString())) {
+            // the process's input closed under it (it is exiting): the prompt went nowhere, and the turn says so
+            s.mapper.note(Block.NoteKind.ERROR, "The session's input has closed; the prompt was not sent");
+            s.transcript.changed();
+            sink.dispatch(new Intent.SessionTurnEnded(s.name, 0, -1.0, -1L, 0L, true, "session input closed"));
+        }
     }
 
     @Override
@@ -341,7 +365,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 return;
             }
             s.transcript.clear();
-            try (BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            try (final BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = in.readLine()) != null) {
                     if (!line.isBlank()) {
@@ -376,6 +400,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         s.run(() -> {
             if (s.current != null) {
+                started.remove(s.current);
                 if (s.current.isAlive()) {
                     s.current.process.kill();
                 }
@@ -617,6 +642,11 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     // ---- strand work
 
     private void startProcess(final Session s, final SessionSpec spec) {
+        if (closed) {
+            // a start queued behind close's SIGTERM task: close has collected the runs already
+            LOG.log(System.Logger.Level.DEBUG, "closing, start dropped [session=" + s.name + ']');
+            return;
+        }
         if (s.current != null && s.current.isAlive()) {
             s.startFailed = false;
             sink.dispatch(new Intent.SessionStarted(s.name));
@@ -644,14 +674,15 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         try {
             final RootLaunch launch = settings.launch().forSession(spec.name(), spec.workDir()).madeBy(spec.createdBy())
-                    .checkpointBy(checkpointThreshold.getAsLong() > 0);
+                    .checkpointBy(checkpointByComando);
             final var argv = launch.argv(ClaudeCommand.of(settings.executable(), spec, newId, run.mcpConfig, settings.uiInstructions()));
             s.workDir = workDir;
             s.mapper.resetStreams();
-            run.process = ClaudeProcess.start(s.name, argv, workDir, launch,
+            run.process = ClaudeProcess.start(s.name, argv, workDir, launch, helpers,
                     line -> s.run(() -> onLine(s, line)),
                     code -> s.run(() -> onExit(s, run, code)));
             s.current = run;
+            started.put(run, s.name);
             s.live = true;
             s.startFailed = false;
             if (spec.startMode() == StartMode.NEW) {
@@ -700,6 +731,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
      * its note.
      */
     private void onExit(final Session s, final Run run, final int code) {
+        started.remove(run);
         deleteConfig(run);
         mcp.unregister(s.name, run.ticket);
         run.process.closeInput(); // ends the stdin writer of a process that exited on its own
@@ -774,15 +806,13 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         server.putObject("headers").put("Authorization", "Bearer " + ticket.token());
         // a per-server timeout also raises the idle window, so an approval card can wait for the user
         server.put("timeout", 3_600_000);
-        Files.createDirectories(settings.runDir());
+        // the run folder is owner-only (rule 15), also when it was deleted while comando runs
+        if (!Files.isDirectory(settings.runDir())) {
+            OwnerOnly.folder(settings.runDir());
+        }
         final Path file = settings.runDir().resolve(name.replaceAll("[^A-Za-z0-9._-]", "_") + '-' + UUID.randomUUID() + ".mcp.json");
         // the file holds the session's bearer token: owner-only from its creation, never readable in between
-        try {
-            Files.createFile(file, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
-        } catch (final UnsupportedOperationException e) {
-            LOG.log(System.Logger.Level.DEBUG, "no POSIX permissions on this file system");
-            Files.createFile(file);
-        }
+        OwnerOnly.file(file);
         Files.writeString(file, root.toString());
         return file;
     }
@@ -803,7 +833,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (!Files.isDirectory(dir)) {
             return null;
         }
-        try (var projects = Files.newDirectoryStream(dir)) {
+        try (final var projects = Files.newDirectoryStream(dir)) {
             for (final Path project : projects) {
                 final Path candidate = project.resolve(sessionId + ".jsonl");
                 if (Files.isRegularFile(candidate)) {
@@ -832,27 +862,35 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             // an exception escaping a periodic task cancels every later run
             try {
                 final PlanUsage usage = PlanUsageReader.read(settings.executable(), settings.launch(), settings.runDir(), json);
+                if (stopping()) {
+                    // close interrupted the read: nothing to tell, and no Codex read starts after it
+                    return;
+                }
                 if (!usage.problem().isEmpty()) {
                     LOG.log(System.Logger.Level.WARNING, "cannot read the plan's usage limits [problem=" + usage.problem() + ']');
                 }
-                if (!closed) {
-                    sink.dispatch(new Intent.PlanUsageRead(usage));
-                }
+                sink.dispatch(new Intent.PlanUsageRead(usage));
                 usageMetrics(usage);
                 final PlanUsage codexUsage = CodexUsageReader.read(codex, json, CodexUsageReader.TIMEOUT, ZoneId.systemDefault());
+                if (stopping()) {
+                    return;
+                }
                 // logged when it changes: without Codex installed, every read fails the same way
                 if (!codexUsage.problem().isEmpty() && !codexUsage.problem().equals(lastCodexProblem)) {
                     LOG.log(System.Logger.Level.INFO, "cannot read the Codex plan's usage limits [problem=" + codexUsage.problem() + ']');
                 }
                 lastCodexProblem = codexUsage.problem();
-                if (!closed) {
-                    sink.dispatch(new Intent.PlanUsageRead(codexUsage));
-                }
+                sink.dispatch(new Intent.PlanUsageRead(codexUsage));
                 usageMetrics(codexUsage);
             } catch (final RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "cannot read the plan usage", e);
             }
         }, 0, every.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /** Whether the plan-usage task is to stop: the adapter closes, or its strand was interrupted by the close. */
+    private boolean stopping() {
+        return closed || Thread.currentThread().isInterrupted();
     }
 
     /** A plan's usage read: a {@code usage} event per window (record 110); a read that failed says nothing. */
@@ -899,9 +937,17 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         // one bound for every session together, so a close with many sessions waits as long as with one
         ExecutorStop.drain("claude", ExecutorStop.WAIT, strands);
+        // a run whose strand was cut before its SIGTERM task ran: ended here, without the grace
+        final Map<Run, String> ending = new IdentityHashMap<>();
+        runs.forEach((name, run) -> ending.put(run, name));
+        started.forEach((run, name) -> {
+            if (ending.putIfAbsent(run, name) == null) {
+                LOG.log(System.Logger.Level.WARNING, "claude process not stopped by its strand, killed [session=" + name + ']');
+            }
+        });
         final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-        for (final Map.Entry<String, Run> e : runs.entrySet()) {
-            final Run run = e.getValue();
+        for (final Map.Entry<Run, String> e : ending.entrySet()) {
+            final Run run = e.getKey();
             if (run.process != null) {
                 run.process.awaitExit(Math.max(0L, TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())));
                 // also when Claude Code exited in time: a child that ignored the SIGTERM is still running
@@ -909,8 +955,10 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 run.process.closeInput();
             }
             deleteConfig(run);
-            mcp.unregister(e.getKey(), run.ticket);
+            mcp.unregister(e.getValue(), run.ticket);
         }
+        started.clear();
+        helpers.close();
         ExecutorStop.now("claude", Map.of("claude-timer", timer));
     }
 }

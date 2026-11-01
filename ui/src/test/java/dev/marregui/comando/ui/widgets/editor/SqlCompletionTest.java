@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.editor;
 
 import java.awt.Component;
+import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [SqlCompletion] offers SQL words from the bound connection's schema in the panel editor.
 /// - offers keywords, tables and each column once, naming every table that has it
 /// - a schema name like HTML is listed as text
+/// - a large schema is set in one sort
 /// - another schema replaces the words
 /// - a disposed editor leaves no global listener
 /// - completion opens on a statement being typed, not on a prompt
@@ -54,6 +56,29 @@ class SqlCompletionTest {
 
     private static String text(final Component c) {
         return ((JLabel) c).getText();
+    }
+
+    /// A schema of 1,000 tables of 20 columns each, all names distinct, gives every table and column one completion and
+    /// is set in far less than the EDT's 200 ms budget allows ten times over: the completions are sorted once, not once
+    /// per name added (5.8 s when each addition sorted the list).
+    @Test
+    void aLargeSchemaIsSetInOneSort() {
+        final List<Schema.Table> tables = new ArrayList<>();
+        for (int t = 0; t < 1_000; t++) {
+            final List<Schema.Column> columns = new ArrayList<>();
+            for (int c = 0; c < 20; c++) {
+                columns.add(new Schema.Column("c" + t + "_" + c, "DOUBLE"));
+            }
+            tables.add(new Schema.Table("t" + t, columns));
+        }
+        final SqlCompletion c = new SqlCompletion();
+        final long start = System.nanoTime();
+        c.setSchema(new Schema(tables));
+        final long millis = (System.nanoTime() - start) / 1_000_000;
+        assertThat(c.provider().getCompletionByInputText("t999")).hasSize(1);
+        assertThat(c.provider().getCompletionByInputText("c999_19")).hasSize(1);
+        assertThat(c.provider().getCompletionByInputText("SELECT")).hasSize(1);
+        assertThat(millis).as("ms to set 21,000 names").isLessThan(2_000);
     }
 
     /// Setting an empty schema removes the previous tables and keeps the keywords.

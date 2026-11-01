@@ -20,7 +20,7 @@ final class OpenFiles {
             if (Files.size(file) > MAX_PANEL_BYTES) {
                 return false;
             }
-            try (InputStream in = Files.newInputStream(file)) {
+            try (final InputStream in = Files.newInputStream(file)) {
                 for (final byte b : in.readNBytes(8192)) {
                     if (b == 0) {
                         return false;

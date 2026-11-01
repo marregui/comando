@@ -7,8 +7,8 @@ import java.util.List;
 import dev.marregui.comando.core.transcript.Block;
 
 /**
- * The painter of one transcript block. Keeps its layout until the block, the width or the style changes;
- * coordinates passed in are the item's top left in canvas space.
+ * The painter of one transcript block. Keeps its layout until the block, the width or the style changes, or until it
+ * is released far from the view ({@link #release}); coordinates passed in are the item's top left in canvas space.
  */
 abstract class Item {
 
@@ -55,6 +55,42 @@ abstract class Item {
         height = doLayout(w, s);
         dirty = false;
         return height;
+    }
+
+    /**
+     * Drops the layout of this item and of the items nested in it, keeping its height as its estimate at the width and
+     * style it had: an item far from the view holds no boxes, and its position does not move. Nothing happens to an
+     * item not laid out or changed since its layout.
+     */
+    final void release() {
+        if (!laidOut() || dirty) {
+            return;
+        }
+        guessed = height;
+        guessedWidth = width;
+        guessedStyle = style;
+        discard();
+    }
+
+    /**
+     * Drops the layout of this item and of the items nested in it, whatever changed since: for an item that left the
+     * transcript (a thought the next block took the place of), which no release pass reaches any more.
+     */
+    final void discard() {
+        if (!laidOut()) {
+            return;
+        }
+        width = -1;
+        style = null;
+        dirty = true;
+        for (final Item child : children()) {
+            child.discard();
+        }
+        dropLayout();
+    }
+
+    /** Lets go of what the last layout built (boxes, laid-out text); the next layout builds it again. */
+    void dropLayout() {
     }
 
     /** True when the next layout at {@code w} with {@code s} does work. */
@@ -123,6 +159,13 @@ abstract class Item {
 
     /** Adds this item's text boxes, in reading order, at absolute positions. */
     abstract void collect(int x, int y, List<Placed> out);
+
+    /**
+     * Adds the text of each box {@link #collect} adds, in the same order and as the folds are now, without laying out:
+     * what find searches, read from the block. The two must agree box for box, as a match found here is shown in the
+     * box {@link #collect} places at the same position.
+     */
+    abstract void findTexts(List<String> out);
 
     /** The item whose header is at {@code (px, py)} (relative), to open or close; null when none. */
     Item toggleAt(final int px, final int py) {

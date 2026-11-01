@@ -37,7 +37,7 @@ final class BuiltInThemes {
         final Map<String, ThemeSpec> specs = new LinkedHashMap<>();
         for (final String id : IDS) {
             final String resource = "/themes/" + id + ".json";
-            try (InputStream in = BuiltInThemes.class.getResourceAsStream(resource)) {
+            try (final InputStream in = BuiltInThemes.class.getResourceAsStream(resource)) {
                 if (in == null) {
                     throw new IllegalStateException("missing " + resource);
                 }

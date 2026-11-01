@@ -10,7 +10,8 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -26,12 +27,13 @@ import dev.marregui.comando.claude.UiInstructions;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
+import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
+import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.loop.Threads;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
@@ -44,6 +46,7 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.db.DbAdapter;
@@ -84,6 +87,8 @@ public final class App implements AutoCloseable {
     static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
     /** How often the kit's version and its remote's releases are read, on a strand of their own. */
     static final Duration KIT_EVERY = Duration.ofHours(6);
+    /** How often the unbounded queues are read for the metrics log; a reading is written only when it changed. */
+    static final Duration QUEUES_EVERY = Duration.ofMinutes(1);
     /** {@code -Dcomando.peers=false}, set by window tests and picture tools, keeps this instance off the Edge. */
     static final String PEERS_PROPERTY = "comando.peers";
     private final StateLoop loop;
@@ -99,22 +104,27 @@ public final class App implements AutoCloseable {
     /** The comando Edge as the instances' broker, and this instance among them (record 123); null when left out. */
     private final MqttPeerBroker peerBroker;
     private final Peers peers;
-    /** Reads the kit's version at start and every {@link #KIT_EVERY}. */
+    /** Reads the kit's version at start and every {@link #KIT_EVERY}, and the queues every {@link #QUEUES_EVERY}. */
     private final ScheduledExecutorService kitCheck = Threads.timedStrand("kit-check");
+    /** Where the queues' readings go: the sessions' metrics log. */
+    private final MetricsLog metrics;
+    /** The queues' last reading written; the kit-check strand's own. */
+    private List<Queues.Reading> queuesWritten = List.of();
     private volatile boolean closed;
 
     public App(final AppConfig config, final String version, final Runnable onQuit) {
         claudeExecutable = config.claudeExecutable();
         root = config.root();
-        launch = RootLaunch.on(root);
+        // every claude this instance starts gets its kit and its data root (record 122)
+        launch = RootLaunch.on(root, config.home());
         try {
+            ownerOnlyFolders(config);
             // what reads HomeDir.claudeDir without being handed the root reads this one, until this closes
             final KitRoot before = KitRoot.current();
             KitRoot.use(root);
             // the New session dialog names the kit's defaults beside Model, Effort and Permission mode (record 125)
             SessionKind.INSTANCE.defaults(sessionDefaults(root.dir()));
             own(() -> KitRoot.use(before));
-            own(() -> ExecutorStop.now("app", kitCheck));
             final KitGit git = own(new KitGit());
             setup = new RootSetup(root, git);
             final Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));
@@ -131,19 +141,30 @@ public final class App implements AutoCloseable {
             final ConsoleRegistry consoles = new ConsoleRegistry();
             final SchemaRegistry schemas = new SchemaRegistry();
             final DeferredEffects effects = new DeferredEffects();
-            // the log is owned before the loop, so it closes after it and records the intents of the shutdown
-            final IntentLog log = config.recordIntents() ? own(new IntentLog(config.logDir(), initial)) : null;
-            // the checkpoint threshold (record 129): the window's setting, read by the reducer at each turn's end and by
-            // the adapter at each launch
-            final AtomicLong checkpointThreshold = new AtomicLong(Reducer.CHECKPOINT_THRESHOLD_TOKENS);
-            loop = new StateLoop(initial, new Reducer(Clock.SYSTEM, checkpointThreshold::get), effects);
+            // the checkpoint threshold (record 129): the window's setting, in percent of a session's context window, read
+            // by the reducer at each turn's end, never below 10 % (Reflection.clamp)
+            final AtomicInteger checkpointThreshold = new AtomicInteger(Reflection.DEFAULT_PERCENT);
+            // the log is owned before the loop, so it closes after it and records the intents of the shutdown; it records
+            // the threshold too, which the reducer reads, and each change of it
+            final IntentLog log = config.recordIntents() ? own(new IntentLog(config.logDir(), initial, checkpointThreshold::get)) : null;
+            loop = new StateLoop(initial, new Reducer(Clock.SYSTEM, appliedThreshold(log, checkpointThreshold::get)), effects);
             owned.push(loop);
             store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
             store.onFoldersChanged(folders -> loop.dispatch(new Intent.FoldersRead(folders)));
-            // the decisions automatic checkpoints held back in earlier runs wait in the Later group again (record 131)
-            final List<Decision> held = store.loadDecisions();
-            if (!held.isEmpty()) {
-                loop.dispatch(new Intent.DecisionsRead(held));
+            // what is wrong with the kit's manifest is told, never dropped silently (record 133): the file refused whole,
+            // or each entry left out, with the palette's repair, which rewrites the file without them
+            if (!root.refused().isEmpty()) {
+                loop.dispatch(new Intent.Notify(Notice.Level.WARN, root.refused(), false));
+            }
+            for (final String problem : root.kit().map(KitRoot.Manifest::problems).orElse(List.of())) {
+                loop.dispatch(new Intent.Notify(Notice.Level.WARN, KitRoot.FILE + ": " + problem + "; left out. Kit ▸ Repair "
+                        + KitRoot.FILE + "… rewrites the file without it", false));
+            }
+            // the decisions automatic checkpoints held back in earlier runs wait in the Later group again (record 131),
+            // and no id given before is given again
+            final Store.Decisions held = store.loadDecisions();
+            if (!held.held().isEmpty() || held.lastId() > 0) {
+                loop.dispatch(new Intent.DecisionsRead(held.held(), held.lastId()));
             }
             if (log != null) {
                 loop.addObserver(log);
@@ -176,8 +197,9 @@ public final class App implements AutoCloseable {
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
-            claude.metrics(new MetricsLog(config.metricsDir()));
-            claude.checkpointThreshold(checkpointThreshold::get);
+            metrics = new MetricsLog(config.metricsDir());
+            claude.metrics(metrics);
+            claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
             final EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
@@ -211,6 +233,8 @@ public final class App implements AutoCloseable {
                 peers = null;
             }
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
+            // the kit check uses KitGit, Peers and the window: its strand stops before them
+            own(() -> ExecutorStop.now("app", kitCheck));
             // the Edge this instance started stops before QuestDB; one another instance started keeps running
             owned.addLast(edge);
             // the embedded QuestDB stops last: it may still serve the connections closed above
@@ -219,9 +243,14 @@ public final class App implements AutoCloseable {
             owned.addLast(ui);
             LOG.log(System.Logger.Level.INFO, "comando " + version + " ready [home=" + config.home() + ", mcp=" + mcp.url()
                     + ", claude=" + config.claudeExecutable() + ", root=" + root.dir() + ", kit=" + (root.kit().isPresent() ? root.name() : "none") + ']');
-        } catch (RuntimeException | Error e) {
-            // roll back: close what was built, in reverse order, then report the cause
-            close();
+        } catch (final RuntimeException | Error e) {
+            // roll back: close what was built, in reverse order, then report the cause; the kit check's strand too, when
+            // the failure came before it was owned
+            try {
+                close();
+            } finally {
+                ExecutorStop.now("app", kitCheck);
+            }
             throw e;
         }
     }
@@ -254,11 +283,21 @@ public final class App implements AutoCloseable {
         if (root.kit().isPresent()) {
             kitCheck.scheduleWithFixedDelay(this::checkKit, 0, KIT_EVERY.toMillis(), TimeUnit.MILLISECONDS);
         }
+        kitCheck.scheduleWithFixedDelay(this::readQueues, QUEUES_EVERY.toMillis(), QUEUES_EVERY.toMillis(), TimeUnit.MILLISECONDS);
         if (peers != null) {
             // the last will and the subscriptions are set before the first connect
             peers.start();
             peerBroker.start();
         }
+    }
+
+    /**
+     * The checkpoint threshold the reducer applies each intent under: with an intent log, the value the log read and
+     * wrote for that intent, so the window's setting changed between the log's line and the reducer's read cannot make
+     * a replay apply the intent otherwise than the run did; without one, the setting as it is.
+     */
+    static IntSupplier appliedThreshold(final IntentLog log, final IntSupplier setting) {
+        return log != null ? log.applied() : setting;
     }
 
     /**
@@ -277,6 +316,24 @@ public final class App implements AutoCloseable {
         } catch (final JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the kit's settings [file=" + file + ", cause=" + e.getMessage() + ']');
             return SessionKind.Defaults.NONE;
+        }
+    }
+
+    /**
+     * Reads the unbounded queues' depths and peaks ({@link Queues}) and writes them to the metrics log when they differ
+     * from the last reading written, so an idle window writes nothing; measured first, each queue is bounded later from
+     * how it is used.
+     */
+    private void readQueues() {
+        // an exception escaping a periodic task cancels every later run
+        try {
+            final List<Queues.Reading> now = Queues.read();
+            if (!now.equals(queuesWritten)) {
+                metrics.queues(now);
+                queuesWritten = now;
+            }
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read the queues", e);
         }
     }
 
@@ -309,6 +366,22 @@ public final class App implements AutoCloseable {
         return ui;
     }
 
+    /**
+     * Creates the data root's logs, run, audit and metrics folders readable by the user alone, and narrows them when
+     * they exist (rule 15): the audit log records every tool call with its arguments, the run folder holds the MCP
+     * configurations with their bearer tokens, the logs and metrics name files and sessions. A folder that cannot be
+     * made so is logged; comando still runs.
+     */
+    static void ownerOnlyFolders(final AppConfig config) {
+        for (final Path dir : List.of(config.logDir(), config.runDir(), config.auditDir(), config.metricsDir())) {
+            try {
+                OwnerOnly.folder(dir);
+            } catch (final IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot make the folder the user's alone [dir=" + dir + ']', e);
+            }
+        }
+    }
+
     /** A part closing this long or longer is named in the log. */
     static final long SLOW_CLOSE_MILLIS = 100;
 
@@ -325,6 +398,27 @@ public final class App implements AutoCloseable {
         }
         closed = true;
         final long start = System.nanoTime();
+        try {
+            // the comparison window's edits are saved before the parts behind the window close: on the shutdown hook's
+            // path no quit flow ran, and the window itself closes last; a start that failed before the window was built
+            // rolls back through here with no window
+            if (ui != null) {
+                ui.saveEdits();
+            }
+            closeAll(owned);
+        } finally {
+            LOG.log(System.Logger.Level.INFO, "comando closed [millis=" + (System.nanoTime() - start) / 1_000_000 + ']');
+        }
+    }
+
+    /**
+     * Closes and takes out every part of {@code owned}, the last pushed first. A part that throws is logged and the
+     * rest still close: an {@link Exception} as a warning; an {@link Error} too, the first rethrown once every part has
+     * closed, the later ones suppressed in it, so a failing part never leaves the processes and files of the parts after
+     * it behind.
+     */
+    static void closeAll(final Deque<AutoCloseable> owned) {
+        Error failed = null;
         while (!owned.isEmpty()) {
             final AutoCloseable c = owned.pop();
             final long partStart = System.nanoTime();
@@ -332,6 +426,13 @@ public final class App implements AutoCloseable {
                 c.close();
             } catch (final Exception e) {
                 LOG.log(System.Logger.Level.WARNING, "close failed [part=" + c.getClass().getSimpleName() + ']', e);
+            } catch (final Error e) {
+                LOG.log(System.Logger.Level.ERROR, "close failed, the other parts still close [part=" + c.getClass().getSimpleName() + ']', e);
+                if (failed == null) {
+                    failed = e;
+                } else {
+                    failed.addSuppressed(e);
+                }
             }
             final long millis = (System.nanoTime() - partStart) / 1_000_000;
             if (millis >= SLOW_CLOSE_MILLIS) {
@@ -339,7 +440,9 @@ public final class App implements AutoCloseable {
                 LOG.log(System.Logger.Level.INFO, "closed slowly [part=" + c.getClass().getSimpleName() + ", millis=" + millis + ']');
             }
         }
-        LOG.log(System.Logger.Level.INFO, "comando closed [millis=" + (System.nanoTime() - start) / 1_000_000 + ']');
+        if (failed != null) {
+            throw failed;
+        }
     }
 
     /** The reducer needs its effect handler before the adapters that implement it exist. */

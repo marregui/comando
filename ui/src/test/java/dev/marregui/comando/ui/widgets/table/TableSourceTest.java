@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.table;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,8 @@ class TableSourceTest {
     /// doubles.
     @Test
     void numericColumnsAreDetectedFromTheValues() {
-        final TableSource s = TableSource.of(new ViewSpec.Table(List.of("n", "name"), List.of(List.of("1", "a"), List.of("null", "b"), List.of("2.5", "c"))));
+        final TableSource s = TableSource.of(new ViewSpec.Table(List.of("n", "name"),
+                List.of(List.of("1", "a"), Arrays.asList(null, "b"), List.of("2.5", "c"))));
         assertThat(s.isNumeric(0)).isTrue();
         assertThat(s.isNumeric(1)).isFalse();
         assertThat(s.isNull(1, 0)).isTrue();

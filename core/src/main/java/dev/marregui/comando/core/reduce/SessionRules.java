@@ -49,17 +49,63 @@ final class SessionRules {
                 .orElse(Transition.of(s));
     }
 
-    static Transition saveSession(final Clock clock, final AppState s, final Intent.SaveSession i) {
+    /**
+     * A save refused: why, in the words of the reducer's notice, and the notice's subject.
+     *
+     * @param subject the session the notice is about ({@link Notice#session}), empty when it concerns none of them: the
+     *                saved session's own when a new one is refused, the edited one's when its edit is, none when the
+     *                edited session is gone or the new name is another session's
+     */
+    record Refusal(String reason, String subject) {
+    }
+
+    /**
+     * Why {@code i} is refused, in the words of the reducer's notice: a name another session has, or a title another
+     * panel has (a session's name is its own panel's title, record 88), or a running session renamed; empty when it is
+     * saved.
+     */
+    static Optional<Refusal> saveRefusal(final AppState s, final Intent.SaveSession i) {
         final SessionSpec spec = i.spec();
         if (i.previousName().isEmpty()) {
+            final String subject = Notice.session(spec.name());
             if (s.session(spec.name()).isPresent()) {
-                return Transition.of(notice(clock, s, Notice.Level.ERROR, "A session called " + spec.name() + " exists", Notice.session(spec.name())));
+                return Optional.of(new Refusal("A session called " + spec.name() + " exists", subject));
             }
             if (s.titleTaken(spec.name()) && Stream.concat(s.panels().stream(), s.closed().stream())
                     .noneMatch(p -> !p.document() && p.session().isEmpty() && p.title().equalsIgnoreCase(spec.name()))) {
-                return Transition.of(notice(clock, s, Notice.Level.ERROR, "A panel called " + spec.name()
-                        + " exists; a session's name is its own panel's title", Notice.session(spec.name())));
+                return Optional.of(new Refusal("A panel called " + spec.name() + " exists; a session's name is its own panel's title", subject));
             }
+            return Optional.empty();
+        }
+        final Optional<SessionState> previous = s.session(i.previousName());
+        if (previous.isEmpty()) {
+            return Optional.of(new Refusal("No session called " + i.previousName(), ""));
+        }
+        final String edited = Notice.session(i.previousName());
+        final boolean renamed = !i.previousName().equals(spec.name());
+        final SessionState old = previous.get();
+        if (renamed && old.status() != Status.CLOSED && old.status() != Status.FAILED) {
+            return Optional.of(new Refusal("Stop session " + old.name() + " before renaming it", edited));
+        }
+        if (renamed && s.session(spec.name()).isPresent()) {
+            return Optional.of(new Refusal("A session called " + spec.name() + " exists", ""));
+        }
+        // its own panel takes the new name: no other panel may have it
+        if (renamed && Stream.concat(s.panels().stream(), s.closed().stream())
+                .anyMatch(p -> p.title().equalsIgnoreCase(spec.name()) && !(!p.document() && p.session().equals(i.previousName())))) {
+            return Optional.of(new Refusal("A panel called " + spec.name() + " exists", edited));
+        }
+        return Optional.empty();
+    }
+
+    static Transition saveSession(final Clock clock, final AppState s, final Intent.SaveSession i) {
+        final Optional<Refusal> refused = saveRefusal(s, i);
+        if (refused.isPresent()) {
+            return Transition.of(notice(clock, s, Notice.Level.ERROR, refused.get().reason(), refused.get().subject()));
+        }
+        if (i.previousName().isEmpty()) {
+            // a new session is cut off from no family: a family is recorded only by a removal, never taken from the intent
+            final SessionSpec spec = i.spec().withFamily("");
             final List<SessionState> sessions = new ArrayList<>(s.sessions());
             sessions.add(SessionState.closed(spec));
             final AppState next = s.withSessions(sessions);
@@ -74,28 +120,16 @@ final class SessionRules {
             effects.addAll(opened.effects());
             return new Transition(opened.state(), effects);
         }
-        final Optional<SessionState> previous = s.session(i.previousName());
-        if (previous.isEmpty()) {
-            return Transition.of(notice(clock, s, Notice.Level.ERROR, "No session called " + i.previousName()));
-        }
+        final SessionSpec spec = i.spec();
+        final SessionState old = s.session(i.previousName()).orElseThrow();
         final boolean renamed = !i.previousName().equals(spec.name());
-        final SessionState old = previous.get();
-        if (renamed && old.status() != Status.CLOSED && old.status() != Status.FAILED) {
-            return Transition.of(notice(clock, s, Notice.Level.ERROR, "Stop session " + old.name() + " before renaming it", Notice.session(old.name())));
-        }
-        if (renamed && s.session(spec.name()).isPresent()) {
-            return Transition.of(notice(clock, s, Notice.Level.ERROR, "A session called " + spec.name() + " exists"));
-        }
-        // its own panel takes the new name: no other panel may have it
-        if (renamed && Stream.concat(s.panels().stream(), s.closed().stream())
-                .anyMatch(p -> p.title().equalsIgnoreCase(spec.name()) && !(!p.document() && p.session().equals(i.previousName())))) {
-            return Transition.of(notice(clock, s, Notice.Level.ERROR, "A panel called " + spec.name() + " exists", Notice.session(old.name())));
-        }
         final List<SessionState> sessions = new ArrayList<>(s.sessions().size());
         for (final SessionState x : s.sessions()) {
-            // the form has no carried summary nor creator: both stay as they were (record 121)
+            // the form has no carried summary, creator nor family: they stay as they were (record 121); the sessions it
+            // made name it by its new name, so a rename cuts no creation family (rule 1)
             sessions.add(x.name().equals(i.previousName())
-                    ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy())) : x);
+                    ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy()).withFamily(x.spec().family()))
+                    : renamed && x.spec().createdBy().equals(i.previousName()) ? x.withSpec(x.spec().withCreatedBy(spec.name())) : x);
         }
         AppState next = s.withSessions(sessions);
         final List<Effect> effects = new ArrayList<>();
@@ -142,7 +176,12 @@ final class SessionRules {
         }
         effects.add(new Effect.ForgetSession(name));
         AppState next = clear(ApprovalRules.withdrawApprovals(s, name, "session removed", effects), Notice.session(name));
-        next = next.withSessions(next.sessions().stream().filter(x -> !x.name().equals(name)).toList());
+        // the sessions it made pass to its own creator, so a removal cuts no creation family (rule 1); those of a family's
+        // root, which the user made, then have no creator, and keep the family by recording its root
+        final String creator = session.get().spec().createdBy();
+        final String family = creator.isEmpty() ? next.familyRoot(name) : "";
+        next = next.withSessions(next.sessions().stream().filter(x -> !x.name().equals(name))
+                .map(x -> x.spec().createdBy().equals(name) ? x.withSpec(orphaned(x.spec().withCreatedBy(creator), family)) : x).toList());
         next = rebindSession(next, name, "");
         if (own.isPresent() || closedOwn.isPresent()) {
             next = notice(clock, next, Notice.Level.INFO, "Removed session " + name + " and its panel");
@@ -150,6 +189,11 @@ final class SessionRules {
         effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         effects.add(savePanels(next));
         return new Transition(next, effects);
+    }
+
+    /** {@code spec}, its creator removed, of the family whose root was {@code family}; as it is when that is empty. */
+    private static SessionSpec orphaned(final SessionSpec spec, final String family) {
+        return family.isEmpty() ? spec : spec.withFamily(family);
     }
 
     static Transition importSessions(final Clock clock, final AppState s, final List<SessionSpec> specs) {
@@ -206,7 +250,9 @@ final class SessionRules {
         final SessionState x = found.get();
         final String previous = x.spec().claudeSessionId();
         // a new conversation has nothing to reflect on yet
-        final SessionState fresh = x.withSpec(x.spec().restarted()).withStatus(Status.OPENING, "").withReflection(Reflection.FRESH);
+        final SessionState fresh = x.withSpec(x.spec().restarted()).withStatus(Status.OPENING, "").withReflection(Reflection.FRESH)
+                // a new conversation: due and the automatic checkpoint arm together (D3)
+                .withCheckpointArmed(true);
         AppState next = s.withSession(fresh);
         if (!previous.isEmpty()) {
             next = notice(clock, next, Notice.Level.INFO, "Session " + name + ": new conversation; the previous one (" + previous
@@ -274,7 +320,7 @@ final class SessionRules {
         if (!id.isEmpty() && (!id.equals(previous) || x.spec().startMode() != StartMode.RESUME)) {
             x = x.withSpec(x.spec().resumable(id));
         }
-        AppState next = s.withSession(cleared ? x.withReflection(Reflection.FRESH) : x);
+        AppState next = s.withSession(cleared ? x.withReflection(Reflection.FRESH).withCheckpointArmed(true) : x);
         if (cleared) {
             final String carried = x.spec().carried().isEmpty() ? "" : "; the checkpoint's summary goes in front of the next prompt";
             next = notice(clock, next, Notice.Level.INFO, "Session " + x.name() + ": new conversation; the previous one (" + previous

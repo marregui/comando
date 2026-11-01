@@ -15,7 +15,7 @@ import javax.swing.JFrame;
 
 import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.reduce.Reducer;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
@@ -42,8 +42,14 @@ final class WindowLayout {
     static final String OFF_SCREEN_PROPERTY = "comando.offScreen";
     /** A panel's lower divider is kept under this prefix and the panel's id. */
     static final String PANEL_DIVIDER = "divider.lower.panel.";
-    /** The checkpoint threshold, in tokens (record 129). */
-    static final String CHECKPOINT_THRESHOLD = "sessions.checkpointThresholdTokens";
+    /**
+     * The checkpoint threshold, in percent of a session's context window (record 129). The token count an earlier
+     * version kept under {@code sessions.checkpointThresholdTokens} is not read: no window converts it to a share, so
+     * the default holds until the user chooses again.
+     */
+    static final String CHECKPOINT_THRESHOLD = "sessions.checkpointThresholdPercent";
+    /** The token threshold of an earlier version, removed at the first choice of a percentage. */
+    static final String CHECKPOINT_THRESHOLD_TOKENS = "sessions.checkpointThresholdTokens";
 
     private final Settings prefs;
     private final boolean offScreen;
@@ -168,16 +174,23 @@ final class WindowLayout {
         prefs.flush();
     }
 
-    /**
-     * The context, in tokens, at which a session's turn end runs its checkpoint, then {@code /compact} (record 129);
-     * 0 runs none.
-     */
-    long checkpointThreshold() {
-        return Math.max(0, prefs.getInt(CHECKPOINT_THRESHOLD, (int) Reducer.CHECKPOINT_THRESHOLD_TOKENS));
+    /** Why {@code settings.json} was not read: a later comando's, kept as it is; empty when it read. */
+    String settingsRefusal() {
+        return prefs.refusal();
     }
 
-    void checkpointThreshold(final long tokens) {
-        prefs.putInt(CHECKPOINT_THRESHOLD, Math.clamp(tokens, 0, Integer.MAX_VALUE));
+    /**
+     * The share of a session's context window, in percent, at which the session falls due and its turn end runs its
+     * checkpoint, then {@code /compact} (record 129): {@link Reflection#MIN_PERCENT} to 100, 40 until the user chooses
+     * another; a lower value an earlier version kept reads as the minimum.
+     */
+    int checkpointThreshold() {
+        return Reflection.clamp(prefs.getInt(CHECKPOINT_THRESHOLD, Reflection.DEFAULT_PERCENT));
+    }
+
+    void checkpointThreshold(final int percent) {
+        prefs.putInt(CHECKPOINT_THRESHOLD, Reflection.clamp(percent));
+        prefs.remove(CHECKPOINT_THRESHOLD_TOKENS);
         prefs.flush();
     }
 

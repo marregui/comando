@@ -27,7 +27,7 @@
     <text x="710" y="170">/reflect</text>
     <text x="820" y="170">kit tools</text>
     <text x="930" y="170">hooks</text>
-    <text x="1040" y="170">Monday jobs</text>
+    <text x="1040" y="170">weekly jobs</text>
     <text x="1150" y="170">agents</text>
     <text x="1260" y="170">the user</text>
   </g>
@@ -43,7 +43,7 @@
   <g>
     <text x="60" y="244" class="row">MEMORY.md</text><text x="200" y="244" class="s">the index: one cue per file, loaded at every start</text>
     <text x="60" y="284" class="row">rules and state</text><text x="200" y="284" class="s">feedback, user, project, reference files, opened on cue</text>
-    <text x="60" y="324" class="row">the current lane</text><text x="200" y="324" class="s">what each topic stands at; one section per topic</text>
+    <text x="60" y="324" class="row">the current work</text><text x="200" y="324" class="s">what each topic stands at; one section per topic</text>
     <text x="60" y="364" class="row">logs</text><text x="200" y="364" class="s">session log, agent runs: dated, append only, a head + months</text>
     <text x="60" y="404" class="row">archive/</text><text x="200" y="404" class="s">closed work, verbatim; not loaded</text>
 
@@ -83,7 +83,7 @@
     <circle cx="710" cy="280" r="6" fill="#E7C55A"/>
     <circle cx="930" cy="280" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
     <circle cx="1260" cy="280" r="6" fill="#F2F2F2"/>
-    <!-- current lane -->
+    <!-- current work -->
     <circle cx="600" cy="320" r="6" fill="#D98E5F"/>
     <circle cx="710" cy="320" r="6" fill="#E7C55A"/>
     <!-- logs -->
@@ -135,7 +135,7 @@
     <text x="834" y="884">--gold scores it</text>
     <text x="1274" y="884">labels, with /reflect</text>
     <text x="944" y="504">roll renames it daily</text>
-    <text x="1054" y="364">daily brief reads</text>
+    <text x="1054" y="364">a job may read</text>
     <text x="1054" y="764">drift check</text>
   </g>
 
@@ -143,11 +143,11 @@
   <line x1="1440" y1="200" x2="1440" y2="900" stroke="#262626"/>
   <g>
     <text x="1460" y="214" class="cap" fill="#E7C55A">BUDGETS</text>
-    <text x="1460" y="244" class="s">set by the kit</text>
-    <text x="1460" y="262" class="s">per file; the</text>
-    <text x="1460" y="278" class="s">index stays under</text>
-    <text x="1460" y="296" class="s">what Claude Code</text>
-    <text x="1460" y="314" class="s">loads at start:</text>
+    <text x="1460" y="244" class="s">kit defaults:</text>
+    <text x="1460" y="262" class="s">32 KB a file,</text>
+    <text x="1460" y="278" class="s">16 KB a log's head;</text>
+    <text x="1460" y="296" class="s">the index 160 lines,</text>
+    <text x="1460" y="314" class="s">24,000 bytes, under:</text>
     <text x="1460" y="392" class="s">Claude Code</text>
     <text x="1460" y="408" class="s">loads 200 lines</text>
     <text x="1460" y="424" class="s">or 25,000 chars</text>

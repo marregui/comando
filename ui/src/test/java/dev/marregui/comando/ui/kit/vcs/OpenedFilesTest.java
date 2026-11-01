@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   read back.
 /// - Listeners hear only of a file not opened before, until stopped.
 /// - Past the bound the oldest is dropped.
-/// - A store that cannot be read starts empty.
+/// - A store that cannot be read starts empty; a later version is kept as it is, with what the user is told once.
 class OpenedFilesTest {
 
     /// Adding a path, a path with `..` to another, and the first again writes two normalised lines with no temporary
@@ -28,13 +28,31 @@ class OpenedFilesTest {
         o.add(Path.of("/a/b/../y.md"));
         o.add(Path.of("/a/x.md"));
         o.written().join();
-        assertThat(Files.readAllLines(store)).as("normalized, once each, oldest first").containsExactly("/a/x.md", "/a/y.md");
+        assertThat(Files.readAllLines(store)).as("its version, then normalized, once each, oldest first")
+                .containsExactly("# comando opened-files, version 1", "/a/x.md", "/a/y.md");
         assertThat(store.resolveSibling("opened-files.tmp")).doesNotExist();
 
         final OpenedFiles again = OpenedFiles.load(store);
         assertThat(again.contains(Path.of("/a/x.md"))).isTrue();
         assertThat(again.contains(Path.of("/a/y.md"))).isTrue();
         assertThat(again.contains(Path.of("/a/z.md"))).isFalse();
+    }
+
+    /// A file written before versions, one path a line, reads as version 1; one of a later version is kept as it is and
+    /// never written over (record 133).
+    @Test
+    void anOldFileReadsAndALaterOneIsKeptAsItIs(@TempDir final Path dir) throws Exception {
+        final Path old = Files.writeString(dir.resolve("old"), "/a/x.md\n");
+        assertThat(OpenedFiles.load(old).contains(Path.of("/a/x.md"))).isTrue();
+        final String later = "# comando opened-files, version 2\n/a/x.md\n";
+        final Path newer = Files.writeString(dir.resolve("newer"), later);
+        final OpenedFiles o = OpenedFiles.load(newer);
+        assertThat(OpenedFiles.load(old).refusal()).isEmpty();
+        assertThat(o.refusal()).as("what the user is told once").startsWith("newer is of version 2, written by a later comando")
+                .contains("nothing is saved to it");
+        o.add(Path.of("/a/y.md"));
+        o.written().join();
+        assertThat(Files.readString(newer)).isEqualTo(later);
     }
 
     /// A repeated add is not heard, a stopped listener hears nothing more, and an in-memory store's write is already

@@ -259,7 +259,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         if (c != null) {
             try {
                 c.disconnect().get(CLOSE_WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (ExecutionException | TimeoutException e) {
+            } catch (final ExecutionException | TimeoutException e) {
                 LOG.log(System.Logger.Level.DEBUG, "disconnect from the comando Edge incomplete [cause=" + e.getMessage() + ']');
             } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();

@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - source references, web addresses and note links become links, except inside links and code
 /// - unchanged paragraphs compare equal while the last one streams
 /// - raw HTML stays text
+/// - parsed without links, every paragraph reads the same text
 class MarkdownDocTest {
 
     /// A heading and a paragraph with bold, italic and code spans parse into two paragraphs, a soft line break kept as
@@ -96,5 +97,28 @@ class MarkdownDocTest {
         assertThat(MarkdownDoc.parse("```python\ttitle=x\nprint(1)\n```").getFirst()).isEqualTo(new Para.Code("python", "print(1)", 0));
         assertThat(MarkdownDoc.parse("```  sql   linenos\nselect 1\n```").getFirst()).isEqualTo(new Para.Code("sql", "select 1", 0));
         assertThat(MarkdownDoc.parse("```\nplain\n```").getFirst()).isEqualTo(new Para.Code("", "plain", 0));
+    }
+
+    /// Without links, every paragraph's spans read the same text as with them: a note link as its label, a web address
+    /// and a `path:line` reference as written, code as written; only the spans' links differ.
+    @Test
+    void parsedWithoutLinksEveryParagraphReadsTheSameText() {
+        final String md = "see [[MyNote|the label]], [[Other#Head]], https://example.org/x and Reducer.java:42\n\n"
+                + "`[[kept]]` and `Main.java:7`\n\n| [[a]] | b |\n|---|---|\n| c | https://x.y |\n\n- [[item]] one\n";
+        assertThat(texts(MarkdownDoc.parse(md, false))).isEqualTo(texts(MarkdownDoc.parse(md)));
+        assertThat(texts(MarkdownDoc.parse(md, false)).getFirst()).startsWith("see the label, Other › Head, https://example.org/x");
+    }
+
+    private static List<String> texts(final List<Para> paras) {
+        return paras.stream().map(p -> switch (p) {
+            case Para.Text t -> spans(t.spans());
+            case Para.Table t -> String.join("|", t.rows().stream().flatMap(List::stream).map(MarkdownDocTest::spans).toList());
+            case Para.Code c -> c.text();
+            case Para.Rule r -> "---";
+        }).toList();
+    }
+
+    private static String spans(final List<Span> spans) {
+        return String.join("", spans.stream().map(Span::text).toList());
     }
 }

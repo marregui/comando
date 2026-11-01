@@ -1,6 +1,5 @@
 package dev.marregui.comando.core.resource;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -22,20 +21,21 @@ import dev.marregui.comando.core.state.SessionState;
 /**
  * Claude Code sessions as a resource kind. The dialog asks first the session's name, what it is for, then which
  * conversation it continues and how Claude runs, each default shown in its choice with where it comes from; the folder
- * it runs in, the extra folders and the checkpoint prompt are under More, as most sessions keep the kit's folder. The budget is not asked: it only binds
- * on API billing, and a stored one is kept.
+ * it runs in and the checkpoint prompt are under More, as most sessions keep the kit's folder. The budget is not asked:
+ * it only binds on API billing, and a stored one is kept. The permission mode is not asked either: the kit's
+ * {@code settings.json} sets it for every session (record 7), and the dialog's context line shows it, read-only.
  */
 public final class SessionKind implements ResourceKind<SessionSpec> {
 
     public static final SessionKind INSTANCE = new SessionKind();
 
-    /** The permission modes the CLI takes ({@code --permission-mode}), with what each does. */
+    /** The permission modes the kit's {@code settings.json} may set ({@code permissions.defaultMode}), with what each does. */
     static final Map<String, String> PERMISSION_MODES = permissionModes();
 
     /**
-     * What a session gets when it names no model, effort or permission mode: the kit's {@code settings.json}
-     * ({@code model}, {@code effortLevel}, {@code permissions.defaultMode}), as the application read it; empty for
-     * what it names none of.
+     * What a session gets when it names no model or effort, and the permission mode every session runs in: the kit's
+     * {@code settings.json} ({@code model}, {@code effortLevel}, {@code permissions.defaultMode}), as the application
+     * read it; empty for what it names none of.
      */
     public record Defaults(String model, String effort, String permissionMode) {
 
@@ -55,7 +55,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     private SessionKind() {
     }
 
-    /** The kit's defaults, which the dialog names beside Model, Effort and Permission mode. */
+    /** The kit's defaults, which the dialog names beside Model and Effort, and its permission mode, in its context line. */
     public void defaults(final Defaults d) {
         defaults = Objects.requireNonNullElse(d, Defaults.NONE);
     }
@@ -69,8 +69,6 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         final String model = !d.model().isEmpty() ? d.model() + " · the kit's default"
                 : cliModel.isEmpty() ? "Claude Code's default" : cliModel + " · Claude Code's default";
         final String effort = d.effort().isEmpty() ? "Claude Code's default" : d.effort() + " · the kit's default";
-        final String permission = d.permissionMode().isEmpty() ? "default · asks before each tool"
-                : d.permissionMode() + " · the kit's default: " + PERMISSION_MODES.getOrDefault(d.permissionMode(), "as the CLI defines");
         final String follows = "the default follows the kit; a choice here holds for this session";
         return List.of(
                 Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "what this session is for: it names its panel and its ongoing conversation")
@@ -90,23 +88,15 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                         .about("How much the model thinks before answering: higher is slower and more thorough. The default follows the kit's "
                                 + "settings.json; the effort chip changes it while the session runs.")
                         .whenEmpty(effort),
-                Attribute.choice("permissionMode", "Permission mode", orDefault(List.copyOf(PERMISSION_MODES.keySet())), follows)
-                        .about("Whether Claude asks before running a tool. default asks each time, acceptEdits edits without asking, plan "
-                                + "only plans, bypassPermissions never asks. The default follows the kit's settings.json.")
-                        .whenEmpty(permission),
                 Attribute.of("workDir", "Working directory", Attribute.Kind.DIRECTORY, true,
                                 "this folder's CLAUDE.md and git branch; the kit's by default")
                         .about("The folder the session starts in: its CLAUDE.md, git branch and stored conversation come from there. "
                                 + "Keep the kit's unless the session needs a project's own CLAUDE.md and branch.")
                         .inAdvanced(),
-                Attribute.of("addDirs", "Extra folders", Attribute.Kind.DIRECTORIES, false,
-                                "other folders Claude may read and change; separated by " + File.pathSeparator)
-                        .about("Other folders Claude may read and change without asking path by path.")
-                        .inAdvanced(),
                 Attribute.of("checkpoint", "Checkpoint prompt", Attribute.Kind.TEXT, false,
-                                "what Checkpoint sends before a fresh conversation; empty hides the button")
-                        .about("What the Checkpoint button sends, the kit's /reflect by default; then comando carries the summary into a "
-                                + "fresh conversation, so a long session starts light again.")
+                                "what Checkpoint sends before the conversation is compacted; empty hides the button")
+                        .about("What the Checkpoint button sends, the kit's /reflect by default; once it has answered, comando compacts the "
+                                + "same conversation (/compact), so a long session goes on light again.")
                         .inAdvanced());
     }
 
@@ -145,13 +135,23 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         return "More";
     }
 
-    /** Where every session of this comando runs: its kit, brain and instance, which a session does not choose. */
+    /**
+     * Where every session of this comando runs and how it asks: its kit, brain and instance, and the permission mode the
+     * kit's {@code settings.json} sets, none of which a session chooses (records 7, 125).
+     */
     @Override
     public String context() {
         final KitRoot root = KitRoot.current();
         final String brain = root.brain().map(b -> " · brain " + HomeDir.shorten(b.toString())).orElse("");
         return "Runs on " + (root.kit().isPresent() ? "kit " : "folder ") + HomeDir.shorten(root.dir().toString()) + brain
-                + " · instance " + InstanceName.display(InstanceName.current());
+                + " · instance " + InstanceName.display(InstanceName.current()) + " · " + permission(defaults);
+    }
+
+    /** The permission mode every session runs in, as the kit's {@code settings.json} sets it, with what it does. */
+    static String permission(final Defaults d) {
+        return d.permissionMode().isEmpty() ? "permissions: default, asks before each tool (the kit's settings.json)"
+                : "permissions: " + d.permissionMode() + ", " + PERMISSION_MODES.getOrDefault(d.permissionMode(), "as Claude Code defines it")
+                + " (the kit's settings.json)";
     }
 
     @Override
@@ -161,8 +161,6 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         m.put("workDir", s.workDir());
         m.put("model", s.model());
         m.put("effort", s.effort());
-        m.put("permissionMode", s.permissionMode());
-        m.put("addDirs", String.join(File.pathSeparator, s.addDirs()));
         m.put("budgetUsd", s.budgetUsd() == 0.0 ? "0" : Double.toString(s.budgetUsd()));
         m.put("claudeSessionId", s.claudeSessionId());
         m.put("startMode", s.startMode().name());
@@ -179,12 +177,6 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         } catch (final NumberFormatException e) {
             throw new IllegalArgumentException("budget is not a number: " + b);
         }
-        final List<String> dirs = new ArrayList<>();
-        for (final String d : a.getOrDefault("addDirs", "").split(File.pathSeparator)) {
-            if (!d.isBlank()) {
-                dirs.add(HomeDir.expand(d.strip()));
-            }
-        }
         final String id = a.getOrDefault("claudeSessionId", "").strip();
         final StartMode startMode = startMode(a.getOrDefault("startMode", ""), id);
         return new SessionSpec(
@@ -192,8 +184,6 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 HomeDir.expand(a.getOrDefault("workDir", "").strip()),
                 a.getOrDefault("model", "").strip(),
                 a.getOrDefault("effort", "").strip(),
-                a.getOrDefault("permissionMode", "").strip(),
-                dirs,
                 budget,
                 id,
                 startMode,
@@ -235,7 +225,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         if (s.claudeSessionId().isEmpty()) {
             return s;
         }
-        return new SessionSpec(name, s.workDir(), s.model(), s.effort(), s.permissionMode(), s.addDirs(), s.budgetUsd(),
+        return new SessionSpec(name, s.workDir(), s.model(), s.effort(), s.budgetUsd(),
                 s.claudeSessionId(), StartMode.FORK, s.checkpoint(), s.carried());
     }
 
@@ -281,7 +271,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     @Override
     public boolean showAdvanced(final Map<String, String> values) {
         final String dir = values.getOrDefault("workDir", "").strip();
-        return !dir.isEmpty() && !KitRoot.current().isRoot(HomeDir.expand(dir)) || !values.getOrDefault("addDirs", "").isBlank()
+        return !dir.isEmpty() && !KitRoot.current().isRoot(HomeDir.expand(dir))
                 || !values.getOrDefault("checkpoint", SessionSpec.DEFAULT_CHECKPOINT).equals(SessionSpec.DEFAULT_CHECKPOINT);
     }
 

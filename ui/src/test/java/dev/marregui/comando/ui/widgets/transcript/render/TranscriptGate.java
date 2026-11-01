@@ -119,7 +119,7 @@ public final class TranscriptGate {
         System.out.printf(Locale.ROOT, "1 500-line code fence, its last 100 lines streamed (%d frames): p50 %.2f ms, p99 %.2f ms, max %.2f ms%n",
                 codeSorted.length, ms(codeSorted[codeSorted.length / 2]), ms(codeSorted[(int) (codeSorted.length * 0.99)]),
                 ms(codeSorted[codeSorted.length - 1]));
-        System.out.printf(Locale.ROOT, "find in %d loaded blocks, a word in most: first search %.2f ms, the next match %.2f ms; "
+        System.out.printf(Locale.ROOT, "find in %d blocks, a word in most: first search %.2f ms, the next match %.2f ms; "
                 + "a word in a few, from the end backwards: %.2f ms%n", find[2], ms(find[0]), ms(find[1]), ms(find[3]));
         if (p99 > 16.0 || thinkingP99 > 16.0) {
             System.out.println("GATE FAILED: p99 above 16 ms");

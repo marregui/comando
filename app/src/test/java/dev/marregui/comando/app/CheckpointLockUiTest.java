@@ -43,7 +43,8 @@ class CheckpointLockUiTest {
 
     /// The stand-in holds the first `/reflect` until it is interrupted, the second until `reflect.go` exists, and
     /// `/compact` until `compact.go` exists, so the locked window can be read at each step; the prompts it received
-    /// say what was sent.
+    /// say what was sent. It answers an interrupt as Claude Code 2.1.316 does, a failed result whose `terminal_reason`
+    /// is `aborted_streaming`, which comando reads as the user's interrupt, not as a failed turn.
     @Test
     void theSessionLocksWhileItsCheckpointRunsAndStopCarriesOn() throws Exception {
         final Path stdin = home.resolve("stdin.jsonl");
@@ -64,7 +65,7 @@ class CheckpointLockUiTest {
                   case "$line" in
                     *'"subtype":"interrupt"'*)
                       printf '%%s\\n' '{"type":"control_response","response":{"subtype":"success","request_id":"x"}}'
-                      printf '%%s\\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"","total_cost_usd":0,"duration_ms":1,"num_turns":1}'
+                      printf '%%s\\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"","stop_reason":null,"terminal_reason":"aborted_streaming","total_cost_usd":0,"duration_ms":1,"num_turns":1}'
                       ;;
                     *'"control_request"'*)
                       printf '%%s\\n' '{"type":"control_response","response":{"subtype":"success","request_id":"x"}}' ;;
@@ -129,6 +130,7 @@ class CheckpointLockUiTest {
             SwingUtilities.invokeAndWait(() -> button(view, "Stop").doClick());
             awaitLocked(loop, view, compact, false);
             assertThat(prompts(stdin)).as("interrupted: no /compact").containsExactly("hello", "/reflect");
+            assertThat(session(loop).lastTurnError()).as("an interrupt, not a failed turn").isEmpty();
 
             // a checkpoint left to finish: locked through its /compact, unlocked when the compaction ends
             SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());

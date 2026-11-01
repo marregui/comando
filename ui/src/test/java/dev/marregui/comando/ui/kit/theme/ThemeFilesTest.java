@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   reads above every floor.
 /// - A user's file is offered after the built-in ones, with a ground and tint of its own, in the order of the names.
 /// - A file that does not parse, names a bad id, mode or colour, repeats an id, or reads below a floor, dark or light,
-///   is left out, with one line naming the file and why.
+///   is left out, with one line naming the file and why; one left out for its colours leaves its id to the next.
 class ThemeFilesTest {
 
     @TempDir
@@ -118,6 +118,17 @@ class ThemeFilesTest {
     void noFolderOffersNothing() {
         assertThat(ThemeFiles.read(null)).isEqualTo(new ThemeFiles.Read(List.of(), List.of()));
         assertThat(ThemeFiles.read(folder.resolve("missing"))).isEqualTo(new ThemeFiles.Read(List.of(), List.of()));
+    }
+
+    /// A file left out because its colours read below a floor does not hold its id: a later, valid file with that id
+    /// is read, and only the first is named.
+    @Test
+    void aFileLeftOutForItsColoursLeavesItsIdToTheNextFile() throws IOException {
+        write("1-dim.json", theme("rose", "Dim rose", "#121212", "#5A5A5A", "#4A4A4A", "#3A3A3A"));
+        write("2-rose.json", theme("rose", "Rose", "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F"));
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
+        assertThat(read.themes()).extracting(t -> t.label).containsExactly("Rose");
+        assertThat(read.problems()).singleElement().asString().startsWith("1-dim.json: the tint's body on the ground reads at ");
     }
 
     private void write(final String name, final String json) throws IOException {

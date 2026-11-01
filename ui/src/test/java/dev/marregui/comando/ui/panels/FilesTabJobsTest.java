@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [FilesTab]'s Jobs row: the kit's scheduled jobs at a glance (record 117), first inside the kit's row (record 118).
 /// - the row leads the KIT row, is a row of its own after a separator without a kit's folder, and is gone without a kit
-/// - its detail says how many and what runs next; its tip, one line, the most pressing first
+/// - its detail says how many and what runs next, "none" for a manifest without jobs; its tip, one line, the most
+///   pressing first
 /// - a failed last run reds its name, a pending change marks it, nothing else does
 /// - its menu configures the jobs and applies a pending change, only while nothing runs; a double click opens the
 ///   window
@@ -128,7 +129,10 @@ class FilesTabJobsTest {
         final KitJob off = new KitJob("b", "", List.of("TUE"), "08:00", List.of("bin/b"), Map.of(), "", false);
         final KitJobs withPaused = new KitJobs(true, List.of(FINE.jobs().getFirst(), new KitJobs.Entry(off, false, false, null, false, "", null, "", "")), "");
         assertThat(FilesTab.jobsDetail(withPaused)).isEqualTo("2 jobs · 1 paused · next Mon 07:30");
-        for (final KitJobs j : List.of(FINE, pending, failed, running, broken)) {
+        final KitJobs none = new KitJobs(true, List.of(), "");
+        assertThat(FilesTab.jobsDetail(none)).as("a kit whose manifest lists no job").isEqualTo("none");
+        assertThat(FilesTab.jobsTip(none)).isEqualTo("No scheduled jobs in comando-kit.json; double-click to add one");
+        for (final KitJobs j : List.of(FINE, pending, failed, running, broken, none)) {
             assertThat(FilesTab.jobsTip(j)).doesNotContain("\n").hasSizeLessThanOrEqualTo(80);
         }
     }

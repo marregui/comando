@@ -3,6 +3,7 @@
 subprojects {
     apply(plugin = "java-library")
     apply(plugin = "checkstyle")
+    apply(plugin = "jacoco")
 
     group = "dev.marregui.comando"
     version = "2.0.0-SNAPSHOT"
@@ -59,6 +60,18 @@ subprojects {
         testLogging {
             events("failed")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
+    }
+
+    // the coverage of a module's unit tests, on demand: `./gradlew test jacocoTestReport`, HTML and XML in
+    // build/reports/jacoco/test; not run by `build`
+    extensions.configure<JacocoPluginExtension> {
+        toolVersion = libs.findVersion("jacoco").get().requiredVersion
+    }
+    tasks.named<JacocoReport>("jacocoTestReport") {
+        reports {
+            xml.required = true
+            html.required = true
         }
     }
 

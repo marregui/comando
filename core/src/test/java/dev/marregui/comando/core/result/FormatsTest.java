@@ -31,7 +31,7 @@ class FormatsTest {
 
     /// [Formats#appendMillis] changes units at one second and one minute, retaining a tenth of a second below a minute.
     @Test
-    void durations() {
+    void aDurationChangesUnitsAtOneSecondAndOneMinute() {
         final StringBuilder sb = new StringBuilder();
         Formats.appendMillis(sb, 850);
         sb.append('|');

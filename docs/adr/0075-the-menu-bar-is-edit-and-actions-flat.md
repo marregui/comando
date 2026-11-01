@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | accepted; its Claude Code kit… item removed by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md); its menu bar replaced by [record 114](0114-help-menu-and-corner-buttons.md) | Miguel and Claude |
+| 2026-10-19 | accepted; its Claude Code kit… item removed by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md); its menu bar replaced by [record 114](0114-help-menu-and-corner-buttons.md); the command's name amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -30,3 +30,8 @@ The keys work without a menu item: the registry binds them on the window. `Menus
 no submenu. Claude Code kit… left Actions with the kit inside comando
 ([record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md)); the help group is now Tutorial,
 Keyboard shortcuts, Markdown sheet, Show the log, Reveal comando folder.
+
+## Amendments
+
+2026-11-01, [record 73](0073-the-claude-folders-window-explains-and-creates-the-index.md)'s amendment of the same
+day: the command Configure ~/.claude folders is now Configure Files tab folders, the window titled by what it holds.

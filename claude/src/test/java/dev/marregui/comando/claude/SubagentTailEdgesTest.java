@@ -51,7 +51,7 @@ class SubagentTailEdgesTest {
         final Path projects = tmp.resolve("projects");
         subagents = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
         final Path exe = tmp.resolve("fake-claude.sh");
-        try (InputStream in = getClass().getResourceAsStream("/fake-claude.sh")) {
+        try (final InputStream in = getClass().getResourceAsStream("/fake-claude.sh")) {
             Files.write(exe, in.readAllBytes());
         }
         exe.toFile().setExecutable(true);
@@ -187,7 +187,7 @@ class SubagentTailEdgesTest {
         // the same stack to every sample
         final long deadline = System.nanoTime() + WAIT.toNanos();
         boolean blocked = blockedInOpen();
-        while (!blocked && System.nanoTime() < deadline) {
+        while (!blocked && deadline - System.nanoTime() > 0) {
             Thread.onSpinWait();
             blocked = blockedInOpen();
         }
@@ -195,14 +195,14 @@ class SubagentTailEdgesTest {
 
         adapter.close();
         final int before = sink.intents().size();
-        try (OutputStream out = Files.newOutputStream(fifo)) { // releases the blocked open
+        try (final OutputStream out = Files.newOutputStream(fifo)) { // releases the blocked open
             out.write((text("late") + "\n").getBytes(StandardCharsets.UTF_8));
         } catch (final IOException e) {
             // the reader may have closed already: a broken pipe
         }
         // the read released, the tail thread finishes its task and ends
         final long end = System.nanoTime() + WAIT.toNanos();
-        while (tailThreadAlive() && System.nanoTime() < end) {
+        while (tailThreadAlive() && end - System.nanoTime() > 0) {
             Thread.onSpinWait();
         }
         assertThat(tailThreadAlive()).as("the tail thread ended").isFalse();

@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
@@ -207,7 +209,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }
 
         void copy(final Process p) {
-            try (Reader r = new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)) {
+            try (final Reader r = new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)) {
                 final char[] buf = new char[8192];
                 for (int n; (n = r.read(buf)) >= 0; ) {
                     synchronized (this) {
@@ -337,6 +339,11 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final Map<FolderRoot, Sent> sentFolders = new HashMap<>();
     /** The folders the Files tab has open: the poll reads these and no others. */
     private volatile List<FolderRoot> watchedFolders = List.of();
+    /**
+     * By folder name, the subfolders open in the Files tab (absolute, normalized paths): a watched folder with an entry
+     * is read only as deep as the tab shows it, one without whole.
+     */
+    private volatile Map<String, Set<String>> watchedOpen = Map.of();
 
     private final ScheduledExecutorService folderPoll =
             Threads.timedStrand("folder-poll");
@@ -345,24 +352,40 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     @Override
     public void readFolders(final List<FolderRoot> folders) {
         final List<FolderRoot> copy = List.copyOf(folders);
-        errands.start("folder-read", () -> copy.forEach(f -> readFolder(f, true)));
+        errands.start("folder-read", () -> copy.forEach(f -> readFolder(f, true, FolderTree.WHOLE)));
     }
 
-    /** From now on the poll reads {@code folders} only; a folder newly watched is read at once. */
+    /** From now on the poll reads {@code folders} only, each whole; a folder newly watched is read at once. */
     @Override
     public void watchFolders(final List<FolderRoot> folders) {
+        watchFolders(folders, Map.of());
+    }
+
+    /**
+     * From now on the poll reads {@code folders} only, one with an entry in {@code open} as deep as the Files tab shows
+     * it; a folder newly watched, or one whose open subfolders changed, is read at once.
+     */
+    @Override
+    public void watchFolders(final List<FolderRoot> folders, final Map<String, List<String>> open) {
         final List<FolderRoot> before = watchedFolders;
+        final Map<String, Set<String>> openBefore = watchedOpen;
+        final Map<String, Set<String>> opened = new HashMap<>();
+        open.forEach((name, paths) -> opened.put(name, paths.stream().map(p -> Path.of(p).toAbsolutePath().normalize().toString())
+                .collect(Collectors.toUnmodifiableSet())));
+        // the scope first: a poll that sees the new folders reads them as deep as asked
+        watchedOpen = Map.copyOf(opened);
         watchedFolders = List.copyOf(folders);
         synchronized (sentFolders) {
             // a folder no longer watched sends at its next read whatever it holds: what was sent of it is not needed
             sentFolders.keySet().retainAll(watchedFolders);
         }
-        final List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
+        final List<FolderRoot> added = folders.stream()
+                .filter(f -> !before.contains(f) || !Objects.equals(openBefore.get(f.name()), opened.get(f.name()))).toList();
         if (!added.isEmpty()) {
             // the repositories first: the new folders' trees leave out what git ignores and come with their colours
             errands.start("folder-read", () -> {
                 readRepos(false, false);
-                added.forEach(f -> readFolder(f, true));
+                added.forEach(f -> readFolder(f, true, scope(f)));
             });
         }
     }
@@ -376,7 +399,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         folderPoll.scheduleWithFixedDelay(() -> {
             try {
                 readRepos(false, polls++ % COLD_POLLS == 0);
-                watchedFolders.forEach(f -> readFolder(f, false));
+                watchedFolders.forEach(f -> readFolder(f, false, scope(f)));
             } catch (final RuntimeException e) {
                 // a task that throws is never run again: log and keep polling
                 LOG.log(System.Logger.Level.WARNING, "cannot poll the folders [folders=" + watchedFolders.size() + ']', e);
@@ -384,18 +407,25 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }, every.toMillis(), every.toMillis(), TimeUnit.MILLISECONDS);
     }
 
+    /** Which subfolders of the watched {@code folder} are read: those open in the Files tab, or every one. */
+    private Predicate<Path> scope(final FolderRoot folder) {
+        final Set<String> open = watchedOpen.get(folder.name());
+        return open == null ? FolderTree.WHOLE : dir -> open.contains(dir.toAbsolutePath().normalize().toString());
+    }
+
     /**
-     * Reads {@code folder} and sends its tree when it changed since the last send, or always when {@code force}. A
+     * Reads {@code folder}, as deep as {@code open} asks, and sends its tree when it changed since the last send, or
+     * always when {@code force}. A
      * folder that cannot be read becomes a tree that says so, logged once per change rather than at every read. The
      * read takes a ticket first: when a newer read of the same folder has already sent, this one sends nothing; nor
      * does a poll's read of a folder closed or edited since the poll began.
      */
-    private void readFolder(final FolderRoot folder, final boolean force) {
+    private void readFolder(final FolderRoot folder, final boolean force, final Predicate<Path> open) {
         final long ticket = readTickets.incrementAndGet();
         ViewSpec.TreeNode tree;
         try {
-            tree = FolderTree.tree(folder, Files::list, ignoredIn(folder));
-        } catch (IOException | RuntimeException e) {
+            tree = FolderTree.tree(folder, Files::list, ignoredIn(folder), open);
+        } catch (final IOException | RuntimeException e) {
             tree = FolderTree.unreadable(folder, e);
         }
         synchronized (sentFolders) {
@@ -750,7 +780,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 trashing.unlock();
             }
             // the tab shows the change now rather than at the next poll
-            watchedFolders.forEach(f -> readFolder(f, true));
+            watchedFolders.forEach(f -> readFolder(f, true, scope(f)));
         });
     }
 
@@ -784,7 +814,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                     failed.add(name + ": this desktop has no Trash" + (left == 0 ? "" : "; " + left + " more left in place"));
                     break;
                 }
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot move to the Trash [item=" + item + ']', e);
                 failed.add(name + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
                 continue;
@@ -813,7 +843,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                     text.append("; still named in ").append(where).append(r.mentions().size() == 1 ? " at line " : " at lines ")
                             .append(String.join(", ", r.mentions().stream().map(String::valueOf).toList()));
                 }
-            } catch (IOException | RuntimeException ex) {
+            } catch (final IOException | RuntimeException ex) {
                 LOG.log(System.Logger.Level.WARNING, "cannot update [key=" + e.getKey() + ']', ex);
                 unlisted.add(where + " not updated: " + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
             }

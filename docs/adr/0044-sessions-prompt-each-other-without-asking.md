@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted; amended by [record 121](0121-an-agent-has-every-action-the-user-has.md) | Miguel and Claude |
+| 2026-10-15 | accepted; amended by [record 121](0121-an-agent-has-every-action-the-user-has.md) and 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -37,3 +37,9 @@ still leave behind when a turn ends is a statement card
 `session_start` and `session_fresh` among them. The circuit breaker holds in a narrower form: a stopped session is
 started again only by the user or by a session that created it, directly or through others; stopping either side of a
 loop still ends it.
+
+2026-11-01, first-release review, with [record 121](0121-an-agent-has-every-action-the-user-has.md)'s amendment of the
+same day: the breaker holds on every route that would start a stopped session, not on `session_start` and
+`session_fresh` alone. `panel_run` into the session's panel, `session_command`, `session_checkpoint` and
+`decision_settle` start a stopped session only for the user or one of its creators; the reducer refuses the start
+(`TurnRules.runPrompt`) and the tool answers the refusal. Tested in `ReducerTest` and `ActionToolsTest`.

@@ -41,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - its tab's title greys; the Session tab greys while it shows that session
 /// - the session bar keeps only the plug on and says how to carry on
 /// - the sidebar's menu keeps Stop, Interrupt, Open, Copy and Clone; the rest is off
+/// - Checkpoint is off in the session's menu and on the bar while the session stops
 /// - another session's views stay as they are, and the lock lifts when the checkpoint ends
 class CheckpointLockTest {
 
@@ -175,6 +176,24 @@ class CheckpointLockTest {
         }
         assertThat(item(menus[0], "Model: ").isEnabled()).isFalse();
         assertThat(item(menus[0], "Effort: ").isEnabled()).isFalse();
+    }
+
+    /// A session that stops has Checkpoint off in its menu, as on the session bar and in the palette: the reducer
+    /// refuses a checkpoint of a stopping session.
+    @Test
+    void theSidebarsCheckpointIsOffWhileTheSessionStops() throws Exception {
+        final AppState stopping = state(false).withSession("work", x -> x.withStatus(Status.CLOSING, ""));
+        final JPopupMenu[] menu = new JPopupMenu[1];
+        final SessionBar[] bar = new SessionBar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            final SessionsSidebar s = new SessionsSidebar(i -> { }, new NoDialogs(), TEXTS, () -> { });
+            s.render(stopping);
+            menu[0] = s.sessionMenu(stopping.session("work").orElseThrow());
+            bar[0] = new SessionBar(i -> { });
+            bar[0].render(stopping);
+        });
+        assertThat(item(menu[0], "Checkpoint").isEnabled()).as("the menu").isFalse();
+        assertThat(button(bar[0].component(), "Checkpoint").isEnabled()).as("the bar").isFalse();
     }
 
     /**

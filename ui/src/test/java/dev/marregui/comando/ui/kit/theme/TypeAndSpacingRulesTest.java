@@ -15,16 +15,17 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// The ui module's sources keep every text size on the type scale and every inset on the 4-point grid (record 102), as
-/// every colour comes from the theme (`ColourRulesTest`): outside the theme and About's own design (record 60) they add
-/// or multiply no size of their own and set no inset of 5, 6, 7, 9, 10 or 11 pixels. Up to 3 pixels nudge a line or an
-/// icon into place and are allowed. [Theme] holds the scale and the grid.
+/// every colour comes from the theme (`ColourRulesTest`): outside [Theme], which holds the scale and the grid, and
+/// About's own design (record 60) they add or multiply no size of their own and set no inset of 5, 6, 7, 9, 10 or 11
+/// pixels. Up to 3 pixels nudge a line or an icon into place and are allowed.
 /// - No source line makes a font from a literal size or a size offset by a number.
 /// - No inset outside the listed exception is above 3 and off the 4-point grid.
 /// - The scale and the grid hold their steps.
 class TypeAndSpacingRulesTest {
 
     private static final Path SOURCES = Path.of("src/main/java/dev/marregui/comando/ui");
-    private static final List<String> OWN_DESIGN = List.of("kit/theme/", "shell/About.java");
+    /** The scale itself and About, record 102's exception; a field's hint, its other one, is in {@link #ALIGNED}. */
+    private static final List<String> OWN_DESIGN = List.of("kit/theme/Theme.java", "shell/About.java");
     /** A size moved by a number, on a line that makes a font: {@code getSize2D() - 1f}, {@code getSize2D() * 1.25f}. */
     private static final Pattern SIZE_OFFSET = Pattern.compile("getSize2D\\(\\)\\s*[-+*]\\s*[0-9]");
     /** A size given in points: {@code deriveFont(12f)}, {@code deriveFont(Font.BOLD, 12f)}. */
@@ -41,7 +42,8 @@ class TypeAndSpacingRulesTest {
     void everyTextSizeIsAStepOfTheScale() throws IOException {
         final List<String> off = new ArrayList<>();
         scan((rel, n, line) -> {
-            final boolean makesAFont = Stream.of("deriveFont(", "setFont(", "new Font(", "TintTitle(").anyMatch(line::contains);
+            final boolean makesAFont = Stream.of("deriveFont(", "setFont(", "new Font(", "TintTitle(", "Theme.mono(", "Theme.serif(")
+                    .anyMatch(line::contains);
             if (makesAFont && SIZE_OFFSET.matcher(line).find() || SIZE_LITERAL.matcher(line).find()) {
                 off.add(rel + ":" + n + " " + line.strip());
             }
@@ -93,7 +95,7 @@ class TypeAndSpacingRulesTest {
     }
 
     private static void scan(final Line check) throws IOException {
-        try (Stream<Path> files = Files.walk(SOURCES)) {
+        try (final Stream<Path> files = Files.walk(SOURCES)) {
             for (final Path f : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
                 final String rel = SOURCES.relativize(f).toString().replace('\\', '/');
                 if (OWN_DESIGN.stream().anyMatch(rel::startsWith)) {

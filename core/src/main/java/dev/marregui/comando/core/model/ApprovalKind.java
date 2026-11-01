@@ -9,7 +9,12 @@ public enum ApprovalKind {
     /** Claude presents a plan through ExitPlanMode. */
     PLAN,
     /** Claude asks to run a statement that is not read-only through {@code db_run_sql}. */
-    SQL_WRITE;
+    SQL_WRITE,
+    /**
+     * An agent asks, through {@code connection_save}, to clear a connection's production flag or to weaken its TLS
+     * mode: guards the user set against the agent itself (records 20, 23).
+     */
+    CONNECTION;
 
     public static ApprovalKind ofTool(final String toolName) {
         return switch (toolName) {

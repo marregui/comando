@@ -78,7 +78,7 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
     private static boolean modifiedSince(final Path p, final long since) {
         try {
             return Files.getLastModifiedTime(p).toMillis() >= since - 1000;
-        } catch (IOException | UncheckedIOException e) {
+        } catch (final IOException | UncheckedIOException e) {
             return false;
         }
     }
@@ -161,7 +161,7 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
                     return FileVisitResult.CONTINUE;
                 }
             });
-        } catch (IOException | UncheckedIOException e) {
+        } catch (final IOException | UncheckedIOException e) {
             // what was found stands
         }
         return out;

@@ -32,7 +32,7 @@ public final class ThemeFiles {
             return new Read(themes, problems);
         }
         List<Path> files;
-        try (Stream<Path> s = Files.list(folder)) {
+        try (final Stream<Path> s = Files.list(folder)) {
             files = s.filter(f -> f.getFileName().toString().endsWith(".json") && Files.isRegularFile(f)).sorted().toList();
         } catch (final IOException e) {
             problems.add(folder + ": cannot be listed: " + e.getMessage());
@@ -43,16 +43,18 @@ public final class ThemeFiles {
             final String name = f.getFileName().toString();
             try {
                 final ThemeSpec spec = ThemeSpec.parse(Files.readString(f, StandardCharsets.UTF_8));
-                if (!ids.add(spec.id())) {
+                if (ids.contains(spec.id())) {
                     problems.add(name + ": the id " + spec.id() + " is another theme's");
                     continue;
                 }
                 final NamedTheme t = NamedTheme.fromFile(spec, f);
                 final List<String> low = ThemeRules.problems(t.ground, t.tint);
                 if (!low.isEmpty()) {
+                    // left out: its id stays free for a file that reads well
                     problems.add(name + ": " + low.getFirst() + (low.size() > 1 ? " (and " + (low.size() - 1) + " more)" : ""));
                     continue;
                 }
+                ids.add(spec.id());
                 themes.add(t);
             } catch (final IllegalArgumentException e) {
                 problems.add(name + ": " + e.getMessage());

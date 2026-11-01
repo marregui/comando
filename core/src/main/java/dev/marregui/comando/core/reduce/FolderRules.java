@@ -119,7 +119,7 @@ final class FolderRules {
     }
 
     static Transition watchFolders(final AppState s, final Intent.WatchFolders i) {
-        return new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
+        return new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()), i.open())));
     }
 
     static Transition folderLoaded(final AppState s, final Intent.FolderLoaded i) {

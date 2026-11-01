@@ -97,7 +97,7 @@ final class MenuBuilder {
         try {
             a = a.toRealPath();
             b = b.toRealPath();
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             // as written: a folder not there yet is compared by its path
         }
         return a.startsWith(b);

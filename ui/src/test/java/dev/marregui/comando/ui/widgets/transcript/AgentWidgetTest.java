@@ -1,7 +1,10 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import java.awt.Component;
+import java.awt.Container;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
@@ -73,13 +76,13 @@ class AgentWidgetTest {
         assertThat(transcripts.of(TranscriptRegistry.subagentKey("workshop", "toolu_2")).size()).as("another session's, by a longer name").isEqualTo(1);
     }
 
-    private static java.awt.Component find(final java.awt.Component c, final String name) {
+    private static Component find(final Component c, final String name) {
         if (name.equals(c.getName())) {
             return c;
         }
-        if (c instanceof java.awt.Container k) {
-            for (final java.awt.Component child : k.getComponents()) {
-                final java.awt.Component f = find(child, name);
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
+                final Component f = find(child, name);
                 if (f != null) {
                     return f;
                 }
@@ -88,7 +91,7 @@ class AgentWidgetTest {
         return null;
     }
 
-    private static <T> T onEdt(final java.util.concurrent.Callable<T> c) throws Exception {
+    private static <T> T onEdt(final Callable<T> c) throws Exception {
         final Object[] out = new Object[1];
         final Exception[] err = new Exception[1];
         SwingUtilities.invokeAndWait(() -> {

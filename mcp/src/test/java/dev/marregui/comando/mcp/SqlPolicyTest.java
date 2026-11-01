@@ -1,5 +1,6 @@
 package dev.marregui.comando.mcp;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -46,7 +47,16 @@ class SqlPolicyTest {
             (SELECT 1)                                        | false
             SELECT 'x                                         | false
             """)
-    void readOnly(final String sql, final boolean expected) {
+    void admitsOnlyStatementsThatCannotWrite(final String sql, final boolean expected) {
         assertThat(SqlPolicy.isReadOnly(sql.replace("\\n", "\n"))).isEqualTo(expected);
+    }
+
+    /// PostgreSQL ends a `--` comment at a carriage return as well as a line feed, so a statement after a lone `\r`
+    /// is one the server runs: the block is not read-only, and a read-only one stays read-only.
+    @Test
+    void aCarriageReturnEndsALineComment() {
+        assertThat(SqlPolicy.isReadOnly("SELECT 1 -- note\r; DELETE FROM t")).isFalse();
+        assertThat(SqlPolicy.isReadOnly("SELECT 1 -- note\rFROM t")).isTrue();
+        assertThat(SqlPolicy.isReadOnly("SELECT 1 -- note\r\nFROM t")).isTrue();
     }
 }

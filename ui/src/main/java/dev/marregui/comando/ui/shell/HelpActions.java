@@ -62,7 +62,7 @@ final class HelpActions {
         UiErrands.start("write-tutorial", () -> {
             try {
                 HelpFiles.writeTutorial(home);
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot write the tutorial [home=" + home + ']', e);
             }
         });
@@ -75,7 +75,7 @@ final class HelpActions {
             try {
                 final Path file = HelpFiles.writeTutorial(home);
                 Edt.later(() -> openFile.accept(file));
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), e));
             }
         });
@@ -129,7 +129,7 @@ final class HelpActions {
         UiErrands.start("reveal", () -> {
             try {
                 Desktop.getDesktop().open(dir.toFile());
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot open " + dir + ": " + e.getMessage(), e));
             }
         });

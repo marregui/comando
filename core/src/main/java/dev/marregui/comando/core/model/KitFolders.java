@@ -55,7 +55,7 @@ public final class KitFolders {
         final Path p = Path.of(HomeDir.expand(path)).toAbsolutePath().normalize();
         try {
             return p.toRealPath();
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             return p;
         }
     }

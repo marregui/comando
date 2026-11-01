@@ -75,7 +75,7 @@ public interface TableSource {
             boolean all = !t.rows().isEmpty();
             for (final var row : t.rows()) {
                 final String v = row.get(c);
-                if (!v.equals("null") && !isNumber(v)) {
+                if (v != null && !isNumber(v)) {
                     all = false;
                     break;
                 }
@@ -110,12 +110,14 @@ public interface TableSource {
 
             @Override
             public boolean isNull(final int row, final int column) {
-                return t.rows().get(row).get(column).equals("null");
+                // a null cell is SQL NULL; the text "null" is text (record 10's export tells them apart)
+                return t.rows().get(row).get(column) == null;
             }
 
             @Override
             public void format(final int row, final int column, final StringBuilder sink) {
-                sink.append(t.rows().get(row).get(column));
+                final String v = t.rows().get(row).get(column);
+                sink.append(v == null ? "null" : v);
             }
 
             @Override

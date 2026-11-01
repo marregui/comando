@@ -126,8 +126,9 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
     /** An agent's start or stop (record 121); the start or stop re-checks under the monitor. */
     @Override
     public String want(final boolean up) {
-        if (up == (server != null)) {
-            return up ? "QuestDB is up already: PG wire on 8812, console on http://localhost:9000" : "QuestDB is not running";
+        final ServerMain running = server;
+        if (up == (running != null)) {
+            return up ? "QuestDB is up already: " + ports(running) : "QuestDB is not running";
         }
         if (!busy.compareAndSet(false, true)) {
             return (server == null ? "QuestDB is starting" : "QuestDB is stopping") + "; try again when that ends";
@@ -155,7 +156,7 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
             try {
                 server = start();
                 LOG.log(System.Logger.Level.INFO, "QuestDB started [root=" + root + "]");
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: PG wire on 8812, console on http://localhost:9000", false));
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: " + ports(server), false));
             } catch (final RuntimeException e) {
                 intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start QuestDB [root=" + root + "]: " + e.getMessage(), e));
             }
@@ -165,6 +166,17 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
         }
     }
 
+    /** Where a running server listens, as it bound (8812 and 9000 unless the user's {@code server.conf} says otherwise). */
+    private static String ports(final ServerMain s) {
+        return "PG wire on " + s.getPgWireServerPort() + ", console on http://localhost:" + s.getHttpServerPort();
+    }
+
+    /** The port the running server's PostgreSQL wire listens on, as it bound; -1 when it is not running. */
+    int pgPort() {
+        final ServerMain s = server;
+        return s == null ? -1 : s.getPgWireServerPort();
+    }
+
     /**
      * The newest daily log in the root's {@code log/}, else today's that the next start writes; null when the root's
      * {@code conf/log.conf} chose a file of its own, which then is where to look.
@@ -172,13 +184,13 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
     @Override
     public Path log() {
         final Path dir = root.resolve("log");
-        try (Stream<Path> files = Files.list(dir)) {
+        try (final Stream<Path> files = Files.list(dir)) {
             final Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("questdb-\\d{8}\\.log"))
                     .max(Comparator.comparing(f -> f.getFileName().toString()));
             if (newest.isPresent()) {
                 return newest.get();
             }
-        } catch (IOException | UncheckedIOException e) {
+        } catch (final IOException | UncheckedIOException e) {
             // no log folder yet: today's file, which says there is no log yet
         }
         return dir.resolve("questdb-" + DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.now(ZoneOffset.UTC)) + ".log");

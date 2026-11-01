@@ -299,7 +299,7 @@ final class PanelFiles {
         }
         final String own = names.get(id);
         if (Files.isDirectory(dir)) {
-            try (var files = Files.list(dir)) {
+            try (final var files = Files.list(dir)) {
                 files.map(p -> p.getFileName().toString())
                         .filter(n -> !n.equals(own))
                         .forEach(n -> taken.add(n.toLowerCase(Locale.ROOT)));

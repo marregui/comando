@@ -3,6 +3,8 @@ package dev.marregui.comando.mcp;
 import java.util.Locale;
 import java.util.Set;
 
+import dev.marregui.comando.core.dispatch.Statements;
+
 /**
  * Which statements Claude may run without asking. A statement is read-only when its first keyword, after
  * comments, is one that cannot change data, and no word outside quotes and comments is one that writes or
@@ -87,7 +89,7 @@ final class SqlPolicy {
                 out.append(c);
                 i++;
             } else if (c == '-' && i + 1 < sql.length() && sql.charAt(i + 1) == '-') {
-                final int eol = sql.indexOf('\n', i);
+                final int eol = Statements.lineCommentEnd(sql, i);
                 i = eol < 0 ? sql.length() : eol;
             } else if (c == '/' && i + 1 < sql.length() && sql.charAt(i + 1) == '*') {
                 final int end = sql.indexOf("*/", i + 2);

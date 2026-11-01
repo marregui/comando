@@ -324,7 +324,7 @@ public final class Theme {
                 // registered, so that rendered Markdown's style sheet can name it
                 GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(created);
                 return created.deriveFont(Font.BOLD, 13f);
-            } catch (FontFormatException | IOException e) {
+            } catch (final FontFormatException | IOException e) {
                 // not a font this Java reads: the next face
             }
         }

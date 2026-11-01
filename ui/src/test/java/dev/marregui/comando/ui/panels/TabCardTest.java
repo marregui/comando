@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.panels;
 
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import java.time.Duration;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JRootPane;
@@ -10,6 +11,7 @@ import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// The card's explaining form (record 125), a dialog field's ⓘ, and the leave grace every card shares.
 class TabCardTest {
@@ -47,9 +49,8 @@ class TabCardTest {
             card.explain("name", anchor, at, "Name", "text");
             card.left();
         });
-        Thread.sleep(TabCard.LEAVE_GRACE_MILLIS + 300);
-        SwingUtilities.invokeAndWait(() -> { });
-        assertThat(card.shown()).as("drifted away").isNull();
+        // the grace's timer fires on the event thread when the machine gets to it: waited for, not timed
+        await("drifted away").atMost(Duration.ofSeconds(10)).until(() -> shown(card) == null);
 
         SwingUtilities.invokeAndWait(() -> {
             card.explain("name", anchor, at, "Name", "text");
@@ -70,6 +71,13 @@ class TabCardTest {
         Thread.sleep(TabCard.LEAVE_GRACE_MILLIS + 300);
         SwingUtilities.invokeAndWait(() -> { });
         assertThat(card.shown()).as("the pointer came back").isEqualTo("name");
+    }
+
+    /// What the card shows, read on the event thread.
+    private static String shown(final TabCard card) throws Exception {
+        final String[] out = new String[1];
+        SwingUtilities.invokeAndWait(() -> out[0] = card.shown());
+        return out[0];
     }
 
     /// A label in a root pane, laid out, for a card to hang under.

@@ -382,7 +382,7 @@ public final class HtmlPane extends JEditorPane {
     private void fill() {
         fillPosted.set(false);
         final Map<String, String> ready = new LinkedHashMap<>();
-        for (Iterator<Map.Entry<String, Supplier<String>>> it = waitingFor.entrySet().iterator(); it.hasNext(); ) {
+        for (final Iterator<Map.Entry<String, Supplier<String>>> it = waitingFor.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<String, Supplier<String>> w = it.next();
             final String html = w.getValue().get();
             if (html != null) {
@@ -401,7 +401,7 @@ public final class HtmlPane extends JEditorPane {
                 }
                 try {
                     doc.setOuterHTML(stand, inItsLink(stand, r.getValue()));
-                } catch (BadLocationException | IOException e) {
+                } catch (final BadLocationException | IOException e) {
                     // not expected of Swing's own document; the whole page drawn again shows it all the same
                     LOG.log(System.Logger.Level.DEBUG, "cannot put a picture in place [id=" + r.getKey() + ']', e);
                     final String shown = markdown;

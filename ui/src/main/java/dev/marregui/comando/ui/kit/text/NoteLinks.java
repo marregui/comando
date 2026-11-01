@@ -184,7 +184,7 @@ public final class NoteLinks {
     /** The {@code name:} a Markdown file's front matter declares; null when it has none. */
     static String declaredName(final Path file) {
         byte[] head;
-        try (InputStream in = Files.newInputStream(file)) {
+        try (final InputStream in = Files.newInputStream(file)) {
             head = in.readNBytes(HEAD_BYTES);
         } catch (final IOException e) {
             return null;

@@ -5,7 +5,6 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.file.Files;
@@ -17,6 +16,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import io.questdb.log.LogFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -29,7 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// [EmbeddedQuestDb]: the bundled database, started and stopped from the window, reachable from this machine only.
 /// - every listener binds to `127.0.0.1` and line-protocol UDP is off
-/// - it starts on a fresh data root, reports it, and listens on loopback only
+/// - it starts on a fresh data root, reports the ports it bound, and listens on loopback only
+/// - an agent's start and stop answer at once, and asking for the state it is in changes nothing
 /// - `isRunning` answers at once while a start holds the server, and a second toggle waits with a notice
 class EmbeddedQuestDbTest {
 
@@ -43,53 +44,60 @@ class EmbeddedQuestDbTest {
                 .allSatisfy(bind -> assertThat(bind).startsWith("127.0.0.1:"));
     }
 
-    /// A start on a missing data root creates it, posts an INFO notice and runs; its Postgres port accepts a connection
-    /// on loopback and refuses one on this machine's LAN address, when it has one.
+    /// One server's life, as one start per test process is what QuestDB's process-wide log allows. An agent's start
+    /// (record 121) on a missing data root answers at once, and a second ask while it is under way is refused; the start
+    /// creates the root and posts an INFO notice naming the ports it bound; its Postgres port accepts a connection on
+    /// loopback and refuses one on this machine's LAN address, when it has one. Asking for the state the server is in
+    /// changes nothing and says so; the window's toggle stops it; after close nothing starts.
     @Test
-    void startsOnAFreshDataRootAndListensOnLoopbackOnly(@TempDir final Path dir) throws IOException {
+    void startsOnAFreshDataRootListensOnLoopbackOnlyAndAnswersAnAgentAtOnce(@TempDir final Path dir) throws IOException {
         final Path root = dir.resolve("questdb");
-        final int pg = freePort();
-        final int http = freePort();
         final RecordingSink sink = new RecordingSink();
-        final EmbeddedQuestDb db = new EmbeddedQuestDb(root, sink, Map.of(
-                "QDB_HTTP_NET_BIND_TO", "127.0.0.1:" + http,
-                "QDB_HTTP_MIN_NET_BIND_TO", "127.0.0.1:" + freePort(),
-                "QDB_PG_NET_BIND_TO", "127.0.0.1:" + pg,
-                "QDB_LINE_TCP_NET_BIND_TO", "127.0.0.1:" + freePort(),
-                "QDB_LINE_UDP_ENABLED", "false"));
-        final String property = System.getProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY);
-        // QuestDB reads its log configuration once per process: another test's start may have read it already
-        io.questdb.log.LogFactory.closeInstance();
-        try {
-            db.toggle();
-            final Intent.Notify up = sink.await(Intent.Notify.class, n -> n.text().startsWith("QuestDB") || n.text().startsWith("Cannot"), Duration.ofSeconds(60));
+        final EmbeddedQuestDb db = new EmbeddedQuestDb(root, sink, ANY_PORT);
+        withQuestDbLog(() -> {
+            try {
+                assertThat(db.want(false)).isEqualTo("QuestDB is not running");
+                synchronized (db) {
+                    // the start's thread waits for the monitor, as behind a start or stop in progress
+                    assertThat(db.want(true)).isEqualTo("starting QuestDB; the outcome comes as a notice, and ui_get_state's servers show it");
+                    assertThat(db.want(true)).isEqualTo("QuestDB is starting; try again when that ends");
+                }
+                final Intent.Notify up = sink.await(Intent.Notify.class, n -> n.text().startsWith("QuestDB") || n.text().startsWith("Cannot"),
+                        Duration.ofSeconds(60));
 
-            assertThat(up.level()).as(up.text()).isEqualTo(Notice.Level.INFO);
-            assertThat(db.isRunning()).isTrue();
-            assertThat(Files.isDirectory(root)).isTrue();
-            assertThat(db.log()).as("the day's log, in the root's log folder").isRegularFile()
-                    .hasParent(root.resolve("log"));
-            assertThat(db.log().getFileName().toString()).matches("questdb-\\d{8}\\.log");
-            try (Socket s = new Socket()) {
-                s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), pg), 2_000);
+                assertThat(up.level()).as(up.text()).isEqualTo(Notice.Level.INFO);
+                assertThat(db.isRunning()).isTrue();
+                final int pg = db.pgPort();
+                assertThat(pg).isPositive();
+                assertThat(up.text()).startsWith("QuestDB is up: PG wire on " + pg + ", console on http://localhost:");
+                assertThat(db.want(true)).startsWith("QuestDB is up already: PG wire on " + pg + ',');
+                assertThat(Files.isDirectory(root)).isTrue();
+                assertThat(db.log()).as("the day's log, in the root's log folder").isRegularFile()
+                        .hasParent(root.resolve("log"));
+                assertThat(db.log().getFileName().toString()).matches("questdb-\\d{8}\\.log");
+                try (final Socket s = new Socket()) {
+                    s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), pg), 2_000);
+                }
+                final Optional<InetAddress> lan = lanAddress();
+                if (lan.isPresent()) {
+                    assertThatThrownBy(() -> {
+                        try (final Socket s = new Socket()) {
+                            s.connect(new InetSocketAddress(lan.get(), pg), 2_000);
+                        }
+                    }).isInstanceOf(IOException.class);
+                }
+
+                db.toggle();
+                sink.await(Intent.Notify.class, n -> n.text().equals("QuestDB is down"), Duration.ofSeconds(30));
+                assertThat(db.isRunning()).isFalse();
+                assertThat(db.pgPort()).isEqualTo(-1);
+                assertThat(db.want(false)).isEqualTo("QuestDB is not running");
+            } finally {
+                db.close();
             }
-            final Optional<InetAddress> lan = lanAddress();
-            if (lan.isPresent()) {
-                assertThatThrownBy(() -> {
-                    try (Socket s = new Socket()) {
-                        s.connect(new InetSocketAddress(lan.get(), pg), 2_000);
-                    }
-                }).isInstanceOf(IOException.class);
-            }
-        } finally {
-            db.close();
-            io.questdb.log.LogFactory.closeInstance();
-            if (property == null) {
-                System.clearProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY);
-            } else {
-                System.setProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY, property);
-            }
-        }
+            assertThat(db.want(true)).isEqualTo("refused: comando is closing");
+            assertThat(db.isRunning()).isFalse();
+        });
     }
 
     /// comando's log configuration is written unless the log is chosen already: by the property set to another file, or
@@ -135,9 +143,34 @@ class EmbeddedQuestDbTest {
         assertThat(db.isRunning()).isFalse();
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
+    /// Every listener on loopback at a port the system picks at the bind: no port is chosen first and bound later,
+    /// which another test fork could take in between.
+    private static final Map<String, String> ANY_PORT = Map.of(
+            "QDB_HTTP_NET_BIND_TO", "127.0.0.1:0",
+            "QDB_HTTP_MIN_NET_BIND_TO", "127.0.0.1:0",
+            "QDB_PG_NET_BIND_TO", "127.0.0.1:0",
+            "QDB_LINE_TCP_NET_BIND_TO", "127.0.0.1:0",
+            "QDB_LINE_UDP_ENABLED", "false");
+
+    /// A body that may throw an `IOException`.
+    private interface Body {
+        void run() throws IOException;
+    }
+
+    /// Runs `body` with QuestDB's log configuration read afresh and the property restored after: QuestDB reads it once
+    /// per process, and another test's start may have read it already.
+    private static void withQuestDbLog(final Body body) throws IOException {
+        final String property = System.getProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY);
+        LogFactory.closeInstance();
+        try {
+            body.run();
+        } finally {
+            LogFactory.closeInstance();
+            if (property == null) {
+                System.clearProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY);
+            } else {
+                System.setProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY, property);
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package dev.marregui.comando.claude;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -25,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Measures a background sub-agent up to its task notification.
 /// - Counts each stored message once in a sub-agent's spend.
 /// - Leaves storage untouched when metrics are disabled.
+/// - Writes the queues' depths and peaks as a `queues` event.
+/// - Makes its folder owner-only when it writes into one that is gone.
 class MetricsTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -172,5 +176,42 @@ class MetricsTest {
         assertThat(log.lastContext("c1")).hasValueSatisfying(c -> assertThat(c).containsExactly(588_979L, 1_000_000L));
         assertThat(log.lastContext("c2")).isEmpty();
         assertThat(MetricsLog.NONE.lastContext("c1")).isEmpty();
+    }
+
+    /// The event's own fields decide, not their text: an `agent` event whose nested detail reads `"event":"turn"` and a
+    /// turn of another conversation whose nested object names `c1` are not `c1`'s last turn.
+    @Test
+    void onlyATurnEventOfTheConversationItselfIsItsLastContext() throws Exception {
+        final Path days = Files.createDirectories(dir.resolve("fields"));
+        Files.writeString(days.resolve("metrics-2026-10-29.jsonl"), String.join("\n",
+                "{\"ts\":\"2026-10-29T06:00:00Z\",\"event\":\"turn\",\"conversation\":\"c1\",\"context\":100,\"window\":200000}",
+                "{\"ts\":\"2026-10-29T07:00:00Z\",\"event\":\"agent\",\"conversation\":\"c1\",\"detail\":{\"event\":\"turn\"},\"context\":7}",
+                "{\"ts\":\"2026-10-29T07:30:00Z\",\"event\":\"turn\",\"conversation\":\"c2\",\"models\":{\"conversation\":\"c1\"},\"context\":9}", ""));
+        final MetricsLog log = new MetricsLog(days, JSON, () -> Instant.parse("2026-10-29T08:00:00Z").toEpochMilli());
+        assertThat(log.lastContext("c1")).hasValueSatisfying(c -> assertThat(c).containsExactly(100L, 200_000L));
+    }
+
+    /// A `queues` event lists each queue read with its depth and its peak since the reading before, so a queue can be
+    /// bounded later from how it was used.
+    @Test
+    void aQueuesEventListsEachQueuesDepthAndPeak() throws Exception {
+        final MetricsLog log = new MetricsLog(dir, JSON, now::get);
+        log.queues(List.of(new Queues.Reading("intents", 0, 12), new Queues.Reading("claude-stdin-work", 1, 3)));
+        final JsonNode e = lines().getLast();
+        assertThat(e.path("event").asString()).isEqualTo("queues");
+        assertThat(e.path("queues").findValuesAsString("name")).containsExactly("intents", "claude-stdin-work");
+        assertThat(e.path("queues").get(0).path("peak").asInt()).isEqualTo(12);
+        assertThat(e.path("queues").get(1).path("depth").asInt()).isEqualTo(1);
+    }
+
+    /// The metrics folder deleted while comando runs is made again owner-only (rule 15) by the next write, whatever the
+    /// umask, as the start made it.
+    @Test
+    void aMetricsFolderDeletedWhileRunningComesBackOwnerOnly() throws Exception {
+        final Path metrics = dir.resolve("data/metrics");
+        final MetricsLog log = new MetricsLog(metrics, JSON, now::get);
+        log.queues(List.of(new Queues.Reading("intents", 0, 1)));
+        assertThat(Files.getPosixFilePermissions(metrics)).isEqualTo(PosixFilePermissions.fromString("rwx------"));
+        assertThat(Files.isRegularFile(metrics.resolve("metrics-2026-10-28.jsonl"))).isTrue();
     }
 }

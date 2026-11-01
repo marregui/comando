@@ -49,7 +49,7 @@ class ToolsAdapterReposTest {
     @Test
     void theChangesViewsRepositoriesAreReadAtOnce(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(dir.toRealPath());
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             tools.watchRepos(List.of(folder("src", root.resolve("src"))), true);
             final Intent.ReposLoaded loaded = sink.await(Intent.ReposLoaded.class, r -> !r.repos().isEmpty(), WAIT);
             final RepoStatus s = loaded.repos().getFirst();
@@ -65,7 +65,7 @@ class ToolsAdapterReposTest {
     void aWatchedFolderInARepositoryLeavesOutWhatGitIgnores(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(dir.toRealPath());
         final FolderRoot f = folder("repo", root);
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             tools.watchFolders(List.of(f));
             final Intent.FolderLoaded loaded = sink.await(Intent.FolderLoaded.class, WAIT);
             assertThat(loaded.tree().children()).extracting(ViewSpec.TreeNode::label)
@@ -95,7 +95,7 @@ class ToolsAdapterReposTest {
         GitTest.git(brain, "commit", "-q", "-m", "brain");
         Files.writeString(kit.resolve("hooks/guard.py"), "a = 2\n");
         Files.writeString(brain.resolve("MEMORY/m.md"), "n\n");
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             tools.watchRepos(List.of(new FolderRoot("Kit", kit.toString(), "", List.of("BRAIN", ".git")),
                     folder("Memory", brain.resolve("MEMORY"))), true);
             final Intent.ReposLoaded loaded = sink.await(Intent.ReposLoaded.class, r -> r.repos().size() == 2, WAIT);
@@ -109,7 +109,7 @@ class ToolsAdapterReposTest {
     @Test
     void aChangeIsReadAndSent(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(dir.toRealPath());
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             final RepoStatus.FileChange c = new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED);
             tools.readChange(root.toString(), c, ChangeAsk.FOLLOW);
             final Intent.ChangeRead read = sink.await(Intent.ChangeRead.class, WAIT);
@@ -125,7 +125,7 @@ class ToolsAdapterReposTest {
     @Test
     void aFolderGitIgnoresAsAWholeShowsAllItHolds(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(dir.toRealPath());
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             tools.watchFolders(List.of(folder("dist", root.resolve("dist"))));
             final Intent.FolderLoaded loaded = sink.await(Intent.FolderLoaded.class, WAIT);
             assertThat(loaded.tree().children()).extracting(ViewSpec.TreeNode::label).containsExactly("bundle.js");
@@ -138,7 +138,7 @@ class ToolsAdapterReposTest {
         final Path plain = Files.createDirectories(dir.toRealPath().resolve("plain"));
         Files.createDirectories(plain.resolve("dist"));
         Files.writeString(plain.resolve("dist/x.txt"), "x");
-        try (ToolsAdapter tools = adapter()) {
+        try (final ToolsAdapter tools = adapter()) {
             tools.watchFolders(List.of(folder("plain", plain)));
             final Intent.FolderLoaded loaded = sink.await(Intent.FolderLoaded.class, WAIT);
             assertThat(loaded.tree().children()).extracting(ViewSpec.TreeNode::label).containsExactly("dist");
@@ -166,15 +166,15 @@ class ToolsAdapterReposTest {
         final Path root = GitTest.repo(Files.createDirectories(dir.resolve("repo")).toRealPath());
         final List<Path> moved = new CopyOnWriteArrayList<>();
         List<RepoStatus.FileChange> all;
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             all = git.status(root).status().changes();
         }
-        try (ToolsAdapter tools = adapter(binIn(dir.resolve("bin"), moved))) {
+        try (final ToolsAdapter tools = adapter(binIn(dir.resolve("bin"), moved))) {
             tools.rollBack(root.toString(), all);
             final Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
             assertThat(n.text()).startsWith("Rolled back 5 files to HEAD; the versions you had are in the Trash");
         }
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             assertThat(git.status(root).status().changes()).as("nothing left to commit").isEmpty();
         }
         assertThat(Files.readString(root.resolve("src/main/A.java"))).contains("x = 1");
@@ -189,7 +189,7 @@ class ToolsAdapterReposTest {
     @Test
     void withoutATrashAChangedFileStaysAsItIs(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(dir.toRealPath());
-        try (ToolsAdapter tools = adapter(ToolsAdapter.Trash.NONE)) {
+        try (final ToolsAdapter tools = adapter(ToolsAdapter.Trash.NONE)) {
             tools.rollBack(root.toString(), List.of(new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED)));
             final Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
             assertThat(n.text()).isEqualTo("Nothing rolled back; A.java: this desktop has no Trash; left as it is");
@@ -202,12 +202,12 @@ class ToolsAdapterReposTest {
     void removingSendsFilesToTheTrashAndANewOneOutOfTheIndex(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(Files.createDirectories(dir.resolve("repo")).toRealPath());
         final List<Path> moved = new CopyOnWriteArrayList<>();
-        try (ToolsAdapter tools = adapter(binIn(dir.resolve("bin"), moved))) {
+        try (final ToolsAdapter tools = adapter(binIn(dir.resolve("bin"), moved))) {
             tools.removeFiles(root.toString(), List.of("added.txt", "src/main/A.java"));
             final Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
             assertThat(n.text()).isEqualTo("Moved 2 files to the Trash");
         }
-        try (Git git = new Git()) {
+        try (final Git git = new Git()) {
             assertThat(git.status(root).status().changes())
                     .as("the added file is gone from the index too; the tracked one is a removal to commit")
                     .contains(new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.DELETED))

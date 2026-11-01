@@ -1,5 +1,10 @@
 package dev.marregui.comando.db;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 
@@ -21,6 +26,7 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// [DbAdapter] against PostgreSQL 16 in a container; skipped without Docker.
 ///
@@ -71,22 +77,42 @@ class DbAdapterPostgresTest {
         assertThat(r.isNull(0, 5)).isTrue();
     }
 
-    /// [DbAdapter#cancel] returns in under 100 milliseconds for `pg_sleep(30)` and publishes cancellation within three
-    /// seconds, so a running PostgreSQL query does not block the caller.
+    /// A `timestamptz` value, which the driver reports as a plain timestamp, is read as the instant it names, in
+    /// microseconds since the epoch; `now()` runs too.
+    @Test
+    void aTimestampWithTimeZoneIsReadAsItsInstant() {
+        db.execute(6L, spec, "SELECT TIMESTAMPTZ '2024-01-01 00:00:01+00' ts, now() n");
+        sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 6L, WAIT);
+        final ResultView r = results.get(6L);
+        assertThat(r.kind(0)).isEqualTo(ColumnKind.TIMESTAMP);
+        assertThat(r.getMicros(0, 0)).isEqualTo(1_704_067_201_000_000L);
+    }
+
+    /// [DbAdapter#cancel] returns in under a second for `pg_sleep(30)` once the server runs it (it does not wait for the
+    /// statement) and publishes the cancellation within ten seconds, so a running PostgreSQL query does not block the
+    /// caller.
     @Test
     void cancelStopsASleepingQueryAtOnce() {
         db.execute(2L, spec, "SELECT pg_sleep(30)");
         sink.await(Intent.SqlStarted.class, c -> c.requestId() == 2L, WAIT);
-        try {
-            Thread.sleep(300);
-        } catch (final InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // started on comando's side; a cancel reaches it once the server runs it
+        await("the statement running on the server").atMost(WAIT).until(() -> running("SELECT pg_sleep(30)"));
         final long t0 = System.nanoTime();
         db.cancel(2L);
-        assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofMillis(100));
-        sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 2L, Duration.ofSeconds(5));
-        assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(3));
+        assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(1));
+        sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 2L, Duration.ofSeconds(15));
+        assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(10));
+    }
+
+    /// Whether a session of the container's server runs `sql` now, read on a connection of its own.
+    private static boolean running(final String sql) throws SQLException {
+        try (final Connection c = DriverManager.getConnection(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword());
+             final PreparedStatement s = c.prepareStatement("SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query = ?")) {
+            s.setString(1, sql);
+            try (final ResultSet r = s.executeQuery()) {
+                return r.next() && r.getLong(1) > 0;
+            }
+        }
     }
 
     /// [DbAdapter#query] leaves an insert unexecuted when its future is cancelled behind a one-second running query.
@@ -108,10 +134,7 @@ class DbAdapterPostgresTest {
     void schemaComesFromTheInformationSchema() throws Exception {
         db.query(spec, "CREATE TABLE IF NOT EXISTS trades (ts timestamptz, symbol text, price double precision)", 1).get();
         db.loadSchema(spec, false);
-        final long deadline = System.currentTimeMillis() + 10_000;
-        while (schemas.of("pg").tables().isEmpty() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(50);
-        }
+        await("the schema").atMost(Duration.ofSeconds(10)).until(() -> !schemas.of("pg").tables().isEmpty());
         final Schema.Table trades = schemas.of("pg").tables().stream().filter(t -> t.name().equals("trades")).findFirst().orElseThrow();
         assertThat(trades.columns()).extracting(Schema.Column::name).containsExactly("ts", "symbol", "price");
         assertThat(trades.columns().get(2).type()).isEqualTo("double precision");

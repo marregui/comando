@@ -21,24 +21,38 @@ import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
  * comando's own settings, kept with its other state in the data root as {@code settings.json} (record 106): one JSON
- * object of keys, each a string, a number or a boolean, in key order. Read once when the window opens; written whole,
- * atomically, by {@link #flush} after a change. Without a file, the values kept before in the user's Java preferences
- * are read once and written to it; the preferences stay as they were. A window without a data root (some tests) keeps
- * its settings in memory. EDT only.
+ * object of keys, each a string, a number or a boolean, in key order, after its schema's {@code version} (record 133;
+ * a file without it is version 1). Read once when the window opens; written whole, atomically, by {@link #flush}
+ * after a change. A file of a later version is kept as it is and never written: the window runs on the defaults and
+ * the log says why. Without a file, the values kept before in the user's Java preferences are read once and written to
+ * it; the preferences stay as they were. A window without a data root (some tests) keeps its settings in memory. EDT
+ * only.
  */
 final class Settings {
 
     private static final System.Logger LOG = System.getLogger(Settings.class.getName());
     private static final ObjectMapper JSON = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
     private static final Pattern INT = Pattern.compile("-?\\d{1,9}");
+    /** The schema's version this comando reads and writes, and the key that names it. */
+    static final int VERSION = 1;
+    static final String VERSION_KEY = "version";
 
     private final Path file;
     private final TreeMap<String, Object> values;
     private boolean dirty;
+    /** A file of a later version: kept as it is, never written. */
+    private boolean refused;
+    /** Why the file is not read, in the words the user is told once (record 133); empty when it read. */
+    private String refusal = "";
 
     private Settings(final Path file, final TreeMap<String, Object> values) {
         this.file = file;
         this.values = values;
+    }
+
+    /** Why the file was not read, for the user, once (record 133); empty when it read. */
+    String refusal() {
+        return refusal;
     }
 
     /** Settings that live as long as the window: nothing is read or written. */
@@ -53,7 +67,18 @@ final class Settings {
     static Settings open(final Path file, final Preferences legacy) {
         if (Files.exists(file)) {
             try {
-                return new Settings(file, read(JSON.readTree(file.toFile())));
+                final JsonNode root = JSON.readTree(file.toFile());
+                final int version = root != null && root.isObject() ? root.path(VERSION_KEY).asInt(1) : 1;
+                if (version > VERSION) {
+                    final Settings later = new Settings(file, new TreeMap<>());
+                    later.refused = true;
+                    later.refusal = file.getFileName() + " is of version " + version + ", written by a later comando; this one reads version "
+                            + VERSION + ". It is kept as it is and nothing is saved to it until a comando that reads it runs; the window"
+                            + " runs on its defaults";
+                    LOG.log(System.Logger.Level.WARNING, later.refusal + " [file=" + file + ']');
+                    return later;
+                }
+                return new Settings(file, read(root));
             } catch (final JacksonException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read the settings, kept aside [file=" + file + ']', e);
                 try {
@@ -74,6 +99,9 @@ final class Settings {
         final TreeMap<String, Object> out = new TreeMap<>();
         if (root != null && root.isObject()) {
             root.properties().forEach(e -> {
+                if (e.getKey().equals(VERSION_KEY)) {
+                    return;
+                }
                 final JsonNode v = e.getValue();
                 if (v.isBoolean()) {
                     out.put(e.getKey(), v.booleanValue());
@@ -98,7 +126,7 @@ final class Settings {
                             : v.equals("true") || v.equals("false") ? Boolean.valueOf(v) : v);
                 }
             }
-        } catch (BackingStoreException | IllegalStateException e) {
+        } catch (final BackingStoreException | IllegalStateException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the earlier preferences", e);
         }
         return out;
@@ -134,6 +162,9 @@ final class Settings {
     }
 
     private void set(final String key, final Object value) {
+        if (key.equals(VERSION_KEY)) {
+            throw new IllegalArgumentException(VERSION_KEY + " names the file's schema, not a setting");
+        }
         dirty |= !value.equals(values.put(key, value));
     }
 
@@ -144,11 +175,12 @@ final class Settings {
 
     /** Writes the settings when they changed since the last write: to a file beside it, then moved over it. */
     void flush() {
-        if (!dirty || file == null) {
+        if (!dirty || file == null || refused) {
             dirty = false;
             return;
         }
         final ObjectNode root = JSON.createObjectNode();
+        root.put(VERSION_KEY, VERSION);
         values.forEach((k, v) -> {
             switch (v) {
                 case Integer i -> root.put(k, i);
@@ -160,7 +192,7 @@ final class Settings {
             Files.createDirectories(file.getParent());
             AtomicFiles.write(file, JSON.writeValueAsBytes(root));
             dirty = false;
-        } catch (IOException | JacksonException e) {
+        } catch (final IOException | JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write the settings [file=" + file + ']', e);
         }
     }

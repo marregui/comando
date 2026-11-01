@@ -51,7 +51,7 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
         }
         byte[] bytes;
         // the read itself is bounded: a file that grows between a size check and the read is still refused
-        try (InputStream in = Files.newInputStream(path)) {
+        try (final InputStream in = Files.newInputStream(path)) {
             bytes = in.readNBytes((int) MAX_BYTES + 1);
         } catch (final FileSystemException e) {
             throw new IOException(e.getReason() != null ? e.getReason() : e.getClass().getSimpleName(), e);

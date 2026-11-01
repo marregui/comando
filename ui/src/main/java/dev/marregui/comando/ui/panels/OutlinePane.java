@@ -5,11 +5,14 @@ import java.awt.Component;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Rectangle;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
@@ -18,6 +21,7 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 
@@ -83,6 +87,17 @@ final class OutlinePane {
                 }
             }
         });
+        // Enter goes to the heading selected, as Enter opens what the Files tab's and the Changes view's lists select
+        list.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "outline-open");
+        list.getActionMap().put("outline-open", new AbstractAction() {
+            @Override
+            public void actionPerformed(final ActionEvent e) {
+                final MarkdownHtml.Section s = list.getSelectedValue();
+                if (s != null) {
+                    onOpen.accept(s);
+                }
+            }
+        });
         empty.setForeground(Theme.MUTED);
         empty.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, Theme.GAP, Theme.GAP, Theme.GAP));
         empty.setVerticalAlignment(JLabel.TOP);
@@ -101,7 +116,7 @@ final class OutlinePane {
         return root;
     }
 
-    /** {@code open} goes to a heading a double click picked. */
+    /** {@code open} goes to a heading a double click, or Enter on the selection, picked. */
     void onOpen(final Consumer<MarkdownHtml.Section> open) {
         onOpen = open;
     }

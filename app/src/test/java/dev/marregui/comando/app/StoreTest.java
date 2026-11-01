@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -16,7 +17,10 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.claude.KitJson;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -41,7 +45,7 @@ class StoreTest {
     @Test
     void freshRootGetsDefaultsAndWritesThem() {
         Store.Loaded loaded;
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             loaded = store.load();
             assertThat(store.load(loaded.panels().getFirst().id())).contains("Welcome to comando");
         }
@@ -56,7 +60,7 @@ class StoreTest {
     @Test
     void aSettingsFileThatCannotBeWrittenIsTold() throws Exception {
         final List<String> notices = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.onNotice(notices::add);
             store.load();
             store.saveNow().get(5, TimeUnit.SECONDS); // what loading wrote is on disk before the file is replaced
@@ -74,14 +78,14 @@ class StoreTest {
     @Test
     void roundTripOfSpecsBindingsAndText() {
         final PanelId id = new PanelId("p-1");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "10.0.0.2", 8812, "qdb", "admin", "pw", true)));
             store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
             store.savePanels(List.of(new PanelState(id, "work", "lab", "edge")), List.of());
             store.changed(id, "SELECT 42;");
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.connections()).singleElement().extracting(ConnectionSpec::prod).isEqualTo(true);
             assertThat(loaded.sessions()).singleElement().extracting(SessionSpec::claudeSessionId).isEqualTo("abc");
@@ -95,7 +99,7 @@ class StoreTest {
     @Test
     void aFileIsWrittenWholeOnTheWritersThreadEvenWhereItsFolderIsGone() throws Exception {
         final Path file = home.resolve("repo/docs/gone/a.md");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.write(file, "# a\n").get(10, TimeUnit.SECONDS)).as("written").isNull();
             assertThat(Files.readString(file)).isEqualTo("# a\n");
             assertThat(store.write(file, "# b\n").get(10, TimeUnit.SECONDS)).isNull();
@@ -109,71 +113,72 @@ class StoreTest {
     /// and an unreadable `folders.json` gives the default and is kept aside.
     @Test
     void theFilesTabsFoldersHaveADefaultAndAreKeptAsSavedEvenEmpty() throws Exception {
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("no folders.json: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));
             store.saveFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")),
                     new FolderRoot("app", "/app", "", List.of())));
         }
         assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"").doesNotContain("repository");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("as saved")
                     .containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")), new FolderRoot("app", "/app", "", List.of()));
             store.saveFolders(List.of(new FolderRoot("KB", "/kb", "", List.of(), "knowledge", false, "", "Brain")));
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).extracting(FolderRoot::group).as("a group kept (record 98)").containsExactly("Brain");
             store.saveFolders(List.of());
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("no folder is a choice").isEmpty();
         }
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"KB\",\"path\":\"/kb\"}]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("a hand-written entry without index or excludes")
                     .containsExactly(new FolderRoot("KB", "/kb", "", List.of()));
         }
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"Memory\",\"path\":\"/m\",\"icon\":\"memory\",\"readOnly\":true}]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("the icon kept through the folders' rules; an old read-only flag ignored")
                     .containsExactly(new FolderRoot("Memory", "/m", "", List.of(), "memory"));
         }
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"Scratchpad\",\"path\":\"/s\",\"deletable\":true,\"listedIn\":\"ALPHA.md\"}]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("entries that go to the Trash, with their listing file")
                     .containsExactly(new FolderRoot("Scratchpad", "/s", "", List.of()).withTrash("ALPHA.md"));
         }
         Files.writeString(home.resolve("folders.json"), "{not json");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("unreadable: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));
         }
-        try (var aside = Files.list(home)) {
+        try (final var aside = Files.list(home)) {
             assertThat(aside.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("folders.json.corrupt-"));
         }
     }
 
-    /// The decisions automatic checkpoints held back come back from `decisions.json` as saved, in order, an emptied list
-    /// stays empty, and with no file or an unreadable one there are none; the unreadable file is kept aside.
+    /// The decisions automatic checkpoints held back come back from `decisions.json` as saved, in order, with the
+    /// highest id given, an emptied list stays empty and keeps that id, and with no file or an unreadable one there are
+    /// none; the unreadable file is kept aside.
     @Test
     void theDecisionsHeldBackRoundTripAndAnUnreadableFileReadsAsNone() throws Exception {
         final List<Decision> held = List.of(new Decision(3, "work", "Merge the two entries?", "both say SVG only", 1_000L),
                 new Decision(7, "edge", "Archive the old lane?", "", 2_000L));
-        try (Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("no decisions.json").isEmpty();
-            store.saveDecisions(held);
+        try (final Store store = new Store(home)) {
+            assertThat(store.loadDecisions().held()).as("no decisions.json").isEmpty();
+            store.saveDecisions(held, 9L);
         }
         assertThat(home.resolve("decisions.json")).exists();
-        try (Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("as saved").isEqualTo(held);
-            store.saveDecisions(List.of());
+        try (final Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("as saved").isEqualTo(new Store.Decisions(held, 9L));
+            store.saveDecisions(List.of(), 9L);
         }
-        try (Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("emptied").isEmpty();
+        try (final Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("emptied, the last id kept").isEqualTo(new Store.Decisions(List.of(), 9L));
         }
         Files.writeString(home.resolve("decisions.json"), "[{\"id\": 1, \"session\": ");
-        try (Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("unreadable: none").isEmpty();
+        try (final Store store = new Store(home)) {
+            assertThat(store.loadDecisions().held()).as("unreadable: none").isEmpty();
         }
-        try (Stream<Path> files = Files.list(home)) {
+        try (final Stream<Path> files = Files.list(home)) {
             assertThat(files.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("decisions.json.corrupt-"));
         }
     }
@@ -190,18 +195,76 @@ class StoreTest {
         final FolderRoot kitMemory = new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory");
         final FolderRoot repo = new FolderRoot("app", "/app", "", List.of());
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"app\",\"path\":\"/app\",\"repository\":true}]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.withKitFolders(store.loadFolders(CLAUDE_DIR), kitRoot)).containsExactly(kitMemory, repo);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("saved").containsExactly(kitMemory, repo);
             store.saveFolders(List.of(repo));
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.withKitFolders(store.loadFolders(CLAUDE_DIR), kitRoot)).as("taken out by the user: stays out").containsExactly(repo);
             assertThat(store.withKitFolders(List.of(repo), KitRoot.plain(root))).as("no kit").containsExactly(repo);
         }
-        assertThat(Files.readAllLines(home.resolve("kit-folders"))).containsExactly(root.toString());
+        assertThat(Files.readAllLines(home.resolve("kit-folders"))).as("its version, the root, then where the kit put each folder")
+                .containsExactly("# comando kit-folders, version 2", root.toString(), "folder\tMemory\t" + memory);
+    }
+
+    /// A kit folder never shows at one start to vanish at the next (record 133): the manifest is read by the rules
+    /// every Files-tab folder meets, so a folder with an icon outside the list is left out at the first start, named
+    /// with what is wrong, while the folder beside it shows at both starts.
+    @Test
+    void aKitFolderTheManifestAcceptsSurvivesTheNextStart() throws Exception {
+        final Path root = Files.createDirectories(home.resolve("claude/kit"));
+        Files.createDirectories(root.resolve("BRAIN/MEMORY"));
+        Files.createDirectories(root.resolve("BRAIN/KB"));
+        Files.writeString(root.resolve(KitRoot.FILE), """
+                {"kit": 1, "name": "k", "brain": "BRAIN",
+                 "folders": [{"name": "Memory", "path": "BRAIN/MEMORY", "index": "MEMORY.md", "icon": "brain", "group": "Brain"},
+                             {"name": "KB", "path": "BRAIN/KB", "icon": "knowledge", "group": "Brain"}]}
+                """);
+        final KitRoot.Manifest manifest = KitJson.read(root.resolve(KitRoot.FILE));
+        assertThat(manifest.problems()).singleElement().asString().startsWith("folders[0] (Memory): the icon must be one of");
+        final KitRoot kitRoot = new KitRoot(root, Optional.of(manifest), home.resolve("claude"));
+        final Path data = Files.createDirectories(home.resolve("data"));
+        try (final Store store = new Store(data)) {
+            assertThat(store.withKitFolders(store.loadFolders(root), kitRoot)).extracting(FolderRoot::name).as("first start").containsExactly("KB");
+        }
+        try (final Store store = new Store(data)) {
+            assertThat(store.withKitFolders(store.loadFolders(root), kitRoot)).extracting(FolderRoot::name).as("second start").containsExactly("KB");
+        }
+    }
+
+    /// Every store file names its schema's version (record 133): a list file is an object with `version` and its list;
+    /// one written before versions, a bare list, reads as version 1; one of a later version is kept as it is, read as
+    /// empty, never written over, and the user is told once.
+    @Test
+    void theStoreFilesAreVersionedAndALaterVersionIsKeptAsItIs() throws Exception {
+        try (final Store store = new Store(home)) {
+            store.saveSessions(List.of(SessionSpec.fresh("work", "/tmp")));
+        }
+        final JsonNode written = JsonFile.JSON.readTree(home.resolve("sessions.json").toFile());
+        assertThat(written.path("version").asInt()).isEqualTo(1);
+        assertThat(written.path("sessions").get(0).path("name").asString()).isEqualTo("work");
+        assertThat(written.path("sessions").get(0).has("permissionMode")).as("no permission mode is kept (record 7)").isFalse();
+
+        Files.writeString(home.resolve("sessions.json"), "[{\"name\":\"old\",\"workDir\":\"/tmp\",\"model\":\"\",\"effort\":\"\","
+                + "\"permissionMode\":\"bypassPermissions\",\"addDirs\":[\"/\"],\"budgetUsd\":0.0,\"claudeSessionId\":\"\",\"startMode\":\"NEW\"}]");
+        try (final Store store = new Store(home)) {
+            assertThat(store.load().sessions()).as("a bare list, and its old fields ignored").containsExactly(SessionSpec.fresh("old", "/tmp"));
+        }
+
+        final String later = "{\"version\": 2, \"sessions\": [{\"name\": \"new\", \"workDir\": \"/tmp\"}], \"more\": true}";
+        Files.writeString(home.resolve("sessions.json"), later);
+        final List<String> told = new ArrayList<>();
+        try (final Store store = new Store(home)) {
+            store.onNotice(told::add);
+            assertThat(store.load().sessions()).as("a later version: read as none").isEmpty();
+            store.saveSessions(List.of(SessionSpec.fresh("mine", "/tmp")));
+        }
+        assertThat(Files.readString(home.resolve("sessions.json"))).as("never written over").isEqualTo(later);
+        assertThat(told).hasSize(2).first().asString().startsWith("sessions.json is of version 2, written by a later comando; this one reads version 1");
+        assertThat(told.get(1)).as("the panels name its sessions: kept too").startsWith("panels.json is kept as it is");
     }
 
     /// A fresh data home on a kit root shows the kit's folders, the default folder being the kit's own root and so not
@@ -218,11 +281,11 @@ class StoreTest {
                 List.of(), List.of(), List.of())), root);
         final FolderRoot kitDir = new FolderRoot("Kit", root.toString(), "", List.of(), "folder");
         final FolderRoot kitMemory = new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(root)).as("no folders file: the default").isEqualTo(FolderRoot.defaults(root));
             assertThat(store.withKitFolders(store.loadFolders(root), kitRoot)).containsExactly(kitDir, kitMemory);
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.loadFolders(root)).as("saved").containsExactly(kitDir, kitMemory);
         }
     }
@@ -237,14 +300,14 @@ class StoreTest {
         final KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
                 List.of(new FolderRoot("Kit", ".", "", List.of(), "folder")), List.of(), List.of(), List.of())), root);
         Files.writeString(home.resolve("kit-folders"), root + "\n");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.withKitFolders(store.loadFolders(root), kitRoot))
                     .containsExactly(new FolderRoot("Kit", root.toString(), "", List.of(), "folder"));
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.saveFolders(List.of());
         }
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.withKitFolders(store.loadFolders(root), kitRoot)).as("a list the user emptied stays empty").isEmpty();
         }
     }
@@ -259,7 +322,7 @@ class StoreTest {
                   {"name":"","path":"/x"}, {"name":"Out","path":"/o","index":"../up.md"}, {"name":"Home","path":"~/notes"}, {"name":"NoPath"}, null ]
                 """);
         final List<String> told = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final List<FolderRoot> loaded = store.loadFolders(CLAUDE_DIR);
             store.onNotice(told::add);
             assertThat(loaded).extracting(FolderRoot::name).containsExactly("KB", "Home");
@@ -279,7 +342,7 @@ class StoreTest {
         Files.writeString(json, "[{\"name\":\"KB\",\"path\":\"/kb\"}]");
         final List<String> told = new CopyOnWriteArrayList<>();
         final List<List<FolderRoot>> read = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.loadFolders(CLAUDE_DIR);
             store.onNotice(told::add);
             store.onFoldersChanged(read::add);
@@ -311,7 +374,7 @@ class StoreTest {
         Files.writeString(home.resolve("sessions.json"), "[]");
         Files.writeString(home.resolve("panels.json"), "[ {\"id\":\"a\",\"title\":\"notes\",\"file\":\"notes.md\",\"closed\":true} ]");
         final List<String> told = new CopyOnWriteArrayList<>();
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             store.onNotice(told::add);
             assertThat(told).singleElement().asString().contains("deleted while comando was closed");
@@ -326,7 +389,7 @@ class StoreTest {
         Files.writeString(home.resolve("sessions.json"), "[{\"name\":\"old\",\"workDir\":\"/w\",\"model\":\"\",\"effort\":\"\","
                 + "\"permissionMode\":\"\",\"addDirs\":[],\"budgetUsd\":0.0,\"claudeSessionId\":\"\",\"startMode\":\"NEW\"}]");
         Files.writeString(home.resolve("panels.json"), "[]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.load().sessions()).extracting(SessionSpec::checkpoint).containsExactly("/reflect");
         }
     }
@@ -337,7 +400,7 @@ class StoreTest {
         Files.writeString(home.resolve("connections.json"), "[]");
         Files.writeString(home.resolve("sessions.json"), "[]");
         Files.writeString(home.resolve("panels.json"), "[{\"id\":\"p\",\"title\":\"t\",\"connection\":\"gone\",\"session\":\"gone\",\"content\":\"x\"}]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             assertThat(store.load().panels()).containsExactly(new PanelState(new PanelId("p"), "t", "", ""));
         }
     }
@@ -363,11 +426,11 @@ class StoreTest {
     void anUnreadableFileIsKeptAsideAndNotOverwritten() throws Exception {
         Files.writeString(home.resolve("connections.json"), "{ this is not json");
         Files.writeString(home.resolve("sessions.json"), "[]");
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             final Store.Loaded loaded = store.load();
             assertThat(loaded.connections()).isEmpty();
         }
-        try (Stream<Path> files = Files.list(home)) {
+        try (final Stream<Path> files = Files.list(home)) {
             assertThat(files.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("connections.json.corrupt-"));
         }
     }
@@ -375,13 +438,13 @@ class StoreTest {
     /// Repeated saves leave no `.tmp` file in the data root.
     @Test
     void writesLeaveNoTemporaryFiles() throws Exception {
-        try (Store store = new Store(home)) {
+        try (final Store store = new Store(home)) {
             store.load();
             for (int i = 0; i < 20; i++) {
                 store.saveSessions(List.of(SessionSpec.fresh("s" + i, "/w")));
             }
         }
-        try (Stream<Path> files = Files.list(home)) {
+        try (final Stream<Path> files = Files.list(home)) {
             assertThat(files.map(p -> p.getFileName().toString())).noneMatch(n -> n.endsWith(".tmp"));
         }
     }
@@ -412,19 +475,67 @@ class StoreTest {
         }
     }
 
+    /// A start on a `sessions.json` of a later version (a later comando bumped it alone, as record 133 allows per
+    /// format) leaves `panels.json`'s bindings to those sessions as they were, so going back to the later comando loses
+    /// nothing; the user is told `panels.json` is not written.
+    @Test
+    void aLaterSessionsFileLeavesThePanelsBindingsAlone() throws Exception {
+        final PanelId id = new PanelId("p-1");
+        try (final Store store = new Store(home)) {
+            store.load();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "10.0.0.2", 8812, "qdb", "admin", "", false)));
+            store.saveSessions(List.of(SessionSpec.fresh("edge", "/w")));
+            store.savePanels(List.of(new PanelState(id, "edge", "lab", "edge")), List.of());
+            store.changed(id, "SELECT 42;");
+        }
+        assertThat(JsonFile.JSON.readTree(home.resolve("panels.json").toFile()).path("panels").get(0).path("session").asString()).isEqualTo("edge");
+        final ObjectNode later = (ObjectNode) JsonFile.JSON.readTree(home.resolve("sessions.json").toFile());
+        later.put("version", 2);
+        Files.writeString(home.resolve("sessions.json"), JsonFile.JSON.writeValueAsString(later));
+
+        final List<String> told = new ArrayList<>();
+        try (final Store store = new Store(home)) {
+            store.onNotice(told::add);
+            store.load();
+        }
+        assertThat(JsonFile.JSON.readTree(home.resolve("panels.json").toFile()).path("panels").get(0).path("session").asString())
+                .as("the binding to a session of the later file survives the downgrade").isEqualTo("edge");
+        assertThat(told).anyMatch(t -> t.startsWith("panels.json is kept as it is"));
+    }
+
+    /// A password the secret store refuses to keep (a keychain that says no) stays in `connections.json` rather than
+    /// being lost, and loads back, as the store's contract says.
+    @Test
+    void aPasswordTheSecretStoreRefusesStaysInTheFile() throws Exception {
+        final MapSecrets refusing = new MapSecrets() {
+            @Override
+            public boolean write(final String name, final String password) {
+                return false;
+            }
+        };
+        try (final Store store = new Store(home, refusing)) {
+            store.load();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false)));
+        }
+        assertThat(Files.readString(home.resolve("connections.json"))).contains("s3cret");
+        try (final Store store = new Store(home, refusing)) {
+            assertThat(store.load().connections()).extracting(ConnectionSpec::password).containsExactly("s3cret");
+        }
+    }
+
     /// A connection's password goes to the secret store and not into `connections.json`, a blank one stores nothing, it
     /// reads back at the next load, and a connection saved with a blank password has its item removed.
     @Test
     void passwordsLiveInTheSecretStoreNotInTheFile() throws Exception {
         final MapSecrets secrets = new MapSecrets();
-        try (Store store = new Store(home, secrets)) {
+        try (final Store store = new Store(home, secrets)) {
             store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false),
                     new ConnectionSpec("open", "h", 8812, "qdb", "admin", "", false)));
         }
         assertThat(Files.readString(home.resolve("connections.json"))).doesNotContain("s3cret");
-        assertThat(secrets.map).containsExactly(Map.entry("lab", "s3cret"));
-        try (Store store = new Store(home, secrets)) {
+        assertThat(secrets.map).containsExactly(Map.entry(Store.account(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "", false)), "s3cret"));
+        try (final Store store = new Store(home, secrets)) {
             assertThat(store.load().connections()).extracting(ConnectionSpec::password).containsExactly("s3cret", "");
             store.saveConnections(List.of(new ConnectionSpec("open", "h", 8812, "qdb", "admin", "", false)));
         }
@@ -432,11 +543,11 @@ class StoreTest {
     }
 
     /// When the secret store cannot be read, as with a locked keychain, the connection loads without its password and
-    /// saving it, or renaming it, keeps the stored item.
+    /// saving another change of it, or renaming it, keeps the stored item, while it names the same target.
     @Test
     void aPasswordTheStoreCouldNotReadIsNotDeletedBySaving() throws Exception {
         final MapSecrets secrets = new MapSecrets();
-        try (Store store = new Store(home, secrets)) {
+        try (final Store store = new Store(home, secrets)) {
             store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false)));
         }
@@ -447,13 +558,129 @@ class StoreTest {
             }
         };
         locked.map.putAll(secrets.map);
-        try (Store store = new Store(home, locked)) {
+        try (final Store store = new Store(home, locked)) {
             assertThat(store.load().connections()).extracting(ConnectionSpec::password).containsExactly("");
-            // saving another change, and renaming the connection away, both keep the item it could not read
-            store.saveConnections(List.of(new ConnectionSpec("lab", "h2", 8812, "qdb", "admin", "", false)));
-            store.saveConnections(List.of(new ConnectionSpec("lab2", "h2", 8812, "qdb", "admin", "", false)));
+            // saving another change of the same target, and renaming the connection away, both keep the item
+            store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "", true)));
+            store.saveConnections(List.of(new ConnectionSpec("lab2", "h", 8812, "qdb", "admin", "", true)));
         }
-        assertThat(locked.map).containsEntry("lab", "s3cret");
+        assertThat(locked.map).containsEntry(Store.account(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "", false)), "s3cret");
+    }
+
+    /// A connection pointed at another target while the secret store could not be read does not get the old target's
+    /// password back at a later start: the item, which belonged to the old target, is deleted at the save (record 20).
+    @Test
+    void aRepointedConnectionDoesNotGetItsOldTargetsPasswordBackAtTheNextStart() throws Exception {
+        final MapSecrets secrets = new MapSecrets();
+        try (final Store store = new Store(home, secrets)) {
+            store.load();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "h", 5432, "sales", "app", "s3cret", true, "verify-full")));
+        }
+        final MapSecrets locked = new MapSecrets() {
+            @Override
+            public Optional<String> read(final String name) {
+                throw new Secrets.Unreadable("locked");
+            }
+        };
+        locked.map.putAll(secrets.map);
+        try (final Store store = new Store(home, locked)) {
+            assertThat(store.load().connections().getFirst().password()).isEmpty();
+            // what the reducer saves after connection_save {"name":"lab","host":"elsewhere"}: no password
+            store.saveConnections(List.of(new ConnectionSpec("lab", "elsewhere", 5432, "sales", "app", "", true, "verify-full")));
+        }
+        final MapSecrets unlocked = new MapSecrets();
+        unlocked.map.putAll(locked.map);
+        try (final Store store = new Store(home, unlocked)) {
+            final ConnectionSpec next = store.load().connections().getFirst();
+            assertThat(next.host()).isEqualTo("elsewhere");
+            assertThat(next.password()).as("h's password does not follow lab to elsewhere").isEmpty();
+        }
+    }
+
+    /// A repoint while the secret store is locked for every call, a read and a delete alike, as a locked keychain is,
+    /// does not hand the old target's password to the new one at a later start: the delete of the old item fails
+    /// silently, but that item's account names its own target, so the connection pointed elsewhere never reads it
+    /// (record 20).
+    @Test
+    void aRepointWhileTheKeychainIsLockedDoesNotHandTheOldTargetsPasswordToTheNewOne() throws Exception {
+        final MapSecrets secrets = new MapSecrets();
+        try (final Store store = new Store(home, secrets)) {
+            store.load();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "h", 5432, "sales", "app", "s3cret", true, "verify-full")));
+        }
+        final MapSecrets locked = new MapSecrets() {
+            @Override
+            public Optional<String> read(final String name) {
+                throw new Secrets.Unreadable("locked");
+            }
+
+            @Override
+            public void delete(final String name) {
+                // the tool timed out on the unlock prompt; the item stays
+            }
+        };
+        locked.map.putAll(secrets.map);
+        try (final Store store = new Store(home, locked)) {
+            assertThat(store.load().connections().getFirst().password()).isEmpty();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "elsewhere", 5432, "sales", "app", "", true, "verify-full")));
+        }
+        assertThat(locked.map).as("the old item stays: its delete failed").containsValue("s3cret");
+        final MapSecrets unlocked = new MapSecrets();
+        unlocked.map.putAll(locked.map);
+        try (final Store store = new Store(home, unlocked)) {
+            final ConnectionSpec next = store.load().connections().getFirst();
+            assertThat(next.host()).isEqualTo("elsewhere");
+            assertThat(next.password()).as("h's password does not follow lab to elsewhere (record 20, amended)").isEmpty();
+        }
+    }
+
+    /// An item under the connection's bare name, as comando kept passwords before an item's account named its target,
+    /// names no target: it is never read for the connection, and the first save of the run deletes it.
+    @Test
+    void anItemUnderTheBareNameIsNeverReadAndIsDeleted() throws Exception {
+        try (final Store store = new Store(home)) {
+            store.load();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "elsewhere", 5432, "sales", "app", "", false)));
+        }
+        final MapSecrets secrets = new MapSecrets();
+        secrets.map.put("lab", "s3cret-of-h");
+        try (final Store store = new Store(home, secrets)) {
+            assertThat(store.load().connections().getFirst().password()).isEmpty();
+            store.saveConnections(List.of(new ConnectionSpec("lab", "elsewhere", 5432, "sales", "app", "", true)));
+        }
+        assertThat(secrets.map).isEmpty();
+    }
+
+    /// A connection's account names it and its target, each part encoded, so two connections never share one and a
+    /// repoint changes it.
+    @Test
+    void aConnectionsAccountNamesItsTarget() {
+        final ConnectionSpec lab = new ConnectionSpec("lab", "h", 5432, "sales", "app", "", false);
+        assertThat(Store.account(lab)).isEqualTo("lab app@h:5432/sales");
+        assertThat(Store.account(lab.withName("lab 2"))).isEqualTo("lab+2 app@h:5432/sales");
+        assertThat(Store.account(new ConnectionSpec("a b", "h", 1, "d", "c", "", false)))
+                .isNotEqualTo(Store.account(new ConnectionSpec("a", "h", 1, "d", "b c", "", false)));
+        assertThat(Store.account(new ConnectionSpec("lab", "elsewhere", 5432, "sales", "app", "", false))).isNotEqualTo(Store.account(lab));
+    }
+
+    /// A `connections.json` of a later version is kept, and so are the secret store's items it names: a connection of
+    /// the same name the user adds meanwhile neither replaces nor deletes them (record 133).
+    @Test
+    void aLaterConnectionsFilesSecretsAreKeptToo() throws Exception {
+        Files.writeString(home.resolve("connections.json"), """
+                {"version": 2, "connections": [{"name": "prod", "host": "db.internal", "port": 5432, "database": "sales", "user": "app",
+                 "password": "", "prod": true, "sslMode": "verify-full", "newField": 1}]}
+                """);
+        Files.writeString(home.resolve("sessions.json"), "{\"version\": 1, \"sessions\": []}");
+        final MapSecrets secrets = new MapSecrets();
+        secrets.map.put("prod", "later-s3cret");
+        try (final Store store = new Store(home, secrets)) {
+            assertThat(store.load().connections()).isEmpty();
+            store.saveConnections(List.of(new ConnectionSpec("prod", "localhost", 8812, "qdb", "admin", "", false)));
+            store.saveConnections(List.of(new ConnectionSpec("prod", "localhost", 8812, "qdb", "admin", "other", false)));
+        }
+        assertThat(Files.readString(home.resolve("connections.json"))).as("the file is kept").contains("\"version\": 2");
+        assertThat(secrets.map).as("its password is kept too").containsEntry("prod", "later-s3cret");
     }
 
     /// A secret store write stuck on an unanswered unlock prompt does not hold back the panels' text, which reaches its
@@ -472,7 +699,7 @@ class StoreTest {
                 return super.write(name, password);
             }
         };
-        try (Store store = new Store(home, waiting)) {
+        try (final Store store = new Store(home, waiting)) {
             store.load();
             final PanelId id = new PanelId("p-wait");
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false)));
@@ -486,7 +713,7 @@ class StoreTest {
             assertThat(Files.readString(file)).isEqualTo("SELECT 7;");
             prompt.countDown();
         }
-        assertThat(waiting.map).containsEntry("lab", "s3cret");
+        assertThat(waiting.map).containsEntry(Store.account(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "", false)), "s3cret");
     }
 
     /// The keychain's answer is decoded in both forms it prints, the quoted password and the hex form with escapes, a
@@ -542,5 +769,106 @@ class StoreTest {
         assertThat(skills.resolve("gone")).as("no folder is made for it").doesNotExist();
         assertThat(repo.resolve("INDEX.md")).as("outside Claude Code's folder").doesNotExist();
         assertThat(Store.createIndexes(folders, claude)).as("once").isEmpty();
+    }
+
+    /// A folder of the brain, which may lie outside the kit's folder (D10), gets its missing index too; a folder in
+    /// neither root is left alone.
+    @Test
+    void anIndexMissingInAFolderOfTheBrainIsCreated() throws Exception {
+        final Path kit = Files.createDirectories(home.resolve("comando-kit"));
+        final Path memory = Files.createDirectories(home.resolve("comando-brain/MEMORY"));
+        final Path repo = Files.createDirectories(home.resolve("repo"));
+        final List<FolderRoot> folders = List.of(new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of()),
+                new FolderRoot("Outside", repo.toString(), "INDEX.md", List.of()));
+        assertThat(Store.createIndexes(folders, List.of(kit, home.resolve("comando-brain")))).containsExactly(memory.resolve("MEMORY.md"));
+        assertThat(repo.resolve("INDEX.md")).doesNotExist();
+    }
+
+    /// Without a kit, saving the folders creates no index file: the default folder, the user's own `~/.claude`, never
+    /// gains a `CLAUDE.md`, which every Claude Code session of theirs would load (D10). With a kit, the kit's folder and
+    /// its brain are where a missing index is created.
+    @Test
+    void withoutAKitSavingTheFoldersCreatesNoIndexInTheUsersOwnClaudeFolder() throws Exception {
+        final Path claude = Files.createDirectories(home.resolve(".claude"));
+        final KitRoot outer = KitRoot.current();
+        KitRoot.use(KitRoot.plain(claude));
+        try (final Store store = new Store(home.resolve("data"))) {
+            store.saveFolders(FolderRoot.defaults(claude));
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        } finally {
+            KitRoot.use(outer);
+        }
+        assertThat(claude.resolve("CLAUDE.md")).as("the user's own Claude Code folder").doesNotExist();
+        assertThat(Store.indexRoots(KitRoot.plain(claude))).as("no kit").isEmpty();
+
+        final Path kit = home.resolve("comando-kit");
+        final Path brain = home.resolve("comando-brain");
+        final KitRoot withKit = new KitRoot(kit, Optional.of(new KitRoot.Manifest("k", brain.toString(), List.of(), List.of(), List.of(), List.of())),
+                claude);
+        assertThat(Store.indexRoots(withKit)).as("a kit and its brain").containsExactly(kit, brain);
+    }
+
+    /// The kit's `Memory` folder lies in the brain (`root: brain`). The first start runs on brain A; the next one, with
+    /// `COMANDO_BRAIN` naming brain B, finds the Files tab's Memory moved to B with the brain, as D10 says a brain moved
+    /// by `COMANDO_BRAIN` takes its folders with it, at every start and not only the first on the kit.
+    @Test
+    void aBrainMovedByComandoBrainTakesItsFilesTabFoldersWithIt() throws Exception {
+        final Path kit = Files.createDirectories(home.resolve("comando-kit"));
+        final Path a = Files.createDirectories(home.resolve("brain-a/MEMORY")).getParent();
+        final Path b = Files.createDirectories(home.resolve("brain-b/MEMORY")).getParent();
+        Files.writeString(kit.resolve(KitRoot.FILE), """
+                {"kit": 1, "name": "k", "brain": "%s",
+                 "folders": [{"name": "Memory", "root": "brain", "path": "MEMORY", "index": "MEMORY.md", "icon": "memory", "group": "Brain"}]}
+                """.formatted(a));
+        final KitRoot.Manifest manifest = KitJson.read(kit.resolve(KitRoot.FILE));
+        final Path user = home.resolve(".claude");
+        final Path data = Files.createDirectories(home.resolve("data"));
+        final KitRoot first = new KitRoot(kit, Optional.of(manifest), user, "", "");
+        try (final Store store = new Store(data)) {
+            assertThat(store.withKitFolders(store.loadFolders(kit), first)).extracting(FolderRoot::path).as("first start, brain A")
+                    .containsExactly(a.resolve("MEMORY").toString());
+        }
+        final KitRoot moved = new KitRoot(kit, Optional.of(manifest), user, "", b.toString());
+        try (final Store store = new Store(data)) {
+            assertThat(store.withKitFolders(store.loadFolders(kit), moved)).extracting(FolderRoot::path).as("next start, COMANDO_BRAIN names B")
+                    .containsExactly(b.resolve("MEMORY").toString());
+        }
+        try (final Store store = new Store(data)) {
+            assertThat(store.loadFolders(kit)).extracting(FolderRoot::path).as("saved").containsExactly(b.resolve("MEMORY").toString());
+        }
+    }
+
+    /// A kit folder the user pointed elsewhere stays where the user put it when the brain moves, and so does the user's
+    /// own folder; a folder of the kit's own root follows the kit to another root.
+    @Test
+    void aKitFolderTheUserPointedElsewhereStaysWhenTheBrainMovesAndTheKitsFoldersFollowTheKit() throws Exception {
+        final Path kit = Files.createDirectories(home.resolve("comando-kit"));
+        final Path other = Files.createDirectories(home.resolve("kit-two"));
+        final Path a = Files.createDirectories(home.resolve("brain-a/MEMORY")).getParent();
+        final Path b = Files.createDirectories(home.resolve("brain-b/MEMORY")).getParent();
+        final Path notes = Files.createDirectories(home.resolve("notes"));
+        final KitRoot.Manifest manifest = new KitRoot.Manifest("k", a.toString(),
+                List.of(new FolderRoot("Memory", "MEMORY", "", List.of(), "memory"), new FolderRoot("Skills", "skills", "", List.of())),
+                List.of(), List.of(), List.of(), List.of(), Set.of("Memory"));
+        final Path user = home.resolve(".claude");
+        final Path data = Files.createDirectories(home.resolve("data"));
+        final FolderRoot own = new FolderRoot("Notes", notes.toString(), "", List.of());
+        try (final Store store = new Store(data)) {
+            final List<FolderRoot> first = store.withKitFolders(store.loadFolders(kit), new KitRoot(kit, Optional.of(manifest), user, "", ""));
+            final List<FolderRoot> edited = new ArrayList<>(first);
+            edited.set(0, new FolderRoot("Memory", notes.resolve("memory").toString(), "", List.of(), "memory"));
+            edited.add(own);
+            store.saveFolders(edited);
+        }
+        try (final Store store = new Store(data)) {
+            assertThat(store.withKitFolders(store.loadFolders(kit), new KitRoot(kit, Optional.of(manifest), user, "", b.toString())))
+                    .extracting(FolderRoot::path).as("the brain moved: the user's Memory and Notes stay, Skills is the kit's")
+                    .containsExactly(notes.resolve("memory").toString(), kit.resolve("skills").toString(), notes.toString());
+        }
+        try (final Store store = new Store(data)) {
+            assertThat(store.withKitFolders(store.loadFolders(other), new KitRoot(other, Optional.of(manifest), user, "", b.toString())))
+                    .extracting(FolderRoot::path).as("another kit: its Skills replaces the first kit's")
+                    .containsExactly(notes.resolve("memory").toString(), other.resolve("skills").toString(), notes.toString());
+        }
     }
 }

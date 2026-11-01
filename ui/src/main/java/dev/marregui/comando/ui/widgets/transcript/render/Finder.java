@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -10,8 +11,11 @@ import java.util.Set;
 import dev.marregui.comando.ui.kit.text.CaseFold;
 
 /**
- * Find in the transcript: the matches over the boxes in reading order, the current one, and the closed items a find
- * opened, which close again when it ends. EDT only.
+ * Find in the transcript: the matches over the whole conversation, the current one, and the closed items a find
+ * opened, which close again when it ends. The matches are read from the blocks' text as each item's boxes would show
+ * it ({@link Item#findTexts}), so a find lays out nothing; a match is a top-level item, the box within it in reading
+ * order, and the offset in that box's text. Only the item of the match shown is laid out, to scroll to it; the boxes
+ * the view has laid out take their marks from their own text. EDT only.
  */
 final class Finder {
 
@@ -24,17 +28,17 @@ final class Finder {
         /** The card or hook group {@code item} sits in; null at the top level. */
         Item parentOf(Item item);
 
-        /** The boxes in reading order, exactly laid out. */
-        List<Placed> placedExactly();
-
         /** The fold of {@code item} changed: it and the items around it lay out again. */
         void foldChanged(Item item);
 
-        /** Lays out every item exactly, keeping the view; the boxes are read again. */
-        void relayout();
-
         /** Items opened or closed: the structure lays out again. */
         void structureChanged();
+
+        /** Lays out the top-level item at {@code index} if it is not, and returns its boxes in reading order, placed. */
+        List<Placed> place(int index);
+
+        /** A count that changes whenever a block, a fold or the style does: matches counted before it are stale. */
+        long version();
 
         /** Scrolls the content at {@code y} into the view. */
         void scrollTo(int y);
@@ -43,14 +47,28 @@ final class Finder {
     }
 
     private final Host host;
-    private final List<int[]> matches = new ArrayList<>();
-    private Map<TextBox, List<int[]>> matchesByBox = new IdentityHashMap<>();
+    /** The matches, in reading order: top-level item, box within it, offset; {@link #count} of them. */
+    private int[] matchItem = new int[0];
+    private int[] matchBox = new int[0];
+    private int[] matchAt = new int[0];
+    private int count;
+    /** The {@link Host#version} the matches were counted at; -1 when they must be counted again. */
+    private long countedAt = -1;
     private int currentMatch = -1;
     private String findText = "";
-    /** Where {@link #rewind} left the current match: its box, its item and its offset; -1 when not rewound. */
-    private TextBox rewoundBox;
-    private Item rewoundItem;
-    private int rewoundAt = -1;
+    private String needle = "";
+    /** The marks of the boxes laid out now, from their own text, and the box holding the current match. */
+    private Map<TextBox, List<int[]>> matchesByBox = new IdentityHashMap<>();
+    private TextBox currentBox;
+    /**
+     * Where {@link #rewind} left the current match: its top-level item, the item that owns its box (the top-level item
+     * or one nested in it), the box's place among that owner's own boxes, and the offset; item -1 when not rewound. By
+     * owner, not by place in the top-level item: the next text closes and opens nested cards before it.
+     */
+    private int rewoundItem = -1;
+    private Item rewoundOwner;
+    private int rewoundOwnBox;
+    private int rewoundAt;
     /** Items the current find opened; clearing the find closes them again. */
     private final List<Item> revealed = new ArrayList<>();
 
@@ -62,6 +80,7 @@ final class Finder {
     void reset() {
         revealed.clear();
         findText = "";
+        needle = "";
         clearMatches();
     }
 
@@ -71,73 +90,150 @@ final class Finder {
 
     /**
      * Finds {@code text}, opening the closed items that hold it; returns the number of matches. A new text first
-     * closes what the previous one opened.
+     * closes what the previous one opened. The same text again moves to the next match, counting again first when
+     * blocks arrived or changed since.
      */
     int find(final String text, final boolean forward) {
         boolean fromRewound = false;
         if (!text.equals(findText)) {
-            fromRewound = rewoundAt >= 0;
+            fromRewound = rewoundItem >= 0;
             findText = text;
+            needle = CaseFold.fold(text);
             currentMatch = -1;
+            countedAt = -1;
             concealRevealed(Set.of());
             if (!text.isEmpty()) {
-                revealContaining(host.items(), CaseFold.fold(text));
+                revealContaining(host.items());
             }
-            host.relayout();
+            host.structureChanged();
         }
-        // the same text again, after a switch or new blocks: matches are counted over every item
-        final List<Placed> placed = host.placedExactly();
-        rematch(placed);
-        if (matches.isEmpty()) {
+        if (countedAt != host.version()) {
+            count();
+            countedAt = host.version();
+        }
+        if (count == 0) {
             currentMatch = -1;
             dropRewound();
             host.repaint();
             return 0;
         }
         if (fromRewound) {
-            currentMatch = atOrAfterRewound(placed);
+            currentMatch = atOrAfterRewound();
         } else {
-            currentMatch = currentMatch < 0 ? (forward ? 0 : matches.size() - 1)
-                    : Math.floorMod(currentMatch + (forward ? 1 : -1), matches.size());
+            currentMatch = currentMatch < 0 ? (forward ? 0 : count - 1) : Math.floorMod(currentMatch + (forward ? 1 : -1), count);
         }
         dropRewound();
-        final int[] m = matches.get(currentMatch);
-        final Placed p = placed.get(m[0]);
-        host.scrollTo(p.y() + Math.round(p.box().topOf(m[1])));
+        final int y = currentMatchY();
+        if (y >= 0) {
+            host.scrollTo(y);
+        }
         host.repaint();
-        return matches.size();
+        return count;
     }
 
-    /** The next find of a new text starts where the current match begins; {@code placed} null when not placed. */
-    void rewind(final List<Placed> placed) {
+    /**
+     * Counts the matches over every item from the texts its boxes would show, keeping the current match when it still
+     * is one. Each item's texts are made for the count and let go.
+     */
+    private void count() {
+        final int keep = currentMatch;
+        count = 0;
+        final List<Item> items = host.items();
+        // each item's matches as box and offset pairs, on every core; then in reading order
+        final int[][] found = new int[items.size()][];
+        final String folded = needle;
+        Forks.each("transcript-find", found.length, i -> found[i] = matchesIn(items.get(i), folded));
+        for (int i = 0; i < found.length; i++) {
+            for (int j = 0; j < found[i].length; j += 2) {
+                add(i, found[i][j], found[i][j + 1]);
+            }
+        }
+        currentMatch = keep < count ? keep : -1;
+    }
+
+    private static final int[] NONE = new int[0];
+
+    /** The matches of {@code needle} in {@code item}'s texts, as box and offset pairs. */
+    private static int[] matchesIn(final Item item, final String needle) {
+        final List<String> texts = new ArrayList<>();
+        item.findTexts(texts);
+        int[] out = NONE;
+        int n = 0;
+        for (int k = 0; k < texts.size(); k++) {
+            final String hay = CaseFold.fold(texts.get(k));
+            for (int at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length())) {
+                if (n + 2 > out.length) {
+                    out = Arrays.copyOf(out, Math.max(8, out.length * 2));
+                }
+                out[n++] = k;
+                out[n++] = at;
+            }
+        }
+        return n == out.length ? out : Arrays.copyOf(out, n);
+    }
+
+    private void add(final int item, final int box, final int at) {
+        if (count == matchItem.length) {
+            final int n = Math.max(64, count * 2);
+            matchItem = Arrays.copyOf(matchItem, n);
+            matchBox = Arrays.copyOf(matchBox, n);
+            matchAt = Arrays.copyOf(matchAt, n);
+        }
+        matchItem[count] = item;
+        matchBox[count] = box;
+        matchAt[count] = at;
+        count++;
+    }
+
+    /** The next find of a new text starts where the current match begins. */
+    void rewind() {
         dropRewound();
-        if (placed != null && currentMatch >= 0 && currentMatch < matches.size()) {
-            final int[] m = matches.get(currentMatch);
-            rewoundBox = placed.get(m[0]).box();
-            rewoundItem = placed.get(m[0]).item();
-            rewoundAt = m[1];
+        final Placed p = currentPlaced();
+        if (p != null) {
+            final List<Placed> boxes = host.place(matchItem[currentMatch]);
+            int own = 0;
+            for (int j = 0; j < matchBox[currentMatch]; j++) {
+                if (boxes.get(j).item() == p.item()) {
+                    own++;
+                }
+            }
+            rewoundItem = matchItem[currentMatch];
+            rewoundOwner = p.item();
+            rewoundOwnBox = own;
+            rewoundAt = matchAt[currentMatch];
         }
     }
 
-    /** The first match at or after the anchor, in reading order; the first match when the anchor's text is gone. */
-    private int atOrAfterRewound(final List<Placed> placed) {
-        int from = -1;
-        for (int i = 0; i < placed.size() && from < 0; i++) {
-            if (placed.get(i).box() == rewoundBox) {
-                from = i;
+    /**
+     * The first match at or after the anchor, in reading order, the anchor's box found again among its owner's boxes
+     * as the new text's folds place them; the owner's first box when that one is gone, the top-level item's start when
+     * the owner shows none; the first match when no match is at or after it.
+     */
+    private int atOrAfterRewound() {
+        int box = 0;
+        int at = 0;
+        if (rewoundItem < host.items().size()) {
+            final List<Placed> boxes = host.place(rewoundItem);
+            int own = 0;
+            int first = -1;
+            int found = -1;
+            for (int j = 0; j < boxes.size() && found < 0; j++) {
+                if (boxes.get(j).item() == rewoundOwner) {
+                    first = first < 0 ? j : first;
+                    found = own++ == rewoundOwnBox ? j : -1;
+                }
+            }
+            if (found >= 0) {
+                box = found;
+                at = rewoundAt;
+            } else if (first >= 0) {
+                box = first;
             }
         }
-        for (int i = 0; i < placed.size() && from < 0; i++) {
-            if (placed.get(i).item() == rewoundItem) {
-                from = i;
-            }
-        }
-        if (from < 0) {
-            return 0;
-        }
-        for (int k = 0; k < matches.size(); k++) {
-            final int[] m = matches.get(k);
-            if (m[0] > from || (m[0] == from && m[1] >= rewoundAt)) {
+        for (int k = 0; k < count; k++) {
+            final int order = matchItem[k] != rewoundItem ? Integer.compare(matchItem[k], rewoundItem)
+                    : matchBox[k] != box ? Integer.compare(matchBox[k], box) : Integer.compare(matchAt[k], at);
+            if (order >= 0) {
                 return k;
             }
         }
@@ -145,19 +241,26 @@ final class Finder {
     }
 
     private void dropRewound() {
-        rewoundBox = null;
-        rewoundItem = null;
-        rewoundAt = -1;
+        rewoundItem = -1;
+        rewoundOwner = null;
     }
 
-    /** The top of the current match in the canvas, -1 when there is none; {@code placed} null when not placed. */
-    int currentMatchY(final List<Placed> placed) {
-        if (placed == null || currentMatch < 0 || currentMatch >= matches.size()) {
+    /** The current match's placed box, laying its item out; null when there is none. */
+    private Placed currentPlaced() {
+        if (currentMatch < 0 || currentMatch >= count || matchItem[currentMatch] >= host.items().size()) {
+            return null;
+        }
+        final List<Placed> boxes = host.place(matchItem[currentMatch]);
+        return matchBox[currentMatch] < boxes.size() ? boxes.get(matchBox[currentMatch]) : null;
+    }
+
+    /** The top of the current match in the canvas, -1 when there is none. */
+    int currentMatchY() {
+        final Placed p = currentPlaced();
+        if (p == null) {
             return -1;
         }
-        final int[] m = matches.get(currentMatch);
-        final Placed p = placed.get(m[0]);
-        return p.y() + Math.round(p.box().topOf(m[1]));
+        return p.y() + Math.round(p.box().topOf(Math.min(matchAt[currentMatch], p.box().length())));
     }
 
     /**
@@ -167,14 +270,15 @@ final class Finder {
     void clear() {
         final Set<Item> keep = Collections.newSetFromMap(new IdentityHashMap<>());
         if (!findText.isEmpty() && !revealed.isEmpty()) {
-            final List<Placed> placed = host.placedExactly();
-            if (currentMatch >= 0 && currentMatch < matches.size()) {
-                for (Item i = placed.get(matches.get(currentMatch)[0]).item(); i != null; i = host.parentOf(i)) {
+            final Placed p = currentPlaced();
+            if (p != null) {
+                for (Item i = p.item(); i != null; i = host.parentOf(i)) {
                     keep.add(i);
                 }
             }
         }
         findText = "";
+        needle = "";
         dropRewound();
         clearMatches();
         if (concealRevealed(keep)) {
@@ -198,47 +302,47 @@ final class Finder {
     }
 
     private void clearMatches() {
-        matches.clear();
+        count = 0;
+        countedAt = -1;
         matchesByBox = new IdentityHashMap<>();
+        currentBox = null;
         currentMatch = -1;
     }
 
     /**
-     * Matches the find's text over {@code placed}, the boxes in reading order, keeping the current match when it still
-     * is one.
+     * Opens the closed items that hold the needle, at any depth: which they are is read on every core, as it reads every
+     * block's text; they open on the caller.
      */
-    void rematch(final List<Placed> placed) {
-        final int keep = currentMatch;
-        matches.clear();
-        matchesByBox = new IdentityHashMap<>();
-        if (findText.isEmpty()) {
-            currentMatch = -1;
-            return;
-        }
-        // folded char by char, so an offset in the folded text is the same offset in the box's text
-        final String needle = CaseFold.fold(findText);
-        for (int i = 0; i < placed.size(); i++) {
-            final TextBox box = placed.get(i).box();
-            final String hay = CaseFold.fold(box.text());
-            for (int at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length())) {
-                matches.add(new int[]{i, at});
-                matchesByBox.computeIfAbsent(box, k -> new ArrayList<>()).add(new int[]{at, at + needle.length()});
+    private void revealContaining(final List<Item> list) {
+        // one slot per item, each set by one task: no slot is added or removed while they run
+        final List<List<Item>> closed = new ArrayList<>(Collections.nCopies(list.size(), List.of()));
+        final String folded = needle;
+        Forks.each("transcript-reveal", closed.size(), i -> {
+            final List<Item> out = new ArrayList<>();
+            closedContaining(list.get(i), folded, out);
+            closed.set(i, out);
+        });
+        for (final List<Item> items : closed) {
+            for (final Item item : items) {
+                if (item.fold().reveal()) {
+                    host.foldChanged(item);
+                    revealed.add(item);
+                }
             }
         }
-        currentMatch = keep < matches.size() ? keep : -1;
     }
 
-    private void revealContaining(final List<Item> list, final String needle) {
-        for (final Item item : list) {
-            final Fold fold = item.fold();
-            if ((fold == null && item.children().isEmpty()) || !subtreeContains(item, needle)) {
-                continue;
-            }
-            if (fold != null && fold.reveal()) {
-                host.foldChanged(item);
-                revealed.add(item);
-            }
-            revealContaining(item.children(), needle);
+    /** Adds {@code item} and the items nested in it that are closed and hold {@code needle}, outer first. */
+    private static void closedContaining(final Item item, final String needle, final List<Item> out) {
+        final Fold fold = item.fold();
+        if ((fold == null && item.children().isEmpty()) || !subtreeContains(item, needle)) {
+            return;
+        }
+        if (fold != null && !fold.isOpen()) {
+            out.add(item);
+        }
+        for (final Item child : item.children()) {
+            closedContaining(child, needle, out);
         }
     }
 
@@ -257,26 +361,53 @@ final class Finder {
 
     // ---- what painting reads
 
+    /** The boxes laid out now are placed again: their marks are read from their own text. */
+    void startPlacing() {
+        matchesByBox = new IdentityHashMap<>();
+        currentBox = null;
+    }
+
+    /** The top-level item at {@code index} is laid out with {@code boxes}, in reading order: marks them. */
+    void placed(final int index, final List<Placed> boxes) {
+        if (findText.isEmpty()) {
+            return;
+        }
+        for (final Placed p : boxes) {
+            final String hay = CaseFold.fold(p.box().text());
+            for (int at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length())) {
+                matchesByBox.computeIfAbsent(p.box(), k -> new ArrayList<>()).add(new int[]{at, at + needle.length()});
+            }
+        }
+        if (currentMatch >= 0 && currentMatch < count && matchItem[currentMatch] == index && matchBox[currentMatch] < boxes.size()) {
+            currentBox = boxes.get(matchBox[currentMatch]).box();
+        }
+    }
+
     /** The matches in {@code box}, as {@code [start, end]} pairs; null when none. */
     List<int[]> finds(final TextBox box) {
         return matchesByBox.get(box);
     }
 
     /** The index among {@code box}'s matches of the current match; -1 when it is not in that box. */
-    int currentFind(final TextBox box, final List<Placed> placed) {
-        if (currentMatch < 0 || placed == null) {
-            return -1;
-        }
-        final int[] m = matches.get(currentMatch);
-        if (placed.get(m[0]).box() != box) {
+    int currentFind(final TextBox box) {
+        if (box != currentBox || currentMatch < 0 || currentMatch >= count) {
             return -1;
         }
         final List<int[]> inBox = matchesByBox.get(box);
         for (int i = 0; inBox != null && i < inBox.size(); i++) {
-            if (inBox.get(i)[0] == m[1]) {
+            if (inBox.get(i)[0] == matchAt[currentMatch]) {
                 return i;
             }
         }
         return -1;
+    }
+
+    /** The matches as {@code [item, box, offset]}, in reading order; for tests. */
+    List<int[]> matches() {
+        final List<int[]> out = new ArrayList<>(count);
+        for (int k = 0; k < count; k++) {
+            out.add(new int[]{matchItem[k], matchBox[k], matchAt[k]});
+        }
+        return out;
     }
 }

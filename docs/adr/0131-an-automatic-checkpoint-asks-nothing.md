@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-01 | accepted; built | Miguel and Claude |
+| 2026-11-01 | accepted; built; amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -47,3 +47,19 @@ so the cards shown in it look disabled although they answer (scratchpad task 42)
 
 [Record 129](0129-a-checkpoint-reflects-then-compacts.md): the automatic checkpoint's prompt carries `--auto`.
 [Record 130](0130-a-session-locks-while-its-checkpoint-runs.md): the Session tab's veil lifts while a card waits.
+
+## Amendments
+
+2026-11-01, first-release review: a decision's id is never given twice. It comes from the state's counter, which never
+goes back, so a checkpoint that read ids earlier cannot settle a newer decision; `decisions.json` keeps the highest id
+given (`lastId`), and the ids after a restart start above it. The Settle row reads: the decision's own session while it
+exists with a checkpoint command, else the focused panel's session when it has one. Under Miguel's decision D3 the
+automatic checkpoint runs at the threshold of [record 129](0129-a-checkpoint-reflects-then-compacts.md)'s amendment, a share
+of the context window. Tested in `ReducerDecisionsTest` and `StoreTest`.
+
+2026-11-01, Miguel's choice in the first-release review ("when it is done automatically, it definitely wants to carry on
+working"; offered both kinds of checkpoint or the automatic one only, he chose the automatic one only): once the
+compaction that follows an automatic checkpoint has ended normally, comando prompts the session to carry on with its
+work, as [record 129](0129-a-checkpoint-reflects-then-compacts.md)'s amendment of the same date describes. The checkpoint
+that asks nothing is thus also the one that resumes by itself; a checkpoint the user starts, whose decisions are answered
+there, waits for the user's next prompt as before.

@@ -1,5 +1,7 @@
 [versions]
 checkstyle = "14.3.0"
+# the coverage report (`./gradlew test jacocoTestReport`); not part of `build`
+jacoco = "0.8.16"
 flatlaf = "3.7.2"
 # the SVG renderer FlatLaf's extras use; kept at their version
 jsvg = "2.2.0"

@@ -142,24 +142,31 @@ final class DiffWindow {
         }
     }
 
-    /** Drops the window's edits and closes it when it shows one of {@code paths} in {@code root}, changed elsewhere. */
+    /**
+     * Drops the window's edits of {@code paths} in {@code root}, changed elsewhere, and closes it when it shows one of
+     * them.
+     */
     void drop(final String root, final Collection<String> paths) {
+        editor.forget(root, paths);
         if (editor.change() != null && Objects.equals(editor.root(), root) && paths.contains(editor.change().path())) {
             editor.discard();
             close();
         }
     }
 
-    /** Writes the window's edits, waiting at most {@link #SAVE_AT_QUIT}; for quitting. */
+    /**
+     * Writes the window's edits, those of files it showed before among them, waiting at most {@link #SAVE_AT_QUIT}; for
+     * quitting.
+     */
     void saveNow() {
         try {
-            final String reason = editor.save().get(SAVE_AT_QUIT.toMillis(), TimeUnit.MILLISECONDS);
+            final String reason = editor.saveAll().get(SAVE_AT_QUIT.toMillis(), TimeUnit.MILLISECONDS);
             if (reason != null) {
                 LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits [reason=" + reason + ']');
             }
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
+        } catch (final ExecutionException | TimeoutException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits in time", e);
         }
     }

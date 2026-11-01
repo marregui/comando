@@ -6,7 +6,11 @@ import java.util.List;
 
 import dev.marregui.comando.core.model.SessionSpec;
 
-/** Builds the argument list of a headless Claude Code process for a session. */
+/**
+ * Builds the argument list of a headless Claude Code process for a session. It names no permission mode and no extra
+ * folder: how Claude asks and what it reaches are the kit's {@code settings.json} rules, the same for every session
+ * (record 7).
+ */
 public final class ClaudeCommand {
 
     public static final String APPROVE_TOOL = "mcp__comando__approve";
@@ -61,11 +65,7 @@ public final class ClaudeCommand {
         }
         option(a, "--model", spec.model());
         option(a, "--effort", spec.effort());
-        option(a, "--permission-mode", spec.permissionMode());
-        for (final String dir : spec.addDirs()) {
-            a.add("--add-dir");
-            a.add(dir);
-        }
+        // no permission mode and no extra folders: the kit's settings.json rules hold for every session (record 7)
         if (spec.budgetUsd() > 0.0) {
             a.add("--max-budget-usd");
             a.add(Double.toString(spec.budgetUsd()));

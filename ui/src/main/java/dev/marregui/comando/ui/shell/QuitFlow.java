@@ -68,7 +68,7 @@ final class QuitFlow {
     }
 
     private void quitWith(final Map<PanelId, String> jobs) {
-        final List<String> work = runningWork(jobs);
+        final List<String> work = runningWork(deps.state().get(), jobs);
         final JFrame frame = parts.frame();
         final boolean keep = !work.isEmpty() && !PanelFiles.confirm(frame, "Quit comando?", quitQuestion(work), "Quit");
         confirmingQuit = false;
@@ -78,13 +78,26 @@ final class QuitFlow {
             return;
         }
         quitting = true;
-        final long start = System.nanoTime();
-        layout.saveQuietly();
-        teardown.run();
-        final long millis = (System.nanoTime() - start) / 1_000_000;
-        LOG.log(System.Logger.Level.INFO, "quitting [window teardown millis=" + millis + ']');
-        // the window stays, saying so, until the application has closed (close() disposes it): a relaunch meanwhile
-        // finds the lock held, and the user can see why
+        try {
+            final long start = System.nanoTime();
+            layout.saveQuietly();
+            teardown.run();
+            final long millis = (System.nanoTime() - start) / 1_000_000;
+            LOG.log(System.Logger.Level.INFO, "quitting [window teardown millis=" + millis + ']');
+            closing(frame);
+        } catch (final RuntimeException e) {
+            // the window could not stop cleanly: comando quits all the same, or it would stay with its lock held
+            LOG.log(System.Logger.Level.WARNING, "the window did not stop cleanly, quitting all the same", e);
+        } finally {
+            deps.onQuit().run();
+        }
+    }
+
+    /**
+     * The window stays, saying so, until the application has closed ({@code close()} disposes it): a relaunch meanwhile
+     * finds the lock held, and the user can see why.
+     */
+    private static void closing(final JFrame frame) {
         frame.setTitle(InstanceName.display(InstanceName.current()) + " — closing…");
         final ClosingCover cover = new ClosingCover();
         frame.setGlassPane(cover);
@@ -96,7 +109,6 @@ final class QuitFlow {
                 bar.getMenu(i).setEnabled(false);
             }
         }
-        deps.onQuit().run();
     }
 
     /** "Quitting stops main's turn.", or what it stops one per line when several things run. */
@@ -109,8 +121,7 @@ final class QuitFlow {
      * What quitting would stop: running queries, sessions in a turn, shells running a job ({@code jobs}, by panel);
      * empty when nothing.
      */
-    private List<String> runningWork(final Map<PanelId, String> jobs) {
-        final AppState s = deps.state().get();
+    static List<String> runningWork(final AppState s, final Map<PanelId, String> jobs) {
         final List<String> work = new ArrayList<>();
         final long queries = s.runs().stream().filter(r -> r.status().isActive()).count();
         if (queries > 0) {

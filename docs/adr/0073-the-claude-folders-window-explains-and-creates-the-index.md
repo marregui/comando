@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | accepted | Miguel and Claude |
+| 2026-10-19 | accepted; the rows "picks" and "title" amended 2026-11-01 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -48,3 +48,12 @@ The same kit release carries the author's standard for the knowledge base (2026-
 (`00_START_HERE.md` and `99_MAINTENANCE.md`, the latter with Rules, Source register, Drift check and its checks table,
 Change log), `index-check` checks every set, and a scratchpad day's index is `INDEX.md`, formerly `ALPHA.md`. The kit's
 folders follow: the knowledge base opens `00_START_HERE.md`, and the Scratchpad's listing file is `INDEX.md`.
+
+## Amendments
+
+2026-11-01, Miguel's decision D10 of the first-release review: the kit and the brain are folders of their own, anywhere,
+so the row "picks" reads: the window takes a folder inside the folder comando's sessions run on (the kit, else Claude
+Code's own `~/.claude`) and, with a kit, inside the brain's folder
+([Kit and brain §3.1](../kit-and-brain.md#31-the-root)). The chooser starts in the first; + and … refuse a folder
+outside both, and the message line says so. The row "title" reads: "Files tab folders" and the command Configure Files
+tab folders, naming what the window holds rather than one of its roots. Tested in `FoldersEditorTest`.

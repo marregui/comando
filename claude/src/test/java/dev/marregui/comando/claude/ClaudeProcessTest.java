@@ -1,5 +1,6 @@
 package dev.marregui.comando.claude;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -13,7 +14,10 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.core.loop.Errands;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// [ClaudeProcess] streams process output, queues input, and reports exit after bounded output draining.
 ///
@@ -24,6 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Ends the processes Claude Code started with it, one that ignores SIGTERM by SIGKILL.
 class ClaudeProcessTest {
 
+    /** The errands every process here runs its stdin writer and exit waiter on. */
+    private static final Errands HELPERS = new Errands("claude-process-test");
+
     /** How long a signalled process is given to be gone. */
     private static final Duration GONE = Duration.ofSeconds(5);
 
@@ -33,7 +40,7 @@ class ClaudeProcessTest {
         final List<String> lines = new CopyOnWriteArrayList<>();
         final AtomicInteger code = new AtomicInteger(-1);
         final CountDownLatch exited = new CountDownLatch(1);
-        ClaudeProcess.start("t", List.of("sh", "-c", "printf 'a\\nb\\n'; exit 3"), dir, RootLaunch.INHERIT, lines::add, c -> {
+        ClaudeProcess.start("t", List.of("sh", "-c", "printf 'a\\nb\\n'; exit 3"), dir, RootLaunch.INHERIT, HELPERS, lines::add, c -> {
             code.set(c);
             exited.countDown();
         });
@@ -48,7 +55,7 @@ class ClaudeProcessTest {
     void theExitIsReportedWhileAChildStillHoldsTheOutputOpen(@TempDir final Path dir) throws Exception {
         final List<String> lines = new CopyOnWriteArrayList<>();
         final CountDownLatch exited = new CountDownLatch(1);
-        ClaudeProcess.start("t", List.of("sh", "-c", "sleep 60 & echo $!; exit 0"), dir, RootLaunch.INHERIT, lines::add, c -> exited.countDown());
+        ClaudeProcess.start("t", List.of("sh", "-c", "sleep 60 & echo $!; exit 0"), dir, RootLaunch.INHERIT, HELPERS, lines::add, c -> exited.countDown());
         try {
             assertThat(exited.await(ClaudeProcess.DRAIN_MILLIS + 8_000, TimeUnit.MILLISECONDS)).isTrue();
         } finally {
@@ -65,7 +72,7 @@ class ClaudeProcessTest {
         final CountDownLatch exited = new CountDownLatch(1);
         final AtomicReference<ClaudeProcess> process = new AtomicReference<>();
         process.set(ClaudeProcess.start("t", List.of("sh", "-c", "i=0; while [ $i -lt 100 ]; do echo \"err $i\" 1>&2; i=$((i+1)); done; exit 1"),
-                dir, RootLaunch.INHERIT, line -> { }, c -> exited.countDown()));
+                dir, RootLaunch.INHERIT, HELPERS, line -> { }, c -> exited.countDown()));
         assertThat(exited.await(10, TimeUnit.SECONDS)).isTrue();
         // read before the exit is told, so it is there once it has been
         final List<String> tail = process.get().stderrTail().lines().toList();
@@ -73,12 +80,50 @@ class ClaudeProcessTest {
         assertThat(process.get().stderrFile()).as("the stderr file is deleted").doesNotExist();
     }
 
+    /// Stderr past the 64 KB the exit reads of it keeps whole lines only: the line the read's start cuts is left out,
+    /// so the failure notice never starts mid-line, and the last lines are the process's last.
+    @Test
+    void aStderrPastItsTailBoundKeepsWholeLines(@TempDir final Path dir) throws Exception {
+        final CountDownLatch exited = new CountDownLatch(1);
+        final AtomicReference<ClaudeProcess> process = new AtomicReference<>();
+        // 2,000 lines of 50 characters: about 100 KB, past the bound
+        process.set(ClaudeProcess.start("t", List.of("sh", "-c",
+                        "i=0; while [ $i -lt 2000 ]; do printf 'line %04d %s\\n' $i 0123456789012345678901234567890123456789 1>&2; i=$((i+1)); done; exit 1"),
+                dir, RootLaunch.INHERIT, HELPERS, line -> { }, c -> exited.countDown()));
+        assertThat(exited.await(20, TimeUnit.SECONDS)).isTrue();
+        final List<String> tail = process.get().stderrTail().lines().toList();
+        assertThat(tail).hasSize(40).allMatch(l -> l.matches("line \\d{4} 0123456789012345678901234567890123456789"));
+        assertThat(tail.getLast()).startsWith("line 1999 ");
+    }
+
+    /// Once the stdin writer has ended (the process closed its input and exited), a line is refused, not queued where
+    /// nothing reads it.
+    @Test
+    void aLineAfterTheWriterEndedIsRefused(@TempDir final Path dir) throws Exception {
+        final CountDownLatch exited = new CountDownLatch(1);
+        final ClaudeProcess p = ClaudeProcess.start("t", List.of("sh", "-c", "exec 0<&-; exit 0"), dir, RootLaunch.INHERIT, HELPERS, line -> { },
+                c -> exited.countDown());
+        assertThat(exited.await(10, TimeUnit.SECONDS)).isTrue();
+        p.closeInput();
+        Awaitility.await("the writer ended").atMost(GONE).until(() -> !p.send("{}"));
+    }
+
+    /// A process asked for once its owner's errands have closed (comando closing) is not left running: the start
+    /// throws and nothing waits on a process that would be nobody's.
+    @Test
+    void aStartAfterTheOwnerClosedIsRefused(@TempDir final Path dir) {
+        final Errands closed = new Errands("closed");
+        closed.close();
+        assertThatThrownBy(() -> ClaudeProcess.start("t", List.of("sh", "-c", "sleep 30"), dir, RootLaunch.INHERIT, closed, line -> { }, c -> { }))
+                .isInstanceOf(IOException.class).hasMessage("comando is closing");
+    }
+
     /// A blocked session process creates only `claude-out-budget` as a platform thread; stdin and exit waits do not add
     /// platform threads before the test releases the process.
     @Test
     void aSessionsOnlyPlatformThreadIsItsStdoutReader(@TempDir final Path dir) throws Exception {
         final CountDownLatch exited = new CountDownLatch(1);
-        final ClaudeProcess p = ClaudeProcess.start("budget", List.of("sh", "-c", "read x; exit 0"), dir, RootLaunch.INHERIT, line -> { }, c -> exited.countDown());
+        final ClaudeProcess p = ClaudeProcess.start("budget", List.of("sh", "-c", "read x; exit 0"), dir, RootLaunch.INHERIT, HELPERS, line -> { }, c -> exited.countDown());
         try {
             final List<String> platform = Thread.getAllStackTraces().keySet().stream().filter(t -> !t.isVirtual())
                     .map(Thread::getName).filter(n -> n.startsWith("claude-")).toList();
@@ -95,7 +140,7 @@ class ClaudeProcessTest {
     void terminateEndsTheProcessesClaudeStarted(@TempDir final Path dir) throws Exception {
         final List<String> lines = new CopyOnWriteArrayList<>();
         final ClaudeProcess p = ClaudeProcess.start("t", List.of("sh", "-c", "nohup sleep 60 >/dev/null 2>&1 & echo $!; wait"),
-                dir, RootLaunch.INHERIT, lines::add, c -> { });
+                dir, RootLaunch.INHERIT, HELPERS, lines::add, c -> { });
         final long grandchild = awaitPid(lines);
         try {
             p.terminate();
@@ -113,7 +158,7 @@ class ClaudeProcessTest {
     void killEndsAChildThatIgnoredTheTerminateAfterClaudeExited(@TempDir final Path dir) throws Exception {
         final List<String> lines = new CopyOnWriteArrayList<>();
         final ClaudeProcess p = ClaudeProcess.start("t", List.of("sh", "-c", "(trap '' TERM HUP; exec sleep 61) & echo $!; wait"),
-                dir, RootLaunch.INHERIT, lines::add, c -> { });
+                dir, RootLaunch.INHERIT, HELPERS, lines::add, c -> { });
         final long grandchild = awaitPid(lines);
         try {
             p.terminate();

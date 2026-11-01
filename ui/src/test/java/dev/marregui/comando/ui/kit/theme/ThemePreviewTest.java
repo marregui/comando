@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.theme;
 
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -21,7 +22,7 @@ class ThemePreviewTest {
         final BufferedImage paper = draw(NamedTheme.PAPER_OCHRE);
         assertThat(paper.getRGB(186, 6) & 0xFFFFFF).as("paper's ground").isEqualTo(Ground.PAPER.color.getRGB() & 0xFFFFFF);
         final int bar = paper.getRGB(9, 48) & 0xFFFFFF;
-        assertThat(Oklch.distance(new java.awt.Color(bar), Tint.OCHRE.at(0.5f))).as("the bar in ochre").isLessThan(0.08);
+        assertThat(Oklch.distance(new Color(bar), Tint.OCHRE.at(0.5f))).as("the bar in ochre").isLessThan(0.08);
         assertThat(darkest(paper)).as("dark text on paper").isLessThan(0.3);
         final BufferedImage graphite = draw(NamedTheme.GRAPHITE_GOLD);
         assertThat(graphite.getRGB(186, 6) & 0xFFFFFF).isEqualTo(Ground.GRAPHITE.color.getRGB() & 0xFFFFFF);
@@ -40,7 +41,7 @@ class ThemePreviewTest {
         double min = 1;
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
-                min = Math.min(min, Oklch.lch(new java.awt.Color(img.getRGB(x, y)))[0]);
+                min = Math.min(min, Oklch.lch(new Color(img.getRGB(x, y)))[0]);
             }
         }
         return min;

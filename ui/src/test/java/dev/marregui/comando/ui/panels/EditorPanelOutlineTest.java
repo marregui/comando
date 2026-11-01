@@ -1,11 +1,17 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JList;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 
 import org.awaitility.Awaitility;
@@ -24,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - lists the headings with the ids the rendered page gives them, skipping fenced code and front matter
 /// - re-reads the headings after typing pauses
 /// - the Outline button toggles the pane and reports the choice for the next panel
-/// - a double click on a heading puts its line at the top; a single click does nothing
+/// - a double click on a heading puts its line at the top; a single click does nothing; Enter goes to the one selected
 /// - the pane uses the sidebar's colours
 /// - text that does not render as a page has no outline
 class EditorPanelOutlineTest {
@@ -63,12 +69,12 @@ class EditorPanelOutlineTest {
         return find(p, "Outline");
     }
 
-    private static JButton find(final java.awt.Container c, final String name) {
-        for (final java.awt.Component k : c.getComponents()) {
+    private static JButton find(final Container c, final String name) {
+        for (final Component k : c.getComponents()) {
             if (k instanceof JButton b && name.equals(b.getAccessibleContext().getAccessibleName())) {
                 return b;
             }
-            if (k instanceof java.awt.Container sub) {
+            if (k instanceof Container sub) {
                 final JButton f = find(sub, name);
                 if (f != null) {
                     return f;
@@ -141,12 +147,31 @@ class EditorPanelOutlineTest {
         assertThat(p.editor().area().getCaretLineNumber()).isEqualTo(line);
     }
 
+    /// Enter on the heading selected goes to it, as a double click does, and as Enter opens what the Files tab's and the
+    /// Changes view's lists select; with nothing selected it goes nowhere.
+    @Test
+    void enterOnTheHeadingSelectedGoesToIt() throws Exception {
+        final List<MarkdownHtml.Section> opened = new CopyOnWriteArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            final OutlinePane o = new OutlinePane();
+            o.onOpen(opened::add);
+            o.show(List.of(new MarkdownHtml.Section(1, "Plan", "plan", 3), new MarkdownHtml.Section(2, "Scope", "scope", 7)));
+            final var list = o.list();
+            final Object key = list.getInputMap(JComponent.WHEN_FOCUSED).get(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0));
+            list.clearSelection();
+            list.getActionMap().get(key).actionPerformed(null);
+            list.setSelectedIndex(1);
+            list.getActionMap().get(key).actionPerformed(null);
+        });
+        assertThat(opened).extracting(MarkdownHtml.Section::text).containsExactly("Scope");
+    }
+
     /// [OutlinePane]'s list and pane use the theme ground, the sidebar text colour and the tint's selection colours.
     @Test
     void theOutlineIsInTheSidebarsLook() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             final OutlinePane o = new OutlinePane();
-            final javax.swing.JList<?> l = o.list();
+            final JList<?> l = o.list();
             assertThat(l.getBackground()).as("the theme's ground").isEqualTo(Theme.ground());
             assertThat(l.getForeground()).as("ivory names").isEqualTo(SidebarLook.TEXT);
             assertThat(l.getSelectionBackground()).as("a band of the tint").isEqualTo(Theme.tint().tableHeadGround());

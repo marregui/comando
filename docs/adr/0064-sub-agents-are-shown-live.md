@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-18 | accepted; following and large files amended on 2026-10-18; its view amended by [record 109](0109-a-sub-agent-is-a-session-tab.md) | Miguel and Claude |
+| 2026-10-18 | accepted; following and large files amended on 2026-10-18; its view amended by [record 109](0109-a-sub-agent-is-a-session-tab.md); every running card has its chip since [record 24](0024-the-window-belongs-to-the-user.md)'s amendment of 2026-11-01 | Miguel and Claude |
 
 ## 1. Context
 
@@ -51,3 +51,7 @@ link; `TranscriptWidget` gains the `AgentStrip` and `setBackgroundTasks`, fed by
 2026-10-18 (Miguel): the rows "following" and "large files" were amended to the rules above. The first rules stopped
 following after 30 s without growth and read the last 2 MB of the file; they left most views stale mid-run and showed
 only a long subagent's last few steps.
+
+2026-11-01, [record 24](0024-the-window-belongs-to-the-user.md) amended: the Session tab holds the whole conversation,
+so every running subagent's card is in it and has its card chip; the consequence above about a card before the 2 000
+blocks the tab loaded no longer applies.

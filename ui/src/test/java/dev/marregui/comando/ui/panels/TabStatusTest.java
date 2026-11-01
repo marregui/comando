@@ -137,7 +137,7 @@ class TabStatusTest {
 
     /// Only `NEEDS_YOU` and `ERROR` ask for attention.
     @Test
-    void attention() {
+    void onlyARequestAndAnErrorAskForAttention() {
         assertThat(TabStatus.NEEDS_YOU.wantsAttention()).isTrue();
         assertThat(TabStatus.ERROR.wantsAttention()).isTrue();
         assertThat(TabStatus.DONE.wantsAttention()).as("a finished turn does not bounce the Dock").isFalse();

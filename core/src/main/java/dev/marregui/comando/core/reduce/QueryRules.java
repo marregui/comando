@@ -56,7 +56,23 @@ final class QueryRules {
             return Transition.of(notice(clock, s, Notice.Level.WARN, "Nothing to run: the block holds only comments",
                     Notice.panel(panel.id().value())));
         }
-        return c.target() == Target.SQL ? runSql(clock, s, panel, c.text()) : TurnRules.runPrompt(clock, s, panel, c.text());
+        return c.target() == Target.SQL ? runSql(clock, s, panel, c.text()) : TurnRules.runPrompt(clock, s, panel, c.text(), i.from());
+    }
+
+    /**
+     * Why a prompt {@code i} carries is not sent, as {@link #runText} and {@link TurnRules#runPrompt} decide it; empty
+     * for text that goes to the database or would be sent.
+     */
+    static Optional<String> promptRefusal(final AppState s, final Intent.RunText i) {
+        final Optional<PanelState> found = s.panel(i.panel() != null && s.panel(i.panel()).isPresent() ? i.panel() : s.focused());
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        final Target target = switch (i.target()) {
+            case AUTO -> Classifier.classify(i.text()).target();
+            case SQL, CLAUDE -> i.target();
+        };
+        return target == Target.SQL ? Optional.empty() : TurnRules.promptRefusal(s, found.get(), i.from());
     }
 
     /**
@@ -255,7 +271,7 @@ final class QueryRules {
     // ---- connections
 
     static Transition saveConnection(final Clock clock, final AppState s, final Intent.SaveConnection i) {
-        final ConnectionSpec spec = i.spec();
+        ConnectionSpec spec = i.spec();
         final boolean isNew = i.previousName().isEmpty();
         if (isNew) {
             if (s.connection(spec.name()).isPresent()) {
@@ -276,6 +292,13 @@ final class QueryRules {
         }
         final List<Effect> effects = new ArrayList<>();
         final ConnectionState old = previous.get();
+        // a stored password belongs to the host, port, database and user it was given for: pointed elsewhere, the
+        // connection keeps it only when the save gives it again (record 20)
+        final boolean dropped = !i.passwordGiven() && !spec.password().isEmpty() && spec.password().equals(old.spec().password())
+                && !spec.sameTarget(old.spec());
+        if (dropped) {
+            spec = spec.withPassword("");
+        }
         ConnectionState updated = new ConnectionState(spec, old.status(), old.error());
         if (old.status().isUsable() && !old.spec().equals(spec)) {
             effects.add(new Effect.CloseDb(old.name()));
@@ -293,6 +316,10 @@ final class QueryRules {
         if (renamed) {
             next = rebindConnection(next, i.previousName(), spec.name());
             effects.add(savePanels(next));
+        }
+        if (dropped) {
+            next = notice(clock, next, Notice.Level.INFO, spec.name() + " now logs in to " + spec.label() + ": its saved password was for "
+                    + old.spec().label() + " and is dropped; enter it again", Notice.connection(spec.name()));
         }
         return new Transition(next, effects);
     }

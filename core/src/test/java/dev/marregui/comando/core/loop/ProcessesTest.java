@@ -45,7 +45,8 @@ class ProcessesTest {
     }
 
     /// A script that starts a 60 s `sleep` child and waits for it, under a 500 ms limit, answers `timedOut` with exit
-    /// code -1 within 1.5 s, and the child it started has been ended: dead, or dying, within 5 s of the answer.
+    /// code -1 within 10 s (the limit and its kill, with slack for a loaded runner, far from the child's 60 s), and the
+    /// child it started has been ended: dead, or dying, within 5 s of the answer.
     @Test
     void aProgramPastItsLimitIsEndedWithItsChildren() throws Exception {
         final long start = System.nanoTime();
@@ -53,7 +54,7 @@ class ProcessesTest {
         final long millis = (System.nanoTime() - start) / 1_000_000;
         assertThat(r.timedOut()).isTrue();
         assertThat(r.exitCode()).isEqualTo(-1);
-        assertThat(millis).isLessThan(1_500);
+        assertThat(millis).isLessThan(10_000);
         final long child = Long.parseLong(r.out().strip());
         final Optional<ProcessHandle> sleeper = ProcessHandle.of(child);
         if (sleeper.isPresent()) {

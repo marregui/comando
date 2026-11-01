@@ -17,8 +17,10 @@ public interface PersistencePort {
 
     void saveFolders(List<FolderRoot> folders);
 
-    /** The decisions automatic checkpoints held back (record 131). */
-    void saveDecisions(List<Decision> decisions);
+    /**
+     * The decisions automatic checkpoints held back (record 131), and an id at or above every decision id given so far.
+     */
+    void saveDecisions(List<Decision> decisions, long lastId);
 
     /** The open panels, in tab order, and the closed panels of comando's own, which keep their files. */
     void savePanels(List<PanelState> panels, List<PanelState> closed);

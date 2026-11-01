@@ -25,6 +25,7 @@ import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -38,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - once the checkpoint's turn has finished, `/compact` goes out and the conversation is compacted, not cleared
 /// - the Session tab keeps the conversation and shows the compaction; the panel's text stays
 /// - nothing is carried: the next prompt goes as typed
+/// - an automatic checkpoint, run at the threshold, is compacted the same way and then carries on with one prompt
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class CheckpointCompactUiTest {
 
@@ -127,6 +129,80 @@ class CheckpointCompactUiTest {
             Awaitility.await("the next turn").atMost(Duration.ofSeconds(20))
                     .until(() -> !session(loop).isBusy() && Files.readAllLines(stdin).getLast().contains("go on"));
             assertThat(Files.readAllLines(stdin).getLast()).as("nothing carried in front of the prompt").doesNotContain("Context carried over");
+
+            loop.dispatch(new Intent.StopSession("work"));
+            Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);
+        } finally {
+            app.close();
+        }
+    }
+
+    /// A turn that leaves the context at half the window, above the 40 % threshold, runs the automatic checkpoint by
+    /// itself: the stand-in receives `hello`, `/reflect --auto`, `/compact`, then the carry-on prompt
+    /// ([Reducer#CONTINUE_PROMPT]) once the compaction has ended; the carry-on turn, at a tenth of the window, runs no
+    /// checkpoint again, and the session ends idle in the same conversation.
+    @Test
+    void anAutomaticCheckpointCarriesOnOnceItsCompactionHasEnded() throws Exception {
+        final Path stdin = home.resolve("stdin.jsonl");
+        final Path claude = home.resolve("fake-claude.sh");
+        final String init = "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fake-1\",\"model\":\"fake\",\"cwd\":\"/tmp\","
+                + "\"claude_code_version\":\"0.0.1\",\"permissionMode\":\"default\",\"capabilities\":[]}";
+        Files.writeString(claude, """
+                #!/bin/sh
+                # stands in for claude -p in a window of 100 tokens: the first prompt ends at 50, past the threshold; the
+                # automatic checkpoint answers with a summary, /compact compacts to 5, every later prompt ends at 10
+                n=0
+                while IFS= read -r line; do
+                  printf '%%s\\n' "$line" >> '%s'
+                  case "$line" in
+                    *'"control_request"'*)
+                      printf '%%s\\n' '{"type":"control_response","response":{"subtype":"success","request_id":"x"}}' ;;
+                    *'"content":"/compact"'*)
+                      printf '%%s\\n' '{"type":"system","subtype":"status","status":"compacting"}'
+                      printf '%%s\\n' '{"type":"system","subtype":"status","status":null,"compact_result":"success"}'
+                      printf '%%s\\n' '%s'
+                      printf '%%s\\n' '{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":50,"post_tokens":5}}'
+                      printf '%%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"","total_cost_usd":0,"duration_ms":1,"num_turns":0}'
+                      ;;
+                    *'"content":"/reflect --auto"'*)
+                      printf '%%s\\n' '%s'
+                      printf '%%s\\n' '{"type":"assistant","parent_tool_use_id":null,"message":{"id":"r1","content":[{"type":"text","text":"%s"}],"usage":{"input_tokens":50}}}'
+                      printf '%%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"%s","total_cost_usd":0,"duration_ms":1,"num_turns":1,"usage":{"input_tokens":50},"modelUsage":{"fake":{"contextWindow":100}}}'
+                      ;;
+                    *'"type":"user"'*)
+                      n=$((n+1))
+                      if [ "$n" -eq 1 ]; then tokens=50; else tokens=10; fi
+                      printf '%%s\\n' '%s'
+                      printf '%%s\\n' '{"type":"assistant","parent_tool_use_id":null,"message":{"id":"m'$n'","content":[{"type":"text","text":"pong '$n'"}],"usage":{"input_tokens":'$tokens'}}}'
+                      printf '%%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"pong","total_cost_usd":0,"duration_ms":1,"num_turns":1,"usage":{"input_tokens":'$tokens'},"modelUsage":{"fake":{"contextWindow":100}}}'
+                      ;;
+                  esac
+                done
+                """.formatted(stdin, init, init, SUMMARY_JSON, SUMMARY_JSON, init));
+        claude.toFile().setExecutable(true);
+        final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "checkpoint-auto", () -> {
+        });
+        try {
+            app.start();
+            final StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && editor() != null);
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("work", home.toString())));
+            Awaitility.await("its own panel").atMost(Duration.ofSeconds(10)).until(() -> loop.state().homePanel("work").isPresent());
+            final PanelId panel = loop.state().homePanel("work").orElseThrow().id();
+            loop.dispatch(new Intent.StartSession("work"));
+            Awaitility.await("running").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.OPEN);
+
+            loop.dispatch(new Intent.RunText(panel, "hello", Target.CLAUDE));
+            Awaitility.await("checkpointed, compacted, then carried on").atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+                assertThat(Files.readAllLines(stdin)).filteredOn(l -> l.contains("\"type\":\"user\""))
+                        .extracting(l -> l.replaceAll(".*\"content\":\"([^\"]*)\".*", "$1"))
+                        .containsExactly("hello", SessionSpec.DEFAULT_CHECKPOINT + ' ' + SessionSpec.AUTO_ARGUMENT, SessionSpec.COMPACT_COMMAND,
+                                Reducer.CONTINUE_PROMPT);
+                final SessionState x = session(loop);
+                assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.checkpointCompacts(), x.checkpointContinues()))
+                        .as("sent: %s", Files.readAllLines(stdin)).containsExactly(0, "fake-1", false, false);
+            });
+            Awaitility.await("the compaction shown").atMost(Duration.ofSeconds(10)).until(() -> notes(app).contains("Compacted manual: 50 → 5 tokens"));
 
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);

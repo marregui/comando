@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 /// whole.
 /// - a hover, a find bar left open or a first paint lays out only what is near the view
 /// - a rebuilt session stays at its end whether painted or refined first; a scroll away before the next slice is kept
-/// - a hover, select all, find, copy or a slice after an append keeps what the view shows
+/// - a hover, select all, find, copy or a slice after an append keeps what the view shows; select all lays out nothing
 /// - the scroll range ends up covering the whole session
 /// - find after a switch counts every match, in closed cards too, and shows the current one
 @ExtendWith(OnEdt.class)
@@ -182,10 +182,10 @@ class TranscriptCanvasViewportTest {
         assertThat(atEnd()).isTrue();
     }
 
-    /// Select all during the idle pass lays out everything, sets the scroll range to the exact content and keeps the
-    /// end in view.
+    /// Select all during the idle pass lays out nothing, keeps the end in view, and copies every box's text: the same
+    /// text as selecting all over a layout of everything.
     @Test
-    void selectAllDuringTheIdlePassKeepsTheViewAndTheWholeSessionScrollable() {
+    void selectAllDuringTheIdlePassLaysOutNothingAndCopiesEveryBox() {
         final JPanel parent = new JPanel(null);
         parent.add(viewport);
         parent.addNotify();
@@ -195,10 +195,24 @@ class TranscriptCanvasViewportTest {
         viewport.validate();
         viewport.setViewPosition(new Point(0, Math.max(0, canvas.contentHeight() - H)));
         assertThat(canvas.isEstimated()).isTrue();
+        final long laid = canvas.topLevel().stream().filter(Item::laidOut).count();
         canvas.selectAll();
-        assertThat(canvas.isEstimated()).as("select-all needs every position").isFalse();
-        assertThat(canvas.getHeight()).as("the scroll range is the exact content").isEqualTo(canvas.contentHeight());
+        final String copied = canvas.selectionText();
+        assertThat(canvas.topLevel().stream().filter(Item::laidOut).count()).as("select-all and copy lay out nothing").isEqualTo(laid);
         assertThat(atEnd()).as("the view that showed the end still shows it").isTrue();
+
+        canvas.layoutFully(W);
+        final List<String> boxes = new ArrayList<>();
+        final List<Placed> placed = new ArrayList<>();
+        for (final Item item : canvas.topLevel()) {
+            item.collect(0, 0, placed);
+        }
+        for (final Placed p : placed) {
+            if (p.box().length() > 0) {
+                boxes.add(p.box().text());
+            }
+        }
+        assertThat(copied).as("every box laid out, joined by newlines").isEqualTo(String.join("\n", boxes));
     }
 
     /// A switch to a large session while the find bar holds a query lays out fewer than half the items at the first
@@ -235,8 +249,8 @@ class TranscriptCanvasViewportTest {
                 .as("the scroll range covers the whole session, or a revalidation is pending").isTrue();
     }
 
-    /// A backward find from the top during the idle pass scrolls the last match, near the end, into view with an exact
-    /// scroll range.
+    /// A backward find from the top during the idle pass scrolls the last match, near the end, into view, the scroll
+    /// range sized to the content.
     @Test
     void findDuringTheIdlePassShowsTheMatch() {
         final JPanel parent = new JPanel(null);
@@ -250,22 +264,20 @@ class TranscriptCanvasViewportTest {
         // the last prompt's text: the backward search lands on the last match, near the end; no card opens for it
         assertThat(canvas.find("Summarise what changed", false)).isPositive();
         final List<Item> items = canvas.topLevel();
-        int top = 10;
         int last = -1;
         for (int i = 0; i < items.size(); i++) {
             if (items.get(i) instanceof Items.PromptItem p && p.text().startsWith("Summarise what changed")) {
                 last = i;
             }
         }
-        for (int i = 0; i < last; i++) {
-            top += items.get(i).height;
-        }
+        final int top = canvas.topOf(items.get(last));
         final int y = viewport.getViewPosition().y;
         assertThat(top).as("the current match is in view").isBetween(y, y + H);
         assertThat(canvas.getHeight()).as("the scroll range is the exact content").isEqualTo(canvas.contentHeight());
     }
 
-    /// A slice of the idle pass that runs after an append and before its layout does not throw.
+    /// A slice of the idle pass that runs after an append and before its layout does not throw, and the next layout
+    /// takes the block in: it is found, and the scroll range is the exact content.
     @Test
     void aBlockAppendedDuringTheIdlePassBeforeItsLayoutDoesNotBreakTheNextSlice() {
         // a live session: the idle pass runs after the switch, a new block arrives, and the timer's tick runs before
@@ -276,6 +288,11 @@ class TranscriptCanvasViewportTest {
         assertThat(canvas.isEstimated()).isTrue();
         canvas.append(next++, new Block.AssistantText("live", 0, "A new answer arrives.", true, ""));
         assertThatCode(canvas::refineAll).as("a slice of the idle pass with a block not yet positioned").doesNotThrowAnyException();
+        viewport.doLayout();
+        paintView();
+        canvas.refineAll();
+        assertThat(canvas.find("A new answer arrives.", true)).as("the block appended is in the transcript").isOne();
+        assertThat(canvas.getHeight()).as("the scroll range is the exact content").isEqualTo(canvas.contentHeight());
     }
 
     /// After switching to a session made of 27 copies, find counts 27 times the matches of one copy.

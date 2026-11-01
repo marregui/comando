@@ -101,7 +101,7 @@ final class Notifier {
                 SystemTray.getSystemTray().add(trayIcon);
             }
             trayIcon.displayMessage(title, Clip.keepStart(text, MAX_CHARS), TrayIcon.MessageType.INFO);
-        } catch (AWTException | RuntimeException e) {
+        } catch (final AWTException | RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "notification failed [cause=" + e.getMessage() + ']');
         }
     }

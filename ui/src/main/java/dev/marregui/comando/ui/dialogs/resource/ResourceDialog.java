@@ -57,6 +57,7 @@ import javax.swing.text.JTextComponent;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.Attribute;
 import dev.marregui.comando.core.resource.ResourceKind;
 import dev.marregui.comando.core.state.AppState;
@@ -99,11 +100,22 @@ public final class ResourceDialog<S> {
             ResourceKind<S> kind,
             Function<AppState, List<S>> specs,
             Function<AppState, Map<String, Status>> statuses,
-            BiFunction<String, S, Intent> save,
+            Save<S> save,
             Function<S, Intent> test,
             Function<String, Intent> open,
             Function<String, Intent> close,
             BiFunction<AppState, String, Intent> assign) {
+    }
+
+    /**
+     * The intent that saves the form: {@code editing} is the name the form was opened on, empty for a new resource;
+     * {@code typed} holds the keys of the secret fields the user typed into since the form was filled or last saved.
+     * A secret field is filled with the stored value, so its text alone cannot tell a password given again from one
+     * carried along: a connection pointed at another target keeps its password only when it was typed (record 20).
+     */
+    @FunctionalInterface
+    public interface Save<S> {
+        Intent apply(String editing, S spec, Set<String> typed);
     }
 
     private static final System.Logger LOG = System.getLogger(ResourceDialog.class.getName());
@@ -122,6 +134,10 @@ public final class ResourceDialog<S> {
     /** The resources' names as of the last render: a saved name must be free, a new one is made free. */
     private List<String> names = List.of();
     private final Map<String, JComponent> fields = new LinkedHashMap<>();
+    /** Under the context line: what the session's working folder's own settings add, empty when nothing. */
+    private final JLabel project = Plain.only(new JLabel());
+    /** Counts the reads of the project's settings; only the newest is shown. */
+    private long projectReads;
     private final JLabel message = Plain.only(new JLabel());
     private final JButton openClose = new JButton();
     private final JButton save;
@@ -139,6 +155,8 @@ public final class ResourceDialog<S> {
     /** The values the form was last filled with: what the user has not changed since is refreshed from the state. */
     private Map<String, String> filled = Map.of();
     private boolean filling;
+    /** The secret fields typed into since the form was filled with a resource or last saved: {@link Save}'s {@code typed}. */
+    private final Set<String> typed = new HashSet<>();
     private String advice = "";
     private String lastDirectory = "";
     /** The notice subject whose newer notices the message shows, after Test, Connect or Start. */
@@ -230,7 +248,32 @@ public final class ResourceDialog<S> {
             line.setName("context");
             line.setToolTipText(context);
             line.setForeground(Theme.MUTED);
-            right.add(line, BorderLayout.NORTH);
+            final JPanel lines = new JPanel(new BorderLayout());
+            lines.add(line, BorderLayout.NORTH);
+            if (session) {
+                // what the session's own folder adds on top of the kit's settings, read as its folder is set
+                project.setName("project");
+                project.setForeground(Theme.MUTED);
+                lines.add(project, BorderLayout.SOUTH);
+                if (fields.get("workDir") instanceof JTextField dir) {
+                    dir.getDocument().addDocumentListener(new DocumentListener() {
+                        @Override
+                        public void insertUpdate(final DocumentEvent e) {
+                            readProject(dir.getText());
+                        }
+
+                        @Override
+                        public void removeUpdate(final DocumentEvent e) {
+                            readProject(dir.getText());
+                        }
+
+                        @Override
+                        public void changedUpdate(final DocumentEvent e) {
+                        }
+                    });
+                }
+            }
+            right.add(lines, BorderLayout.NORTH);
         }
         final JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         if (config.test() != null) {
@@ -473,7 +516,7 @@ public final class ResourceDialog<S> {
                 unwatch();
                 editing = name;
                 filled = config.kind().toAttributes(spec);
-                fill(filled);
+                refill(filled);
                 setAdvancedOpen(config.kind().showAdvanced(filled));
                 say(Theme.MUTED, "");
                 showAdvice(true);
@@ -495,7 +538,7 @@ public final class ResourceDialog<S> {
         // the kind's template says where a new one starts: a session in the kit's folder (record 125)
         final Map<String, String> values = config.kind().toAttributes(config.kind().template(name));
         filled = values;
-        fill(values);
+        refill(values);
         setAdvancedOpen(config.kind().showAdvanced(values));
         say(Theme.MUTED, "New " + config.kind().noun() + "; Save adds it.");
         advice = "";
@@ -519,7 +562,7 @@ public final class ResourceDialog<S> {
         unwatch();
         editing = "";
         filled = config.kind().toAttributes(config.kind().cloneOf(spec, name));
-        fill(filled);
+        refill(filled);
         setAdvancedOpen(config.kind().showAdvanced(filled));
         say(Theme.MUTED, "Clone of " + config.kind().nameOf(spec) + "; Save adds it.");
         updateOpenClose();
@@ -531,6 +574,25 @@ public final class ResourceDialog<S> {
         if (save()) {
             hide();
         }
+    }
+
+    /** Reads, off the EDT, what {@code workDir}'s own settings add to the kit's, and shows it under the context line. */
+    private void readProject(final String workDir) {
+        final long mine = ++projectReads;
+        UiErrands.start("project-settings", () -> {
+            final String line = ProjectSettings.line(workDir);
+            Edt.later(() -> {
+                if (mine == projectReads) {
+                    project.setText(line);
+                    project.setToolTipText(line.isEmpty() ? null : line);
+                }
+            });
+        });
+    }
+
+    /** The line under the context line; for tests. */
+    String projectShown() {
+        return project.getText();
     }
 
     /** Saves the form; false, with the reason in the message, when it is invalid or refused. */
@@ -548,7 +610,15 @@ public final class ResourceDialog<S> {
                 say(Theme.DANGER, "Stop " + editing + " before renaming it");
                 return false;
             }
-            intents.dispatch(config.save().apply(editing, spec));
+            final Intent saving = config.save().apply(editing, spec, Set.copyOf(typed));
+            final Optional<String> refused = refusal(saving);
+            if (refused.isPresent()) {
+                // the reducer would drop it: "Saved" would close the dialog on an edit that is lost
+                say(Theme.DANGER, refused.get());
+                return false;
+            }
+            intents.dispatch(saving);
+            typed.clear();
             filled = config.kind().toAttributes(spec);
             editing = config.kind().nameOf(spec);
             for (final Attribute a : config.kind().attributes()) {
@@ -565,6 +635,20 @@ public final class ResourceDialog<S> {
             say(Theme.DANGER, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Why the reducer would refuse {@code saving} on the state shown, in the dialog's words for the checkpoint lock
+     * (record 130), else in the reducer's; empty when it would apply it.
+     */
+    private Optional<String> refusal(final Intent saving) {
+        if (state == null) {
+            return Optional.empty();
+        }
+        if (Reducer.refusedWhileCheckpointing(state, saving)) {
+            return Optional.of(editing + " runs its checkpoint; Save once it has ended");
+        }
+        return Reducer.refusal(state, saving);
     }
 
     private void testForm() {
@@ -631,7 +715,7 @@ public final class ResourceDialog<S> {
         }
         if (isDirty()) {
             confirm(discardQuestion(), "Discard", "Keep editing", () -> {
-                fill(filled);
+                refill(filled);
                 say(Theme.MUTED, "");
                 hide();
             });
@@ -819,6 +903,12 @@ public final class ResourceDialog<S> {
         return name;
     }
 
+    /** Fills the form with a resource's values, or back to them: no secret field counts as typed into. */
+    private void refill(final Map<String, String> values) {
+        typed.clear();
+        fill(values);
+    }
+
     private void fill(final Map<String, String> values) {
         filling = true;
         try {
@@ -880,6 +970,14 @@ public final class ResourceDialog<S> {
         return m;
     }
 
+    /** A text field changed: by the user, unless the form is being filled; a secret field the user typed into is noted. */
+    private void edited(final Attribute a) {
+        if (!filling && a.kind() == Attribute.Kind.SECRET) {
+            typed.add(a.key());
+        }
+        formChanged();
+    }
+
     private JComponent field(final Attribute a) {
         if (a.kind() == Attribute.Kind.CONVERSATION) {
             final ConversationField c = new ConversationField();
@@ -908,17 +1006,17 @@ public final class ResourceDialog<S> {
             t.getDocument().addDocumentListener(new DocumentListener() {
                 @Override
                 public void insertUpdate(final DocumentEvent e) {
-                    formChanged();
+                    edited(a);
                 }
 
                 @Override
                 public void removeUpdate(final DocumentEvent e) {
-                    formChanged();
+                    edited(a);
                 }
 
                 @Override
                 public void changedUpdate(final DocumentEvent e) {
-                    formChanged();
+                    edited(a);
                 }
             });
         }

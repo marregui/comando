@@ -31,7 +31,7 @@ class AtomicFilesTest {
     Path dir;
 
     private List<String> names() throws IOException {
-        try (Stream<Path> files = Files.list(dir)) {
+        try (final Stream<Path> files = Files.list(dir)) {
             return files.map(p -> p.getFileName().toString()).sorted().toList();
         }
     }

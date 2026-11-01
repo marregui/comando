@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.kit.vcs;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -10,15 +9,16 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.model.VersionedLines;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 
 /**
  * The files the user opened in comando, by absolute path: a new file opened once is no longer marked new in the Files
- * tab. Kept in a file of one path per line, oldest first, at most {@link #MAX} paths; read once when made, written
- * whole after each path added, off the EDT, one write at a time. Used on the EDT.
+ * tab. Kept in a file of one path per line, oldest first, at most {@link #MAX} paths, after its version line (record
+ * 133); read once when made, written whole after each path added, off the EDT, one write at a time. A file of a later
+ * version is kept as it is and not written. Used on the EDT.
  */
 public final class OpenedFiles {
 
@@ -26,10 +26,17 @@ public final class OpenedFiles {
     public static final int MAX = 20_000;
     private static final System.Logger LOG = System.getLogger(OpenedFiles.class.getName());
     private static final Executor WRITER = task -> UiErrands.start("opened-files", task);
+    /** The file's format and version (record 133). */
+    static final String FORMAT = "opened-files";
+    static final int VERSION = 1;
 
     /** Where the paths are kept; null keeps them in memory only. */
     private final Path file;
     private final LinkedHashSet<Path> paths = new LinkedHashSet<>();
+    /** Whether the file is of a later version: kept as it is, never written. */
+    private boolean refused;
+    /** Why the file is not read, in the words the user is told once (record 133); empty when it read. */
+    private String refusal = "";
     private final List<Runnable> listeners = new ArrayList<>();
     private CompletableFuture<Void> written = CompletableFuture.completedFuture(null);
 
@@ -41,17 +48,26 @@ public final class OpenedFiles {
     public static OpenedFiles load(final Path file) {
         final OpenedFiles o = new OpenedFiles(file);
         try {
-            for (final String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-                if (!line.isBlank()) {
-                    o.keep(Path.of(line));
-                }
+            final VersionedLines.Read read = VersionedLines.read(file, VERSION);
+            if (!read.refused().isEmpty()) {
+                o.refused = true;
+                o.refusal = read.refused();
+                LOG.log(System.Logger.Level.WARNING, read.refused() + " [file=" + file + ']');
+            }
+            for (final String line : read.lines()) {
+                o.keep(Path.of(line));
             }
         } catch (final NoSuchFileException e) {
             // nothing opened yet
-        } catch (IOException | RuntimeException e) {
+        } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the opened files [file=" + file + ']', e);
         }
         return o;
+    }
+
+    /** Why the file was not read, for the user, once (record 133); empty when it read. */
+    public String refusal() {
+        return refusal;
     }
 
     /** Paths kept in memory only, for tests and windows without a home. */
@@ -74,7 +90,7 @@ public final class OpenedFiles {
         for (final Runnable l : List.copyOf(listeners)) {
             l.run();
         }
-        if (file != null) {
+        if (file != null && !refused) {
             final List<String> lines = paths.stream().map(Path::toString).toList();
             written = written.thenRunAsync(() -> write(lines), WRITER);
         }
@@ -104,8 +120,8 @@ public final class OpenedFiles {
     private void write(final List<String> lines) {
         try {
             Files.createDirectories(file.getParent());
-            AtomicFiles.writeString(file, lines.stream().map(l -> l + System.lineSeparator()).collect(Collectors.joining()));
-        } catch (IOException | RuntimeException e) {
+            AtomicFiles.writeString(file, VersionedLines.text(FORMAT, VERSION, lines));
+        } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write the opened files [file=" + file + ']', e);
         }
     }

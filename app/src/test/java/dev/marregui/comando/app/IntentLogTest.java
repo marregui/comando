@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -11,12 +12,15 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.Clock;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
@@ -25,6 +29,7 @@ import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.testkit.States;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a connection's password never reaches the log
 /// - a password inside a text field that holds JSON (an approval card's tool input) is blanked too
 /// - a connection spec printed as text writes its password as `***`
+/// - the checkpoint threshold and each change of it are logged, and a replay applies each intent under its own, the
+///   value the run applied it under
 class IntentLogTest {
 
     static final List<Intent> SAMPLE = List.of(
@@ -70,11 +77,11 @@ class IntentLogTest {
     void everyIntentRoundTrips(@TempDir final Path dir) throws Exception {
         final AppState initial = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "lab", "edge")),
                 List.of(), List.of());
-        try (IntentLog log = new IntentLog(dir, initial)) {
+        try (final IntentLog log = new IntentLog(dir, initial, () -> 40)) {
             SAMPLE.forEach(log::observe);
         }
         Path file;
-        try (var files = Files.list(dir)) {
+        try (final var files = Files.list(dir)) {
             file = files.findFirst().orElseThrow();
         }
         final IntentLog.Replay replay = IntentLog.read(file);
@@ -92,6 +99,70 @@ class IntentLogTest {
             } else {
                 assertThat(read.get(i)).isEqualTo(expected);
             }
+        }
+    }
+
+    /// The log records the checkpoint threshold the reducer reads, and each change of it before the next intent: 90 %
+    /// for the first turn, 40 % for the second. Replayed, each turn runs under its own: the first, at half the context
+    /// window, leaves the session not due; the second, at the same size, makes it due, which the first value alone
+    /// would not.
+    @Test
+    void theCheckpointThresholdIsLoggedAndEachIntentReplaysUnderItsOwn(@TempDir final Path dir) throws Exception {
+        final AppState initial = States.twoPanels();
+        final Intent half = new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, "");
+        final Intent halfAgain = new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, "");
+        final AtomicInteger threshold = new AtomicInteger(90);
+        try (final IntentLog log = new IntentLog(dir, initial, threshold::get)) {
+            log.observe(half);
+            threshold.set(40);
+            log.observe(halfAgain);
+        }
+        Path file;
+        try (final var files = Files.list(dir)) {
+            file = files.findFirst().orElseThrow();
+        }
+        final IntentLog.Replay replay = IntentLog.read(file);
+        assertThat(replay.intents()).containsExactly(half, halfAgain);
+        assertThat(replay.thresholds()).containsExactly(90, 40);
+        assertThat(replay.threshold()).isEqualTo(90);
+        final List<String> lines = Files.readAllLines(file);
+        assertThat(lines.getFirst()).contains("\"version\":1", "\"checkpointThreshold\":90");
+        assertThat(lines.get(2)).contains("\"type\":\"@threshold\"", "\"percent\":40");
+
+        try (final StateLoop loop = replay.loop(Clock.SYSTEM, e -> { })) {
+            loop.applyNow(replay.intents().get(0));
+            assertThat(loop.state().session("work").orElseThrow().reflection().due()).as("50 % under 90 %").isFalse();
+            loop.applyNow(replay.intents().get(1));
+            assertThat(loop.state().session("work").orElseThrow().reflection().due()).as("50 % under 40 %").isTrue();
+        }
+    }
+
+    /// The window's setting changes from 90 % to 40 % after the log wrote an intent's line and before the reducer reads
+    /// the threshold for it, as the EDT's write may land while the reducer thread is between the two; the observer
+    /// added after the log stands in for that write. The run, wired as [App] wires it, applies the intent under the
+    /// value the log wrote for it, so its replay applies it as the run did.
+    @Test
+    void aThresholdSetBetweenTheLogsLineAndTheReducersReadReplaysAsTheRunApplied(@TempDir final Path dir) throws Exception {
+        final AppState initial = States.twoPanels();
+        final AtomicInteger threshold = new AtomicInteger(90);
+        final Intent half = new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, "");
+        boolean live;
+        try (final IntentLog log = new IntentLog(dir, initial, threshold::get);
+             final StateLoop run = new StateLoop(initial, new Reducer(Clock.SYSTEM, App.appliedThreshold(log, threshold::get)), e -> { })) {
+            run.addObserver(log);
+            run.addObserver(i -> threshold.set(40));
+            run.applyNow(half);
+            live = run.state().session("work").orElseThrow().reflection().due();
+        }
+        Path file;
+        try (final var files = Files.list(dir)) {
+            file = files.findFirst().orElseThrow();
+        }
+        final IntentLog.Replay replay = IntentLog.read(file);
+        try (final StateLoop loop = replay.loop(Clock.SYSTEM, e -> { })) {
+            loop.applyNow(replay.intents().getFirst());
+            assertThat(loop.state().session("work").orElseThrow().reflection().due())
+                    .as("replayed under %s; the run applied it so too", replay.thresholds()).isEqualTo(live);
         }
     }
 
@@ -118,5 +189,27 @@ class IntentLogTest {
     void aConnectionSpecPrintsNoPassword() {
         assertThat(new ConnectionSpec("lab", "h", 8812, "qdb", "u", "s3cret", false).toString())
                 .doesNotContain("s3cret").contains("password=***");
+    }
+
+    /// A log that recorded no threshold (every log written before it was) replays with a reducer that never
+    /// checkpoints, not at the window's minimum; one that did replays at its intent's threshold. An intent the log does
+    /// not hold, though equal to one it does, keeps the threshold in force.
+    @Test
+    void aLogWithoutAThresholdReplaysWithAReducerThatNeverCheckpoints() {
+        final AppState start = States.twoPanels();
+        final Intent turn = new Intent.SessionTurnEnded("work", 0, 0.1, 900_000L, 1_000_000L, false, "");
+        try (final StateLoop loop = new IntentLog.Replay(start, List.of(turn), List.of()).loop(Clock.SYSTEM, e -> { })) {
+            loop.applyNow(turn);
+            assertThat(loop.state().session("work").orElseThrow().reflection().due()).as("no threshold: never due").isFalse();
+        }
+        try (final StateLoop loop = new IntentLog.Replay(start, List.of(turn), List.of(40)).loop(Clock.SYSTEM, e -> { })) {
+            loop.applyNow(turn);
+            assertThat(loop.state().session("work").orElseThrow().reflection().due()).as("40 %: due at 90 %").isTrue();
+        }
+        final Intent low = new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, "");
+        try (final StateLoop loop = new IntentLog.Replay(start, List.of(low, low), List.of(90, 40)).loop(Clock.SYSTEM, e -> { })) {
+            loop.applyNow(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, ""));
+            assertThat(loop.state().session("work").orElseThrow().reflection().due()).as("not the log's: still 90 %").isFalse();
+        }
     }
 }

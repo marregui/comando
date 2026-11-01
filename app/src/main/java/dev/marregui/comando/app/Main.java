@@ -58,8 +58,8 @@ public final class Main {
     }
 
     /**
-     * The name in the data root's {@code instance.json} ({@code {"name": "Comando Expert"}}, written by the kit's
-     * {@code kit.py instance new}), or null when the file is missing, unreadable or names none.
+     * The name in the data root's {@code instance.json} ({@code {"name": "Comando Expert"}}, written by whoever creates
+     * the instance), or null when the file is missing, unreadable or names none.
      */
     static String nameFile(final Path home) {
         final Path file = home.resolve(InstanceName.FILE);
@@ -110,7 +110,7 @@ public final class Main {
                 return false;
             }
             return true;
-        } catch (IOException | OverlappingFileLockException e) {
+        } catch (final IOException | OverlappingFileLockException e) {
             // a data root that cannot hold a lock file still runs; the lock is a guard, not a requirement
             return true;
         }

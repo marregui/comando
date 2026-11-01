@@ -2,7 +2,9 @@ package dev.marregui.comando.core.reduce;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.dispatch.Target;
@@ -47,7 +49,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Folders are read and watched by name in their order, added unless one has the name, and replaced by `folders.json`
 ///   without writing it.
 /// - Entries go to the Trash only from a deletable folder, never the folder itself or a path outside it.
-/// - A prompt on a closed session starts the session, then sends.
+/// - A prompt on a closed session starts the session, then sends; another session's prompt starts it only for its
+///   creator.
 class ReducerTest {
 
     private final FakeClock clock = new FakeClock();
@@ -101,9 +104,9 @@ class ReducerTest {
         assertThat(state.notice().text()).startsWith("Stopped the statement");
     }
 
-    /// Reading and watching folders by name emits them in configured order, dropping unknown names; none open watches
-    /// none; a loaded tree is shown unless it was read with since-edited settings or its folder was removed; the state
-    /// is unchanged.
+    /// Reading and watching folders by name emits them in configured order, dropping unknown names, each watched one
+    /// with its open subfolders; none open watches none; a loaded tree is shown unless it was read with since-edited
+    /// settings or its folder was removed; the state is unchanged.
     @Test
     void foldersAreReadAndWatchedByNameInTheirOrderAndShownWithoutTouchingTheState() {
         final FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
@@ -114,6 +117,9 @@ class ReducerTest {
         assertThat(effects).as("configured order; an unknown name is dropped").containsExactly(new Effect.ReadFolders(List.of(kb, notes)));
         apply(new Intent.WatchFolders(List.of("Notes")));
         assertThat(effects).containsExactly(new Effect.WatchFolders(List.of(notes)));
+        apply(new Intent.WatchFolders(List.of("Notes"), Map.of("Notes", List.of("/n/tools"))));
+        assertThat(effects).as("the open subfolders go with the folders").containsExactly(
+                new Effect.WatchFolders(List.of(notes), Map.of("Notes", List.of("/n/tools"))));
         apply(new Intent.WatchFolders(List.of()));
         assertThat(effects).as("none open: none watched").containsExactly(new Effect.WatchFolders(List.of()));
         final ViewSpec.TreeNode tree = new ViewSpec.TreeNode("KB", "/kb", List.of());
@@ -233,7 +239,7 @@ class ReducerTest {
 
     /// Progress updates the run's row count, and completion sets its final status, row count and truncation.
     @Test
-    void progressThenCompletion() {
+    void progressCountsTheRowsAndCompletionSetsTheFinalStatus() {
         apply(new Intent.RunText(P1, "SELECT x FROM long_sequence(10)", Target.AUTO));
         apply(new Intent.SqlStarted(1L));
         apply(new Intent.SqlRows(1L, 100, 5, 7, 12));
@@ -690,42 +696,85 @@ class ReducerTest {
         assertThat(effects).as("its own panel closed: it runs from there").contains(new Effect.SendToClaude("work", "/reflect", "one"));
         apply(new Intent.ReopenPanel(P1));
         apply(new Intent.SaveSession("work", state.session("work").orElseThrow().spec().restarted()));
-        final SessionSpec silent = new SessionSpec("work", state.session("work").orElseThrow().spec().workDir(), "", "", "", List.of(), 0.0, "",
+        final SessionSpec silent = new SessionSpec("work", state.session("work").orElseThrow().spec().workDir(), "", "", 0.0, "",
                 StartMode.NEW, "", "");
         apply(new Intent.SaveSession("work", silent));
         apply(new Intent.Checkpoint("work"));
         assertThat(effects).as("an emptied command sends nothing").isEmpty();
     }
 
-    /// A session becomes due its checkpoint once its context passes the threshold (61 %, not 50 %), stops being due
-    /// when the command is sent or it was already past at the checkpoint, and is due again when it crosses after a
-    /// compaction.
+    /// A session falls due its checkpoint once a turn ends with its context at the threshold (40 % of the window, not
+    /// 39 %), the turn its automatic checkpoint runs at, which clears it; while that checkpoint cannot run (a prompt
+    /// is queued) the session stays due until the command is sent, typed counting as the button. After a compaction the
+    /// next crossing makes it due and runs the automatic checkpoint at once. Without a threshold no session falls due.
     @Test
     void aSessionIsDueItsCheckpointPastTheThresholdUntilTheCommandIsSent() {
+        reducer = new Reducer(clock, () -> 40);
+        final String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.RunText(P1, "go", Target.CLAUDE));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, ""));
-        assertThat(state.session("work").orElseThrow().reflection().due()).as("50 % of the window").isFalse();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 390_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("39 % of the window").isFalse();
 
         apply(new Intent.RunText(P1, "more", Target.CLAUDE));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 610_000L, 1_000_000L, false, ""));
-        assertThat(state.session("work").orElseThrow().reflection().due()).as("61 %").isTrue();
+        apply(new Intent.RunText(P1, "queued", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 400_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("40 %").isTrue();
+        assertThat(effects).as("a prompt queued: the automatic checkpoint waits").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
 
         // typed in the panel, it counts as the button would
         apply(new Intent.RunText(P1, "/reflect", Target.AUTO));
         assertThat(state.session("work").orElseThrow().reflection().due()).isFalse();
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 620_000L, 1_000_000L, false, ""));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 410_000L, 1_000_000L, false, ""));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, ""));
         assertThat(state.session("work").orElseThrow().reflection().due()).as("already past it at the checkpoint").isFalse();
 
         apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, ""));
         apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 650_000L, 1_000_000L, false, ""));
-        assertThat(state.session("work").orElseThrow().reflection().due()).as("crossed again after the compaction").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, ""));
+        assertThat(effects).as("crossed again after the compaction: the automatic checkpoint at once")
+                .contains(new Effect.SendToClaude("work", "/reflect --auto", title));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("sent, so no longer due").isFalse();
 
-        apply(new Intent.Checkpoint("work"));
-        assertThat(state.session("work").orElseThrow().reflection().due()).isFalse();
+        reducer = new Reducer(clock);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, "## Reflected"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 20_000L, 1_000_000L, false, ""));
+        apply(new Intent.RunText(P1, "huge", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 900_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("a test's reducer, no threshold: never due").isFalse();
+    }
+
+    /// The window's threshold is at least 10 % and at most the whole window (Miguel's decision D3: no off): a setting of
+    /// 0 or 5 makes a session due at 10 % of its window and not at 9 %, one of 150 at the full window.
+    @Test
+    void theWindowsThresholdIsAtLeastTenPercentAndAtMostTheWholeWindow() {
+        final AtomicInteger setting = new AtomicInteger(0);
+        reducer = new Reducer(clock, setting::get);
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        for (final int percent : new int[]{0, 5}) {
+            setting.set(percent);
+            apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 1_000_000L, false, ""));
+            apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 90_000L, 1_000_000L, false, ""));
+            assertThat(state.session("work").orElseThrow().reflection().due()).as(percent + ": 9 %").isFalse();
+            apply(new Intent.RunText(P1, "more", Target.CLAUDE));
+            apply(new Intent.SessionTurnEnded("work", 1, 0.1, 100_000L, 1_000_000L, false, ""));
+            assertThat(state.session("work").orElseThrow().reflection().due()).as(percent + ": 10 %").isTrue();
+            apply(new Intent.RunText(P1, "/reflect", Target.AUTO));
+        }
+        setting.set(150);
+        apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 1_000_000L, false, ""));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 999_999L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("150: below the whole window").isFalse();
+        apply(new Intent.RunText(P1, "more", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 1_000_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("150: the whole window").isTrue();
     }
 
     /// [Reducer#isCheckpoint] matches the command alone or with arguments, padded; a longer word, the command inside
@@ -762,8 +811,10 @@ class ReducerTest {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.SessionInit("work", new SessionInfo("conv-1", "opus", "/w", "2.1", "", List.of())));
+        reducer = new Reducer(clock, () -> 40);
         apply(new Intent.RunText(P1, "go", Target.CLAUDE));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, ""));
+        apply(new Intent.RunText(P1, "queued", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 700_000L, 1_000_000L, false, ""));
         assertThat(state.session("work").orElseThrow().reflection().due()).isTrue();
 
         // /clear: the same process reports a new conversation
@@ -895,7 +946,7 @@ class ReducerTest {
     /// below it re-arms, and the next crossing runs it again. Without a threshold nothing runs.
     @Test
     void aTurnThatEndsAtTheThresholdRunsTheCheckpointThenCompactsOncePerCrossing() {
-        reducer = new Reducer(clock, () -> 400_000L);
+        reducer = new Reducer(clock, () -> 40);
         final String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
@@ -913,7 +964,10 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", "## Reflected"));
         assertThat(effects).as("then /compact").containsExactly(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, title));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", ""));
-        assertThat(effects).as("the compaction's turn, still reporting the old size: nothing more")
+        assertThat(effects).as("the compaction's turn: the session carries on")
+                .containsExactly(new Effect.SendToClaude("work", Reducer.CONTINUE_PROMPT, title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", "carried on"));
+        assertThat(effects).as("the carry-on turn, still reporting the old size: nothing more")
                 .containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
         apply(new Intent.RunText(P1, "on", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, "", "still above"));
@@ -926,12 +980,56 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 401_000L, 1_000_000L, false, "", "crossed again"));
         assertThat(effects).as("the next crossing").containsExactly(new Effect.SendToClaude("work", "/reflect --auto", title));
 
-        reducer = new Reducer(clock, () -> 0L);
+        reducer = new Reducer(clock);
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 401_000L, 1_000_000L, false, "", "reflected"));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", ""));
         apply(new Intent.RunText(P1, "off", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 900_000L, 1_000_000L, false, "", "no threshold"));
-        assertThat(effects).as("a threshold of 0: never").containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+        assertThat(effects).as("a test's reducer, no threshold: never").containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+    }
+
+    /// One prompt of the user's leads to one automatic checkpoint and one carry-on, with the numbers of the recorded
+    /// Claude Code 2.1.296 compaction (`queued-compact-interrupt.jsonl`) in a 200,000-token window at the 10 % minimum:
+    /// the compaction ends with Claude Code's own count, 3,812, and the next call reads 31,921. That count re-arms
+    /// nothing, so neither the carry-on nor the user's next prompt, both still above, runs a checkpoint. A compaction
+    /// that does end with a call's context below the threshold re-arms the session, and still its carry-on runs no
+    /// checkpoint: the next one waits for someone's prompt.
+    @Test
+    void oneUserPromptLeadsToOneAutomaticCheckpointAndOneCarryOn() {
+        for (final boolean counted : List.of(true, false)) {
+            final String when = counted ? "the compaction's own count" : "a call's context at the compaction";
+            reducer = new Reducer(clock, () -> 10);
+            state = States.twoPanels();
+            apply(new Intent.StartSession("work"));
+            apply(new Intent.SessionStarted("work"));
+            apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 34_473L, 200_000L, false, "", "done"));
+            int checkpoints = sent("/reflect --auto");
+            int carryOns = 0;
+            // the same cycle five times over, while each step follows the one before
+            for (int cycle = 0; cycle < 5; cycle++) {
+                apply(new Intent.SessionTurnEnded("work", 0, 0.1, 35_205L, 200_000L, false, "", "## Reflected"));
+                if (sent(SessionSpec.COMPACT_COMMAND) == 0) {
+                    break;
+                }
+                apply(new Intent.SessionTurnEnded("work", 0, 0.1, 3_812L, 200_000L, false, "", "", counted));
+                carryOns += sent(Reducer.CONTINUE_PROMPT);
+                apply(new Intent.SessionTurnEnded("work", 0, 0.1, 31_921L, 200_000L, false, "", "Nothing left to do."));
+                checkpoints += sent("/reflect --auto");
+            }
+            assertThat(List.of(checkpoints, carryOns)).as(when + ": checkpoints and carry-ons").containsExactly(1, 1);
+
+            apply(new Intent.RunText(P1, "the next step", Target.CLAUDE));
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 33_000L, 200_000L, false, "", "done too"));
+            // the context a call read never fell below the threshold after the compaction's count: the same crossing;
+            // after a call's context below it, the user's prompt is a crossing of its own
+            assertThat(sent("/reflect --auto")).as(when + ": the user's next prompt, above").isEqualTo(counted ? 0 : 1);
+        }
+    }
+
+    /// How many prompts reading `text` the last intent sent.
+    private int sent(final String text) {
+        return (int) effects.stream().filter(e -> e instanceof Effect.SendToClaude x && x.text().equals(text)).count();
     }
 
     /// At the threshold nothing runs for a session with no checkpoint command, for a turn that failed or was
@@ -939,7 +1037,7 @@ class ReducerTest {
     /// check repeats at its end.
     @Test
     void theAutomaticCheckpointWaitsForTheSessionsOwnTurnToFinishAndNeedsACommand() {
-        reducer = new Reducer(clock, () -> 400_000L);
+        reducer = new Reducer(clock, () -> 40);
         final String title = state.panel(P1).orElseThrow().title();
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
@@ -999,7 +1097,7 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 2_000L, 1_000_000L, false, "", ""));
         assertThat(locked()).as("the compaction ended").isFalse();
 
-        reducer = new Reducer(clock, () -> 400_000L);
+        reducer = new Reducer(clock, () -> 40);
         apply(new Intent.RunText(P1, "a short task", Target.CLAUDE));
         assertThat(locked()).as("a prompt").isFalse();
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 1_000_000L, false, "", "below: armed"));
@@ -1010,7 +1108,9 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 410_000L, 1_000_000L, false, "", "## Reflected"));
         assertThat(locked()).as("its compaction").isTrue();
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", ""));
-        assertThat(locked()).isFalse();
+        assertThat(locked()).as("the carry-on prompt runs unlocked").isFalse();
+        assertThat(effects).contains(new Effect.SendToClaude("work", Reducer.CONTINUE_PROMPT, title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 35_000L, 1_000_000L, false, "", "carried on"));
 
         reducer = new Reducer(clock);
         apply(new Intent.RunText(P1, "/reflect now", Target.CLAUDE));
@@ -1110,6 +1210,148 @@ class ReducerTest {
         assertThat(locked()).as("the queued prompt runs unlocked").isFalse();
     }
 
+    /// The lock holds for the locked session's own panel once closed too (record 130): removing it from the Panels tab
+    /// changes nothing, so the session is not removed mid-checkpoint with it.
+    @Test
+    void aLockedSessionsOwnPanelOnceClosedIsNotRemovedEither() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(locked()).isTrue();
+        apply(new Intent.ClosePanel(P1));
+        assertThat(state.closedPanel(P1)).as("closed, kept").isPresent();
+        final AppState was = state;
+        apply(new Intent.RemovePanel(P1));
+        assertThat(state).isSameAs(was);
+        assertThat(effects).isEmpty();
+        assertThat(state.session("work")).isPresent();
+    }
+
+    /// Due and the automatic checkpoint fall at one crossing (D3), also in the conversation a fresh start or a `/clear`
+    /// begins after a checkpoint that never compacted: its first crossing runs the automatic checkpoint, not "due"
+    /// alone.
+    @Test
+    void afterAFreshStartDueAndTheAutomaticCheckpointFireTogether() {
+        reducer = new Reducer(clock, () -> 40);
+        final String title = state.panel(P1).orElseThrow().title();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, ""));
+        assertThat(effects).as("first crossing: automatic checkpoint").contains(new Effect.SendToClaude("work", "/reflect --auto", title));
+        // the user stops the session before the compaction and starts a new conversation
+        apply(new Intent.StopSession("work"));
+        apply(new Intent.SessionExited("work", 0, ""));
+        apply(new Intent.StartFresh("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "read the whole repository", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, ""));
+        assertThat(effects).as("the new conversation's first crossing").contains(new Effect.SendToClaude("work", "/reflect --auto", title));
+    }
+
+    /// Once the automatic checkpoint's compaction has ended normally, the session is prompted from its panel to carry
+    /// on (Miguel, 2026-11-01): no "Turn finished" for the compaction, the session unlocked and re-armed below the
+    /// threshold, and the carry-on turn an ordinary one, which notifies at its end and sends nothing more.
+    @Test
+    void anAutomaticCheckpointCarriesOnOnceItsCompactionHasEnded() {
+        reducer = new Reducer(clock, () -> 40);
+        final String title = state.panel(P1).orElseThrow().title();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        crossTheThreshold(title);
+        assertThat(state.session("work").orElseThrow().checkpointContinues()).as("the automatic origin").isTrue();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(effects).containsExactly(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, title));
+        assertThat(state.session("work").orElseThrow().checkpointContinues()).as("survives to the compaction").isTrue();
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", ""));
+        assertThat(effects).as("the compaction ended: carry on, from the panel").containsExactly(
+                new Effect.SendToClaude("work", Reducer.CONTINUE_PROMPT, title));
+        final SessionState x = state.session("work").orElseThrow();
+        assertThat(List.of(x.pendingTurns(), x.isCheckpointing(), x.checkpointContinues(), x.checkpointArmed()))
+                .as("one turn, unlocked, nothing left to carry on, re-armed").containsExactly(1, false, false, true);
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 60_000L, 1_000_000L, false, "", "the next step, done"));
+        assertThat(effects).as("an ordinary turn").containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+    }
+
+    /// No carry-on prompt after the button's checkpoint, nor when the automatic one ends any other way: a prompt queued
+    /// during its turn or its compaction (that prompt runs instead), its turn failed, interrupted or blank, its
+    /// compaction failed or interrupted, its process ended. Each way clears the automatic origin.
+    @Test
+    void noCarryOnAfterTheButtonsCheckpointOrAnAutomaticOneThatEndsOtherwise() {
+        reducer = new Reducer(clock, () -> 40);
+        final String title = state.panel(P1).orElseThrow().title();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+
+        apply(new Intent.Checkpoint("work"));
+        assertThat(state.session("work").orElseThrow().checkpointContinues()).as("the button").isFalse();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "## Reflected"));
+        assertThat(effects).contains(new Effect.SendToClaude("work", SessionSpec.COMPACT_COMMAND, title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 2_000L, 1_000_000L, false, "", ""));
+        assertNoCarryOn("the button's compaction ended");
+        assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+
+        crossTheThreshold(title);
+        apply(new Intent.PromptSession("work", "one more thing", "lead"));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 460_000L, 1_000_000L, false, "", "## Reflected"));
+        assertNoCarryOn("a prompt queued during the checkpoint");
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, false, "", "one more thing, done"));
+        assertNoCarryOn("the queued prompt's end");
+
+        crossTheThreshold(title);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, false, "", "## Reflected"));
+        apply(new Intent.PromptSession("work", "after the compaction", "lead"));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 20_000L, 1_000_000L, false, "", ""));
+        assertNoCarryOn("a prompt queued during the compaction");
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 20_000L, 1_000_000L, false, "", "done"));
+        assertNoCarryOn("the queued prompt's end");
+
+        for (final String failure : List.of("rate limited", TurnRules.INTERRUPTED)) {
+            crossTheThreshold(title);
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, true, failure));
+            assertNoCarryOn("the checkpoint's turn: " + failure);
+        }
+        crossTheThreshold(title);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, false, "", " "));
+        assertNoCarryOn("a blank answer: no compaction");
+
+        for (final String failure : List.of("rate limited", TurnRules.INTERRUPTED)) {
+            crossTheThreshold(title);
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, false, "", "## Reflected"));
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, true, failure));
+            assertNoCarryOn("the compaction: " + failure);
+        }
+
+        crossTheThreshold(title);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 460_000L, 1_000_000L, false, "", "## Reflected"));
+        apply(new Intent.SessionExited("work", 1, "killed"));
+        assertNoCarryOn("the process ended during the compaction");
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        crossTheThreshold(title);
+        apply(new Intent.SessionExited("work", 1, "killed"));
+        assertNoCarryOn("the process ended during the checkpoint");
+    }
+
+    /// Ends a turn of session `work` below the threshold of 40 % and another at 45 %, which runs the automatic
+    /// checkpoint from the panel titled `title`.
+    private void crossTheThreshold(final String title) {
+        apply(new Intent.RunText(P1, "a short task", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 1_000_000L, false, "", "below"));
+        apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 450_000L, 1_000_000L, false, "", "above"));
+        assertThat(effects).containsExactly(new Effect.SendToClaude("work", "/reflect --auto", title));
+    }
+
+    /// No effect sends the carry-on prompt and the session no longer carries the automatic origin.
+    private void assertNoCarryOn(final String when) {
+        assertThat(effects).as(when).noneMatch(e -> e instanceof Effect.SendToClaude s && s.text().equals(Reducer.CONTINUE_PROMPT));
+        assertThat(state.session("work").orElseThrow().checkpointContinues()).as(when).isFalse();
+    }
+
     /// Whether the session `work` is locked by its checkpoint.
     private boolean locked() {
         return state.session("work").orElseThrow().isCheckpointing();
@@ -1141,10 +1383,12 @@ class ReducerTest {
     /// A stopped session stays due its checkpoint, and a fresh start resets its reflection to fresh.
     @Test
     void aFreshStartLeavesNothingDue() {
+        reducer = new Reducer(clock, () -> 40);
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.RunText(P1, "go", Target.CLAUDE));
-        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, ""));
+        apply(new Intent.RunText(P1, "queued", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 700_000L, 1_000_000L, false, ""));
         apply(new Intent.StopSession("work"));
         apply(new Intent.SessionExited("work", 0, ""));
         assertThat(state.session("work").orElseThrow().reflection().due()).as("a stopped session stays due").isTrue();
@@ -1786,5 +2030,81 @@ class ReducerTest {
     void promptWithoutPanelGoesToTheFocusedPanelsSession() {
         apply(new Intent.RunText(null, "explain this failure", Target.CLAUDE));
         assertThat(effects).contains(new Effect.StartClaude(state.session("work").orElseThrow().spec()));
+    }
+
+    /// A stopped session starts again only for the user or one of its creators (record 44), whichever intent reaches it:
+    /// a run from its panel, a command, the checkpoint or a Settle that another session sends is refused with a notice
+    /// naming it, and nothing starts; the same from the session's creator, or from the user, starts it.
+    @Test
+    void aStoppedSessionStartsOnlyForTheUserOrItsCreatorRecord44() {
+        state = state.withSessions(List.of(SessionState.closed(States.WORK.withCreatedBy("foreman"))));
+        apply(new Intent.RunText(P1, "keep going", Target.CLAUDE, "rogue"));
+        assertThat(effects).as("a run from another session").noneMatch(e -> e instanceof Effect.StartClaude);
+        assertThat(state.notice().text()).isEqualTo("rogue did not create session work, which is not running; only the user or its creator starts it "
+                + "(record 44)");
+        apply(new Intent.SessionCommand("work", "/compact", "rogue"));
+        apply(new Intent.Checkpoint("work", "rogue"));
+        apply(new Intent.DecisionHeldBack("work", "One", ""));
+        apply(new Intent.SettleDecision(state.later().getFirst().id(), "rogue"));
+        assertThat(effects).as("a command, the checkpoint, a Settle").noneMatch(e -> e instanceof Effect.StartClaude);
+        assertThat(Reducer.refusal(state, new Intent.SessionCommand("work", "/compact", "rogue"))).as("asked first, as a tool does")
+                .contains("rogue did not create session work, which is not running; only the user or its creator starts it (record 44)");
+
+        apply(new Intent.SessionCommand("work", "/compact", "foreman"));
+        assertThat(effects).as("its creator").anyMatch(e -> e instanceof Effect.StartClaude);
+        state = state.withSessions(List.of(SessionState.closed(States.WORK.withCreatedBy("foreman"))));
+        apply(new Intent.RunText(P1, "go on", Target.CLAUDE));
+        assertThat(effects).as("the user").anyMatch(e -> e instanceof Effect.StartClaude);
+    }
+
+    /// The reducer's refusal, asked before sending, names what it would refuse: a checkpoint with no command, a session
+    /// name another session's panel holds, a Settle of a decision that is gone; text that goes to the database is never refused
+    /// for a session.
+    @Test
+    void aRefusalIsNamedBeforeTheIntentIsSent() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        assertThat(Reducer.refusal(state, new Intent.Checkpoint("work"))).isEmpty();
+        state = state.withSession(state.session("work").orElseThrow().withSpec(States.WORK.withCheckpoint("")));
+        assertThat(Reducer.refusal(state, new Intent.Checkpoint("work"))).contains("Session work has no command to send: its checkpoint command is empty");
+        final String panel = state.panel(P1).orElseThrow().title();
+        assertThat(Reducer.refusal(state, new Intent.SaveSession("", SessionSpec.fresh(panel, "/tmp")))).get(InstanceOfAssertFactories.STRING)
+                .startsWith("A panel called " + panel + " exists");
+        assertThat(Reducer.refusal(state, new Intent.SettleDecision(42L))).contains("No decision 42");
+        state = state.withSessions(List.of(SessionState.closed(States.WORK.withCreatedBy("foreman"))));
+        assertThat(Reducer.refusal(state, new Intent.RunText(P1, "SELECT 1", Target.AUTO, "rogue"))).as("SQL").isEmpty();
+    }
+
+    /// An agent's intent that its tool let through just before the session's checkpoint began is dropped as the window's
+    /// is (record 130), and a notice names the agent, which was answered "sent"; the window's own gesture is dropped
+    /// silently.
+    @Test
+    void anAgentsIntentRefusedUnderTheCheckpointLockIsTold() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        final Notice before = state.notice();
+        apply(new Intent.SessionCommand("work", "/compact"));
+        assertThat(state.notice()).as("the window's").isEqualTo(before);
+        apply(new Intent.SessionCommand("work", "/compact", "foreman"));
+        assertThat(effects).isEmpty();
+        assertThat(state.notice().text()).isEqualTo("foreman: SessionCommand not applied: the session is running its checkpoint (record 130)");
+    }
+
+    /// A connection pointed at another host, port, database or user loses its saved password unless the save gives it
+    /// again (record 20): a notice says to enter it again; a change of name or flags keeps it.
+    @Test
+    void aConnectionPointedElsewhereLosesItsSavedPassword() {
+        final ConnectionSpec prod = new ConnectionSpec("prod", "db.internal", 5432, "sales", "app", "s3cret", true, "verify-full");
+        state = state.withConnections(List.of(ConnectionState.closed(prod)));
+        apply(new Intent.SaveConnection("prod", new ConnectionSpec("prod", "elsewhere", 5432, "sales", "app", "s3cret", true, "verify-full")));
+        assertThat(state.connection("prod").orElseThrow().spec().password()).isEmpty();
+        assertThat(state.notice().text()).startsWith("prod now logs in to app@elsewhere:5432/sales: its saved password was for app@db.internal:5432/sales");
+        state = state.withConnections(List.of(ConnectionState.closed(prod)));
+        apply(new Intent.SaveConnection("prod", new ConnectionSpec("prod", "elsewhere", 5432, "sales", "app", "new", true, "verify-full")));
+        assertThat(state.connection("prod").orElseThrow().spec().password()).as("given again").isEqualTo("new");
+        state = state.withConnections(List.of(ConnectionState.closed(prod)));
+        apply(new Intent.SaveConnection("prod", prod.withName("prod2")));
+        assertThat(state.connection("prod2").orElseThrow().spec().password()).as("renamed: the same target").isEqualTo("s3cret");
     }
 }

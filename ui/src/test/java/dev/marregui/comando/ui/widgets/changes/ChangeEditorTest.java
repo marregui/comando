@@ -270,4 +270,32 @@ class ChangeEditorTest {
         failing.set(null);
         await().atMost(Duration.ofSeconds(3)).until(() -> str(e, ChangeEditor::status).equals("✓ saved"));
     }
+
+    /// The window moves to another file while the edits of the one it showed cannot be written: the write is tried
+    /// again every second until it succeeds, and the file shown again meanwhile shows the edits, still to be written.
+    @Test
+    void anEditWhoseWriteFailsAsTheWindowMovesOnIsTriedAgainAndShownOnComingBack() throws Exception {
+        final ChangeEditor e = editor();
+        shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
+        run(e, x -> x.diff().right().insert("x", 0));
+        failing.set("disk full");
+        shown(e, texts("B.java", RepoStatus.Kind.MODIFIED, "c\n", "d\n"));
+        assertThat(written).extracting(w -> w.getKey().getFileName().toString()).containsExactly("A.java");
+        await().atMost(Duration.ofSeconds(5)).until(() -> writesOf("A.java") >= 2);
+        shown(e, texts("A.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
+        assertThat(right(e)).as("A's edits, not its text on disk").isEqualTo("xb\n");
+        assertThat(is(e, ChangeEditor::edited)).isTrue();
+        assertThat(str(e, ChangeEditor::status)).isEqualTo("✗ not saved");
+        failing.set(null);
+        await().atMost(Duration.ofSeconds(3)).until(() -> str(e, ChangeEditor::status).equals("✓ saved"));
+        assertThat(written.getLast()).isEqualTo(Map.entry(root.resolve("A.java"), "xb\n"));
+        final long writes = written.size();
+        Thread.sleep(ChangeEditor.AUTOSAVE_MILLIS * 2L);
+        assertThat(written).as("nothing left to write once written").hasSize((int) writes);
+        run(e, ChangeEditor::unmount);
+    }
+
+    private long writesOf(final String name) {
+        return written.stream().filter(w -> w.getKey().getFileName().toString().equals(name)).count();
+    }
 }

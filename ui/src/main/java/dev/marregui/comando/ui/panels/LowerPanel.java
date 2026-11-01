@@ -2,9 +2,10 @@ package dev.marregui.comando.ui.panels;
 
 import java.awt.Component;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
@@ -185,9 +186,23 @@ public final class LowerPanel {
             // read-only already; greyed with the session's other views, except while one of its cards waits for the user
             final boolean checkpointing = s.session(shown).map(SessionState::isCheckpointing).orElse(false);
             veil.show(checkpointing && s.pendingApprovals(shown) == 0);
-            inbox.render(new ApprovalInbox.Queue(s.approvals(), shown, s.later(), s.later().stream()
-                    .filter(d -> Reducer.refusedWhileCheckpointing(s, new Intent.SettleDecision(d.id()))).map(Decision::id)
-                    .collect(Collectors.toSet())));
+            final Set<Long> locked = new HashSet<>();
+            final Map<Long, String> refused = new HashMap<>();
+            final Map<Long, String> targets = new HashMap<>();
+            final Set<Long> gone = new HashSet<>();
+            for (final Decision d : s.later()) {
+                Reducer.settleTarget(s, d.id()).ifPresent(t -> targets.put(d.id(), t));
+                if (s.session(d.session()).isEmpty()) {
+                    gone.add(d.id());
+                }
+                final Intent.SettleDecision settle = new Intent.SettleDecision(d.id());
+                if (Reducer.refusedWhileCheckpointing(s, settle)) {
+                    locked.add(d.id());
+                } else {
+                    Reducer.refusal(s, settle).ifPresent(why -> refused.put(d.id(), why));
+                }
+            }
+            inbox.render(new ApprovalInbox.Queue(s.approvals(), shown, s.later(), locked, refused, targets, gone));
             final int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, approvalsTitle(pending, s.later().size()));
             // a decision held back brings nothing forward: only a live card takes the attention colour

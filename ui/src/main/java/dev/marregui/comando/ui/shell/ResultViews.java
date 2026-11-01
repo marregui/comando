@@ -60,7 +60,7 @@ final class ResultViews {
         return new ViewSpec.Plot(r.columnName(x), "", r.kind(x) == ColumnKind.TIMESTAMP, series);
     }
 
-    /** The first {@link #MAX_TABLE_ROWS} rows as text. */
+    /** The first {@link #MAX_TABLE_ROWS} rows as text, SQL NULL as a null cell, apart from the text {@code null}. */
     static ViewSpec.Table table(final ResultView r) {
         final List<String> columns = new ArrayList<>(r.columnCount());
         for (int c = 0; c < r.columnCount(); c++) {
@@ -72,6 +72,10 @@ final class ResultViews {
         for (int i = 0; i < n; i++) {
             final List<String> row = new ArrayList<>(columns.size());
             for (int c = 0; c < columns.size(); c++) {
+                if (r.isNull(i, c)) {
+                    row.add(null);
+                    continue;
+                }
                 sb.setLength(0);
                 r.format(i, c, sb);
                 row.add(sb.toString());

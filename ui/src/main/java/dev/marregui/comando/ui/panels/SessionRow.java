@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import javax.swing.Icon;
 
 import dev.marregui.comando.core.model.SessionSpec;
@@ -28,6 +29,9 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  */
 final class SessionRow extends IconRow {
 
+    /** What follows a version part's number ("1-beta" → "-beta"), dropped before it is read. */
+    private static final Pattern NOT_A_NUMBER = Pattern.compile("\\D.*");
+
     /** The controls of a row: its state icon and its ⓘ. */
     enum Control {
         POWER,
@@ -42,6 +46,10 @@ final class SessionRow extends IconRow {
 
     /** The icon a working session shows in place of its state, turned by the list's timer. */
     private Icon working = Icons.get("claude");
+    /** The last comparison of the row's Claude Code version with the newest: the two versions and the answer. */
+    private String comparedVersion = "";
+    private String comparedNewest = "";
+    private boolean comparedOlder;
 
     void working(final Icon spinner) {
         working = spinner;
@@ -62,7 +70,7 @@ final class SessionRow extends IconRow {
         setOpaque(true);
         setBackground(background);
         title.setForeground(foreground);
-        title.setText(titleHtml(s, open, focused, approvals, newestCli));
+        title.setText(titleHtml(s, open, focused, approvals, older(s, newestCli)));
         // its state is its icon: working spins, waiting on background work shows the hourglass
         power.setIcon(s.isBusy() ? working : s.isWaiting() ? Icons.get("hourglass") : Icons.get(SessionIcons.of(s.status())));
         power.setToolTipText(powerTip(s));
@@ -89,6 +97,17 @@ final class SessionRow extends IconRow {
         return newest;
     }
 
+    /** {@link #olderCli}, compared again only when the row's version or the newest changed since the last paint. */
+    private boolean older(final SessionState s, final String newestCli) {
+        final String version = cliText(s).isEmpty() ? "" : s.info().cliVersion();
+        if (!version.equals(comparedVersion) || !newestCli.equals(comparedNewest)) {
+            comparedVersion = version;
+            comparedNewest = newestCli;
+            comparedOlder = olderCli(s, newestCli);
+        }
+        return comparedOlder;
+    }
+
     /** Whether {@code s} runs an older Claude Code than {@code newestCli}: it started before the CLI was updated. */
     static boolean olderCli(final SessionState s, final String newestCli) {
         return !cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newestCli) < 0;
@@ -112,7 +131,7 @@ final class SessionRow extends IconRow {
 
     private static int number(final String[] parts, final int i) {
         try {
-            return i < parts.length ? Integer.parseInt(parts[i].replaceAll("\\D.*", "")) : 0;
+            return i < parts.length ? Integer.parseInt(NOT_A_NUMBER.matcher(parts[i]).replaceAll("")) : 0;
         } catch (final NumberFormatException e) {
             return 0;
         }
@@ -262,11 +281,11 @@ final class SessionRow extends IconRow {
     static String powerTip(final SessionState s) {
         final String doing = s.isBusy() ? "Working: " + TabStatus.working(s) + "; " : s.isWaiting() ? "Waiting on " + s.waitingFor() + "; " : "";
         return switch (s.status()) {
-            case OPEN -> (doing.isEmpty() ? "Connected" : doing + "connected") + "; click to disconnect (stops the session)";
+            case OPEN -> (doing.isEmpty() ? "Running" : doing + "running") + "; click to stop the session";
             case OPENING -> "Starting";
             case CLOSING -> "Stopping";
-            case FAILED -> "Failed" + (s.error().isEmpty() ? "" : ": " + s.error()) + "; click to connect (starts the session)";
-            case CLOSED -> "Disconnected; click to connect (starts the session)";
+            case FAILED -> "Failed" + (s.error().isEmpty() ? "" : ": " + s.error()) + "; click to start it";
+            case CLOSED -> "Stopped; click to start it";
         };
     }
 
@@ -276,7 +295,13 @@ final class SessionRow extends IconRow {
      * the context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
      */
     static String titleHtml(final SessionState s, final boolean open, final boolean focused, final int approvals, final String newestCli) {
-        final String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
+        return titleHtml(s, open, focused, approvals, olderCli(s, newestCli));
+    }
+
+    /** {@link #titleHtml(SessionState, boolean, boolean, int, String)} with the comparison of versions made. */
+    private static String titleHtml(final SessionState s, final boolean open, final boolean focused, final int approvals,
+                                    final boolean olderCli) {
+        final String older = olderCli ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
         final String due = s.reflection().due() && SessionBar.showsCheckpoint(s)
                 ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
         final String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
