@@ -694,9 +694,14 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
     }
 
-    /** Runs on the strand after the process's last stdout line; a process already replaced only adds its note. */
+    /**
+     * Runs on the strand after the process's last stdout line. Its configuration file and token go whether or not a
+     * newer process has replaced it (the gateway leaves a newer token alone); a process already replaced then only adds
+     * its note.
+     */
     private void onExit(final Session s, final Run run, final int code) {
         deleteConfig(run);
+        mcp.unregister(s.name, run.ticket);
         run.process.closeInput(); // ends the stdin writer of a process that exited on its own
         final boolean clean = code == 0 || run.stopping;
         final String err = clean ? "" : run.process.stderrTail();
@@ -712,7 +717,6 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         s.current = null;
         s.live = false;
-        mcp.unregister(s.name, run.ticket);
         stopTails(s.name, STOPPED_SESSION);
         sink.dispatch(new Intent.SessionExited(s.name, clean ? 0 : code, lastLine(err)));
     }

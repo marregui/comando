@@ -8,6 +8,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -42,16 +43,23 @@ class ClaudeAdapterTest {
     private final RecordingSink sink = new RecordingSink();
     private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private final List<String> registered = new ArrayList<>();
+    private final List<String> revoked = new CopyOnWriteArrayList<>();
     private final McpGateway gateway = new McpGateway() {
+        private int issued;
+
         @Override
         public synchronized Ticket register(final String session) {
             registered.add("+" + session);
-            return new Ticket("http://127.0.0.1:1/mcp", "token-" + session);
+            issued++;
+            return new Ticket("http://127.0.0.1:1/mcp", "token-" + session + (issued == 1 ? "" : "-" + issued));
         }
 
         @Override
         public synchronized void unregister(final String session, final Ticket ticket) {
             registered.add("-" + session);
+            if (ticket != null) {
+                revoked.add(ticket.token());
+            }
         }
     };
     private ClaudeAdapter adapter;
@@ -202,6 +210,43 @@ class ClaudeAdapterTest {
         try (Stream<Path> files = Files.list(runDir)) {
             assertThat(files).isEmpty();
         }
+    }
+
+    /// A process that exits while a child still holds its output open has its exit handled only after the drain
+    /// bound; a start in between replaces it. The replaced process's token is revoked when its exit is handled, and
+    /// the newer process keeps its own: a replaced run leaves no live bearer token behind.
+    @Test
+    void aReplacedProcessHasItsTokenRevokedAtItsExit() throws Exception {
+        final Path exe = tmp.resolve("replaced-claude.sh");
+        Files.writeString(exe, """
+                #!/bin/sh
+                # stands in for claude -p: the first run exits at once while a child keeps its stdout open, so its exit
+                # is handled only after the drain bound; a later run reads its input until it closes
+                if [ ! -f "$PWD/first.pid" ]; then
+                  sleep 3 &
+                  echo $$ > "$PWD/first.pid"
+                  exit 0
+                fi
+                cat > /dev/null
+                """);
+        exe.toFile().setExecutable(true);
+        adapter = new ClaudeAdapter(sink, transcripts, gateway,
+                new ClaudeSettings(exe.toString(), runDir, tmp.resolve("projects"), UiInstructions.TEXT));
+        final SessionSpec spec = SessionSpec.fresh("work", tmp.toString());
+        adapter.start(spec);
+        sink.await(Intent.SessionStarted.class, WAIT);
+        final Path pidFile = tmp.resolve("first.pid");
+        Awaitility.await().atMost(WAIT).until(() -> Files.exists(pidFile) && !Files.readString(pidFile).isBlank());
+        final long pid = Long.parseLong(Files.readString(pidFile).strip());
+        Awaitility.await().atMost(WAIT).until(() -> ProcessHandle.of(pid).map(h -> !h.isAlive()).orElse(true));
+
+        adapter.start(spec); // within the drain bound: the first process's exit is not handled yet
+        sink.await(Intent.SessionStarted.class, e -> sink.of(Intent.SessionStarted.class).size() == 2, WAIT);
+        assertThat(revoked).as("the first exit is still pending").doesNotContain("token-work");
+
+        Awaitility.await().atMost(WAIT).untilAsserted(() -> assertThat(revoked).contains("token-work"));
+        assertThat(revoked).as("the newer process keeps its token").doesNotContain("token-work-2");
+        assertThat(sink.of(Intent.SessionExited.class)).as("the replaced process says nothing to the window").isEmpty();
     }
 
     /// A child of Claude Code that ignores SIGTERM is killed at close although Claude Code itself exits on the

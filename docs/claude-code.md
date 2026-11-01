@@ -44,9 +44,8 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 - **MCP configuration.** One file per running process under `run/` in the data root, mode `0600` from creation, named
   after the session and a random UUID. At each start the adapter asks `McpGateway.register` for a ticket (the server's
   URL and a bearer token); the file names comando's server, that token, and `"timeout": 3600000`, which lets an approval
-  card wait up to 55 minutes. Deleted when the process exits, and the token revoked unless a newer run has already
-  replaced the process, in which case it stays until comando closes; files a killed comando left are deleted at the next
-  start.
+  card wait up to 55 minutes. Deleted when the process exits, and its token revoked, also when a newer run has already
+  replaced the process (the newer run keeps its own token); files a killed comando left are deleted at the next start.
 - **Working directory.** The session's; the session bar shows its git branch, read from `.git/HEAD` after each turn.
 - **Threads.** stdout is read on a platform thread, `claude-out-<session>`, the one operating-system thread a session
   costs: a read of a process pipe holds its carrier thread even from a virtual thread (measured on JDK 25). The stdin
