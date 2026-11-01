@@ -94,7 +94,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                                 + "Keep the kit's unless the session needs a project's own CLAUDE.md and branch.")
                         .inAdvanced(),
                 Attribute.of("checkpoint", "Checkpoint prompt", Attribute.Kind.TEXT, false,
-                                "what Checkpoint sends before the conversation is compacted; empty hides the button")
+                                "what Checkpoint sends before compacting; empty hides the button")
                         .about("What the Checkpoint button sends, the kit's /reflect by default; once it has answered, comando compacts the "
                                 + "same conversation (/compact), so a long session goes on light again.")
                         .inAdvanced());
