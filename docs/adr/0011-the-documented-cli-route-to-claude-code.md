@@ -19,7 +19,7 @@ Miguel decided, on the default proposed in the review of the design plan.
 ## 3. Consequences
 
 The bridge is behind `ClaudePort`. The facts it relies on are recorded probes against CLI 2.1.296
-([The Claude bridge](../claude.md#1-the-claude-bridge)). `ClaudeVersion` names the tested line, 2.1.296 up to 2.2.0;
+([The Claude bridge](../claude-code.md#1-the-claude-bridge)). `ClaudeVersion` names the tested line, 2.1.296 up to 2.2.0;
 a version outside it gets a warning, not a refusal.
 
 ## 4. Alternatives

@@ -42,7 +42,7 @@ Each release has one file per system:
 | Windows | `AMD64` | `comando-<version>-windows-x64.zip` |
 
 Another architecture has no package: tell the user so, and that comando builds from source with JDK 25
-(`./gradlew :app:installDist`, [Build and run](docs/build-and-run.md)). Download the file into a new, empty folder
+(`./gradlew :app:installDist`, [Development](docs/development.md)). Download the file into a new, empty folder
 (`TAG` is the tag chosen above):
 
 ```sh
@@ -117,10 +117,10 @@ and Ubuntu. A second start while comando runs only says that it is already runni
 ## 5. The kit
 
 The kit is a Claude Code setup for the way of working comando is built for: instructions, settings with their hooks,
-skills, agents, workflows and scripts, and a brain (memory, knowledge base, scratchpad) kept in its own folder. The
-reference kit is `marregui/comando-kit`; any kit with its layout serves
-([workbench §7](docs/workbench.md#7-the-kit)). It installs into `~/.claude/comando-kit` and leaves the user's own
-`~/.claude` alone; comando finds it at its next start and runs its sessions on it.
+skills, agents, workflows and scripts. Its installer also creates a brain (memory, knowledge base, scratchpad), a folder
+of its own that the kit's repository does not hold. The reference kit is `marregui/comando-kit`; any kit with its
+layout serves ([Kit and brain](docs/kit-and-brain.md)). It installs into `~/.claude/comando-kit` and leaves the
+user's own `~/.claude` alone; comando finds it at its next start and runs its sessions on it.
 
 Ask the user: "comando is installed. Install the kit as well: the reference kit, `marregui/comando-kit`, or another kit
 you name?" On no, go to [§6](#6-start-comando). On yes, read the chosen kit's recipe and follow it; it asks the user for
@@ -136,7 +136,7 @@ When the kit is installed while comando runs, quit comando and start it again so
 
 ## 6. Start comando
 
-Tell the user how to start it, and that **Actions ▸ Tutorial** inside comando takes ten minutes:
+Tell the user how to start it, and that **Help ▸ Tutorial** inside comando takes ten minutes:
 
 | System | Start |
 |---|---|
@@ -153,8 +153,8 @@ Tell the user how to start it, and that **Actions ▸ Tutorial** inside comando 
    Windows `Remove-Item -Recurse -Force "$env:LOCALAPPDATA\comando"` (the shortcut stays).
 4. Check that it starts, as in [§4](#4-check-that-it-starts).
 
-The data in `~/.comando` is kept and read by the new version. The kit upgrades on its own: comando shows its version
-and offers **Upgrade the kit…** when a newer one is released.
+The data in `~/.comando` is kept and read by the new version. The kit has its own upgrade: when a newer release is
+out, comando says so on the KIT row and offers **Upgrade the kit…**.
 
 ## 8. Uninstall
 

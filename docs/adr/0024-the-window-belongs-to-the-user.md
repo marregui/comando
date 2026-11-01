@@ -35,7 +35,7 @@ the record was left for Miguel to accept or reverse.
 Commands carry an enablement, and a disabled command leaves its key to the focused component, so a key acts where the
 keyboard is. Notices carry a subject, so the event that settles a subject clears its notice, and an error stays until
 it is settled. The rules are written down in [Running text](../workbench.md#2-running-text),
-[Approvals and safety](../claude.md#3-approvals-and-safety), [MCP tools](../claude.md#2-mcp-tools) and
+[Approvals and safety](../claude-code.md#4-approvals-and-safety), [MCP tools](../claude-code.md#3-mcp-tools) and
 [State, intents, effects](../architecture.md#4-state-intents-effects).
 
 In the code: `Workspace.CLOSED_KEPT` is 10, `ApprovalInbox.CONFIRM_MILLIS` is 3 000 ms and

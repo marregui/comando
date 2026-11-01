@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#101010"/>
+    </radialGradient>
+    <radialGradient id="core" cx="50%" cy="40%" r="60%">
+      <stop offset="0" stop-color="#22201A"/>
+      <stop offset="1" stop-color="#151515"/>
+    </radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,1 L9,5 L0,9" fill="none" stroke="#E7C55A" stroke-width="1.4"/>
+    </marker>
+    <style>
+      .cap{font-size:13px;font-weight:500;letter-spacing:3px}
+      .h{font-size:24px;font-weight:300;fill:#F2F2F2}
+      .t{font-size:20px;font-weight:300;fill:#F2F2F2}
+      .s{font-size:13px;font-weight:300;fill:#BDBDBD}
+      .q{font-size:13px;font-weight:300;fill:#8E8E8E;font-style:italic}
+      .m{font-family:Menlo, monospace;font-size:12px;fill:#9A9A9A}
+      .arc{fill:none;stroke:#E7C55A;stroke-opacity:.45;stroke-width:1.2;marker-end:url(#a)}
+      .link{fill:none;stroke:#E7C55A;stroke-opacity:.35;stroke-width:1;stroke-dasharray:4 4}
+    </style>
+  </defs>
+  <rect width="1600" height="1040" fill="url(#bg)"/>
+
+  <text x="60" y="56" class="cap" fill="#E7C55A">BRAIN · THE LEARNING LOOP</text>
+  <text x="60" y="88" class="h">How the brain gets sharper</text>
+  <text x="60" y="112" class="s">Every session is used, recorded, measured and reflected on; the next one starts from the result.</text>
+
+  <!-- loop arcs, clockwise: use → record → measure → report → reflect → use -->
+  <path d="M836,262 Q1060,250 1164,382" class="arc"/>
+  <path d="M1182,432 Q1190,650 1072,782" class="arc"/>
+  <path d="M1052,812 Q800,880 552,812" class="arc"/>
+  <path d="M528,776 Q450,600 418,432" class="arc"/>
+  <path d="M436,382 Q540,250 764,262" class="arc"/>
+
+  <!-- stations -->
+  <g>
+    <circle cx="800" cy="262" r="14" fill="#151515" stroke="#D98E5F" stroke-width="1.3"/><circle cx="800" cy="262" r="5" fill="#D98E5F"/>
+    <circle cx="1180" cy="406" r="14" fill="#151515" stroke="#D98E5F" stroke-width="1.3"/><circle cx="1180" cy="406" r="5" fill="#D98E5F"/>
+    <circle cx="1080" cy="800" r="14" fill="#151515" stroke="#6CC69A" stroke-width="1.3"/><circle cx="1080" cy="800" r="5" fill="#6CC69A"/>
+    <circle cx="524" cy="800" r="14" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="524" cy="800" r="5" fill="#E7C55A"/>
+    <circle cx="420" cy="406" r="14" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="420" cy="406" r="5" fill="#E7C55A"/>
+  </g>
+
+  <!-- centre -->
+  <circle cx="800" cy="540" r="122" fill="none" stroke="#E7C55A" stroke-opacity=".10"/>
+  <circle cx="800" cy="540" r="94" fill="url(#core)" stroke="#E7C55A" stroke-width="1.3"/>
+  <text x="800" y="520" text-anchor="middle" class="cap" fill="#9E8230">THE BRAIN</text>
+  <text x="800" y="550" text-anchor="middle" font-size="16" font-weight="300" fill="#E6E6E6">memory</text>
+  <text x="800" y="572" text-anchor="middle" font-size="16" font-weight="300" fill="#E6E6E6">scratchpad · KB</text>
+
+  <!-- EVAL satellite -->
+  <circle cx="800" cy="716" r="9" fill="none" stroke="#E7C55A" stroke-width="1.2"/><circle cx="800" cy="716" r="3" fill="#E7C55A"/>
+  <path d="M808,712 Q960,690 1066,792" class="link"/>
+  <path d="M792,712 Q560,640 430,420" class="link"/>
+  <g text-anchor="middle">
+    <text x="800" y="748" class="cap" fill="#E7C55A">EVAL · THE ANSWER KEY</text>
+    <text x="800" y="770" class="s">past queries, hand-labelled with the</text>
+    <text x="800" y="788" class="s">memory files they needed</text>
+    <text x="800" y="810" class="s">optional; grows by use</text>
+  </g>
+
+  <!-- USE -->
+  <g text-anchor="middle">
+    <text x="800" y="150" class="cap" fill="#D98E5F">1 · USE</text>
+    <text x="800" y="178" class="t">a session draws on the brain</text>
+    <text x="800" y="202" class="s">MEMORY.md at start · files on cue, named by a kit hook</text>
+    <text x="800" y="222" class="s">KB documents by title · today's tasks from INDEX.md</text>
+  </g>
+
+  <!-- RECORD -->
+  <g>
+    <text x="1214" y="350" class="cap" fill="#D98E5F">2 · RECORD</text>
+    <text x="1214" y="378" class="t">what happened is kept</text>
+    <text x="1214" y="404" class="s">transcripts: every prompt, file opened,</text>
+    <text x="1214" y="422" class="s">correction, agent run (Claude Code)</text>
+    <text x="1214" y="448" class="s">comando metrics/: turns, agents, usage</text>
+    <text x="1214" y="466" class="s">comando audit/: MCP calls, approvals</text>
+    <text x="1214" y="492" class="q">metrics: read by the kit (record 110);</text>
+    <text x="1214" y="510" class="q">so far the agent ledger reads agent runs</text>
+  </g>
+
+  <!-- MEASURE -->
+  <g>
+    <text x="1124" y="770" class="cap" fill="#6CC69A">3 · MEASURE, WEEKLY</text>
+    <text x="1124" y="798" class="t">the kit scores the week</text>
+    <text x="1124" y="824" class="s">recall replay: did the index route each prompt</text>
+    <text x="1124" y="842" class="s">to the files it needed?</text>
+    <text x="1124" y="864" class="s">correction curator: each correction → its cause</text>
+    <text x="1124" y="886" class="s">drift check: each KB set against its sources</text>
+    <text x="1124" y="908" class="s">agent ledger: runs and pass rates</text>
+  </g>
+
+  <!-- REPORT -->
+  <g text-anchor="end">
+    <text x="476" y="770" class="cap" fill="#E7C55A">4 · REPORT</text>
+    <text x="476" y="798" class="t">findings wait in the scratchpad</text>
+    <text x="476" y="824" class="s">one report per job, a task in INDEX.md</text>
+    <text x="476" y="846" class="s">what needs a decision waits on the user</text>
+    <text x="476" y="868" class="s">nothing reaches memory or KB from here</text>
+    <text x="476" y="886" class="s">without the next step</text>
+  </g>
+
+  <!-- REFLECT -->
+  <g text-anchor="end">
+    <text x="386" y="350" class="cap" fill="#E7C55A">5 · REFLECT</text>
+    <text x="386" y="378" class="t">/reflect changes the brain</text>
+    <text x="386" y="404" class="s">cues sharpened, rules rewritten</text>
+    <text x="386" y="422" class="s">KB corrected where proved wrong</text>
+    <text x="386" y="444" class="s">kit edits the user confirmed</text>
+    <text x="386" y="466" class="s">new gold rows → EVAL</text>
+    <text x="386" y="488" class="s">scratchpad folded, indexes true</text>
+  </g>
+
+  <!-- legend -->
+  <line x1="60" y1="972" x2="1540" y2="972" stroke="#2A2A2A"/>
+  <g class="s">
+    <circle cx="66" cy="1002" r="5" fill="#D98E5F"/><text x="80" y="1006">Claude Code sessions</text>
+    <circle cx="246" cy="1002" r="5" fill="#6CC69A"/><text x="260" y="1006">the kit's jobs</text>
+    <circle cx="376" cy="1002" r="5" fill="#E7C55A"/><text x="390" y="1006">the brain, /reflect</text>
+    <line x1="530" y1="1002" x2="560" y2="1002" stroke="#E7C55A" stroke-opacity=".5" stroke-dasharray="4 4"/><text x="570" y="1006">EVAL: scored by MEASURE, grown by REFLECT</text>
+    <text x="1540" y="1006" text-anchor="end">comando · docs/kit-and-brain</text>
+  </g>
+</svg>

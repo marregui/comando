@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1090" viewBox="0 0 1600 1090" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8A8A8A"/>
+    </marker>
+    <style>
+      .t{font-size:15px;font-weight:500;fill:#EDEDED}
+      .h{font-size:24px;font-weight:300;fill:#F2F2F2}
+      .cap{font-size:13px;font-weight:500;letter-spacing:3px;fill:#E7C55A}
+      .s{font-size:13px;font-weight:300;fill:#BDBDBD}
+      .m{font-size:12px;fill:#9A9A9A;font-family:Menlo, monospace}
+      .l{font-size:12px;font-weight:300;fill:#9C9C9C;font-style:italic}
+      .ln{stroke:#7A7A7A;stroke-width:1.1;fill:none;marker-end:url(#a)}
+      .lb{stroke:#7A7A7A;stroke-width:1.1;fill:none;marker-end:url(#a);marker-start:url(#a)}
+      .dash{stroke-dasharray:5 4}
+    </style>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#101010"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1090" fill="url(#bg)"/>
+
+  <text x="30" y="30" class="cap">BRAIN · THE WHOLE PICTURE</text>
+  <text x="30" y="58" class="h">A comando session, the kit and the brain</text>
+  <text x="30" y="80" class="s">Who runs what, who writes what, what flows where. Solid boxes run; dashed boxes are files on disk. Paths are the defaults: root ~/.claude, data root ~/.comando.</text>
+
+  <g transform="translate(0,24)">
+  <!-- comando -->
+  <rect x="30" y="90" width="330" height="520" rx="10" fill="#161A20" stroke="#6FAEE8" stroke-width="1.2"/>
+  <text x="45" y="116" class="t">comando (JVM) — owns the process</text>
+  <rect x="45" y="130" width="300" height="70" rx="6" fill="#1E1E1E" stroke="#6FAEE8"/>
+  <text x="57" y="152" class="s">Panels: transcript, approval cards,</text>
+  <text x="57" y="170" class="s">context meter, Stop, Checkpoint</text>
+  <text x="57" y="188" class="s">the user types here</text>
+  <rect x="45" y="212" width="300" height="88" rx="6" fill="#1E1E1E" stroke="#6FAEE8"/>
+  <text x="57" y="234" class="s">Session strand (one per session)</text>
+  <text x="57" y="252" class="s">writes stdin, reads stdout line by line,</text>
+  <text x="57" y="270" class="s">stop: interrupt → SIGTERM 3 s → KILL 2 s</text>
+  <text x="57" y="288" class="s">checkpoint at 400k: /reflect then /compact</text>
+  <rect x="45" y="312" width="300" height="88" rx="6" fill="#1E1E1E" stroke="#6FAEE8"/>
+  <text x="57" y="334" class="s">MCP server (HTTP, localhost, token/run)</text>
+  <text x="57" y="352" class="m">approve  ui_*  session_*</text>
+  <text x="57" y="370" class="m">db_*  instance_ask  instances_list</text>
+  <text x="57" y="388" class="s">every call and approval → audit/</text>
+  <rect x="45" y="412" width="300" height="180" rx="6" fill="#1E1E1E" stroke="#6FAEE8" class="dash"/>
+  <text x="57" y="434" class="t">Data root ~/.comando</text>
+  <text x="57" y="456" class="m">sessions.json</text>
+  <text x="170" y="456" class="s">the desk: name, workDir,</text>
+  <text x="170" y="472" class="s">model, claudeSessionId</text>
+  <text x="57" y="496" class="m">metrics/</text>
+  <text x="170" y="496" class="s">each turn's tokens, outcome</text>
+  <text x="57" y="518" class="m">audit/</text>
+  <text x="170" y="518" class="s">MCP calls, approvals</text>
+  <text x="57" y="540" class="m">run/*.mcp.json</text>
+  <text x="170" y="540" class="s">live token, 0600,</text>
+  <text x="170" y="556" class="s">deleted at exit</text>
+  <text x="57" y="580" class="m">panels/ folders.json …</text>
+
+  <!-- claude process -->
+  <rect x="440" y="90" width="360" height="400" rx="10" fill="#1D1814" stroke="#D98E5F" stroke-width="1.2"/>
+  <text x="455" y="116" class="t">claude -p — child process of comando</text>
+  <text x="455" y="138" class="m">--input-format stream-json</text>
+  <text x="455" y="154" class="m">--output-format stream-json</text>
+  <text x="455" y="170" class="m">--session-id | --resume  --name</text>
+  <text x="455" y="186" class="m">--mcp-config  --permission-prompt-tool</text>
+  <text x="455" y="202" class="m">env CLAUDE_CONFIG_DIR, COMANDO_CREATED_BY,</text>
+  <text x="455" y="218" class="m">    CONTEXT_CHECKPOINT_BY</text>
+  <rect x="455" y="232" width="330" height="70" rx="6" fill="#1E1E1E" stroke="#D98E5F"/>
+  <text x="467" y="254" class="s">Model turn loop: context = system prompt</text>
+  <text x="467" y="272" class="s">+ CLAUDE.md + MEMORY.md index</text>
+  <text x="467" y="290" class="s">+ conversation + hook context</text>
+  <rect x="455" y="314" width="160" height="80" rx="6" fill="#1E1E1E" stroke="#D98E5F"/>
+  <text x="467" y="336" class="s">Tools</text>
+  <text x="467" y="354" class="m">Bash Read Edit</text>
+  <text x="467" y="370" class="m">Grep Agent Skill</text>
+  <text x="467" y="386" class="m">mcp__comando__*</text>
+  <rect x="625" y="314" width="160" height="80" rx="6" fill="#1E1E1E" stroke="#D98E5F"/>
+  <text x="637" y="336" class="s">Sub-agents</text>
+  <text x="637" y="354" class="s">own transcript,</text>
+  <text x="637" y="370" class="s">reviewers, writers,</text>
+  <text x="637" y="386" class="s">the kit's agent types</text>
+  <rect x="455" y="406" width="330" height="70" rx="6" fill="#1E1E1E" stroke="#D98E5F"/>
+  <text x="467" y="428" class="s">Its children: Bash shells, stdio MCP servers,</text>
+  <text x="467" y="446" class="s">hook scripts (comando does not see them)</text>
+  <text x="467" y="464" class="s">no process when the session is stopped</text>
+
+  <!-- Claude Code state -->
+  <rect x="440" y="530" width="360" height="160" rx="10" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2" class="dash"/>
+  <text x="455" y="556" class="t">Claude Code state (in the kit root)</text>
+  <text x="455" y="578" class="m">projects/&lt;dir&gt;/&lt;id&gt;.jsonl</text>
+  <text x="455" y="596" class="s">the conversation itself: outlives every process;</text>
+  <text x="455" y="612" class="s">--resume continues it; comando draws history from it</text>
+  <text x="455" y="634" class="m">&lt;id&gt;/subagents/  tool-results/  file-history/</text>
+  <text x="455" y="656" class="s">comando sessions kept forever; others to the Trash</text>
+  <text x="455" y="672" class="s">after a retention period (a kit job)</text>
+
+  <!-- kit -->
+  <rect x="880" y="90" width="320" height="400" rx="10" fill="#141B17" stroke="#6CC69A" stroke-width="1.2"/>
+  <text x="895" y="116" class="t">The kit &lt;root&gt; — read by every run</text>
+  <text x="895" y="140" class="m">CLAUDE.md</text>
+  <text x="1010" y="140" class="s">standing rules</text>
+  <text x="895" y="160" class="m">settings.json</text>
+  <text x="1010" y="160" class="s">hooks, memory dir</text>
+  <text x="895" y="180" class="m">skills/</text>
+  <text x="1010" y="180" class="s">/reflect …</text>
+  <text x="895" y="200" class="m">agents/ bin/</text>
+  <text x="1010" y="200" class="s">roles, tools</text>
+  <rect x="895" y="214" width="290" height="262" rx="6" fill="#1E1E1E" stroke="#6CC69A"/>
+  <text x="907" y="236" class="s" font-weight="bold">Hooks, by event</text>
+  <text x="907" y="258" class="s">SessionStart: roll the day folder, tools</text>
+  <text x="907" y="274" class="s">   on PATH; after compact: the hard rules</text>
+  <text x="907" y="296" class="s">UserPromptSubmit: retrieve matching memory,</text>
+  <text x="907" y="312" class="s">   KB and tasks; other sessions; context size</text>
+  <text x="907" y="334" class="s">PreToolUse: guards (no kill by pattern,</text>
+  <text x="907" y="350" class="s">   ask before deletes, own instance only)</text>
+  <text x="907" y="372" class="s">PostToolUse: index check, diagram check,</text>
+  <text x="907" y="388" class="s">   context threshold → /reflect</text>
+  <text x="907" y="410" class="s">PostToolUseFailure: known traps → memory</text>
+  <text x="907" y="436" class="l">Hooks run as children of claude;</text>
+  <text x="907" y="452" class="l">they put context in, or block a call.</text>
+
+  <!-- jobs -->
+  <rect x="880" y="530" width="320" height="160" rx="10" fill="#141B17" stroke="#6CC69A" stroke-width="1.2"/>
+  <text x="895" y="556" class="t">Scheduled jobs (launchd, headless)</text>
+  <text x="895" y="580" class="s">transcript retention</text>
+  <text x="1050" y="580" class="s">daily</text>
+  <text x="895" y="600" class="s">KB drift check</text>
+  <text x="1050" y="600" class="s">weekly</text>
+  <text x="895" y="620" class="s">correction curator</text>
+  <text x="1050" y="620" class="s">weekly</text>
+  <text x="895" y="640" class="s">recall replay</text>
+  <text x="1050" y="640" class="s">weekly</text>
+  <text x="895" y="660" class="s">daily brief</text>
+  <text x="1050" y="660" class="s">workdays</text>
+  <text x="895" y="680" class="l">not comando sessions; reports only</text>
+
+  <!-- brain -->
+  <rect x="1270" y="90" width="300" height="600" rx="10" fill="#1D1B13" stroke="#E7C55A" stroke-width="1.2"/>
+  <text x="1285" y="116" class="t">BRAIN &lt;root&gt;/&lt;brain&gt; (own repo)</text>
+  <rect x="1285" y="130" width="270" height="130" rx="6" fill="#1E1E1E" stroke="#E7C55A" class="dash"/>
+  <text x="1297" y="152" class="t">MEMORY/</text>
+  <text x="1297" y="172" class="s">working context: state, preferences,</text>
+  <text x="1297" y="188" class="s">lessons, logs (sessions, agent runs)</text>
+  <text x="1297" y="210" class="s">MEMORY.md index loaded at start</text>
+  <text x="1297" y="226" class="s">(200 lines / 25k chars); files on cue</text>
+  <text x="1297" y="248" class="l">writers: any session, /reflect</text>
+  <rect x="1285" y="290" width="270" height="130" rx="6" fill="#1E1E1E" stroke="#E7C55A" class="dash"/>
+  <text x="1297" y="312" class="t">SCRATCHPAD/</text>
+  <text x="1297" y="332" class="s">one day folder, today's; topics,</text>
+  <text x="1297" y="348" class="s">numbered docs, work/, INDEX.md</text>
+  <text x="1297" y="364" class="s">(tasks, State, Next, what waits on the user)</text>
+  <text x="1297" y="386" class="s">provisional, may be wrong</text>
+  <text x="1297" y="408" class="l">writers: any task, agents, jobs</text>
+  <rect x="1285" y="450" width="270" height="140" rx="6" fill="#1E1E1E" stroke="#E7C55A" class="dash"/>
+  <text x="1297" y="472" class="t">KB/</text>
+  <text x="1297" y="492" class="s">product truth, sets with</text>
+  <text x="1297" y="508" class="s">00_START_HERE and 99_MAINTENANCE</text>
+  <text x="1297" y="524" class="s">must match published code;</text>
+  <text x="1297" y="540" class="s">a drift check reads it weekly</text>
+  <text x="1297" y="562" class="l">writer: /reflect only</text>
+  <text x="1297" y="578" class="l">never points into MEMORY</text>
+  <rect x="1285" y="610" width="270" height="62" rx="6" fill="#1E1E1E" stroke="#E7C55A" class="dash"/>
+  <text x="1297" y="632" class="t">EVAL/</text>
+  <text x="1297" y="652" class="s">cue-gold.tsv: recall gold set</text>
+  <!-- internal brain arrows -->
+  <path d="M1540,420 C1590,440 1590,440 1540,452" class="ln"/>
+  <text x="1490" y="440" class="l" text-anchor="end">/reflect: proved → KB</text>
+
+  <!-- arrows comando <-> claude -->
+  <path d="M345,240 L440,240" class="ln"/>
+  <text x="400" y="232" class="l" text-anchor="middle">stdin</text>
+  <text x="400" y="256" class="s" text-anchor="middle" font-size="11">prompts,</text>
+  <text x="400" y="270" class="s" text-anchor="middle" font-size="11">interrupt</text>
+  <path d="M440,190 L345,190" class="ln"/>
+  <text x="400" y="182" class="l" text-anchor="middle">stdout</text>
+  <text x="400" y="206" class="s" text-anchor="middle" font-size="11">events</text>
+  <path d="M455,385 L345,360" class="ln"/>
+  <text x="400" y="400" class="l" text-anchor="middle">MCP calls</text>
+  <!-- claude -> transcript -->
+  <path d="M620,490 L620,530" class="ln"/>
+  <text x="628" y="514" class="l">appends</text>
+  <!-- comando reads transcript; sessions.json links -->
+  <path d="M440,600 L345,560" class="ln dash"/>
+  <text x="432" y="630" class="l" text-anchor="end">reads history,</text>
+  <text x="432" y="646" class="l" text-anchor="end">via claudeSessionId</text>
+  <!-- kit -> claude -->
+  <path d="M880,160 L800,160" class="ln"/>
+  <text x="840" y="150" class="l" text-anchor="middle">loads</text>
+  <path d="M895,300 L800,280" class="ln"/>
+  <text x="845" y="276" class="l" text-anchor="middle">context</text>
+  <path d="M800,360 L895,345" class="ln dash"/>
+  <text x="845" y="380" class="l" text-anchor="middle">events</text>
+  <!-- claude <-> brain (over the kit) -->
+  <path d="M800,104 C900,40 1180,40 1300,130" class="lb"/>
+  <text x="1040" y="22" class="l" text-anchor="middle">reads MEMORY.md, memory files on cue, KB docs by title; writes memory; /reflect</text>
+  <!-- hooks -> brain -->
+  <path d="M1185,280 L1285,340" class="ln"/>
+  <text x="1232" y="276" class="l" text-anchor="middle" font-size="11">roll,</text>
+  <text x="1232" y="290" class="l" text-anchor="middle" font-size="11">index check</text>
+  <path d="M1285,360 L1185,320" class="ln dash"/>
+  <text x="1234" y="394" class="l" text-anchor="middle" font-size="11">retrieval</text>
+  <!-- claude task output -> scratchpad, KB reads -->
+  <path d="M800,470 C830,510 860,510 900,510 L1225,510 C1255,510 1265,440 1285,405" class="ln"/>
+  <text x="1040" y="503" class="l" text-anchor="middle">task output, agent reports → SCRATCHPAD</text>
+  <!-- jobs -> scratchpad -->
+  <path d="M1200,580 L1285,410" class="ln"/>
+  <text x="1236" y="470" class="l" text-anchor="middle">reports</text>
+  <!-- jobs read transcripts -->
+  <path d="M880,620 L800,620" class="ln dash"/>
+  <text x="840" y="610" class="l" text-anchor="middle">read</text>
+
+  <!-- instances band -->
+  <rect x="30" y="760" width="1540" height="270" rx="10" fill="#161616" stroke="#AEB6C1" stroke-width="1.2"/>
+  <text x="45" y="786" class="t">Other comando instances on this machine — each with its own kit, brain and data root</text>
+  <rect x="60" y="806" width="380" height="200" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1"/>
+  <text x="75" y="830" class="t">Main instance</text>
+  <text x="75" y="852" class="m">~/.comando  ~/.claude  ~/.claude/BRAIN</text>
+  <text x="75" y="878" class="s">session calls instance_ask {instance, text}</text>
+  <text x="75" y="898" class="s">publishes presence (retained, last will)</text>
+  <text x="75" y="922" class="l">only the text a session chose to send</text>
+  <text x="75" y="940" class="l">and the reply travel; never brain or kit</text>
+  <rect x="610" y="836" width="380" height="140" rx="8" fill="#1E1E1E" stroke="#AEB6C1" stroke-width="1"/>
+  <text x="625" y="860" class="t">comando Edge (embedded HiveMQ Edge)</text>
+  <text x="625" y="882" class="m">MQTT 5, 127.0.0.1:18883</text>
+  <text x="625" y="904" class="m">comando/v1/local/instance/&lt;slug&gt;/</text>
+  <text x="625" y="920" class="m">   presence  inbox  reply</text>
+  <text x="625" y="946" class="s">one per machine; ~/.comando-edge.json</text>
+  <rect x="1160" y="806" width="380" height="200" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1"/>
+  <text x="1175" y="830" class="t">Instance b</text>
+  <text x="1175" y="852" class="m">~/.comando_b  ~/.claude_b  ~/.claude_b/BRAIN</text>
+  <text x="1175" y="878" class="s">prompts its session consult-&lt;asker&gt;</text>
+  <text x="1175" y="898" class="s">in a visible panel; replies with the turn</text>
+  <text x="1175" y="922" class="l">a kit guard: no session reads or</text>
+  <text x="1175" y="940" class="l">writes another instance's roots</text>
+  <path d="M440,880 L610,890" class="lb"/>
+  <path d="M990,890 L1160,880" class="lb"/>
+  <text x="525" y="872" class="l" text-anchor="middle">ask / reply</text>
+  <text x="1075" y="872" class="l" text-anchor="middle">inbox / reply</text>
+  <path d="M195,610 L195,806" class="lb dash"/>
+  <text x="205" y="720" class="l">the main instance is the box above</text>
+
+  </g>
+  <!-- legend -->
+  <g class="s">
+    <rect x="30" y="1068" width="12" height="12" rx="2" fill="#161A20" stroke="#6FAEE8"/><text x="50" y="1078">comando</text>
+    <rect x="140" y="1068" width="12" height="12" rx="2" fill="#1D1814" stroke="#D98E5F"/><text x="160" y="1078">Claude Code</text>
+    <rect x="270" y="1068" width="12" height="12" rx="2" fill="#141B17" stroke="#6CC69A"/><text x="290" y="1078">the kit</text>
+    <rect x="360" y="1068" width="12" height="12" rx="2" fill="#1D1B13" stroke="#E7C55A"/><text x="380" y="1078">the brain</text>
+    <rect x="460" y="1068" width="12" height="12" rx="2" fill="#161616" stroke="#AEB6C1"/><text x="480" y="1078">shared between instances</text>
+    <rect x="680" y="1068" width="12" height="12" rx="2" fill="none" stroke="#9A9A9A"/><text x="700" y="1078">runs</text>
+    <rect x="750" y="1068" width="12" height="12" rx="2" fill="none" stroke="#9A9A9A" stroke-dasharray="3 2"/><text x="770" y="1078">files on disk</text>
+    <text x="1570" y="1078" text-anchor="end">comando · docs/kit-and-brain</text>
+  </g>
+</svg>

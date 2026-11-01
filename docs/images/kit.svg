@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#101010"/>
+    </radialGradient>
+    <linearGradient id="rail" gradientUnits="userSpaceOnUse" x1="640" y1="330" x2="1560" y2="330">
+      <stop offset="0" stop-color="#6CC69A" stop-opacity=".2"/>
+      <stop offset=".5" stop-color="#6CC69A" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#6CC69A" stop-opacity=".2"/>
+    </linearGradient>
+    <style>
+      .cap{font-size:13px;font-weight:500;letter-spacing:3px}
+      .h{font-size:24px;font-weight:300;fill:#F2F2F2}
+      .t{font-size:18px;font-weight:300;fill:#F2F2F2}
+      .s{font-size:13px;font-weight:300;fill:#BDBDBD}
+      .q{font-size:13px;font-weight:300;fill:#8E8E8E;font-style:italic}
+      .m{font-family:Menlo, monospace;font-size:13px;fill:#6CC69A}
+      .ev{font-size:15px;font-weight:400;fill:#EDEDED}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <text x="60" y="56" class="cap" fill="#6CC69A">KIT</text>
+  <text x="60" y="88" class="h">How sessions behave: one repository, loaded where Claude Code looks</text>
+  <text x="60" y="112" class="s">A kit is a Claude Code setup kept in git and versioned by tags. comando runs every session on it; the brain sits beside it, never in it.</text>
+
+  <!-- parts -->
+  <text x="60" y="170" class="cap" fill="#6CC69A">PARTS</text>
+  <g>
+    <text x="60" y="206" class="m">CLAUDE.md</text><text x="230" y="206" class="s">the standing instructions every session loads</text>
+    <text x="60" y="242" class="m">settings.json</text><text x="230" y="242" class="s">Claude Code's settings; the hooks; permissions</text>
+    <text x="60" y="278" class="m">hooks/</text><text x="230" y="278" class="s">the hooks' scripts: context in, a call blocked</text>
+    <text x="60" y="314" class="m">skills/</text><text x="230" y="314" class="s">named procedures; reflect answers the checkpoint</text>
+    <text x="60" y="350" class="m">agents/</text><text x="230" y="350" class="s">the subagent types sessions dispatch</text>
+    <text x="60" y="386" class="m">workflows/</text><text x="230" y="386" class="s">saved multi-agent workflows</text>
+    <text x="60" y="422" class="m">bin/</text><text x="230" y="422" class="s">scripts on the Bash tool's PATH</text>
+    <text x="60" y="458" class="m">tools/</text><text x="230" y="458" class="s">each script's code and its test</text>
+    <text x="60" y="494" class="m">templates/</text><text x="230" y="494" class="s">agent spec, knowledge-base set templates</text>
+    <text x="60" y="530" class="m">comando-kit.json</text><text x="230" y="530" class="s">all comando reads: name, brain, folders, jobs</text>
+    <text x="60" y="566" class="m">INSTALL.md</text><text x="230" y="566" class="s">install, upgrade, uninstall; the brain's skeleton</text>
+  </g>
+  <line x1="600" y1="160" x2="600" y2="580" stroke="#262626"/>
+
+  <!-- lifecycle -->
+  <text x="640" y="170" class="cap" fill="#6CC69A">A SESSION'S LIFE, AND WHICH PART ACTS</text>
+  <line x1="640" y1="330" x2="1560" y2="330" stroke="url(#rail)" stroke-width="1.4"/>
+  <g>
+    <circle cx="690" cy="330" r="11" fill="#151515" stroke="#6CC69A" stroke-width="1.3"/><circle cx="690" cy="330" r="4" fill="#6CC69A"/>
+    <circle cx="860" cy="330" r="11" fill="#151515" stroke="#6CC69A" stroke-width="1.3"/><circle cx="860" cy="330" r="4" fill="#6CC69A"/>
+    <circle cx="1030" cy="330" r="11" fill="#151515" stroke="#6CC69A" stroke-width="1.3"/><circle cx="1030" cy="330" r="4" fill="#6CC69A"/>
+    <circle cx="1200" cy="330" r="11" fill="#151515" stroke="#6CC69A" stroke-width="1.3"/><circle cx="1200" cy="330" r="4" fill="#6CC69A"/>
+    <circle cx="1370" cy="330" r="11" fill="#151515" stroke="#6CC69A" stroke-width="1.3"/><circle cx="1370" cy="330" r="4" fill="#6CC69A"/>
+    <circle cx="1530" cy="330" r="11" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="1530" cy="330" r="4" fill="#E7C55A"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="690" y="300" class="ev">start</text>
+    <text x="860" y="300" class="ev">prompt</text>
+    <text x="1030" y="300" class="ev">tool call</text>
+    <text x="1200" y="300" class="ev">tool done</text>
+    <text x="1370" y="300" class="ev">compaction</text>
+    <text x="1530" y="300" class="ev">checkpoint</text>
+    <text x="690" y="230" class="q">SessionStart</text>
+    <text x="860" y="230" class="q">UserPromptSubmit</text>
+    <text x="1030" y="230" class="q">PreToolUse</text>
+    <text x="1200" y="230" class="q">PostToolUse</text>
+    <text x="1370" y="230" class="q">SessionStart · compact</text>
+    <text x="1530" y="230" class="q">comando</text>
+  </g>
+  <g class="s">
+    <text x="640" y="372">CLAUDE.md loaded</text>
+    <text x="640" y="392">settings read</text>
+    <text x="640" y="412">bin/ on PATH</text>
+    <text x="640" y="432">day folder rolled</text>
+    <text x="640" y="452" fill="#E7C55A">MEMORY.md index</text>
+
+    <text x="810" y="372">matching memory,</text>
+    <text x="810" y="392">KB lines, tasks</text>
+    <text x="810" y="412">put in context</text>
+    <text x="810" y="432">other sessions' news</text>
+    <text x="810" y="452">a skill by /name</text>
+
+    <text x="980" y="372">guards: no kill by</text>
+    <text x="980" y="392">pattern, ask before</text>
+    <text x="980" y="412">deletes, own instance</text>
+    <text x="980" y="432">agents/ on dispatch</text>
+    <text x="980" y="452">bin/ through Bash</text>
+
+    <text x="1150" y="372">index check after</text>
+    <text x="1150" y="392">a write to the brain</text>
+    <text x="1150" y="412">diagram check</text>
+    <text x="1150" y="432">context size watched</text>
+
+    <text x="1320" y="372">the hard rules</text>
+    <text x="1320" y="392">put back in context</text>
+
+    <text x="1480" y="372">skills/reflect</text>
+    <text x="1480" y="392">runs, then</text>
+    <text x="1480" y="412">/compact</text>
+  </g>
+
+  <!-- outside any session -->
+  <text x="640" y="520" class="cap" fill="#6CC69A">OUTSIDE ANY SESSION</text>
+  <g class="s">
+    <text x="640" y="552">comando reads comando-kit.json at start: the brain's folder, the Files tab's folders, the jobs.</text>
+    <text x="640" y="574">The kit's installer writes the jobs to the platform's scheduler; each runs headless and leaves a report in the brain.</text>
+  </g>
+
+  <!-- kit vs brain -->
+  <line x1="60" y1="640" x2="1540" y2="640" stroke="#2A2A2A"/>
+  <g>
+    <rect x="60" y="680" width="700" height="210" rx="10" fill="#141B17" stroke="#6CC69A" stroke-width="1.2"/>
+    <text x="90" y="716" class="cap" fill="#6CC69A">THE KIT</text>
+    <text x="90" y="746" class="t">how sessions behave</text>
+    <text x="90" y="776" class="s">written by the user, deliberately; each change reviewed and committed</text>
+    <text x="90" y="798" class="s">versioned by tags vMAJOR.MINOR.PATCH; upgraded by a session named kit</text>
+    <text x="90" y="820" class="s">the same kit can run many people's sessions</text>
+    <text x="90" y="852" class="q">a kit is a recipe: it says how, never what was learned</text>
+
+    <rect x="840" y="680" width="700" height="210" rx="10" fill="#1D1B13" stroke="#E7C55A" stroke-width="1.2"/>
+    <text x="870" y="716" class="cap" fill="#E7C55A">THE BRAIN</text>
+    <text x="870" y="746" class="t">what sessions know</text>
+    <text x="870" y="776" class="s">written by the sessions as they work, under the kit's rules</text>
+    <text x="870" y="798" class="s">its own repository, ignored by the kit's; backed up from comando</text>
+    <text x="870" y="820" class="s">one per person or instance; it starts as a skeleton</text>
+    <text x="870" y="852" class="q">a brain is a record: its content is what use has put there</text>
+  </g>
+
+  <!-- legend -->
+  <g class="s">
+    <circle cx="66" cy="946" r="5" fill="#6CC69A"/><text x="80" y="950">the kit</text>
+    <circle cx="166" cy="946" r="5" fill="#E7C55A"/><text x="180" y="950">the brain</text>
+    <text x="1540" y="950" text-anchor="end">comando · docs/kit-and-brain</text>
+  </g>
+</svg>

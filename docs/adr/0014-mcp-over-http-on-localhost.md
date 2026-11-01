@@ -19,7 +19,7 @@ Miguel decided, on the default proposed in the review of the design plan.
 ## 3. Consequences
 
 The token names the calling session, so tools act on that session's panels. An Origin check keeps browsers out
-([The server](../claude.md#21-the-server)).
+([The server](../claude-code.md#31-the-server)).
 
 ## 4. Alternatives
 

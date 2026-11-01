@@ -19,7 +19,7 @@ Claude decided during implementation; Miguel accepted the record on 2026-10-13.
 ## 3. Consequences
 
 Frame p99 on the synthetic session is about 3 ms: 3.39 ms on 2026-10-18 (Apple silicon, 12 cores, JDK 25, headless;
-the measured figures are in [The frame-time gate](../ui.md#43-the-frame-time-gate)). `./gradlew :ui:transcriptGate`
+the measured figures are in [The frame-time gate](../architecture.md#1453-the-frame-time-gate)). `./gradlew :ui:transcriptGate`
 fails when either p99 (the streamed session, the open thinking block) exceeds 16 ms. CI runs it without enforcing it,
-because runner speed varies ([The transcript](../ui.md#4-the-transcript)). Text selection, find and links are
+because runner speed varies ([The transcript](../architecture.md#145-the-transcript)). Text selection, find and links are
 comando's own code.

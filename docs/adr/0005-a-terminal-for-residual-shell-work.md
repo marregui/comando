@@ -17,7 +17,7 @@ Miguel decided, on the default proposed in the review of the design plan.
 ## 3. Consequences
 
 JediTerm and pty4j are dependencies: JediTerm is LGPL-3.0, pty4j EPL-1.0. Both are used unmodified, as libraries. The
-terminal is described in [Terminal](../workbench.md#41-terminal).
+terminal is described in [Terminal](../workbench.md#51-terminal).
 
 ## Amendments
 

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="770" viewBox="0 0 1600 770" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#101010"/></radialGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9A9A9A" stroke-width="1.4"/></marker></defs>
+<rect width="1600" height="770" fill="url(#bg)"/>
+<text x="60" y="52" text-anchor="start" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">INSTANCES · ONE QUESTION</text>
+<text x="60" y="84" text-anchor="start" font-size="24" font-weight="300" fill="#F2F2F2" >A session of instance a asks instance b</text>
+<text x="130" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#D98E5F" >session in a</text>
+<line x1="130" y1="150" x2="130" y2="680" stroke="#D98E5F" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="130" cy="150" r="3.5" fill="#D98E5F"/>
+<text x="430" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#6FAEE8" >Peers (a)</text>
+<line x1="430" y1="150" x2="430" y2="680" stroke="#6FAEE8" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="430" cy="150" r="3.5" fill="#6FAEE8"/>
+<text x="760" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#AEB6C1" >comando Edge</text>
+<line x1="760" y1="150" x2="760" y2="680" stroke="#AEB6C1" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="760" cy="150" r="3.5" fill="#AEB6C1"/>
+<text x="1090" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#6FAEE8" >Peers (b)</text>
+<line x1="1090" y1="150" x2="1090" y2="680" stroke="#6FAEE8" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="1090" cy="150" r="3.5" fill="#6FAEE8"/>
+<text x="1420" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#D98E5F" >consult-a in b</text>
+<line x1="1420" y1="150" x2="1420" y2="680" stroke="#D98E5F" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="1420" cy="150" r="3.5" fill="#D98E5F"/>
+<line x1="136" y1="186" x2="424" y2="186" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="280.0" y="178.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >instance_ask: instance, text, wait_seconds</text>
+<line x1="436" y1="234" x2="754" y2="234" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="595.0" y="226.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >…/instance/b/inbox · response topic …/a/reply · correlation</text>
+<line x1="766" y1="282" x2="1084" y2="282" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="925.0" y="274.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >the question</text>
+<path d="M1096,322 h40 v16 h-40" fill="none" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1146" y="334" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >asker denied in agents.json? reply refused</text>
+<line x1="1096" y1="378" x2="1414" y2="378" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1255.0" y="370.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >SaveSession once (created by peer:a), PromptSession</text>
+<text x="1255" y="430" text-anchor="middle" font-size="13" font-weight="300" fill="#9C9C9C" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" font-style="italic">headed [from instance a · session s], shown in its panel</text>
+<line x1="1414" y1="474" x2="1096" y2="474" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="1255.0" y="466.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >the turn ends (at most 600 s)</text>
+<line x1="1084" y1="522" x2="766" y2="522" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="925.0" y="514.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >…/a/reply: ok with the turn's text, refused, timeout or error</text>
+<line x1="754" y1="570" x2="436" y2="570" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="595.0" y="562.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >the reply, matched by its correlation data</text>
+<line x1="424" y1="618" x2="136" y2="618" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="280.0" y="610.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >the text, or after wait_seconds an id for instance_reply</text>
+<text x="60" y="730" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Solid: a call or a publish. Dashed: what comes back. Every instance also keeps a retained presence under comando/v1/local/instance/&lt;id&gt;/presence, cleared at close and by its last will.</text>
+<text x="1540" y="730" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/workbench</text>
+</svg>

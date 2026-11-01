@@ -30,8 +30,6 @@ Create an empty directory for the Claude session of step 5:
 mkdir -p ~/comando-tutorial
 ```
 
-The session of step 5 runs the haiku model with a budget of 0.50 USD, which Claude Code enforces per process.
-
 ## 1. The window
 
 Start comando: the installed application (Launchpad, the Start menu, or `comando` in a terminal on Linux), or from the
@@ -48,7 +46,7 @@ the sessions run on the kit, and the Files tab opens on its folders, its KIT row
 |---|---|
 | **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Tab row's right end** | start or stop the shell, stop refreshing plots, start or stop the embedded QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
-| **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
+| **Sidebar**, left | four tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Outline** and **Preview** (Markdown), **Run**, **Stop**, **Locate**, **Clear**; rest the pointer on one for what a click does |
 | **Editor** | where you write SQL and prompts, mixed in one text |
@@ -73,6 +71,7 @@ does; the menus grey out what cannot run now.
 | **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel; a right click opens its menu, which does the rest; drag a row to order the list yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the ⓘ shows a card of its facts, without a summary; a double click on the name binds the connection to the focused panel |
 | **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
+| **Instances** | the other comando instances on this machine and what their sessions are doing, while the comando Edge runs; then the questions they asked each other | a click on a row shows its card |
 
 The tabs' right-click menus:
 
@@ -81,6 +80,7 @@ The tabs' right-click menus:
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
 | **Connections** | New connection…, starting or stopping the embedded QuestDB and the comando Edge |
 | **Files** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
+| **Instances** | the window's commands; an instance's row asks it, refuses its questions or forgets one that left |
 
 ### 1.2 The panel tabs and their cards
 
@@ -147,8 +147,10 @@ themes of that mode, each drawn small in its own colours. Each light theme sits 
 (or **D** and **L**) turns the whole window to the twin of your theme and each card into its twin in place, the
 chooser still open. Click a card, or move to it with the arrows and
 press ⏎: the window takes that theme and the chooser stays open, so you can try the next; the last you chose is
-kept. The ✕ at its top right, Esc, a click elsewhere or the button again closes it. To add one, put a JSON file in the `themes` folder of
-comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** opens the root) and start comando again:
+kept. The ✕ at its top right, Esc, a click elsewhere or the button again closes it.
+
+To add a theme of your own, put a JSON file in the `themes` folder of comando's data root (`~/.comando/themes/`;
+**Help ▸ Reveal comando folder** opens the root) and start comando again:
 
 ```json
 {
@@ -163,16 +165,16 @@ comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** op
 | Field | Means |
 |---|---|
 | `id` | lower case letters, digits and underscores; it names the theme's command (`theme.ink_rose`) and keeps your choice across restarts |
-| `label` | the name in the swatch's menu and the palette |
+| `label` | the name in the chooser and the palette |
 | `mode` | `dark`, or `light` for a pale ground under dark text: the window takes the light look, and its syntax, terminal and plot colours are drawn dark enough to read |
 | `twin` | optional: the id of the theme of the other mode it pairs with; the chooser puts the two in the same place |
 | `ground` | the background of every panel; its `label` may be left out |
 | `tint` | the accent in three steps, from the one that stands out most from the ground, the `highlight`, through the `body`, to the `shade`, as on polished metal: pale to deep on a dark ground, deep to pale on a light one; its `label` may be left out |
 
-*You should see* the theme in the chooser, under its mode, in its twin's place or after the built-in ones. comando reads the files only at start. A file that is not
-valid, repeats an id, or would make text hard to read (the tint's body below 7.5:1 on the ground, for one) is left
-out, and the status bar names the file and the reason. The seven built-in themes are files of the same shape inside
-the app.
+*You should see* the theme in the chooser, under its mode, in its twin's place or after the built-in ones. comando reads
+the files only at start. A file that is not valid, repeats an id, or would make text hard to read (the tint's body below
+7.5:1 on the ground, for one) is left out, and the status bar names the file and the reason. The twelve built-in themes
+are files of the same shape inside the app. [Workbench §1.3](workbench.md#13-themes) has the full rules.
 
 ## 2. A database
 
@@ -272,8 +274,7 @@ position and the block was a single statement, the token there is underlined in 
 
 ## 5. A Claude session
 
-A session is a Claude Code process that comando starts for you in a working directory, with a model and a budget you
-choose.
+A session is a Claude Code process that comando starts for you in a working directory, with a model you choose.
 
 1. Right-click the sidebar's **Sessions** tab and choose **New session…**. The session dialog opens on a new session,
    titled **New session**, with the keyboard in **Name** and its default selected. Fill in:
@@ -281,11 +282,11 @@ choose.
    | Field | Value |
    |---|---|
    | Name | `tutor` |
-   | Working directory | your `~/comando-tutorial` directory, typed in full or picked with `…` |
    | Model | `haiku` |
-   | Budget (USD) | `0.50` |
+   | Working directory, under **▸ More** | your `~/comando-tutorial` directory, typed in full or picked with `…` |
 
-   Leave the rest as it is; the line under each field says what it does. Click **Save**, then press **Esc**.
+   Click **▸ More** to show **Working directory**. Leave the rest as it is; the line under each field says what it
+   does. Click **Save**, which also closes the dialog.
    *You should see* a new panel, **tutor**. A session comes with its own panel, titled with its name, and the two are
    one: renamed and removed together. `tutor` shows in the session bar and in the sidebar.
 2. In the **tutor** panel, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the
@@ -311,9 +312,8 @@ choose.
 The **Session** tab shows the whole turn: your prompt in a bubble, every tool call as a card with its input and
 result, and everything else (Claude's text, notes, the turn's time, the "Thinking…" line while Claude thinks) in warm
 ivory on near-black, with headings, list marks and table heads in the tint, Treasure gold at first. The answer that
-ends a turn has a bar of the tint beside it. The swatch at the top right beside **+** chooses another
-theme, a ground and its tint together: Graphite and gold, Espresso and champagne, Aubergine and yellow gold, Midnight
-and electric blue, Evergreen and tropical forest, Slate and silver. The editors', terminal's and diffs' colours follow.
+ends a turn has a bar of the tint beside it. The theme button at the top right changes the ground and tint
+([§1.6](#16-themes-of-your-own)); the editors', terminal's and diffs' colours follow.
 
 **⌘⇧.** interrupts a turn: the turn ends with an "interrupted" line and the session stays alive for the next prompt.
 While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows
@@ -391,16 +391,19 @@ Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 
 | File or folder | Holds |
 |---|---|
-| `connections.json`, `sessions.json`, `panels.json` | the connections, the sessions, the panels and their bindings |
+| `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the connections, the sessions, the Files tab's folders, the panels and their bindings |
 | `panels/` | each panel's text as a Markdown file named after the panel. **⌘O** opens a file as a panel; edit a panel's file in another editor and the panel shows the change within a second |
-| `questdb/` | the embedded QuestDB's data |
-| `help/` | this tutorial |
-| `folders.json` | the Files tab's folders, edited from the Files tab's menu |
+| `settings.json` | the window's kept state: the theme, the window's size and dividers, the sidebar, the last Gradle tasks |
+| `themes/` | your own themes ([§1.6](#16-themes-of-your-own)) |
 | `opened-files` | the files you opened: a new file loses its dot once opened |
-| `logs/` | comando's logs |
+| `instances-seen.json` | the other comando instances seen, so the Instances tab lists those that left until you forget them |
+| `questdb/` | the embedded QuestDB's data |
+| `edge/` | the comando Edge: its download, its installation, its configuration, data and logs |
+| `help/` | this tutorial |
+| `logs/` | comando's logs; **Help ▸ Show the log** opens them |
 
-On macOS, with the default data root, connection passwords are kept in the login keychain, not in the files;
-otherwise they stay in `connections.json`.
+[Workbench §7.1](workbench.md#71-the-data-root) has the full rules. On macOS, with the default data root, connection
+passwords are kept in the login keychain, not in the files; otherwise they stay in `connections.json`.
 
 ## Cheat sheet
 
@@ -457,6 +460,6 @@ These documents describe how comando works; using it does not need them.
 
 | Document | Read it for |
 |---|---|
-| [Workbench](workbench.md#2-running-text) | the rules that decide SQL or prompt, and how a first line `-- @sql` or `-- @claude` forces either |
-| Claude (`docs/claude.md`) | what Claude may do without asking, what counts as a read-only statement, production connections |
-| Build and run (`docs/build-and-run.md`) | every Gradle task and setting, including a data root of your own (`COMANDO_HOME`) |
+| [Workbench](workbench.md#2-running-text) | the rules that decide SQL or prompt, and how a first line `-- @sql` or `-- @claude` forces either; every gesture of the window |
+| [Claude Code](claude-code.md) | what Claude may do without asking, what counts as a read-only statement, production connections |
+| [Development](development.md) | every Gradle task and setting, including a data root of your own (`COMANDO_HOME`) |

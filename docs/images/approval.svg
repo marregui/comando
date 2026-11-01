@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="690" viewBox="0 0 1600 690" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#101010"/></radialGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9A9A9A" stroke-width="1.4"/></marker></defs>
+<rect width="1600" height="690" fill="url(#bg)"/>
+<text x="60" y="52" text-anchor="start" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">CLAUDE CODE · ONE APPROVAL</text>
+<text x="60" y="84" text-anchor="start" font-size="24" font-weight="300" fill="#F2F2F2" >A permission prompt, from the CLI's call to your answer</text>
+<text x="160" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#D98E5F" >claude -p</text>
+<line x1="160" y1="150" x2="160" y2="600" stroke="#D98E5F" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="160" cy="150" r="3.5" fill="#D98E5F"/>
+<text x="520" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#6FAEE8" >comando MCP server</text>
+<line x1="520" y1="150" x2="520" y2="600" stroke="#6FAEE8" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="520" cy="150" r="3.5" fill="#6FAEE8"/>
+<text x="880" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#6FAEE8" >reducer (StateLoop)</text>
+<line x1="880" y1="150" x2="880" y2="600" stroke="#6FAEE8" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="880" cy="150" r="3.5" fill="#6FAEE8"/>
+<text x="1200" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#F2F2F2" >you · Approvals tab</text>
+<line x1="1200" y1="150" x2="1200" y2="600" stroke="#F2F2F2" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="1200" cy="150" r="3.5" fill="#F2F2F2"/>
+<text x="1460" y="136" text-anchor="middle" font-size="15" font-weight="400" fill="#E7C55A" >disk</text>
+<line x1="1460" y1="150" x2="1460" y2="600" stroke="#E7C55A" stroke-opacity="0.35" stroke-width="1.0"/>
+<circle cx="1460" cy="150" r="3.5" fill="#E7C55A"/>
+<line x1="166" y1="186" x2="514" y2="186" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="340.0" y="178.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >tools/call approve: tool_name, input, tool_use_id</text>
+<line x1="526" y1="236" x2="874" y2="236" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="700.0" y="228.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >ApprovalRequested (an id above 1 000 000, a future)</text>
+<line x1="886" y1="286" x2="1194" y2="286" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1040.0" y="278.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >a card; the Approvals tab comes forward</text>
+<text x="520" y="340" text-anchor="middle" font-size="13" font-weight="300" fill="#9C9C9C" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" font-style="italic">the request's virtual thread waits on the future, at most 55 minutes</text>
+<line x1="1194" y1="386" x2="886" y2="386" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1040.0" y="378.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >Allow once ⏎ · For session S · Always L L · Deny D · an answer</text>
+<line x1="874" y1="436" x2="526" y2="436" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="700.0" y="428.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >effect ResolveApproval → McpServer.resolve</text>
+<line x1="514" y1="486" x2="166" y2="486" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="340.0" y="478.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >allow or deny, updatedInput, updatedPermissions (addRules)</text>
+<line x1="526" y1="536" x2="1454" y2="536" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="990.0" y="528.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >the call and the decision → audit/audit-&lt;UTC date&gt;.jsonl</text>
+<text x="60" y="650" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Solid: a call. Dashed: what comes back. A card is withdrawn and its call denied when the CLI cancels it, the process exits, the session is removed, or 55 minutes pass.</text>
+<text x="1540" y="650" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/claude-code</text>
+</svg>

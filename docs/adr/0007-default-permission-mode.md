@@ -20,4 +20,4 @@ Miguel decided, on the default proposed in the review of the design plan.
 
 comando neither weakens nor strengthens the user's Claude Code settings. `--permission-mode` is passed only when the
 session names a mode; `--permission-prompt-tool mcp__comando__approve` is passed with the MCP configuration
-([The process](../claude.md#11-the-process)).
+([The process](../claude-code.md#11-the-process)).

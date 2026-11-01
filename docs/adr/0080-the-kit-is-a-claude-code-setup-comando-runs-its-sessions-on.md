@@ -62,7 +62,7 @@ copy in comando's folder being gone, else the checkout's `./gradlew`.
 `KitRoot` (core) resolves the root; `KitJson` (claude) reads `comando-kit.json` into it. `./gradlew :app:package` builds
 the running system's release file in `app/build/package`; `.github/workflows/release.yml` builds it on the three
 systems on a tag, and makes the release with the commits since the previous tag as its notes; run by hand, it builds
-the three files as the run's artifacts without a release. [Workbench §7](../workbench.md#7-the-kit) describes the root,
+the three files as the run's artifacts without a release. [Kit and brain §3](../kit-and-brain.md#3-comando-and-a-kit) describes the root,
 the brain, the Files tab, the upgrade and the backup.
 
 ## Amendments
@@ -72,6 +72,6 @@ the brain, the Files tab, the upgrade and the backup.
 2026-10-27: the kit carries no plugin. Its agents, skills, workflows, hooks (in `settings.json`), scripts (`bin/`, put
 on the Bash tool's `PATH` by a hook at every session start) and tools sit where Claude Code loads them from a config
 folder, so the row "what the kit is" reads "the plugin" as those parts. The author's kit is the reference: a kit
-conforms when it has its layout ([workbench §7](../workbench.md#7-the-kit)). Conformance is documented, not checked;
+conforms when it has its layout ([Kit and brain §3](../kit-and-brain.md#3-comando-and-a-kit)). Conformance is documented, not checked;
 comando's code still reads only `comando-kit.json`. The agent that installs comando offers the reference kit or one the
 user names ([INSTALL.md §5](../../INSTALL.md#5-the-kit)). Miguel decided all three.

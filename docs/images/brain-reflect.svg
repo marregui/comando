@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#101010"/>
+    </radialGradient>
+    <linearGradient id="rail" gradientUnits="userSpaceOnUse" x1="60" y1="420" x2="1540" y2="420">
+      <stop offset="0" stop-color="#E7C55A" stop-opacity=".15"/>
+      <stop offset=".5" stop-color="#E7C55A" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#E7C55A" stop-opacity=".15"/>
+    </linearGradient>
+    <style>
+      .cap{font-size:13px;font-weight:500;letter-spacing:3px}
+      .h{font-size:24px;font-weight:300;fill:#F2F2F2}
+      .step{font-size:20px;font-weight:300;fill:#F2F2F2}
+      .s{font-size:13px;font-weight:300;fill:#BDBDBD}
+      .q{font-size:13px;font-weight:300;fill:#8E8E8E;font-style:italic}
+      .m{font-family:Menlo, monospace;font-size:12px;fill:#9A9A9A}
+      .mut{font-size:11px;font-weight:500;letter-spacing:2px}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <text x="60" y="56" class="cap" fill="#E7C55A">BRAIN · /REFLECT</text>
+  <text x="60" y="88" class="h">The one step that turns a session into memory and checked knowledge</text>
+  <text x="60" y="112" class="s">Aim of every run: the next session recalls more of what matters from fewer bytes, and the KB is truer.</text>
+
+  <!-- WHEN -->
+  <text x="60" y="166" class="cap" fill="#E7C55A">WHEN</text>
+  <g class="s">
+    <circle cx="66" cy="192" r="3.5" fill="#E7C55A"/><text x="80" y="196">the user asks</text>
+    <circle cx="166" cy="192" r="3.5" fill="#E7C55A"/><text x="180" y="196">a session ends</text>
+    <circle cx="306" cy="192" r="3.5" fill="#6CC69A"/><text x="320" y="196">a context threshold: a kit hook reminds</text>
+    <circle cx="606" cy="192" r="3.5" fill="#6FAEE8"/><text x="620" y="196">comando's Checkpoint, or its threshold at a turn's end: /reflect, then /compact</text>
+  </g>
+  <text x="1080" y="166" class="cap" fill="#E7C55A">THREE DEPTHS</text>
+  <g class="s">
+    <text x="1080" y="196">full: every step below</text>
+    <text x="1080" y="216">threshold run: Measure, Memory, liveness only</text>
+    <text x="1080" y="236">headless or --no-ask: feedback and user changes</text>
+    <text x="1080" y="252">queued in INDEX.md, asked next time</text>
+  </g>
+
+  <!-- INPUTS -->
+  <text x="60" y="300" class="cap" fill="#E7C55A">INPUTS</text>
+  <g class="s">
+    <text x="60" y="328">the conversation itself</text>
+    <text x="300" y="328">scheduled reports: drift, corrections, recall</text>
+    <text x="640" y="328">agent reports, only once stamped verified</text>
+    <text x="960" y="328">FRICTION.md lines</text>
+    <text x="1120" y="328">memory files relevant to the session</text>
+  </g>
+
+  <!-- rail -->
+  <line x1="60" y1="420" x2="1540" y2="420" stroke="url(#rail)" stroke-width="1.4"/>
+  <g>
+    <circle cx="150" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="150" cy="420" r="4" fill="#E7C55A"/>
+    <circle cx="410" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="410" cy="420" r="4" fill="#E7C55A"/>
+    <circle cx="670" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="670" cy="420" r="4" fill="#E7C55A"/>
+    <circle cx="930" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="930" cy="420" r="4" fill="#E7C55A"/>
+    <circle cx="1190" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="1190" cy="420" r="4" fill="#E7C55A"/>
+    <circle cx="1430" cy="420" r="12" fill="#151515" stroke="#E7C55A" stroke-width="1.3"/><circle cx="1430" cy="420" r="4" fill="#E7C55A"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="150" y="388" class="q">A</text><text x="410" y="388" class="q">B</text><text x="670" y="388" class="q">C</text>
+    <text x="930" y="388" class="q">C</text><text x="1190" y="388" class="q">D</text><text x="1430" y="388" class="q">D</text>
+  </g>
+
+  <!-- step columns -->
+  <g>
+    <text x="70" y="470" class="step">Measure</text>
+    <text x="70" y="494" class="mut" fill="#9A9A9A">READS ONLY</text>
+    <text x="70" y="524" class="s">a snapshot tool</text>
+    <text x="70" y="546" class="s">snapshots MEMORY/</text>
+    <text x="70" y="568" class="s">reads MEMORY.md, then only</text>
+    <text x="70" y="586" class="s">the files this session touched</text>
+
+    <text x="330" y="470" class="step">Memory</text>
+    <text x="330" y="494" class="mut" fill="#E7C55A">MUTATES MEMORY · EVAL</text>
+    <text x="330" y="524" class="q">will it change behaviour</text>
+    <text x="330" y="542" class="q">in a future session?</text>
+    <text x="330" y="566" class="s">rewrite the entry, never append</text>
+    <text x="330" y="586" class="s">cues sharpened to triggers</text>
+    <text x="330" y="606" class="s">the lane: this topic's section</text>
+    <text x="330" y="626" class="s">session log via its tool</text>
+    <text x="330" y="646" class="s">agent runs via their ledger</text>
+    <text x="330" y="666" class="s">recall report's fixes applied</text>
+    <text x="330" y="686" class="s">gold rows labelled → EVAL</text>
+    <text x="330" y="706" class="s">kit edits proposed: user confirms</text>
+    <text x="330" y="726" class="s">feedback, user: asked once</text>
+
+    <text x="590" y="470" class="step">KB</text>
+    <text x="590" y="494" class="mut" fill="#E7C55A">MUTATES KB</text>
+    <text x="590" y="524" class="s">only what this session proved</text>
+    <text x="590" y="542" class="s">against published code</text>
+    <text x="590" y="566" class="s">drift report, item by item,</text>
+    <text x="590" y="584" class="s">each spot-checked first</text>
+    <text x="590" y="608" class="s">through the set's 99:</text>
+    <text x="590" y="626" class="s">statement, header date,</text>
+    <text x="590" y="644" class="s">register, change-log line</text>
+    <text x="590" y="668" class="q">a suspicion is written nowhere</text>
+
+    <text x="850" y="470" class="step">Scratchpad</text>
+    <text x="850" y="494" class="mut" fill="#E7C55A">MUTATES SCRATCHPAD · KB</text>
+    <text x="850" y="524" class="s">task by task, in INDEX.md</text>
+    <text x="850" y="546" class="s">proved findings folded into KB</text>
+    <text x="850" y="566" class="s">folded artefacts deleted,</text>
+    <text x="850" y="584" class="s">one file at a time</text>
+    <text x="850" y="606" class="s">entries cut to State and Next</text>
+    <text x="850" y="626" class="s">reports fold only when verified</text>
+    <text x="850" y="646" class="s">FRICTION lines → a change</text>
+    <text x="850" y="666" class="s">every open task names who acts</text>
+
+    <text x="1110" y="470" class="step">Indexes</text>
+    <text x="1110" y="494" class="mut" fill="#E7C55A">MUTATES ALL INDEXES</text>
+    <text x="1110" y="524" class="s">MEMORY.md, each set's 00,</text>
+    <text x="1110" y="542" class="s">the day's INDEX.md</text>
+    <text x="1110" y="566" class="s">part of every write,</text>
+    <text x="1110" y="584" class="s">never a follow-up</text>
+    <text x="1110" y="608" class="s">an index check runs</text>
+    <text x="1110" y="628" class="s">after each write to BRAIN/</text>
+
+    <text x="1370" y="470" class="step">Report</text>
+    <text x="1370" y="494" class="mut" fill="#9A9A9A">READS ONLY</text>
+    <text x="1370" y="524" class="s">the snapshot compared</text>
+    <text x="1370" y="546" class="s">MEMORY.md before → after</text>
+    <text x="1370" y="566" class="s">lines ± per file</text>
+    <text x="1370" y="586" class="s">files only appended to</text>
+    <text x="1370" y="606" class="s">budget warnings</text>
+    <text x="1370" y="630" class="s">then four lines at most</text>
+  </g>
+
+  <!-- WHY -->
+  <line x1="60" y1="780" x2="1540" y2="780" stroke="#2A2A2A"/>
+  <text x="60" y="816" class="cap" fill="#E7C55A">WHY IT IS BUILT THIS WAY</text>
+  <g class="s">
+    <text x="60" y="848">One writer for the KB: what is stated as fact passed one gate, in a session that checked it.</text>
+    <text x="60" y="870">Memory and KB never point at each other: memory changes daily, the KB must read cold to anyone.</text>
+    <text x="60" y="892">Rewrite, not append: a rule plus one line of evidence; displaced detail goes to the session log or archive/.</text>
+    <text x="60" y="914">Budgets hold the index under what Claude Code loads at start; nothing is dropped to fit.</text>
+    <text x="60" y="936">Parallel sessions: re-read before every write, change only your own lines, delete per artefact, never per folder.</text>
+  </g>
+
+  <!-- legend -->
+  <g class="s">
+    <circle cx="1196" cy="976" r="4" fill="#E7C55A"/><text x="1208" y="980">brain</text>
+    <circle cx="1266" cy="976" r="4" fill="#6CC69A"/><text x="1278" y="980">kit</text>
+    <circle cx="1320" cy="976" r="4" fill="#6FAEE8"/><text x="1332" y="980">comando</text>
+    <text x="1540" y="980" text-anchor="end">comando · docs/kit-and-brain</text>
+  </g>
+</svg>

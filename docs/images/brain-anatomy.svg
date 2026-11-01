@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="75%">
+      <stop offset="0" stop-color="#1B1B1B"/>
+      <stop offset="1" stop-color="#101010"/>
+    </radialGradient>
+    <style>
+      .cap{font-size:13px;font-weight:500;letter-spacing:3px}
+      .h{font-size:24px;font-weight:300;fill:#F2F2F2}
+      .s{font-size:13px;font-weight:300;fill:#BDBDBD}
+      .row{font-size:14px;font-weight:400;fill:#EDEDED}
+      .m{font-family:Menlo, monospace;font-size:12px;fill:#9A9A9A}
+      .col{font-size:12px;font-weight:500;fill:#CFCFCF;letter-spacing:.5px}
+      .w{font-size:11px;font-weight:300;fill:#BDBDBD}
+      .grid{stroke:#262626;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <text x="60" y="56" class="cap" fill="#E7C55A">BRAIN · ANATOMY</text>
+  <text x="60" y="88" class="h">What the brain is made of, and what changes each part</text>
+  <text x="60" y="112" class="s">Rows: the parts. Columns: who writes them. A filled mark writes; a ring only checks or reads. Budgets on the right.</text>
+
+  <!-- column headers -->
+  <g class="col" text-anchor="middle">
+    <text x="600" y="170">any session</text>
+    <text x="710" y="170">/reflect</text>
+    <text x="820" y="170">kit tools</text>
+    <text x="930" y="170">hooks</text>
+    <text x="1040" y="170">Monday jobs</text>
+    <text x="1150" y="170">agents</text>
+    <text x="1260" y="170">the user</text>
+  </g>
+  <line x1="60" y1="186" x2="1540" y2="186" stroke="#E7C55A" stroke-opacity=".35"/>
+
+  <!-- group labels -->
+  <text x="60" y="214" class="cap" fill="#E7C55A">MEMORY</text>
+  <text x="60" y="474" class="cap" fill="#E7C55A">SCRATCHPAD</text>
+  <text x="60" y="694" class="cap" fill="#E7C55A">KB</text>
+  <text x="60" y="854" class="cap" fill="#E7C55A">EVAL (OPTIONAL)</text>
+
+  <!-- rows: name, path, purpose -->
+  <g>
+    <text x="60" y="244" class="row">MEMORY.md</text><text x="200" y="244" class="s">the index: one cue per file, loaded at every start</text>
+    <text x="60" y="284" class="row">rules and state</text><text x="200" y="284" class="s">feedback, user, project, reference files, opened on cue</text>
+    <text x="60" y="324" class="row">the current lane</text><text x="200" y="324" class="s">what each topic stands at; one section per topic</text>
+    <text x="60" y="364" class="row">logs</text><text x="200" y="364" class="s">session log, agent runs: dated, append only, a head + months</text>
+    <text x="60" y="404" class="row">archive/</text><text x="200" y="404" class="s">closed work, verbatim; not loaded</text>
+
+    <text x="60" y="504" class="row">day folder</text><text x="200" y="504" class="s">today's topics, numbered docs, work/ (specs, reports)</text>
+    <text x="60" y="544" class="row">INDEX.md</text><text x="200" y="544" class="s">tasks with State and Next; what waits on the user</text>
+    <text x="60" y="584" class="row">reports</text><text x="200" y="584" class="s">the scheduled jobs' reports; agent reports, stamped</text>
+    <text x="60" y="624" class="row">FRICTION.md</text><text x="200" y="624" class="s">what got in agents' way, one line each</text>
+
+    <text x="60" y="724" class="row">sets</text><text x="200" y="724" class="s">00_START_HERE (the way in) · documents · 99 (rules, sources)</text>
+    <text x="60" y="764" class="row">checks table</text><text x="200" y="764" class="s">which source each set is kept true against, how often</text>
+    <text x="60" y="804" class="row">change log</text><text x="200" y="804" class="s">one line per correction, in the set's 99</text>
+
+    <text x="60" y="884" class="row">cue-gold.tsv</text><text x="200" y="884" class="s">the answer key: past queries and the files they needed</text>
+  </g>
+
+  <!-- grid lines -->
+  <g class="grid">
+    <line x1="60" y1="258" x2="1420" y2="258"/><line x1="60" y1="298" x2="1420" y2="298"/>
+    <line x1="60" y1="338" x2="1420" y2="338"/><line x1="60" y1="378" x2="1420" y2="378"/>
+    <line x1="60" y1="418" x2="1420" y2="418"/>
+    <line x1="60" y1="518" x2="1420" y2="518"/><line x1="60" y1="558" x2="1420" y2="558"/>
+    <line x1="60" y1="598" x2="1420" y2="598"/><line x1="60" y1="638" x2="1420" y2="638"/>
+    <line x1="60" y1="738" x2="1420" y2="738"/><line x1="60" y1="778" x2="1420" y2="778"/>
+    <line x1="60" y1="818" x2="1420" y2="818"/>
+    <line x1="60" y1="898" x2="1420" y2="898"/>
+  </g>
+
+  <!-- marks: filled = writes, ring = checks/reads -->
+  <g>
+    <!-- MEMORY.md: reflect writes; hooks check; a recall job reads -->
+    <circle cx="600" cy="240" r="6" fill="#D98E5F"/>
+    <circle cx="710" cy="240" r="6" fill="#E7C55A"/>
+    <circle cx="930" cy="240" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <circle cx="1040" cy="240" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <!-- rules and state: session writes (re-read first), reflect, the user confirms feedback/user -->
+    <circle cx="600" cy="280" r="6" fill="#D98E5F"/>
+    <circle cx="710" cy="280" r="6" fill="#E7C55A"/>
+    <circle cx="930" cy="280" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <circle cx="1260" cy="280" r="6" fill="#F2F2F2"/>
+    <!-- current lane -->
+    <circle cx="600" cy="320" r="6" fill="#D98E5F"/>
+    <circle cx="710" cy="320" r="6" fill="#E7C55A"/>
+    <!-- logs -->
+    <circle cx="710" cy="360" r="6" fill="#E7C55A"/>
+    <circle cx="820" cy="360" r="6" fill="#6CC69A"/>
+    <circle cx="1040" cy="360" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <!-- archive -->
+    <circle cx="710" cy="400" r="6" fill="#E7C55A"/>
+
+    <!-- day folder -->
+    <circle cx="600" cy="500" r="6" fill="#D98E5F"/>
+    <circle cx="710" cy="500" r="6" fill="#E7C55A"/>
+    <circle cx="930" cy="500" r="6" fill="#6CC69A"/>
+    <circle cx="1150" cy="500" r="6" fill="#E9B48F"/>
+    <!-- INDEX.md -->
+    <circle cx="600" cy="540" r="6" fill="#D98E5F"/>
+    <circle cx="710" cy="540" r="6" fill="#E7C55A"/>
+    <circle cx="930" cy="540" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <circle cx="1040" cy="540" r="6" fill="#6CC69A"/>
+    <!-- reports -->
+    <circle cx="710" cy="580" r="6" fill="#E7C55A"/>
+    <circle cx="1040" cy="580" r="6" fill="#6CC69A"/>
+    <circle cx="1150" cy="580" r="6" fill="#E9B48F"/>
+    <!-- FRICTION -->
+    <circle cx="710" cy="620" r="6" fill="#E7C55A"/>
+    <circle cx="1150" cy="620" r="6" fill="#E9B48F"/>
+
+    <!-- KB sets -->
+    <circle cx="710" cy="720" r="6" fill="#E7C55A"/>
+    <circle cx="930" cy="720" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <circle cx="1040" cy="720" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <circle cx="1260" cy="720" r="6" fill="#F2F2F2"/>
+    <!-- checks table -->
+    <circle cx="710" cy="760" r="6" fill="#E7C55A"/>
+    <circle cx="1040" cy="760" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <!-- change log -->
+    <circle cx="710" cy="800" r="6" fill="#E7C55A"/>
+
+    <!-- EVAL -->
+    <circle cx="710" cy="880" r="6" fill="#E7C55A"/>
+    <circle cx="820" cy="880" r="6" fill="none" stroke="#6CC69A" stroke-width="1.4"/>
+    <circle cx="1260" cy="880" r="6" fill="#F2F2F2"/>
+  </g>
+
+  <!-- notes beside marks -->
+  <g class="w">
+    <text x="1274" y="284">confirms feedback, user</text>
+    <text x="1274" y="724">asks for a new set</text>
+    <text x="834" y="884">--gold scores it</text>
+    <text x="1274" y="884">labels, with /reflect</text>
+    <text x="944" y="504">roll renames it daily</text>
+    <text x="1054" y="364">daily brief reads</text>
+    <text x="1054" y="764">drift check</text>
+  </g>
+
+  <!-- right panel: budgets -->
+  <line x1="1440" y1="200" x2="1440" y2="900" stroke="#262626"/>
+  <g>
+    <text x="1460" y="214" class="cap" fill="#E7C55A">BUDGETS</text>
+    <text x="1460" y="244" class="s">set by the kit</text>
+    <text x="1460" y="262" class="s">per file; the</text>
+    <text x="1460" y="278" class="s">index stays under</text>
+    <text x="1460" y="296" class="s">what Claude Code</text>
+    <text x="1460" y="314" class="s">loads at start:</text>
+    <text x="1460" y="392" class="s">Claude Code</text>
+    <text x="1460" y="408" class="s">loads 200 lines</text>
+    <text x="1460" y="424" class="s">or 25,000 chars</text>
+
+    <text x="1460" y="474" class="cap" fill="#E7C55A">LIFETIME</text>
+    <text x="1460" y="504" class="s">one day folder,</text>
+    <text x="1460" y="520" class="s">renamed daily;</text>
+    <text x="1460" y="536" class="s">a task stays</text>
+    <text x="1460" y="552" class="s">until folded</text>
+
+    <text x="1460" y="694" class="cap" fill="#E7C55A">TRUTH</text>
+    <text x="1460" y="724" class="s">must match</text>
+    <text x="1460" y="740" class="s">published code</text>
+    <text x="1460" y="756" class="s">or named source</text>
+
+    <text x="1460" y="854" class="cap" fill="#E7C55A">SIZE</text>
+    <text x="1460" y="884" class="s">optional; grows</text>
+    <text x="1460" y="900" class="s">by use</text>
+  </g>
+
+  <!-- legend -->
+  <line x1="60" y1="940" x2="1540" y2="940" stroke="#2A2A2A"/>
+  <g class="s">
+    <circle cx="66" cy="968" r="6" fill="#D98E5F"/><text x="80" y="972">a session (Claude Code)</text>
+    <circle cx="256" cy="968" r="6" fill="#E7C55A"/><text x="270" y="972">/reflect</text>
+    <circle cx="356" cy="968" r="6" fill="#6CC69A"/><text x="370" y="972">kit tools, hooks, jobs</text>
+    <circle cx="536" cy="968" r="6" fill="#E9B48F"/><text x="550" y="972">agents</text>
+    <circle cx="636" cy="968" r="6" fill="#F2F2F2"/><text x="650" y="972">the user</text>
+    <circle cx="740" cy="968" r="6" fill="none" stroke="#9A9A9A" stroke-width="1.4"/><text x="754" y="972">checks or reads, never writes</text>
+    <text x="1540" y="972" text-anchor="end">Memory and KB never point at each other · comando · docs/kit-and-brain</text>
+  </g>
+</svg>

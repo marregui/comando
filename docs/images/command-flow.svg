@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="860" viewBox="0 0 1600 860" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#101010"/></radialGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9A9A9A" stroke-width="1.4"/></marker></defs>
+<rect width="1600" height="860" fill="url(#bg)"/>
+<text x="60" y="52" text-anchor="start" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">ARCHITECTURE · ONE COMMAND</text>
+<text x="60" y="84" text-anchor="start" font-size="24" font-weight="300" fill="#F2F2F2" >Intents in, one reducer, effects out</text>
+<rect x="60" y="170" width="340" height="450" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="74" y="196" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >ui · the EDT</text>
+<rect x="80" y="220" width="300" height="90" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="94" y="246" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >editor, sidebar, cards</text>
+<text x="94" y="268" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >keys and clicks become intents</text>
+<rect x="80" y="490" width="300" height="90" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="94" y="516" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >results, transcript, views</text>
+<text x="94" y="538" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >render the state, coalesced</text>
+<rect x="520" y="170" width="400" height="450" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="534" y="196" text-anchor="start" font-size="15" font-weight="400" fill="#E7C55A" >core · the reducer thread</text>
+<rect x="545" y="220" width="350" height="70" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="559" y="246" text-anchor="start" font-size="15" font-weight="400" fill="#E7C55A" >intent queue</text>
+<text x="559" y="268" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >unbounded; one thread's intents keep order</text>
+<rect x="545" y="340" width="350" height="90" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="559" y="366" text-anchor="start" font-size="15" font-weight="400" fill="#E7C55A" >Reducer.apply</text>
+<text x="559" y="388" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >(state, intent) → next state + effects</text>
+<text x="559" y="407" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >pure in its arguments and a Clock</text>
+<rect x="545" y="490" width="350" height="90" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="559" y="516" text-anchor="start" font-size="15" font-weight="400" fill="#E7C55A" >AppState</text>
+<text x="559" y="538" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >immutable; the reducer its one writer</text>
+<line x1="720" y1="290" x2="720" y2="338" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="720" y1="430" x2="720" y2="488" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="1170" y="170" width="370" height="450" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1184" y="196" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >adapters · their own threads</text>
+<rect x="1190" y="216" width="300" height="82" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1204" y="242" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >db lanes</text>
+<text x="1204" y="264" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >a strand per connection</text>
+<rect x="1190" y="316" width="300" height="82" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1204" y="342" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >claude processes</text>
+<text x="1204" y="364" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >a strand and a reader per session</text>
+<rect x="1190" y="416" width="300" height="82" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1204" y="442" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >MCP server</text>
+<text x="1204" y="464" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >a virtual thread per request</text>
+<rect x="1190" y="516" width="300" height="82" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1204" y="542" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >tools runs</text>
+<text x="1204" y="564" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >errands and strands</text>
+<line x1="380" y1="260" x2="543" y2="255" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="462" y="248" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >intents</text>
+<line x1="543" y1="535" x2="382" y2="535" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="462" y="526" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >render</text>
+<line x1="545" y1="400" x2="382" y2="295" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="462" y="342" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >to the window</text>
+<line x1="895" y1="385" x2="1168" y2="385" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1032" y="376" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >effects</text>
+<text x="1032" y="408" text-anchor="middle" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >ExecuteSql · StartClaude</text>
+<text x="1032" y="426" text-anchor="middle" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >ResolveApproval · RunGradle</text>
+<path d="M1170,240 C1080,240 980,250 897,255" fill="none" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="1032" y="214" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >intents back</text>
+<text x="1032" y="280" text-anchor="middle" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >SqlRows · SessionTurnEnded</text>
+<text x="1032" y="298" text-anchor="middle" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >ShowView · ApprovalRequested</text>
+<text x="1032" y="316" text-anchor="middle" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >CommandFinished · FolderLoaded</text>
+<rect x="1170" y="680" width="370" height="80" rx="8" fill="#1E1E1E" stroke="#D98E5F" stroke-width="1.2"/>
+<text x="1184" y="706" text-anchor="start" font-size="15" font-weight="400" fill="#D98E5F" >Claude Code</text>
+<text x="1184" y="728" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >claude -p, one process per session</text>
+<path d="M1515,680 V357 H1492" fill="none" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<path d="M1505,680 V457 H1492" fill="none" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1495" y="664" text-anchor="end" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >stream-JSON · MCP calls</text>
+<text x="60" y="820" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Gold: core. Blue: comando's other modules. Copper: Claude Code. Solid: a call. Dashed: what comes back.</text>
+<text x="1540" y="820" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/architecture</text>
+</svg>

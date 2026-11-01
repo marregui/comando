@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="940" viewBox="0 0 1600 940" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#101010"/></radialGradient>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9A9A9A" stroke-width="1.4"/></marker></defs>
+<rect width="1600" height="940" fill="url(#bg)"/>
+<text x="60" y="52" font-size="13" font-weight="500" letter-spacing="3" fill="#E7C55A">CLAUDE · ONE SESSION</text>
+<text x="60" y="84" font-size="24" font-weight="300" fill="#F2F2F2">A session's process, from start to stop</text>
+<text x="160" y="130" text-anchor="middle" font-size="15" font-weight="400" fill="#F2F2F2">the user</text>
+<line x1="160" y1="144" x2="160" y2="850" stroke="#F2F2F2" stroke-opacity=".35" stroke-width="1"/>
+<circle cx="160" cy="144" r="3.5" fill="#F2F2F2"/>
+<text x="460" y="130" text-anchor="middle" font-size="15" font-weight="400" fill="#6FAEE8">comando (JVM)</text>
+<line x1="460" y1="144" x2="460" y2="850" stroke="#6FAEE8" stroke-opacity=".35" stroke-width="1"/>
+<circle cx="460" cy="144" r="3.5" fill="#6FAEE8"/>
+<text x="800" y="130" text-anchor="middle" font-size="15" font-weight="400" fill="#D98E5F">claude -p</text>
+<line x1="800" y1="144" x2="800" y2="850" stroke="#D98E5F" stroke-opacity=".35" stroke-width="1"/>
+<circle cx="800" cy="144" r="3.5" fill="#D98E5F"/>
+<text x="1130" y="130" text-anchor="middle" font-size="15" font-weight="400" fill="#6FAEE8">comando MCP server</text>
+<line x1="1130" y1="144" x2="1130" y2="850" stroke="#6FAEE8" stroke-opacity=".35" stroke-width="1"/>
+<circle cx="1130" cy="144" r="3.5" fill="#6FAEE8"/>
+<text x="1440" y="130" text-anchor="middle" font-size="15" font-weight="400" fill="#E7C55A">disk</text>
+<line x1="1440" y1="144" x2="1440" y2="850" stroke="#E7C55A" stroke-opacity=".35" stroke-width="1"/>
+<circle cx="1440" cy="144" r="3.5" fill="#E7C55A"/>
+<line x1="466" y1="180" x2="1434" y2="180" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="950.0" y="172" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">write run/&lt;session&gt;-&lt;uuid&gt;.mcp.json (token, 0600)</text>
+<line x1="466" y1="220" x2="794" y2="220" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="630.0" y="212" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">start: argv, CLAUDE_CONFIG_DIR, working directory</text>
+<line x1="806" y1="260" x2="1434" y2="260" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1120.0" y="252" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">CLAUDE.md, settings, SessionStart hooks, MEMORY.md index</text>
+<line x1="794" y1="300" x2="466" y2="300" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="630.0" y="292" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">system/init: conversation id, model, version</text>
+<line x1="166" y1="340" x2="454" y2="340" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="310.0" y="332" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">prompt</text>
+<line x1="466" y1="380" x2="794" y2="380" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="630.0" y="372" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">stdin: {"type":"user", …}</text>
+<line x1="806" y1="420" x2="1434" y2="420" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1120.0" y="412" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">UserPromptSubmit hooks; transcript appended</text>
+<line x1="794" y1="460" x2="466" y2="460" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="630.0" y="452" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">stream_event deltas, assistant blocks, tool results</text>
+<line x1="806" y1="500" x2="1124" y2="500" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="965.0" y="492" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">mcp__comando__* tool calls</text>
+<line x1="806" y1="540" x2="1124" y2="540" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="965.0" y="532" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">mcp__comando__approve: a permission prompt</text>
+<line x1="1124" y1="580" x2="166" y2="580" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="645.0" y="572" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">approval card</text>
+<line x1="166" y1="620" x2="1124" y2="620" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="645.0" y="612" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">allow or deny</text>
+<line x1="1124" y1="660" x2="806" y2="660" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="965.0" y="652" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">the decision</text>
+<line x1="794" y1="700" x2="466" y2="700" stroke="#9A9A9A" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<text x="630.0" y="692" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">result: duration, context size, window</text>
+<line x1="166" y1="740" x2="454" y2="740" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="310.0" y="732" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">Stop</text>
+<line x1="466" y1="780" x2="794" y2="780" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="630.0" y="772" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">interrupt, close stdin; SIGTERM at 3 s, SIGKILL 2 s later</text>
+<line x1="466" y1="820" x2="1434" y2="820" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="950.0" y="812" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round">delete the MCP file, revoke the token</text>
+<text x="60" y="900" font-size="13" font-weight="300" fill="#BDBDBD">Solid: a request or a write. Dashed: what comes back. The process ends with comando; the conversation stays on disk and the next start resumes it.</text>
+<text x="1540" y="900" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E">comando · docs/claude-code</text>
+</svg>

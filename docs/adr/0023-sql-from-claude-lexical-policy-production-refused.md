@@ -11,7 +11,7 @@ statement unasked would let a mistake write to a database.
 
 ## 2. Decision
 
-A lexical check decides whether a statement is read-only ([SQL from Claude](../claude.md#32-sql-from-claude)). A
+A lexical check decides whether a statement is read-only ([SQL from Claude](../claude-code.md#42-sql-from-claude)). A
 read-only statement runs. Any other statement needs an approval card on an ordinary connection and is refused on a
 production one.
 

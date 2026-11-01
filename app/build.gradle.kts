@@ -93,20 +93,6 @@ tasks.register<JavaExec>("snapshot") {
     )
 }
 
-// Paints the README's and the docs' pictures at twice their size, one real haiku turn included: ./gradlew :app:docImages -Pout=<dir>
-tasks.register<JavaExec>("docImages") {
-    group = "verification"
-    description = "Paints the pictures of the README and the docs, with a live Claude Code turn"
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass = "dev.marregui.comando.app.DocImages"
-    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-docs",
-        "-Dcomando.peers=false",
-        // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
-        "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
-    args((project.findProperty("out") ?: layout.buildDirectory.dir("doc-images").get().asFile.path).toString())
-}
-
 // Replays recorded intent logs against the Swing shell; needs a display (xvfb-run on Linux): ./gradlew :app:uiTest
 val uiTest = tasks.register<Test>("uiTest") {
     group = "verification"

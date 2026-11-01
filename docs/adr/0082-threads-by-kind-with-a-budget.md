@@ -13,7 +13,7 @@ and sessions. The literature for interactive applications converges on event loo
 of sequential workers behind queues, one timer facility and an owner for every task (Half-Sync/Half-Async, Active
 Object, SEDA, actors, structured concurrency). The inventory, the literature and the measurements are in the session's
 notes outside the repository. This record amends the architecture's thread rule
-([Threads](../architecture.md#6-threads) and rule 2 of [Code rules](../architecture.md#9-code-rules)), and shares the
+([Threads](../architecture.md#6-threads) and rule 2 of [Code rules](../development.md#5-code-rules)), and shares the
 reducer's watchdog thread of [record 66](0066-the-reducer-is-watched-as-the-edt-is.md) with the EDT's.
 
 ## 2. Decision

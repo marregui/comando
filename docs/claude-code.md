@@ -1,18 +1,22 @@
-# Claude
+# Claude Code in comando
 
-How comando runs Claude Code, what a session can do in the window, and what it must ask for. It is for a user who
-wants to know what a session may change without asking, and for a contributor working on the `claude` and `mcp`
-modules.
+How comando runs Claude Code, what a session can do in the window, and what it must ask you for. I built comando around
+Claude Code rather than beside it: every session is a real `claude -p` process with your own Claude Code setup loaded,
+and the window is where its work lands. This document is about that seam. It is for whoever wants to know what a session
+may change without asking, and for whoever works on the `claude` and `mcp` modules.
 
 1. [The Claude bridge](#1-the-claude-bridge)
-2. [MCP tools](#2-mcp-tools)
-3. [Approvals and safety](#3-approvals-and-safety)
+2. [The checkpoint](#2-the-checkpoint)
+3. [MCP tools](#3-mcp-tools)
+4. [Approvals and safety](#4-approvals-and-safety)
 
 ## 1. The Claude bridge
 
 comando runs Claude Code as one child process per session, speaks stream-JSON over its standard input and output, and
 maps the stream into transcript blocks and intents. The CLI facts below were verified with recorded probes against
 Claude Code 2.1.296 and 2.1.302 (fixtures in `testkit`), and against 2.1.300 for background tasks.
+
+![A session's process from start to stop: comando, claude -p, comando's MCP server, disk](images/session.svg)
 
 ### 1.1 The process
 
@@ -31,25 +35,25 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   conversation ([record 4](adr/0004-a-session-open-in-another-terminal.md)).
 - **Not `--bare`.** The session loads CLAUDE.md, hooks, plugins, skills and the user's MCP servers as a terminal session
   does. The login is the CLI's own; comando stores no key.
-- **The root.** Every `claude` comando starts runs on one Claude Code folder, the root: with
-  `CLAUDE_CONFIG_DIR=<root>` in its environment when the root is not `~/.claude`, and, when the root holds a kit,
-  `--settings '{"autoMemoryDirectory": "<root>/<brain>/MEMORY"}'` (`RootLaunch`,
-  [Workbench §7.1](workbench.md#71-the-root)). The session named `kit` that upgrades the kit runs on the user's own
-  `~/.claude` instead when the root is `~/.claude` or inside it; a sibling kit such as `~/.claude_b` keeps its own root
-  ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)).
+- **The root.** Every `claude` comando starts runs on the root
+  ([Kit and brain §3.1](kit-and-brain.md#31-the-root)); the `kit` session's exception is in
+  [§3.4](kit-and-brain.md#34-version-and-upgrade).
 - **An agent's session.** A session with a creator (`createdBy`) runs with `COMANDO_CREATED_BY=<creator>`, so a kit's
   hooks can tell it from a person's; every other process has the variable taken out
   ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)).
 - **MCP configuration.** One file per running process under `run/` in the data root, mode `0600` from creation, named
-  after the session and a random UUID. It names comando's server, the process's bearer token, and `"timeout": 3600000`,
-  which lets an approval card wait up to 55 minutes. Deleted when the process exits; files a killed comando left are
-  deleted at the next start.
+  after the session and a random UUID. At each start the adapter asks `McpGateway.register` for a ticket (the server's
+  URL and a bearer token); the file names comando's server, that token, and `"timeout": 3600000`, which lets an approval
+  card wait up to 55 minutes. Deleted when the process exits, and the token revoked unless a newer run has already
+  replaced the process, in which case it stays until comando closes; files a killed comando left are deleted at the next
+  start.
 - **Working directory.** The session's; the session bar shows its git branch, read from `.git/HEAD` after each turn.
 - **Threads.** stdout is read on a platform thread, `claude-out-<session>`, the one operating-system thread a session
   costs: a read of a process pipe holds its carrier thread even from a virtual thread (measured on JDK 25). The stdin
   writer, fed by a queue, and the exit waiter are virtual threads. stderr goes to a temporary file (`0600`) whose last
-  40 lines are read at the exit, for the error message, and the file deleted. Every change to the session runs on its
-  strand, `claude-strand-<session>`, a single-threaded virtual executor, so the transcript has one writer.
+  40 lines are read at the exit, for the error message, and the file deleted. Every change to the session (start, a
+  stdout line, a prompt, interrupt, stop, history) runs on its strand, `claude-strand-<session>`, a single-threaded
+  virtual executor, so the transcript has one writer and the process one owner.
 - **Instructions.** `--append-system-prompt` carries `UiInstructions`: the tools and when to use them (a view when a
   table, plot or diff shows a result better than text; explanations stay in text).
 - **Other runs.** Besides one process per running session, comando runs `claude --safe-mode -p /usage` at start and
@@ -97,16 +101,6 @@ of text and shown to 400 lines.
   under `-p`. `/clear` writes `conversation_reset`, ends its turn with no model call and reports the new conversation
   in a new `system/init`: comando zeroes the context, notes the clear, and resumes the new id from then on, saying the
   previous one can be imported again.
-- **The checkpoint** sends the session's checkpoint command. Once its turn has finished (nothing running, queued or out
-  in the background) and its `result` carries text, `/compact` goes out as a prompt from the session's panel, as the
-  Compact command sends it: the same conversation goes on, and the transcript keeps its blocks and shows the
-  compaction's notes. comando also runs it by itself when a turn ends with the context at or above the checkpoint
-  threshold (`sessions.checkpointThresholdTokens`, default 400,000 tokens, 0 for never), once per crossing. A session
-  launched while the threshold is above 0 gets `CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that
-  would checkpoint at that size leaves it to comando; every other process has the variable taken out. A summary an
-  earlier checkpoint carried (`SessionSpec.carried`, record 86) still goes in front of the next prompt that is not a
-  slash command, its block showing the prompt as typed. [Workbench §1.4](workbench.md#14-the-checkpoint) lists when
-  the conversation is kept instead ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)).
 - **Versions.** At start `claude --version` runs with a 5 s bound on its exit and 1 s more for its output. A version
   outside the tested line (2.1.296 up to, not including, 2.2.0) gets a warning, not a refusal; features are read from
   `system/init`'s capabilities.
@@ -145,11 +139,48 @@ of text and shown to 400 lines.
   often for minutes. The tab's last line says whether it is still updated and, if not, why. At most 4 tabs follow at
   once; the oldest stops first. A file missing or moved by a later Claude Code gives the notice "transcript not found
   for this sub-agent" ([record 64](adr/0064-sub-agents-are-shown-live.md)). The tab itself is in
-  [UI §4.2](ui.md#42-the-widget).
+  [Architecture §14.5.2](architecture.md#1452-the-widget).
 
-## 2. MCP tools
+## 2. The checkpoint
 
-### 2.1 The server
+The checkpoint button (the session bar, or the session's menu) sends the session's checkpoint command. Once that turn
+has finished (nothing runs or is queued, no background work it started is still out), comando sends `/compact` from the
+session's panel, as the palette's "Compact the conversation" does: the same conversation goes on, the Session tab keeps
+it and shows the compaction, and the panel's text stays
+([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)).
+
+comando runs the same sequence by itself, the checkpoint command then `/compact`, when a turn ends with the context at
+or above the checkpoint threshold: `sessions.checkpointThresholdTokens` in comando's `settings.json`, 400,000 tokens by
+default, 0 for never, changed with the palette's "Checkpoint threshold…". It runs once per crossing: any checkpoint
+command sent disarms it, and a turn that ends below the threshold arms it again. It waits while a prompt is queued (the
+check repeats at that prompt's end) or background work is out, and does not run after a failed or interrupted turn or
+for a session without a checkpoint command. A session launched while the threshold is above 0 gets
+`CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that would checkpoint at that size on its own leaves it
+to comando; every other process has the variable taken out, and a session keeps what it was launched with.
+
+The conversation is not compacted when a prompt is sent before the checkpoint's turn ends, the turn fails or is
+interrupted, the process ends, or the answer is blank (a warning says so). A summary an earlier checkpoint carried
+([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)) still goes in front of the next prompt that is
+not a slash command, and that prompt's block (`SessionSpec.carried`) shows the prompt as typed; while the summary waits,
+a checkpoint runs its command alone. A checkpoint typed by hand, or sent by another session, is a prompt like any other
+and compacts nothing.
+
+While a checkpoint runs, by any route, typed included, the session is locked until its turn has ended and, when
+`/compact` follows, until the compaction's turn has ended
+([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). Its panels read only and grey under one veil with
+its Session tab, their tabs' titles grey; Run and Clear are off; on the session bar only the plug stays on; the
+session's menu keeps Open, Stop, Interrupt, Copy details and Clone; the palette's Compact, model and effort commands
+wait. Stop in the panel's header (⌘.) interrupts the checkpoint: the lock lifts and nothing is compacted. A failed turn,
+a blank answer or a process that ends lifts it the same way. A prompt another session or an agent sends queues, as it
+does while the session works, and runs once the checkpoint's turn has ended, unlocked; anything else that acts on the
+session (a prompt from its panel, Fresh, Checkpoint, Compact, its settings, Remove) is refused without a notice. The
+Session tab is greyed, not blocked: an approval the checkpoint asks for can still be answered. While the checkpoint's
+turn has handed work to the background and no turn runs, the session is not locked. The lock is the session's live
+state, never stored: comando started again shows none. Other sessions and their panels are not touched.
+
+## 3. MCP tools
+
+### 3.1 The server
 
 | Property | Value |
 |---|---|
@@ -160,11 +191,11 @@ of text and shown to 400 lines.
 | Methods | `initialize`, `tools/list`, `tools/call`, `ping`; notifications get 202; anything else, including the `server/discover` Claude Code sends first, gets method-not-found |
 | Implementation | JSON-RPC over the JDK's `HttpServer` and Jackson, a virtual thread per request; no MCP library |
 
-### 2.2 The tools
+### 3.2 The tools
 
 | Tool | Arguments | Does |
 |---|---|---|
-| `approve` | `tool_name`, `input`, `tool_use_id` | Claude Code's permission prompt: a card, and a wait for the answer ([§3](#3-approvals-and-safety)) |
+| `approve` | `tool_name`, `input`, `tool_use_id` | Claude Code's permission prompt: a card, and a wait for the answer ([§4](#4-approvals-and-safety)) |
 | `ui_show_table` | `title`, `columns`, `rows`, `placement` | a table view |
 | `ui_plot` | `title`, `x_label`, `y_label`, `time_x`, `series` (`name`, `x`, `y`), or `x` and `y` for one series named after the title, `placement` | a plot; with `time_x`, x is epoch milliseconds; an array sent as JSON text reads as the array |
 | `ui_show_view` | `type`, `title`, `data`, `placement` | a `markdown`, `diff`, `text`, `tree`, `table` or `plot` view |
@@ -175,7 +206,7 @@ of text and shown to 400 lines.
 | `ui_get_state` | none | panels with bindings and last run, connections, sessions (busy, `waitingOn`), open views |
 | `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes and the lower share change after the same pause; Restore layout in the palette undoes it |
 | `ui_close_view` | `id` | closes a view this session placed; the user's or pinned views are refused |
-| `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§3.2](#32-sql-from-claude)); returns the first result as tab-separated text in PostgreSQL COPY text form (`\N` is SQL NULL; a tab, newline, carriage return or backslash in a value is escaped); `show` also opens it as a table, NULL shown as `null` |
+| `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§4.2](#42-sql-from-claude)); returns the first result as tab-separated text in PostgreSQL COPY text form (`\N` is SQL NULL; a tab, newline, carriage return or backslash in a value is escaped); `show` also opens it as a table, NULL shown as `null` |
 | `db_describe` | `table`, `connection` | a table's columns and types, in the COPY text form of `db_run_sql` |
 | `session_send` | `session`, `text` | prompts another running session with an open panel, headed `[from session <sender>]`, without a card ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)); returns a cursor for `session_read` |
 | `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks after a cursor, or the last 40; `wait_seconds` (≤ 600) waits until its turns are over |
@@ -217,7 +248,7 @@ sends for the same gesture:
 - **Other instances** ([record 123](adr/0123-instances-consult-each-other.md)). `instances_list`, `instance_ask` and
   `instance_reply` are not in the registry: the window has no gesture for them and they send no intent of their own, so
   `ActionParityTest` holds without them. They work while this instance is connected to the comando Edge
-  ([workbench §3.5](workbench.md#35-the-comando-edge)); otherwise each says so and how to start it. The instance asked
+  ([Workbench §4.1](workbench.md#41-the-comando-edge)); otherwise each says so and how to start it. The instance asked
   makes `consult-<asker>` on the first question (in the home folder, created by `peer:<asker>`), prompts it with
   `PromptSession`, so its user sees the question in that session's panel, and replies when the turn ends: `ok` with the
   text (at most 64 kB), `refused` for an asker its user denied in `agents.json` (`{"peers": {"deny": ["<id>"]}}`),
@@ -251,30 +282,19 @@ sends for the same gesture:
   call's type, description and model asked, the parent's model, background, status, start and duration, the tool calls
   inside it at any depth, and its `spend` read from its own file: model calls, tokens by kind, models); `usage` at each
   plan-usage read (provider, window, percent, reset). Money fields are kept as they arrive and shown nowhere. Read by
-  the kit's calibration, never by comando.
+  the kit's calibration; comando reads back only a stored conversation's last context size, from the last `turn` of
+  the past 14 days of files, when the conversation loads (`MetricsLog.lastContext`,
+  [record 120](adr/0120-the-context-follows-each-model-call.md)).
 
-## 3. Approvals and safety
+## 4. Approvals and safety
 
-### 3.1 Approval cards
+### 4.1 Approval cards
 
 `--permission-prompt-tool mcp__comando__approve` makes Claude Code ask comando before each tool call its permission
 rules do not settle. Each request is a card in the Approvals tab; the MCP call waits on a future until the user
 answers.
 
-![Two approval cards: a Bash command with Allow once, For session, Always and Deny, its Always rule shown below, and a question with two options and an Other answer box](images/approvals.png)
-
-```mermaid
-sequenceDiagram
-    participant CLI as claude -p
-    participant MCP as comando's MCP server
-    participant Tab as Approvals tab
-    CLI->>MCP: tools/call approve with tool_name, input, tool_use_id
-    MCP->>Tab: a card
-    Note over MCP: the call waits on a future, at most 55 minutes
-    Tab-->>MCP: Allow once, For session, Always, Deny or an answer
-    MCP-->>CLI: behavior allow or deny, updatedInput, updatedPermissions
-    MCP->>MCP: the call and the decision appended to the audit log
-```
+![An approval: claude -p calls the approve tool on comando's MCP server with the tool's name, input and id; the server puts a card in the Approvals tab and waits on a future, at most 55 minutes; the answer goes back as allow or deny with the rules to add; the call and the decision go to the audit log](images/approval.svg)
 
 | Kind | Raised by | Answers |
 |---|---|---|
@@ -310,7 +330,7 @@ how Claude Code matches them and never allow more than the command could do (`Pe
   runs every card stays ([record 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)).
 - A card unanswered for 55 minutes is withdrawn and denied; at exit every waiting card is denied.
 
-### 3.2 SQL from Claude
+### 4.2 SQL from Claude
 
 `db_run_sql` runs on the connection's lane behind the user's runs, waits at most 90 s (a statement still queued is then
 withdrawn; one running ends at its 60 s statement timeout), and is not stopped by the user's ⌘..
@@ -333,7 +353,7 @@ ordinary connection, refused on a production one.
 A production connection frames its panels in red, shows a red "prod" on its sidebar row, refuses Claude's writes, and
 runs the user's own statements as typed.
 
-### 3.3 Secrets
+### 4.3 Secrets
 
 | Secret | Where it lives |
 |---|---|
@@ -347,7 +367,7 @@ runs; it never reaches a file. Passwords are read with `find-generic-password -g
 Every keychain call is bounded at 10 s; when the keychain cannot be asked, the connection loads without its password
 and later saves keep the stored item. Copy details on a connection never includes the password.
 
-### 3.4 Text is never rendered as HTML
+### 4.4 Text is never rendered as HTML
 
 Swing renders a label, button, tooltip, tab title or table cell as HTML when its text starts with `<html>`, and loads
 the images it names. Text from Claude, a database or a stored conversation goes through `Plain` (renderers with HTML

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="820" viewBox="0 0 1600 820" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs><radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#1B1B1B"/><stop offset="1" stop-color="#101010"/></radialGradient><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9" fill="none" stroke="#9A9A9A" stroke-width="1.4"/></marker></defs>
+<rect width="1600" height="820" fill="url(#bg)"/>
+<text x="60" y="52" text-anchor="start" font-size="13" font-weight="500" fill="#E7C55A" letter-spacing="3">ARCHITECTURE · MODULES</text>
+<text x="60" y="84" text-anchor="start" font-size="24" font-weight="300" fill="#F2F2F2" >Eight Gradle modules and what each depends on</text>
+<rect x="500" y="140" width="600" height="96" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="514" y="166" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >app</text>
+<text x="514" y="188" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >wiring, store files, keychain, intent log, embedded QuestDB, the comando Edge, main</text>
+<text x="514" y="207" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >every module · Jackson · QuestDB · HiveMQ MQTT client</text>
+<rect x="60" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="74" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >testkit</text>
+<text x="74" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >fakes, recorded streams</text>
+<text x="74" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >core (api)</text>
+<line x1="174.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="306" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="320" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >db</text>
+<text x="320" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >JDBC lanes, columnar results</text>
+<text x="320" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >PostgreSQL JDBC</text>
+<line x1="800" y1="236" x2="420.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="420.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="552" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="566" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >claude</text>
+<text x="566" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >claude -p per session</text>
+<text x="566" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >Jackson</text>
+<line x1="800" y1="236" x2="666.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="666.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="798" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="812" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >mcp</text>
+<text x="812" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >MCP server, SQL policy</text>
+<text x="812" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >Jackson</text>
+<line x1="800" y1="236" x2="912.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="912.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="1044" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1058" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >tools</text>
+<text x="1058" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Gradle, folders, git</text>
+<text x="1058" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >core only</text>
+<line x1="800" y1="236" x2="1158.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="1158.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="1290" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
+<text x="1304" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >ui</text>
+<text x="1304" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >the Swing window</text>
+<text x="1304" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >FlatLaf · jsvg · RSTA …</text>
+<line x1="800" y1="236" x2="1404.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<line x1="1404.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<rect x="560" y="590" width="480" height="96" rx="8" fill="#1E1E1E" stroke="#E7C55A" stroke-width="1.2"/>
+<text x="574" y="616" text-anchor="start" font-size="15" font-weight="400" fill="#E7C55A" >core</text>
+<text x="574" y="638" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >state, intents, reducer, effects, ports, thread kit</text>
+<text x="574" y="657" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >the JDK only</text>
+<line x1="1100" y1="188" x2="1150" y2="188" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<path d="M1100,188 H1560 V638 H1042" fill="none" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="1552" y="300" text-anchor="end" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >app → core</text>
+<text x="60" y="716" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >ui depends on core only; mcp stays apart from db, so every route from Claude to the database passes QueryPort.</text>
+<text x="60" y="736" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Dashed: testkit is test scope only, taken by every module's tests.</text>
+<text x="60" y="780" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Gold: the centre every module depends on. Blue: comando's modules. Grey: outside libraries.</text>
+<text x="1540" y="780" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/architecture</text>
+</svg>
