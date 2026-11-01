@@ -906,7 +906,7 @@ class ReducerTest {
         apply(new Intent.RunText(P1, "more", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 400_000L, 1_000_000L, false, "", "at it"));
         assertThat(effects).as("at the threshold: the checkpoint, and no notice of the turn yet")
-                .containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+                .containsExactly(new Effect.SendToClaude("work", "/reflect --auto", title));
         final SessionState x = state.session("work").orElseThrow();
         assertThat(List.of(x.pendingTurns(), x.checkpointCompacts(), x.checkpointArmed())).containsExactly(1, true, false);
 
@@ -924,7 +924,7 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().checkpointArmed()).as("re-armed below the threshold").isTrue();
         apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 401_000L, 1_000_000L, false, "", "crossed again"));
-        assertThat(effects).as("the next crossing").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+        assertThat(effects).as("the next crossing").containsExactly(new Effect.SendToClaude("work", "/reflect --auto", title));
 
         reducer = new Reducer(clock, () -> 0L);
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 401_000L, 1_000_000L, false, "", "reflected"));
@@ -949,7 +949,7 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 1, 0.1, 500_000L, 1_000_000L, false, "", "first"));
         assertThat(effects).as("a prompt queued: it runs first").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 510_000L, 1_000_000L, false, "", "second"));
-        assertThat(effects).as("at its end").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+        assertThat(effects).as("at its end").containsExactly(new Effect.SendToClaude("work", "/reflect --auto", title));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 510_000L, 1_000_000L, true, "rate limited"));
         assertNoCompaction();
         apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
@@ -971,7 +971,7 @@ class ReducerTest {
         apply(new Intent.SessionTasksChanged("work", List.of()));
         apply(new Intent.SessionTurnRunning("work"));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 505_000L, 1_000_000L, false, "", "the build passed"));
-        assertThat(effects).as("the work back").containsExactly(new Effect.SendToClaude("work", "/reflect", title));
+        assertThat(effects).as("the work back").containsExactly(new Effect.SendToClaude("work", "/reflect --auto", title));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 505_000L, 1_000_000L, true, "interrupted"));
 
         final SessionSpec silent = state.session("work").orElseThrow().spec().withCheckpoint("");
@@ -1005,7 +1005,7 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 1_000_000L, false, "", "below: armed"));
         apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 400_000L, 1_000_000L, false, "", "done"));
-        assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect", title));
+        assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect --auto", title));
         assertThat(locked()).as("the automatic checkpoint").isTrue();
         apply(new Intent.SessionTurnEnded("work", 0, 0.1, 410_000L, 1_000_000L, false, "", "## Reflected"));
         assertThat(locked()).as("its compaction").isTrue();

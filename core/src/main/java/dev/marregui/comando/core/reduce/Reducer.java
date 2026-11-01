@@ -171,6 +171,11 @@ public final class Reducer {
             case Intent.ApprovalRequested i -> ApprovalRules.approvalRequested(clock, s, i.approval());
             case Intent.ApprovalAnswered i -> ApprovalRules.approvalAnswered(s, i);
             case Intent.ApprovalWithdrawn i -> ApprovalRules.approvalWithdrawn(clock, s, i);
+            case Intent.DecisionHeldBack i -> DecisionRules.heldBack(clock, s, i);
+            case Intent.DecisionsSettled i -> DecisionRules.settled(s, i);
+            case Intent.DecisionsRead i -> DecisionRules.read(s, i);
+            case Intent.SettleDecision i -> DecisionRules.settle(clock, s, i);
+            case Intent.DismissDecision i -> DecisionRules.dismissed(s, i);
 
             case Intent.AddFolder i -> FolderRules.addFolder(clock, s, i.spec());
             case Intent.SaveFolders i -> FolderRules.saveFolders(clock, s, i);

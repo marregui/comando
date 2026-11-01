@@ -10,6 +10,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -256,6 +257,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void saveFolders(final List<FolderRoot> folders) {
         record("save.folders " + folders.size());
+    }
+
+    @Override
+    public void saveDecisions(final List<Decision> decisions) {
+        record("save.decisions " + decisions.size());
     }
 
     @Override

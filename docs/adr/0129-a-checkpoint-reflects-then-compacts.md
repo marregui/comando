@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-31 | accepted; built; amended by [record 130](0130-a-session-locks-while-its-checkpoint-runs.md) (the session locks while its checkpoint runs) | Miguel and Claude |
+| 2026-10-31 | accepted; built; amended by [record 130](0130-a-session-locks-while-its-checkpoint-runs.md) (the session locks while its checkpoint runs) and [record 131](0131-an-automatic-checkpoint-asks-nothing.md) (the automatic checkpoint carries `--auto`) | Miguel and Claude |
 
 ## 1. Context
 
@@ -69,3 +69,7 @@ then `/compact`; the Session tab keeps the conversation).
 | the session runs `/reflect` itself when a hook sees the crossing | Miguel chose comando at a turn's end; a hook acts mid-turn, and comando would not know a checkpoint ran |
 | keep the clear and the carried summary | Miguel asked for a compaction |
 | the threshold in comando's state, set by an intent | it is a setting of the window, as the theme is; the reducer reads it as it reads the home folder, and an agent's action for it is not asked for |
+
+## Amendments
+
+2026-11-01, [record 131](0131-an-automatic-checkpoint-asks-nothing.md): the automatic checkpoint sends the checkpoint command with `--auto`, so the command asks the user nothing and holds its decisions back for the Approvals tab's Later group; the Checkpoint button and a typed command are unchanged.

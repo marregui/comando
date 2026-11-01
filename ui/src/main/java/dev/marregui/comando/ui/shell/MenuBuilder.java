@@ -33,7 +33,7 @@ final class MenuBuilder {
     }
 
     /**
-     * The buttons left of the theme's swatch: the shell, the live plots, and the embedded server and the Edge if any.
+     * The buttons left of the theme's swatch: the live plots, and the embedded server and the Edge if any.
      */
     List<CommandButton> cornerButtons() {
         final List<CommandButton> buttons = new ArrayList<>();

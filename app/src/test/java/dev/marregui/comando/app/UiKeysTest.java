@@ -622,8 +622,9 @@ class UiKeysTest {
                     b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
             final List<String> row = onEdt(() -> Stream.of(swatch.getParent().getComponents())
                     .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).filter(Objects::nonNull).toList());
-            assertThat(row).as("at the top right, left of New panel (record 104), the shell's and the plots' buttons before it")
-                    .startsWith("Start the shell", "Stop refreshing plots").endsWith("Choose the theme", "New panel");
+            assertThat(row).as("at the top right, left of New panel (record 104), the plots' button before it and no shell button")
+                    .startsWith("Stop refreshing plots").endsWith("Choose the theme", "New panel")
+                    .doesNotContain("Start the shell", "Stop the shell");
             assertThat(hoverTip(swatch)).as("hovered, the tooltip shows and names the theme").startsWith("Theme: " + NamedTheme.GRAPHITE_GOLD.label + ";");
             assertThat(onEdt(() -> find(w.frame(), AbstractButton.class,
                     b -> "Clear the Session tab".equals(b.getAccessibleContext().getAccessibleName())))).as("no Clear button").isEmpty();

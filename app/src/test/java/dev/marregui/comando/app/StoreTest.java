@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
@@ -26,8 +27,8 @@ import dev.marregui.comando.core.state.PanelState;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// The data root's files: settings, panels and their text, the Files tab's folders and the secret store behind the
-/// connections.
+/// The data root's files: settings, panels and their text, the Files tab's folders, the decisions held back and the
+/// secret store behind the connections.
 class StoreTest {
 
     private static final Path CLAUDE_DIR = Path.of("/home/u/.claude");
@@ -147,6 +148,33 @@ class StoreTest {
         }
         try (var aside = Files.list(home)) {
             assertThat(aside.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("folders.json.corrupt-"));
+        }
+    }
+
+    /// The decisions automatic checkpoints held back come back from `decisions.json` as saved, in order, an emptied list
+    /// stays empty, and with no file or an unreadable one there are none; the unreadable file is kept aside.
+    @Test
+    void theDecisionsHeldBackRoundTripAndAnUnreadableFileReadsAsNone() throws Exception {
+        final List<Decision> held = List.of(new Decision(3, "work", "Merge the two entries?", "both say SVG only", 1_000L),
+                new Decision(7, "edge", "Archive the old lane?", "", 2_000L));
+        try (Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("no decisions.json").isEmpty();
+            store.saveDecisions(held);
+        }
+        assertThat(home.resolve("decisions.json")).exists();
+        try (Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("as saved").isEqualTo(held);
+            store.saveDecisions(List.of());
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("emptied").isEmpty();
+        }
+        Files.writeString(home.resolve("decisions.json"), "[{\"id\": 1, \"session\": ");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("unreadable: none").isEmpty();
+        }
+        try (Stream<Path> files = Files.list(home)) {
+            assertThat(files.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("decisions.json.corrupt-"));
         }
     }
 

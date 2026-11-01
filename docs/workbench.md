@@ -153,9 +153,9 @@ Any number of document panels may be attached to a session
   lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties
   the Session tab once the turn has ended, while the conversation goes on
   ([record 104](adr/0104-the-theme-beside-new-panel.md)).
-- **The corner's buttons**, left of the swatch: start or stop the focused panel's shell, stop refreshing plots,
-  start or stop the embedded QuestDB, and start or stop the comando Edge ([§4.1](#41-the-comando-edge)); each shows what
-  it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)).
+- **The corner's buttons**, left of the swatch: stop refreshing plots, start or stop the embedded QuestDB, and start or stop the comando Edge ([§4.1](#41-the-comando-edge)); each shows what
+  it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)). The
+  shell has no button: it starts when its tab is shown ([§5.1](#51-terminal)).
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own,
   closed, with its file, title and bindings, until removed; a document is dropped
   ([record 39](adr/0039-panels-are-kept-until-removed.md)). ⌘⇧T reopens the last of ten recently closed. The Sessions
@@ -523,8 +523,9 @@ Runs go through `ToolPort` (`tools` module); the terminal lives in the UI becaus
 JediTerm on a pseudo-terminal from pty4j, one per panel, started the first time it is shown, as `$SHELL -l` (else
 `/bin/zsh`, else `/bin/sh`) in the session's directory, else home; `TERM=xterm-256color`, `TERM_PROGRAM=comando`. ⌃3
 shows it. ⌃⏎ in the editor types the selection or line into it and presses Enter, waiting until a starting shell has
-written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar; the corner's shell button
-stops the focused panel's shell or starts it in the session's directory, and the palette's Restart the shell does both.
+written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar. The palette's Start the shell, Stop the shell
+and Restart the shell act on the focused panel's shell; Stop ends what runs in it. The corner has no shell button
+([record 114](adr/0114-help-menu-and-corner-buttons.md), amended 2026-11-01).
 
 ### 5.2 Gradle runs
 
@@ -723,6 +724,7 @@ backing up.
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
 | `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
 | `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
+| `decisions.json` | the decisions automatic checkpoints held back, until settled or dismissed ([Claude Code §4.1](claude-code.md#41-approval-cards)) |
 | `instances-seen.json` | the other instances seen, so the Instances tab lists those that left until **Forget** ([§4.3](#43-the-instances-tab)) |
 | `questdb/` | the embedded QuestDB's data |
 | `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)): `dist/` (the downloaded distribution), its home unzipped from it, `installed` (the zip and its time), `conf/`, `data/` and `log/`, kept across reinstalls, and `stdout.log` |

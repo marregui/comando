@@ -6,6 +6,7 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -16,6 +17,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import java.util.function.ToLongFunction;
 import javax.swing.AbstractAction;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
@@ -57,6 +60,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
@@ -72,6 +76,7 @@ import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
@@ -87,20 +92,49 @@ import dev.marregui.comando.ui.widget.WidgetContext;
  * nothing once the card is answered. Questions show their options with descriptions; a plan shows rendered; an edit
  * shows its diff.
  *
- * <p>Each time the inbox comes forward ({@link #shown}) it shows its top, the oldest request first, unless the keyboard
- * is in a card. A request arriving while it is in front moves nothing.</p>
+ * <p>One queue for the window, in three groups (record 131): this session's cards, the focused panel's session's, under
+ * its name, first; then the other sessions' cards under each session's name, the session with the oldest card first;
+ * then Later, the decisions automatic checkpoints held back, under each session's name, each with Settle (its session
+ * asks now) and Dismiss. Within a group the oldest comes first. Up and Down follow that order. A decision takes no
+ * keyboard: its buttons are clicked.</p>
+ *
+ * <p>Each time the inbox comes forward ({@link #shown}) it shows its top, this session's oldest request first, unless
+ * the keyboard is in a card. A request arriving while it is in front moves nothing.</p>
  *
  * <p>When the card that holds the keyboard leaves because the user answered it here, the keyboard moves to the
  * card that took its place. When it leaves for any other reason (withdrawn by Claude Code, its session ended), the
  * keyboard goes to the inbox itself, which has no answer keys: what the user was typing answers nothing.</p>
  */
-public final class ApprovalInbox implements Widget<List<Approval>> {
+public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
+
+    /**
+     * What the inbox shows.
+     *
+     * @param approvals every session's waiting requests, oldest first
+     * @param session   the focused panel's session, whose cards come first; empty when the panel has none
+     * @param later     the decisions held back, oldest first
+     * @param locked    the decisions whose Settle the reducer refuses now: their session's checkpoint runs (record 130)
+     */
+    public record Queue(List<Approval> approvals, String session, List<Decision> later, Set<Long> locked) {
+        public Queue {
+            approvals = List.copyOf(approvals);
+            session = session == null ? "" : session;
+            later = List.copyOf(later);
+            locked = locked == null ? Set.of() : Set.copyOf(locked);
+        }
+
+        public Queue(final List<Approval> approvals, final String session, final List<Decision> later) {
+            this(approvals, session, later, Set.of());
+        }
+    }
 
     /** How long a first L waits for the second. */
     static final long CONFIRM_MILLIS = 3_000;
     private static final int AGE_TICK_MILLIS = 30_000;
     private static final int MENU = Platform.menuShortcutMask();
     private static final String EMPTY = "No approvals waiting. Permission requests from every session arrive here.";
+    private static final String SETTLE_TIP = "Sends %s its checkpoint command, which asks what was held back";
+    private static final String LATER_NOTE = "Held back by automatic checkpoints. Settle asks the session now.";
     /** The Other answer's size: a paragraph of five lines, 120 characters wide. */
     static final int OTHER_ROWS = 5;
     static final int OTHER_COLUMNS = 120;
@@ -132,6 +166,15 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     private final JScrollPane scroll = new JScrollPane(list);
     private final Overlay overlay = new Overlay(scroll);
     private final Map<Long, Card> cards = new LinkedHashMap<>();
+    /** The cards in view order: this session's, the other sessions', each group oldest first. */
+    private final List<Card> order = new ArrayList<>();
+    private final Map<Long, DecisionRow> decisions = new LinkedHashMap<>();
+    /** The session names over the groups, by group and name, kept while their group is shown. */
+    private final Map<String, JLabel> names = new LinkedHashMap<>();
+    private final JLabel thisSession = section("This session");
+    private final JLabel otherSessions = section("Other sessions");
+    private final JLabel later = section("Later");
+    private final JTextArea laterNote = muted(LATER_NOTE);
     /** The approvals the user answered in this inbox whose cards are still shown. */
     private final Set<Long> answered = new HashSet<>();
     private final ShownTimer ages = new ShownTimer(overlay, AGE_TICK_MILLIS, this::tick);
@@ -166,38 +209,30 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     }
 
     @Override
-    public void render(final List<Approval> approvals) {
-        final List<Card> before = new ArrayList<>(cards.values());
+    public void render(final Queue queue) {
+        final List<Card> before = new ArrayList<>(order);
         final Set<Long> answeredHere = new HashSet<>(answered);
         final Card holding = cardOf(focus.owner());
         final Set<Long> ids = new HashSet<>();
-        for (final Approval a : approvals) {
+        for (final Approval a : queue.approvals()) {
             ids.add(a.id());
-            if (!cards.containsKey(a.id())) {
-                final Card c = new Card(a);
-                cards.put(a.id(), c);
-                list.add(c);
-                list.add(Box.createVerticalStrut(Theme.GAP));
-            }
+            cards.computeIfAbsent(a.id(), k -> new Card(a));
         }
-        cards.values().removeIf(c -> {
-            if (ids.contains(c.approval.id())) {
-                return false;
-            }
-            final int i = indexOf(c);
-            list.remove(c);
-            if (i >= 0 && i < list.getComponentCount()) {
-                list.remove(i); // the strut after the card
-            }
-            return true;
-        });
+        cards.values().removeIf(c -> !ids.contains(c.approval.id()));
+        final Set<Long> held = new HashSet<>();
+        for (final Decision d : queue.later()) {
+            held.add(d.id());
+            decisions.computeIfAbsent(d.id(), k -> new DecisionRow(d)).settleable(!queue.locked().contains(d.id()));
+        }
+        decisions.values().removeIf(r -> !held.contains(r.decision.id()));
         answered.retainAll(ids);
-        if (cards.isEmpty()) {
+        lay(queue);
+        if (cards.isEmpty() && decisions.isEmpty()) {
             overlay.showEmpty(EMPTY);
         } else {
             overlay.showContent();
         }
-        ages.want(!cards.isEmpty());
+        ages.want(!cards.isEmpty() || !decisions.isEmpty());
         list.revalidate();
         list.repaint();
         if (holding != null && !cards.containsValue(holding)) {
@@ -211,6 +246,100 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 focus.request(list);
             }
         }
+    }
+
+    /** Every card under no session in front, nothing held back; for tests. */
+    void render(final List<Approval> approvals) {
+        render(new Queue(approvals, "", List.of()));
+    }
+
+    /**
+     * Lays the groups out in order. A component already in its place stays, so the card the keyboard is in keeps it
+     * while cards of other groups come and go; the rest are moved into place and what is no longer shown goes.
+     */
+    private void lay(final Queue queue) {
+        final List<Component> want = new ArrayList<>();
+        final Set<String> named = new HashSet<>();
+        order.clear();
+        final String own = queue.session();
+        final List<Approval> mine = queue.approvals().stream().filter(a -> !own.isEmpty() && a.session().equals(own)).toList();
+        if (!mine.isEmpty()) {
+            want.add(thisSession);
+            want.add(name("this", own, named));
+            for (final Approval a : mine) {
+                place(cards.get(a.id()), want);
+            }
+        }
+        final Map<String, List<Approval>> others = bySession(queue.approvals().stream().filter(a -> own.isEmpty() || !a.session().equals(own)).toList(),
+                Approval::session, Approval::createdMillis);
+        if (!others.isEmpty()) {
+            otherSessions.setText(own.isEmpty() ? "SESSIONS" : "OTHER SESSIONS");
+            want.add(otherSessions);
+            for (final Map.Entry<String, List<Approval>> e : others.entrySet()) {
+                want.add(name("other", e.getKey(), named));
+                for (final Approval a : e.getValue()) {
+                    place(cards.get(a.id()), want);
+                }
+            }
+        }
+        final Map<String, List<Decision>> held = bySession(queue.later(), Decision::session, Decision::createdMillis);
+        if (!held.isEmpty()) {
+            want.add(later);
+            want.add(laterNote);
+            for (final Map.Entry<String, List<Decision>> e : held.entrySet()) {
+                want.add(name("later", e.getKey(), named));
+                for (final Decision d : e.getValue()) {
+                    final DecisionRow r = decisions.get(d.id());
+                    want.add(r);
+                    want.add(r.gap);
+                }
+            }
+        }
+        names.keySet().retainAll(named);
+        for (int i = 0; i < want.size(); i++) {
+            if (i >= list.getComponentCount() || list.getComponent(i) != want.get(i)) {
+                // a component shown further down is moved up from there
+                list.add(want.get(i), i);
+            }
+        }
+        while (list.getComponentCount() > want.size()) {
+            list.remove(list.getComponentCount() - 1);
+        }
+    }
+
+    private void place(final Card c, final List<Component> want) {
+        order.add(c);
+        want.add(c);
+        want.add(c.gap);
+    }
+
+    /** The session's name over a group, the same label while the group stays. */
+    private JLabel name(final String group, final String session, final Set<String> named) {
+        final String key = group + "\n" + session;
+        named.add(key);
+        return names.computeIfAbsent(key, k -> {
+            final JLabel l = Plain.only(new JLabel(session.isEmpty() ? "comando" : session));
+            l.setName("session");
+            l.setFont(l.getFont().deriveFont(Font.BOLD));
+            l.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, 0, Theme.SPACE_XS, 0));
+            l.setAlignmentX(Component.LEFT_ALIGNMENT);
+            return l;
+        });
+    }
+
+    /** {@code items} by session, each oldest first as given, the session with the oldest item first. */
+    private static <T> Map<String, List<T>> bySession(final List<T> items, final Function<T, String> session, final ToLongFunction<T> created) {
+        final Map<String, List<T>> groups = new LinkedHashMap<>();
+        for (final T t : items) {
+            groups.computeIfAbsent(session.apply(t), k -> new ArrayList<>()).add(t);
+        }
+        final List<Map.Entry<String, List<T>>> sorted = new ArrayList<>(groups.entrySet());
+        sorted.sort(Comparator.comparingLong(e -> e.getValue().stream().mapToLong(created).min().orElse(Long.MAX_VALUE)));
+        final Map<String, List<T>> out = new LinkedHashMap<>();
+        for (final Map.Entry<String, List<T>> e : sorted) {
+            out.put(e.getKey(), e.getValue());
+        }
+        return out;
     }
 
     @Override
@@ -244,10 +373,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return scroll.getViewport().getViewPosition().y;
     }
 
-    /** Moves the keyboard focus to the oldest card. */
+    /** Moves the keyboard focus to the first card: this session's oldest, else the oldest of the session next in line. */
     public void focusFirst() {
-        if (!cards.isEmpty()) {
-            focus.request(cards.values().iterator().next());
+        if (!order.isEmpty()) {
+            focus.request(order.getFirst());
         }
     }
 
@@ -261,6 +390,9 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         final long now = clock.getAsLong();
         for (final Card c : cards.values()) {
             c.age.setText(age(c.approval.createdMillis(), now));
+        }
+        for (final DecisionRow r : decisions.values()) {
+            r.age.setText(age(r.decision.createdMillis(), now));
         }
     }
 
@@ -299,20 +431,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     }
 
     private void neighbour(final Card from, final int step) {
-        final List<Card> order = new ArrayList<>(cards.values());
         final int i = order.indexOf(from) + step;
         if (i >= 0 && i < order.size()) {
             focus.request(order.get(i));
         }
-    }
-
-    private int indexOf(final Component c) {
-        for (int i = 0; i < list.getComponentCount(); i++) {
-            if (list.getComponent(i) == c) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private void answer(final Approval a, final ApprovalDecision d) {
@@ -330,6 +452,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         private final Approval approval;
         private final JTextField note = new JTextField(28);
         private final JLabel age = Plain.only(new JLabel());
+        /** The space under the card. */
+        private final Component gap = Box.createVerticalStrut(Theme.GAP);
         /** Each question's option buttons: radio buttons in a group, or check boxes when it allows several. */
         private final Map<String, List<AbstractButton>> questions = new LinkedHashMap<>();
         private final Map<String, JTextComponent> other = new LinkedHashMap<>();
@@ -350,6 +474,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
 
         Card(final Approval a) {
             this.approval = a;
+            setName("approval-" + a.id());
             final JsonNode in = Json.parse(a.inputJson());
             this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asString("")) : null;
             setLayout(new BorderLayout(0, Theme.GAP));
@@ -780,6 +905,76 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         public Dimension getMaximumSize() {
             return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
         }
+    }
+
+    /** A decision held back: its title, its detail (muted), its age, Settle and Dismiss. It takes no keyboard. */
+    private final class DecisionRow extends JPanel {
+        private final Decision decision;
+        private final JLabel age = Plain.only(new JLabel());
+        private final JButton settle;
+        /** The space under the row. */
+        private final Component gap = Box.createVerticalStrut(Theme.GAP);
+
+        DecisionRow(final Decision d) {
+            this.decision = d;
+            setName("decision-" + d.id());
+            setFocusable(false);
+            setLayout(new BorderLayout(0, Theme.GAP));
+            setBorder(border(Theme.CARD_BORDER));
+            setBackground(Theme.CARD);
+            setAlignmentX(Component.LEFT_ALIGNMENT);
+            final JPanel head = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            head.setOpaque(false);
+            // the title comes from Claude: shown as text, never as HTML
+            final JLabel title = Plain.only(new JLabel());
+            title.setText(d.title() + "  ");
+            title.setName("title");
+            title.setFont(title.getFont().deriveFont(Font.BOLD));
+            title.setIcon(Icons.get("hourglass"));
+            age.setName("age");
+            age.setForeground(Theme.MUTED);
+            age.setText(ApprovalInbox.age(d.createdMillis(), clock.getAsLong()));
+            head.add(title);
+            head.add(age);
+            add(head, BorderLayout.NORTH);
+            if (!d.detail().isBlank()) {
+                final JTextArea detail = muted(d.detail());
+                detail.setName("detail");
+                add(detail, BorderLayout.CENTER);
+            }
+            final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+            buttons.setOpaque(false);
+            settle = button("Settle", "checkpoint", () -> context.intents().dispatch(new Intent.SettleDecision(d.id())), false);
+            settle.setName("settle");
+            settle.setToolTipText(Plain.text(SETTLE_TIP.formatted(d.session())));
+            buttons.add(settle);
+            final JButton dismiss = button("Dismiss", "close", () -> context.intents().dispatch(new Intent.DismissDecision(d.id())), false);
+            dismiss.setName("dismiss");
+            dismiss.setToolTipText("Drops the decision unasked");
+            buttons.add(dismiss);
+            add(buttons, BorderLayout.SOUTH);
+        }
+
+        /** Settle off while the session it would go to runs its checkpoint, which refuses it (record 130). */
+        void settleable(final boolean on) {
+            settle.setEnabled(on);
+            settle.setToolTipText(Plain.text(on ? SETTLE_TIP.formatted(decision.session())
+                    : "The session runs its checkpoint; Settle once it has ended"));
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+    }
+
+    /** A group's header, as the sidebar's and the Files tab's. */
+    private static JLabel section(final String text) {
+        final JLabel l = SidebarLook.header(text);
+        l.setName("section");
+        l.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_M, 0, Theme.SPACE_XS, 0));
+        l.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return l;
     }
 
     private static void collect(final Component c, final List<Component> out) {

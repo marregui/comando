@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -338,6 +339,37 @@ public sealed interface Intent {
 
     /** The waiting call ended without an answer (timeout, session gone). */
     record ApprovalWithdrawn(long id, String reason) implements Intent {
+    }
+
+    // ---- decisions held back (record 131)
+
+    /** A session's automatic checkpoint held a decision back for the user: it joins the Approvals tab's Later group. */
+    record DecisionHeldBack(String session, String title, String detail) implements Intent {
+    }
+
+    /** A checkpoint the user started settled these decisions: they leave the Later group. */
+    record DecisionsSettled(List<Long> ids) implements Intent {
+        public DecisionsSettled {
+            ids = List.copyOf(ids);
+        }
+    }
+
+    /** The decisions {@code decisions.json} holds, read at start. */
+    record DecisionsRead(List<Decision> decisions) implements Intent {
+        public DecisionsRead {
+            decisions = List.copyOf(decisions);
+        }
+    }
+
+    /**
+     * Settle: sends the checkpoint command of the decision's session, without the automatic argument, so the session
+     * asks the user what was held back; the focused panel's session when the decision's session is gone.
+     */
+    record SettleDecision(long id) implements Intent {
+    }
+
+    /** Dismiss: the decision leaves the Later group unasked. */
+    record DismissDecision(long id) implements Intent {
     }
 
     // ---- views

@@ -148,7 +148,7 @@ session's panel, as the palette's "Compact the conversation" does: the same conv
 it and shows the compaction, and the panel's text stays
 ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)).
 
-comando runs the same sequence by itself, the checkpoint command then `/compact`, when a turn ends with the context at
+comando runs the same sequence by itself, the checkpoint command with `--auto` then `/compact`, when a turn ends with the context at
 or above the checkpoint threshold: `sessions.checkpointThresholdTokens` in comando's `settings.json`, 400,000 tokens by
 default, 0 for never, changed with the palette's "Checkpoint threshold…". It runs once per crossing: any checkpoint
 command sent disarms it, and a turn that ends below the threshold arms it again. It waits while a prompt is queued (the
@@ -173,9 +173,17 @@ wait. Stop in the panel's header (⌘.) interrupts the checkpoint: the lock lift
 a blank answer or a process that ends lifts it the same way. A prompt another session or an agent sends queues, as it
 does while the session works, and runs once the checkpoint's turn has ended, unlocked; anything else that acts on the
 session (a prompt from its panel, Fresh, Checkpoint, Compact, its settings, Remove) is refused without a notice. The
-Session tab is greyed, not blocked: an approval the checkpoint asks for can still be answered. While the checkpoint's
+Session tab is greyed, not blocked, and its veil lifts while the session has a waiting card, so a card the checkpoint
+asks for looks as answerable as it is ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)). While the checkpoint's
 turn has handed work to the background and no turn runs, the session is not locked. The lock is the session's live
 state, never stored: comando started again shows none. Other sessions and their panels are not touched.
+
+An automatic checkpoint asks the user nothing ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): its command carries `--auto` (`/reflect --auto`), so a
+command that knows it holds each decision it would have asked back with `decision_hold` instead of raising a card, and
+the session never waits on the user. A decision held back waits in the Approvals tab's Later group
+([§4.1](#41-approval-cards)), kept in `decisions.json` across restarts, until a checkpoint the user starts (the Checkpoint
+button, a typed `/reflect`, or **Settle**) asks it and settles it with `decisions_settled`. The Checkpoint button and a
+typed command carry no argument and ask as before; answering their cards is what lets the checkpoint finish.
 
 ## 3. MCP tools
 
@@ -223,6 +231,7 @@ sends for the same gesture:
 | sessions | `session_new` (name, work dir, model, effort, permission mode, extra directories, checkpoint, and an optional first `prompt` that starts it), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
 | panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
+| decisions held back | `decision_hold` (title, detail; the calling session's automatic checkpoint holds a decision back), `decisions_settled` (ids), `decision_settle`, `decision_dismiss` (id; the Later group's buttons); `ui_get_state` lists `later` with ids ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
 | views and the window | `view_pin`, `view_close`, `notice_dismiss` |
 | servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
@@ -319,7 +328,13 @@ how Claude Code matches them and never allow more than the command could do (`Pe
   while empty; ⌘⏎ denies with the note. ↑ and ↓ move between cards. The keyboard is never taken from outside the tab.
 - A new card brings the Approvals tab forward; the keyboard stays where it is, so typing in the editor goes on. While a
   card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
-- The Approvals tab comes forward at its top, the oldest card first, however it is brought forward (a new card, a
+- The Approvals tab is one queue for the window, in groups ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): the focused panel's session's cards first,
+  under its name; then each other session's cards under its name, the group holding the oldest card first; then
+  **Later**, the decisions automatic checkpoints held back, under each session's name, each with its title, detail and
+  age, **Settle** (sends that session its checkpoint command without `--auto`, so it asks; the focused panel's session
+  when the decision's own is gone; off while that session's checkpoint runs) and **Dismiss** (drops it unasked). The
+  title counts both, "Approvals (2 · 3 later)"; a decision held back brings nothing forward and posts no notice.
+- The Approvals tab comes forward at its top, the focused session's oldest card first, however it is brought forward (a new card, a
   click, ⌃2); a card arriving while it is in front, or while the keyboard is in a card, moves nothing.
 - Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the
   session that asked, with the keyboard; a card withdrawn, or answered after the user moved to another tab, moves

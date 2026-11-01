@@ -26,6 +26,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -172,6 +173,10 @@ final class ActionTools {
             case "panel_cancel" -> send(new Intent.CancelRun(panel(s, args, false).id()));
             case "panel_refresh" -> send(new Intent.RefreshSql(panel(s, args, false).id(), text(args, "sql")));
             case "approval_answer" -> approvalAnswer(caller, s, args);
+            case "decision_hold" -> decisionHold(caller, s, args);
+            case "decisions_settled" -> send(new Intent.DecisionsSettled(ids(args)));
+            case "decision_settle" -> send(new Intent.SettleDecision(decision(s, args).id()));
+            case "decision_dismiss" -> send(new Intent.DismissDecision(decision(s, args).id()));
             case "connection_save" -> connectionSave(s, args);
             case "connection_test" -> send(new Intent.TestConnection(connection(s, args).spec()));
             case "connection_open" -> send(new Intent.OpenConnection(connection(s, args).name()));
@@ -189,7 +194,8 @@ final class ActionTools {
                     : s.folders().stream().map(f -> f.name()).toList()));
             default -> throw new IllegalArgumentException(tool + " has no runner yet");
         };
-        if (action.kind() != Action.Kind.READ && !done.startsWith("refused")) {
+        // a decision held back brings nothing forward (record 131): no notice
+        if (action.kind() != Action.Kind.READ && !done.startsWith("refused") && !"decision_hold".equals(tool)) {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, caller + ": " + tool.replace('_', ' ') + " — " + done, false, ""));
         }
         return done.startsWith("refused") ? McpTools.Outcome.fail(done) : McpTools.Outcome.ok(done);
@@ -302,6 +308,42 @@ final class ActionTools {
             default -> throw new IllegalArgumentException("decision is allow, deny or answer");
         };
         return send(new Intent.ApprovalAnswered(id, decision));
+    }
+
+    /**
+     * Holds a decision back for the calling session (record 131). Only a session holds a decision back: the Later group
+     * lists each under the session whose checkpoint held it. It answers no id: the checkpoint that settles it later reads
+     * the ids from {@code ui_get_state}.
+     */
+    private String decisionHold(final String caller, final AppState s, final JsonNode args) {
+        if (s.session(caller).isEmpty()) {
+            return "refused: " + caller + " is not a session; a decision is held back by the session whose automatic checkpoint runs";
+        }
+        final String sent = send(new Intent.DecisionHeldBack(caller, text(args, "title"), args.path("detail").asString("").strip()));
+        return sent.startsWith("refused") ? sent
+                : "held back; it waits in the Approvals tab's Later group until a checkpoint the user starts settles it";
+    }
+
+    private static Decision decision(final AppState s, final JsonNode args) {
+        final long id = args.path("id").asLong(-1);
+        return s.decision(id).orElseThrow(() -> new IllegalArgumentException("no decision " + id + "; held back: "
+                + s.later().stream().map(d -> d.id() + " (" + d.session() + ", " + d.title() + ")").toList()));
+    }
+
+    /** {@code decisions_settled}'s ids: a JSON array of integers, nothing else. */
+    private static List<Long> ids(final JsonNode args) {
+        final JsonNode a = args.path("ids");
+        if (!a.isArray()) {
+            throw new IllegalArgumentException("ids is a list of integers, the decisions' ids from ui_get_state");
+        }
+        final List<Long> out = new ArrayList<>();
+        for (final JsonNode x : a) {
+            if (!x.isIntegralNumber() || !x.canConvertToLong()) {
+                throw new IllegalArgumentException("ids is a list of integers; " + x + " is not one");
+            }
+            out.add(x.asLong());
+        }
+        return out;
     }
 
     private String connectionSave(final AppState s, final JsonNode args) {

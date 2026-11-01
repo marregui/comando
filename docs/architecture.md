@@ -97,6 +97,7 @@ One immutable record of metadata and ids. Lists hold tens of entries, so lookups
 | `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group whose row shows them ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
+| `later` | the decisions automatic checkpoints held back, oldest first, kept in `decisions.json` (record 131) |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
 | `lowerTab` | the selected lower tab: Session, Approvals, Terminal, Results, or a view |
 | `notice`, `notices` | the standing status-bar message (level, text, time, subject) and the last 50 |
@@ -118,6 +119,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Connections | `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `SchemaChanged`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
 | Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `SessionRanAt` (the model and effort a turn ran at), `SessionContext` (record 120), `PromptSession` (one session prompting another, record 44, and an instance's consult, record 123), `PlanUsageRead` |
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
+| Decisions held back | `DecisionHeldBack`, `DecisionsSettled`, `DecisionsRead`, `SettleDecision`, `DismissDecision` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
 | Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead`, `RollBack`, `RemoveFiles`, `Unstage` (the git writes of the Changes view and the comparison window) |
@@ -134,7 +136,7 @@ arguments, a `Clock`, the home folder and the checkpoint threshold (a window set
 tests drive it with a fake clock. Nothing a user or an adapter sends makes it throw: an intent naming a missing panel,
 connection or session changes nothing or sets a notice. `Reducer` holds the entry point and dispatches each intent to
 the rules of its domain, package-private classes beside it: `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules`
-(runs and connections), `ApprovalRules`, `FolderRules`, `ViewRules`, with `Shared` for the helpers several use
+(runs and connections), `ApprovalRules`, `DecisionRules`, `FolderRules`, `ViewRules`, with `Shared` for the helpers several use
 (notices, the saved lists, fresh panel ids).
 
 | Rule | What the reducer does |
@@ -166,7 +168,7 @@ queues and returns.
 | `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ClearTranscript`, `ForgetSession`, `ShowSubagent` |
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowRepos`, `ShowChange`, `ShowPlanUsage` |
-| `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
+| `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SaveDecisions`, `SavePanels` |
 | `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles`, `WatchRepos`, `ReadChange`, `RollBack`, `RemoveFiles`, `Unstage` |
 
 `StateLoop` runs one intent at a time: the observers (the intent log), the reducer, whose new `AppState` it publishes
@@ -217,7 +219,7 @@ returns; outcomes come back as intents.
 | `ApprovalPort` | `resolve` | `mcp` `McpServer` | `EffectRouter` |
 | `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange`, `rollBack`, `removeFiles`, `unstage` | `tools` `ToolsAdapter` | `EffectRouter` |
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage` | `ui` `ComandoUi` | `EffectRouter` |
-| `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `app` `Store` | `EffectRouter` |
+| `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `saveDecisions`, `savePanels` | `app` `Store` | `EffectRouter` |
 | `InstancesPort` | `ask`, `deny`, `forget`, `role` (the Instances tab's acts, off the caller's thread; record 124) | `mcp` `Peers` | `ui` (the Instances tab; the outcome comes back as a notice and in `AppState.instances`) |
 | `ServerSwitch` | `name`, `isRunning`, `want(up)`, `status` (a local server an agent starts or stops, record 121) | `app` `EmbeddedEdge`, `EmbeddedQuestDb` | `mcp` (`ActionTools`: `server_start`, `server_stop`) |
 
@@ -358,11 +360,11 @@ registries for data too large to copy with every state in [§4.5](#45-stores-out
 | `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo`; `InstancesState`, the other instances on the comando Edge and the questions between them ([record 124](adr/0124-the-sidebar-shows-the-instances.md)) |
 | `intent` | `Intent`, the sealed interface of every change; `EditMode` |
 | `action` | `Action` and `Actions`: every user action as an agent's tool, with its arguments and class, and every kind of intent classified (offered, event, window, not yet) ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)) |
-| `reduce` | `Reducer`; the rules of each domain ([§4.3](#43-the-reducer)): `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules`, `ApprovalRules`, `FolderRules`, `ViewRules`, `Shared`; `Transition` (the next state and its effects) |
+| `reduce` | `Reducer`; the rules of each domain ([§4.3](#43-the-reducer)): `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules`, `ApprovalRules`, `DecisionRules`, `FolderRules`, `ViewRules`, `Shared`; `Transition` (the next state and its effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog`, `ExecutorStop` (an owner's bounded stop of its executors), with `Threads.alive` listing the live threads by name for tests; `Processes`, the one way a short command is run |
 | `port` | the interfaces adapters implement ([§8.2](#82-interface-with-the-rest-of-the-app)); among them `InstancesPort` (`ask`, `deny`, `forget`, `role`: what the user does from the Instances tab, implemented by `mcp`'s `Peers`, record 124) and `ServerSwitch` (`name`, `isRunning`, `want(up)`, `status`: a local server an agent starts or stops naming the direction, the comando Edge or the embedded QuestDB, record 121) |
-| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
+| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `Decision` (a decision an automatic checkpoint held back), `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |

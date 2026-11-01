@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted; amended on 2026-10-29 (see Amendments); the corner gains the comando Edge's toggle by [record 122](0122-instances-name-kit-brain-data-root-edge.md) | Miguel and Claude |
+| 2026-10-28 | accepted; amended on 2026-10-29 and 2026-11-01 (see Amendments); the corner gains the comando Edge's toggle by [record 122](0122-instances-name-kit-brain-data-root-edge.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -30,3 +30,9 @@ from the swatch). `Snapshot` and `DocImages` start QuestDB from the corner's but
 ## Amendments
 
 2026-10-29: Help gains Show the Edge's log and Show QuestDB's log, after Show the log.
+
+2026-11-01: the corner loses the shell's button (Miguel: "that button should not exist"). A panel's shell starts when
+its Terminal tab is shown, and an exited shell offers its restart bar, so a button to start it duplicated the tab.
+`terminal.start`, `terminal.stop` and `terminal.restart` stay as commands in the palette (area Run). The corner holds
+the refreshing plots, then the embedded QuestDB and the comando Edge when comando has them. Tested in `MenusTest` (no
+shell command in the corner; the three in the palette's Run area) and `UiKeysTest` (no shell button in the row).

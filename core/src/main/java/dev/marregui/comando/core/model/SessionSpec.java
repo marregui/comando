@@ -37,6 +37,11 @@ public record SessionSpec(
 
     /** The checkpoint command of a session that never set one: what the Checkpoint button sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
+    /**
+     * The argument the automatic checkpoint adds to the checkpoint command ({@code /reflect --auto}), so the command can
+     * tell it from one the user started: it asks the user nothing and holds its decisions back (record 131).
+     */
+    public static final String AUTO_ARGUMENT = "--auto";
     /** Claude Code's command that compacts a conversation, sent by the compact buttons and the palette. */
     public static final String COMPACT_COMMAND = "/compact";
     /** The model families comando offers, in the palette, a session row's chips and the session dialog. */

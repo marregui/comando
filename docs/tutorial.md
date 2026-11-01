@@ -45,7 +45,7 @@ the sessions run on the kit, and the Files tab opens on its folders, its KIT row
 | Part | What it is |
 |---|---|
 | **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
-| **Tab row's right end** | start or stop the shell, stop refreshing plots, start or stop the embedded QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
+| **Tab row's right end** | stop refreshing plots, start or stop the embedded QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
 | **Sidebar**, left | four tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Outline** and **Preview** (Markdown), **Run**, **Stop**, **Locate**, **Clear**; rest the pointer on one for what a click does |
@@ -396,6 +396,7 @@ Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 | `settings.json` | the window's kept state: the theme, the window's size and dividers, the sidebar, the last Gradle tasks |
 | `themes/` | your own themes ([§1.6](#16-themes-of-your-own)) |
 | `opened-files` | the files you opened: a new file loses its dot once opened |
+| `decisions.json` | the decisions automatic checkpoints held back for you, listed under Later in the Approvals tab |
 | `instances-seen.json` | the other comando instances seen, so the Instances tab lists those that left until you forget them |
 | `questdb/` | the embedded QuestDB's data |
 | `edge/` | the comando Edge: its download, its installation, its configuration, data and logs |

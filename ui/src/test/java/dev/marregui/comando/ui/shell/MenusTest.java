@@ -62,19 +62,23 @@ class MenusTest {
                 .as("one separator between the palette and the help").isEqualTo(1);
     }
 
-    /// [Menus#corner] groups terminal, plot, server and Edge buttons, the Edge's after the server's, and leaves the
-    /// server or the Edge group out when comando has none; [Menus#toggles] lists the same pairs for the Connections
-    /// tab's menu.
+    /// [Menus#corner] groups plot, server and Edge buttons, the Edge's after the server's, and leaves the server or
+    /// the Edge group out when comando has none; the shell has no button, its commands are in the palette's Run area;
+    /// [Menus#toggles] lists the same pairs for the Connections tab's menu.
     @Test
-    void theCornerHoldsTheShellThePlotsTheServerAndTheEdgeOnlyWhenThereAreSome() {
-        assertThat(Menus.corner(true, true)).containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"),
+    void theCornerHoldsThePlotsTheServerAndTheEdgeOnlyWhenThereAreSomeAndNoShellButton() {
+        assertThat(Menus.corner(true, true).stream().flatMap(List::stream)).as("no shell button (record 114, amended)")
+                .doesNotContain("terminal.start", "terminal.stop", "terminal.restart");
+        assertThat(Menus.areas()).as("the shell's commands stay in the palette")
+                .containsEntry("terminal.start", "Run").containsEntry("terminal.stop", "Run").containsEntry("terminal.restart", "Run");
+        assertThat(Menus.corner(true, true)).containsExactly(List.of("run.plotStop"),
                 List.of("server.start", "server.stop"), List.of("edge.start", "edge.stop"));
         assertThat(Menus.corner(false, false)).as("no embedded server or Edge, no button for them")
-                .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"));
+                .containsExactly(List.of("run.plotStop"));
         assertThat(Menus.corner(true, false)).as("no Edge, no button for it")
-                .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"), List.of("server.start", "server.stop"));
+                .containsExactly(List.of("run.plotStop"), List.of("server.start", "server.stop"));
         assertThat(Menus.corner(false, true)).as("no embedded server, the Edge's button alone")
-                .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"), List.of("edge.start", "edge.stop"));
+                .containsExactly(List.of("run.plotStop"), List.of("edge.start", "edge.stop"));
         assertThat(Menus.toggles(true, true)).containsExactly("server.start", "server.stop", "edge.start", "edge.stop");
         assertThat(Menus.toggles(false, false)).isEmpty();
         assertThat(Menus.areas()).containsEntry("edge.start", "Connection").containsEntry("edge.stop", "Connection");

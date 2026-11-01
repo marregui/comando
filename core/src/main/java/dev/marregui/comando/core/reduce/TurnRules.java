@@ -97,11 +97,20 @@ final class TurnRules {
      * prompt since its clear: there is nothing new to compact, and the command runs alone.
      */
     static Transition checkpoint(final Clock clock, final AppState s, final String name) {
+        return checkpoint(clock, s, name, false);
+    }
+
+    /**
+     * The checkpoint; {@code automatic} adds {@link SessionSpec#AUTO_ARGUMENT} to the command, so a command that knows it
+     * asks the user nothing and holds its decisions back (record 131).
+     */
+    static Transition checkpoint(final Clock clock, final AppState s, final String name, final boolean automatic) {
         final Optional<SessionState> found = s.session(name);
         if (found.isEmpty()) {
             return Transition.of(s);
         }
-        final Transition t = sessionCommand(clock, s, name, found.get().spec().checkpoint());
+        final String command = found.get().spec().checkpoint();
+        final Transition t = sessionCommand(clock, s, name, automatic && !command.isBlank() ? command + ' ' + SessionSpec.AUTO_ARGUMENT : command);
         final boolean sent = t.effects().stream().anyMatch(e -> e instanceof Effect.SendToClaude);
         if (!sent || !found.get().spec().carried().isEmpty()) {
             return t;
@@ -132,6 +141,8 @@ final class TurnRules {
             case Intent.RemovePanel r -> s.panel(r.panel()).or(() -> s.closedPanel(r.panel()))
                     .filter(p -> !p.document()).map(p -> locked(s, p.session())).orElse(false);
             case Intent.ClearTranscript c -> locked(s, c.name());
+            // Settle sends the checkpoint command to a session: refused while that session's checkpoint runs
+            case Intent.SettleDecision d -> DecisionRules.target(s, d.id()).map(n -> locked(s, n)).orElse(false);
             default -> false;
         };
     }
@@ -249,7 +260,7 @@ final class TurnRules {
         // the compaction, or the automatic checkpoint, runs from the session's panel as the Compact and Checkpoint
         // buttons do: the Session tab shows it
         final Transition follow = compacts ? sessionCommand(clock, next, i.name(), SessionSpec.COMPACT_COMMAND)
-                : automatic ? checkpoint(clock, next, i.name()) : null;
+                : automatic ? checkpoint(clock, next, i.name(), true) : null;
         if (follow != null) {
             next = follow.state();
             effects.addAll(follow.effects());

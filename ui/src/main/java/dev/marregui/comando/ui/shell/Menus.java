@@ -48,8 +48,6 @@ final class Menus {
             Map.entry("help.questDbLog", "log"),
             Map.entry("help.dataRoot", "comando-folder"),
             // the corner's buttons
-            Map.entry("terminal.start", "terminal-start"),
-            Map.entry("terminal.stop", "terminal-stop"),
             Map.entry("run.plotStop", "chart-stop"),
             Map.entry("server.start", "database-start"),
             Map.entry("server.stop", "database-stop"),
@@ -70,6 +68,8 @@ final class Menus {
             Map.entry("session.toggle", "plug"),
             Map.entry("view.changes", "diff"),
             Map.entry("connection.toggle", "plug"),
+            Map.entry("terminal.start", "terminal-start"),
+            Map.entry("terminal.stop", "terminal-stop"),
             Map.entry("terminal.restart", "terminal-restart"));
 
     /** What each item of the bar and each button of the corner does, as its tooltip: one line. */
@@ -81,8 +81,6 @@ final class Menus {
             Map.entry("edit.paste", "Paste the clipboard's text at the caret"),
             Map.entry("edit.selectAll", "Select all of the focused text, table or transcript"),
             Map.entry("view.palette", "Run any command by typing part of its name"),
-            Map.entry("terminal.start", "Start the focused panel's shell, in its session's folder"),
-            Map.entry("terminal.stop", "Stop the focused panel's shell; what runs in it stops"),
             Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
             Map.entry("server.start", "Start QuestDB on this machine: PostgreSQL wire 8812, console 9000"),
             Map.entry("server.stop", "Stop the embedded QuestDB; its data stays"),
@@ -135,11 +133,12 @@ final class Menus {
     }
 
     /**
-     * The buttons left of the theme's swatch, each its commands, shown by the first that can run: the shell, the
-     * refreshing plots, then the embedded server and the Edge, each only when comando has one.
+     * The buttons left of the theme's swatch, each its commands, shown by the first that can run: the refreshing
+     * plots, then the embedded server and the Edge, each only when comando has one. The shell has no button (record 114,
+     * amended 2026-11-01): it starts when its tab is shown; Start, Stop and Restart the shell are in the palette.
      */
     static List<List<String>> corner(final boolean server, final boolean edge) {
-        final List<List<String>> buttons = new ArrayList<>(List.of(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop")));
+        final List<List<String>> buttons = new ArrayList<>(List.of(List.of("run.plotStop")));
         if (server) {
             buttons.add(List.of("server.start", "server.stop"));
         }

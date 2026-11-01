@@ -34,6 +34,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PermissionRules;
@@ -582,6 +583,12 @@ public final class McpTools {
             n.put("kind", a.kind().name().toLowerCase(Locale.ROOT));
             n.put("tool", a.toolName());
             n.put("summary", clip(a.summary(), 300));
+        }
+        // the decisions automatic checkpoints held back, oldest first: the Approvals tab's Later group (record 131)
+        final ArrayNode later = root.putArray("later");
+        for (final Decision d : s.later()) {
+            later.addObject().put("id", d.id()).put("session", d.session()).put("title", d.title()).put("detail", d.detail())
+                    .put("created", d.createdMillis());
         }
         final ArrayNode folders = root.putArray("folders");
         s.folders().forEach(f -> folders.addObject().put("name", f.name()).put("path", f.path()));

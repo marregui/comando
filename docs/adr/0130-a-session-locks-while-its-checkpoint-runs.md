@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-31 | accepted; built | Miguel and Claude |
+| 2026-10-31 | accepted; built; amended by [record 131](0131-an-automatic-checkpoint-asks-nothing.md) (the Session tab's veil lifts while a card waits) | Miguel and Claude |
 
 ## 1. Context
 
@@ -67,3 +67,7 @@ sent; a second checkpoint locked through its `/compact` and unlocked when the co
 | a notice for each refused intent | the controls are off; a refusal comes only from a key or an agent, and a notice per keystroke is noise |
 | lock only the button's and the automatic checkpoint | a typed `/reflect` summarises the same conversation; the user would type into it by habit just the same |
 | keep the lock through background work the checkpoint handed off | nothing runs to interrupt meanwhile; the lock could only be left by stopping the process |
+
+## Amendments
+
+2026-11-01, [record 131](0131-an-automatic-checkpoint-asks-nothing.md): the Session tab's veil lifts while the checkpointing session has a waiting card, so the card looks as answerable as it is, and returns when none waits; what the reducer refuses is unchanged.

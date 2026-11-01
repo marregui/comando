@@ -31,6 +31,7 @@ import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
@@ -139,6 +140,11 @@ public final class App implements AutoCloseable {
             owned.push(loop);
             store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
             store.onFoldersChanged(folders -> loop.dispatch(new Intent.FoldersRead(folders)));
+            // the decisions automatic checkpoints held back in earlier runs wait in the Later group again (record 131)
+            final List<Decision> held = store.loadDecisions();
+            if (!held.isEmpty()) {
+                loop.dispatch(new Intent.DecisionsRead(held));
+            }
             if (log != null) {
                 loop.addObserver(log);
             }

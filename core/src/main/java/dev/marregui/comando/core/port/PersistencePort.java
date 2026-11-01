@@ -3,6 +3,7 @@ package dev.marregui.comando.core.port;
 import java.util.List;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
@@ -15,6 +16,9 @@ public interface PersistencePort {
     void saveSessions(List<SessionSpec> specs);
 
     void saveFolders(List<FolderRoot> folders);
+
+    /** The decisions automatic checkpoints held back (record 131). */
+    void saveDecisions(List<Decision> decisions);
 
     /** The open panels, in tab order, and the closed panels of comando's own, which keep their files. */
     void savePanels(List<PanelState> panels, List<PanelState> closed);
