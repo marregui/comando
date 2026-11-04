@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -308,6 +309,14 @@ class ClaudeAdapterTest {
         }
     }
 
+    /** Whether the platform thread named {@code name} is inside a native read under a {@link java.io.BufferedReader}. */
+    private static boolean readingStdout(final String name) {
+        return Thread.getAllStackTraces().entrySet().stream()
+                .filter(e -> e.getKey().getName().equals(name))
+                .anyMatch(e -> e.getValue().length > 0 && e.getValue()[0].isNativeMethod()
+                        && Arrays.stream(e.getValue()).anyMatch(f -> f.getClassName().equals("java.io.BufferedReader")));
+    }
+
     private static Field field(final String name) throws NoSuchFieldException {
         final Field f = ClaudeAdapter.class.getDeclaredField(name);
         f.setAccessible(true);
@@ -318,16 +327,22 @@ class ClaudeAdapterTest {
     /// (the drain bound, here a minute, does not end it first); a start in between replaces it. The replaced process's
     /// token is revoked when its exit is handled, and the newer process keeps its own: a replaced run leaves no live
     /// bearer token behind. The child holds the output until the test creates `release`, so no step races a clock.
+    /// The first process exits only once its stdout reader is blocked in a read: the JDK's process reaper drains and
+    /// closes the pipe at the exit unless a reader holds the stream then, and a pipe closed that way ends the read at
+    /// once, so an exit before the read started (on Linux, every run in a container) would be handled before the
+    /// replacing start.
     @Test
     void aReplacedProcessHasItsTokenRevokedAtItsExit() throws Exception {
         final Path exe = tmp.resolve("replaced-claude.sh");
         Files.writeString(exe, """
                 #!/bin/sh
-                # stands in for claude -p: the first run exits at once while a child keeps its stdout open until the
-                # test creates release, so its exit is handled only then; a later run reads its input until it closes
+                # stands in for claude -p: the first run exits when the test creates go, while a child keeps its
+                # stdout open until the test creates release, so its exit is handled only then; a later run reads its
+                # input until it closes
                 if [ ! -f "$PWD/first.pid" ]; then
                   ( while [ ! -f "$PWD/release" ]; do sleep 0.05; done ) &
                   echo $$ > "$PWD/first.pid"
+                  while [ ! -f "$PWD/go" ]; do sleep 0.05; done
                   exit 0
                 fi
                 cat > /dev/null
@@ -343,6 +358,8 @@ class ClaudeAdapterTest {
             final Path pidFile = tmp.resolve("first.pid");
             Awaitility.await().atMost(WAIT).until(() -> Files.exists(pidFile) && !Files.readString(pidFile).isBlank());
             final long pid = Long.parseLong(Files.readString(pidFile).strip());
+            Awaitility.await("the stdout reader blocked in a read").atMost(WAIT).until(() -> readingStdout("claude-out-work"));
+            Files.writeString(tmp.resolve("go"), "");
             Awaitility.await().atMost(WAIT).until(() -> ProcessHandle.of(pid).map(h -> !h.isAlive()).orElse(true));
 
             adapter.start(spec); // the child still holds the first process's output: its exit is not handled yet
