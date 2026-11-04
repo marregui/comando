@@ -27,15 +27,22 @@ class CodexUsageReaderTest {
     private static final long NOW = 1_793_084_400_000L;
     private static final long FIVE_HOURS_ON = NOW / 1000 + 5 * 3600;
     private static final long WEEK_ON = NOW / 1000 + 6 * 86_400;
+    /// A reset in 2096: a read through the real executable compares resets with the wall clock, not `NOW`, so a
+    /// reset tied to `NOW` passes in real time (`WEEK_ON` did on 2026-11-02 and turned the week's 3 % into 0).
+    private static final long FAR_RESET = 4_000_000_000L;
 
     /** The answer of {@code codex app-server} to {@code account/rateLimits/read} on a Plus plan, codex-cli 0.163.0. */
     private static String answer(final double session, final long sessionResets, final double week) {
+        return answer(session, sessionResets, week, WEEK_ON);
+    }
+
+    private static String answer(final double session, final long sessionResets, final double week, final long weekResets) {
         return """
                 {"id":2,"result":{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","limitName":null,\
                 "primary":{"usedPercent":%s,"windowDurationMins":300,"resetsAt":%d},\
                 "secondary":{"usedPercent":%s,"windowDurationMins":10080,"resetsAt":%d},\
                 "credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"planType":"plus","rateLimitReachedType":null}}}"""
-                .formatted(session, sessionResets, week, WEEK_ON);
+                .formatted(session, sessionResets, week, weekResets);
     }
 
     @TempDir
@@ -89,7 +96,7 @@ class CodexUsageReaderTest {
                     *'"id":2'*) printf '%%s\\n%%s\\n%%s\\n' '{"id":1,"result":{}}' '{"method":"account/updated","params":{"planType":"plus"}}' '%s'; exit 0 ;;
                   esac
                 done
-                """.formatted(requests, answer(4, 4_000_000_000L, 3).replace("'", "'\\''")));
+                """.formatted(requests, answer(4, FAR_RESET, 3, FAR_RESET).replace("'", "'\\''")));
         final PlanUsage u = CodexUsageReader.read(exe.toString(), JSON, Duration.ofSeconds(10), MADRID);
         assertThat(u.problem()).isEmpty();
         assertThat(u.windows()).extracting(PlanUsage.Window::percent).containsExactly(4, 3);
