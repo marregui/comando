@@ -138,7 +138,7 @@ three groups (Changed, Untracked, Removed), each by folder.
 
 On the left, the current message: click it to go where it is about (a failure's line in the log, which flashes);
 right-click it for the recent messages. On the right: your Claude plan's usage (the session window, the week, and a
-model's weekly window where the plan has one; rest the pointer on it for the reset times; read every 5 minutes), then
+model's weekly window where the plan has one; rest the pointer on it for the reset times; read every 20 minutes), then
 Codex's (session, week) when Codex is installed, then the queries and sessions working and the requests waiting for
 approval. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
 

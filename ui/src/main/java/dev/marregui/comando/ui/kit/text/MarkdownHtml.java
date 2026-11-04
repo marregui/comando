@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import org.commonmark.Extension;
+import org.commonmark.ext.gfm.tables.TableBlock;
 import org.commonmark.ext.gfm.tables.TableCell;
 import org.commonmark.ext.gfm.tables.TablesExtension;
 import org.commonmark.node.AbstractVisitor;
@@ -95,6 +96,20 @@ public final class MarkdownHtml {
         }
     }
 
+    /**
+     * Every table is a {@code grid}, its cells one pixel apart so the table's ground draws the lines between them
+     * ({@link HtmlPane#styles}), and says {@code border="0"}, which is how Swing draws one without it: each cell reads
+     * its table's border and, when the table has none, Swing parses the missing value as a number and catches the
+     * failure, once per cell of every page drawn.
+     */
+    private static final AttributeProvider TABLE_GRID = (node, tagName, attributes) -> {
+        if (node instanceof TableBlock) {
+            attributes.put("class", "grid");
+            attributes.put("cellspacing", "1");
+            attributes.put("border", "0");
+        }
+    };
+
     private static final List<Extension> EXTENSIONS = List.of(TablesExtension.create());
     private static final Parser PARSER = Parser.builder().extensions(EXTENSIONS).build();
     /** The parser for a marked text: every block and every run of text knows where its source is. */
@@ -105,6 +120,7 @@ public final class MarkdownHtml {
             .sanitizeUrls(true)
             .softbreak("<br>")
             .attributeProviderFactory(c -> new HeadingIds())
+            .attributeProviderFactory(c -> TABLE_GRID)
             .nodeRendererFactory(c -> new ImageAsText(c, Pictures.NONE))
             .nodeRendererFactory(c -> new ColouredCode(c, null, Marks.NONE))
             .nodeRendererFactory(NoteLinkHtml::new)
@@ -146,6 +162,7 @@ public final class MarkdownHtml {
                 .sanitizeUrls(true)
                 .softbreak("<br>")
                 .attributeProviderFactory(c -> new HeadingIds())
+                .attributeProviderFactory(c -> TABLE_GRID)
                 .nodeRendererFactory(c -> new ImageAsText(c, pictures))
                 .nodeRendererFactory(c -> new ColouredCode(c, mermaid, marks))
                 .nodeRendererFactory(NoteLinkHtml::new);
@@ -295,7 +312,7 @@ public final class MarkdownHtml {
 
     /** The front matter's facts as a table: the key muted, the value with its links. */
     static String facts(final List<FrontMatter.Fact> facts) {
-        final StringBuilder out = new StringBuilder("<table class=\"front\" cellspacing=\"0\">");
+        final StringBuilder out = new StringBuilder("<table class=\"front\" cellspacing=\"0\" border=\"0\">");
         for (final FrontMatter.Fact f : facts) {
             out.append("<tr><td class=\"front-key\" valign=\"top\">").append(escape(f.key()))
                     .append("</td><td class=\"front-value\">").append(linkedHtml(f.value())).append("</td></tr>");

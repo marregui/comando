@@ -45,6 +45,16 @@ class DarkPageTest {
         assertThat(HtmlPane.styles().getForeground(HtmlPane.styles().getRule("h2"))).isEqualTo(Tint.TROPICAL_FOREST.body);
     }
 
+    /// Panes share one sheet while the rules stay the same, and a tint change builds a new one: the rules are parsed
+    /// once per theme, not once per pane.
+    @Test
+    void panesShareOneSheetUntilTheRulesChange() {
+        final StyleSheet first = HtmlPane.styles();
+        assertThat(HtmlPane.styles()).as("the same rules: the same sheet").isSameAs(first);
+        Theme.tint(Tint.TROPICAL_FOREST);
+        assertThat(HtmlPane.styles()).as("another tint: a new sheet").isNotSameAs(first);
+    }
+
     /// [HtmlPane#fallBackInHeadings] wraps a run of private-use characters the serif cannot draw in a `Dialog` span
     /// inside a heading, but not inside its `code` or outside headings; a heading the serif draws whole is unchanged.
     /// Skipped when the serif draws every private-use character.

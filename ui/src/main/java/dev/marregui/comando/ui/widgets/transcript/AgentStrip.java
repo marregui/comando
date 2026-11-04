@@ -46,7 +46,7 @@ final class AgentStrip extends JPanel {
     private final Consumer<String> open;
     private final LongSupplier clock;
     private final SpinnerIcon spinner = new SpinnerIcon(12);
-    private final ShownTimer timer = new ShownTimer(this, SpinnerIcon.STEP_MILLIS, this::tick);
+    private final ShownTimer timer = SpinnerIcon.timer(this, this::tick);
     private final List<Chip> chips = new ArrayList<>();
     private final JLabel more = new JLabel();
     private List<RunningAgent> agents = List.of();

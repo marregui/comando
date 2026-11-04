@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -14,7 +15,6 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.format.Versions;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -66,8 +66,7 @@ final class SessionRow extends IconRow {
                     final Color background, final Color foreground, final String newestCli) {
         setOpaque(true);
         setBackground(background);
-        title.setForeground(foreground);
-        title.setText(titleHtml(s, open, focused, approvals, older(s, newestCli)));
+        title(title(s, open, focused, approvals, older(s, newestCli)), foreground);
         // its state is its icon: working spins, waiting on background work shows the hourglass
         power.setIcon(s.isBusy() ? working : s.isWaiting() ? Icons.get("hourglass") : Icons.get(SessionIcons.of(s.status())));
         power.setToolTipText(powerTip(s));
@@ -265,20 +264,26 @@ final class SessionRow extends IconRow {
     /**
      * The name, dimmed when its own panel is not open, in the accent colour while one of its panels has the focus; an
      * amber ↑ when it runs an older Claude Code than another running session ({@code newestCli} as in {@link #show});
-     * the context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
+     * the context in purple once the checkpoint is due; the approvals waiting. Never wraps.
      */
-    static String titleHtml(final SessionState s, final boolean open, final boolean focused, final int approvals, final String newestCli) {
-        return titleHtml(s, open, focused, approvals, olderCli(s, newestCli));
+    static Title title(final SessionState s, final boolean open, final boolean focused, final int approvals, final String newestCli) {
+        return title(s, open, focused, approvals, olderCli(s, newestCli));
     }
 
-    /** {@link #titleHtml(SessionState, boolean, boolean, int, String)} with the comparison of versions made. */
-    private static String titleHtml(final SessionState s, final boolean open, final boolean focused, final int approvals,
-                                    final boolean olderCli) {
-        final String older = olderCli ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
-        final String due = s.reflection().due() && SessionBar.showsCheckpoint(s)
-                ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
-        final String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
-        final String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
-        return "<html><nobr>" + name + MarkdownHtml.escape(s.name()) + "</b>" + older + due + badge + "</nobr></html>";
+    /** {@link #title(SessionState, boolean, boolean, int, String)} with the comparison of versions made. */
+    private static Title title(final SessionState s, final boolean open, final boolean focused, final int approvals,
+                               final boolean olderCli) {
+        final List<Mark> marks = new ArrayList<>(3);
+        if (olderCli) {
+            marks.add(new Mark("↑", Theme.ATTENTION));
+        }
+        if (s.reflection().due() && SessionBar.showsCheckpoint(s)) {
+            marks.add(new Mark(contextText(s).isEmpty() ? "◆" : contextText(s), Theme.THINKING));
+        }
+        if (approvals > 0) {
+            marks.add(new Mark("⚑" + approvals, Theme.ATTENTION));
+        }
+        final Color name = focused ? Theme.tint().body : open ? null : Theme.MUTED;
+        return new Title(s.name(), name, marks);
     }
 }

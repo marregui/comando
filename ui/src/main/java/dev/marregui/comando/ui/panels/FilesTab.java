@@ -3,8 +3,10 @@ package dev.marregui.comando.ui.panels;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
+import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -187,6 +189,16 @@ final class FilesTab {
     private Set<String> foundRows = Set.of();
     /** The open folders as last sent in {@link Intent.WatchFolders}; the adapter starts watching none. */
     private List<String> watched = List.of();
+    /**
+     * Whether the open folders are watched: false while the tab does not show or no comando window is active (comando
+     * in the background), when none is watched, so their repositories are read only as often as the closed folders'
+     * and their trees not at all; true again reads them at once. True until the tab first shows: one never shown
+     * (a test) is watched as it opens. A {@link #reveal} reads what it walks into whatever this says, and the watch
+     * drops back when it is done.
+     */
+    private boolean attended = true;
+    /** Whether the tab hears which window is active, from the first time it shows. */
+    private boolean hearingWindows;
     /** The open folders' open subfolders as last sent in {@link Intent.WatchFolders}, by folder name. */
     private Map<String, List<String>> watchedOpen = Map.of();
     /** A look at the watch is posted to follow the filter's text, after the edit under way. */
@@ -311,6 +323,29 @@ final class FilesTab {
         filter.setForeground(SidebarLook.TEXT);
         body.add(center, BorderLayout.CENTER);
         body.add(bottom, BorderLayout.SOUTH); // under the tree
+        body.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
+                if (body.isShowing() && !hearingWindows) {
+                    hearingWindows = true;
+                    // the tab lives as long as the window: the listener is never removed
+                    KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener("activeWindow", w -> attend());
+                }
+                attend();
+            }
+        });
+    }
+
+    /** Follows whether the tab shows in an active comando window; see {@link #attended}. */
+    private void attend() {
+        attention(body.isShowing() && KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow() != null);
+    }
+
+    /** Watches the open folders while {@code now}, none otherwise; see {@link #attended}. */
+    void attention(final boolean now) {
+        if (now != attended) {
+            attended = now;
+            watchOpen(false);
+        }
     }
 
     /** The tree, the filter under it. */
@@ -396,6 +431,10 @@ final class FilesTab {
             filter.setText("");
         }
         revealing = file.toAbsolutePath().normalize();
+        if (!attended) {
+            // the folders already open are read too: the walk may go down one of them
+            watchOpen(false);
+        }
         revealNext();
     }
 
@@ -410,7 +449,7 @@ final class FilesTab {
                 .max(Comparator.comparingInt(f -> Path.of(f.path()).normalize().getNameCount()));
         TreePath at = holder.map(f -> folderRow(f.name())).orElse(null);
         if (at == null) {
-            revealing = null;
+            revealed();
             tell.tell(tree.tree(), new Point(8, 8), "Not in a folder of the Files tab: " + Labels.shortPath(file.toString()));
             return;
         }
@@ -433,7 +472,7 @@ final class FilesTab {
                 if (!read.containsKey(f.name()) || notRead(node)) {
                     return; // its tree, or this folder's part of it, is on its way: show() goes on
                 }
-                revealing = null;
+                revealed();
                 tell.tell(tree.tree(), below(tree, at), "The Files tab does not show " + rel + " (left out, or not read)");
                 return;
             }
@@ -442,10 +481,18 @@ final class FilesTab {
                 tree.tree().expandPath(at);
             }
         }
-        revealing = null;
+        revealed();
         tree.tree().setSelectionPath(at);
         tree.tree().scrollPathToVisible(at);
         tree.tree().requestFocusInWindow();
+    }
+
+    /** Ends a {@link #reveal}: a tab not {@link #attended} watches nothing again. */
+    private void revealed() {
+        revealing = null;
+        if (!attended) {
+            watchOpen(false);
+        }
     }
 
     /** Whether {@code node} is a subfolder whose entries were not read, as the folder holding it was closed. */
@@ -1046,7 +1093,8 @@ final class FilesTab {
     /**
      * The open folders, in their order, each with its open subfolders so it is read only as deep as it shows; sent
      * when they changed, or when {@code force} and any is open. While the filter has text, the open folders are read
-     * whole, as it searches every level.
+     * whole, as it searches every level; while the tab is not {@link #attended}, none is sent, unless a
+     * {@link #reveal} is under way.
      */
     private void watchOpen(final boolean force) {
         final List<String> open = new ArrayList<>();
@@ -1056,9 +1104,11 @@ final class FilesTab {
                 open.add(f.name());
             }
         }
-        final Map<String, List<String>> inside = searching() ? Map.of() : openInside(open);
-        if (!open.equals(watched) || !inside.equals(watchedOpen) || force && !open.isEmpty()) {
-            watched = List.copyOf(open);
+        final boolean reading = attended || revealing != null;
+        final List<String> sent = reading ? open : List.of();
+        final Map<String, List<String>> inside = !reading || searching() ? Map.of() : openInside(open);
+        if (!sent.equals(watched) || !inside.equals(watchedOpen) || force && !sent.isEmpty()) {
+            watched = List.copyOf(sent);
             watchedOpen = inside;
             intents.dispatch(new Intent.WatchFolders(watched, watchedOpen));
         }

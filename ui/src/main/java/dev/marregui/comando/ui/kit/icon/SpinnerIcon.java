@@ -10,13 +10,17 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
 import javax.swing.Icon;
 
+import dev.marregui.comando.ui.kit.async.SharedClock;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * A bar wheel as an icon (record 42): bars around a centre, the head in the tint chosen and the bars behind it fading
  * into the ground, turning clockwise one bar per {@link #advance()}; the shades are read at each paint, so another
- * theme shows at the next turn. The icon has no clock of its own; its owner advances it on a timer and repaints where
- * it is drawn, so one icon serves every place that spins, in step. Not thread-safe: advanced and painted on the EDT.
+ * theme shows at the next turn. The icon has no clock of its own; its owner advances it on a {@link #timer} and
+ * repaints where it is drawn, so one icon serves every place an owner spins, in step. Every owner's timer ticks on one
+ * clock, so all the wheels on screen turn in the same event and are repainted in one pass. Not thread-safe: advanced
+ * and painted on the EDT.
  */
 public final class SpinnerIcon implements Icon {
 
@@ -24,6 +28,8 @@ public final class SpinnerIcon implements Icon {
     public static final int STEP_MILLIS = 80;
 
     private static final int BAR_COUNT = 8;
+    /** The one clock every spinner's timer ticks on. */
+    private static final SharedClock CLOCK = new SharedClock(STEP_MILLIS);
 
     private final int size;
     private final Area[] bars = new Area[BAR_COUNT];
@@ -48,6 +54,14 @@ public final class SpinnerIcon implements Icon {
             bar.transform(AffineTransform.getRotateInstance(2.0 * Math.PI / BAR_COUNT * i, c, c));
             bars[i] = bar;
         }
+    }
+
+    /**
+     * A timer owned by {@code owner} that runs {@code tick} every {@link #STEP_MILLIS} while it is wanted and the owner
+     * shows, on the clock all spinners share.
+     */
+    public static ShownTimer timer(final Component owner, final Runnable tick) {
+        return CLOCK.timer(owner, tick);
     }
 
     /** Turns the wheel one bar clockwise. */

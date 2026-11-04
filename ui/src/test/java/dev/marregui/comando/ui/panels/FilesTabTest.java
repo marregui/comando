@@ -148,6 +148,28 @@ class FilesTabTest {
         assertThat(f.labels()).as("an empty folder says so").containsExactly("KB", "Notes", FilesTab.EMPTY);
     }
 
+    /// A tab hidden, or comando in the background, unwatches its open folders, so the poll reads their repositories
+    /// only at the closed folders' pace and their trees not at all; attended again, it watches them as they are open,
+    /// subfolders included, and the adapter reads them at once. A folder opened while unattended is watched on return.
+    @Test
+    void anUnattendedTabWatchesNothingAndWatchesItsOpenFoldersAgainOnReturn() throws Exception {
+        final Fixture f = new Fixture(new FolderRoot("KB", "/kb", "", List.of()), new FolderRoot("Notes", "/n", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", notRead("deep")), file("a.md"))));
+        f.edt(() -> f.tree().expandRow(1));
+        f.intents.clear();
+
+        f.edt(() -> f.tab.attention(false));
+        assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of()));
+        f.edt(() -> f.tab.attention(false));
+        f.edt(() -> f.tree().expandRow(4));
+        assertThat(f.intents).as("unattended: opening a folder, or a second look, sends nothing").hasSize(1);
+
+        f.edt(() -> f.tab.attention(true));
+        assertThat(f.intents).last()
+                .isEqualTo(new Intent.WatchFolders(List.of("KB", "Notes"), Map.of("KB", List.of("/kb/tools"), "Notes", List.of())));
+    }
+
     /// Opening a subfolder sends its path with its folder's watch, so the adapter reads it and one level inside it;
     /// closing it takes the path out again.
     @Test
@@ -182,6 +204,27 @@ class FilesTabTest {
         assertThat(selected[0]).as("selected once its folder's entries arrive").isEqualTo("x.md");
         assertThat(f.intents).as("the way opened is watched, so the adapter reads it")
                 .contains(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of("/kb/tools", "/kb/tools/deep"))));
+    }
+
+    /// A reveal while the tab is not attended (comando in the background, an agent asking) still reads the way to the
+    /// file: the open folders and the subfolders it opens are watched until the file is selected, then nothing again.
+    @Test
+    void anUnattendedRevealReadsTheWayToTheFileAndThenWatchesNothing() throws Exception {
+        final Fixture f = new Fixture(new FolderRoot("KB", "/kb", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", notRead("deep")), file("a.md"))));
+        f.edt(() -> f.tab.attention(false));
+        f.intents.clear();
+
+        f.edt(() -> f.tab.reveal(Path.of("/kb/tools/deep/x.md")));
+        assertThat(f.intents).as("the way opened is watched, so the adapter reads it")
+                .contains(new Intent.WatchFolders(List.of("KB"), Map.of("KB", List.of("/kb/tools", "/kb/tools/deep"))));
+        f.edt(() -> f.show("KB", folder("KB", folder("tools", folder("deep", file("x.md"))), file("a.md"))));
+        final String[] selected = new String[1];
+        f.edt(() -> selected[0] = f.tree().getSelectionPath() == null ? null
+                : ((ViewSpec.TreeNode) ((DefaultMutableTreeNode) f.tree().getSelectionPath().getLastPathComponent()).getUserObject()).label());
+        assertThat(selected[0]).isEqualTo("x.md");
+        assertThat(f.intents).as("revealed: unattended again").last().isEqualTo(new Intent.WatchFolders(List.of()));
     }
 
     /** A subfolder whose entries were not read: the folder holding it was closed. */

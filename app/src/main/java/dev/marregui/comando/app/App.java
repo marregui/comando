@@ -84,7 +84,7 @@ public final class App implements AutoCloseable {
     /**
      * How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second.
      */
-    static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
+    static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(20);
     /** How often the kit's version and its remote's releases are read, on a strand of their own. */
     static final Duration KIT_EVERY = Duration.ofHours(6);
     /** How often the unbounded queues are read for the metrics log; a reading is written only when it changed. */

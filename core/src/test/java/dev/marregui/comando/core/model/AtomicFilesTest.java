@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.CopyOption;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - A write creates the target, and a second write replaces its content.
 /// - No temporary file is left after a write that succeeds.
 /// - A write that fails leaves no temporary file, leaves the target as it was, and reaches the caller.
+/// - A cleanup that fails after a failed write is kept as suppressed, never in place of the write's failure.
 /// - Where the file system cannot move atomically, a plain replacing move writes the file.
 /// - A file another program wrote is moved over the target.
 /// - A replaced file keeps its permissions; the temporary file's owner-only mode never reaches it.
@@ -66,6 +68,23 @@ class AtomicFilesTest {
         assertThat(Files.isDirectory(target)).isTrue();
         assertThat(Files.readString(target.resolve("inside.txt"))).isEqualTo("kept");
         assertThat(names()).containsExactly("taken");
+    }
+
+    /// A write whose move fails and whose cleanup fails too reaches the caller with the move's failure, the cleanup's
+    /// kept as suppressed: the cleanup never hides why the write failed.
+    @Test
+    void aFailedCleanupDoesNotHideWhyTheWriteFailed() {
+        final Path target = dir.resolve("panels.json");
+        final AtomicFiles.Mover refusing = (from, to, options) -> {
+            // the temporary file becomes a non-empty folder, which deleteIfExists cannot remove
+            Files.delete(from);
+            Files.createDirectory(from);
+            Files.writeString(from.resolve("inside.txt"), "x");
+            throw new IOException("move refused");
+        };
+        assertThatThrownBy(() -> AtomicFiles.write(target, new byte[] {1}, refusing))
+                .hasMessage("move refused")
+                .satisfies(e -> assertThat(e.getSuppressed()).singleElement().isInstanceOf(DirectoryNotEmptyException.class));
     }
 
     /// A mover that refuses `ATOMIC_MOVE` with [AtomicMoveNotSupportedException] is called again with

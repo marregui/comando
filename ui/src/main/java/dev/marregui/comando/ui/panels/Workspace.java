@@ -119,7 +119,7 @@ public final class Workspace {
     private final JPanel trailing = new JPanel(new GridBagLayout());
     /** One wheel for every spinning tab; the timer turns it and repaints only the spinning tabs' bounds. */
     private final SpinnerIcon spinner = new SpinnerIcon(16);
-    private final ShownTimer spin = new ShownTimer(tabs, SpinnerIcon.STEP_MILLIS, this::spinTabs);
+    private final ShownTimer spin = SpinnerIcon.timer(tabs, this::spinTabs);
     private Runnable attention = () -> {
     };
     private Consumer<PanelId> closer;

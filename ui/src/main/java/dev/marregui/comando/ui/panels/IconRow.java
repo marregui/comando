@@ -1,14 +1,19 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -16,6 +21,7 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * A resource's row in the sidebar, one line: its state icon, which a click connects or disconnects, its name with its
@@ -26,7 +32,33 @@ import dev.marregui.comando.ui.kit.icon.Icons;
  */
 abstract class IconRow extends JPanel {
 
-    protected final JLabel title = new JLabel();
+    /**
+     * A row's name and its marks, shown as plain text: the name in bold, in {@code nameColor} or, when that is null, the
+     * row's foreground; each mark after it in its own colour. Not HTML: a list paints its rows through one renderer,
+     * and an HTML label parses its text into a new document at every paint (the row's text, foreground and graphics
+     * configuration change per cell), which cost 35 % of comando's allocation while a spinner turned (2026-11-02).
+     */
+    record Title(String name, Color nameColor, List<Mark> marks) {
+        Title {
+            marks = List.copyOf(marks);
+        }
+    }
+
+    /** A mark after the name: {@code text} in {@code color}. */
+    record Mark(String text, Color color) {
+    }
+
+    /** The name: bold, in a font the look's updates keep bold. */
+    private final JLabel title = new JLabel() {
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            setFont(getFont().deriveFont(Font.BOLD));
+        }
+    };
+    /** The name and its marks on one line; the marks' labels are kept and reused, never parsed. */
+    private final JPanel line = new JPanel();
+    private final List<JLabel> marks = new ArrayList<>();
     protected final JButton power = new JButton();
     /** The ⓘ: drawn on the row the pointer is over; elsewhere its place stays empty, so no row changes width. */
     protected final JButton info = new JButton();
@@ -42,13 +74,52 @@ abstract class IconRow extends JPanel {
         power.setFocusable(false);
         power.setMargin(new Insets(0, 2, 0, 2));
         add(power, BorderLayout.WEST);
-        add(title, BorderLayout.CENTER);
+        line.setOpaque(false);
+        line.setLayout(new BoxLayout(line, BoxLayout.X_AXIS));
+        line.add(title);
+        add(line, BorderLayout.CENTER);
         info.putClientProperty("JButton.buttonType", "toolBarButton");
         info.setFocusable(false);
         info.setMargin(new Insets(0, 2, 0, 2));
         info.getAccessibleContext().setAccessibleName("Show the card");
         add(info, BorderLayout.EAST);
         hovered(false);
+    }
+
+    /** Shows {@code t} on the row's line, the name in {@code foreground} unless {@code t} gives its own colour. */
+    final void title(final Title t, final Color foreground) {
+        title.setText(t.name());
+        title.setForeground(t.nameColor() == null ? foreground : t.nameColor());
+        while (marks.size() < t.marks().size()) {
+            final JLabel mark = new JLabel();
+            mark.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_XS, 0, 0));
+            marks.add(mark);
+            line.add(mark);
+        }
+        for (int i = 0; i < marks.size(); i++) {
+            final boolean shown = i < t.marks().size();
+            marks.get(i).setVisible(shown);
+            if (shown) {
+                marks.get(i).setText(t.marks().get(i).text());
+                marks.get(i).setForeground(t.marks().get(i).color());
+            }
+        }
+    }
+
+    /** The line shown, as text: the name and the marks, one space apart; for tests. */
+    final String titleText() {
+        final StringBuilder sb = new StringBuilder(title.getText());
+        for (final JLabel m : marks) {
+            if (m.isVisible()) {
+                sb.append(' ').append(m.getText());
+            }
+        }
+        return sb.toString();
+    }
+
+    /** The colour the name is drawn in; for tests. */
+    final Color titleColor() {
+        return title.getForeground();
     }
 
     /** Whether the pointer is over this row: only then is its ⓘ drawn and clickable. */

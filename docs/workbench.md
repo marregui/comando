@@ -662,7 +662,8 @@ replaces the text.
   indented under an item; never inside a code block), and the notice gives the lines that still name it. A panel on a
   moved file is removed as for any file deleted outside.
 - **Sync.** Only folders whose rows are open are read: at once when opened, then every 5 s on `folder-poll`, sent only
-  when something changed. Each is read as deep as its open subfolders show (one level, plus each open subfolder and one
+  when something changed; while the Files tab does not show, or no comando window is active, none is read, and showing
+  again or coming back to comando reads them at once. Each is read as deep as its open subfolders show (one level, plus each open subfolder and one
   level inside it); opening or closing a subfolder reads it again at once. While the filter has text every folder is
   searched whole, one read in part and then closed included. A tree carries the settings it was read with and is dropped
   if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree keeps what
@@ -685,7 +686,8 @@ replaces the text.
   Changes view of what it holds: a repository's top folder all of the repository, a folder's row its folder only (KB's
   shows `KB/`, not the whole of `~/.claude`); with nothing to show, or no repository holding the folder, a balloon says
   so ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). The open folders' repositories are read
-  with them every 5 s, the others every 30 s ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
+  with them every 5 s, the others (and the open ones while the tab is not shown or comando is in the background) every
+  30 s ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
 - **Filter.** A field under the tree finds entries by name across every folder, reading never-read folders once; a
   second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The palette's Files
   command puts the keyboard there.
@@ -799,7 +801,8 @@ and the backups of the brain and the kit, which commit in their own repositories
 ### 7.2 Store files
 
 `JsonFile` writes through `AtomicFiles`: a temporary file of a unique name in the same folder, moved over the old one
-atomically where the file system can, so a crash leaves old or new, never torn. A file that cannot be parsed at start is
+atomically where the file system can, so a crash leaves old or new, never torn. A save whose bytes are the ones this
+run last wrote, to a file whose modification time and size are still those that write left, writes nothing. A file that cannot be parsed at start is
 renamed `<name>.corrupt-<millis>`. Every file comando keeps names its schema's version
 ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md), which lists each file and its schema): a JSON
 file as `"version"`, a file of lines (`opened-files`, `kit-folders`) in its first line. A file written before versions

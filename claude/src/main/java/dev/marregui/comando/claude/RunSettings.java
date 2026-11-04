@@ -1,10 +1,14 @@
 package dev.marregui.comando.claude;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 
 import tools.jackson.core.JacksonException;
@@ -15,8 +19,10 @@ import tools.jackson.databind.ObjectMapper;
  * The model and effort a session's message ran at, read from the transcript Claude Code writes beside its stream: the
  * stream's {@code assistant} event names the model but not the effort, while each assistant line of the transcript
  * carries both ({@code message.model}, {@code perTurnEffort}, else {@code effort}). A skill that sets {@code effort} or
- * {@code model}, a {@code /effort} or a {@code /model} shows there from the next message on. Reads only the file's last
- * {@value #TAIL} bytes, where the latest message's lines are; one reader per session, on the session's strand.
+ * {@code model}, a {@code /effort} or a {@code /model} shows there from the next message on. Looks only at the file's
+ * last {@value #TAIL} bytes, where the latest message's lines are, mapped and scanned in place from the end: only the
+ * line found is copied out and parsed, so a read that finds nothing (the retries while the line is not yet written)
+ * allocates next to nothing. One reader per session, on the session's strand.
  */
 final class RunSettings {
 
@@ -26,6 +32,9 @@ final class RunSettings {
 
     /** The bytes read from the transcript's end: the latest message's lines are well within them. */
     static final int TAIL = 256 * 1024;
+
+    private static final byte[] NEWLINE = {'\n'};
+    private static final byte[] ASSISTANT = "\"assistant\"".getBytes(StandardCharsets.UTF_8);
 
     private final Path projectsDir;
     private final ObjectMapper json;
@@ -49,24 +58,38 @@ final class RunSettings {
         if (f == null) {
             return Optional.empty();
         }
-        try {
-            final String tail = tail(f);
-            final String needle = "\"" + messageId + "\"";
-            for (int end = tail.length(); end > 0; ) {
-                final int start = tail.lastIndexOf('\n', end - 1) + 1;
-                final String line = tail.substring(start, end);
-                end = start - 1;
-                if (!line.contains(needle) || !line.contains("\"assistant\"")) {
-                    continue;
+        final byte[] needle = ('"' + messageId + '"').getBytes(StandardCharsets.UTF_8);
+        try (FileChannel channel = FileChannel.open(f, StandardOpenOption.READ); Arena arena = Arena.ofConfined()) {
+            final long length = channel.size();
+            if (length == 0L) {
+                return Optional.empty();
+            }
+            final long from = Math.max(0L, length - TAIL);
+            final MemorySegment tail = channel.map(FileChannel.MapMode.READ_ONLY, from, length - from, arena);
+            for (long at = lastIndexOf(tail, needle, tail.byteSize()); at >= 0L; ) {
+                final long lineStart = lastIndexOf(tail, NEWLINE, at) + 1L;
+                final long newline = indexOf(tail, NEWLINE[0], at);
+                final long lineEnd = newline < 0L ? tail.byteSize() : newline;
+                // a line cut by the tail's start is not whole; nothing before it is in the tail either
+                if (lineStart == 0L && from > 0L) {
+                    break;
                 }
-                final JsonNode e = json.readTree(line);
-                if (e.path("type").asString("").equals("assistant") && e.path("message").path("id").asString("").equals(messageId)) {
-                    final String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));
-                    return Optional.of(new Ran(e.path("message").path("model").asString(""), effort));
+                final MemorySegment line = tail.asSlice(lineStart, lineEnd - lineStart);
+                if (lastIndexOf(line, ASSISTANT, line.byteSize()) >= 0L) {
+                    final JsonNode e = json.readTree(line.toArray(ValueLayout.JAVA_BYTE));
+                    if (e.path("type").asString("").equals("assistant")
+                            && e.path("message").path("id").asString("").equals(messageId)) {
+                        final String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));
+                        return Optional.of(new Ran(e.path("message").path("model").asString(""), effort));
+                    }
                 }
+                at = lineStart == 0L ? -1L : lastIndexOf(tail, needle, lineStart - 1L);
             }
         } catch (final IOException | JacksonException e) {
-            // a line cut by the tail's start, or a file being rewritten: the next message reads again
+            // a line cut by the end of a write, or a file being rewritten: the next message reads again
+        } catch (final InternalError e) {
+            // the file was cut shorter while mapped: the JDK reports the fault on the mapped page as an InternalError;
+            // this reader holds no state the read could have left half-done, and the next message reads again
         }
         return Optional.empty();
     }
@@ -95,14 +118,36 @@ final class RunSettings {
         return file;
     }
 
-    private static String tail(final Path f) throws IOException {
-        try (final RandomAccessFile raf = new RandomAccessFile(f.toFile(), "r")) {
-            final long length = raf.length();
-            final int n = (int) Math.min(length, TAIL);
-            final byte[] bytes = new byte[n];
-            raf.seek(length - n);
-            raf.readFully(bytes);
-            return new String(bytes, StandardCharsets.UTF_8);
+    /**
+     * Where the last {@code needle} starting before {@code before} begins in {@code s}, or -1. A byte loop: the line is
+     * near the end, so a read stops after a few kilobytes.
+     */
+    private static long lastIndexOf(final MemorySegment s, final byte[] needle, final long before) {
+        final byte first = needle[0];
+        for (long i = Math.min(before, s.byteSize() - needle.length + 1L) - 1L; i >= 0L; i--) {
+            if (s.get(ValueLayout.JAVA_BYTE, i) == first && matches(s, i, needle)) {
+                return i;
+            }
         }
+        return -1L;
+    }
+
+    /** Where the first {@code b} at or after {@code from} is in {@code s}, or -1. */
+    private static long indexOf(final MemorySegment s, final byte b, final long from) {
+        for (long i = from; i < s.byteSize(); i++) {
+            if (s.get(ValueLayout.JAVA_BYTE, i) == b) {
+                return i;
+            }
+        }
+        return -1L;
+    }
+
+    private static boolean matches(final MemorySegment s, final long at, final byte[] needle) {
+        for (int k = 1; k < needle.length; k++) {
+            if (s.get(ValueLayout.JAVA_BYTE, at + k) != needle[k]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

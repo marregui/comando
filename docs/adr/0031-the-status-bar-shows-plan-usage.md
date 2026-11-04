@@ -15,7 +15,7 @@ and the week for Fable. They were to be shown in comando, refreshed every 5 minu
 |---|---|---|
 | source | `claude --safe-mode -p /usage --no-session-persistence --output-format json`, the windows parsed from the command's text | `/usage` is a local command: no prompt, 0 tokens (measured: `total_cost_usd` 0, `num_turns` 0); it is the only source with the Fable week |
 | safe mode | no hooks, plugins, MCP servers, skills or CLAUDE.md load; a read takes about 1.2 s of wall time (2.9 s without it) | a read every 5 minutes must not start the user's MCP servers or fire the user's hooks |
-| cadence | at start, then every 5 minutes, on a thread of its own (`plan-usage`); a read is stopped after 30 s | Miguel's interval |
+| cadence | at start, then every 20 minutes (5 until 2026-11-02), on a thread of its own (`plan-usage`); a read is stopped after 30 s | Miguel's interval; 2026-11-02: three reads an hour are enough |
 | where | the status bar, right side: `Session N% (resets <time>) · Week N% · Fable N%`; the tooltip has every reset time and when it was read | visible with the sidebar hidden |
 | colour | muted; warning from 75% of any window, danger from 90% | the bar draws the eye only near a limit |
 | a failed read | the last good read stays, muted, and the tooltip says why; with no good read, nothing shows | a passing failure does not blank the numbers |

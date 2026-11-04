@@ -2,7 +2,10 @@ package dev.marregui.comando.ui.kit.text;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.Polygon;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
@@ -19,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
@@ -35,6 +39,7 @@ import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.ImageView;
 
+import com.formdev.flatlaf.util.Graphics2DProxy;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -504,5 +509,52 @@ class HtmlPaneTest {
 
     private static String bodyColor(final HtmlPane p) {
         return String.valueOf(((HTMLDocument) p.getDocument()).getStyleSheet().getRule("body").getAttribute(CSS.Attribute.COLOR));
+    }
+
+    /// A Markdown table paints its grid with no polygon: Swing draws a CSS border as a polygon per side of every cell,
+    /// which on the Metal pipeline flushes the render queue each time; the grid is the table's ground between cells.
+    @Test
+    void aTableDrawsItsGridWithoutPolygons() throws Exception {
+        final AtomicInteger polygons = new AtomicInteger();
+        SwingUtilities.invokeAndWait(() -> {
+            final HtmlPane pane = new HtmlPane();
+            pane.setSize(600, 400);
+            pane.setMarkdown("| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n");
+            final BufferedImage image = new BufferedImage(600, 400, BufferedImage.TYPE_INT_ARGB);
+            final Graphics2D g = image.createGraphics();
+            try {
+                pane.paint(new PolygonCount(g, polygons));
+            } finally {
+                g.dispose();
+            }
+        });
+        assertThat(polygons).as("polygons drawn for the table's grid").hasValue(0);
+    }
+
+    /// A graphics that counts its polygon fills, its copies included.
+    private static final class PolygonCount extends Graphics2DProxy {
+        private final AtomicInteger count;
+
+        PolygonCount(final Graphics2D delegate, final AtomicInteger count) {
+            super(delegate);
+            this.count = count;
+        }
+
+        @Override
+        public Graphics create() {
+            return new PolygonCount((Graphics2D) super.create(), count);
+        }
+
+        @Override
+        public void fillPolygon(final int[] xPoints, final int[] yPoints, final int nPoints) {
+            count.incrementAndGet();
+            super.fillPolygon(xPoints, yPoints, nPoints);
+        }
+
+        @Override
+        public void fillPolygon(final Polygon p) {
+            count.incrementAndGet();
+            super.fillPolygon(p);
+        }
     }
 }

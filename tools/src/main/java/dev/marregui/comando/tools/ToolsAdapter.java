@@ -51,7 +51,8 @@ import dev.marregui.comando.core.view.ViewSpec;
  * console; it ends with {@link Intent.CommandFinished}. A folder read ends in {@link Intent.FolderLoaded}, a move to
  * the Trash in a notice and a read of the open folders. The poll reads the repositories of the open folders, and of
  * every folder while the Changes view is open, then the open folders, whose trees leave out what git ignores; the other
- * repositories are read every {@link #COLD_POLLS} polls.
+ * repositories are read every {@link #COLD_POLLS} polls. The Files tab watches no folder while it does not show or no
+ * comando window is active, so then every repository is read at that slower pace and no tree at all.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
 

@@ -22,7 +22,7 @@ class MarkdownSheetTest {
     @Test
     void theSheetRendersItsTablesAndShowsItsFencesAsTyped() {
         final String html = MarkdownHtml.render(MarkdownSheet.markdown());
-        assertThat(html).contains("<h1 id=\"markdown\">Markdown</h1>", "<h2 id=\"prompts-to-claude\">Prompts to Claude</h2>", "<table>")
+        assertThat(html).contains("<h1 id=\"markdown\">Markdown</h1>", "<h2 id=\"prompts-to-claude\">Prompts to Claude</h2>", "<table class=\"grid\" cellspacing=\"1\" border=\"0\">")
                 .as("no table left as text").doesNotContain("|---|");
         assertThat(html).as("the fence example shows its backticks").contains("```sql\nSELECT * FROM trades LIMIT 10;\n```");
         assertThat(html).as("the table example shows its pipes").contains("|:-----|------:|");

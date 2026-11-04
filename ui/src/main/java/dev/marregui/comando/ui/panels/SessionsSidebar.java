@@ -789,12 +789,32 @@ public final class SessionsSidebar {
         });
     }
 
-    /** The working sessions' icon, one for every row, turned while any session works. */
+    /**
+     * The working sessions' icon, one for every row, turned while any session works; each turn repaints only the
+     * working rows' icons in view, as the tabs' wheel does: repainting the whole list 12 times a second held the EDT on
+     * the Java2D render lock for up to 7 % of the time while sessions worked.
+     */
     private final SpinnerIcon spinner = new SpinnerIcon(16);
-    private final ShownTimer spin = new ShownTimer(sessions, SpinnerIcon.STEP_MILLIS, () -> {
+    private final ShownTimer spin = SpinnerIcon.timer(sessions, this::spinRows);
+
+    /** Turns the wheel once; the timer's tick, and for tests. */
+    void spinRows() {
         spinner.advance();
-        sessions.repaint();
-    });
+        final Rectangle view = sessions.getVisibleRect();
+        final int first = sessions.locationToIndex(view.getLocation());
+        if (first < 0) {
+            return;
+        }
+        final int last = sessions.locationToIndex(new Point(view.x, view.y + view.height - 1));
+        for (int i = first; i <= last && i < sessionModel.size(); i++) {
+            final SessionState s = sessionModel.get(i);
+            if (s.isBusy()) {
+                final Rectangle cell = sessions.getCellBounds(i, i);
+                final Rectangle icon = layOutRow(s, i).bounds(cell, SessionRow.Control.POWER);
+                sessions.repaint(icon.isEmpty() ? cell : icon);
+            }
+        }
+    }
 
     /** Turns the working icon while a session works, and stops it when none does. */
     private void spinWhileWorking() {

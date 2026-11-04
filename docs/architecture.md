@@ -633,7 +633,7 @@ every tab: however many panels ask, at most one Haiku process runs.
 |---|---|---|
 | `ClaudePort` | `start`, `stop`, `send(name, text, origin, preface)`, `interrupt`, `clearTranscript`, `loadHistory`, `forget`, `showSubagent` | the reducer's effects, through `EffectRouter` |
 | `TopicPort` (`ClaudeTopics`) | `read(key, source, urgent, done)` | `ui`, set by `app` through `ComandoUi.topics` |
-| `ClaudeAdapter.watchPlanUsage(every)` | reads both plans' usage now and every period | `app` at start (every 5 min) |
+| `ClaudeAdapter.watchPlanUsage(every)` | reads both plans' usage now and every period | `app` at start (every 20 min) |
 | `ClaudeAdapter.metrics(log)`, `checkpointThreshold(supplier)` | the `MetricsLog` the sessions write, and the checkpoint threshold, a percentage of the context window, 10 to 100 in the window; above 0 it sets `CONTEXT_CHECKPOINT_BY` on the sessions launched (record 129) | `app`'s wiring |
 | `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog and the session dialog |
 | `ClaudeVersion.check(executable, launch)` | a warning, or empty | `app` at start |
@@ -979,11 +979,11 @@ runs) moves to an errand of `UiErrands`.
 | Package | Holds |
 |---|---|
 | `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS) on the ground chosen, the colour tokens in four tiers ([record 100](adr/0100-a-theme-is-four-tiers-of-tokens.md)), spacing, the fonts; `NamedTheme`, the curated themes, each a `Ground` and the `Tint` on it, chosen together ([record 103](adr/0103-curated-themes-in-actions.md)), read from JSON files (`BuiltInThemes` the twelve in `/themes` on the class path, `ThemeFiles` the user's in the data root's `themes`, `ThemeSpec` their shape, `ThemeRules` the contrast floors a file must pass) ([record 126](adr/0126-themes-are-json-files.md)); `ContentPalette`, the colours of syntax, the terminal, diffs, plots and code derived from them in OKLCH (`Oklch`) ([record 101](adr/0101-content-colours-derived-from-the-theme.md)); `SidebarLook`, `TintBarBorder`, `TintTitle`, `GroundIcon`; `ThemePreview` (a theme drawn small in its own colours) and `GildedSplitIcon` (the theme button's icon, [record 128](adr/0128-a-chooser-of-twelve-themes.md)); `FocusRing`, a hairline in the tint round a content view's scroll pane while the view holds the keyboard. FlatLaf's own focus marks (focused borders, the underline of the tab in front) take the tint too, set again with each tint. A border is replaced by an empty one, never removed with `null`: installing the look and feel again, as each theme change does, puts its border back on a component that has none. Dark or light by the theme's mode ([record 127](adr/0127-light-themes.md)): a light ground takes FlatLaf's light look, the colours a light ground cannot take as they are have a second value (`ByMode`, `OnGround`), and each window's title bar takes the mode; a JVM option at launch sets the application's macOS appearance dark, which its menus and the native file dialogs keep |
-| `icon` | `Icons` (one SVG set under `/icons`, HiDPI); `SpinnerIcon` (one shared wheel, advanced by its owner's timer); `OverlayIcon`, `BesideIcon`; `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
+| `icon` | `Icons` (one SVG set under `/icons`, HiDPI); `SpinnerIcon` (one shared wheel, advanced by its owner's timer; every owner's timer ticks on one spinner clock); `OverlayIcon`, `BesideIcon`; `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§14.3](#143-commands-and-keys)) |
 | `resource` | `ResourceActions`: a list of resources' add, from its tab's menu, and its removal question, from a row's menu; no bar of buttons ([Workbench §1.4](workbench.md#14-the-sidebar)) |
 | `overlay` | `Overlay`, `Balloon`, `Flash` ([§14.2.3](#1423-trees-tabs-and-overlays)) |
-| `async` | `Edt`, `Coalescer`, `Debouncer`, `ShownTimer`, `EdtWatchdog` ([§14.2.1](#1421-threads)); `UiErrands`, the window's errands; `Waiters`, the callers waiting on one render, each told once |
+| `async` | `Edt`, `Coalescer`, `Debouncer`, `ShownTimer`, `SharedClock`, `EdtWatchdog` ([§14.2.1](#1421-threads)); `UiErrands`, the window's errands; `Waiters`, the callers waiting on one render, each told once |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them), `Versions` (version texts compared by number) |
 | `text` | editors, find, diffs, Markdown and links ([§14.2.2](#1422-text)); `Tooltips`, `FrontMatter`, `LocalImages` |
 | `tree`, `layout`, `tabs` | `TreeView`, `ShrinkingRow`, `TabStrip`, `MovableTabs` ([§14.2.3](#1423-trees-tabs-and-overlays)) |
@@ -998,6 +998,7 @@ runs) moves to an errand of `UiErrands`.
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT, which reads the latest data |
 | `Debouncer` | runs once requests stop for a delay (the editor's gutter: 250 ms) |
 | `ShownTimer` | repeats while its owner wants it and the owner component is showing (the working spinners, the approval ages, running cards' elapsed time) |
+| `SharedClock` | one Swing timer many `ShownTimer`s tick on, all in the same event, so what they repaint is painted in one pass: the sidebar's, the tabs' and the agent strip's spinners share one (three 80 ms timers caused up to three paint passes per step, 2026-11-02) |
 | `EdtWatchdog` | posts a probe to the EDT every 100 ms. A probe waiting 200 ms is a stall, classified once as `startup`, `drawing` (in Java2D's render queue), `comando` or `jdk`, with where it was; one INFO line when it ends. A stall of 1 s, or 2 s for `drawing`, is a hang, logged with the EDT's stack |
 
 #### 14.2.2 Text
@@ -1010,7 +1011,7 @@ runs) moves to an errand of `UiErrands`.
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); callable from any thread |
 | `Diffs`, `DiffPane` | a unified diff with three lines of context, coloured |
 | `SplitDiff` | two versions side by side in editors, each with its syntax colours and line numbers, the right one editable: lost lines red, gained green, changed words marked, a band joining each difference, scrolling kept in step by the diff's line mapping. F7 and ⇧F7 move between differences. `compute` works the match out off the EDT and stops at a deadline; `remark` marks a comparison worked out for its new text without setting it ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)) |
-| `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing, raw HTML escaped. An image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG and GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text. Fences are coloured as in the editors; a pane has one dark style sheet (`HtmlPane.styles`). Headings carry GitHub's ids. Web addresses and `[[name]]` note links in text become links; front matter shows as a table of its facts (`FrontMatter`) |
+| `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing, raw HTML escaped. An image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG and GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text. Fences are coloured as in the editors; a pane has one dark style sheet (`HtmlPane.styles`). A table is a `grid`: its lines are the table's ground showing through 1 px between cells, with no CSS cell borders (Swing drew each as a polygon per side, and on the Metal pipeline each flushed the render queue: stalls up to 4 s, 2026-11-02). Headings carry GitHub's ids. Web addresses and `[[name]]` note links in text become links; front matter shows as a table of its facts (`FrontMatter`) |
 | `RenderedMarkdown` | an `HtmlPane` padded in a scroll pane: a panel's preview, the comparison window's rendered sides, which `MarkdownHtml.Marks` shades where a comparison found changes |
 | `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text and mode, one at a time: Mermaid's dark theme on a dark theme, its default one on a light theme. A diagram or picture not ready yet stands as an element of its own, which the picture replaces when it arrives; the rest of the page is untouched. Without `mmdc`, no diagram is drawn |
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
@@ -1040,7 +1041,11 @@ pictures arrive, until the reader scrolls; any other link goes to the pane's own
 
 A tree row is plain labels, never HTML, and the tree names a node by its label. Measured with HTML labels and a node
 record's own text as its name, a row cost 63 µs: HTML in a renderer is parsed again for every row, and a record's
-`toString` prints its whole subtree. With plain labels it costs 2.5 µs.
+`toString` prints its whole subtree. With plain labels it costs 2.5 µs. The sidebar's rows (`IconRow`) follow the same
+rule: the name is a bold label and each mark after it (↑, the context, ⚑, prod) a label of its own colour. With an HTML
+title, each paint re-added the row to the list's renderer pane, the scale change of its graphics configuration made
+the label parse its text into a new HTML document, and at the spinner's 12.5 Hz that was 35 % of comando's allocation
+(2026-11-02).
 
 #### 14.2.4 Rules
 
@@ -1160,7 +1165,9 @@ changed, and paints only the clip.
 | Layout | `TextBox` | lines broken with `LineBreakMeasurer`, kept until the width or style changes |
 
 While text streams, paragraphs equal to earlier ones keep their layout; only the growing last one is laid out again.
-`TranscriptCanvas` holds one item per top-level block, a subagent's blocks inside its tool card. Changed and visible
+`TranscriptCanvas` holds one item per top-level block, a subagent's blocks inside its tool card, and finds each
+block's item by its transcript index in a list: each render asks it for every block, which a map keyed by a boxed index
+made an allocation per block per render. Changed and visible
 items are laid out at once. After a width or zoom change the rest get an estimated height, and an idle pass lays them
 out in 8 ms slices, nearest the viewport first, keeping the first visible line in place. Painting finds the items in
 the clip by binary search. `Items` makes the item for each block kind (`ToolCallItem` the tool card); the canvas
@@ -1315,7 +1322,7 @@ the synthetic session at a scroll offset to a PNG.
 | `catalogue` | the stored conversations for the import dialog and the session dialog's conversation picker (record 125), as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
 | `server` | `ServerToggle`: the embedded QuestDB (`app`'s `EmbeddedQuestDb`) |
 | `edge` | `ServerToggle`: the comando Edge (`app`'s `EmbeddedEdge`), its button right of QuestDB's; null, no button |
-| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups, the kit's jobs (`app`'s `RootSetup`). `KitActions` shows the kit on the KIT row, repairs `comando-kit.json` on Kit ▸ Repair comando-kit.json… after a confirm, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; `JobActions` reads the kit's jobs at start, after each change and every minute while the Files tab shows, puts them on the Jobs row, and opens the Kit jobs window ([record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
+| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups, the kit's jobs (`app`'s `RootSetup`). `KitActions` shows the kit on the KIT row, repairs `comando-kit.json` on Kit ▸ Repair comando-kit.json… after a confirm, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; `JobActions` reads the kit's jobs at start, after each change comando makes, and, while the Files tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (looked at every 10 s; logs left out), puts them on the Jobs row, and opens the Kit jobs window ([record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
 | `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` (the data root) holds `settings.json` (the window's layout and settings, record 106), `themes/` (the user's theme files, record 126) and `opened-files`, the files opened once, which the Files tab no longer marks new; a null `home` keeps the settings in memory, offers no user themes and turns Tutorial and Reveal off; what quitting runs once the window has asked |
 
 `PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a
@@ -1372,10 +1379,10 @@ Tests that drive components with Swing timers run on the EDT through the `OnEdt`
 |---|---|
 | (top) | `UiArchitectureTest`, `PanelTextsTitleTest` |
 | `kit.action` | `CommandPaletteTest`, `KeyPriorityTest`, `MenuBarTest` |
-| `kit.async` | `EdtTest`, `EdtWatchdogTest`, `DebouncerTest`, `ShownTimerTest`, `WaitersTest` |
+| `kit.async` | `EdtTest`, `EdtWatchdogTest`, `DebouncerTest`, `ShownTimerTest`, `SharedClockTest`, `WaitersTest` |
 | `kit.desktop` | `BrowserTest`, `ExternalEditorTest`, `FileChoosersTest`, `FileSearchTest`, `LinksTest`, `PlatformTest` |
 | `kit.format`, `kit.icon`, `kit.layout`, `kit.overlay` | `JsonTest`, `KeyTextTest`, `VersionsTest`; `GildedIconsTest`, `SpinnerIconTest`; `ShrinkingRowTest`; `FlashTest`, `OverlayTest` |
-| `kit.resource`, `kit.tabs`, `kit.tree`, `kit.vcs` | `ResourceActionsTest`; `MovableTabsTest`; `TreeViewTest`; `OpenedFilesTest`, `RepoChangesTest` |
+| `kit.resource`, `kit.tabs`, `kit.tree`, `kit.vcs` | `ResourceActionsTest`; `MovableTabsTest`, `TabStripTest`; `TreeViewTest`; `OpenedFilesTest`, `RepoChangesTest` |
 | `kit.text` | `MarkdownHtmlTest`, `HtmlPaneTest`, `ContentSheetTest`, `DarkPageTest`, `FrontMatterTest`, `FencesTest`, `MermaidDiagramsTest`, `LocalImagesTest`, `PlainTest`, `LogLinesTest`, `TextLinksTest`, `NoteLinksTest`, `SourceLinksTest`, `EditorsTest`, `EditorThemesTest`, `DiffsTest`, `SplitDiffTest`, `CaseFoldTest` |
 | `kit.theme` | `NamedThemeTest`, `ContentPaletteTest`, `OnGroundTest`, `SerifTest`, `TooltipTintTest`, `TypeAndSpacingRulesTest`, `ThemeFilesTest`, `ThemeChoiceTest`, `ThemePreviewTest`, `FocusRingTest` |
 | `widgets.*` | `ApprovalInboxTest`, `ApprovalInboxGroupsTest`; `ChangesWidgetTest`, `ChangeEditorTest`; `CommandEditorTest`, `PanelTokenMakerTest`, `SqlCompletionTest`; `PlotCanvasTest`; `GridTableTest`, `TableSourceTest`; `TerminalWidgetTest`, `TerminalKeysTest`, `PtyTest`, `InputGateTest`; `TextWidgetTest`; `TreeWidgetTest` |
@@ -1410,7 +1417,7 @@ One package, `dev.marregui.comando.app`.
 | `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `metrics`, `questdb`, `edge`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
 | `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json` (with a kit's folders first, once per root, recorded in `kit-folders`), `panels.json`, and the panels' text: a Markdown file in `panels/` for a panel of comando's own, the file itself for a document; each file with its schema's version ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)); writes from immutable snapshots on its own threads |
 | `PanelFiles` | each panel's text as a file: a panel of comando's own is named after its title and follows renames; a document is bound to its path and never renamed or deleted; no file is overwritten after an edit made outside comando |
-| `JsonFile` | one store file, `{"version": n, <key>: [...]}` ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)), written through `core`'s `AtomicFiles`; a bare list or no `version` reads as version 1; a later version is refused, kept as it is and never written, and the user told; an unreadable file is renamed aside (`.corrupt-<time>`), not overwritten |
+| `JsonFile` | one store file, `{"version": n, <key>: [...]}` ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)), written through `core`'s `AtomicFiles`, and not at all when the bytes are this run's last write and the file's modification time and size are those it left; a bare list or no `version` reads as version 1; a later version is refused, kept as it is and never written, and the user told; an unreadable file is renamed aside (`.corrupt-<time>`), not overwritten |
 | `Secrets` | connection passwords in the macOS login keychain through `/usr/bin/security`, under service `comando` and an account naming the connection and the target the password was given for (`Store.account`: `name user@host:port/database`, each part URL-encoded), so a connection pointed elsewhere never reads its old target's item; each call through `core`'s `Processes`, bounded at 10 s; with the keychain switch off (the default on any data root but `~/.comando`) and on other systems `Secrets.NONE`, and the store keeps the password in `connections.json` |
 | `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, every `password` field blanked |
 | `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
@@ -1458,7 +1465,7 @@ What `app` connects, and nothing else does:
 | `claude` | `metrics/` | `MetricsLog` |
 
 **At start** (`App.start`): the reducer starts, the window is built, every folder's git repository is watched for the
-Files tab's marks, the Files tab's open folders are read every 5 s, the plans' usage every 5 minutes, every session with
+Files tab's marks, the Files tab's open folders are read every 5 s while the tab shows in an active window, the plans' usage every 20 minutes, every session with
 a stored conversation loads its transcript, `claude --version` is checked, and, on a kit's root, the kit's version and
 its remote's newer releases are read now and every 6 hours for the Files tab's KIT row and this instance's presence, and `Peers` sets its last will and
 subscriptions before `MqttPeerBroker` takes its first look at the Edge. Before that, the constructor names the
@@ -1487,7 +1494,7 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 
 | Test | Covers | Runs in |
 |---|---|---|
-| `StoreTest`, `StoreSaveNowTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `EmbeddedQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the embedded QuestDB, the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
+| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `EmbeddedQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the embedded QuestDB, the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
 | `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run, audit and metrics folders owner-only and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
 | `MqttPeerBrokerTest` | without a broker or a port: a question's response topic and correlation data through the client's types, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays | `./gradlew :app:test` |
 | `StoreTest`'s keychain round trip | writes and deletes one login keychain item | `./gradlew :app:test -PkeychainTest=true` |

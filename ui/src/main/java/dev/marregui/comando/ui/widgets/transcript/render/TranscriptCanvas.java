@@ -17,7 +17,6 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +64,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private static final int BAND_VIEWS = 2;
 
     private final List<Item> items = new ArrayList<>();
-    private final Map<Integer, Item> byIndex = new HashMap<>();
+    /**
+     * The item of each block, by transcript index; a gap holds null. A list, not a map by boxed index: the widget asks
+     * for every block on each render, and boxing an index past 127 allocated per block per render (run 8, 2026-11-03:
+     * up to 766 MB an hour, a quarter of comando's allocation, growing with the transcript).
+     */
+    private final List<Item> byIndex = new ArrayList<>();
+    /** How many indexes hold an item. */
+    private int held;
     /** The card or hook group each nested item sits in. */
     private final Map<Item, Item> parentOf = new IdentityHashMap<>();
     /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
@@ -165,6 +171,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         endKeptAt = -1;
         items.clear();
         byIndex.clear();
+        held = 0;
         agents.clear();
         parentOf.clear();
         updateTicker();
@@ -186,7 +193,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             case Block.Note n when n.kind() == Block.NoteKind.HOOK -> new Items.NoteItem(n, true);
             default -> Items.of(b);
         };
-        byIndex.put(index, item);
+        hold(index, item);
         if (item instanceof Items.ToolItem card) {
             agents.added(card);
         }
@@ -266,7 +273,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /** The writer replaced the block at {@code index}. */
     public void update(final int index, final Block b) {
-        final Item item = byIndex.get(index);
+        final Item item = itemOf(index);
         if (item == null || item.block == b) {
             return;
         }
@@ -374,12 +381,28 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     public Block blockAt(final int index) {
-        final Item item = byIndex.get(index);
+        final Item item = itemOf(index);
         return item == null ? null : item.block;
     }
 
     public int itemCount() {
-        return byIndex.size();
+        return held;
+    }
+
+    private Item itemOf(final int index) {
+        return index >= 0 && index < byIndex.size() ? byIndex.get(index) : null;
+    }
+
+    private void hold(final int index, final Item item) {
+        while (byIndex.size() < index) {
+            byIndex.add(null);
+        }
+        if (index == byIndex.size()) {
+            byIndex.add(item);
+            held++;
+        } else if (byIndex.set(index, item) == null) {
+            held++;
+        }
     }
 
     /**
@@ -400,7 +423,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /** The item of the block at {@code index}; for tests. */
     Item itemAt(final int index) {
-        return byIndex.get(index);
+        return itemOf(index);
     }
 
     /** The top-level items in order; for tests. */

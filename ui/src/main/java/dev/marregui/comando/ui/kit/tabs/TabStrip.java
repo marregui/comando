@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.kit.tabs;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.FlowLayout;
+import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -56,7 +57,10 @@ public final class TabStrip {
         b.putClientProperty("JButton.buttonType", "tab");
         // the tab in front underlined in the tint, as every "where I am" mark is (record 100)
         SidebarLook.whileShown(b, () -> b.putClientProperty("FlatLaf.style", "tab.underlineHeight: 2; tab.underlineColor: "
-                + Theme.hex(Theme.tint().body) + "; margin: 4,7,4,7"));
+                + Theme.hex(Theme.tint().body)));
+        // the button's own margin, not a style key: FlatLaf finds no "margin" style on a tab and falls back through two
+        // caught exceptions at every restyle; an Insets that is no UIResource survives a look and feel update
+        b.setMargin(new Insets(Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S));
         b.setToolTipText(title + ": " + tip);
         b.getAccessibleContext().setAccessibleName(title);
         b.setFocusable(false);

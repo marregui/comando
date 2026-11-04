@@ -3,7 +3,10 @@ package dev.marregui.comando.app;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
 
 import tools.jackson.core.JacksonException;
@@ -24,8 +27,10 @@ import dev.marregui.comando.core.model.AtomicFiles;
  * {@link #key}. A file written before versions, a bare JSON array, reads as version 1's list; an object without
  * {@code version} is version 1 too. A file of a later version than this comando reads is refused: kept as it is, never
  * written, and {@link #refused} says why, for the user. A write goes to a temporary file in the same directory and is
- * moved over the old one atomically, so a crash leaves the old or the new content, never a torn file. A file that
- * cannot be read is renamed aside ({@code .corrupt-<time>}) instead of being overwritten by the next save.
+ * moved over the old one atomically, so a crash leaves the old or the new content, never a torn file. A write of the
+ * bytes this run last wrote, to a file whose modification time and size are still those that write left, writes
+ * nothing. A file that cannot be read is renamed aside ({@code .corrupt-<time>}) instead of being overwritten by the
+ * next save.
  */
 final class JsonFile<T> {
 
@@ -55,6 +60,12 @@ final class JsonFile<T> {
     private volatile String refused = "";
     /** The object last read, for the numbers stored beside the list; empty until a read. */
     private volatile JsonNode lastRead = JSON.createObjectNode();
+    /**
+     * The bytes this run last wrote and the file's stamp right after; null until a write. Written and read by the thread
+     * that writes this file ({@code Store}'s writer, its secrets writer for {@code connections.json}); volatile so a write
+     * handed to another of them still sees the last one.
+     */
+    private volatile Written lastWritten;
 
     /** The file at {@code path}, of schema {@code version}, its list under {@code key}. */
     JsonFile(final Path path, final String key, final int version, final TypeReference<T> type) {
@@ -178,7 +189,33 @@ final class JsonFile<T> {
         root.put(VERSION, version);
         numbers.forEach(root::put);
         root.set(key, JSON.valueToTree(value));
-        AtomicFiles.write(path, JSON.writeValueAsBytes(root));
+        final byte[] bytes = JSON.writeValueAsBytes(root);
+        final Written last = lastWritten;
+        if (last != null && Arrays.equals(last.bytes(), bytes) && last.stamp().equals(stamp())) {
+            return; // the file holds these bytes already: rewriting it the same churns the disk and its watchers
+        }
+        AtomicFiles.write(path, bytes);
+        final Stamp after = stamp();
+        lastWritten = after == Stamp.NONE ? null : new Written(bytes, after);
+    }
+
+    /** The file's modification time and size, or {@link Stamp#NONE} when it cannot be read. */
+    private Stamp stamp() {
+        try {
+            final BasicFileAttributes a = Files.readAttributes(path, BasicFileAttributes.class);
+            return new Stamp(a.lastModifiedTime(), a.size());
+        } catch (final IOException e) {
+            return Stamp.NONE;
+        }
+    }
+
+    /** A file's modification time and size, which an outside write changes. */
+    private record Stamp(FileTime modified, long size) {
+        static final Stamp NONE = new Stamp(FileTime.fromMillis(0L), -1L);
+    }
+
+    /** What a write left: its bytes and the file's stamp right after. */
+    private record Written(byte[] bytes, Stamp stamp) {
     }
 
     /** A file of a later version than this comando reads. */

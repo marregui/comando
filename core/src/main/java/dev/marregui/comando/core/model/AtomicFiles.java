@@ -45,8 +45,20 @@ public final class AtomicFiles {
             keepMode(target, tmp);
             Files.write(tmp, bytes);
             move(tmp, target, mover);
-        } finally {
+        } catch (final IOException | RuntimeException e) {
+            // only a failure leaves the temporary file (a moved one is gone, and deleting it would throw and catch
+            // inside the JDK); a failed delete must not hide why the write failed
+            deleteAfter(e, tmp);
+            throw e;
+        }
+    }
+
+    /** Deletes {@code tmp} after {@code failure}, a failure of the delete kept as suppressed by it. */
+    public static void deleteAfter(final Exception failure, final Path tmp) {
+        try {
             Files.deleteIfExists(tmp);
+        } catch (final IOException e) {
+            failure.addSuppressed(e);
         }
     }
 

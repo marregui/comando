@@ -3,13 +3,13 @@ package dev.marregui.comando.ui.panels;
 import java.awt.Color;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.util.List;
 import java.util.Optional;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -25,8 +25,7 @@ final class ConnectionRow extends IconRow {
     ConnectionRow show(final ConnectionState c, final boolean focused, final boolean selected, final Color background, final Color foreground) {
         setOpaque(true);
         setBackground(background);
-        title.setForeground(foreground);
-        title.setText(titleHtml(c, focused));
+        title(title(c, focused), foreground);
         power.setIcon(Icons.get(icon(c.status())));
         power.setToolTipText(powerTip(c));
         return this;
@@ -93,9 +92,8 @@ final class ConnectionRow extends IconRow {
     }
 
     /** The name, in the accent colour while the focused panel uses it, and "prod" in red. Never wraps. */
-    static String titleHtml(final ConnectionState c, final boolean focused) {
-        final String prod = c.spec().prod() ? "&nbsp;<span style='color:" + Theme.hex(Theme.DANGER) + "'>prod</span>" : "";
-        final String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : "<b>";
-        return "<html><nobr>" + name + MarkdownHtml.escape(c.spec().name()) + "</b>" + prod + "</nobr></html>";
+    static Title title(final ConnectionState c, final boolean focused) {
+        return new Title(c.spec().name(), focused ? Theme.tint().body : null,
+                c.spec().prod() ? List.of(new Mark("prod", Theme.DANGER)) : List.of());
     }
 }

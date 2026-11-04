@@ -33,6 +33,7 @@ import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.ListCellRenderer;
 import javax.swing.LookAndFeel;
+import javax.swing.RepaintManager;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.basic.BasicHTML;
@@ -574,11 +575,12 @@ class SessionsSidebarTest {
             s[0].render(state);
         });
         final JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
-        assertThat(rowText(list, 0)).as("running first; one of its panels has the focus")
-                .contains("<b style='color:" + Theme.hex(Theme.tint().body) + "'>work</b>").doesNotContain("PLAN.md", "·");
-        final String dimmed = "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
-        assertThat(rowText(list, 1)).as("its own panel closed").contains(dimmed + "edge</b>");
-        assertThat(rowText(list, 2)).as("no panel").contains(dimmed + "old</b>");
+        assertThat(rowText(list, 0)).as("running first; one of its panels has the focus").isEqualTo("work");
+        assertThat(rowColor(list, 0)).isEqualTo(Theme.tint().body);
+        assertThat(rowText(list, 1)).as("its own panel closed").isEqualTo("edge");
+        assertThat(rowColor(list, 1)).isEqualTo(Theme.MUTED);
+        assertThat(rowText(list, 2)).as("no panel").isEqualTo("old");
+        assertThat(rowColor(list, 2)).isEqualTo(Theme.MUTED);
 
         final SessionRow row = (SessionRow) render(list, 0);
         assertThat(row.tip(new Rectangle(0, 0, 260, 60), new Point(0, 0))).isEmpty();
@@ -748,11 +750,11 @@ class SessionsSidebarTest {
         final long started = 1_760_000_000_000L;
         final SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
                 .withStatus(Status.OPEN, "").withStarted(started).withUsage(0.0, 84_000L, 200_000L, started).withBranch("main");
-        assertThat(SessionRow.titleHtml(running, true, false, 0, "")).isEqualTo("<html><nobr><b>edge</b></nobr></html>");
-        assertThat(SessionRow.titleHtml(running, false, false, 2, "")).as("its own panel not open: dimmed; approvals waiting")
-                .contains("<b style='color:" + Theme.hex(Theme.MUTED) + "'>edge</b>", "⚑2");
-        assertThat(SessionRow.titleHtml(running.withReflection(new Reflection(true, false)), true, false, 0, ""))
-                .as("the checkpoint due: the context in purple").contains("<span style='color:" + Theme.hex(Theme.THINKING) + "'>42%</span>");
+        assertThat(SessionRow.title(running, true, false, 0, "")).isEqualTo(new IconRow.Title("edge", null, List.of()));
+        assertThat(SessionRow.title(running, false, false, 2, "")).as("its own panel not open: dimmed; approvals waiting")
+                .isEqualTo(new IconRow.Title("edge", Theme.MUTED, List.of(new IconRow.Mark("⚑2", Theme.ATTENTION))));
+        assertThat(SessionRow.title(running.withReflection(new Reflection(true, false)), true, false, 0, "").marks())
+                .as("the checkpoint due: the context in purple").containsExactly(new IconRow.Mark("42%", Theme.THINKING));
         final SessionRow[] row = new SessionRow[1];
         final int[] height = new int[3];
         final Icon[] icons = new Icon[2];
@@ -784,10 +786,9 @@ class SessionsSidebarTest {
     void aConnectionRowIsItsStateIconAndItsNameAsASessionsIs() throws Exception {
         final ConnectionState open = ConnectionState.closed(new ConnectionSpec("live", "db.example", 8812, "qdb", "admin", "secret", true))
                 .with(Status.OPEN, "");
-        assertThat(ConnectionRow.titleHtml(open, false)).isEqualTo("<html><nobr><b>live</b>&nbsp;<span style='color:"
-                + Theme.hex(Theme.DANGER) + "'>prod</span></nobr></html>");
-        assertThat(ConnectionRow.titleHtml(open, true)).as("the focused panel uses it: the accent colour")
-                .contains("<b style='color:" + Theme.hex(Theme.tint().body) + "'>live</b>");
+        assertThat(ConnectionRow.title(open, false)).isEqualTo(new IconRow.Title("live", null, List.of(new IconRow.Mark("prod", Theme.DANGER))));
+        assertThat(ConnectionRow.title(open, true).nameColor()).as("the focused panel uses it: the accent colour")
+                .isEqualTo(Theme.tint().body);
         assertThat(List.of(ConnectionRow.icon(Status.OPEN), ConnectionRow.icon(Status.CLOSED), ConnectionRow.icon(Status.OPENING),
                 ConnectionRow.icon(Status.FAILED))).containsExactly("database", "database-off", "database-starting", "database-failed");
         assertThat(ConnectionRow.powerTip(open)).isEqualTo("Connected; click to disconnect");
@@ -932,14 +933,14 @@ class SessionsSidebarTest {
         final String newest = SessionRow.newestCli(List.of(older, newer, SessionState.closed(SessionSpec.fresh("new", "/w/new"))));
         assertThat(newest).isEqualTo("2.1.303");
 
-        assertThat(SessionRow.titleHtml(newer, true, false, 0, newest)).doesNotContain("↑");
-        assertThat(SessionRow.titleHtml(older, true, false, 0, newest)).as("started before the update: an amber arrow after the name")
-                .contains(">edge</b>&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>");
+        assertThat(SessionRow.title(newer, true, false, 0, newest).marks()).isEmpty();
+        assertThat(SessionRow.title(older, true, false, 0, newest).marks()).as("started before the update: an amber arrow after the name")
+                .containsExactly(new IconRow.Mark("↑", Theme.ATTENTION));
         assertThat(SessionRow.details(older, started, ZoneOffset.UTC, newest))
                 .contains("Claude Code: 2.1.302, older than the 2.1.303 another session runs; start this one again to use it\n");
         assertThat(SessionRow.details(newer, started, ZoneOffset.UTC, newest)).contains("Claude Code: 2.1.303\n");
-        assertThat(SessionRow.titleHtml(older.withStatus(Status.CLOSED, ""), true, false, 0, newest))
-                .as("a stopped session runs no Claude Code").doesNotContain("↑");
+        assertThat(SessionRow.title(older.withStatus(Status.CLOSED, ""), true, false, 0, newest).marks())
+                .as("a stopped session runs no Claude Code").isEmpty();
 
         assertThat(Versions.compare("2.1.303", "2.1.302")).isPositive();
         assertThat(Versions.compare("2.2.0", "2.1.303")).isPositive();
@@ -956,6 +957,54 @@ class SessionsSidebarTest {
         assertThat(Versions.compare("2.1", "2.1.0")).as("a missing part is 0").isZero();
         assertThat(Versions.compare("2.1.4-beta", "2.1.3")).as("the digits before a suffix").isPositive();
         assertThat(Versions.compare("2.1.303", "")).isPositive();
+    }
+
+    /// While a session works, each turn of the wheel repaints that row's state icon alone: not the idle rows, not the
+    /// whole list.
+    @Test
+    void theWheelRepaintsOnlyTheWorkingRowsIcon() throws Exception {
+        final long now = System.currentTimeMillis();
+        final SessionState busy = running("busy", "2.1.300", now).withTurns(1, now);
+        final SessionState idle = running("idle", "2.1.300", now);
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "spec", "", "")), List.of(), List.of(busy, idle));
+        final SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> {
+            }, NO_DIALOGS, () -> {
+            });
+            s[0].render(state);
+        });
+        final JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        final List<Rectangle> dirty = new CopyOnWriteArrayList<>();
+        final Rectangle[] cells = new Rectangle[2];
+        final RepaintManager previous = RepaintManager.currentManager(list);
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+            for (int i = 0; i < 2; i++) {
+                final String name = ((SessionState) list.getModel().getElementAt(i)).name();
+                cells["busy".equals(name) ? 0 : 1] = list.getCellBounds(i, i);
+            }
+            RepaintManager.setCurrentManager(new RepaintManager() {
+                @Override
+                public void addDirtyRegion(final JComponent c, final int x, final int y, final int w, final int h) {
+                    if (c == list) {
+                        dirty.add(new Rectangle(x, y, w, h));
+                    }
+                    super.addDirtyRegion(c, x, y, w, h);
+                }
+            });
+            try {
+                s[0].spinRows();
+            } finally {
+                RepaintManager.setCurrentManager(previous);
+            }
+        });
+        assertThat(dirty).as("one region, the working row's").hasSize(1);
+        final Rectangle r = dirty.getFirst();
+        assertThat(cells[0].contains(r)).as("inside the working row " + cells[0] + ": " + r).isTrue();
+        assertThat(r.intersects(cells[1])).as("the idle row is left alone").isFalse();
+        assertThat(r.width).as("the icon, not the row").isLessThan(cells[0].width);
     }
 
     private static SessionState running(final String name, final String cliVersion, final long started) {
@@ -994,10 +1043,10 @@ class SessionsSidebarTest {
                 false, id == MouseEvent.MOUSE_MOVED || id == MouseEvent.MOUSE_DRAGGED ? MouseEvent.NOBUTTON : MouseEvent.BUTTON1);
     }
 
-    /// Each session has its own row component, so drawing another row neither replaces it nor parses its HTML label
-    /// again.
+    /// Each session has its own row component, so drawing another row does not replace it; no label of a row holds
+    /// HTML, so no draw parses one.
     @Test
-    void eachSessionKeepsItsOwnRowSoDrawingAnotherDoesNotParseItsLabelAgain() throws Exception {
+    void eachSessionKeepsItsOwnRowAndNoRowLabelHoldsHtml() throws Exception {
         final SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
         final SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
         final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
@@ -1012,14 +1061,12 @@ class SessionsSidebarTest {
         final Component first = render(list, 0);
         final Component second = render(list, 1);
         assertThat(second).isNotSameAs(first);
-        final JLabel label = find(second, JLabel.class, l -> l.getText() != null && l.getText().startsWith("<html>"));
-        final Object parsed = label.getClientProperty(BasicHTML.propertyKey);
-        assertThat(parsed).isNotNull();
-
         render(list, 0);
         assertThat(render(list, 1)).isSameAs(second);
-        assertThat(label.getClientProperty(BasicHTML.propertyKey)).as("its HTML parsed once, not again after another row was drawn")
-                .isSameAs(parsed);
+        for (final Component row : List.of(first, second)) {
+            assertThat(search(row, JLabel.class, l -> l.getText() != null && l.getText().startsWith("<html>"))).isNull();
+            assertThat(search(row, JLabel.class, l -> l.getClientProperty(BasicHTML.propertyKey) != null)).isNull();
+        }
     }
 
     private static Component render(final JList<?> list, final int index) throws Exception {
@@ -1034,21 +1081,25 @@ class SessionsSidebarTest {
         return c[0];
     }
 
-    /**
-     * The row's text, read on the EDT in the same step as the render: the list shares one renderer, which a paint
-     * reuses.
-     */
+    /// The row's line as text (the name and its marks), read on the EDT in the same step as the render: the list shares
+    /// one renderer, which a paint reuses.
     private static String rowText(final JList<?> list, final int index) throws Exception {
         final String[] text = new String[1];
-        SwingUtilities.invokeAndWait(() -> {
-            @SuppressWarnings("unchecked")
-            final JList<Object> l = (JList<Object>) list;
-            final Component row = l.getCellRenderer().getListCellRendererComponent(l, l.getModel().getElementAt(index), index, false, false);
-            final JLabel label = search(row, JLabel.class, x -> x.getText() != null && x.getText().startsWith("<html>"));
-            text[0] = label == null ? null : label.getText();
-        });
-        assertThat(text[0]).as("row " + index + " text").isNotNull();
+        SwingUtilities.invokeAndWait(() -> text[0] = row(list, index).titleText());
         return text[0];
+    }
+
+    /// The colour the row's name is drawn in, read like [#rowText].
+    private static Color rowColor(final JList<?> list, final int index) throws Exception {
+        final Color[] color = new Color[1];
+        SwingUtilities.invokeAndWait(() -> color[0] = row(list, index).titleColor());
+        return color[0];
+    }
+
+    private static IconRow row(final JList<?> list, final int index) {
+        @SuppressWarnings("unchecked")
+        final JList<Object> l = (JList<Object>) list;
+        return (IconRow) l.getCellRenderer().getListCellRendererComponent(l, l.getModel().getElementAt(index), index, false, false);
     }
 
     private static Rectangle bounds(final SessionsSidebar sidebar, final SessionRow.Control control) throws Exception {

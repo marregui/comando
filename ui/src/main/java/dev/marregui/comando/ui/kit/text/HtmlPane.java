@@ -12,8 +12,10 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -68,7 +70,10 @@ public final class HtmlPane extends JEditorPane {
     private static final int RESIZE_SLACK = 16;
     /** The width the page's pictures and diagrams were sized for; -1 when it has none. */
     private int sizedFor = -1;
-    /** Sizes the pictures again once a resize settles: a page rendered before it was laid out had no width to fit. */
+    /**
+     * Sizes the pictures again once a resize settles: a page rendered before it was laid out had no width to fit. The
+     * 150 ms settle is unmeasured, chosen as a pause longer than the steps of a window drag.
+     */
     private final Debouncer resized = new Debouncer(150, () -> redraw(this.markdown));
 
     public HtmlPane() {
@@ -210,8 +215,33 @@ public final class HtmlPane extends JEditorPane {
      * content palette (record 101), quotes beside a tinted bar.
      */
     static StyleSheet styles() {
+        final List<String> rules = rules();
+        final Styles last = shared;
+        if (last != null && last.rules().equals(rules)) {
+            return last.sheet();
+        }
         final StyleSheet css = new StyleSheet();
         css.addStyleSheet(new HTMLEditorKit().getStyleSheet());
+        // Swing parses each length as a number first and catches the failure for "2px": building once per rule set
+        // keeps that, and the parse, from repeating for every pane
+        rules.forEach(css::addRule);
+        shared = new Styles(rules, css);
+        return css;
+    }
+
+    /**
+     * The sheet {@link #styles} last built and the rules it was built from; panes share it and never change it. Written
+     * and read on the EDT, where panes are made and restyled; volatile for a test that asks for the sheet from its own
+     * thread.
+     */
+    private static volatile Styles shared;
+
+    private record Styles(List<String> rules, StyleSheet sheet) {
+    }
+
+    /** The page's rules under the theme, the tint and the font size as they are now. */
+    private static List<String> rules() {
+        final List<String> rules = new ArrayList<>();
         final String fg = Theme.hex(Theme.TRANSCRIPT_TEXT);
         final String border = Theme.hex(Theme.CARD_BORDER);
         final String muted = Theme.hex(Theme.MUTED);
@@ -221,34 +251,37 @@ public final class HtmlPane extends JEditorPane {
         final Tint tint = Theme.tint();
         final int size = UIManager.getFont("Label.font").getSize();
         final float[] scale = Theme.HEADING_SCALE;
-        css.addRule("body { font-family: sans-serif; font-size: " + size + "pt; color: " + fg + "; margin: 0; }");
-        css.addRule("p { margin-top: 2px; margin-bottom: 6px; }");
-        css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(tint.body) + "; }");
-        css.addRule("h1 { font-size: " + Math.round(size * scale[0]) + "pt; margin: 6px 0 4px 0; }");
-        css.addRule("h2 { font-size: " + Math.round(size * scale[1]) + "pt; margin: 6px 0 4px 0; }");
-        css.addRule("h3 { font-size: " + Math.round(size * scale[2]) + "pt; margin: 4px 0 2px 0; }");
-        css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + Theme.hex(tint.headingRule())
+        rules.add("body { font-family: sans-serif; font-size: " + size + "pt; color: " + fg + "; margin: 0; }");
+        rules.add("p { margin-top: 2px; margin-bottom: 6px; }");
+        rules.add("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(tint.body) + "; }");
+        rules.add("h1 { font-size: " + Math.round(size * scale[0]) + "pt; margin: 6px 0 4px 0; }");
+        rules.add("h2 { font-size: " + Math.round(size * scale[1]) + "pt; margin: 6px 0 4px 0; }");
+        rules.add("h3 { font-size: " + Math.round(size * scale[2]) + "pt; margin: 4px 0 2px 0; }");
+        rules.add("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + Theme.hex(tint.headingRule())
                 + "; padding-bottom: 3px; }");
-        css.addRule("b, strong { color: " + Theme.hex(Theme.ANSWER_STRONG) + "; }");
-        css.addRule("code { font-family: '" + mono + "'; color: " + Theme.hex(Theme.content().code) + "; background-color: "
+        rules.add("b, strong { color: " + Theme.hex(Theme.ANSWER_STRONG) + "; }");
+        rules.add("code { font-family: '" + mono + "'; color: " + Theme.hex(Theme.content().code) + "; background-color: "
                 + Theme.hex(Theme.content().codeInlineGround) + "; }");
-        css.addRule("pre { font-family: '" + mono + "'; background-color: " + Theme.hex(Theme.content().codeGround) + "; padding: 6px; margin: 4px 0 6px 0; }");
-        css.addRule("pre.code code { color: " + fg + "; }");
-        css.addRule("a { color: " + link + "; }");
-        css.addRule("table { border-collapse: collapse; margin: 4px 0 6px 0; }");
-        css.addRule("th { border: 1px solid " + border + "; padding: 2px 6px; color: " + Theme.hex(tint.highlight) + "; background-color: "
-                + Theme.hex(tint.tableHeadGround()) + "; }");
-        css.addRule("td { border: 1px solid " + border + "; padding: 2px 6px; }");
-        css.addRule("blockquote { margin-left: 8px; color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
+        rules.add("pre { font-family: '" + mono + "'; background-color: " + Theme.hex(Theme.content().codeGround) + "; padding: 6px; margin: 4px 0 6px 0; }");
+        rules.add("pre.code code { color: " + fg + "; }");
+        rules.add("a { color: " + link + "; }");
+        rules.add("table { margin: 4px 0 6px 0; }");
+        // the grid is the table's ground showing through one pixel between cells of the panel's ground: Swing draws a CSS
+        // border as a polygon per side of every cell, and on the Metal pipeline each one flushes the render queue, which
+        // froze the EDT for up to 4 s painting a page of tables; a cell's ground is one rectangle
+        rules.add("table.grid { background-color: " + border + "; }");
+        rules.add("th { padding: 2px 6px; color: " + Theme.hex(tint.highlight) + "; background-color: " + Theme.hex(tint.tableHeadGround()) + "; }");
+        rules.add("td { padding: 2px 6px; background-color: " + Theme.hex(Theme.ground()) + "; }");
+        rules.add("blockquote { margin-left: 8px; color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
                 + "border-left-color: " + Theme.hex(tint.body) + "; padding-left: 8px; }");
         // front matter: its facts as a tab's card shows them, the key muted beside the value, no grid
-        css.addRule("table.front { margin: 0 0 8px 0; }");
+        rules.add("table.front { margin: 0 0 8px 0; }");
         // Swing reads padding side by side, not a shorthand of four
-        css.addRule("td.front-key { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 14px; color: "
+        rules.add("td.front-key { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 14px; color: "
                 + muted + "; }");
-        css.addRule("td.front-value { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 0; }");
-        css.addRule("ul, ol { margin-left: 18px; margin-top: 2px; margin-bottom: 4px; }");
-        return css;
+        rules.add("td.front-value { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 0; }");
+        rules.add("ul, ol { margin-left: 18px; margin-top: 2px; margin-bottom: 4px; }");
+        return rules;
     }
 
     /**

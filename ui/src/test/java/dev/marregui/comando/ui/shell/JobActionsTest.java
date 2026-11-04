@@ -1,7 +1,9 @@
 package dev.marregui.comando.ui.shell;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -27,6 +29,7 @@ import static org.awaitility.Awaitility.await;
 /// - A list that cannot be read opens no window and says why, so no Save can hand `kit.py` an empty list.
 /// - Apply pending changes hands over the jobs read at that moment, not the list read a minute or hours before.
 /// - Apply with a list that cannot be read hands over nothing and says why.
+/// - A look reads the jobs through `kit.py` only when the manifest or the runner's state changed, not when a log grew.
 class JobActionsTest {
 
     private static final KitRoot.Manifest KIT = new KitRoot.Manifest("marregui", "BRAIN", List.of(), List.of(), List.of(), List.of());
@@ -38,6 +41,7 @@ class JobActionsTest {
 
     private final List<Intent> sent = new CopyOnWriteArrayList<>();
     private final List<List<KitJob>> saved = new CopyOnWriteArrayList<>();
+    private final AtomicInteger read = new AtomicInteger();
 
     private static KitJobs list(final String... names) {
         return new KitJobs(true, Arrays.stream(names).map(n -> new KitJobs.Entry(
@@ -47,7 +51,6 @@ class JobActionsTest {
 
     /** Actions on a kit whose reads answer {@code reads} in turn, the last one again and again. */
     private JobActions actions(final Path tmp, final KitJobs... reads) {
-        final AtomicInteger read = new AtomicInteger();
         final KitRoot root = new KitRoot(tmp, Optional.of(KIT), tmp);
         final Setup setup = new Setup() {
             @Override
@@ -117,5 +120,40 @@ class JobActionsTest {
         await().atMost(Duration.ofSeconds(10)).until(() -> !notices(Notice.Level.ERROR).isEmpty());
         assertThat(notices(Notice.Level.ERROR).getFirst()).isEqualTo("The kit jobs were not applied: no python3");
         assertThat(saved).isEmpty();
+    }
+
+    /// A look on an unchanged kit reads nothing; a changed manifest, a run recorded or a job started is read once; a log
+    /// that grew is not.
+    @Test
+    void aLookReadsTheJobsOnlyWhenTheManifestOrTheRunnersStateChanged(@TempDir final Path tmp) throws IOException {
+        final Path manifest = Files.writeString(tmp.resolve(KitRoot.FILE), "{}");
+        final Path state = Files.createDirectories(tmp.resolve(JobActions.STATE));
+        final Path runs = Files.writeString(state.resolve("a.tsv"), "start\texit\n");
+        final Path log = Files.writeString(state.resolve("a.log"), "one\n");
+        final JobActions a = actions(tmp, list("a"));
+
+        a.readIfChanged();
+        assertThat(read).as("the first look reads").hasValue(1);
+        a.readIfChanged();
+        assertThat(read).as("nothing changed").hasValue(1);
+
+        Files.writeString(log, "one\ntwo\n");
+        // later by more than any filesystem's time resolution, so only the exclusion keeps the look from reading
+        Files.setLastModifiedTime(log, FileTime.fromMillis(Files.getLastModifiedTime(log).toMillis() + 5_000));
+        a.readIfChanged();
+        assertThat(read).as("only a log grew").hasValue(1);
+
+        Files.writeString(runs, "start\texit\n2026-11-03T17:00\t0\n");
+        a.readIfChanged();
+        assertThat(read).as("a run was recorded").hasValue(2);
+
+        Files.writeString(state.resolve("a.pid"), "4242");
+        a.readIfChanged();
+        a.readIfChanged();
+        assertThat(read).as("a job started, read once").hasValue(3);
+
+        Files.writeString(manifest, "{\"jobs\": []}");
+        a.readIfChanged();
+        assertThat(read).as("the manifest changed").hasValue(4);
     }
 }

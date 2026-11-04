@@ -397,8 +397,9 @@ The Files tab shows the jobs as one **Jobs** row, the first inside the KIT row
 ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)): its detail counts them and names what runs
 now or the next run (`5 jobs · 1 paused · next Thu 07:15`); the dot marks a change the scheduler has not taken (a job
 running when it was saved is left as it was), a red name a failed last run or jobs that cannot be read; its tooltip says
-the most pressing of these. comando reads them through `jobs --json` at start, after every change, and every minute
-while the Files tab shows.
+the most pressing of these. comando reads them through `jobs --json` at start, after every change it makes, and,
+while the Files tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (a job's pid or its runs;
+looked at every 10 s, logs left out).
 
 A double click, Enter, or **Configure kit jobs** (the row's menu, the Files tab's menu, the palette) reads the jobs
 again and opens the **Kit jobs** window on them (a list that cannot be read opens none, and a notice says why): the jobs

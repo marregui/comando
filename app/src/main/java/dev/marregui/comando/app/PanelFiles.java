@@ -270,8 +270,9 @@ final class PanelFiles {
                 notices.accept(f.getFileName() + " changed outside comando; that version is kept as " + aside.getFileName());
             }
             AtomicFiles.move(tmp, f);
-        } finally {
-            Files.deleteIfExists(tmp);
+        } catch (final IOException | RuntimeException e) {
+            AtomicFiles.deleteAfter(e, tmp); // only a failure leaves it, and the delete must not hide the failure
+            throw e;
         }
         stamps.put(id, stamp(f));
         reported.remove(id);

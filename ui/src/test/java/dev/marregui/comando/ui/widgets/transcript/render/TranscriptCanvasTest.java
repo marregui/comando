@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import com.sun.management.ThreadMXBean;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Font;
@@ -7,6 +8,7 @@ import java.awt.Graphics2D;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - find opens closed cards and keeps the reader's match while typing on; select all copies every box
 /// - streaming keeps the layouts of finished paragraphs; tabs expand to four-column stops
 /// - links in text, tool summaries, inputs and results are followed on a double click
+/// - asking for every block, as the widget does on each render, allocates nothing however long the transcript
 @ExtendWith(OnEdt.class)
 class TranscriptCanvasTest {
 
@@ -105,6 +108,29 @@ class TranscriptCanvasTest {
 
     /// A thinking block shows while it is the latest item of its list and is hidden once another item follows, at the
     /// top level and inside a card, while every block stays counted.
+    @Test
+    void askingForEveryBlockAllocatesNothingHoweverLongTheTranscript() {
+        final int n = 1_000;
+        final Block[] blocks = new Block[n];
+        for (int i = 0; i < n; i++) {
+            blocks[i] = new Block.TurnEnd(0, 0, 1, false, "turn " + i);
+            canvas.append(i, blocks[i]);
+        }
+        final ThreadMXBean threads = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+        int same = 0;
+        final long before = threads.getCurrentThreadAllocatedBytes();
+        for (int pass = 0; pass < 50; pass++) {
+            for (int i = 0; i < n; i++) {
+                same += canvas.blockAt(i) == blocks[i] ? 1 : 0;
+            }
+        }
+        final long allocated = threads.getCurrentThreadAllocatedBytes() - before;
+        assertThat(same).isEqualTo(50 * n);
+        assertThat(canvas.itemCount()).isEqualTo(n);
+        // a boxed index per block per pass would be 16 B x 872 x 50, about 700 KB
+        assertThat(allocated).as("bytes allocated by 50 passes over %d blocks", n).isLessThan(16_384);
+    }
+
     @Test
     void thinkingShowsUntilTheNextItemInItsListTakesItsPlace() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
