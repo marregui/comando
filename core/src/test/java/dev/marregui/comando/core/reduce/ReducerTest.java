@@ -1014,6 +1014,7 @@ class ReducerTest {
                 }
                 apply(new Intent.SessionTurnEnded("work", 0, 0.1, 3_812L, 200_000L, false, "", "", counted));
                 carryOns += sent(Reducer.CONTINUE_PROMPT);
+                apply(new Intent.SessionContext("work", 31_921L, 200_000L));
                 apply(new Intent.SessionTurnEnded("work", 0, 0.1, 31_921L, 200_000L, false, "", "Nothing left to do."));
                 checkpoints += sent("/reflect --auto");
             }
@@ -1025,6 +1026,39 @@ class ReducerTest {
             // after a call's context below it, the user's prompt is a crossing of its own
             assertThat(sent("/reflect --auto")).as(when + ": the user's next prompt, above").isEqualTo(counted ? 0 : 1);
         }
+    }
+
+    /// A task that goes on for one long turn after the carry-on crosses the threshold again: a model call of that turn
+    /// read the context below it, so this is a crossing of its own, and the next checkpoint needs nobody's prompt. Each
+    /// repeat takes a window's worth of real work; a compaction that cannot get below the threshold repeats nothing,
+    /// as the test above holds.
+    @Test
+    void aCarryOnThatFillsTheContextAgainRunsTheNextCheckpoint() {
+        reducer = new Reducer(clock, () -> 40);
+        state = States.twoPanels();
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+        for (int crossing = 0; crossing < 3; crossing++) {
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 420_000L, 1_000_000L, false, "", "at it"));
+            assertThat(sent("/reflect --auto")).as("crossing %d: the checkpoint", crossing).isEqualTo(1);
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 430_000L, 1_000_000L, false, "", "## Reflected"));
+            apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, "", "", true));
+            assertThat(sent(Reducer.CONTINUE_PROMPT)).as("crossing %d: the carry-on", crossing).isEqualTo(1);
+            apply(new Intent.SessionContext("work", 35_000L, 1_000_000L));
+            apply(new Intent.SessionContext("work", 410_000L, 1_000_000L));
+        }
+    }
+
+    /// A reducer without a threshold arms nothing, whatever a model call read.
+    @Test
+    void aModelCallBelowNoThresholdArmsNothing() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        state = state.withSession(state.session("work").orElseThrow().withCheckpointArmed(false).withCarriedOn(true));
+        apply(new Intent.SessionContext("work", 35_000L, 1_000_000L));
+        final SessionState x = state.session("work").orElseThrow();
+        assertThat(List.of(x.checkpointArmed(), x.carriedOn())).containsExactly(false, true);
     }
 
     /// How many prompts reading `text` the last intent sent.

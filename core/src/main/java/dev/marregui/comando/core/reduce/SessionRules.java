@@ -396,7 +396,17 @@ final class SessionRules {
         return Transition.of(s.withSession(i.name(), x -> x.withBranch(i.branch())));
     }
 
-    static Transition sessionContext(final AppState s, final Intent.SessionContext i) {
-        return Transition.of(s.withSession(i.name(), x -> x.withContext(i.tokens(), i.window())));
+    /**
+     * A model call's context. One that read below the threshold starts a crossing of its own, mid-turn too: a task that
+     * runs on for one long turn after a carry-on gets its next checkpoint, and each repeat takes that much real work. A
+     * compaction that cannot get below the threshold reads no such context, so nothing repeats (record 129).
+     */
+    static Transition sessionContext(final AppState s, final Intent.SessionContext i, final int percent) {
+        return Transition.of(s.withSession(i.name(), x -> {
+            final SessionState known = x.withContext(i.tokens(), i.window());
+            final boolean below = i.tokens() > 0
+                    && Reflection.below(known.contextTokens(), known.contextWindow(), percent);
+            return below ? known.withCheckpointArmed(true).withCarriedOn(false) : known;
+        }));
     }
 }

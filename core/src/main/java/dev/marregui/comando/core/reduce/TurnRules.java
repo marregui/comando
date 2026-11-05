@@ -353,11 +353,12 @@ final class TurnRules {
         // crossing checkpoints again; a compaction's own count never re-arms, or the checkpoint would follow its own
         // carry-on without end
         final boolean above = Reflection.above(x.contextTokens(), x.contextWindow(), percent);
-        if (percent > 0 && x.contextWindow() > 0 && read && !above) {
+        if (read && Reflection.below(x.contextTokens(), x.contextWindow(), percent)) {
             x = x.withCheckpointArmed(true);
         }
         // at the threshold, the session's own turn finished: nothing queued, no background work out, no checkpoint
-        // under way, a checkpoint command to run, and someone's prompt since the last carry-on
+        // under way, a checkpoint command to run, and since the last carry-on someone's prompt or a call below the
+        // threshold
         final boolean automatic = above && x.checkpointArmed() && !x.carriedOn() && !checkpointDone && !x.checkpointCompacts() && !i.error()
                 && !x.isBusy() && !x.isAwaitingHandOff() && x.status().isUsable() && !x.spec().checkpoint().isBlank();
         next = next.withSession(x);

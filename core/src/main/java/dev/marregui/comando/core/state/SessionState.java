@@ -27,17 +27,17 @@ import dev.marregui.comando.core.model.Status;
  * @param reflection        whether the session is due its checkpoint
  * @param checkpointCompacts the Checkpoint button's command, or the automatic checkpoint's, runs: when its turn ends,
  *                          the conversation is compacted
- * @param checkpointArmed   a turn has ended with the context below the checkpoint threshold since the last checkpoint
+ * @param checkpointArmed   a model call has read the context below the checkpoint threshold since the last checkpoint
  *                          command: the next turn that ends at or above it runs the automatic checkpoint
  * @param checkpointTurns   the turns still to end, the session's queue up to and including a checkpoint command or the
  *                          {@code /compact} that follows it; 0 when none is under way. See {@link #isCheckpointing()}
  * @param checkpointContinues the automatic checkpoint runs, its command or the {@code /compact} that follows it: when
  *                          the compaction's turn ends normally, the session is prompted to carry on with its work
  *                          (record 129's amendment); cleared on every way the checkpoint can end otherwise
- * @param carriedOn         the automatic checkpoint's carry-on prompt was sent and no prompt of the user's, or of
- *                          another session's, has run since: a turn that ends at or above the threshold then runs no
- *                          automatic checkpoint, so the checkpoint and its carry-on never repeat without someone's
- *                          prompt
+ * @param carriedOn         the automatic checkpoint's carry-on prompt was sent and neither a prompt of the user's or
+ *                          of another session's has run since nor a model call has read the context below the
+ *                          threshold: a turn that ends at or above it then runs no automatic checkpoint, so a
+ *                          compaction that cannot get below it does not repeat the checkpoint and its carry-on
  */
 public record SessionState(
         SessionSpec spec,

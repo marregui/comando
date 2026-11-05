@@ -41,9 +41,10 @@ public final class Reducer {
     private static final IntSupplier NEVER = () -> 0;
 
     /**
-     * The checkpoint threshold in force, in percent of each session's context window, read at each turn's end: the
-     * session falls due and its automatic checkpoint runs there (record 129). Read through {@link Reflection#clamp}, so
-     * the window's setting is never below 10 % (D3: no off); only {@link #NEVER} makes neither happen.
+     * The checkpoint threshold in force, in percent of each session's context window, read at each turn's end, where
+     * the session falls due and its automatic checkpoint runs, and at each model call's context (record 129). Read
+     * through {@link Reflection#clamp}, so the window's setting is never below 10 % (D3: no off); only {@link #NEVER}
+     * makes neither happen.
      */
     private final IntSupplier checkpointThreshold;
 
@@ -209,7 +210,7 @@ public final class Reducer {
             case Intent.SessionRanAt i -> SessionRules.sessionRanAt(s, i);
             case Intent.SessionExited i -> SessionRules.sessionExited(clock, s, i);
             case Intent.SessionBranch i -> SessionRules.sessionBranch(s, i);
-            case Intent.SessionContext i -> SessionRules.sessionContext(s, i);
+            case Intent.SessionContext i -> SessionRules.sessionContext(s, i, threshold());
             case Intent.OpenSubagent i -> SessionRules.openSubagent(clock, s, i);
 
             case Intent.PromptSession i -> TurnRules.promptSession(clock, s, i);

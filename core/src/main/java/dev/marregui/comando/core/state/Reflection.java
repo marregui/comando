@@ -58,4 +58,9 @@ public record Reflection(boolean due, boolean armed) {
     public static boolean above(final long tokens, final long window, final int percent) {
         return window > 0L && percent > 0 && tokens * 100L >= (long) percent * window;
     }
+
+    /** Whether the context is known to sit below the threshold; an unknown window or no threshold is neither. */
+    public static boolean below(final long tokens, final long window, final int percent) {
+        return window > 0L && percent > 0 && !above(tokens, window, percent);
+    }
 }

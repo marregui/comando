@@ -170,10 +170,12 @@ the work the checkpoint paused goes on. That carry-on turn is an ordinary one: t
 notifies at its end as any turn does, while the compaction's own turn, followed at once by it, notifies nothing. Only
 the automatic checkpoint carries on; after the Checkpoint button, a typed checkpoint or **Settle** the session waits for
 the next prompt. The automatic checkpoint runs once per crossing: any checkpoint command sent leaves the session not due
-and disarmed, and a turn that ends below the threshold, a fresh start or `/clear` arms it again. Only a context size a
+and disarmed, and a model call that reads below the threshold, a fresh start or `/clear` arms it again. Only a context size a
 model call read arms it: the count Claude Code reports after a compaction (`post_tokens`, `SessionTurnEnded.estimated`)
-is shown but never arms it. After a carry-on (`SessionState.carriedOn`), a turn that ends above the threshold starts no
-automatic checkpoint until a prompt from the user or another session has run. A session whose context window is not
+is shown but never arms it; a model call that reads below the threshold arms it at once, mid-turn too. After a carry-on
+(`SessionState.carriedOn`), a turn that ends above the threshold starts no automatic checkpoint until a prompt from the
+user or another session has run or a model call has read below the threshold: a task that fills the context again gets
+its next checkpoint, and a compaction that cannot get below the threshold does not repeat. A session whose context window is not
 known yet falls due at no size. It waits while a prompt is queued (the check repeats at that prompt's end) or background
 work is out, and does not run after a failed or interrupted turn or for a session without a checkpoint command. Every
 session comando launches gets `CONTEXT_CHECKPOINT_BY=comando` in its environment, so a hook that would checkpoint at

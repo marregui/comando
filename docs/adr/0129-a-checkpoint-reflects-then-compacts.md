@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-31 | accepted; built; amended by [record 130](0130-a-session-locks-while-its-checkpoint-runs.md) (the session locks while its checkpoint runs) and [record 131](0131-an-automatic-checkpoint-asks-nothing.md) (the automatic checkpoint carries `--auto`); the threshold amended 2026-11-01 (see Amendments: 10–100 %, no off); after an automatic checkpoint the session carries on, amended 2026-11-01 (see Amendments) | Miguel and Claude |
+| 2026-10-31 | accepted; built; amended by [record 130](0130-a-session-locks-while-its-checkpoint-runs.md) (the session locks while its checkpoint runs) and [record 131](0131-an-automatic-checkpoint-asks-nothing.md) (the automatic checkpoint carries `--auto`); the threshold amended 2026-11-01 (see Amendments: 10–100 %, no off); after an automatic checkpoint the session carries on, amended 2026-11-01 (see Amendments); a model call below the threshold starts a crossing, amended 2026-11-05 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -118,3 +118,10 @@ above the threshold runs no automatic checkpoint until a prompt from the user or
 checkpoint and its carry-on never repeat on their own. A fresh start and a `/clear`'s new conversation still arm it. The
 threshold logged for an intent is the value the reducer applied to it, read once per intent; without a log the reducer
 reads the setting. Tested in `ReducerTest` and `IntentLogTest`.
+
+2026-11-05, Miguel: after a carry-on, a long unattended task had no second checkpoint and ran on to Claude Code's own
+compaction with nothing written to memory. A model call that reads the context below the threshold now starts a crossing
+at once, mid-turn too (`Intent.SessionContext`): it arms the session and ends `SessionState.carriedOn`. Each repeat takes
+that much real work; a compaction that cannot get below the threshold reads no such context, so the checkpoint and its
+carry-on still do not repeat. Tested in `ReducerTest` (`aCarryOnThatFillsTheContextAgainRunsTheNextCheckpoint`,
+`oneUserPromptLeadsToOneAutomaticCheckpointAndOneCarryOn`).
