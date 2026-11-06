@@ -649,10 +649,7 @@ replaces the text.
   it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's
   also offers Back up the brain, KIT's Back up the kit and Upgrade the kit…
   ([Kit and brain §3.3](kit-and-brain.md#33-back-up-the-brain-and-the-kit)). A folder of `comando-kit.json` that breaks
-  the folders' rules is left out and named in a notice at start; the palette's Kit ▸ Repair comando-kit.json… rewrites
-  the file without those entries once you confirm, and a notice names each entry it took out, keeping the old one as
-  `comando-kit.json.bak-<time>`, one per repair, never overwritten
-  ([Kit and brain §2.4](kit-and-brain.md#24-the-manifest)). A group's folder inside its row and a subfolder offer
+  the folders' rules is left out; [Kit and brain §2.4](kit-and-brain.md#24-the-manifest) tells the repair. A group's folder inside its row and a subfolder offer
   neither: the brain and the kit are each one unit ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
 - **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
   desktop's Trash after one question naming it; the folder's row never goes, and a selection reaching another folder
@@ -792,11 +789,8 @@ shared by every instance ([§4.1](#41-the-comando-edge)). The Java preferences t
 `settings.json` (node `dev/marregui/comando`; tests use `comando.prefsNode`) are read once, when the file does not exist
 yet, and left as they were.
 
-In the root ([Kit and brain §3.1](kit-and-brain.md#31-the-root)) comando reads Claude Code's conversations in `projects/` and the effort levels in
-`settings.json`, and never writes either. It writes into the root only on the user's action: a file edited in a panel or
-the comparison window, an index file the folders window creates, a listing file's lines for an entry moved to the Trash,
-and the backups of the brain and the kit, which commit in their own repositories
-([Kit and brain §3.3](kit-and-brain.md#33-back-up-the-brain-and-the-kit)).
+What comando reads and writes in the root is in [Kit and brain §2.1](kit-and-brain.md#21-parts); it never writes
+`projects/` or `settings.json`.
 
 ### 7.2 Store files
 

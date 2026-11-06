@@ -19,6 +19,7 @@ for the newest release). Run each step, report what it printed when it fails, an
 |---|---|---|
 | Claude Code CLI, 2.1.316 or later | `claude --version` | the session running this recipe is Claude Code; comando finds `claude` at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH`. An older version: ask the user to update it (`claude update`) before going on |
 | GitHub CLI, signed in | `gh auth status` and `gh repo view marregui/comando --json name` | install `gh` (macOS `brew install gh`; Debian and Ubuntu `sudo apt-get install -y gh`; Windows `winget install --id GitHub.cli -e`), then ask the user to run `gh auth login` |
+| Python 3.9 or later | `python3 --version` (`python` on Windows) | the kit's hooks and tools run on it, and a guard that cannot start refuses the call it guards ([Kit and brain §2.2](docs/kit-and-brain.md#22-a-sessions-life-and-which-part-acts)); [§5](#5-the-kit)'s recipe installs it |
 | a desktop session | macOS; Linux with X11 or Wayland (XWayland); Windows 10 or 11 | comando is a window application |
 
 No Java is needed: each package carries its own runtime. A comando release needs, at least, the newest Claude Code on
@@ -119,8 +120,8 @@ and Ubuntu. A second start while comando runs only says that it is already runni
 
 ## 5. The kit
 
-The kit is the Claude Code setup comando runs every session on: instructions, settings with their hooks, the checkpoint
-skill, the manifest comando reads. The brain is what those sessions remember and know: memory, a knowledge base, a
+The kit is the Claude Code setup comando runs every session on: instructions, settings, hooks, tools, skills, the
+manifest comando reads, and a check that proves its shape. The brain is what those sessions remember and know: memory, a knowledge base, a
 scratchpad. They are two folders of their own, `~/comando-kit` and `~/comando-brain`; the user's own `~/.claude` is
 never touched, so a user trying comando keeps their Claude Code setup as it was. No kit is published: you create both
 for the user from [Kit and brain](docs/kit-and-brain.md) of the installed release, read at its tag (`TAG` from
@@ -182,5 +183,5 @@ kit…** on the KIT row when a newer tag is out.
    (`security delete-generic-password -s comando`, once per saved password).
 4. The kit and the brain stay. To remove them: back the brain up first (**Back up the brain**, or a copy of
    `~/comando-brain`); when the kit has a jobs tool, remove its scheduled jobs with
-   `echo '[]' | python3 ~/comando-kit/install/kit.py jobs set --root ~/comando-kit` (exit 0 or 1); then ask the user to
+   `echo '[]' | python3 ~/comando-kit/install/kit.py jobs set --root ~/comando-kit` (exit 0 or 1; `python` on Windows); then ask the user to
    move `~/comando-kit`, and `~/comando-brain` if they want it gone too, to the Trash. Never delete them yourself.

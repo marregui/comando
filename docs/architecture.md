@@ -634,7 +634,7 @@ every tab: however many panels ask, at most one Haiku process runs.
 | `ClaudePort` | `start`, `stop`, `send(name, text, origin, preface)`, `interrupt`, `clearTranscript`, `loadHistory`, `forget`, `showSubagent` | the reducer's effects, through `EffectRouter` |
 | `TopicPort` (`ClaudeTopics`) | `read(key, source, urgent, done)` | `ui`, set by `app` through `ComandoUi.topics` |
 | `ClaudeAdapter.watchPlanUsage(every)` | reads both plans' usage now and every period | `app` at start (every 20 min) |
-| `ClaudeAdapter.metrics(log)`, `checkpointThreshold(supplier)` | the `MetricsLog` the sessions write, and the checkpoint threshold, a percentage of the context window, 10 to 100 in the window; above 0 it sets `CONTEXT_CHECKPOINT_BY` on the sessions launched (record 129) | `app`'s wiring |
+| `ClaudeAdapter.metrics(log)`, `checkpointByComando()` | the `MetricsLog` the sessions write, and `CONTEXT_CHECKPOINT_BY` on every session launched (record 129) | `app`'s wiring |
 | `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog and the session dialog |
 | `ClaudeVersion.check(executable, launch)` | a warning, or empty | `app` at start |
 | `KitJson.resolve`, `KitJson.read` | the root and its kit | `app`'s `AppConfig` |

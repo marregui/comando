@@ -47,9 +47,11 @@ drifts with its user's habits, as it should. The contract is: the manifest ([§2
 ([§3.1](#31-the-root)), the settings
 comando reads and the retention it needs ([§2.5](#25-settings)), what the repository ignores
 ([§2.6](#26-what-the-repository-ignores)), the launch environment ([§3.1](#31-the-root)), the Files tab's layout
-([§3.2](#32-the-files-tab)), the jobs tool when the manifest lists jobs ([§3.5](#35-scheduled-jobs)) and the checkpoint
-skill with its automatic form ([§6.2](#62-depths)). A kit created from this document, or brought by the user, is checked
-against these sections alone.
+([§3.2](#32-the-files-tab)), the `INSTALL.md` section *Upgrade* when the kit is tagged on a remote
+([§3.4](#34-version-and-upgrade)), the jobs tool when the manifest lists jobs ([§3.5](#35-scheduled-jobs)) and the
+checkpoint skill with its automatic form ([§6.2](#62-depths)). A kit created from this document, or brought by the user, is checked
+against these sections alone. A kit may add a **layout contract** of its own, the rules its hooks and tools meet, in
+its `README.md`; comando reads none of it.
 
 ### 2.1 Parts
 
@@ -57,10 +59,11 @@ against these sections alone.
 |---|---|---|
 | `comando-kit.json` | the manifest: the kit's name, its brain, the Files tab's folders, its scheduled jobs, what it needs outside the folder ([§2.4](#24-the-manifest)) | required |
 | `.gitignore` | what the kit's repository leaves out: credentials, Claude Code's runtime files, the brain when it sits inside the kit ([§2.6](#26-what-the-repository-ignores)) | required |
-| `settings.json` | Claude Code's settings: permissions, retention, the hooks; each hook names its script as `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/…` ([§2.5](#25-settings)) | required |
+| `settings.json` | Claude Code's settings: permissions, retention, the hooks; each hook entry runs a command under `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`, so it works on any root ([§2.5](#25-settings)) | required |
 | `skills/` | the skills; `reflect` answers the checkpoint ([§6](#6-reflect-the-consolidation-step)) | `reflect` required |
 | `CLAUDE.md` | the instructions every session loads | recommended |
-| `hooks/` | the hooks' scripts, and the files they put in context | recommended |
+| `README.md` | the kit's layout contract: what each folder holds and the rules every hook and tool meets, proved by a check among its tools | recommended |
+| `hooks/` | one folder per hook: its contract, its code and its test, and the files it puts in context | recommended |
 | `agents/` | the subagent types the sessions dispatch ([§2.7](#27-agents-specs-and-reviews)) | recommended |
 | `templates/` | the agent spec ([§2.7](#27-agents-specs-and-reviews)) and the KB's set templates ([§4.1.3](#413-kb)) | recommended |
 | `tools/` | one folder per tool: its contract, its command and its test; the command folders are on the Bash tool's `PATH` | recommended |
@@ -68,12 +71,17 @@ against these sections alone.
 | `INSTALL.md` | the kit's own recipe; its section *Upgrade* is what the `kit` session follows ([§3.4](#34-version-and-upgrade)) | when tagged on a remote |
 | `install/kit.py` | the jobs tool, which alone writes the jobs to the platform's scheduler ([§3.5](#35-scheduled-jobs)) | when the manifest lists jobs |
 
-comando's code reads five things of a kit: the manifest; the root's `settings.json`, for a new session's default model,
-effort and permission mode; the root's `projects/`, for stored conversations; the root's `skills/<name>/SKILL.md`, to
-link a skill call in a transcript to its file; and, when the kit has one, the jobs tool, which it calls. It writes two:
-a missing index file of a Files-tab folder inside the kit or the brain ([§3.2](#32-the-files-tab)), and the manifest
-when the user repairs it, keeping the old one as `comando-kit.json.bak-<time>` ([§2.4](#24-the-manifest)). Its upgrade
-prompt names the kit's `INSTALL.md`. The rest of the layout is what the sessions work by: a kit that lacks a recommended
+comando's code reads of a kit: the manifest; the folders it names and their index files ([§3.2](#32-the-files-tab)); the
+root's `settings.json`, for the keys of [§2.5](#25-settings); the root's `projects/`, for stored conversations; the
+root's `skills/<name>/SKILL.md`, to link a skill call in a transcript to its file; the root as a git repository, for
+its version and backup ([§3.3](#33-back-up-the-brain-and-the-kit), [§3.4](#34-version-and-upgrade)); `.kit-jobs/`, the
+jobs' runner files ([§3.5](#35-scheduled-jobs)); `tools/`, where the job editor's program chooser starts; and, when the
+kit has one, the jobs tool, which it calls. Its upgrade prompt names the kit's `INSTALL.md`. It writes, on the user's
+action: a file edited in a panel or the comparison window; a listing file's lines for an entry moved to the Trash
+([Workbench §6](workbench.md#6-the-files-tab)); the backup's commits and pushes ([§3.3](#33-back-up-the-brain-and-the-kit));
+the manifest when the user repairs it, keeping the old one as `comando-kit.json.bak-<time>`
+([§2.4](#24-the-manifest)). When the folders are saved it writes a missing index file of a Files-tab folder inside the
+kit or the brain ([§3.2](#32-the-files-tab)). The rest of the layout is what the sessions work by: a kit that lacks a recommended
 part runs without what that part carries.
 
 ### 2.2 A session's life, and which part acts
@@ -97,7 +105,7 @@ person needs in a session an agent made, and to stay silent at a size where coma
 Guards fail closed: a guard hook sets Claude Code's `"onFailure": "block"`, so one that crashes, times out or cannot
 start refuses the call instead of letting it through, and it refuses with exit code 2. The hook that puts the tools on
 `PATH` appends `export PATH=…` lines to the file Claude Code names in `CLAUDE_ENV_FILE`, at every start, so the Bash
-tool of the session and of its subagents finds the scripts. The rules that must survive compaction come back after each
+tool of the session and of its subagents finds the tools. The rules that must survive compaction come back after each
 compaction as the plain output of a `SessionStart` hook with the matcher `compact` (plain standard output is context on
 `SessionStart` and `UserPromptSubmit`; other events need Claude Code's JSON `additionalContext`).
 
@@ -123,11 +131,11 @@ comando reads in [record 133](adr/0133-every-stored-file-has-a-schema-and-a-vers
 | `jobs` | no | the scheduled jobs, written by the jobs tool only ([§3.5](#35-scheduled-jobs)) |
 
 comando ignores keys it does not know, so a kit may add its own (`required` and `for` on a requirement, say). A file
-that is not a JSON object, has a later version, no `name`, or a folder whose path leaves its root, is refused whole:
+that is not a JSON object, has another version, no `name`, or a folder whose path is empty or leaves its root, is refused whole:
 comando tells the user why at start and runs without the kit, ending "Correct the file, then restart comando to run on
 the kit". A folder that breaks one of the rules every Files-tab folder meets
-([Workbench §6](workbench.md#6-the-files-tab): its icon, an index inside it, a listing file that is a file name, a name
-used once) is left out, and the window names it at start, by its place and name, with what is wrong; **Kit ▸ Repair
+([Workbench §6](workbench.md#6-the-files-tab): a name, used once; a `root` of `kit` or `brain`; its icon; an index
+inside it; a listing file that is a file name) is left out, and the window names it at start, by its place and name, with what is wrong; **Kit ▸ Repair
 comando-kit.json…** in the palette rewrites the file without those entries once the user confirms (and removes nothing
 when the file's problems changed since, as after a kit upgrade), a notice naming each entry it took out, and keeps the
 old one beside it as `comando-kit.json.bak-<time>`, one per repair, never overwritten. comando writes the manifest only
@@ -146,11 +154,8 @@ The root's `settings.json` is Claude Code's, and comando reads four of its keys:
 | `modelSettings.<model>.effortLevel` | the base effort comando takes for a session of that model (Claude Code starts its turns at it), before `effortLevel` |
 | `permissions.defaultMode` | shown, read-only, in the session dialog's context line |
 
-**Permissions live here alone.** comando passes no permission mode and no extra folders to `claude`: the kit's
-`permissions` (its `defaultMode`, `allow` and `deny` rules) hold for every session, a session an agent creates included;
-a session's working folder may add its own `.claude/settings.json` and `settings.local.json` on top, as Claude Code does
-for any session, and they may widen the rules ([record 7](adr/0007-default-permission-mode.md),
-[Claude Code §1.1](claude-code.md#11-the-process)). A tool call the rules leave to ask comes to comando's approval cards
+**Permissions.** The kit's `permissions` (its `defaultMode`, `allow` and `deny` rules) hold for every session; what a
+working folder adds on top is in [Claude Code §1.1](claude-code.md#11-the-process). A tool call the rules leave to ask comes to comando's approval cards
 ([Claude Code §4.1](claude-code.md#41-approval-cards)). comando allows nothing of its own. An automatic checkpoint must
 ask nothing and runs while the session is locked ([§6.2](#62-depths)), so a kit used with comando allows everything that
 run does, or each call is a card and the locked session waits on the user:
@@ -266,9 +271,9 @@ The kit and the brain are two folders, each anywhere and each a git repository o
 repository checkout serves too). A new install never touches `~/.claude`: it creates the kit at `~/comando-kit` and the
 brain at `~/comando-brain`, and names the brain in the manifest ([§8](#8-creating-a-kit-and-a-brain)), so a user trying
 comando keeps their own Claude Code setup exactly as it was. A user who wants every Claude Code session, inside comando
-or not, to run on a kit makes `~/.claude` itself the kit instead. A `comando-kit.json` that does not read (not JSON, a
-later version, no name, a folder outside the root) leaves comando without a kit, on `~/.claude`, never on the next
-folder's kit: a notice at start names the file and why it does not read, and ends "Correct the file, then restart
+or not, to run on a kit makes `~/.claude` itself the kit instead. A `comando-kit.json` that does not read (not JSON, another
+version, no name, a folder outside the root) leaves comando without a kit, on the folder `CLAUDE_CONFIG_DIR` names, else
+on `~/.claude`, never on the next folder's kit: a notice at start names the file and why it does not read, and ends "Correct the file, then restart
 comando to run on the kit" ([§2.4](#24-the-manifest)).
 
 Every `claude` comando starts (sessions, the plan usage reader, the topics, the version check) gets this environment
@@ -282,8 +287,8 @@ from its instance:
 | `COMANDO_CREATED_BY` | the agent that made the session | a session an agent created ([Claude Code §1.1](claude-code.md#11-the-process)) |
 | `CONTEXT_CHECKPOINT_BY` | `comando` | comando runs the session's checkpoint at its threshold ([Claude Code §2](claude-code.md#2-the-checkpoint)); a hook that would remind or checkpoint at that size leaves it to comando |
 
-With a kit, and only then, each also gets `--settings '{"autoMemoryDirectory": "<brain>/MEMORY"}'`, so the brain's
-memory loads whatever the user's own settings say. Stored conversations and their import are read from
+With a kit, and only then, each but that `kit` session also gets
+`--settings '{"autoMemoryDirectory": "<brain>/MEMORY"}'`, so the brain's memory loads whatever the user's own settings say. Stored conversations and their import are read from
 `<root>/projects`. A session on a root other than `~/.claude` neither reads nor writes `~/.claude`. Each comando
 instance is isolated: its sessions get its root, its brain and its data root, and nothing of another instance's
 ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)).
@@ -319,10 +324,9 @@ The rows the Files tab gives a kit depend on its layout:
 A folder inside the kit's folder or the brain's that names an `index` file which does not exist, in a folder that does,
 gets one when the folders are saved, with a title and the line "`/reflect` keeps it current"; without a kit, comando
 creates none in the user's own `~/.claude`. A new brain also has its index files from its skeleton
-([§4.3](#43-the-skeleton)). Keeping them is the kit's ([§6.3](#63-the-steps)). In a `deletable` folder the Trash takes
-out, with an entry, its own line in the nearest `listedIn` file at or above it: a list item or table row whose first
-element is the entry's path relative to that file's folder (`topic/01-x.md`, `work/` for a folder). Any other line
-naming it stays and is reported ([§4.1.2](#412-scratchpad)).
+([§4.3](#43-the-skeleton)). Keeping them is the kit's ([§6.3](#63-the-steps)). `listedIn` names the file the Trash keeps
+current ([Workbench §6](workbench.md#6-the-files-tab)); any other line naming an entry stays and is reported
+([§4.1.2](#412-scratchpad)).
 
 ### 3.3 Back up the brain and the kit
 
@@ -671,7 +675,6 @@ was doing?
 | Aspect | Rule |
 |---|---|
 | a row | one query (a prompt, or an action the session took), the memory files whose rules applied, and for each whether the session had it loaded |
-| format | a tab-separated file with a header: `id`, `kind` (`prompt` or `action`), `session`, `time`, `index_sha` (the brain's commit of the index then), `query` (short, no third-party names), `files` (a comma list), `rules` (the headings that applied), `loaded` (one `y` or `n` per file), `source` (`sample` or `correction`), `note` |
 | who adds rows | `/reflect`, a few each week, from a seeded sample of the week's queries, labelled with the user; a correction caused by a missed cue goes in too |
 | who reads it | the recall tool: loaded over applicable, per query class, with a confidence interval |
 | where | in the brain, not the kit: its rows describe the user's real prompts |
@@ -702,9 +705,10 @@ nothing yet.
 ## 8. Creating a kit and a brain
 
 What an agent does to give a user a working kit and brain, given only this document; [INSTALL.md §5](../INSTALL.md#5-the-kit)
-sends it here. The kit it creates is the smallest that honours the contract ([§2](#2-the-kit)) and works the brain's
-method; no script is required beyond the one below, and every other part of [§2.1](#21-parts) is added later, when the
-user asks for what it carries. The kit goes to `~/comando-kit` (`K` below) and the brain to `~/comando-brain` (`B`); the
+sends it here. The kit it creates honours the contract ([§2](#2-the-kit)), works the brain's method and has the layout of
+[§2.1](#21-parts): a layout contract and a check that proves it, hooks and tools as folders with their code, test and
+contract, Python only, a guard, the roll, the checkpoint, a ledger of agent runs, an index check and agent specs. Every
+other part of §2.1 is added later, when the user asks for what it carries. The kit goes to `~/comando-kit` (`K` below) and the brain to `~/comando-brain` (`B`); the
 user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windows `~` is `%USERPROFILE%`.
 
 ### 8.1 The steps
@@ -716,35 +720,44 @@ user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windo
 2. **Check the tools.** `claude --version`, `git --version`, `python3 --version` and `sh -c 'echo ok'` answer. When one
    does not, ask the user to install it, then check again: macOS `xcode-select --install` (git and python3);
    Debian and Ubuntu `sudo apt-get install -y git python3`; Windows `winget install --id Git.Git -e` (git, and the `sh`
-   the hooks run under) and `winget install --id Python.Python.3.13 -e`. `python3` is needed only by the checks of step
-   6. On Windows without `sh`, write `settings.json` without its `hooks` key: the skill rolls the day folder itself in
-   a run the user starts.
+   the hooks run under) and `winget install --id Python.Python.3.13 -e`. `python3` must be 3.9 or later: the hooks and tools run on it, and a guard that cannot
+   start refuses the call it guards. On Windows, write `python` for `python3` in the hook commands; without `sh`, write
+   `settings.json` without its `hooks` key: the skill rolls the day folder itself in a run the user starts, and no
+   guard runs.
 3. **Show the plan and ask once.** One table: every folder and file below, the hooks and what each does, what the
-   settings allow (the three MCP tools, reads and edits inside the brain, [§2.5](#25-settings)), that no job is
+   settings allow (the three MCP tools, reads and edits inside the brain, the two tools the checkpoint runs,
+   [§2.5](#25-settings)), that no job is
    scheduled, and that `~/.claude` is not touched. Change nothing before the user agrees.
 4. **The kit.** `mkdir -p ~/comando-kit && git -C ~/comando-kit init -b main`, then write the files of
-   [§8.2](#82-the-kits-files) with their names and text as given, `<today>` as `YYYY-MM-DD` and `<brain>` in
-   `settings.json` as the brain's absolute path (`printf '%s\n' "$HOME/comando-brain"`).
+   [§8.2](#82-the-kits-files) with their names and text as given, `<brain>` in `settings.json` as the brain's absolute
+   path as the filesystem gives it
+   (`python3 -c 'import os; print(os.path.realpath(os.path.expanduser("~/comando-brain")))'`). A `<today>` in §8.2 stays
+   as it is: there it stands for whatever day a session reads it. Make the commands executable:
+   `for d in ~/comando-kit/tools/*/; do chmod +x "$d$(basename "$d")"; done`.
 5. **The brain.** `mkdir -p ~/comando-brain && git -C ~/comando-brain init -b main`, then write the files of
-   [§8.3](#83-the-brains-files).
-6. **Check.** Each command prints the line in the comment after it:
+   [§8.3](#83-the-brains-files), with `<today>` as `YYYY-MM-DD`, in their text and in the day folder's path.
+6. **Check.** The first three commands check the contract, the last three the kit made here. Each prints the line in the
+   comment after it; the two `kit-check` and `index-check` lines print nothing when they pass.
 
    ```sh
-   K=~/comando-kit; B=~/comando-brain
-   python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["kit"]==1 and d["name"]; print("manifest ok")' "$K/comando-kit.json"
+   K=~/comando-kit; B=$(cd ~/comando-brain && pwd -P)
+   python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("kit",1)==1 and d["name"]; print("manifest ok")' "$K/comando-kit.json"
    # manifest ok
-   python3 -c 'import json,sys; p=json.load(open(sys.argv[1]))["permissions"]; b=sys.argv[2]; assert {"Read(/"+b+"/**)", "Edit(/"+b+"/**)"} <= set(p["allow"]) and b in p["additionalDirectories"]; print("settings ok")' "$K/settings.json" "$HOME/comando-brain"
+   python3 -c 'import json,sys; p=json.load(open(sys.argv[1]))["permissions"]; b=sys.argv[2]; assert {"Read(/"+b+"/**)", "Edit(/"+b+"/**)"} <= set(p["allow"]) and b in p["additionalDirectories"]; print("settings ok")' "$K/settings.json" "$B"
    # settings ok
    for p in settings.local.json .claude.json .credentials.json projects/ usage-data/ plugins/; do git -C "$K" check-ignore -q "$p" || echo "not ignored: $p"; done; echo checked
    # checked
-   COMANDO_BRAIN="$B" sh "$K/hooks/scratchpad-roll.sh"; ls "$B/SCRATCHPAD"
-   # <today>  FRICTION.md  README.md
+   python3 "$K/tools/kit-check/kit-check" --tests
+   COMANDO_BRAIN="$B" python3 "$K/hooks/roll/roll.py"; ls "$B/SCRATCHPAD"
+   # <today>, FRICTION.md and README.md, one line each in a pipe
+   python3 "$K/tools/index-check/index-check" --brain "$B"
    ```
 
-7. **Commit.** When `git config user.email` prints nothing, ask the user for the name and address their commits carry
-   and set them in both repositories (`git -C ~/comando-kit config user.name '<name>'`, `… user.email '<address>'`, and
-   the same for `~/comando-brain`). Then `git -C ~/comando-brain add -A && git -C ~/comando-brain commit -m 'Brain
-   created'`, and the same in `~/comando-kit` with `'Kit created'`. Add a remote to either only when the user names one,
+7. **Commit.** When `git -C ~/comando-kit config user.email` prints nothing, ask the user for the name and address their
+   commits carry and set them in both repositories (`git -C ~/comando-kit config user.name '<name>'`,
+   `… user.email '<address>'`, and the same for `~/comando-brain`). Then
+   `git -C ~/comando-brain add -A && git -C ~/comando-brain commit -m 'Brain created'`, and the same in `~/comando-kit`
+   with `'Kit created'`. Add a remote to either only when the user names one,
    a private repository; **Back up the brain** and **Back up the kit** stay off until then
    ([§3.3](#33-back-up-the-brain-and-the-kit)).
 8. **Sign the kit in.** The kit is a Claude Code config folder of its own, signed in once: ask the user to run, in
@@ -754,6 +767,8 @@ user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windo
    jobs tool ([§3.5](#35-scheduled-jobs)). Report what was created, in a table.
 
 ### 8.2 The kit's files
+
+**What Claude Code and comando load.**
 
 `K/comando-kit.json`: the kit's folder as the KIT row, the brain's three folders as the BRAIN row
 ([§3.2](#32-the-files-tab)).
@@ -780,7 +795,10 @@ user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windo
   "requirements": [
     {"tool": "git", "check": ["git", "--version"],
      "install": {"macos": ["xcode-select", "--install"], "linux": ["sudo", "apt-get", "install", "-y", "git"],
-                 "windows": ["winget", "install", "--id", "Git.Git", "-e"]}}
+                 "windows": ["winget", "install", "--id", "Git.Git", "-e"]}},
+    {"tool": "python3", "check": ["python3", "--version"],
+     "install": {"macos": ["xcode-select", "--install"], "linux": ["sudo", "apt-get", "install", "-y", "python3"],
+                 "windows": ["winget", "install", "--id", "Python.Python.3.13", "-e"]}}
   ]
 }
 ```
@@ -842,8 +860,8 @@ __pycache__/
 ```
 
 `K/settings.json` ([§2.5](#25-settings)): transcripts kept, permissions that ask before each tool but allow what the
-automatic checkpoint does (the three MCP tools it calls, reads and edits inside the brain, the brain as a working
-directory), and two hooks. `<brain>` is the brain's absolute path, written in at step 4.
+automatic checkpoint does (the three MCP tools it calls, reads and edits inside the brain, the two tools it runs, the
+brain as a working directory), and the four hooks. `<brain>` is the brain's absolute path, written in at step 4.
 
 ```json
 {
@@ -851,51 +869,21 @@ directory), and two hooks. `<brain>` is the brain's absolute path, written in at
   "permissions": {
     "defaultMode": "default",
     "allow": ["mcp__comando__decision_hold", "mcp__comando__decisions_settled", "mcp__comando__ui_get_state",
-              "Read(/<brain>/**)", "Edit(/<brain>/**)"],
+              "Read(/<brain>/**)", "Edit(/<brain>/**)", "Bash(index-check:*)", "Bash(ledger:*)"],
     "additionalDirectories": ["<brain>"],
     "deny": []
   },
   "hooks": {
     "SessionStart": [
-      {"matcher": "startup", "hooks": [{"type": "command", "command": "sh \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/scratchpad-roll.sh\"", "timeout": 15}]},
-      {"matcher": "compact", "hooks": [{"type": "command", "command": "cat \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/critical-rules.md\"", "timeout": 5}]}
+      {"hooks": [{"type": "command", "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/tool-path/tool_path.py\"", "timeout": 5}]},
+      {"matcher": "startup", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/roll/roll.py\"", "timeout": 15}]},
+      {"matcher": "compact", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/compact-rules/compact_rules.py\"", "timeout": 5}]}
+    ],
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/bash-guard/bash_guard.py\"", "timeout": 5, "onFailure": "block"}]}
     ]
   }
 }
-```
-
-`K/hooks/scratchpad-roll.sh`, the roll ([§4.1.2](#412-scratchpad)). It finds the brain in `COMANDO_BRAIN`, which
-comando sets, else `~/comando-brain`; it renames and reports, and leaves merging and filing to the session:
-
-```sh
-#!/bin/sh
-# Keeps the scratchpad to one day folder, today's: renames the newest day folder to today, so topics and task
-# numbers carry over; names any other day folder for the session to merge. Prints only what it did.
-pad="${COMANDO_BRAIN:-$HOME/comando-brain}/SCRATCHPAD"
-[ -d "$pad" ] || exit 0
-today=$(date +%Y-%m-%d)
-days=$(cd "$pad" && ls -d 2[0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9] 2>/dev/null | sort)
-if [ ! -d "$pad/$today" ]; then
-  last=$(printf '%s\n' "$days" | grep -v "^$today\$" | tail -n 1)
-  if [ -n "$last" ]; then
-    mv "$pad/$last" "$pad/$today" && echo "scratchpad: $last renamed to $today"
-  else
-    mkdir "$pad/$today" && printf '%s\n' '# Scratchpad' '' '| Folder | Holds |' '|---|---|' '' \
-      '## Waiting on the user' '' '| # | Decision or action | Task | By |' '|---|---|---|---|' '' \
-      '## Open' '' '## Scheduled reports' > "$pad/$today/INDEX.md" && echo "scratchpad: $today created"
-  fi
-fi
-for d in $(cd "$pad" && ls -d 2[0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9] 2>/dev/null); do
-  [ "$d" = "$today" ] || echo "scratchpad: $d is another day folder: merge it into $today by topic, then remove it"
-done
-```
-
-`K/hooks/critical-rules.md`, put back after every compaction:
-
-```markdown
-After a compaction: the brain is the folder in $COMANDO_BRAIN. Memory and the KB never point at each other; only
-/reflect writes the KB; every write updates its index; nothing is deleted for good (files to the Trash, folders with
-rmdir).
 ```
 
 `K/CLAUDE.md`, the instructions every session loads:
@@ -915,8 +903,11 @@ The brain is the folder comando names in `$COMANDO_BRAIN` (outside comando: `bra
 - **KB** (`KB/`) holds checked knowledge, found by title from `00_START_HERE.md`. Only `/reflect` writes it, each
   statement verified against its source, refuted by an independent reviewer and approved by the user.
 - **The checkpoint** is the `reflect` skill. Run with `--auto` it asks nothing and holds decisions back.
-- **Agents** work from a spec in the topic's `work/` folder with an executable acceptance; writers only on disjoint
-  files; every finding is verified before it is acted on.
+- **Agents** are `writer` and `reviewer`, each from a spec in the topic's `work/` folder, copied from
+  `templates/agent-spec.md`, with an executable acceptance; writers only on disjoint files; every finding is verified
+  before it is acted on; every run is a row: `ledger add`.
+- **The kit** follows its `README.md`; `kit-check --tests` proves it after any change here. `index-check` proves the
+  brain's indexes after a write.
 - **Nothing is deleted for good**: files go to the Trash, an emptied folder goes with `rmdir`.
 ```
 
@@ -944,14 +935,14 @@ with this run's own, one form at a time; after the answers, call `decisions_sett
 
 0. **Roll.** When `SCRATCHPAD/<today>/` is missing, rename the newest day folder to today.
 1. **Measure.** Note `MEMORY.md`'s lines and bytes and the files this session touched.
-2. **Memory.** For each thing learned that will change behaviour in a later session, rewrite its entry as a rule and
+2. **Memory.** Every agent run has its row (`ledger add`). For each thing learned that will change behaviour in a later session, rewrite its entry as a rule and
    one line of evidence; never append. A new file has front matter (`name`, `description`, `type`: feedback, user,
    project or reference) and one index line, `- [<title>](<file>.md) — read when <triggers>`. Keep the index under 160
    lines and 24,000 bytes and each file under 32 KB: merge, shorten to the trigger or move to `archive/`, losing no
    date, code span, number or link. When the context opens with a compaction summary and a reflect ran before it,
    reflect only the turns after it.
 3. **KB** (not with `--auto` or headless). Only what this session proved against its source. Verify each statement,
-   have a reviewer agent try to refute it, ask the user to approve what survives, one batch per set; then write it
+   have a `reviewer` try to refute it, ask the user to approve what survives, one batch per set; then write it
    through the set's `99_MAINTENANCE.md`: the statement, the header date, the source register, a change-log line.
 4. **Scratchpad.** Liveness: every open task has State and a live Next. Collection (not with `--auto` or headless): a
    file no open task names in a code span is read, its true content folded into memory or the KB, then moved to the
@@ -959,8 +950,40 @@ with this run's own, one form at a time; after the answers, call `decisions_sett
    changed after this run started is another session's live work and stays. Agent reports fold only when stamped
    `verified`. Turn each `FRICTION.md` line into a change, with the user, and delete the line.
 5. **Indexes.** `MEMORY.md`, each set's `00_START_HERE.md`, the day's `INDEX.md`, and the index files of the folders the
-   Files tab shows; a file without its index line is invisible.
+   Files tab shows; a file without its index line is invisible. `index-check` prints nothing when they are true.
 6. **Report.** `MEMORY.md` before and after, files written, decisions held or settled; four lines at most.
+```
+
+**The kit's own rules.**
+
+`K/README.md`, the kit's layout contract ([§2.1](#21-parts)):
+
+```markdown
+# The kit
+
+A Claude Code setup in a git repository, created from comando's docs/kit-and-brain.md. This file is its contract:
+`tools/kit-check/kit-check --tests` proves it. A change that needs an exception changes this file first.
+
+| Path | Holds |
+|---|---|
+| `CLAUDE.md`, `settings.json` | what Claude Code loads: the instructions; permissions and hooks |
+| `comando-kit.json` | the manifest comando reads |
+| `INSTALL.md` | upgrade and uninstall |
+| `agents/` | one `<name>.md` per subagent type |
+| `skills/` | one `<name>/` per skill, `SKILL.md` and what it reads; no code, a skill calls a tool |
+| `hooks/` | one `<name>/` per hook: `<name>.py`, its test, `CONTRACT.md` and what the hook reads |
+| `tools/` | one `<name>/` per tool: the command `<name>`, its test, `CONTRACT.md`; on the Bash tool's `PATH` |
+| `templates/` | the files copied to start something; no code |
+
+In a file name, `-` in `<name>` becomes `_` for Python: `hooks/bash-guard/bash_guard.py`.
+
+1. A folder holds what its name says. A misplaced file moves; it gets no exception.
+2. A hook and a tool have one shape: code, test, contract. The contract starts from `templates/tool-contract.md`.
+3. Python only, no shell scripts: a one-line command in `settings.json` is configuration. Standard library, Python 3.9.
+4. A contract is the yardstick: each numbered guarantee names its test, and that test exists. A change of behaviour
+   changes the contract first.
+5. Every part is wired: each hook folder is named in `settings.json`, each path there exists.
+6. Every test runs: `kit-check --tests`, and CI on a push once the kit has a remote.
 ```
 
 `K/INSTALL.md`, needed once the kit is tagged on a remote ([§3.4](#34-version-and-upgrade)):
@@ -976,7 +999,7 @@ own.
 1. `git fetch --tags origin`.
 2. Show the user the local changes; commit them once they agree.
 3. `git merge <tag>`; resolve every conflict so both changes hold.
-4. Check that comando-kit.json and settings.json are valid JSON and the manifest's `kit` is 1.
+4. `python3 tools/kit-check/kit-check --tests` prints nothing.
 5. Report what changed, file by file.
 
 ## Uninstall
@@ -986,7 +1009,1246 @@ Back the brain up first. When the kit has a jobs tool, remove its scheduled jobs
 Trash; the brain's folder stays unless the user moves it too.
 ```
 
+`K/.github/workflows/kit.yml`, which runs once the kit has a remote on GitHub:
+
+```yaml
+name: kit
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/kit-check/kit-check --tests
+```
+
+**Agents and templates** ([§2.7](#27-agents-specs-and-reviews)).
+
+`K/agents/writer.md`:
+
+```markdown
+---
+name: writer
+description: Writes code or tests from one agent spec, editing only the files the spec lists, and proves the result with the spec's acceptance.
+---
+
+You work from one spec. Read it whole first; its Files table is what you may touch, and nothing else.
+
+- Run every row of its Acceptance and report each result, as printed. A row you cannot pass is reported, not reworded.
+- No git writes, no deleting outside what the spec names, nothing that leaves this machine.
+- Write the report the spec names, `<name>-report.md`, with front matter `generated: {by: writer, at: <UTC time>,
+  against: <checkout>@<commit>}`.
+- Append what got in your way to `SCRATCHPAD/FRICTION.md`, one line:
+  `- <date> writer <spec>: <what got in the way> → <what would have prevented it>`.
+```
+
+`K/agents/reviewer.md`:
+
+```markdown
+---
+name: reviewer
+description: Read-only reviewer of one lens of a code or document review, or the refutation of a statement, from one spec.
+tools: Read, Grep, Glob, Bash, Write
+---
+
+You read, you do not edit; the one file you write is the report your spec names.
+
+- Before any finding, write what the subject is for, what must not break, what the change intends, and your unknowns.
+- Assume a defect is there. Each finding has `file:line`, a failure sequence (inputs → wrong outcome) and its evidence:
+  a command you ran or code you quote. A suspicion with no sequence is not a finding.
+- List what you checked and found correct, and what you deliberately did not count.
+- Front matter as in `agents/writer.md`, `by: reviewer`. The same line in `SCRATCHPAD/FRICTION.md`.
+```
+
+`K/templates/agent-spec.md`:
+
+```markdown
+# <name>: agent spec
+
+Copy to `SCRATCHPAD/<today>/<topic>/work/<name>-spec.md` and list it under its task. No Acceptance, no dispatch.
+
+## Kind and runner
+
+produce | test | review; the agent type. The checkout and its commit. Who else writes there meanwhile.
+
+## Context
+
+What the agent needs, quoted: agents do not see memory. Each item says what it was checked against.
+
+## Task
+
+The exact change or question, in one paragraph.
+
+## Files
+
+| File | Access |
+|---|---|
+| `<path>` | write, this agent only |
+| `<path>` | read |
+
+## Must not
+
+What is out of bounds.
+
+## Acceptance
+
+| # | Command | Expected |
+|---|---|---|
+| 1 | `<command>` | `<result>` |
+
+A review's acceptance is its findings: each with `file:line`, a failure sequence and its evidence.
+
+## Output
+
+The report's path: `work/<name>-report.md`.
+```
+
+`K/templates/tool-contract.md`:
+
+```markdown
+# <name>
+
+<One or two lines: what it does and when it runs.>
+
+Usage: `<command>`. Exit codes: <what each means>.
+
+## Guarantees
+
+1. <A guarantee, one line.> `test_<method>`
+```
+
+**Hooks.** Each is a folder with its code, test and contract.
+
+`K/hooks/tool-path/`, puts the tools on `PATH`.
+
+`CONTRACT.md`:
+
+```markdown
+# tool-path
+
+Puts every tool of the kit on the Bash tool's PATH. A SessionStart hook.
+
+Usage: `python3 tool_path.py`. Exit codes: 0, always.
+
+## Guarantees
+
+1. Appends one export line per folder of `tools/` that holds an executable of its own name. `test_appends_one_export_line_per_executable_tool`
+2. Without `CLAUDE_ENV_FILE` it does nothing. `test_does_nothing_without_the_variable`
+3. A file it cannot write costs the session nothing: exit 0, the reason on stderr. `test_exits_0_with_the_reason_when_the_file_cannot_be_written`
+```
+
+`tool_path.py`:
+
+```python
+"""Put every tool of the kit on the Bash tool's PATH: a SessionStart hook.
+
+Usage: `python3 tool_path.py`. Appends one export line per tool to the file CLAUDE_ENV_FILE names, and without that
+variable does nothing. Prints nothing on stdout. Exit 0, also when the file cannot be written (the reason on stderr).
+"""
+from __future__ import annotations
+
+import os
+import sys
+from collections.abc import Iterator, Sequence
+from pathlib import Path
+
+
+def tool_folders(tools: Path) -> Iterator[Path]:
+    """Yield, sorted, each folder of `tools` that holds an executable file of its own name."""
+    for folder in sorted(tools.glob("*")):
+        command = folder / folder.name
+        if command.is_file() and os.access(command, os.X_OK):
+            yield folder
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Append the export lines, `argv` being unused; always return 0, as a session starts without them too."""
+    env_file = os.environ.get("CLAUDE_ENV_FILE")
+    if env_file:
+        tools = Path(__file__).resolve().parents[2] / "tools"
+        lines = "".join(f'export PATH="{folder}:$PATH"\n' for folder in tool_folders(tools))
+        try:
+            with open(env_file, "a", encoding="utf-8") as env:
+                env.write(lines)
+        except OSError as error:
+            print(f"tool-path: {error}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_tool_path.py`:
+
+```python
+"""Tests for tool_path.py: each runs a copy of the hook inside a temporary kit."""
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class ToolPathTest(unittest.TestCase):
+    """tool_path.py, through its environment, its env file and its output."""
+
+    def setUp(self) -> None:
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.kit = Path(folder.name).resolve()
+        (self.kit / "hooks/tool-path").mkdir(parents=True)
+        self.hook = shutil.copy(Path(__file__).with_name("tool_path.py"), self.kit / "hooks/tool-path")
+        self.env_file = self.kit / "env.sh"
+
+    def add_tool(self, name: str, mode: int) -> Path:
+        command = self.kit / "tools" / name / name
+        command.parent.mkdir(parents=True)
+        command.touch(mode)
+        return command.parent
+
+    def run_hook(self, **env: str) -> subprocess.CompletedProcess:
+        clean = {key: value for key, value in os.environ.items() if key != "CLAUDE_ENV_FILE"}
+        return subprocess.run([sys.executable, self.hook], env={**clean, **env}, capture_output=True, encoding="utf-8",
+                              timeout=30, check=False)
+
+    def test_appends_one_export_line_per_executable_tool(self) -> None:
+        tools = [self.add_tool(name, 0o755) for name in ("alpha", "beta")]
+        self.add_tool("not-executable", 0o644)
+        (self.kit / "tools/a-folder/a-folder").mkdir(parents=True)
+        (self.kit / "tools/a-file").touch()
+        self.env_file.write_text("kept\n", encoding="utf-8")
+        result = self.run_hook(CLAUDE_ENV_FILE=str(self.env_file))
+        expected = "kept\n" + "".join(f'export PATH="{tool}:$PATH"\n' for tool in tools)
+        self.assertEqual(self.env_file.read_text(encoding="utf-8"), expected)
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+
+    def test_does_nothing_without_the_variable(self) -> None:
+        self.add_tool("alpha", 0o755)
+        result = self.run_hook()
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+        self.assertFalse(self.env_file.exists())
+
+    def test_exits_0_with_the_reason_when_the_file_cannot_be_written(self) -> None:
+        result = self.run_hook(CLAUDE_ENV_FILE=str(self.kit / "missing/env.sh"))
+        self.assertEqual((result.returncode, result.stdout), (0, ""))
+        self.assertIn("tool-path: ", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+`K/hooks/roll/`, the roll ([§4.1.2](#412-scratchpad)).
+
+`CONTRACT.md`:
+
+```markdown
+# roll
+
+Keeps the scratchpad on one day folder, named for today. A SessionStart hook, on startup.
+
+Usage: `python3 roll.py`. Exit codes: 0, also without a pad; 2 when no brain is named.
+
+## Guarantees
+
+1. Renames the newest day folder to today and names each other day folder for merging. `test_renames_the_newest_day_folder_then_only_names_the_others`
+2. With no day folder, creates today's with an empty `INDEX.md`. `test_creates_today_with_its_index_when_there_is_no_day_folder`
+3. Two sessions starting together: the one that loses claims no action. `test_a_session_that_loses_the_race_reports_no_action`
+4. The brain is `COMANDO_BRAIN`, else `brain` in the kit's manifest, with `~` expanded. `test_the_brain_is_the_variable_else_the_manifest_with_home_expanded`
+5. Without a pad it prints nothing and exits 0; without a brain it exits 2. `test_exits_0_silently_without_a_pad_and_2_without_a_brain`
+```
+
+`roll.py`:
+
+```python
+"""Keep the scratchpad on one day folder, named for today: a SessionStart hook, on startup.
+
+Usage: `python3 roll.py`. The pad is SCRATCHPAD in the brain: COMANDO_BRAIN, else `brain` in the kit's comando-kit.json.
+Renames or creates today's folder and prints what it did. Exit 0, also without a pad; 2 without a usable brain.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from collections.abc import Sequence
+from contextlib import suppress
+from datetime import date
+from pathlib import Path
+
+KIT = Path(__file__).resolve().parents[2]
+DAY_FOLDER = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+INDEX = (
+    "# Scratchpad\n\n| Folder | Holds |\n|---|---|\n\n## Waiting on the user\n\n"
+    "| # | Decision or action | Task | By |\n|---|---|---|---|\n\n## Open\n\n## Scheduled reports\n"
+)
+
+
+def brain_folder(kit: Path) -> Path:
+    """Return the brain; raises OSError, ValueError, KeyError or TypeError when neither source names one."""
+    brain = os.environ.get("COMANDO_BRAIN")
+    if not brain:
+        brain = json.loads((kit / "comando-kit.json").read_text(encoding="utf-8"))["brain"]
+    return Path(brain).expanduser()
+
+
+def day_folders(pad: Path) -> list[str]:
+    """Return the names of the day folders in `pad`, oldest first."""
+    return sorted(path.name for path in pad.iterdir() if path.is_dir() and DAY_FOLDER.fullmatch(path.name))
+
+
+def roll(pad: Path, today: str) -> list[str]:
+    """Give `pad` a folder named `today`; return the lines to print, with no action if another session did it first."""
+    days = day_folders(pad)
+    lines = []
+    with suppress(FileExistsError, FileNotFoundError):  # two sessions starting together: the other one rolled first
+        if days and today not in days:
+            (pad / days[-1]).rename(pad / today)
+            lines.append(f"scratchpad: {days[-1]} renamed to {today}")
+        elif not days:
+            (pad / today).mkdir()
+            staged = pad / today / ".INDEX.md"
+            staged.write_text(INDEX, encoding="utf-8")
+            os.replace(staged, pad / today / "INDEX.md")
+            lines.append(f"scratchpad: {today} created")
+    others = [day for day in day_folders(pad) if day != today]
+    return lines + [f"scratchpad: {day} is another day folder: merge it into {today} by topic, then remove it"
+                    for day in others]
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Roll the pad, `argv` being unused; return 0, or 2 without a brain or a pad it can roll."""
+    try:
+        pad = brain_folder(KIT) / "SCRATCHPAD"
+        lines = roll(pad, date.today().isoformat()) if pad.is_dir() else []
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(f"roll: no brain: set COMANDO_BRAIN or `brain` in comando-kit.json ({error!r})", file=sys.stderr)
+        return 2
+    sys.stdout.writelines(f"{line}\n" for line in lines)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_roll.py`:
+
+```python
+"""Tests for roll.py, on a temporary pad and under a set environment."""
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import roll
+
+TODAY, OLD, OLDER = "2030-01-15", "2030-01-14", "2030-01-13"
+MERGE = f"scratchpad: {OLDER} is another day folder: merge it into {TODAY} by topic, then remove it"
+EMPTY_INDEX = ("# Scratchpad\n\n| Folder | Holds |\n|---|---|\n\n## Waiting on the user\n\n"
+               "| # | Decision or action | Task | By |\n|---|---|---|---|\n\n## Open\n\n## Scheduled reports\n")
+
+
+@mock.patch.dict(os.environ, {"COMANDO_BRAIN": "", "HOME": "/home"})
+class RollTest(unittest.TestCase):
+    """roll.py: `roll` on a pad, `brain_folder` and `main` by their environment."""
+
+    def setUp(self) -> None:
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.pad = Path(folder.name)
+
+    def test_renames_the_newest_day_folder_then_only_names_the_others(self) -> None:
+        for path in (OLDER, f"{TODAY}-topic", f"{OLD}/kept"):
+            (self.pad / path).mkdir(parents=True)
+        (self.pad / "2030-01-20").touch()
+        self.assertEqual(roll.roll(self.pad, TODAY), [f"scratchpad: {OLD} renamed to {TODAY}", MERGE])
+        self.assertTrue((self.pad / TODAY / "kept").is_dir())
+        self.assertEqual(roll.roll(self.pad, TODAY), [MERGE])
+
+    def test_creates_today_with_its_index_when_there_is_no_day_folder(self) -> None:
+        self.assertEqual(roll.roll(self.pad, TODAY), [f"scratchpad: {TODAY} created"])
+        self.assertEqual((self.pad / TODAY / "INDEX.md").read_text(encoding="utf-8"), EMPTY_INDEX)
+
+    def test_a_session_that_loses_the_race_reports_no_action(self) -> None:
+        with mock.patch.object(roll, "day_folders", side_effect=[[OLD, OLDER], [OLDER, TODAY]]):
+            self.assertEqual(roll.roll(self.pad, TODAY), [MERGE])
+
+    def test_the_brain_is_the_variable_else_the_manifest_with_home_expanded(self) -> None:
+        (self.pad / "comando-kit.json").write_text('{"brain": "~/kept"}', encoding="utf-8")
+        self.assertEqual(roll.brain_folder(self.pad), Path("/home/kept"))
+        with mock.patch.dict(os.environ, {"COMANDO_BRAIN": "/set"}):
+            self.assertEqual(roll.brain_folder(self.pad), Path("/set"))
+
+    def test_exits_0_silently_without_a_pad_and_2_without_a_brain(self) -> None:
+        with mock.patch.dict(os.environ, {"COMANDO_BRAIN": "/no/such"}), mock.patch("sys.stdout") as stdout:
+            self.assertEqual(roll.main(), 0)
+        stdout.write.assert_not_called()
+        with mock.patch.object(roll, "KIT", self.pad), mock.patch("sys.stderr"):
+            self.assertEqual(roll.main(), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+`K/hooks/bash-guard/`, the guard, which fails closed ([§2.2](#22-a-sessions-life-and-which-part-acts)).
+
+`CONTRACT.md`:
+
+```markdown
+# bash-guard
+
+Refuses a Bash call that kills by pattern, deletes a tree or destroys git work. A PreToolUse hook on Bash that fails closed.
+
+Usage: `python3 bash_guard.py`, the hook's JSON on stdin. Exit codes: 0 allows the call, 2 refuses it.
+
+## Guarantees
+
+1. Refuses `pkill`, `killall`, a `kill` of -1, 0 or an unseen target, a recursive `rm`, and the git commands that destroy work. `test_refuses_every_listed_command`
+2. Judges every simple command, past separators, substitutions and the prefixes that run another command. `test_judges_every_simple_command_past_its_prefixes`
+3. Allows everything else, and any tool other than Bash. `test_allows_everything_else`
+4. A refusal is one stderr line that ends in a Recover. `test_a_refusal_is_one_line_with_a_recover`
+5. Stdin that is not the call, or a command it cannot split, is refused. `test_fails_closed_on_what_it_cannot_read`
+
+Not read: a command handed to another shell as one string (`bash -c '…'`, `eval '…'`), and the body of a script.
+```
+
+`bash_guard.py`:
+
+```python
+"""Refuse a Bash call that kills by pattern, deletes a tree or destroys git work: a PreToolUse hook that fails closed.
+
+Usage: `python3 bash_guard.py`, the hook's JSON on stdin. Exit 0 allows the call; exit 2 refuses it, one line on stderr.
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from collections.abc import Iterable, Iterator, Sequence
+from types import MappingProxyType
+
+FROM_SHELL = "\0"  # stands for text only the running shell knows: a substitution, or what xargs appends
+SEPARATORS = frozenset(";&|\n()")
+QUOTED_HEREDOC = re.compile(r"(?<!<)(<<-? *(['\"])([\w.-]+)\2[^\n]*)\n.*?^[ \t]*\3$", re.M | re.S)
+ASSIGNMENT = re.compile(r"[A-Za-z_]\w*\+?=")
+PREFIXES = MappingProxyType({  # what runs the command after it, with the letters of its flags that take a value
+    "sudo": "CDRTUghprtu", "env": "CPSu", "xargs": "EIJLPRSadns", "command": "vV", "git": "Cc",
+    "exec": "a", "nice": "n", "timeout": "ks",
+    **dict.fromkeys(("time", "nohup", "eval", "if", "then", "elif", "else", "while", "until", "do", "!", "{"), ""),
+})
+RECOVER_PID = "Recover: name one PID you started"
+FORCE = r"(-[^- ]*f|--force\b)"
+RULES = tuple((re.compile(pattern, re.S), why) for pattern, why in (
+    (r"(pkill|killall)( |$)", f"pkill and killall kill by pattern, which can hit other sessions. {RECOVER_PID}"),
+    (r"kill .*\0", f"this kill takes its target from a substitution or a pipe, unseen. {RECOVER_PID}"),
+    (r"kill(?! (-1|-[sn] 0) [^-0])( .*)? (0|-1)( |$)", f"kill aimed at -1 or 0 reaches many processes. {RECOVER_PID}"),
+    (r"rm( .*)? (-[^- ]*[rR]|--recursive\b)",
+     "a recursive rm cannot be undone. Recover: move the files to the Trash, or ask the user to run it"),
+    (rf"git (reset( .*)? --hard\b|clean( .*)? {FORCE}|checkout( .*)? --( |$)|restore\b|stash (drop|clear)\b"
+     rf"|push( .*)? ({FORCE}|\+)|branch( .*)? -[^- ]*D)", "this git command destroys work or history. "
+     "Recover: ask the user to run it"),
+))
+
+
+def simple_commands(chars: Iterator[str], closer: str = "") -> list[list[list[str]]]:
+    """Return the commands up to `closer` ("": the end) as words; raises ValueError, StopIteration, RecursionError."""
+    commands, words, quote = [], [[]], ""
+    for char in chars:
+        if char == "#" and not quote and not words[-1]:
+            next((skipped for skipped in chars if skipped == "\n"), None)  # advances `chars` past the comment
+            char = "\n"
+        if char == quote:
+            quote = ""
+        elif quote == "'":
+            words[-1].append(char)
+        elif char == closer and not quote:
+            return [*commands, words]
+        elif char == "\\":
+            words[-1].append(next(chars).replace("\n", ""))
+        elif char == "`" or char == "(" and words[-1][-1:] == ["$"]:
+            commands += simple_commands(chars, "`" if char == "`" else ")")
+            words[-1].append(FROM_SHELL)
+        elif not quote and char in ("'", '"'):
+            quote = char
+        elif not quote and char in SEPARATORS:
+            commands.append(words)
+            words = [[]]
+            commands += simple_commands(chars, ")") if char == "(" else []
+        elif not quote and char.isspace():
+            words.append([])
+        else:
+            words[-1].append(char)
+    if closer or quote:
+        raise ValueError("open quote or bracket")
+    return [*commands, words]
+
+
+def judged_line(raw_words: Iterable[Iterable[str]]) -> str:
+    """Return the words from the one naming the command, as a basename, joined by spaces; "" when no word names one."""
+    words = [word.replace(" ", "_") for word in map("".join, raw_words) if word]  # a quoted space is no word break
+    while words:
+        name = words[0].rsplit("/", 1)[-1]
+        if name not in PREFIXES and not ASSIGNMENT.match(words[0]):
+            return " ".join([name, *words[1:]])
+        value_flags, words = PREFIXES.get(name, ""), words[1:] + ([FROM_SHELL] if name == "xargs" else [])
+        while words and words[0].startswith("-"):
+            takes_value = words[0][-1] in value_flags and words[0][:2] != "--"
+            words = words[2 if takes_value else 1:]
+        if name == "timeout":
+            words = words[1:]  # its duration
+        if name == "git":
+            return " ".join(["git", *words])
+    return ""
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Judge the call on stdin, `argv` being unused; return 0 to allow it, 2 to refuse it."""
+    try:
+        call = json.load(sys.stdin.buffer)
+        if call["tool_name"] != "Bash":
+            return 0
+        lines = map(judged_line, simple_commands(iter(QUOTED_HEREDOC.sub(r"\1", call["tool_input"]["command"]))))
+        reason = next((why for line in lines for rule, why in RULES if rule.match(line)), None)
+    except Exception as error:  # only exit 2 blocks, so a crash must not end any other way
+        reason = f"cannot read this call ({error!r}). Recover: balance its quotes and quote any heredoc delimiter"
+    if reason:
+        print(f"bash-guard: {reason}", file=sys.stderr)
+    return 2 if reason else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_bash_guard.py`:
+
+```python
+"""Tests for bash_guard.py: every row runs the hook as Claude Code does, JSON on stdin."""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+
+REFUSED = ("pkill x", "killall x", "kill -1", "kill 0", "kill -- -1", "kill -s 9 -1", "kill $(pgrep x)",
+           "kill `pgrep x`", "pgrep x | xargs kill", "rm -r d", "rm -R d", "rm -rf d", "rm -vfr d", "rm -f -r d",
+           "rm --recursive d", "git reset --hard", "git clean -xdf", "git clean --force", "git push -f",
+           "git push --force", "git push --force-with-lease=m", "git push o +m", "git branch -D b", "git restore a",
+           "git checkout -- a", "git stash drop", "git stash clear", "git -C d reset --hard", "git -c a=b -C d push -f")
+HIDDEN = ("a; pkill x", "a & pkill x", "a && pkill x", "a || pkill x", "a | pkill x", "a\npkill x", "echo $(pkill x)",
+          "echo `pkill x`", 'echo "$(pkill x)"', 'echo "`pkill x`"', "A=1 sudo env B=2 command pkill x", "(pkill x)",
+          "sudo -u root pkill x", "xargs -P 4 -n 1 rm -r", "/bin/rm -r d", "'pkill' x", "if a; then pkill x; fi",
+          "pk\\\nill x", "echo a#b; pkill x", "# it's\npkill x", "cat <<'E'\nE\npkill x", "cat <<E\n$(pkill x)\nE",
+          "exec pkill x", "nohup pkill x", "nice -n 5 pkill x", "timeout -k 1 5 rm -r d", "eval pkill x")
+ALLOWED = ("kill 123", "kill -TERM 123", "kill -1 123", "kill -s 0 123", "kill $PID", "rm a.txt", "rm 'a -r'",
+           "rm -f a", 'echo "pkill x"', "echo '$(pkill x)'", "grep killall f", "git push", "git status", "",
+           "git checkout m", "git branch -d b", "command -v pkill", "# don't\necho a", "cat <<'E'\nit's; pkill x\nE",
+           "exec ls", "timeout 5 ls")
+UNSPLITTABLE = ("echo 'a", 'echo "a', "echo $(a", "echo `a", "(a", "echo a\\", "cat <<E\nit's\nE", "$(" * 5000)
+UNREADABLE = ("{", "[1]", "{}", '{"tool_name": "Bash"}', '{"tool_name": "Bash", "tool_input": {"command": 5}}')
+
+
+def run(command: str, stdin: str = "") -> subprocess.CompletedProcess:
+    text = stdin or json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+    return subprocess.run([sys.executable, str(Path(__file__).resolve().with_name("bash_guard.py"))], input=text,
+                          capture_output=True, encoding="utf-8", timeout=30, check=False)
+
+
+class BashGuardTest(unittest.TestCase):
+    """bash_guard.py, through its stdin, exit code and stderr."""
+
+    def assert_exits(self, code: int, commands: tuple[str, ...]) -> None:
+        for command in commands:
+            with self.subTest(command[:40]):
+                self.assertEqual(run(command).returncode, code)
+
+    def test_refuses_every_listed_command(self) -> None:
+        self.assert_exits(2, REFUSED)
+
+    def test_judges_every_simple_command_past_its_prefixes(self) -> None:
+        self.assert_exits(2, HIDDEN)
+
+    def test_allows_everything_else(self) -> None:
+        self.assert_exits(0, ALLOWED)
+        self.assertEqual(run("", '{"tool_name": "Read", "tool_input": {}}').returncode, 0)
+
+    def test_a_refusal_is_one_line_with_a_recover(self) -> None:
+        for command in ("pkill x", "kill 0", "kill $(a)", "rm -r d", "git restore a", "echo 'a"):
+            self.assertRegex(run(command).stderr, r"^bash-guard: [^\n]+\. Recover: [^\n]+\n$", command)
+
+    def test_fails_closed_on_what_it_cannot_read(self) -> None:
+        self.assert_exits(2, UNSPLITTABLE)
+        self.assertEqual({stdin: run("", stdin).returncode for stdin in UNREADABLE}, dict.fromkeys(UNREADABLE, 2))
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+`K/hooks/compact-rules/`, puts the rules back after a compaction.
+
+`CONTRACT.md`:
+
+```markdown
+# compact-rules
+
+Prints the rules a session must keep after a compaction. A SessionStart hook, on compact.
+
+Usage: `python3 compact_rules.py`. Exit codes: 0, or 1 when the rules file cannot be read.
+
+## Guarantees
+
+1. Prints `critical-rules.md`, the file beside it, exactly. `test_prints_the_rules_file_exactly`
+2. A missing rules file is reported on stderr, with nothing on stdout. `test_a_missing_rules_file_is_reported_on_stderr`
+```
+
+`compact_rules.py`:
+
+```python
+"""Print the rules a session must keep after a compaction: a SessionStart hook, on compact.
+
+Usage: `python3 compact_rules.py`. Prints critical-rules.md, the file beside it. Exit 0; 1 when it cannot be read.
+"""
+from __future__ import annotations
+
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Print the rules, `argv` being unused; return 0, or 1 when the file cannot be read."""
+    try:
+        print(Path(__file__).with_name("critical-rules.md").read_text(encoding="utf-8"), end="")
+    except OSError as error:
+        print(f"compact-rules: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_compact_rules.py`:
+
+```python
+"""Tests for compact_rules.py: the hook is run by path, the failure on a copy without its rules."""
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+HOOK = Path(__file__).resolve().with_name("compact_rules.py")
+RULES = (
+    "After a compaction: the brain is the folder in $COMANDO_BRAIN. Memory and the KB never point at each other; "
+    "only\n/reflect writes the KB; every write updates its index; nothing is deleted for good (files to the Trash, "
+    "folders with\nrmdir).\n"
+)
+
+
+def run(hook: Path | str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(hook)], capture_output=True, encoding="utf-8", timeout=30, check=False)
+
+
+class CompactRulesTest(unittest.TestCase):
+    """compact_rules.py, through its output and exit code."""
+
+    def test_prints_the_rules_file_exactly(self) -> None:
+        result = run(HOOK)
+        self.assertEqual((result.returncode, result.stdout), (0, RULES))
+
+    def test_a_missing_rules_file_is_reported_on_stderr(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            result = run(shutil.copy(HOOK, folder))
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertIn("compact-rules: ", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+`critical-rules.md`:
+
+```markdown
+After a compaction: the brain is the folder in $COMANDO_BRAIN. Memory and the KB never point at each other; only
+/reflect writes the KB; every write updates its index; nothing is deleted for good (files to the Trash, folders with
+rmdir).
+```
+
+**Tools.** Each is a folder with its command, test and contract; step 4 makes the commands executable.
+
+`K/tools/kit-check/`, proves the layout contract.
+
+`CONTRACT.md`:
+
+```markdown
+# kit-check
+
+Proves the kit's contract: run it after any change to the kit, with `--tests` before calling the kit sound.
+
+Usage: `kit-check [--root DIR] [--tests]`. Exit codes: 0 no defect, 1 defects, one `<path>: <what is wrong>` line each, 2 usage.
+
+## Guarantees
+
+1. A conforming kit prints nothing and exits 0; `__pycache__` and, in a repository, what `.gitignore` covers are not read. `test_a_conforming_repository_is_silent_and_ignored_files_are_not_read`
+2. A bad manifest or settings, a missing required file, a hook path that does not exist and a hook folder no command names are defects. `test_names_each_defect`
+3. A hook or tool folder without its contract, test or program, or a tool not executable, is a defect. `test_names_each_defect`
+4. A guarantee with no test name, or naming a method the test file lacks, is a defect. `test_names_each_defect`
+5. A shell script, by name or shebang, and Python under `skills/`, `agents/`, `templates/` are defects. `test_names_each_defect`
+6. With `--tests`, a failing test is the defect `<path>: tests failed`. `test_tests_option_names_a_failing_test`
+```
+
+`kit-check`:
+
+```python
+#!/usr/bin/env python3
+"""Prove the kit's contract: layout, hooks, tools, guarantees. Reads the kit, by git in a repository; writes nothing.
+
+Usage: kit-check [--root DIR] [--tests]. Default root: the kit this file sits in.
+Exit codes: 0 no defect, 1 defects (one `<path>: <what is wrong>` line each, relative to the root), 2 usage.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from collections.abc import Iterable, Iterator, Sequence, Set
+from pathlib import Path
+
+REQUIRED = ("CLAUDE.md", "README.md", "skills/reflect/SKILL.md")
+HOOK_PATH = re.compile(r"\bhooks/[\w.-]+/[\w.-]+")
+GUARANTEE = re.compile(r"^\d+\. .*?(?:`(test_\w+)`)?\s*$", re.M)
+TEST_METHOD = re.compile(r"^\s+def (test_\w+)\(", re.M)
+SHELL_SHEBANG = re.compile(rb"#!\s*\S*/(env\s+(-\S+\s+)*)?(ba)?sh(\s|$)")
+
+
+def kit_files(root: Path) -> set[Path]:
+    """Return the files to read, relative to `root`; raises CalledProcessError when git refuses a repository."""
+    if (root / ".git").exists():
+        command = ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard"]
+        listed = subprocess.run(command, capture_output=True, check=True, timeout=60).stdout
+        paths = [Path(name.decode("utf-8", "surrogateescape")) for name in listed.split(b"\0") if name]
+    else:
+        paths = [path.relative_to(root) for path in root.rglob("*")]
+    return {path for path in paths if (root / path).is_file() and "__pycache__" not in path.parts}
+
+
+def check_settings(root: Path, folders: Iterable[Path]) -> Iterator[str]:
+    """Yield the defects of the manifest, of the settings' hook commands and the files every kit holds."""
+    yield from (f"{name}: missing" for name in REQUIRED if not (root / name).is_file())
+    parsed = []
+    for name in ("comando-kit.json", "settings.json"):
+        try:
+            parsed.append(dict(json.loads((root / name).read_text(encoding="utf-8"))))
+        except (OSError, TypeError, ValueError) as error:
+            yield f"{name}: {error}"
+    if len(parsed) < 2:
+        return
+    manifest, settings = parsed
+    if manifest.get("kit") != 1 or not manifest.get("name") or not manifest.get("brain"):
+        yield "comando-kit.json: needs `kit` 1 and non-empty `name` and `brain`"
+    commands = json.dumps(settings.get("hooks"))
+    yield from (f"settings.json: {path} does not exist" for path in sorted(set(HOOK_PATH.findall(commands)))
+                if not (root / path).is_file())
+    yield from (f"{folder}: named by no hook command" for folder in folders
+                if folder.parent.name == "hooks" and f"{folder}/" not in commands)
+
+
+def check_folder(root: Path, files: Set[Path], folder: Path) -> Iterator[str]:
+    """Yield what a folder of `hooks/` or `tools/` lacks and each guarantee without its test."""
+    stem, is_tool = folder.name.replace("-", "_"), folder.parent.name == "tools"
+    contract, test = folder / "CONTRACT.md", folder / f"test_{stem}.py"
+    program = folder / (folder.name if is_tool else f"{stem}.py")
+    yield from (f"{path}: missing" for path in (contract, test, program) if path not in files)
+    if is_tool and program in files and not (root / program).stat().st_mode & 0o111:
+        yield f"{program}: not executable"
+    if contract in files and test in files:
+        methods = set(TEST_METHOD.findall((root / test).read_text(encoding="utf-8", errors="replace")))
+        named = GUARANTEE.findall((root / contract).read_text(encoding="utf-8", errors="replace"))
+        yield from (f"{contract}: no test behind guarantee {number}" for number, name in enumerate(named, 1)
+                    if name not in methods)
+
+
+def check_files(root: Path, files: Set[Path], run_tests: bool) -> Iterator[str]:
+    """Yield each shell script, each Python file where none belongs and, with `run_tests`, each failing test."""
+    for path in sorted(files):
+        with (root / path).open("rb") as file:
+            head = file.read(128)
+        if path.suffix == ".sh" or SHELL_SHEBANG.match(head):
+            yield f"{path}: a shell script"
+        if path.suffix == ".py" and path.parts[0] in ("skills", "agents", "templates"):
+            yield f"{path}: Python under {path.parts[0]}/"
+        if run_tests and path.parts[0] in ("hooks", "tools") and path.match("test_*.py"):
+            try:
+                subprocess.run([sys.executable, str(root / path)], capture_output=True, check=True, timeout=300)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                yield f"{path}: tests failed"
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Print every defect of the kit; return 1 if there is any, else 0."""
+    parser = argparse.ArgumentParser(description="Prove the kit's contract.")
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2], help="the kit to check")
+    parser.add_argument("--tests", action="store_true", help="also run each test under hooks/ and tools/")
+    args = parser.parse_args(argv)
+    try:
+        files = kit_files(args.root)
+    except (OSError, subprocess.SubprocessError) as error:
+        parser.error(f"cannot list the kit: {error}")
+    folders = sorted({path.parent for path in files if str(path.parent.parent) in ("hooks", "tools")})
+    defects = [*check_settings(args.root, folders), *check_files(args.root, files, args.tests),
+               *(defect for folder in folders for defect in check_folder(args.root, files, folder))]
+    sys.stdout.writelines(f"{defect}\n" for defect in defects)
+    return 1 if defects else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_kit_check.py`:
+
+```python
+"""Tests for kit-check, on kits built in temporary folders; the repository is three files, no git command writes."""
+from __future__ import annotations
+
+import contextlib
+import io
+import sys
+import tempfile
+import unittest
+from importlib import machinery, util
+from pathlib import Path
+
+LOADER = machinery.SourceFileLoader("kit_check", str(Path(__file__).with_name("kit-check")))
+kit_check = util.module_from_spec(util.spec_from_loader("kit_check", LOADER))
+sys.modules["kit_check"] = kit_check
+LOADER.exec_module(kit_check)
+KIT = (("comando-kit.json", '{"kit": 1, "name": "k", "brain": "~/b"}'), ("CLAUDE.md", ""), ("README.md", ""),
+       ("settings.json", '{"hooks": {"Stop": [{"hooks": [{"command": "python3 hooks/h-a/h_a.py"}]}]}}'),
+       ("skills/reflect/SKILL.md", ""), ("hooks/h-a/h_a.py", ""), ("hooks/h-a/CONTRACT.md", ""), (".gitignore", "x/\n"),
+       ("hooks/h-a/test_h_a.py", ""), ("tools/t/t", "#!/usr/bin/python3\n"), ("__pycache__/a.sh", ""),
+       ("tools/t/CONTRACT.md", "1. A. `test_a`\n"), ("tools/t/test_t.py", "class A:\n    def test_a(self): pass\n"))
+CASES = (("comando-kit.json", "{", "comando-kit.json: "), ("comando-kit.json", '{"kit": 1, "name": "k"}', "needs"),
+         ("comando-kit.json", '{"kit": 2, "name": "k", "brain": "b"}', "needs"),
+         ("comando-kit.json", '{"kit": 1, "brain": "b"}', "needs"), ("settings.json", "[", "settings.json: "),
+         ("settings.json", "{}", "named by no"), ("settings.json", '{"hooks": "hooks/a/b.py"}', "b.py does not exist"),
+         ("README.md", None, "README.md: missing"), ("hooks/h-a/h_a.py", None, "h_a.py: missing"),
+         ("tools/t/t", "", "not executable"), ("tools/t/t", None, "t/t: missing"), ("agents/a.py", "", "a.py: Python"),
+         ("tools/t/CONTRACT.md", None, "CONTRACT.md: missing"), ("tools/t/test_t.py", None, "test_t.py: missing"),
+         ("tools/t/CONTRACT.md", "1. A.\n", "guarantee 1"), ("tools/t/CONTRACT.md", "1. `test_b`\n", "guarantee 1"),
+         ("x/a.sh", "", "a shell"), ("x/a", "#!/bin/sh\n", "a shell"), ("x/a", "#!/usr/bin/env bash\n", "a shell"))
+
+
+class KitCheckTest(unittest.TestCase):
+    """kit-check on `KIT` with changes: a file's text, or None to leave it out."""
+    def check(self, changes: dict, *options: str) -> tuple:
+        with tempfile.TemporaryDirectory() as folder:
+            for path, text in ((Path(folder, name), text) for name, text in {**dict(KIT), **changes}.items()):
+                if text is not None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(text, encoding="utf-8")
+                    path.chmod(0o755 if text.startswith("#!") else 0o644)
+            with contextlib.redirect_stdout(io.StringIO()) as printed:
+                return kit_check.main(["--root", folder, *options]), printed.getvalue()
+
+    def test_a_conforming_repository_is_silent_and_ignored_files_are_not_read(self):
+        repository = {".git/HEAD": "ref: refs/heads/a\n", ".git/objects/a": "", ".git/refs/a": "", "x/a.sh": ""}
+        self.assertEqual(self.check(repository), (0, ""))
+
+    def test_names_each_defect(self):
+        for name, text, expected in CASES:
+            with self.subTest(expected, text=text):
+                self.assertIn(expected, self.check({name: text})[1])
+
+    def test_tests_option_names_a_failing_test(self):
+        self.assertEqual(self.check({}, "--tests"), (0, ""))
+        failing = {"tools/t/test_t.py": "class A:\n    def test_a(self): pass\nraise SystemExit(1)\n"}
+        self.assertEqual(self.check(failing, "--tests"), (1, "tools/t/test_t.py: tests failed\n"))
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+`K/tools/index-check/`, proves the brain's indexes after a write.
+
+`CONTRACT.md`:
+
+```markdown
+# index-check
+
+Checks the brain's indexes: a checkpoint runs it after writing the brain.
+
+Usage: `index-check [--brain DIR]`. Exit codes: 0 no defect, 1 defects, one `<path>: <what is wrong>` line each, 2 usage or no brain.
+
+## Guarantees
+
+1. A conforming brain prints nothing and exits 0, with `MEMORY.md` at 160 lines and a memory file at 32 KB. `test_a_conforming_brain_at_its_limits_is_silent`
+2. A missing `MEMORY.md`, a memory file with no index line and an index link that does not resolve are defects. `test_names_each_defect`
+3. A memory file without `name`, `description`, `type` in its front matter, or over 32 KB, and `MEMORY.md` over 160 lines or 24,000 bytes are defects. `test_names_each_defect`
+4. A KB set holds `99_MAINTENANCE.md`; a document is named in the nearest `00_START_HERE.md` at or above it. `test_names_each_defect`
+5. In the newest day folder each task has a State, and a Next unless its State starts with `done`. `test_names_each_defect`
+6. In the newest day folder each file of a topic or its `work/` is named in a code span of `INDEX.md`. `test_names_each_defect`
+```
+
+`index-check`:
+
+```python
+#!/usr/bin/env python3
+"""Check the brain's indexes: what a checkpoint runs after writing the brain. Reads the brain; writes nothing.
+
+Usage: index-check [--brain DIR]. The brain: `--brain`, else `COMANDO_BRAIN`, else `brain` in `comando-kit.json`.
+Exit codes: 0 no defect, 1 defects (one `<path>: <what is wrong>` line each, relative to the brain), 2 usage, no brain.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from collections.abc import Iterator, Sequence
+from functools import cache
+from pathlib import Path
+
+MANIFEST = Path(__file__).resolve().parents[2] / "comando-kit.json"
+START, MAINTENANCE = "00_START_HERE.md", "99_MAINTENANCE.md"
+LINK = re.compile(r"\]\(([^)]+)\)")
+FRONT_MATTER = re.compile(r"\A---\n(.*?)^---[ \t]*$", re.M | re.S)
+FRONT_KEY = re.compile(r"^[ \t]*(\w+):[ \t]*\S", re.M)
+MD_NAME = re.compile(r"[\w./-]+\.md")
+TASK = re.compile(r"^#### (\d+)\.(.*?)(?=^#{1,4} |\Z)", re.M | re.S)
+STATE = re.compile(r"^[ \t]*- \*\*State:\*\*[ \t]*(.*)$", re.M)
+NEXT = re.compile(r"^[ \t]*- \*\*Next:\*\*", re.M)
+CODE_SPAN = re.compile(r"`([^`\n]+)`")
+
+
+def check_memory(memory: Path) -> Iterator[str]:
+    """Yield the defects of `MEMORY.md` and of each top-level memory file."""
+    if not (memory / "MEMORY.md").is_file():
+        yield "MEMORY/MEMORY.md: missing"
+        return
+    lines = (memory / "MEMORY.md").read_text(encoding="utf-8", errors="replace").splitlines()
+    if len(lines) > 160 or (memory / "MEMORY.md").stat().st_size > 24_000:
+        yield "MEMORY/MEMORY.md: over 160 lines or 24,000 bytes"
+    links = [link for line in lines if line.startswith("- ") for link in LINK.findall(line) if "://" not in link]
+    yield from (f"MEMORY/MEMORY.md: {link} does not resolve" for link in links if not (memory / link).is_file())
+    indexed = set(links)
+    for path in sorted(set(memory.glob("*.md")) - {memory / "MEMORY.md"}):
+        if path.name not in indexed:
+            yield f"MEMORY/{path.name}: no index line"
+        front_matter = FRONT_MATTER.match(path.read_text(encoding="utf-8", errors="replace"))
+        if front_matter is None or not {"name", "description", "type"} <= set(FRONT_KEY.findall(front_matter[1])):
+            yield f"MEMORY/{path.name}: needs front matter with name, description, type"
+        if path.stat().st_size > 32 * 1024:
+            yield f"MEMORY/{path.name}: over 32 KB"
+
+
+def check_kb(brain: Path) -> Iterator[str]:
+    """Yield each set without its maintenance file and each document its set does not name."""
+    names_in = cache(lambda start: {Path(name).name for name in MD_NAME.findall(
+        start.read_text(encoding="utf-8", errors="replace"))})
+    for path in sorted((brain / "KB").rglob("*.md")):
+        where = path.relative_to(brain)
+        starts = [brain / folder / START for folder in where.parents if (brain / folder / START).is_file()]
+        if path.name == START and not path.with_name(MAINTENANCE).is_file():
+            yield f"{where.with_name(MAINTENANCE)}: missing"
+        elif path.name not in (START, MAINTENANCE) and not starts:
+            yield f"{where}: no {START} at or above it"
+        elif path.name not in (START, MAINTENANCE):
+            if path.name not in names_in(starts[0]):
+                yield f"{where}: not named in {starts[0].relative_to(brain)}"
+
+
+def check_day(brain: Path, day: Path) -> Iterator[str]:
+    """Yield each task of the day's index without its State or Next and each topic file it does not name."""
+    index = day / "INDEX.md"
+    text = index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
+    for task in TASK.finditer(text):
+        state = STATE.search(task[2])
+        if state is None:
+            yield f"{index.relative_to(brain)}: task {task[1]} has no **State:**"
+        elif not state[1].startswith("done") and not NEXT.search(task[2]):
+            yield f"{index.relative_to(brain)}: task {task[1]} has no **Next:**"
+    spans = set(CODE_SPAN.findall(text))
+    for topic in sorted(path for path in day.iterdir() if path.is_dir()):
+        for path in sorted([*topic.iterdir(), *(topic / "work").glob("*")]):
+            named = {path.name, path.relative_to(day).as_posix()} & spans
+            if path.is_file() and not path.name.startswith(".") and not named:
+                yield f"{path.relative_to(brain)}: not named in INDEX.md"
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Print every defect of the brain; return 1 if there is any, else 0; exit 2 when no brain is found."""
+    parser = argparse.ArgumentParser(description="Check the brain's indexes.")
+    parser.add_argument("--brain", help="the brain (default: COMANDO_BRAIN, else the manifest's)")
+    args = parser.parse_args(argv)
+    try:
+        named = args.brain or os.getenv("COMANDO_BRAIN") or json.loads(MANIFEST.read_text(encoding="utf-8"))["brain"]
+        brain = Path(named).expanduser().resolve(strict=True)
+    except (OSError, LookupError, TypeError, ValueError) as error:
+        parser.error(f"no brain: {error}")
+    days = sorted(path for path in (brain / "SCRATCHPAD").glob("????-??-??") if path.is_dir())
+    defects = [*check_memory(brain / "MEMORY"), *check_kb(brain), *(check_day(brain, days[-1]) if days else ())]
+    sys.stdout.writelines(f"{defect}\n" for defect in defects)
+    return 1 if defects else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_index_check.py`:
+
+```python
+"""Tests for index-check, on brains built in temporary folders."""
+from __future__ import annotations
+
+import contextlib
+import io
+import sys
+import tempfile
+import unittest
+from importlib import machinery, util
+from pathlib import Path
+
+LOADER = machinery.SourceFileLoader("index_check", str(Path(__file__).with_name("index-check")))
+index_check = util.module_from_spec(util.spec_from_loader("index_check", LOADER))
+sys.modules["index_check"] = index_check
+LOADER.exec_module(index_check)
+FRONT = "---\nname: a\ndescription: b\nmetadata:\n  type: c\n---\n"
+MEMORY, DAY = "- [A](a.md) read when a\n", "SCRATCHPAD/2026-01-02"
+INDEX = "## Open\n#### 1. A\n- **State:** open\n- **Next:** `t/a.md`, `b.md`\n#### 2. B\n- **State:** done\n"
+BRAIN = (("MEMORY/MEMORY.md", MEMORY), ("MEMORY/a.md", FRONT), ("KB/00_START_HERE.md", "`doc.md`, sub/deep.md\n"),
+         ("KB/99_MAINTENANCE.md", ""), ("KB/doc.md", ""), ("KB/sub/deep.md", ""), (f"{DAY}/INDEX.md", INDEX),
+         (f"{DAY}/t/a.md", ""), (f"{DAY}/t/work/b.md", ""), (f"{DAY}/t/.DS_Store", ""),
+         ("SCRATCHPAD/2026-01-01/INDEX.md", "#### 1. Old"))
+CASES = (("MEMORY/MEMORY.md", None, "MEMORY.md: missing"), ("MEMORY/b.md", FRONT, "MEMORY/b.md: no index line"),
+         ("MEMORY/a.md", None, "a.md does not resolve"), ("MEMORY/a.md", "text\n", "a.md: needs front matter"),
+         ("MEMORY/a.md", FRONT.replace("  type: c\n", ""), "a.md: needs front matter"),
+         ("MEMORY/a.md", FRONT.replace("name: a", "name:"), "a.md: needs front matter"),
+         ("MEMORY/MEMORY.md", MEMORY + "x\n" * 160, "MEMORY.md: over"), ("KB/other.md", "", "KB/other.md: not named"),
+         ("MEMORY/MEMORY.md", MEMORY.ljust(24_001), "MEMORY.md: over"), ("MEMORY/a.md", FRONT.ljust(32769), "a.md: ov"),
+         ("KB/99_MAINTENANCE.md", None, "99_MAINTENANCE.md: missing"), ("KB/00_START_HERE.md", None, "doc.md: no 00"),
+         ("KB/sub/00_START_HERE.md", "", "KB/sub/deep.md: not named in KB/sub/00_START_HERE.md"),
+         (f"{DAY}/INDEX.md", INDEX.replace("- **State:** done\n", ""), "INDEX.md: task 2 has no **State:**"),
+         (f"{DAY}/INDEX.md", INDEX.replace("- **Next:**", "`t/a.md`, `b.md`\n"), "INDEX.md: task 1 has no **Next:**"),
+         (f"{DAY}/t/c.md", "", "t/c.md: not named"), (f"{DAY}/t/work/c.md", "", "t/work/c.md: not named"),
+         (f"{DAY}/INDEX.md", INDEX.replace("`b.md`", "b.md"), "t/work/b.md: not named"))
+
+
+class IndexCheckTest(unittest.TestCase):
+    """index-check on `BRAIN` with changes: a file's text, or None to leave it out."""
+    def check(self, changes: dict) -> tuple:
+        with tempfile.TemporaryDirectory() as folder:
+            for path, text in ((Path(folder, name), text) for name, text in {**dict(BRAIN), **changes}.items()):
+                if text is not None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(text, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()) as printed:
+                return index_check.main(["--brain", folder]), printed.getvalue()
+
+    def test_a_conforming_brain_at_its_limits_is_silent(self):
+        limits = {"MEMORY/MEMORY.md": (MEMORY + "x\n" * 158).ljust(24_000), "MEMORY/a.md": FRONT.ljust(32768)}
+        self.assertEqual(self.check(limits), (0, ""))
+
+    def test_names_each_defect(self):
+        for name, text, expected in CASES:
+            with self.subTest(expected, text=text):
+                code, printed = self.check({name: text})
+                self.assertEqual((code, expected in printed), (1, True), printed)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+`K/tools/ledger/`, keeps one row per agent run, so routing rests on results.
+
+`CONTRACT.md`:
+
+```markdown
+# ledger
+
+Keeps one row per agent run in the brain, so a user can see who does what well: run it after each agent run.
+
+Usage: `ledger add --who WHO --kind produce|test|review --task TASK --pass clean|fixed|failed [--note TEXT] [--brain DIR]`, `ledger stats [--brain DIR]`. Exit codes: 0 done, 2 usage or no brain.
+
+## Guarantees
+
+1. `add` appends `date who kind task pass note` to `MEMORY/ledger/runs-YYYY-MM.tsv`, creating the folder; tabs and newlines in a value become spaces. `test_add_appends_a_dated_row_to_the_month_file_with_breaks_as_spaces`
+2. `stats` prints `who runs clean fixed failed`, one line per who, sorted, over all months; a row without six cells is not counted. `test_stats_counts_per_who_sorted_over_all_months_without_malformed_rows`
+3. The brain is `--brain`, else `COMANDO_BRAIN`, else the manifest's `brain` with `~` expanded. `test_brain_flag_beats_environment_beats_manifest_with_home_expanded`
+4. A usage error, or no brain to be found, exits 2. `test_usage_errors_and_no_brain_exit_2`
+```
+
+`ledger`:
+
+```python
+#!/usr/bin/env python3
+"""Keep one row per agent run in `<brain>/MEMORY/ledger/runs-YYYY-MM.tsv`, so a user can see who does what well.
+
+Usage: ledger add --who WHO --kind KIND --task TASK --pass PASS [--note TEXT]; ledger stats. Both take --brain DIR.
+Exit codes: 0 done, 2 usage, no brain. Brain: `--brain`, else `COMANDO_BRAIN`, else `brain` in `comando-kit.json`.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from collections import Counter, defaultdict
+from collections.abc import Sequence
+from datetime import datetime, timezone
+from pathlib import Path
+
+MANIFEST = Path(__file__).resolve().parents[2] / "comando-kit.json"
+OUTCOMES = ("clean", "fixed", "failed")
+TABLE_ROW = "{:<24} {:>4} {:>5} {:>5} {:>6}"
+
+
+def add_row(ledger: Path, args: argparse.Namespace) -> None:
+    """Append one row to this month's file (UTC), in one write so that parallel sessions do not interleave."""
+    now = datetime.now(timezone.utc)
+    cells = (f"{now:%Y-%m-%d}", args.who, args.kind, args.task, args.outcome, args.note)
+    ledger.mkdir(parents=True, exist_ok=True)
+    with (ledger / f"runs-{now:%Y-%m}.tsv").open("a", encoding="utf-8") as runs:
+        runs.write("\t".join(cell.translate(str.maketrans("\t\r\n", "   ")) for cell in cells) + "\n")
+
+
+def print_stats(ledger: Path, _: argparse.Namespace) -> None:
+    """Print one line per who, sorted by who, over all months; a row without six cells is not counted."""
+    outcomes_by_who: dict[str, Counter[str]] = defaultdict(Counter)
+    for path in sorted(ledger.glob("runs-*.tsv")):
+        with path.open(encoding="utf-8", errors="replace") as runs:
+            rows = (line.rstrip("\n").split("\t") for line in runs)
+            for _, who, _, _, outcome, _ in (row for row in rows if len(row) == 6):
+                outcomes_by_who[who][outcome] += 1
+    print(TABLE_ROW.format("who", "runs", *OUTCOMES))
+    for who, outcomes in sorted(outcomes_by_who.items()):
+        print(TABLE_ROW.format(who, sum(outcomes.values()), *(outcomes[outcome] for outcome in OUTCOMES)))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run `add` or `stats` and return 0; exit 2, through argparse, on a usage error or when no brain is found."""
+    parser = argparse.ArgumentParser(description="One row per agent run.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    add = commands.add_parser("add", help="append one row")
+    add.add_argument("--who", required=True, help="who ran: an agent or a model")
+    add.add_argument("--kind", required=True, choices=("produce", "test", "review"), help="what the run was")
+    add.add_argument("--task", required=True, help="the task it ran")
+    add.add_argument("--pass", dest="outcome", required=True, choices=OUTCOMES, help="how it went")
+    add.add_argument("--note", default="", help="free text")
+    add.set_defaults(run=add_row)
+    stats = commands.add_parser("stats", help="print runs per who")
+    stats.set_defaults(run=print_stats)
+    for command in (add, stats):
+        command.add_argument("--brain", help="the brain (default: COMANDO_BRAIN, else the manifest's)")
+    args = parser.parse_args(argv)
+    try:
+        brain = args.brain or os.getenv("COMANDO_BRAIN") or json.loads(MANIFEST.read_text(encoding="utf-8"))["brain"]
+        args.run(Path(brain).expanduser() / "MEMORY" / "ledger", args)
+    except (OSError, LookupError, TypeError, ValueError) as error:
+        parser.error(f"no brain: {error}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+`test_ledger.py`:
+
+```python
+"""Tests for ledger, on brains in a temporary folder with an empty environment."""
+from __future__ import annotations
+
+import io
+import os
+import sys
+import tempfile
+import unittest
+from importlib import machinery, util
+from pathlib import Path
+from unittest import mock
+
+LOADER = machinery.SourceFileLoader("ledger", str(Path(__file__).with_name("ledger")))
+ledger = util.module_from_spec(util.spec_from_loader("ledger", LOADER))
+sys.modules["ledger"] = ledger
+LOADER.exec_module(ledger)
+ROW = ("add", "--who", "a", "--kind", "test", "--task", "t", "--pass", "clean")
+
+
+@mock.patch.dict(os.environ, clear=True)
+class LedgerTest(unittest.TestCase):
+    """ledger with `MANIFEST` pointing into the temporary folder."""
+    def setUp(self) -> None:
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.brain = Path(folder.name)
+        ledger.MANIFEST = self.brain / "comando-kit.json"
+
+    def test_add_appends_a_dated_row_to_the_month_file_with_breaks_as_spaces(self):
+        ledger.main((*ROW, "--brain", str(self.brain)))
+        self.assertEqual(ledger.main((*ROW, "--note", "a\tb\nc\r", "--brain", str(self.brain))), 0)
+        (path,) = self.brain.glob("MEMORY/ledger/runs-*.tsv")
+        rows = r"^runs-(\d{4}-\d\d)\.tsv\n\1-\d\d\ta\ttest\tt\tclean\t\n\1-\d\d\ta\ttest\tt\tclean\ta b c \n$"
+        self.assertRegex(f"{path.name}\n{path.read_text(encoding='utf-8')}", rows)
+
+    def test_stats_counts_per_who_sorted_over_all_months_without_malformed_rows(self):
+        (self.brain / "MEMORY/ledger").mkdir(parents=True)
+        for month, rows in enumerate(("d\tb\t\t\tfixed\t\nd\tb\t\t\tclean", "d\ta\t\t\tclean\t\nd\ta\t\t\tfailed\t")):
+            (self.brain / f"MEMORY/ledger/runs-2026-0{month}.tsv").write_text(f"{rows}\n", encoding="utf-8")
+        with mock.patch("sys.stdout", io.StringIO()) as printed:
+            ledger.main(("stats", "--brain", str(self.brain)))
+        self.assertEqual(printed.getvalue().split(), "who runs clean fixed failed a 2 1 0 1 b 1 0 1 0".split())
+
+    def test_brain_flag_beats_environment_beats_manifest_with_home_expanded(self):
+        os.environ["HOME"] = str(self.brain)
+        ledger.MANIFEST.write_text('{"brain": "~/manifest"}', encoding="utf-8")
+        ledger.main(ROW)
+        os.environ["COMANDO_BRAIN"] = str(self.brain / "env")
+        ledger.main(ROW)
+        ledger.main((*ROW, "--brain", str(self.brain / "flag")))
+        self.assertEqual(sorted(path.parent.name for path in self.brain.glob("*/MEMORY")), ["env", "flag", "manifest"])
+
+    def test_usage_errors_and_no_brain_exit_2(self):
+        for argv in ((), ("add",), (*ROW[:-1], "maybe"), ROW):
+            with self.subTest(argv), mock.patch("sys.stderr", io.StringIO()), self.assertRaisesRegex(SystemExit, "2"):
+                ledger.main(argv)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
 ### 8.3 The brain's files
+
+`B/.gitignore`: the line `.DS_Store`.
 
 `B/MEMORY/MEMORY.md`:
 
@@ -1060,8 +2322,9 @@ Provisional work: it may be wrong or superseded; read it as evidence, not as tru
 the KB and working context into memory, and the scratchpad empties as tasks finish.
 
 - **One day folder, today's.** At session start the newest day folder is renamed to today, so topics and task numbers
-  carry over. Another day folder is merged into today's topic by topic, its INDEX.md parked in `work/` and folded;
-  anything else at the top moves to today's `inbox/` and is filed into a topic.
+  carry over. Another day folder is merged into today's topic by topic, its INDEX.md parked in `work/` and folded.
+  A session that finds anything else at the top, beside this file and FRICTION.md, moves it to today's `inbox/` and
+  files it into a topic.
 - **Topics.** Short lower-case topic folders (at most 20 characters), each with numbered documents `NN-<what>.md` (at
   most 25 characters) and `work/` for raw material (names at most 22). No date in a name; the name says what the file
   holds; a topic's living plan is `00-<topic>-plan.md`.
@@ -1111,21 +2374,21 @@ the KB and working context into memory, and the scratchpad empties as tasks fini
 A kit is any folder whose `comando-kit.json` reads, at one of the roots of [§3.1](#31-the-root); a brain is the folder
 `COMANDO_BRAIN` or the manifest's `brain` names, anywhere, a local repository's folder included, and applies only with a
 kit. A user who brings a kit puts it at `~/comando-kit`, or starts comando with `CLAUDE_CONFIG_DIR` naming it. A user
-who brings only a brain gets the kit of [§8.2](#82-the-kits-files) with `brain` set to that folder (and the roll hook's
-fallback path changed to it). Either is checked against the contract alone, and each gap reported to the user with its
+who brings only a brain gets the kit of [§8.2](#82-the-kits-files) with `brain` set to that folder. Either is checked against the contract alone, and each gap reported to the user with its
 fix, never fixed unasked:
 
 | Check | Passes when |
 |---|---|
-| the manifest | the commands of [§8.1](#81-the-steps) step 6 pass, and comando names no left-out folder at start |
+| the manifest | the first command of [§8.1](#81-the-steps) step 6 passes, with `K` and `B` the kit's and brain's real folders, and comando names no left-out folder at start |
 | the Files tab | one folder `"."` alone in group `Kit`; the brain's folders with `root` `brain`, in one group ([§3.2](#32-the-files-tab)) |
-| the ignore list | the loop of [§8.1](#81-the-steps) step 6 prints `checked` alone; a brain inside the kit is ignored too |
+| the ignore list | the third command of [§8.1](#81-the-steps) step 6 prints `checked` alone; a brain inside the kit is ignored too |
 | retention | `cleanupPeriodDays` set high, or a sweep that spares comando's sessions |
 | compaction | `autoCompactWindow` unset or above comando's threshold |
 | permissions | the rules the user wants in `settings.json`, with what the automatic checkpoint does allowed ([§2.5](#25-settings)): the three MCP tools, `Read` and `Edit` of the brain by its absolute path, the brain in `additionalDirectories`; comando adds none |
 | protected paths | the brain is not under a `.claude` path, or the user accepts that every brain write asks ([§2.5](#25-settings)) |
 | the checkpoint | `skills/reflect/SKILL.md` exists and handles `--auto` with `decision_hold`, and a user-started run settles with `decisions_settled` |
 | jobs | no `jobs`, or an `install/kit.py` that answers the three calls of [§3.5](#35-scheduled-jobs) |
+| upgrade | not tagged on a remote, or an `INSTALL.md` with a section *Upgrade* ([§3.4](#34-version-and-upgrade)) |
 
 ### 8.5 After a comando upgrade
 

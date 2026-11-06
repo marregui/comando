@@ -30,13 +30,13 @@
   <g>
     <text x="60" y="206" class="m">CLAUDE.md</text><text x="230" y="206" class="s">the standing instructions every session loads</text>
     <text x="60" y="242" class="m">settings.json</text><text x="230" y="242" class="s">Claude Code's settings; the hooks; permissions</text>
-    <text x="60" y="278" class="m">hooks/</text><text x="230" y="278" class="s">the hooks' scripts: context in, a call blocked</text>
+    <text x="60" y="278" class="m">hooks/</text><text x="230" y="278" class="s">one folder per hook: context in, a call blocked</text>
     <text x="60" y="314" class="m">skills/</text><text x="230" y="314" class="s">named procedures; reflect answers the checkpoint</text>
     <text x="60" y="350" class="m">agents/</text><text x="230" y="350" class="s">the subagent types sessions dispatch</text>
     <text x="60" y="386" class="m">workflows/</text><text x="230" y="386" class="s">saved multi-agent workflows</text>
-    <text x="60" y="422" class="m">bin/</text><text x="230" y="422" class="s">scripts on the Bash tool's PATH</text>
-    <text x="60" y="458" class="m">tools/</text><text x="230" y="458" class="s">each script's code and its test</text>
-    <text x="60" y="494" class="m">templates/</text><text x="230" y="494" class="s">agent spec, knowledge-base set templates</text>
+    <text x="60" y="422" class="m">tools/</text><text x="230" y="422" class="s">one folder per tool, on the Bash tool's PATH</text>
+    <text x="60" y="458" class="m">templates/</text><text x="230" y="458" class="s">agent spec, knowledge-base set templates</text>
+    <text x="60" y="494" class="m">README.md</text><text x="230" y="494" class="s">the layout contract its check proves</text>
     <text x="60" y="530" class="m">comando-kit.json</text><text x="230" y="530" class="s">the manifest: name, brain, folders, jobs</text>
     <text x="60" y="566" class="m">INSTALL.md</text><text x="230" y="566" class="s">its Upgrade section, for the kit session</text>
   </g>
@@ -70,7 +70,7 @@
   <g class="s">
     <text x="640" y="372">CLAUDE.md loaded</text>
     <text x="640" y="392">settings read</text>
-    <text x="640" y="412">bin/ on PATH</text>
+    <text x="640" y="412">tools on PATH</text>
     <text x="640" y="432">day folder rolled</text>
     <text x="640" y="452" fill="#E7C55A">MEMORY.md index</text>
 
@@ -84,7 +84,7 @@
     <text x="980" y="392">pattern, ask before</text>
     <text x="980" y="412">deletes, own instance</text>
     <text x="980" y="432">agents/ on dispatch</text>
-    <text x="980" y="452">bin/ through Bash</text>
+    <text x="980" y="452">tools through Bash</text>
 
     <text x="1150" y="372">index check after</text>
     <text x="1150" y="392">a write to the brain</text>
