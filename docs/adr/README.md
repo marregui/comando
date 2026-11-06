@@ -133,7 +133,7 @@ row and its record differ, or when a record has no row.
 | [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Miguel and Claude | accepted on 2026-10-29; amended 2026-11-01 (see Amendments) |
 | [111](0111-a-file-link-opens-as-the-files-tab-does.md) | A file link opens as the Files tab opens a file, and is found where it was written from | 2026-10-28 | Miguel and Claude | accepted; the search amended the same day (see Amendments) |
 | [112](0112-closing-gives-the-keyboard-back.md) | Closing a panel or view gives the keyboard back to what opened it | 2026-10-28 | Miguel and Claude | accepted; what is remembered amended the same day (see Amendments) |
-| [113](0113-a-documents-outline-at-the-panels-right.md) | A document's outline at the panel's right, from a button in its tools | 2026-10-28 | Miguel and Claude | accepted |
+| [113](0113-a-documents-outline-at-the-panels-right.md) | A document's outline at the panel's right, from a button in its tools | 2026-10-28 | Miguel and Claude | accepted; amended by [record 134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) |
 | [114](0114-help-menu-and-corner-buttons.md) | Help is the menu; the theme, the shell, the plots and the server are buttons | 2026-10-28 | Miguel and Claude | accepted; amended on 2026-10-29 and 2026-11-01 (see Amendments); the corner gains the comando Edge's toggle by [record 122](0122-instances-name-kit-brain-data-root-edge.md) |
 | [115](0115-the-lower-divider-per-panel.md) | The lower divider is each panel's | 2026-10-28 | Miguel and Claude | accepted; amended on 2026-10-29 (see Amendments) |
 | [116](0116-one-connection-toggle.md) | A panel's connection is one toggle and its name, first of the tools | 2026-10-28 | Miguel and Claude | accepted |
@@ -154,3 +154,4 @@ row and its record differ, or when a record has no row.
 | [131](0131-an-automatic-checkpoint-asks-nothing.md) | An automatic checkpoint asks nothing; its decisions wait in the Approvals tab's Later group | 2026-11-01 | Miguel and Claude | accepted; built; amended 2026-11-01 (see Amendments) |
 | [132](0132-instances-working-together-follow-seven-rules.md) | Instances working together follow seven rules | 2026-10-29 | Miguel and Claude | accepted |
 | [133](0133-every-stored-file-has-a-schema-and-a-version.md) | Every file comando keeps has a schema and a version | 2026-11-01 | Miguel and Claude | accepted; built |
+| [134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) | The window says who works, and gives its room to what is read | 2026-11-06 | Miguel and Claude | accepted; built |

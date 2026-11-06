@@ -336,6 +336,9 @@ class ToolCallItem extends Item {
                     t.link(at, t.length(), target, s.link);
                 }
             }
+            if (c.name().equals("Write")) {
+                t.append("   " + writtenLines(in), s.small, s.muted);
+            }
             title = new TextBox(t).noWrap();
             input = new TextBox(inputRich(c, in, s));
             result = new TextBox(resultRich(c, s));
@@ -371,9 +374,18 @@ class ToolCallItem extends Item {
         return 3 + y + IN_Y + 3;
     }
 
-    /** The unified diff an edit makes, null for a tool that edits nothing; text written over nothing is clipped. */
+    /** How long the text a Write gives is: "48 lines". */
+    private static String writtenLines(final JsonNode in) {
+        final long lines = in.path("content").asString("").lines().count();
+        return lines + (lines == 1 ? " line" : " lines");
+    }
+
+    /**
+     * The unified diff an edit makes, null for a tool that edits nothing and for Write: it gives the whole text and not
+     * what it replaces, so every line would read as added. Text put in at an empty place is clipped.
+     */
     private static List<String> editDiff(final Block.ToolCall c, final JsonNode in) {
-        final Diffs.Edit e = Diffs.edit(c.name(), in);
+        final Diffs.Edit e = c.name().equals("Write") ? null : Diffs.edit(c.name(), in);
         if (e == null) {
             return null;
         }
@@ -394,6 +406,7 @@ class ToolCallItem extends Item {
         return switch (c.name()) {
             case "Bash" -> "$ " + in.path("command").asString("");
             case "Agent", "Task" -> in.path("prompt").asString("");
+            case "Write" -> Items.clipLines(in.path("content").asString(""), Items.MAX_INPUT_LINES);
             default -> in.isObject() && !in.isEmpty() ? Items.clipLines(Json.pretty(in), Items.MAX_INPUT_LINES) : "";
         };
     }
@@ -636,6 +649,8 @@ class ToolCallItem extends Item {
             sb.append("\n\n").append(Items.fence("diff", diff.isEmpty() ? "(no changes)" : String.join("\n", shown) + more));
         } else if (c.name().equals("Bash")) {
             sb.append("\n\n").append(Items.fence("bash", in.path("command").asString("")));
+        } else if (c.name().equals("Write")) {
+            sb.append("\n\n").append(Items.fence("", plainInput(c, in)));
         } else if (in.isObject() && !in.isEmpty()) {
             sb.append("\n\n").append(Items.fence("json", Items.clipLines(Json.pretty(in), Items.MAX_INPUT_LINES)));
         }

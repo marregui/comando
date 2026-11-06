@@ -100,7 +100,7 @@ enum TabStatus {
                 final String what = session.filter(SessionState::isBusy).map(TabStatus::working)
                         .orElse("running");
                 final long since = session.map(SessionState::turnStartedMillis).orElse(0L);
-                yield " · " + what + (since > 0 ? " " + Labels.elapsed(nowMillis - since) : "");
+                yield " · " + what + (since > 0 ? " · turn " + Labels.elapsed(nowMillis - since) : "");
             }
             case WAITING -> {
                 final SessionState ss = session.orElseThrow();

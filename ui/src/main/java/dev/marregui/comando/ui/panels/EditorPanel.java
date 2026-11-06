@@ -8,6 +8,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Window;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.HierarchyEvent;
@@ -105,6 +106,8 @@ public final class EditorPanel extends JPanel {
     private final JButton mode = iconButton();
     /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
     private final JButton browser = iconButton();
+    /** What the Outline button says while it is on and the text has no headings for the pane to show. */
+    static final String NO_HEADINGS = "No headings yet: the outline shows with the first; click to turn it off";
     /** Shows or hides the document's outline at the right (record 113); shown where the text renders as a page. */
     private final JButton outlineButton = iconButton();
     private final OutlinePane outline = new OutlinePane();
@@ -512,7 +515,7 @@ public final class EditorPanel extends JPanel {
         return previewing ? rendered : editor.area();
     }
 
-    /** Whether the outline shows: wanted, and the text renders as a page. */
+    /** Whether the outline shows: wanted, the text renders as a page, and it has headings. */
     boolean outlineShows() {
         return body.getComponentCount() > 0 && body.getComponent(0) == split;
     }
@@ -522,25 +525,48 @@ public final class EditorPanel extends JPanel {
         return outline;
     }
 
-    /** Puts the outline beside the text or the preview when wanted and the text renders as a page, else removes it. */
+    /** Whether the outline follows the text: wanted, and the text renders as a page. */
+    private boolean outlineReads() {
+        return outlineWanted && rendersAsPage();
+    }
+
+    /** Lays the body out as the outline stands, and reads the headings when it follows the text. */
     private void layOutBody() {
-        final boolean on = outlineWanted && rendersAsPage();
+        placeOutline();
+        if (outlineReads()) {
+            readOutline();
+        }
+    }
+
+    /** Puts the outline beside the text or the preview while it follows a text that has headings, else removes it. */
+    private void placeOutline() {
+        final boolean on = outlineReads() && !outline.sections().isEmpty();
         showOutlineButton();
         if (on == outlineShows()) {
             return;
         }
+        final Component typing = keyboardInCenter();
         body.removeAll();
         if (on) {
             split.setLeftComponent(center);
             split.setRightComponent(outline.component());
             body.add(split, BorderLayout.CENTER);
             placeDivider();
-            readOutline();
         } else {
             body.add(center, BorderLayout.CENTER);
         }
         body.revalidate();
         body.repaint();
+        if (typing != null) {
+            typing.requestFocusInWindow();
+        }
+    }
+
+    /** What has the window's keyboard in the text or the preview, which a move loses; null when it is elsewhere. */
+    private Component keyboardInCenter() {
+        final Window window = SwingUtilities.getWindowAncestor(body);
+        final Component owner = window == null ? null : window.getMostRecentFocusOwner();
+        return owner != null && SwingUtilities.isDescendingFrom(owner, center) ? owner : null;
     }
 
     /** The outline {@link #OUTLINE_WIDTH} wide at the split's right, once the split has a width. */
@@ -561,12 +587,14 @@ public final class EditorPanel extends JPanel {
     }
 
     private void showOutlineButton() {
-        outlineButton.setToolTipText(outlineWanted ? "Hide the outline" : "Show the document's outline: a double click on a heading goes to it");
+        outlineButton.setToolTipText(outlineReads() && outline.sections().isEmpty() ? NO_HEADINGS
+                : outlineWanted ? "Hide the outline"
+                : "Show the document's outline: a double click on a heading goes to it");
     }
 
-    /** The text changed: the outline reads its headings again once typing pauses, while it shows. */
+    /** The text changed: the outline reads its headings again once typing pauses, while it follows the text. */
     private void outlineSoon() {
-        if (outlineShows()) {
+        if (outlineReads()) {
             outlineWait.request();
         }
     }
@@ -580,6 +608,7 @@ public final class EditorPanel extends JPanel {
             Edt.later(() -> {
                 if (text.equals(outlineText)) {
                     outline.show(sections);
+                    placeOutline();
                 }
             });
         });

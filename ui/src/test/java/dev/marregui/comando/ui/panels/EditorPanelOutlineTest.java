@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JList;
@@ -30,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - lists the headings with the ids the rendered page gives them, skipping fenced code and front matter
 /// - re-reads the headings after typing pauses
 /// - the Outline button toggles the pane and reports the choice for the next panel
+/// - the pane takes room only while the text has headings: the first one brings it, the last one's end takes it away
 /// - a double click on a heading puts its line at the top; a single click does nothing; Enter goes to the one selected
 /// - the pane uses the sidebar's colours
 /// - text that does not render as a page has no outline
@@ -96,7 +99,6 @@ class EditorPanelOutlineTest {
         assertThat(p.outlineShows()).isFalse();
 
         SwingUtilities.invokeAndWait(() -> button(p).doClick());
-        assertThat(p.outlineShows()).isTrue();
         assertThat(kept).as("the next panel opens the same way").containsExactly(true);
         Awaitility.await("the headings read").atMost(Duration.ofSeconds(5)).until(() -> p.outlinePane().sections().size() == 4);
         assertThat(p.outlinePane().sections()).containsExactly(
@@ -111,6 +113,7 @@ class EditorPanelOutlineTest {
         SwingUtilities.invokeAndWait(() -> p.editor().area().append("## Added\n"));
         Awaitility.await("read again").atMost(Duration.ofSeconds(5))
                 .until(() -> p.outlinePane().sections().stream().anyMatch(s -> s.text().equals("Added")));
+        assertThat(onEdt(p::outlineShows)).isTrue();
 
         SwingUtilities.invokeAndWait(() -> button(p).doClick());
         assertThat(p.outlineShows()).isFalse();
@@ -178,6 +181,34 @@ class EditorPanelOutlineTest {
             assertThat(l.getSelectionForeground()).as("the name in its highlight").isEqualTo(Theme.tint().highlight);
             assertThat(o.component().getBackground()).as("the pane's ground").isEqualTo(Theme.ground());
         });
+    }
+
+    /// With the outline on, text with no heading gives the panel's whole width to the text and the button says why;
+    /// typing the first heading brings the pane, removing it takes the pane away, and the choice stays on throughout.
+    @Test
+    void thePaneTakesRoomOnlyWhileTheTextHasHeadings() throws Exception {
+        final List<Boolean> kept = new CopyOnWriteArrayList<>();
+        final EditorPanel p = panel("notes.md", Path.of("/d/notes.md"), "Just a line.\n");
+        SwingUtilities.invokeAndWait(() -> p.outline(false, kept::add));
+        SwingUtilities.invokeAndWait(() -> button(p).doClick());
+        Awaitility.await("the button says so").atMost(Duration.ofSeconds(5))
+                .until(() -> onEdt(() -> EditorPanel.NO_HEADINGS.equals(button(p).getToolTipText())));
+        assertThat(onEdt(p::outlineShows)).as("no heading: nothing to show").isFalse();
+
+        SwingUtilities.invokeAndWait(() -> p.editor().area().append("# First\n"));
+        Awaitility.await("the first heading").atMost(Duration.ofSeconds(5)).until(() -> onEdt(p::outlineShows));
+        assertThat(onEdt(() -> button(p).getToolTipText())).isEqualTo("Hide the outline");
+
+        SwingUtilities.invokeAndWait(() -> p.editor().area().setText("Just a line.\n"));
+        Awaitility.await("the last heading gone").atMost(Duration.ofSeconds(5))
+                .until(() -> onEdt(() -> !p.outlineShows()));
+        assertThat(kept).as("the choice is the user's, not the text's").containsExactly(true);
+    }
+
+    private static <T> T onEdt(final Supplier<T> read) throws Exception {
+        final AtomicReference<T> value = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> value.set(read.get()));
+        return value.get();
     }
 
     /// A `.sql` file hides the Outline button and shows no outline even when the outline is wanted.

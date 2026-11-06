@@ -14,7 +14,8 @@ import dev.marregui.comando.core.model.Status;
  * @param costUsd           spend Claude Code reports for this process
  * @param contextTokens     the context size: input tokens, cache included, of the latest model call or turn
  * @param contextWindow     the model's context window as last reported, 0 when unknown
- * @param activity          what the session is doing now ("requesting", "compacting", a tool name), empty when idle
+ * @param activity          what the session is doing now ("calling the model", "compacting", a tool name), empty when
+ *                          idle
  * @param branch            git branch of the working directory, empty when unknown
  * @param turnStartedMillis when the running turn began (the first prompt of a busy stretch), 0 when idle
  * @param lastTurnError     why the last turn failed, empty when it finished, was interrupted, or a new turn has started

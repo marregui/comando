@@ -91,11 +91,11 @@ class PanelTextsTest {
                 .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
     }
 
-    /// A session with two turns pending shows "working · …" ending with "1 queued"; an idle session shows nothing.
+    /// A session with two turns pending shows "working · turn …" ending with "1 queued"; an idle session shows nothing.
     @Test
     void aBusySessionShowsHowLongItWorksAndWhatIsQueued() {
         final SessionState x = SessionState.closed(States.WORK).withTurns(2, System.currentTimeMillis() - 5_000);
-        assertThat(SessionBar.busyText(x)).contains("working · ").endsWith(" · 1 queued");
+        assertThat(SessionBar.busyText(x)).contains("working · turn ").endsWith(" · 1 queued");
         assertThat(SessionBar.busyText(SessionState.closed(States.WORK))).isEmpty();
     }
 

@@ -53,7 +53,8 @@ class TabStatusTest {
     void aRunningTurnWorksAndItsEndUnseenIsDone() {
         final SessionState busy = open().withTurns(1, 1_000L).withActivity("Bash", 1_000L);
         assertThat(TabStatus.of(BOUND, state(BOUND, busy), false)).isEqualTo(TabStatus.WORKING);
-        assertThat(TabStatus.describe(BOUND, state(BOUND, busy), TabStatus.WORKING, 13_000L)).isEqualTo(" · Bash 12 s");
+        assertThat(TabStatus.describe(BOUND, state(BOUND, busy), TabStatus.WORKING, 13_000L))
+                .isEqualTo(" · Bash · turn 12 s");
         final SessionState done = busy.withTurns(0, 2_000L);
         assertThat(TabStatus.of(BOUND, state(BOUND, done), true)).isEqualTo(TabStatus.DONE);
         assertThat(TabStatus.of(BOUND, state(BOUND, done), false)).as("looked at: nothing to say").isEqualTo(TabStatus.IDLE);

@@ -13,6 +13,8 @@ import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import javax.swing.BorderFactory;
@@ -28,14 +30,18 @@ import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -77,7 +83,17 @@ public final class StatusBar {
         }
     }
 
+    /**
+     * A line of the work list: who, what it does now, and the panel a click goes to, empty when it has none.
+     *
+     * @param rank needs you, then working, then waiting
+     */
+    record WorkRow(int rank, String text, Optional<PanelId> panel) {
+    }
+
     private final IntentSink intents;
+    /** The state last rendered, which the work list reads when it opens. */
+    private AppState state;
     private List<Notice> history = List.of();
     private Notice shown = Notice.NONE;
     private final Targets targets;
@@ -125,12 +141,25 @@ public final class StatusBar {
         root.add(notice, BorderLayout.CENTER);
         root.add(right, BorderLayout.EAST);
         work.setForeground(Theme.MUTED);
+        work.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        work.setToolTipText("Click to see who is working, and on what");
+        work.getAccessibleContext().setAccessibleName("Work");
+        work.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(final MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e) && !e.isControlDown()) {
+                    showWork();
+                }
+            }
+        });
     }
 
     public JComponent component() {
         return root;
     }
 
+    /** The work list's width: a session's name and what it waits on, as a recent notice's line. */
+    private static final int WORK_WIDTH = 640;
     /** At or above this much of a window used, the usage shows as a warning. */
     static final int USAGE_WARN = 75;
     /** At or above this much, as a danger. */
@@ -315,6 +344,92 @@ public final class StatusBar {
     }
 
 
+    /** What every session and query is doing in {@code s}: who needs you first, then who works, then who waits. */
+    static List<WorkRow> workRows(final AppState s) {
+        final List<WorkRow> rows = new ArrayList<>();
+        for (final SessionState x : s.sessions()) {
+            final int asked = s.pendingApprovals(x.name());
+            final String doing = SessionBar.busyText(x).strip();
+            if (asked > 0 || !doing.isEmpty()) {
+                final String what = asked > 0
+                        ? "needs you: " + asked + (asked == 1 ? " request" : " requests")
+                                + since(oldestAsk(s, x.name()))
+                        : doing;
+                final int rank = asked > 0 ? 0 : x.isBusy() ? 1 : 2;
+                rows.add(new WorkRow(rank, x.name() + " · " + what, s.homePanel(x.name()).map(PanelState::id)));
+            }
+        }
+        for (final PanelState p : s.panels()) {
+            s.runOf(p.id()).filter(r -> r.status().isActive()).ifPresent(r -> rows.add(
+                    new WorkRow(1, p.title() + " · query running" + since(r.startedMillis()), Optional.of(p.id()))));
+        }
+        rows.sort(Comparator.comparingInt(WorkRow::rank));
+        return rows;
+    }
+
+    /** When the oldest request of {@code session} arrived. */
+    private static long oldestAsk(final AppState s, final String session) {
+        return s.approvals().stream().filter(a -> a.session().equals(session)).mapToLong(Approval::createdMillis).min()
+                .orElse(0L);
+    }
+
+    /** " · 4 min 02 s" since {@code millis}; empty for 0, which is not yet started. */
+    private static String since(final long millis) {
+        return millis > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - millis) : "";
+    }
+
+    /** The work list as it stands at the last render; {@code then} runs before a click on a row goes to its panel. */
+    JList<WorkRow> workList(final Runnable then) {
+        final DefaultListModel<WorkRow> model = new DefaultListModel<>();
+        model.addAll(state == null ? List.of() : workRows(state));
+        final JList<WorkRow> list = new JList<>(model);
+        list.getAccessibleContext().setAccessibleName("Work");
+        list.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(final JList<?> l, final Object value, final int index,
+                                                          final boolean selected, final boolean focus) {
+                final JLabel c = (JLabel) super.getListCellRendererComponent(l, "", index, selected, focus);
+                final WorkRow r = (WorkRow) value;
+                c.setText(Plain.text(r.text()));
+                if (!selected && r.rank() == 0) {
+                    c.setForeground(Theme.ATTENTION);
+                }
+                c.setToolTipText(Tooltips.wrapped(r.text() + (r.panel().isPresent() ? " · click to go there" : "")));
+                return c;
+            }
+        });
+        list.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(final MouseEvent e) {
+                final int i = list.locationToIndex(e.getPoint());
+                if (i >= 0 && SwingUtilities.isLeftMouseButton(e) && !e.isControlDown()) {
+                    model.get(i).panel().ifPresent(p -> {
+                        then.run();
+                        intents.dispatch(new Intent.FocusPanel(p));
+                    });
+                }
+            }
+        });
+        return list;
+    }
+
+    /** The count at the bar's right; for tests. */
+    JLabel workLabel() {
+        return work;
+    }
+
+    /** What the status bar's count stands for, one line each; a click on one goes to its panel. */
+    private void showWork() {
+        final JPopupMenu menu = new JPopupMenu();
+        final JList<WorkRow> list = workList(() -> menu.setVisible(false));
+        final JScrollPane scroll = new JScrollPane(list);
+        final int rows = list.getModel().getSize();
+        scroll.setPreferredSize(new Dimension(WORK_WIDTH, Math.min(360, Math.max(40, rows * 22 + 6))));
+        menu.add(scroll);
+        final int height = menu.getPreferredSize().height;
+        menu.show(work, work.getWidth() - WORK_WIDTH, -height);
+    }
+
     /** The notice with its time and its whole text, for the tooltip. */
     static String fullLine(final Notice n) {
         return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + KeyText.of(n.text());
@@ -341,6 +456,7 @@ public final class StatusBar {
     }
 
     public void render(final AppState s) {
+        state = s;
         final Notice n = s.notice();
         shown = n;
         history = s.notices();

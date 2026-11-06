@@ -14,6 +14,7 @@ import java.util.function.Predicate;
 import javax.swing.AbstractButton;
 import javax.swing.JFrame;
 import javax.swing.JList;
+import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// A Markdown document's outline in the real window. Opens the window, so this runs in `./gradlew :app:uiTest`.
 /// - the Outline button in the panel's tools shows the outline at the right
 /// - a double click on a heading far down scrolls the rendered page there
+/// - the pane coming and going with the headings leaves the keyboard in the text being typed
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class OutlineUiTest {
 
@@ -77,6 +79,49 @@ class OutlineUiTest {
                         MouseEvent.BUTTON1));
             });
             Awaitility.await("scrolled to the far section").atMost(WAIT).until(() -> onEdt(() -> page.getViewPosition().y) > 500);
+        } finally {
+            app.close();
+        }
+    }
+
+    /// With the outline on and no heading yet, the first heading brings the pane and the last one's end takes it away
+    /// while the user types: the text is moved in the window both times, and the keyboard stays in it.
+    @Test
+    void thePaneComingAndGoingLeavesTheKeyboardInTheText() throws Exception {
+        final Path doc = home.resolve("notes.md");
+        Files.writeString(doc, "Just a line.\n");
+        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false), "outline-keys", () -> {
+        });
+        try {
+            app.start();
+            final StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20))
+                    .until(() -> loop.state().focused() != null && frame() != null);
+            loop.dispatch(new Intent.OpenFile("", doc.toString(), 0));
+            Awaitility.await("its panel").atMost(WAIT)
+                    .until(() -> loop.state().focusedPanel().title().equals("notes.md"));
+
+            final AbstractButton outline = await(AbstractButton.class,
+                    b -> "Outline".equals(b.getAccessibleContext().getAccessibleName()));
+            SwingUtilities.invokeAndWait(outline::doClick);
+            final AbstractButton edit = await(AbstractButton.class,
+                    b -> "Edit".equals(b.getAccessibleContext().getAccessibleName()));
+            SwingUtilities.invokeAndWait(edit::doClick);
+            final JTextArea text = await(JTextArea.class, a -> a.getText().startsWith("Just a line."));
+            Awaitility.await("the keyboard in the text").atMost(WAIT).until(() -> onEdt(() -> {
+                text.requestFocusInWindow();
+                return frame().getMostRecentFocusOwner() == text;
+            }));
+
+            SwingUtilities.invokeAndWait(() -> text.append("# First\n"));
+            await(JList.class, l -> "outline-list".equals(l.getName()) && l.getModel().getSize() == 1);
+            assertThat(onEdt(() -> frame().getMostRecentFocusOwner())).as("the pane came").isSameAs(text);
+
+            SwingUtilities.invokeAndWait(() -> text.setText("Just a line.\n"));
+            Awaitility.await("the pane gone").atMost(WAIT).until(() -> onEdt(() -> find(frame(), JList.class,
+                    l -> "outline-list".equals(l.getName()) && l.isShowing()) == null));
+            assertThat(onEdt(() -> frame().getMostRecentFocusOwner())).as("the pane went").isSameAs(text);
         } finally {
             app.close();
         }

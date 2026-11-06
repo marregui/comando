@@ -12,6 +12,8 @@ import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -37,6 +39,7 @@ import javax.swing.ToolTipManager;
 import javax.swing.border.AbstractBorder;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
+import javax.swing.plaf.basic.BasicTreeUI;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -134,6 +137,8 @@ public final class TreeView {
     private final JPanel cell = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
     private final JLabel mark = new JLabel();
     private final JLabel detail = new JLabel();
+    /** The viewport's width the rows were last measured for. */
+    private int lastRoom;
 
     public TreeView() {
         cell.setOpaque(false);
@@ -187,19 +192,27 @@ public final class TreeView {
                     }
                     final Icon after = trailing.apply(n);
                     if (after != null || !node.detail().isEmpty()) {
-                        // the mark belongs to the name: the detail, a path that may run past the edge, comes after it
+                        // the mark belongs to the name: the detail comes after it, while the row has room for it
                         cell.removeAll();
                         cell.add(l);
+                        int width = l.getPreferredSize().width;
                         if (after != null) {
                             mark.setIcon(after);
                             cell.add(mark);
+                            width += mark.getPreferredSize().width;
                         }
+                        String cellTip = l.getToolTipText();
                         if (!node.detail().isEmpty()) {
-                            detail.setText(Plain.text(node.detail()));
+                            final String text = Plain.text(node.detail());
+                            detail.setText(text);
                             detail.setFont(l.getFont());
-                            cell.add(detail);
+                            if (fits(n, width + detail.getPreferredSize().width)) {
+                                cell.add(detail);
+                            } else {
+                                cellTip = cellTip == null ? text : text + " · " + cellTip;
+                            }
                         }
-                        cell.setToolTipText(l.getToolTipText());
+                        cell.setToolTipText(cellTip);
                         return underHeader(n, cell);
                     }
                     return underHeader(n, l);
@@ -240,6 +253,30 @@ public final class TreeView {
         });
         ToolTipManager.sharedInstance().registerComponent(tree);
         FocusRing.install(scroll);
+        scroll.getViewport().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(final ComponentEvent e) {
+                final int room = scroll.getViewport().getWidth();
+                if (room != lastRoom && tree.getUI() instanceof BasicTreeUI ui) {
+                    lastRoom = room;
+                    // the tree keeps each row's size: this setter is the one way to have them measured again
+                    ui.setRightChildIndent(ui.getRightChildIndent());
+                }
+            }
+        });
+    }
+
+    /** Whether a cell {@code width} wide fits on the row of {@code n} in the tree's width; true before it has one. */
+    private boolean fits(final DefaultMutableTreeNode n, final int width) {
+        final int room = scroll.getViewport().getWidth();
+        if (room <= 0 || !(tree.getUI() instanceof BasicTreeUI ui)) {
+            return true;
+        }
+        final int handles = tree.getShowsRootHandles() ? 1 : 0;
+        final int offset = tree.isRootVisible() ? handles : handles - 1;
+        final Insets border = tree.getInsets();
+        final int indent = (n.getLevel() + offset) * (ui.getLeftChildIndent() + ui.getRightChildIndent());
+        return border.left + indent + width + border.right <= room;
     }
 
     /** The look's tree, which centres a row's open-and-close mark on the row below its header's space, not on both. */

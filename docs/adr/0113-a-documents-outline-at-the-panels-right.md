@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted | Miguel and Claude |
+| 2026-10-28 | accepted; amended by [record 134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) | Miguel and Claude |
 
 ## 1. Context
 

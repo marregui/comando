@@ -262,7 +262,9 @@ public final class SessionBar {
     }
 
     /**
-     * "  working · 12 s" while a turn runs, "  waiting on …" while background work runs; the shell's tick moves it.
+     * "  Bash · turn 12 s" while a turn runs: what it does now and how long the whole turn has taken, which a tool's
+     * card does not say (its time is the tool's); "  waiting on …" while background work runs; the shell's tick moves
+     * it.
      * While the checkpoint runs, what it does and how to leave it: "  checkpoint · compacting · 12 s · Stop to carry
      * on".
      */
@@ -282,7 +284,7 @@ public final class SessionBar {
         final String what = TabStatus.working(ss);
         final long since = ss.turnStartedMillis();
         final int queued = ss.pendingTurns() - 1;
-        return "  " + what + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "")
+        return "  " + what + (since > 0 ? " · turn " + Labels.elapsed(System.currentTimeMillis() - since) : "")
                 + (queued > 0 ? " · " + queued + " queued" : "");
     }
 

@@ -290,7 +290,9 @@ final class StreamMapper {
             case "init" -> init(e);
             case "status" -> {
                 final String status = e.path("status").isNull() ? "" : e.path("status").asString("");
-                sink.dispatch(new Intent.SessionActivity(session, status));
+                // "requesting" is the stream's word for a call under way; the window says what it means
+                final String activity = status.equals("requesting") ? "calling the model" : status;
+                sink.dispatch(new Intent.SessionActivity(session, activity));
                 if (e.path("compact_result").asString("").equals("success")) {
                     note(Block.NoteKind.COMPACT, "Compaction finished");
                 }
@@ -321,7 +323,7 @@ final class StreamMapper {
                     endedAgents.add(call);
                     agentEnded(call, e.path("status").asString("completed").equals("completed") ? "done" : "error", true);
                 }
-                sink.dispatch(new Intent.SessionActivity(session, "requesting"));
+                sink.dispatch(new Intent.SessionActivity(session, "calling the model"));
             }
             case "background_tasks_changed" -> backgroundTasks(e.path("tasks"));
             case "permission_denied" -> note(Block.NoteKind.DENIED, "Denied: " + e.path("tool_name").asString("tool"));

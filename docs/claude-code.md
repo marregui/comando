@@ -73,7 +73,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 | Event | Becomes |
 |---|---|
 | `system/init` | an init note when the model changed; `SessionInit` with the conversation id (the next start resumes it), model, CLI version, permission mode, capabilities |
-| `system/status`, `task_started`, `task_notification` | `SessionActivity` (requesting, compacting, a task's description) |
+| `system/status`, `task_started`, `task_notification` | `SessionActivity` (calling the model, compacting, a task's description) |
 | `system/background_tasks_changed` | `SessionTasksChanged`: the open background tasks, the whole set ([record 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)) |
 | `stream_event` `message_start` with no parent tool call | `SessionTurnRunning`, also for a turn Claude Code started itself after background work |
 | `stream_event` block start and deltas | a streaming text, thinking or tool-call block, updated in place |

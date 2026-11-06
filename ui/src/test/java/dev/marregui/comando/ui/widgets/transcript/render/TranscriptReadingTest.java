@@ -394,4 +394,17 @@ class TranscriptReadingTest {
         paint(1000, 700);
         assertThat(canvas.contentHeight()).isGreaterThan(5000);
     }
+
+    /// A Write reads as the file's text: no diff headers, no `+` on its lines, clipped like any input, in the export
+    /// too.
+    @Test
+    void aWriteReadsAsTheFilesTextNotAsADiff() {
+        final String content = "first\\n" + "line\\n".repeat(300);
+        add(new Block.ToolCall("w", "Write", "{\"file_path\":\"/a/new.txt\",\"content\":\"" + content + "\"}",
+                "File created", Block.ToolStatus.DONE, ""));
+
+        final String md = canvas.markdown();
+        assertThat(md).contains("**Write** · /a/new.txt\n\n```\nfirst\nline\n").contains(" more lines\n```")
+                .doesNotContain("```diff").doesNotContain("+first").doesNotContain("+++");
+    }
 }

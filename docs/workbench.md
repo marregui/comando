@@ -94,7 +94,9 @@ Any number of document panels may be attached to a session
   the headings at the panel's right, one a line, indented by level, the first level in bold, read again as typing
   pauses. A double click on one, or Enter on the one selected, goes to it: the rendered page scrolls its heading to the
   top, the text puts its line at the top with the caret on it. Whether panels open with it is the last choice made, kept
-  in `settings.json` ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)).
+  in `settings.json` ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)). The pane takes room only while
+  the text has headings: with the outline on and none yet, the button says so, and the first heading brings the pane
+  ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)).
 - **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
 - **Links**, wherever text shows (a rendered page, a panel's text, the transcript, every card in it: a command, a
@@ -138,7 +140,10 @@ Any number of document panels may be attached to a session
   and Remove the session…, each acting on the focused panel's session with the session menu's enablement.
   A panel without a session shows only the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
-  plans' usage and the work running in every session and query on the right. The kit's version is not here: it is on
+  plans' usage and the work running in every session and query on the right. A click on that count lists who needs you,
+  who works and who waits, each with what it does and for how long; a click on a line goes to its panel
+  ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)). The session bar's time is the whole turn's ("Bash · turn 4 min"); a tool card's is
+  the tool's. The kit's version is not here: it is on
   the Files tab's KIT row ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)).
 - **The header** holds icons without a button's shape, at the right. First the connection: a database icon in its
   state's colour (grey closed, blue open, amber opening or closing, red failed) whose click connects or disconnects, and
@@ -268,7 +273,9 @@ or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-a
 `⋯` button hides the sidebar to a rail on the left edge: its `⋯` shows the sidebar again at the width it had, and an
 icon per tab under it shows the sidebar at that tab. A name wider than the sidebar scrolls sideways into view, in every
 tab: the sessions, the panels without a session, the connections and the Files tree show a horizontal scroll bar while
-a row is wider than the tab, and none while every row fits.
+a row is wider than the tab, and none while every row fits. A tree's row gives up its detail (a size, a count, a path)
+before its name: the detail moves to the row's tooltip and comes back when the tab is wide enough
+([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)).
 
 **A session row** is one line: the state icon and the name
 ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops (its tooltip

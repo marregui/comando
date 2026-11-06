@@ -33,15 +33,14 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * A Markdown document's outline, at the right of its panel (record 113): a line per heading, indented by its level, the
- * first level in bold; a double click goes to the heading. Says so when the text has none. In the sidebar's look
- * (record 98): the theme's ground, ivory names, the selection a band of the tint with the report's bar, set again when
- * another theme is chosen. EDT only.
+ * first level in bold; a double click goes to the heading. Its panel shows it only while the text has headings. In the
+ * sidebar's look (record 98): the theme's ground, ivory names, the selection a band of the tint with the report's bar,
+ * set again when another theme is chosen. EDT only.
  */
 final class OutlinePane {
 
     /** How far each level below the first is indented. */
     static final int INDENT = 12;
-    static final String NONE = "No headings";
 
     private final DefaultListModel<MarkdownHtml.Section> model = new DefaultListModel<>();
     private final JList<MarkdownHtml.Section> list = new JList<>(model) {
@@ -57,7 +56,6 @@ final class OutlinePane {
             }
         }
     };
-    private final JLabel empty = new JLabel(NONE);
     private final JPanel root = new JPanel(new BorderLayout());
     private Consumer<MarkdownHtml.Section> onOpen = s -> { };
 
@@ -98,18 +96,12 @@ final class OutlinePane {
                 }
             }
         });
-        empty.setForeground(Theme.MUTED);
-        empty.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, Theme.GAP, Theme.GAP, Theme.GAP));
-        empty.setVerticalAlignment(JLabel.TOP);
         final JScrollPane scroll = new JScrollPane(list);
         FocusRing.install(scroll);
         SidebarLook.list(list);
         SidebarLook.ground(scroll);
         SidebarLook.ground(root);
-        SidebarLook.ground(empty);
         root.add(scroll, BorderLayout.CENTER);
-        root.add(empty, BorderLayout.NORTH);
-        show(List.of());
     }
 
     JComponent component() {
@@ -135,7 +127,6 @@ final class OutlinePane {
                 list.setSelectedIndex(i);
             }
         }
-        empty.setVisible(sections.isEmpty());
     }
 
     /** The headings listed; for tests. */

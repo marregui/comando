@@ -163,7 +163,7 @@ class StreamMapperTest {
     /// A recorded run with a queued prompt, a compaction and an interrupt folds the queued prompt into the running
     /// turn's one answer, notes the compaction, interrupt and command, shows the compacted size, marked as Claude
     /// Code's own count, until the next call reports one, ends the last turn as interrupted with its running tool in
-    /// error, and reports the activity as requesting and compacting.
+    /// error, and reports the activity as calling the model and compacting, never in the stream's own "requesting".
     @Test
     void queuedPromptCompactionAndInterruptRecording() {
         Fixtures.stream("queued-compact-interrupt").forEach(mapper::accept);
@@ -189,7 +189,7 @@ class StreamMapperTest {
         assertThat(sleep30.status()).isEqualTo(Block.ToolStatus.ERROR);
 
         assertThat(sink.of(Intent.SessionActivity.class)).extracting(Intent.SessionActivity::activity)
-                .contains("requesting", "compacting", "");
+                .contains("calling the model", "compacting", "").doesNotContain("requesting");
     }
 
     /// A recorded `/clear` names a new conversation in its init and notes it, and its own turn, which makes no model
