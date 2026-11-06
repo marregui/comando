@@ -1416,13 +1416,13 @@ Usage: `python3 bash_guard.py`, the hook's JSON on stdin. Exit codes: 0 allows t
 
 ## Guarantees
 
-1. Refuses `pkill`, `killall`, a `kill` of -1, 0 or an unseen target, a recursive `rm`, and the git commands that destroy work. `test_refuses_every_listed_command`
-2. Judges every simple command, past separators, substitutions and the prefixes that run another command. `test_judges_every_simple_command_past_its_prefixes`
-3. Allows everything else, and any tool other than Bash. `test_allows_everything_else`
+1. Refuses `pkill`, `killall`; a `kill` of -1, 0, a process group, a target from a substitution or a pipe, or a variable in a call that also runs `pgrep` or `pidof`; a recursive `rm`, `find -delete`; and the git commands in its rules, those that discard changes or delete branches, tags or refs (`rebase` and `commit --amend` stay allowed). `test_refuses_every_listed_command`
+2. Judges every simple command, past separators, substitutions, redirections, quoted heredoc bodies, shell keywords and the wrappers it lists, and what `find` runs. After a wrapper every word is tried as a command, so `timeout 5 grep pkill f` is refused too. `test_judges_every_simple_command_past_its_prefixes`
+3. Allows everything else, a `kill` of a PID in a variable (`kill $!`) included, and any tool other than Bash. `test_allows_everything_else`
 4. A refusal is one stderr line that ends in a Recover. `test_a_refusal_is_one_line_with_a_recover`
 5. Stdin that is not the call, or a command it cannot split, is refused. `test_fails_closed_on_what_it_cannot_read`
 
-Not read: a command handed to another shell as one string (`bash -c '…'`, `eval '…'`), and the body of a script.
+Not read: a command handed to another shell as one string (`bash -c '…'`, `eval '…'`, `trap '…'`), the body of a script or of a heredoc fed to a shell, a substitution in an unquoted heredoc after a quote or a `#`, an escaped backtick nested in backticks, a wrapper it does not list, a command name held in a variable or a substitution, a path given to `git checkout` without `--`, and a PID looked up in an earlier call.
 ```
 
 `bash_guard.py`:
@@ -1438,80 +1438,160 @@ import json
 import re
 import sys
 from collections.abc import Iterable, Iterator, Sequence
-from types import MappingProxyType
+from itertools import chain
 
 FROM_SHELL = "\0"  # stands for text only the running shell knows: a substitution, or what xargs appends
 SEPARATORS = frozenset(";&|\n()")
-QUOTED_HEREDOC = re.compile(r"(?<!<)(<<-? *(['\"])([\w.-]+)\2[^\n]*)\n.*?^[ \t]*\3$", re.M | re.S)
+REDIRECT = "\1"  # stands for an unquoted < or >, which a quoted one must not be taken for
+HEREDOC_OPERATOR = re.compile(r"(?<!<)<<-?[ \t]*$")
+REDIRECTION = re.compile(rf"(?:\d+|\{{\w+\}})?{REDIRECT}+[&|-]?(.?)", re.S)  # group 1: the target, if attached
+FILE_DESCRIPTOR = re.compile(r"\d*|\{\w+\}")
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*\+?=")
-PREFIXES = MappingProxyType({  # what runs the command after it, with the letters of its flags that take a value
-    "sudo": "CDRTUghprtu", "env": "CPSu", "xargs": "EIJLPRSadns", "command": "vV", "git": "Cc",
-    "exec": "a", "nice": "n", "timeout": "ks",
-    **dict.fromkeys(("time", "nohup", "eval", "if", "then", "elif", "else", "while", "until", "do", "!", "{"), ""),
-})
+KEYWORDS = frozenset(("if", "then", "elif", "else", "while", "until", "do", "!", "{", "function"))
+WRAPPERS = frozenset((  # each runs a command named among its words; their flags differ, so every word is tried
+    "sudo", "doas", "env", "xargs", "parallel", "command", "builtin", "exec", "eval", "time", "nohup", "nice", "ionice",
+    "timeout", "gtimeout", "setsid", "stdbuf", "unbuffer", "caffeinate", "coproc", "flock", "chronic", "watch",
+    "busybox", "toybox",
+))
+FIND_RUNS = frozenset(("-exec", "-execdir", "-ok", "-okdir"))
+GIT_VALUE_FLAGS = frozenset(("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix",
+                             "--attr-source"))
+PID_LOOKUPS = ("pgrep ", "pidof ")
+KILLS_A_VARIABLE = re.compile(r"kill .*\$")
 RECOVER_PID = "Recover: name one PID you started"
 FORCE = r"(-[^- ]*f|--force\b)"
+KILL_TARGET = r"(\S+ )*(0|-\d+|-\$\S*)( |$)"
 RULES = tuple((re.compile(pattern, re.S), why) for pattern, why in (
     (r"(pkill|killall)( |$)", f"pkill and killall kill by pattern, which can hit other sessions. {RECOVER_PID}"),
     (r"kill .*\0", f"this kill takes its target from a substitution or a pipe, unseen. {RECOVER_PID}"),
-    (r"kill(?! (-1|-[sn] 0) [^-0])( .*)? (0|-1)( |$)", f"kill aimed at -1 or 0 reaches many processes. {RECOVER_PID}"),
-    (r"rm( .*)? (-[^- ]*[rR]|--recursive\b)",
-     "a recursive rm cannot be undone. Recover: move the files to the Trash, or ask the user to run it"),
-    (rf"git (reset( .*)? --hard\b|clean( .*)? {FORCE}|checkout( .*)? --( |$)|restore\b|stash (drop|clear)\b"
-     rf"|push( .*)? ({FORCE}|\+)|branch( .*)? -[^- ]*D)", "this git command destroys work or history. "
-     "Recover: ask the user to run it"),
+    (rf"kill (-[sn] \S+ |-(?![sn] )\S+ ){KILL_TARGET}|kill (?!-){KILL_TARGET}|kill -(1|\$\S*)$",
+     f"kill aimed at -1, 0 or a process group reaches many processes. {RECOVER_PID}"),
+    (r"rm( .*)? (-[^- ]*[rR]|--recursive\b)|find( .*)? -delete\b",
+     "a recursive delete cannot be undone. Recover: move the files to the Trash, or ask the user to run it"),
+    (rf"git (reset( .*)? --hard\b|clean( .*)? {FORCE}|checkout( .*)? ({FORCE}|--( |$)|\.\.?(/\S*)?( |$))"
+     rf"|switch( .*)? ({FORCE}|--discard-changes\b)|restore\b(?!.* (--staged|-S)( |$))"
+     r"|restore .* (--worktree|-W)( |$)|stash (drop|clear)\b"
+     rf"|push( .*)? ({FORCE}|\+|:|-[^- ]*d\b|--delete\b|--mirror\b|--prune\b)"
+     r"|branch (?=(.* )?(-[^- ]*[dD]|--delete\b))(?=(.* )?(-[^- ]*[fD]|--force\b))"
+     rf"|rm\b(?!.* --cached( |$))( .*)? ({FORCE}|-[^- ]*[rR]|--recursive\b)|tag( .*)? (-[^- ]*d\b|--delete\b)"
+     r"|reflog (expire|delete)\b|update-ref( .*)? (-d|--stdin)( |$)|filter-(branch|repo)\b)",
+     "this git command destroys work or history. Recover: ask the user to run it"),
 ))
+
+
+def past_heredoc(chars: Iterator[str], delimiter: str) -> None:
+    """Advance `chars` past the line holding `delimiter`, at any indent; raises ValueError if it never comes."""
+    line: list[str] = []
+    for char in chain(chars, "\n"):
+        if char != "\n":
+            line.append(char)
+        elif "".join(line).strip(" \t") == delimiter:
+            return
+        else:
+            line.clear()
+    raise ValueError("open heredoc")
 
 
 def simple_commands(chars: Iterator[str], closer: str = "") -> list[list[list[str]]]:
     """Return the commands up to `closer` ("": the end) as words; raises ValueError, StopIteration, RecursionError."""
     commands, words, quote = [], [[]], ""
+    operator: list[str] = []  # the unquoted characters just read that may belong to a redirection
+    delimiters: list[tuple[list[str], int]] = []  # quoted heredocs of this line: a word, where its delimiter starts
+    delimiter_at = None
     for char in chars:
         if char == "#" and not quote and not words[-1]:
             next((skipped for skipped in chars if skipped == "\n"), None)  # advances `chars` past the comment
             char = "\n"
         if char == quote:
             quote = ""
+            words[-1].append("")  # the word has begun, even an empty one, so a # after it is no comment
+            if delimiter_at is not None:
+                delimiters.append((words[-1], delimiter_at))
+                delimiter_at = None
         elif quote == "'":
             words[-1].append(char)
         elif char == closer and not quote:
             return [*commands, words]
         elif char == "\\":
-            words[-1].append(next(chars).replace("\n", ""))
+            escaped = next(chars)
+            words[-1] += [escaped, ""] if escaped != "\n" else []  # the "" stops an escaped $ opening a substitution
         elif char == "`" or char == "(" and words[-1][-1:] == ["$"]:
             commands += simple_commands(chars, "`" if char == "`" else ")")
             words[-1].append(FROM_SHELL)
         elif not quote and char in ("'", '"'):
+            if words[-1][-1:] == ["$"]:  # $'a' is the word a
+                words[-1].pop()
+            delimiter_at = len(words[-1]) if HEREDOC_OPERATOR.search("".join(operator)) else None
             quote = char
-        elif not quote and char in SEPARATORS:
+        elif not quote and char in SEPARATORS and not (char in "&|" and operator[-1:] in (["<"], [">"])):
             commands.append(words)
             words = [[]]
             commands += simple_commands(chars, ")") if char == "(" else []
+            if char == "\n":
+                for word, start in delimiters:
+                    past_heredoc(chars, "".join(word[start:]))
+                delimiters.clear()
         elif not quote and char.isspace():
             words.append([])
+        elif not quote and char in "<>":
+            if words[-1][-1:] != [REDIRECT] and not FILE_DESCRIPTOR.fullmatch("".join(words[-1])):
+                words.append([])
+            words[-1].append(REDIRECT)
         else:
             words[-1].append(char)
+        if not quote and char in "<>- \t":
+            operator.append(char)
+        else:
+            operator.clear()
     if closer or quote:
         raise ValueError("open quote or bracket")
     return [*commands, words]
 
 
-def judged_line(raw_words: Iterable[Iterable[str]]) -> str:
-    """Return the words from the one naming the command, as a basename, joined by spaces; "" when no word names one."""
-    words = [word.replace(" ", "_") for word in map("".join, raw_words) if word]  # a quoted space is no word break
-    while words:
-        name = words[0].rsplit("/", 1)[-1]
-        if name not in PREFIXES and not ASSIGNMENT.match(words[0]):
-            return " ".join([name, *words[1:]])
-        value_flags, words = PREFIXES.get(name, ""), words[1:] + ([FROM_SHELL] if name == "xargs" else [])
-        while words and words[0].startswith("-"):
-            takes_value = words[0][-1] in value_flags and words[0][:2] != "--"
-            words = words[2 if takes_value else 1:]
-        if name == "timeout":
-            words = words[1:]  # its duration
-        if name == "git":
-            return " ".join(["git", *words])
-    return ""
+def without_redirections(words: Iterable[str]) -> list[str]:
+    """Return `words` without each redirection and its target."""
+    kept, remaining = [], iter(words)
+    for word in remaining:
+        redirection = REDIRECTION.match(word)
+        if redirection is None:
+            kept.append(word)
+        elif not redirection[1]:
+            next(remaining, None)
+    return kept
+
+
+def judged_line(words: Sequence[str]) -> str:
+    """Return `words` as a command line: its name as a basename, a git command without git's own flags."""
+    name, rest = words[0].rsplit("/", 1)[-1], list(words[1:])
+    while name == "git" and rest and rest[0].startswith("-"):
+        rest = rest[2 if rest[0] in GIT_VALUE_FLAGS else 1:]
+    return " ".join([name, *rest])
+
+
+def judged_lines(raw_words: Iterable[Iterable[str]]) -> Iterator[str]:
+    """Yield the line of the command in `raw_words` and of each it may run; O(n^2) in the words of a wrapper."""
+    # A quoted space is no word break.
+    words = without_redirections(word.replace(" ", "_") for word in map("".join, raw_words) if word)
+    while words and (words[0] in KEYWORDS or ASSIGNMENT.match(words[0])):
+        words = words[2 if words[0] == "function" else 1:]
+    name = words[0].rsplit("/", 1)[-1] if words else ""
+    if not name or name == "command" and words[1:2] in (["-v"], ["-V"]):
+        return
+    words += [FROM_SHELL] if name == "xargs" or name in WRAPPERS and "xargs" in words else []
+    for index, word in enumerate(words):
+        if name == "find" and word in FIND_RUNS:
+            yield from judged_lines(words[index + 1:])
+        if name in WRAPPERS or not index:
+            yield judged_line(words[index:])
+
+
+def refusal(lines: Sequence[str]) -> str | None:
+    """Return why the call made of `lines` is refused, or None; a PID looked up by name and killed from a variable."""
+    reason = next((why for line in lines for rule, why in RULES if rule.match(line)), None)
+    if reason is None and any(line.startswith(PID_LOOKUPS) for line in lines):
+        if any(KILLS_A_VARIABLE.match(line) for line in lines):
+            return f"this kill takes its target from a lookup by name. {RECOVER_PID}"
+    return reason
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1520,8 +1600,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         call = json.load(sys.stdin.buffer)
         if call["tool_name"] != "Bash":
             return 0
-        lines = map(judged_line, simple_commands(iter(QUOTED_HEREDOC.sub(r"\1", call["tool_input"]["command"]))))
-        reason = next((why for line in lines for rule, why in RULES if rule.match(line)), None)
+        commands = simple_commands(iter(call["tool_input"]["command"]))
+        reason = refusal([line for words in commands for line in judged_lines(words)])
     except Exception as error:  # only exit 2 blocks, so a crash must not end any other way
         reason = f"cannot read this call ({error!r}). Recover: balance its quotes and quote any heredoc delimiter"
     if reason:
@@ -1549,17 +1629,45 @@ REFUSED = ("pkill x", "killall x", "kill -1", "kill 0", "kill -- -1", "kill -s 9
            "kill `pgrep x`", "pgrep x | xargs kill", "rm -r d", "rm -R d", "rm -rf d", "rm -vfr d", "rm -f -r d",
            "rm --recursive d", "git reset --hard", "git clean -xdf", "git clean --force", "git push -f",
            "git push --force", "git push --force-with-lease=m", "git push o +m", "git branch -D b", "git restore a",
-           "git checkout -- a", "git stash drop", "git stash clear", "git -C d reset --hard", "git -c a=b -C d push -f")
+           "git checkout -- a", "git stash drop", "git stash clear", "git -C d reset --hard", "git -c a=b -C d push -f",
+           "git --git-dir d reset --hard", "git --work-tree d clean -fd", "git checkout .", "git checkout ./a",
+           "git checkout -f", "git switch -f m", "git switch --discard-changes m", "git restore --staged -W a",
+           "git push o :m", "git push --delete o m", "git push -d o m", "git push --mirror", "git branch -d -f b",
+           "git branch --delete --force b", "git branch -df b", "git reflog expire --all",
+           "git update-ref -d refs/heads/b", "git filter-branch a", "find . -delete", "find . -exec rm -rf {} +",
+           "find . -exec sudo rm -rf {} +",
+           "find . -execdir pkill x ;", "busybox rm -rf d", "kill -9 -1", "kill -1 1234 -1", "kill -9 -- -123",
+           "P=$(pgrep x); kill $P", "for p in $(pidof x); do kill \"$p\"; done", "git rm -rf d", "git rm -r d",
+           "git rm -f a", "git tag -d v1", "git tag --delete v1", "kill -- -$G", "kill -TERM -$$", "kill -9 -$P",
+           "kill -$P", "pgrep -f x | sudo xargs kill -9", "pgrep x | timeout 5 xargs kill")
 HIDDEN = ("a; pkill x", "a & pkill x", "a && pkill x", "a || pkill x", "a | pkill x", "a\npkill x", "echo $(pkill x)",
           "echo `pkill x`", 'echo "$(pkill x)"', 'echo "`pkill x`"', "A=1 sudo env B=2 command pkill x", "(pkill x)",
           "sudo -u root pkill x", "xargs -P 4 -n 1 rm -r", "/bin/rm -r d", "'pkill' x", "if a; then pkill x; fi",
           "pk\\\nill x", "echo a#b; pkill x", "# it's\npkill x", "cat <<'E'\nE\npkill x", "cat <<E\n$(pkill x)\nE",
-          "exec pkill x", "nohup pkill x", "nice -n 5 pkill x", "timeout -k 1 5 rm -r d", "eval pkill x")
+          "exec pkill x", "nohup pkill x", "nice -n 5 pkill x", "timeout -k 1 5 rm -r d", "eval pkill x",
+          "timeout --signal KILL 5 pkill x", "setsid pkill x", "ionice pkill x", "stdbuf -o0 pkill x",
+          "caffeinate pkill x", "coproc pkill x", "builtin kill -9 -1", "$'pkill' x",
+          "echo \"<<'E'\"\npkill x\nE", "timeout 5 grep pkill f", "> f pkill x", "2>/dev/null rm -rf d",
+          ">/dev/null git reset --hard", "git > f reset --hard", "pkill>f x", "2>&1 rm -rf d", ">|f pkill x",
+          ">&2 pkill x", "function f { pkill x; }; f", "echo '\"' \"<<'E'\"\npkill x\nE",
+          "echo \\\" \"<<'E'\"\npkill x\nE", "cat <<'A'\n\"\nA\necho \"<<'E'\"\npkill x\nE",
+          "echo \"$(echo \"<<'E'\")\"\npkill x\nE", "echo \"<<\"'E'\npkill x\nE", "cat <<<'E'\npkill x\nE",
+          "cat <<'E'F\nEF\npkill x", "rm '>' -rf d", "echo \">\"&pkill x",
+          "echo \"\\$(\" ; pkill x ; echo \")\"", "cat <<'E'F\nEF\npkill x\nE", "echo ''#; pkill x")
 ALLOWED = ("kill 123", "kill -TERM 123", "kill -1 123", "kill -s 0 123", "kill $PID", "rm a.txt", "rm 'a -r'",
            "rm -f a", 'echo "pkill x"', "echo '$(pkill x)'", "grep killall f", "git push", "git status", "",
            "git checkout m", "git branch -d b", "command -v pkill", "# don't\necho a", "cat <<'E'\nit's; pkill x\nE",
-           "exec ls", "timeout 5 ls")
-UNSPLITTABLE = ("echo 'a", 'echo "a', "echo $(a", "echo `a", "(a", "echo a\\", "cat <<E\nit's\nE", "$(" * 5000)
+           "exec ls", "timeout 5 ls", "git restore --staged a", "git restore -S a", "git branch -f m d",
+           "git checkout -b f",
+           "git push o HEAD:refs/heads/b", "git push --dry-run", "find . -name pkill", "find . -exec ls {} +",
+           "pgrep x; kill 123", "kill $!", "kill -- 123", "kill -9 123", "if grep -q pkill f; then ls; fi",
+           "git commit -m 'reset --hard'", "echo \"it's\"; cat <<'E'\nrm -rf x\nE", "# don't\ncat <<'E'\nrm -rf x\nE",
+           "cat <<'A'\nit's\nA\ncat <<'B'\nit's; rm -rf x\nB", "cat <<-'E'\n\trm -rf x\n\tE",
+           "cat <<'A' <<'B'\nrm -rf x\nA\nrm -rf y\nB", "git rm a", "git rm -r --cached d", "git tag v1",
+           "git rebase -i m", "git commit --amend", "ls 2>&1 | wc -l", "ls >f 2>&1", "echo a > b", "ls | wc",
+           "cat <<< 'rm -rf x'", "a & b", "grep -n \"\\$(\" f", "kill -$SIG 123", "sudo xargs ls")
+UNSPLITTABLE = ("echo 'a", 'echo "a', "echo $(a", "echo `a", "(a", "echo a\\", "cat <<E\nit's\nE", "cat <<'E'\nno end",
+                "$(" * 5000)
 UNREADABLE = ("{", "[1]", "{}", '{"tool_name": "Bash"}', '{"tool_name": "Bash", "tool_input": {"command": 5}}')
 
 
