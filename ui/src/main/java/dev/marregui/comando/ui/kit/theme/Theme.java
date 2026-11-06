@@ -208,11 +208,13 @@ public final class Theme {
     private static void setUpLook() {
         final String g = hex(ground.color);
         final String focus = hex(tint.body);
-        // focus is marked in the tint, as everything that says where the user is (record 100), not the system accent
+        // focus is marked in the tint, as everything that says where the user is (record 100), not the system accent;
+        // the macOS looks derive a scroll bar's track, and with it a scroll pane's corner, from @componentBackground
         FlatLaf.setGlobalExtraDefaults(Map.ofEntries(Map.entry("@background", g), Map.entry("List.background", g),
                 Map.entry("Tree.background", g), Map.entry("Table.background", g), Map.entry("TextArea.background", g),
                 Map.entry("EditorPane.background", g), Map.entry("TextPane.background", g),
-                Map.entry("Viewport.background", g), Map.entry("Component.focusedBorderColor", focus),
+                Map.entry("Viewport.background", g), Map.entry("ScrollBar.track", g),
+                Map.entry("Component.focusedBorderColor", focus),
                 Map.entry("Component.focusColor", focus), Map.entry("TabbedPane.underlineColor", focus)));
         // a light ground takes the light look and feel, whose controls, borders and text are drawn for it (record 127)
         final boolean ok = ground.light ? (Platform.isMac() ? FlatMacLightLaf.setup() : FlatLightLaf.setup())
