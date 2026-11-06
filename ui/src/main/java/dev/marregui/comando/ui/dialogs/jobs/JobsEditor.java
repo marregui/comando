@@ -47,8 +47,8 @@ public final class JobsEditor {
 
     /** What the window does for a job's row: pick its program, run it now, open its log. */
     public interface Actions {
-        /** A program inside {@code bin}, chosen; empty when none was. */
-        Optional<Path> program(Component owner, Path bin);
+        /** A program inside {@code tools}, chosen; empty when none was. */
+        Optional<Path> program(Component owner, Path tools);
 
         void run(String name);
 
@@ -389,8 +389,8 @@ public final class JobsEditor {
         when.add(time, BorderLayout.EAST);
         time.setToolTipText("The time it starts, HH:MM, 24 hours, local time");
         time.getAccessibleContext().setAccessibleName("Time");
-        chooseProgram.setToolTipText("Choose a program in the kit's bin/");
-        chooseProgram.addActionListener(e -> actions.program(body, root.resolve("bin")).ifPresent(f -> {
+        chooseProgram.setToolTipText("Choose a program in the kit's tools/");
+        chooseProgram.addActionListener(e -> actions.program(body, root.resolve("tools")).ifPresent(f -> {
             final Path abs = f.toAbsolutePath().normalize();
             final Path r = root.toAbsolutePath().normalize();
             if (!abs.startsWith(r)) {
@@ -408,7 +408,7 @@ public final class JobsEditor {
                 "The days it runs on and the time it starts; all seven days: daily");
         form.input(KitJob.TIME_FIELD, time, "Time");
         form.row("Program", FormRows.withButton(program, chooseProgram), program, KitJob.COMMAND_FIELD,
-                FormRows.lines("The program it runs, a path inside the kit, such as bin/kb-drift",
+                FormRows.lines("The program it runs, a path inside the kit, such as tools/kb-drift/kb-drift",
                         "{scheduler} anywhere becomes launchd, systemd or schtasks"));
         form.row("Arguments", arguments, arguments, "arguments",
                 "The program's arguments, separated by spaces; quote one that holds a space");

@@ -129,7 +129,7 @@ public record KitJob(String name, String description, List<String> days, String 
             out.put(TIME_FIELD, "HH:MM, from 00:00 to 23:59");
         }
         if (j.program().isBlank()) {
-            out.put(COMMAND_FIELD, "choose the program, in the kit's bin/");
+            out.put(COMMAND_FIELD, "choose the program, in the kit's tools/");
         } else if (!insideRoot(j.program())) {
             out.put(COMMAND_FIELD, "a path inside the root, with / and no ..");
         }

@@ -63,8 +63,7 @@ against these sections alone.
 | `hooks/` | the hooks' scripts, and the files they put in context | recommended |
 | `agents/` | the subagent types the sessions dispatch ([§2.7](#27-agents-specs-and-reviews)) | recommended |
 | `templates/` | the agent spec ([§2.7](#27-agents-specs-and-reviews)) and the KB's set templates ([§4.1.3](#413-kb)) | recommended |
-| `bin/` | the scripts on the Bash tool's `PATH` | recommended |
-| `tools/` | each script's code and its test | recommended |
+| `tools/` | one folder per tool: its contract, its command and its test; the command folders are on the Bash tool's `PATH` | recommended |
 | `workflows/` | saved multi-agent workflows | optional |
 | `INSTALL.md` | the kit's own recipe; its section *Upgrade* is what the `kit` session follows ([§3.4](#34-version-and-upgrade)) | when tagged on a remote |
 | `install/kit.py` | the jobs tool, which alone writes the jobs to the platform's scheduler ([§3.5](#35-scheduled-jobs)) | when the manifest lists jobs |
@@ -81,9 +80,9 @@ part runs without what that part carries.
 
 | Moment | Claude Code event | What the kit does |
 |---|---|---|
-| start | `SessionStart` | `CLAUDE.md` and the settings load; a hook puts `bin/` on `PATH`; the brain's memory index loads (`autoMemoryDirectory`); a hook may prepare the brain (the scratchpad's day folder) |
+| start | `SessionStart` | `CLAUDE.md` and the settings load; a hook puts the tools on `PATH`; the brain's memory index loads (`autoMemoryDirectory`); a hook may prepare the brain (the scratchpad's day folder) |
 | a prompt | `UserPromptSubmit` | hooks put context in: the memory files, KB lines and tasks that match, what other sessions did; a skill runs when named |
-| a tool call | `PreToolUse` | guards may refuse a call: a kill by pattern, a delete without asking, another instance's files; agents run on dispatch; `bin/` runs through Bash |
+| a tool call | `PreToolUse` | guards may refuse a call: a kill by pattern, a delete without asking, another instance's files; agents run on dispatch; the tools run through Bash |
 | a tool done | `PostToolUse` | checks after the fact: the brain's indexes after a write, reporting what is now missing; diagrams in a written document |
 | a command failed | `PostToolUseFailure` | a tripwire may point the session at the memory file that documents that error string, without restating its fix |
 | a compaction | `SessionStart` (`compact`) | the rules that must survive go back in context |
@@ -96,8 +95,8 @@ A hook adds context or blocks a call; it never rewrites a prompt. The variables 
 person needs in a session an agent made, and to stay silent at a size where comando runs the checkpoint itself.
 
 Guards fail closed: a guard hook sets Claude Code's `"onFailure": "block"`, so one that crashes, times out or cannot
-start refuses the call instead of letting it through, and it refuses with exit code 2. The hook that puts `bin/` on
-`PATH` appends an `export PATH=…` line to the file Claude Code names in `CLAUDE_ENV_FILE`, at every start, so the Bash
+start refuses the call instead of letting it through, and it refuses with exit code 2. The hook that puts the tools on
+`PATH` appends `export PATH=…` lines to the file Claude Code names in `CLAUDE_ENV_FILE`, at every start, so the Bash
 tool of the session and of its subagents finds the scripts. The rules that must survive compaction come back after each
 compaction as the plain output of a `SessionStart` hook with the matcher `compact` (plain standard output is context on
 `SessionStart` and `UserPromptSubmit`; other events need Claude Code's JSON `additionalContext`).
