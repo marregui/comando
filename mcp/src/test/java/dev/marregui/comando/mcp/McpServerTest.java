@@ -61,6 +61,7 @@ import dev.marregui.comando.testkit.States;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 /// [McpServer] serves comando's MCP tools over HTTP to the sessions it launched, each with its own token.
 /// - A missing or unknown token is refused, a foreign origin forbidden; a revoked token stops while a newer one works.
@@ -272,7 +273,8 @@ class McpServerTest {
             end = -1; // a reset is a close too
         }
         assertThat(end).as("the held request's connection is closed, nothing answered").isEqualTo(-1);
-        assertThat(post(rogue.token(), "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}", null).statusCode()).isEqualTo(200);
+        // the connection closes at the deadline, the request's place frees when its thread has left the handler, just after
+        await().atMost(WAIT).until(() -> post(rogue.token(), "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}", null).statusCode() == 200);
     }
 
     /// A connection that sends a request line and one header and never ends its headers, with no credential, is closed

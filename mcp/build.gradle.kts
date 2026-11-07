@@ -2,5 +2,6 @@
 dependencies {
     api(project(":core"))
     implementation(libs.jackson.databind)
+    testImplementation(libs.awaitility)
     testImplementation(project(":testkit"))
 }
