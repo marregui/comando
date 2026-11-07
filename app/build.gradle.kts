@@ -100,28 +100,30 @@ val uiTest = tasks.register<Test>("uiTest") {
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform()
-    filter {
-        includeTestsMatching("*UiReplayTest")
-        includeTestsMatching("*UiKeysTest")
-        includeTestsMatching("*TreeClicksUiTest")
-        includeTestsMatching("*DarkPageTintUiTest")
-        includeTestsMatching("*ThreadBudgetTest")
-        includeTestsMatching("*CheckpointCompactUiTest")
-        includeTestsMatching("*CheckpointLockUiTest")
-        includeTestsMatching("*SessionCardUiTest")
-        includeTestsMatching("*LinksUiTest")
-        includeTestsMatching("*FocusBackUiTest")
-        includeTestsMatching("*OutlineUiTest")
-        includeTestsMatching("*LocateUiTest")
-        includeTestsMatching("*LowerDividerUiTest")
-        includeTestsMatching("*OwnLogUiTest")
-        includeTestsMatching("*ThemeFadeUiTest")
-        includeTestsMatching("*LaterDecisionsUiTest")
-        includeTestsMatching("*LayoutKeeperUiTest")
-        includeTestsMatching("*FocusRouterUiTest")
-        includeTestsMatching("*QuitTeardownUiTest")
-        includeTestsMatching("*WorkListUiTest")
-    }
+    // by class file, not by a filter: with forkEvery a filter still starts a JVM for every test class to drop it there
+    include(
+        "**/UiReplayTest.class",
+        "**/UiKeysTest.class",
+        "**/TreeClicksUiTest.class",
+        "**/DarkPageTintUiTest.class",
+        "**/ThreadBudgetTest.class",
+        "**/CheckpointCompactUiTest.class",
+        "**/CheckpointLockUiTest.class",
+        "**/SessionCardUiTest.class",
+        "**/LinksUiTest.class",
+        "**/FocusBackUiTest.class",
+        "**/OutlineUiTest.class",
+        "**/LocateUiTest.class",
+        "**/LowerDividerUiTest.class",
+        "**/OwnLogUiTest.class",
+        "**/ThemeFadeUiTest.class",
+        "**/LaterDecisionsUiTest.class",
+        "**/LayoutKeeperUiTest.class",
+        "**/FocusRouterUiTest.class",
+        "**/QuitTeardownUiTest.class",
+        "**/WorkListUiTest.class",
+        "**/DiffThemeUiTest.class",
+    )
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1
     systemProperty("java.awt.headless", "false")

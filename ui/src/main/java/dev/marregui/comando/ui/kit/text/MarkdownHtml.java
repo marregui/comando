@@ -8,15 +8,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableBlock;
 import org.commonmark.ext.gfm.tables.TableCell;
+import org.commonmark.ext.gfm.tables.TableHead;
+import org.commonmark.ext.gfm.tables.TableRow;
 import org.commonmark.ext.gfm.tables.TablesExtension;
 import org.commonmark.node.AbstractVisitor;
 import org.commonmark.node.Code;
 import org.commonmark.node.CustomNode;
+import org.commonmark.node.Document;
 import org.commonmark.node.FencedCodeBlock;
 import org.commonmark.node.Heading;
 import org.commonmark.node.Image;
@@ -45,9 +49,10 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  * view would be a network request nobody approved. A code block that names its language takes the editors' syntax
  * colours. A heading has the id GitHub gives it, which a link to {@code #} and that id names. With {@link Marks}, the
  * blocks whose source lines changed are shaded as a comparison shades lines, and the words that changed inside them
- * more strongly: the rendered sides of a comparison read as its texts do. A web address in the text is a link, and so
- * is a wiki link, {@code [[name]]}, shown as its label ({@link NoteLinks}); front matter at the top shows as its facts,
- * a key and its value a row ({@link FrontMatter}).
+ * more strongly: the rendered sides of a comparison read as its texts do. With {@link Anchors}, each block says its
+ * source line and a side can leave gaps, so the two sides of a comparison lie level. A web address in the text is a
+ * link, and so is a wiki link, {@code [[name]]}, shown as its label ({@link NoteLinks}); front matter at the top shows
+ * as its facts, a key and its value a row ({@link FrontMatter}).
  */
 public final class MarkdownHtml {
 
@@ -97,6 +102,45 @@ public final class MarkdownHtml {
     }
 
     /**
+     * How a rendered side of a comparison lies against the other. With {@code lines}, each block at the top of the
+     * page, each row of a table's body and each item of a list says its source line (from 0) in {@link #LINE};
+     * {@code gaps} leaves that many points open above the block of a line, or at the end of the page under
+     * {@link #END}.
+     */
+    public record Anchors(boolean lines, Map<Integer, Integer> gaps) {
+
+        /** A page as a panel's preview shows it: no block says its line. */
+        public static final Anchors NONE = new Anchors(false, Map.of());
+        /** The line that stands for the end of the page, below every block. */
+        public static final int END = Integer.MAX_VALUE;
+
+        public Anchors {
+            gaps = Map.copyOf(gaps);
+        }
+
+        /** A page whose blocks say their lines, {@code gaps} left open. */
+        public static Anchors gaps(final Map<Integer, Integer> gaps) {
+            return new Anchors(true, gaps);
+        }
+    }
+
+    /** The attribute in which a block says its source line, with {@link Anchors}. */
+    public static final String LINE = "data-line";
+    /**
+     * The tag of a block that a gap's empty block can stand above, and its line: not a list or a row, which take no
+     * block among their items. Text and code are escaped, so only a tag matches.
+     */
+    private static final Pattern ANCHORED =
+            Pattern.compile("<(?!(?:tr|li|ul|ol)\\b)\\w+[^>]* " + LINE + "=\"(\\d+)\"[^>]*>");
+    /**
+     * What a gap's empty block adds to the gap's height: an empty block is one line tall at least, so its line is
+     * written at the smallest size, which leaves a gap of a point or two as near as a block can be.
+     */
+    private static final String SMALLEST_LINE = "; font-size: 1pt";
+    /** The top padding of a table's cell, {@code 2px} in {@link HtmlPane#styles}, in the points a gap counts. */
+    private static final int CELL_TOP = 2;
+
+    /**
      * Every table is a {@code grid}, its cells one pixel apart so the table's ground draws the lines between them
      * ({@link HtmlPane#styles}), and says {@code border="0"}, which is how Swing draws one without it: each cell reads
      * its table's border and, when the table has none, Swing parses the missing value as a number and catches the
@@ -122,7 +166,7 @@ public final class MarkdownHtml {
             .attributeProviderFactory(c -> new HeadingIds())
             .attributeProviderFactory(c -> TABLE_GRID)
             .nodeRendererFactory(c -> new ImageAsText(c, Pictures.NONE))
-            .nodeRendererFactory(c -> new ColouredCode(c, null, Marks.NONE))
+            .nodeRendererFactory(c -> new ColouredCode(c, null, Marks.NONE, false))
             .nodeRendererFactory(NoteLinkHtml::new)
             .build();
 
@@ -155,6 +199,12 @@ public final class MarkdownHtml {
 
     /** As {@link #render(String, Function, Pictures)}, what {@code marks} names shaded as changed. */
     public static String render(final String markdown, final Function<String, String> mermaid, final Pictures pictures, final Marks marks) {
+        return render(markdown, mermaid, pictures, marks, Anchors.NONE);
+    }
+
+    /** As {@link #render(String, Function, Pictures, Marks)}, laid out for a comparison as {@code anchors} says. */
+    public static String render(final String markdown, final Function<String, String> mermaid, final Pictures pictures,
+                                final Marks marks, final Anchors anchors) {
         final boolean marked = marks.any();
         final HtmlRenderer.Builder b = HtmlRenderer.builder()
                 .extensions(EXTENSIONS)
@@ -164,18 +214,52 @@ public final class MarkdownHtml {
                 .attributeProviderFactory(c -> new HeadingIds())
                 .attributeProviderFactory(c -> TABLE_GRID)
                 .nodeRendererFactory(c -> new ImageAsText(c, pictures))
-                .nodeRendererFactory(c -> new ColouredCode(c, mermaid, marks))
+                .nodeRendererFactory(c -> new ColouredCode(c, mermaid, marks, anchors.lines()))
                 .nodeRendererFactory(NoteLinkHtml::new);
         if (marked) {
             b.attributeProviderFactory(c -> new ShadedBlocks(marks)).nodeRendererFactory(c -> new ShadedWords(c, marks));
         }
-        final HtmlRenderer renderer = mermaid == null && pictures == Pictures.NONE && !marked ? RENDERER : b.build();
+        if (anchors.lines()) {
+            b.attributeProviderFactory(c -> new LineAnchors(anchors.gaps()));
+        }
+        final boolean plain = mermaid == null && pictures == Pictures.NONE && !marked && !anchors.lines();
+        final HtmlRenderer renderer = plain ? RENDERER : b.build();
         final FrontMatter.Split front = FrontMatter.split(markdown);
-        final Node document = (marked ? SPANNING : PARSER).parse(front.body());
+        final Node document = (marked || anchors.lines() ? SPANNING : PARSER).parse(front.body());
         linkText(document);
         final String html = (front.any() ? facts(front.facts()) : "") + renderer.render(document);
         // Swing's renderer does not know <del>, and draws <pre><code> with a wrapping paragraph margin
-        return html.replace("<pre><code", "<pre class=\"code\"><code").replace("<del>", "<strike>").replace("</del>", "</strike>");
+        final String drawn = html.replace("<pre><code", "<pre class=\"code\"><code")
+                .replace("<del>", "<strike>").replace("</del>", "</strike>");
+        if (!anchors.lines()) {
+            return drawn;
+        }
+        return withGaps(drawn.replace("<pre " + LINE, "<pre class=\"code\" " + LINE), anchors.gaps());
+    }
+
+    /** {@code html} with each of {@code gaps} open above the block that says its line, and below the last. */
+    private static String withGaps(final String html, final Map<Integer, Integer> gaps) {
+        final Matcher tags = ANCHORED.matcher(html);
+        final StringBuilder out = new StringBuilder(html.length());
+        while (tags.find()) {
+            final int gap = gaps.getOrDefault(Integer.valueOf(tags.group(1)), 0);
+            if (gap > 0) {
+                tags.appendReplacement(out, Matcher.quoteReplacement(spacer(gap) + tags.group()));
+            }
+        }
+        tags.appendTail(out);
+        final int end = gaps.getOrDefault(Anchors.END, 0);
+        return end > 0 ? out.append(spacer(end)).toString() : out.toString();
+    }
+
+    private static String spacer(final int gap) {
+        return "<div style=\"height: " + gap + "pt" + SMALLEST_LINE + "\"></div>";
+    }
+
+    /** The attribute that says {@code node}'s source line, with its leading space; empty when it has none. */
+    private static String lineAttribute(final Node node) {
+        final List<SourceSpan> spans = node.getSourceSpans();
+        return spans.isEmpty() ? "" : " " + LINE + "=\"" + spans.getFirst().getLineIndex() + "\"";
     }
 
     /**
@@ -243,6 +327,51 @@ public final class MarkdownHtml {
                 }
                 headingText(c, out);
             }
+        }
+    }
+
+    /**
+     * Writes the source line on the blocks a comparison lines up: those at the top of the page, a table's body rows and
+     * list items, each a place a gap can open. A table's head is the table's own line, and what sits inside a quote
+     * or an item moves with it. A gap above a row is its cells' top padding, which is exact to the point where a row of
+     * its own would add its height, spacing and rule; a gap above an item is its margin.
+     */
+    private static final class LineAnchors implements AttributeProvider {
+        private final Map<Integer, Integer> gaps;
+
+        LineAnchors(final Map<Integer, Integer> gaps) {
+            this.gaps = gaps;
+        }
+
+        @Override
+        public void setAttributes(final Node node, final String tagName, final Map<String, String> attributes) {
+            if (node instanceof TableCell && bodyRow(node.getParent())) {
+                final int gap = gap(node.getParent());
+                if (gap > 0) {
+                    style(attributes, "padding-top: " + (gap + CELL_TOP) + "pt");
+                }
+                return;
+            }
+            final boolean block = node.getParent() instanceof Document && !tagName.equals("code");
+            if ((block || bodyRow(node) || node instanceof ListItem) && !node.getSourceSpans().isEmpty()) {
+                attributes.put(LINE, String.valueOf(node.getSourceSpans().getFirst().getLineIndex()));
+            }
+            if (node instanceof ListItem && gap(node) > 0) {
+                style(attributes, "margin-top: " + gap(node) + "pt");
+            }
+        }
+
+        private static boolean bodyRow(final Node node) {
+            return node instanceof TableRow && !(node.getParent() instanceof TableHead);
+        }
+
+        private int gap(final Node node) {
+            final List<SourceSpan> spans = node.getSourceSpans();
+            return spans.isEmpty() ? 0 : gaps.getOrDefault(spans.getFirst().getLineIndex(), 0);
+        }
+
+        private static void style(final Map<String, String> attributes, final String rule) {
+            attributes.merge("style", rule, (shade, gap) -> gap + "; " + shade);
         }
     }
 
@@ -474,11 +603,14 @@ public final class MarkdownHtml {
         private final HtmlNodeRendererContext context;
         private final Function<String, String> mermaid;
         private final Marks marks;
+        private final boolean lines;
 
-        ColouredCode(final HtmlNodeRendererContext context, final Function<String, String> mermaid, final Marks marks) {
+        ColouredCode(final HtmlNodeRendererContext context, final Function<String, String> mermaid, final Marks marks,
+                     final boolean lines) {
             this.context = context;
             this.mermaid = mermaid;
             this.marks = marks;
+            this.lines = lines;
         }
 
         @Override
@@ -493,14 +625,16 @@ public final class MarkdownHtml {
             final String language = Fences.language(block.getInfo());
             final HtmlWriter w = context.getWriter();
             final String shade = marks.touches(block) ? " style=\"background-color: " + marks.lineColour() + "\"" : "";
+            final String line = lines && block.getParent() instanceof Document ? lineAttribute(block) : "";
             if (mermaid != null && language.equalsIgnoreCase("mermaid")) {
+                final String own = line + shade;
                 w.line();
-                w.raw(shade.isEmpty() ? mermaid.apply(code) : "<div" + shade + ">" + mermaid.apply(code) + "</div>");
+                w.raw(own.isEmpty() ? mermaid.apply(code) : "<div" + own + ">" + mermaid.apply(code) + "</div>");
                 w.line();
                 return;
             }
             w.line();
-            w.raw("<pre class=\"code\"" + shade + "><code>");
+            w.raw("<pre class=\"code\"" + line + shade + "><code>");
             w.raw(coloured(code, language));
             w.raw("</code></pre>");
             w.line();

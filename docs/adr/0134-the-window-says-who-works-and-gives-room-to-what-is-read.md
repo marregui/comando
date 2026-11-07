@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-06 | accepted; built | Miguel and Claude |
+| 2026-11-06 | accepted; amended by [record 135](0135-the-comparison-follows-the-theme-and-lies-level.md) | Miguel and Claude |
 
 ## 1. Context
 

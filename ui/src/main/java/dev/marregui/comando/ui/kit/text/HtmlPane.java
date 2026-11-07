@@ -17,7 +17,9 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -39,6 +41,7 @@ import javax.swing.text.html.StyleSheet;
 import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 
@@ -177,12 +180,18 @@ public final class HtmlPane extends JEditorPane {
 
     /** Stops hearing the tint chosen; set while the pane is in a window. */
     private Runnable stopHearingTint;
+    /** The ground the page's styles were made under. */
+    private Ground styledGround = Theme.groundChosen();
+    /** The tint the page's styles were made under. */
+    private Tint styledTint = Theme.tint();
 
     @Override
     public void addNotify() {
         super.addNotify();
         // a page's headings, table heads and rules are the tint chosen: another chosen, the page is drawn again
-        stopHearingTint = Theme.onTint(this::restyle);
+        stopHearingTint = Theme.onTint(this::followTheme);
+        // a theme chosen while the pane was in no window went unheard
+        followTheme();
     }
 
     @Override
@@ -194,8 +203,17 @@ public final class HtmlPane extends JEditorPane {
         super.removeNotify();
     }
 
+    /** Draws the page again when the ground or the tint chosen is not the one its styles were made under. */
+    public void followTheme() {
+        if (styledGround != Theme.groundChosen() || styledTint != Theme.tint()) {
+            restyle();
+        }
+    }
+
     /** The page drawn again under its rules and the tint chosen. */
     private void restyle() {
+        styledGround = Theme.groundChosen();
+        styledTint = Theme.tint();
         final String html = markdown == null ? getText() : null;
         final HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
         kit.setStyleSheet(styles());
@@ -306,6 +324,8 @@ public final class HtmlPane extends JEditorPane {
     private String markdown;
     /** What is shaded as changed in {@link #markdown}; kept through a redraw. */
     private MarkdownHtml.Marks marks = MarkdownHtml.Marks.NONE;
+    /** How the page lies against the other side of a comparison; none for any other page. */
+    private MarkdownHtml.Anchors anchors = MarkdownHtml.Anchors.NONE;
 
     /** The folder the Markdown's relative image links are read from; null for Markdown that is no file's. */
     private Path folder;
@@ -342,7 +362,7 @@ public final class HtmlPane extends JEditorPane {
         this.markdown = markdown;
         sizedFor = -1;
         waitingFor.clear();
-        final String html = MarkdownHtml.render(markdown, this::diagram, this::picture, marks);
+        final String html = MarkdownHtml.render(markdown, this::diagram, this::picture, marks, anchors);
         setHtml(fallBackInHeadings(html, Theme.serif()));
     }
 
@@ -356,10 +376,53 @@ public final class HtmlPane extends JEditorPane {
 
     /** As {@link #setMarkdown(String, Path)}, what {@code marks} names shaded as changed, in the theme's colours. */
     public void setMarkdown(final String markdown, final Path folder, final MarkdownHtml.Marks marks) {
+        setMarkdown(markdown, folder, marks, MarkdownHtml.Anchors.NONE);
+    }
+
+    /** As {@link #setMarkdown(String, Path, MarkdownHtml.Marks)}, laid out for a comparison as {@code anchors} says. */
+    public void setMarkdown(final String markdown, final Path folder, final MarkdownHtml.Marks marks,
+                            final MarkdownHtml.Anchors anchors) {
         this.folder = folder;
         this.marks = marks;
+        this.anchors = anchors;
         anchored = null;
         setMarkdown(markdown);
+    }
+
+    /** Lays the page shown out as {@code anchors} says, the view where the reader left it. */
+    public void anchors(final MarkdownHtml.Anchors anchors) {
+        if (!anchors.equals(this.anchors)) {
+            this.anchors = anchors;
+            redraw(markdown);
+        }
+    }
+
+    /**
+     * The height on the page of each block that says its source line, by that line, the topmost when several say it,
+     * and of the page's end under {@link MarkdownHtml.Anchors#END}. Empty while the pane has no size to lay it out at.
+     */
+    public NavigableMap<Integer, Integer> anchorHeights() {
+        final NavigableMap<Integer, Integer> out = new TreeMap<>();
+        if (getWidth() <= 0 || getHeight() <= 0) {
+            return out;
+        }
+        final ElementIterator it = new ElementIterator(getDocument());
+        try {
+            for (Element e = it.next(); e != null; e = it.next()) {
+                final AttributeSet a = e.getAttributes();
+                // what is inside a block reads the block's attribute through it: only the block itself defines it
+                if (a.isDefined(MarkdownHtml.LINE) && a.getAttribute(MarkdownHtml.LINE) instanceof String line) {
+                    final Rectangle2D r = modelToView2D(e.getStartOffset());
+                    if (r != null) {
+                        out.putIfAbsent(Integer.valueOf(line), (int) r.getY());
+                    }
+                }
+            }
+        } catch (final BadLocationException e) {
+            throw new IllegalStateException("an element's own offset", e);
+        }
+        out.put(MarkdownHtml.Anchors.END, getPreferredSize().height);
+        return out;
     }
 
     /** Runs now the redraw that waits for a resize to settle; false when none waits. For tests. */
@@ -508,7 +571,12 @@ public final class HtmlPane extends JEditorPane {
         if (heading != null) {
             SwingUtilities.invokeLater(() -> scrollToHeading(heading));
         } else if (at != null) {
-            SwingUtilities.invokeLater(() -> ((JViewport) getParent()).setViewPosition(at));
+            SwingUtilities.invokeLater(() -> {
+                // drawn again as it joined a window, it may have left it since
+                if (getParent() instanceof JViewport vp) {
+                    vp.setViewPosition(at);
+                }
+            });
         }
     }
 

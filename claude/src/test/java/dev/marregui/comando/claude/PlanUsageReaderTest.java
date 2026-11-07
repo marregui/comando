@@ -35,6 +35,17 @@ class PlanUsageReaderTest {
               87% of your usage was at >150k context
             """;
 
+    /** The same on Claude Code 2.1.318, read 2026-11-06, when the server reported no session window. */
+    private static final String NO_SESSION = """
+            You are currently using your subscription to power your Claude Code usage
+
+            Current week (all models): 26% used · resets Nov 12 at 1pm (Europe/Madrid)
+            Current week (Fable): 0% used · resets Nov 12 at 1pm (Europe/Madrid)
+
+            What's contributing to your usage?
+            Approximate · sessions on this machine only · shares overlap
+            """;
+
     @TempDir
     Path dir;
 
@@ -59,6 +70,17 @@ class PlanUsageReaderTest {
                 new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm (Europe/Madrid)"),
                 new PlanUsage.Window("Week", 43, "Oct 15 at 1:59pm (Europe/Madrid)"),
                 new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)"));
+    }
+
+    /// Claude Code prints no line for a window without a limit: an answer of two weekly lines is a good read of two
+    /// windows, with no session among them and no problem.
+    @Test
+    void anAnswerWithoutASessionLineIsAGoodReadOfItsWeeks() {
+        final PlanUsage u = PlanUsageReader.parse(answer(NO_SESSION, false), 7L, JSON);
+        assertThat(u.problem()).isEmpty();
+        assertThat(u.windows()).containsExactly(
+                new PlanUsage.Window("Week", 26, "Nov 12 at 1pm (Europe/Madrid)"),
+                new PlanUsage.Window("Fable", 0, "Nov 12 at 1pm (Europe/Madrid)"));
     }
 
     /// A model-only weekly line drops its `only` suffix and rounds a fractional percentage without a reset text.

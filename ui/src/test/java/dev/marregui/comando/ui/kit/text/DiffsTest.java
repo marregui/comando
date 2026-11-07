@@ -28,17 +28,35 @@ class DiffsTest {
         assertThat(Diffs.isAdded(added, lines.get(added))).isTrue();
     }
 
-    /// [Diffs#edit] maps Edit to old and new strings, Write to empty and content, MultiEdit to its edits joined with
-    /// `…` separators, and Bash to null.
+    /// [Diffs#edit] maps Edit to old and new strings, MultiEdit to its edits joined with `…` separators, and Bash and
+    /// Write to null: a Write gives a whole text and replaces none.
     @Test
     void eachEditToolMapsToTheTextItReplacesAndWrites() {
         assertThat(Diffs.edit("Edit", Json.parse("{\"file_path\":\"/a\",\"old_string\":\"x\",\"new_string\":\"y\"}")))
                 .isEqualTo(new Diffs.Edit("/a", "x", "y"));
         assertThat(Diffs.edit("Write", Json.parse("{\"file_path\":\"/a\",\"content\":\"z\"}")))
-                .isEqualTo(new Diffs.Edit("/a", "", "z"));
+                .isNull();
         assertThat(Diffs.edit("MultiEdit", Json.parse("""
                 {"file_path":"/a","edits":[{"old_string":"a1","new_string":"b1"},{"old_string":"a2","new_string":"b2"}]}""")))
                 .isEqualTo(new Diffs.Edit("/a", "a1\n…\na2\n…\n", "b1\n…\nb2\n…\n"));
         assertThat(Diffs.edit("Bash", Json.parse("{\"command\":\"ls\"}"))).isNull();
+    }
+
+    /// A written text up to the limit shows whole, a last newline adding no line; past it, the rest is counted.
+    @Test
+    void aWrittenTextIsClippedAtTheTranscriptsLimit() {
+        final String whole = "x\\n".repeat(300);
+        assertThat(Diffs.writtenText(Json.parse("{\"content\":\"" + whole + "\"}"))).isEqualTo("x\n".repeat(300));
+        assertThat(Diffs.writtenText(Json.parse("{\"content\":\"" + whole + "y\\nz\"}")))
+                .isEqualTo("x\n".repeat(299) + "x\n… 2 more lines");
+        assertThat(Diffs.writtenText(Json.parse("{}"))).isEmpty();
+    }
+
+    /// The count is of lines as a reader sees them.
+    @Test
+    void aWrittenTextCountsItsLines() {
+        assertThat(Diffs.writtenLines(Json.parse("{\"content\":\"a\\nb\\n\"}"))).isEqualTo("2 lines");
+        assertThat(Diffs.writtenLines(Json.parse("{\"content\":\"a\"}"))).isEqualTo("1 line");
+        assertThat(Diffs.writtenLines(Json.parse("{}"))).isEqualTo("0 lines");
     }
 }

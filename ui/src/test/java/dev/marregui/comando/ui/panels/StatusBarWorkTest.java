@@ -1,11 +1,16 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.JLabel;
 import javax.swing.JList;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,7 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a running query has a line of its own, under its panel's title
 /// - a click on a line goes to its panel, the session's own; a session with none has nowhere to go
 /// - a line says for how long: a query since it started, a request since the oldest arrived
+/// - in the count only what waits for you is in the attention colour, and every part of it opens the list
 @ExtendWith(OnEdt.class)
 class StatusBarWorkTest {
 
@@ -81,6 +88,48 @@ class StatusBarWorkTest {
         assertThat(bar.workLabel().getToolTipText()).contains("Click to see who is working");
     }
 
+    /// The count reads as one line; what waits for approval is in the attention colour and the rest stays muted. With
+    /// nothing else to count there is no separator, and with no approval nothing is in the attention colour.
+    @Test
+    void onlyWhatWaitsForApprovalIsInTheAttentionColour() {
+        final StatusBar bar = new StatusBar(intent -> { });
+        bar.render(state());
+        assertThat(text(bar)).isEqualTo(
+                "1 query running · 2 sessions working · 1 session waiting on background work"
+                        + " · 1 waiting for approval");
+        assertThat(part(bar, "sessions working").getForeground()).isEqualTo(Theme.MUTED);
+        assertThat(part(bar, "waiting for approval").getForeground()).isEqualTo(Theme.ATTENTION);
+
+        final PanelState notes = new PanelState(NOTES, "Notes", "", "");
+        bar.render(AppState.initial(List.of(notes), List.of(), List.of(open("asks")))
+                .withApprovals(List.of(approval(1L, 1))));
+        assertThat(text(bar)).isEqualTo("1 waiting for approval");
+
+        bar.render(state().withApprovals(List.of()));
+        assertThat(text(bar))
+                .isEqualTo("1 query running · 2 sessions working · 1 session waiting on background work");
+        assertThat(parts(bar)).extracting(JLabel::getForeground).containsOnly(Theme.MUTED);
+    }
+
+    /// Each part of the count has the name, the hand, the tooltip and the click of the whole: a click on the words in
+    /// the attention colour opens the list as a click on the others does.
+    @Test
+    void everyPartOfTheCountOpensTheList() {
+        final StatusBar bar = new StatusBar(intent -> { });
+        final AtomicInteger opened = new AtomicInteger();
+        bar.workOpener = opened::incrementAndGet;
+        bar.render(state());
+        final List<JLabel> parts = parts(bar);
+        assertThat(parts).hasSize(2);
+        for (final JLabel label : parts) {
+            assertThat(label.getCursor().getType()).isEqualTo(Cursor.HAND_CURSOR);
+            assertThat(label.getToolTipText()).contains("Click to see who is working");
+            label.dispatchEvent(
+                    new MouseEvent(label, MouseEvent.MOUSE_CLICKED, 0L, 0, 1, 1, 1, false, MouseEvent.BUTTON1));
+        }
+        assertThat(opened.get()).isEqualTo(2);
+    }
+
     /// A query says how long it has run and a session that asks how long its oldest request has waited; a query still
     /// queued has not started, so it has no time.
     @Test
@@ -103,6 +152,33 @@ class StatusBarWorkTest {
                 new PanelState(BUSY, "Busy", "", "busy"));
         final AppState s = AppState.initial(panels, List.of(), List.of(busy()));
         assertThat(StatusBar.workRows(s)).extracting(StatusBar.WorkRow::panel).containsExactly(Optional.of(BUSY));
+    }
+
+    /** The labels of the count that show, in the order they read. */
+    private static List<JLabel> parts(final StatusBar bar) {
+        final List<JLabel> out = new ArrayList<>();
+        collect(bar.component(), out);
+        return out;
+    }
+
+    private static void collect(final Component c, final List<JLabel> out) {
+        if (c instanceof JLabel l && "Work".equals(l.getAccessibleContext().getAccessibleName()) && l.isVisible()
+                && !l.getText().isEmpty()) {
+            out.add(l);
+        }
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
+                collect(child, out);
+            }
+        }
+    }
+
+    private static JLabel part(final StatusBar bar, final String words) {
+        return parts(bar).stream().filter(l -> l.getText().contains(words)).findFirst().orElseThrow();
+    }
+
+    private static String text(final StatusBar bar) {
+        return String.join("", parts(bar).stream().map(JLabel::getText).toList());
     }
 
     private static long ago(final int minutes) {

@@ -28,6 +28,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.SplitDiff;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.changes.ChangeEditor;
 
 /**
@@ -51,6 +52,8 @@ final class DiffWindow {
     private final Window owner;
     private final Timer reread;
     private final ChangeEditor editor;
+    /** Stops hearing the theme chosen. */
+    private final Runnable stopHearingTheme;
     private JDialog dialog;
 
     /**
@@ -72,6 +75,7 @@ final class DiffWindow {
                 reread.run();
             }
         });
+        stopHearingTheme = Theme.followWithoutWindow(editor.component());
     }
 
     /** Whether a comparison is on screen. */
@@ -172,6 +176,7 @@ final class DiffWindow {
     }
 
     void dispose() {
+        stopHearingTheme.run();
         reread.stop();
         editor.unmount();
         if (dialog != null) {

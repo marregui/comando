@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.kit.text;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,7 @@ import static org.assertj.core.api.Assertions.within;
 
 /// [SplitDiff] compares two texts side by side, mapping lines between them and marking changed words.
 /// - Chunks are the differences in order; a line maps across unchanged and changed stretches by its share.
+/// - Blocks both sides keep pair across the differences; a block inside one, or with no block to match, does not.
 /// - An empty text has no lines.
 /// - Changed words are marked, not whole lines, and a stretch rewritten whole has no word marks.
 /// - A rewrite too large to match in the time budget is compared as a whole; an over-long line is not compared.
@@ -55,6 +57,22 @@ class SplitDiffTest {
         assertThat(SplitDiff.map(chunks, 3, true)).isCloseTo(4, within(1e-9));
         assertThat(SplitDiff.map(chunks, 5, false)).isCloseTo(3.5, within(1e-9));
         assertThat(SplitDiff.map(chunks, 10, false)).isEqualTo(8);
+    }
+
+    /// A block pairs with the block its line maps to, past a line gone and a line that became two; a block inside a
+    /// difference pairs with nothing.
+    @Test
+    void aBlockBothSidesKeepPairsAcrossADifference() {
+        // left line 2 went; left line 5 became two lines
+        final List<SplitDiff.Chunk> chunks = List.of(new SplitDiff.Chunk(2, 3, 2, 2), new SplitDiff.Chunk(5, 6, 4, 6));
+        assertThat(SplitDiff.pairs(chunks, List.of(0, 2, 3, 5, 6, 8), Set.of(0, 2, 4, 6, 7))).containsExactly(
+                new SplitDiff.Pair(0, 0), new SplitDiff.Pair(3, 2), new SplitDiff.Pair(6, 6));
+    }
+
+    /// A block that starts on one side only pairs with nothing, though its line is unchanged.
+    @Test
+    void aLineThatStartsNoBlockOnTheOtherSidePairsWithNothing() {
+        assertThat(SplitDiff.pairs(List.of(), List.of(1, 2), Set.of(2))).containsExactly(new SplitDiff.Pair(2, 2));
     }
 
     /// [SplitDiff#lines] of the empty string is empty, so a one-line text against it is one insertion.

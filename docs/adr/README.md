@@ -154,4 +154,5 @@ row and its record differ, or when a record has no row.
 | [131](0131-an-automatic-checkpoint-asks-nothing.md) | An automatic checkpoint asks nothing; its decisions wait in the Approvals tab's Later group | 2026-11-01 | Miguel and Claude | accepted; built; amended 2026-11-01 (see Amendments) |
 | [132](0132-instances-working-together-follow-seven-rules.md) | Instances working together follow seven rules | 2026-10-29 | Miguel and Claude | accepted |
 | [133](0133-every-stored-file-has-a-schema-and-a-version.md) | Every file comando keeps has a schema and a version | 2026-11-01 | Miguel and Claude | accepted; built |
-| [134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) | The window says who works, and gives its room to what is read | 2026-11-06 | Miguel and Claude | accepted; built |
+| [134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) | The window says who works, and gives its room to what is read | 2026-11-06 | Miguel and Claude | accepted; amended by [record 135](0135-the-comparison-follows-the-theme-and-lies-level.md) |
+| [135](0135-the-comparison-follows-the-theme-and-lies-level.md) | The comparison follows the theme and lies level, and cards say what they ask | 2026-11-06 | Miguel and Claude | accepted; built |

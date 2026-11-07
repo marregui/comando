@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.Shape;
+import java.awt.font.TextHitInfo;
 import java.awt.font.TextLayout;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,11 @@ class ToolCallItem extends Item {
     private final long order;
     private Style built;
     private TextBox title;
+    private float titleAdvance;
+    private TextLayout ellipsis;
+    /** The room {@link #titleCut} last measured and the width of the title it leaves. */
+    private int cutRoom;
+    private int cutWidth;
     private TextBox input;
     private TextBox result;
     private Icon statusIcon;
@@ -219,7 +225,7 @@ class ToolCallItem extends Item {
      */
     static String lastLabel(final Block.ToolCall c) {
         final String name = ToolText.displayName(c.name());
-        final String summary = ToolText.summary(c.name(), Json.parse(c.inputJson()));
+        final String summary = ToolText.title(c.name(), Json.parse(c.inputJson()));
         if (summary.isEmpty()) {
             return Clip.keepStart(name, LAST_CHARS);
         }
@@ -319,7 +325,7 @@ class ToolCallItem extends Item {
         if (built != s) {
             built = s;
             final JsonNode in = Json.parse(c.inputJson());
-            final String summary = ToolText.summary(c.name(), in);
+            final String summary = ToolText.title(c.name(), in);
             final Rich t = new Rich(s.body, s.text).append(ToolText.displayName(c.name()), s.bold, s.text);
             if (c.isSubagent()) {
                 t.append("  ", s.body, s.text);
@@ -337,9 +343,12 @@ class ToolCallItem extends Item {
                 }
             }
             if (c.name().equals("Write")) {
-                t.append("   " + writtenLines(in), s.small, s.muted);
+                t.append("   " + Diffs.writtenLines(in), s.small, s.muted);
             }
             title = new TextBox(t).noWrap();
+            titleAdvance = title.naturalWidth();
+            ellipsis = new TextLayout("…", s.body, Style.FRC);
+            cutRoom = -1;
             input = new TextBox(inputRich(c, in, s));
             result = new TextBox(resultRich(c, s));
             statusIcon = switch (c.status()) {
@@ -374,18 +383,9 @@ class ToolCallItem extends Item {
         return 3 + y + IN_Y + 3;
     }
 
-    /** How long the text a Write gives is: "48 lines". */
-    private static String writtenLines(final JsonNode in) {
-        final long lines = in.path("content").asString("").lines().count();
-        return lines + (lines == 1 ? " line" : " lines");
-    }
-
-    /**
-     * The unified diff an edit makes, null for a tool that edits nothing and for Write: it gives the whole text and not
-     * what it replaces, so every line would read as added. Text put in at an empty place is clipped.
-     */
+    /** The unified diff an edit makes, null for a tool that edits nothing. Text put in at an empty place is clipped. */
     private static List<String> editDiff(final Block.ToolCall c, final JsonNode in) {
-        final Diffs.Edit e = c.name().equals("Write") ? null : Diffs.edit(c.name(), in);
+        final Diffs.Edit e = Diffs.edit(c.name(), in);
         if (e == null) {
             return null;
         }
@@ -406,7 +406,7 @@ class ToolCallItem extends Item {
         return switch (c.name()) {
             case "Bash" -> "$ " + in.path("command").asString("");
             case "Agent", "Task" -> in.path("prompt").asString("");
-            case "Write" -> Items.clipLines(in.path("content").asString(""), Items.MAX_INPUT_LINES);
+            case "Write" -> Diffs.writtenText(in);
             default -> in.isObject() && !in.isEmpty() ? Items.clipLines(Json.pretty(in), Items.MAX_INPUT_LINES) : "";
         };
     }
@@ -508,9 +508,16 @@ class ToolCallItem extends Item {
         }
         final Shape old = g.getClip();
         final int titleRight = right - Math.max(70, used + 8);
-        g.clipRect(x + IN_X + 22, cy, Math.max(0, titleRight - x - IN_X - 22), headerHeight + IN_Y);
+        final int room = Math.max(0, titleRight - x - IN_X - 22);
+        final boolean cut = titleAdvance > room;
+        final int shown = cut ? titleCut(room) : room;
+        g.clipRect(x + IN_X + 22, cy, shown, headerHeight + IN_Y);
         Paras.paintBox(g, title, x + IN_X + 22, cy + IN_Y, clip, marks);
         g.setClip(old);
+        if (cut) {
+            g.setColor(s.muted);
+            ellipsis.draw(g, x + IN_X + 22 + shown, cy + IN_Y + title.lines().getFirst().baseline());
+        }
         if (!fold.isOpen()) {
             return;
         }
@@ -530,6 +537,17 @@ class ToolCallItem extends Item {
                 child.paint(g, bx + CHILD_INDENT, top, clip, marks);
             }
         }
+    }
+
+    /** How much of the title {@code room} shows beside its ellipsis: up to a character, kept until the room changes. */
+    private int titleCut(final int room) {
+        if (room != cutRoom) {
+            cutRoom = room;
+            final TextLayout line = title.lines().getFirst().layout();
+            final int at = line.hitTestChar(Math.max(0, room - ellipsis.getAdvance()), 0).getCharIndex();
+            cutWidth = (int) line.getCaretInfo(TextHitInfo.leading(at))[0];
+        }
+        return cutWidth;
     }
 
     @Override

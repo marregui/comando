@@ -304,6 +304,7 @@ public final class ResourceDialog<S> {
 
         content.add(right, BorderLayout.CENTER);
         content.setPreferredSize(DEFAULT_SIZE);
+        Theme.followWithoutWindow(content);
     }
 
     /** Shows the dialog on the resource named {@code select}, or on a new one when it is empty or unknown. */

@@ -77,6 +77,7 @@ runs one JVM per test class, one at a time, as its windows share one desktop.
 | `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
 | `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |
 | `OutlineUiTest` | a Markdown document's outline at the panel's right; a double click on a heading scrolls the page to it ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)) |
+| `DiffThemeUiTest` | the comparison window opens on the theme chosen, its texts and rendered sides, and follows the next ([record 135](adr/0135-the-comparison-follows-the-theme-and-lies-level.md)) |
 | `LowerDividerUiTest` | the divider above the lower panel is each panel's own ([record 115](adr/0115-the-lower-divider-per-panel.md)) |
 | `LocateUiTest` | a panel's Locate button selects its file in the Files tab or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
 | `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |

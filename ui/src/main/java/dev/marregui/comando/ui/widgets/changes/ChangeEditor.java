@@ -6,16 +6,20 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -29,6 +33,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
@@ -51,6 +56,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
@@ -61,7 +67,8 @@ import dev.marregui.comando.ui.widget.Unmountable;
 
 /**
  * A changed file beside its {@code HEAD} version, the comparison window's body: the two texts side by side with their
- * differences, or, for Markdown, both rendered as a panel's preview renders them. The working tree's side may be
+ * differences, or, for Markdown, both rendered as a panel's preview renders them, level on the blocks both keep: a
+ * block one side lacks leaves a gap there of its height, and the sides scroll together. The working tree's side may be
  * edited: the differences are worked out again as it changes, undo and redo go back and forth through every edit made
  * here (⌘Z, ⌘⇧Z), and the text is written every second while it has edits, and on leaving the file (another file,
  * closing the window, quitting comando); beside the side's title it says "edited" until written, then "saved". Edits
@@ -88,6 +95,18 @@ public final class ChangeEditor implements Unmountable {
     static final int RECOMPARE_MILLIS = 250;
     /** How often edits are written while they wait. */
     static final int AUTOSAVE_MILLIS = 1_000;
+    /**
+     * How long a side's size must hold before the sides are laid level again. Unmeasured: longer than the 150 ms
+     * {@link HtmlPane} waits to size its pictures again, so its redraw comes first.
+     */
+    static final int LEVEL_MILLIS = 200;
+    /** How far apart, in pixels, the same block may sit on the two sides: a gap of a pixel is no block's height. */
+    private static final int LEVEL_SLACK = 1;
+    /**
+     * How many times gaps are moved in one levelling: the first opens every gap, the next take up what a gap's height
+     * missed. A page of 50 blocks, rows and items came level within three.
+     */
+    private static final int LEVEL_PASSES = 3;
     private static final String SAVE_TIP = "Saved every second, and when this window or comando closes";
 
     private final IntentSink intents;
@@ -110,7 +129,13 @@ public final class ChangeEditor implements Unmountable {
     private final JMenuItem remove;
     private final JButton mode;
     private final Debouncer recompare;
+    private final Debouncer relevel;
     private final Timer autosave;
+    /** Stops hearing the theme chosen; the window is gone. */
+    private final Runnable stopHearingTheme;
+    /** What follows the levelling under way: the view put back where a render wants it. */
+    private Runnable afterLevel = () -> {
+    };
     /** Hears whether edits wait to be written: the window marks itself modified while they do. */
     private Consumer<Boolean> modified = m -> {
     };
@@ -133,6 +158,18 @@ public final class ChangeEditor implements Unmountable {
     private boolean loading;
     /** True while one rendered side follows the other's scroll. */
     private boolean following;
+    /** The gaps open on {@code HEAD}'s rendered side, in points, by the line of the block below each. */
+    private final Map<Integer, Integer> headGaps = new HashMap<>();
+    /** The gaps open on the working tree's rendered side. */
+    private final Map<Integer, Integer> treeGaps = new HashMap<>();
+    /** The heights of {@code HEAD}'s blocks as last levelled, by line: while they hold, the sides are level. */
+    private Map<Integer, Integer> headHeights = Map.of();
+    /** The heights of the working tree's blocks as last levelled. */
+    private Map<Integer, Integer> treeHeights = Map.of();
+    /** Where the blocks both sides keep sit on {@code HEAD}'s side, in order; empty until levelled. */
+    private int[] headAnchors = {};
+    /** Where those blocks sit on the working tree's side. */
+    private int[] treeAnchors = {};
     /** Counts the comparisons asked for; only the newest is shown when its work ends. */
     private long asked;
     /** Edits of files no longer shown whose write failed, by file: written again every second until one succeeds. */
@@ -155,6 +192,7 @@ public final class ChangeEditor implements Unmountable {
         remove = menuItem("Move to the Trash…", "trash", this::remove);
         mode = ToolButton.of("preview", "", this::toggleRendered);
         recompare = new Debouncer(RECOMPARE_MILLIS, this::recompare);
+        relevel = new Debouncer(LEVEL_MILLIS, this::level);
         autosave = new Timer(AUTOSAVE_MILLIS, e -> {
             if (edited) {
                 save();
@@ -165,6 +203,7 @@ public final class ChangeEditor implements Unmountable {
         build();
         showMode();
         updateButtons();
+        stopHearingTheme = Theme.onTint(this::shadeAgain);
     }
 
     public JComponent component() {
@@ -211,6 +250,11 @@ public final class ChangeEditor implements Unmountable {
         return count.getText();
     }
 
+    /** For tests: what the header says of the file shown. */
+    String titleShown() {
+        return title.getText();
+    }
+
     /** For tests: whether the switch to the rendered sides is offered, and whether Roll back and Remove are on. */
     boolean offered(final String action) {
         return switch (action) {
@@ -236,6 +280,8 @@ public final class ChangeEditor implements Unmountable {
     public void unmount() {
         autosave.stop();
         recompare.stop();
+        relevel.stop();
+        stopHearingTheme.run();
     }
 
     /** For tests: the rendered sides, HEAD's then the working tree's. */
@@ -271,7 +317,8 @@ public final class ChangeEditor implements Unmountable {
         onDisk = c.kind() != RepoStatus.Kind.DELETED;
         markdown = isMarkdown(c.path());
         editable = texts.note().isEmpty() && !Files.isSymbolicLink(file());
-        title.setText(Plain.text(c.path() + "   " + RepoChanges.describe(c.kind()) + (c.from().isEmpty() ? "" : " from " + c.from())
+        // the window's title names the file
+        title.setText(Plain.text(RepoChanges.describe(c.kind()) + (c.from().isEmpty() ? "" : " from " + c.from())
                 + "   · " + Labels.shortPath(texts.root())));
         title.setForeground(RepoChanges.color(c.kind()));
         if (!texts.note().isEmpty()) {
@@ -336,7 +383,7 @@ public final class ChangeEditor implements Unmountable {
         }
         showMode();
         if (renderedShown()) {
-            renderSides();
+            renderSides(again);
         }
         cards.show(center, renderedShown() ? "rendered" : "diff");
         updateButtons();
@@ -362,7 +409,7 @@ public final class ChangeEditor implements Unmountable {
                     diff.remark(m);
                     count(m);
                     if (renderedShown()) {
-                        renderSides();
+                        renderSides(true);
                     }
                     updateButtons();
                 }
@@ -520,7 +567,7 @@ public final class ChangeEditor implements Unmountable {
                 r.endAtomicEdit();
             }
             if (renderedShown()) {
-                renderSides();
+                renderSides(true);
             }
             save();
             intents.dispatch(new Intent.Unstage(root, List.of(change.path())));
@@ -563,7 +610,7 @@ public final class ChangeEditor implements Unmountable {
         }
         rendering = !rendering;
         if (rendering) {
-            renderSides();
+            renderSides(false);
         }
         cards.show(center, rendering ? "rendered" : "diff");
         showMode();
@@ -581,16 +628,148 @@ public final class ChangeEditor implements Unmountable {
     /**
      * Renders both sides, each shaded as its text is: the blocks whose lines the comparison found changed, and the
      * words inside them, red on {@code HEAD}'s side, green on the working tree's. A comparison not yet worked out for
-     * the texts shown shades nothing.
+     * the texts shown shades nothing and lies level on nothing: the sides scroll by the share of their length. The view
+     * stays where it was when {@code keepPlace}, else starts from the top. Levelling follows in events of its own.
      */
-    private void renderSides() {
+    private void renderSides(final boolean keepPlace) {
         final Path folder = file().getParent();
         final String before = diff.left().getText();
         final String after = diff.right().getText();
         final SplitDiff.Model m = diff.model();
-        final boolean current = m.compared() && m.before().equals(before) && m.after().equals(after);
-        headRendered.show(before, folder, current ? marks(m, false) : MarkdownHtml.Marks.NONE);
-        treeRendered.show(after, folder, current ? marks(m, true) : MarkdownHtml.Marks.NONE);
+        final boolean current = comparisonShown();
+        final JScrollBar headBar = headRendered.scroll().getVerticalScrollBar();
+        final JScrollBar treeBar = treeRendered.scroll().getVerticalScrollBar();
+        final int headAt = keepPlace ? headBar.getValue() : 0;
+        final int treeAt = keepPlace ? treeBar.getValue() : 0;
+        final MarkdownHtml.Anchors anchors = current ? MarkdownHtml.Anchors.gaps(Map.of()) : MarkdownHtml.Anchors.NONE;
+        headGaps.clear();
+        treeGaps.clear();
+        headHeights = Map.of();
+        treeHeights = Map.of();
+        headAnchors = new int[0];
+        treeAnchors = new int[0];
+        headRendered.show(before, folder, current ? marks(m, false) : MarkdownHtml.Marks.NONE, anchors);
+        treeRendered.show(after, folder, current ? marks(m, true) : MarkdownHtml.Marks.NONE, anchors);
+        // a new page shows its top, and opening a gap keeps the view where it is: the view goes back once they are open
+        afterLevel = () -> {
+            headBar.setValue(headAt);
+            treeBar.setValue(treeAt);
+        };
+        Edt.later(this::level);
+    }
+
+    /** Whether the comparison worked out is of the texts shown. */
+    private boolean comparisonShown() {
+        final SplitDiff.Model m = diff.model();
+        return m.compared() && m.before().equals(diff.left().getText()) && m.after().equals(diff.right().getText());
+    }
+
+    /**
+     * Lays the rendered sides level: measures where the blocks both keep sit, and opens a gap above each that sits
+     * higher than its match. A block one side lacks is what stands between, so the gap is that block's height. What a
+     * gap's height missed is taken up by measuring again; a later change of width or a picture arriving, by coming back
+     * here. A page with no size yet is levelled once it has one.
+     */
+    private void level() {
+        level(LEVEL_PASSES);
+    }
+
+    /**
+     * The passes of levelling, each in an event of its own: each draws a page again, and on a long page the passes in
+     * one event would hold the EDT past its budget. {@code passes} are left.
+     */
+    private void level(final int passes) {
+        if (levelled(passes)) {
+            final Runnable then = afterLevel;
+            afterLevel = () -> {
+            };
+            then.run();
+        } else {
+            Edt.later(() -> level(passes - 1));
+        }
+    }
+
+    /** One pass of levelling, one of {@code passes} left; true when no other is needed. */
+    private boolean levelled(final int passes) {
+        if (!renderedShown() || !comparisonShown()) {
+            return true;
+        }
+        final HtmlPane head = headRendered.pane();
+        final HtmlPane tree = treeRendered.pane();
+        final NavigableMap<Integer, Integer> a = head.anchorHeights();
+        final NavigableMap<Integer, Integer> b = tree.anchorHeights();
+        if (a.isEmpty() || b.isEmpty() || (a.equals(headHeights) && b.equals(treeHeights))) {
+            return true;
+        }
+        final int end = MarkdownHtml.Anchors.END;
+        final List<SplitDiff.Pair> pairs =
+                new ArrayList<>(SplitDiff.pairs(diff.model().chunks(), a.headMap(end).keySet(), b.keySet()));
+        pairs.add(new SplitDiff.Pair(end, end));
+        final Map<Integer, Integer> headBefore = Map.copyOf(headGaps);
+        final Map<Integer, Integer> treeBefore = Map.copyOf(treeGaps);
+        if (passes > 0 && moveGaps(pairs, a, b)) {
+            if (!headGaps.equals(headBefore)) {
+                head.anchors(MarkdownHtml.Anchors.gaps(headGaps));
+            }
+            if (!treeGaps.equals(treeBefore)) {
+                tree.anchors(MarkdownHtml.Anchors.gaps(treeGaps));
+            }
+            return false;
+        }
+        headHeights = a;
+        treeHeights = b;
+        headAnchors = pairs.stream().mapToInt(p -> a.get(p.left())).toArray();
+        treeAnchors = pairs.stream().mapToInt(p -> b.get(p.right())).toArray();
+        return true;
+    }
+
+    /**
+     * Moves the gaps so each of {@code pairs} sits level, from the top of the page, given the heights {@code a} and
+     * {@code b} measured with the gaps as they stand; false when each already is.
+     */
+    private boolean moveGaps(final List<SplitDiff.Pair> pairs, final Map<Integer, Integer> a,
+                             final Map<Integer, Integer> b) {
+        // how far the gaps moved so far have lowered HEAD's side against the working tree's
+        int moved = 0;
+        boolean any = false;
+        for (final SplitDiff.Pair p : pairs) {
+            final int apart = a.get(p.left()) - b.get(p.right()) + moved;
+            if (Math.abs(apart) > LEVEL_SLACK) {
+                if (apart > 0) {
+                    moveGap(headGaps, p.left(), treeGaps, p.right(), apart);
+                } else {
+                    moveGap(treeGaps, p.right(), headGaps, p.left(), -apart);
+                }
+                moved -= apart;
+                any = true;
+            }
+        }
+        return any;
+    }
+
+    /**
+     * Brings a block {@code by} points back to its match: out of the gap above the block on the {@code lower} side as
+     * far as there is one, the rest into the gap above its match on the {@code higher} side.
+     */
+    private static void moveGap(final Map<Integer, Integer> lower, final int lowerLine,
+                                final Map<Integer, Integer> higher, final int higherLine, final int by) {
+        final int open = lower.getOrDefault(lowerLine, 0);
+        final int taken = Math.min(open, by);
+        if (open == taken) {
+            lower.remove(lowerLine);
+        } else {
+            lower.put(lowerLine, open - taken);
+        }
+        if (by > taken) {
+            higher.merge(higherLine, by - taken, Integer::sum);
+        }
+    }
+
+    /** The theme chosen shades the comparison on screen: the texts' marks and the rendered sides are drawn again. */
+    private void shadeAgain() {
+        diff.remark(diff.model());
+        headRendered.pane().followTheme();
+        treeRendered.pane().followTheme();
     }
 
     /** The lines and words of one side that {@code m} found changed: the newer side's when {@code gained}. */
@@ -687,7 +866,7 @@ public final class ChangeEditor implements Unmountable {
         Edt.later(this::updateButtons);
     }
 
-    /** The two rendered sides, each titled, scrolled together by the share of their length. */
+    /** The two rendered sides, each titled, scrolled together on the blocks both keep. */
     private JComponent rendered() {
         final JPanel sides = new JPanel(new GridLayout(1, 2, 1, 0));
         sides.setBackground(Theme.CARD_BORDER);
@@ -697,6 +876,15 @@ public final class ChangeEditor implements Unmountable {
         final BoundedRangeModel b = treeRendered.scroll().getVerticalScrollBar().getModel();
         a.addChangeListener(e -> follow(a, b));
         b.addChangeListener(e -> follow(b, a));
+        // first shown, at another width, or grown by the pictures that arrived: the blocks have moved
+        final ComponentAdapter resized = new ComponentAdapter() {
+            @Override
+            public void componentResized(final ComponentEvent e) {
+                relevel.request();
+            }
+        };
+        headRendered.pane().addComponentListener(resized);
+        treeRendered.pane().addComponentListener(resized);
         return sides;
     }
 
@@ -706,12 +894,44 @@ public final class ChangeEditor implements Unmountable {
         }
         following = true;
         try {
-            final int span = from.getMaximum() - from.getExtent() - from.getMinimum();
-            final double share = span <= 0 ? 0 : (from.getValue() - from.getMinimum()) / (double) span;
-            to.setValue(to.getMinimum() + (int) Math.round(share * (to.getMaximum() - to.getExtent() - to.getMinimum())));
+            final boolean fromHead = from == headRendered.scroll().getVerticalScrollBar().getModel();
+            final int value = from.getValue() - from.getMinimum();
+            final int[] here = fromHead ? headAnchors : treeAnchors;
+            final int[] there = fromHead ? treeAnchors : headAnchors;
+            to.setValue(to.getMinimum() + across(here, there, value, span(from), span(to)));
         } finally {
             following = false;
         }
+    }
+
+    private static int span(final BoundedRangeModel m) {
+        return m.getMaximum() - m.getExtent() - m.getMinimum();
+    }
+
+    /**
+     * Where a scroll to {@code value} on one side falls on the other: at one of the blocks both keep, {@code here} on
+     * this side and {@code there} on the other, at that block; between two, the same share of the way. Each end of the
+     * scroll is one more such place, so with no block the position is the same share of the length. A block past what
+     * either side can scroll to, or out of order, is passed over.
+     */
+    static int across(final int[] here, final int[] there, final int value, final int fromSpan, final int toSpan) {
+        if (fromSpan <= 0) {
+            return 0;
+        }
+        int x = 0;
+        int y = 0;
+        for (int i = 0; i <= here.length; i++) {
+            final int nextX = i < here.length ? here[i] : fromSpan;
+            final int nextY = i < here.length ? there[i] : toSpan;
+            if (nextX > x && nextX <= fromSpan && nextY >= y && nextY <= toSpan) {
+                if (value <= nextX) {
+                    return y + (int) Math.round((value - x) * (double) (nextY - y) / (nextX - x));
+                }
+                x = nextX;
+                y = nextY;
+            }
+        }
+        return toSpan;
     }
 
     private static JMenuItem menuItem(final String text, final String icon, final Runnable r) {

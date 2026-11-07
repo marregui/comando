@@ -119,6 +119,10 @@ class ContentPaletteTest {
                 assertThat(contrast(p.ink, p.removed)).as("a removed line, " + at).isGreaterThan(7);
                 assertThat(contrast(p.ink, p.addedWord)).as("an added word, " + at).isGreaterThan(4.5);
                 assertThat(contrast(p.ink, p.removedWord)).as("a removed word, " + at).isGreaterThan(4.5);
+                final Color page = Theme.fixed(Theme.TRANSCRIPT_TEXT, g.light);
+                assertThat(contrast(page, p.added)).as("a rendered page's text on an added block, " + at)
+                        .isGreaterThan(4.5);
+                assertThat(contrast(page, p.removed)).as("on a removed block, " + at).isGreaterThan(4.5);
                 assertThat(contrast(p.code, p.codeInlineGround)).as("inline code, " + at).isGreaterThan(7);
                 assertThat(contrast(p.lineNumber, g.color)).as("line numbers, quiet but there, " + at).isBetween(2.0, 4.5);
                 assertThat(Oklch.distance(p.added, p.removed)).as("added and removed apart, " + at).isGreaterThan(0.05);

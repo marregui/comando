@@ -1,7 +1,10 @@
 package dev.marregui.comando.ui.widgets.changes;
 
+import java.awt.Component;
+import java.awt.Container;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -11,7 +14,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.Document;
+import javax.swing.text.Highlighter;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -20,9 +29,15 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
+import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.awaitility.Awaitility.await;
 
 /// [ChangeEditor]: one changed file compared with HEAD, its working-tree side editable, saved, rolled back or removed.
@@ -32,6 +47,9 @@ import static org.awaitility.Awaitility.await;
 /// - removing asks, then moves the file to the Trash; a removed file stays removed while its text is empty
 /// - Markdown offers both sides rendered; a file not compared is not editable
 /// - a failed write says so and is tried again
+/// - the rendered sides stay level on what did not change, a block one side lacks leaving a gap there, and scroll
+///   together on those blocks
+/// - the header says what the window's title lacks; a theme chosen shades the comparison on screen again
 class ChangeEditorTest {
 
     @TempDir
@@ -44,6 +62,9 @@ class ChangeEditorTest {
     private final AtomicInteger gone = new AtomicInteger();
     /** Why a write fails; null writes. */
     private final AtomicReference<String> failing = new AtomicReference<>();
+
+    /// How far apart the same block may sit on the two sides, in pixels.
+    private static final int LEVEL = 2;
 
     private ChangeEditor editor() throws Exception {
         return on(null, x -> {
@@ -232,6 +253,241 @@ class ChangeEditorTest {
         assertThat(is(e, x -> x.diff().right().isEditable())).isFalse();
         assertThat(is(e, x -> x.offered("rendered"))).isFalse();
         assertThat(is(e, x -> x.offered("remove"))).isTrue();
+    }
+
+    /// The same paragraphs after two only the working tree has sit at one height on both sides: at the top, the gap on
+    /// HEAD's side holding the place of the blocks it lacks, and after scrolling either side.
+    @Test
+    void blocksBothSidesKeepSitLevelAfterABlockOneSideAdded() throws Exception {
+        final String tail = paragraphs(40);
+        final ChangeEditor e = rendered("# Title\n\nFirst.\n\n" + tail,
+                "# Title\n\nFirst.\n\nOnly here.\n\nAnd only here, a second block.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        assertLevel(e, "Paragraph 39.");
+        scroll(e, 0, 300);
+        assertLevel(e, "Paragraph 20.");
+        scroll(e, 1, 150);
+        assertLevel(e, "Paragraph 10.");
+    }
+
+    /// The working tree lost a block: the gap is on its side now, and the blocks after it level all the same.
+    @Test
+    void aBlockRemovedLeavesItsGapOnTheOtherSide() throws Exception {
+        final String tail = paragraphs(30);
+        final ChangeEditor e = rendered("Start.\n\n## Gone\n\nGone too.\n\n" + tail, "Start.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        scroll(e, 1, 200);
+        assertLevel(e, "Paragraph 15.");
+    }
+
+    /// A row added inside a table leaves a gap in the table on the other side, and the rows below it level.
+    @Test
+    void aRowOneSideAddedLeavesAGapAmongTheRows() throws Exception {
+        final String head = "| Name | Says |\n| --- | --- |\n";
+        final String rows =
+                IntStream.range(0, 20).mapToObj(i -> "| row" + i + " | text |\n").collect(Collectors.joining());
+        final ChangeEditor e = rendered("Above.\n\n" + head + "| one | text |\n" + rows + "\nBelow.\n",
+                "Above.\n\n" + head + "| one | text |\n| added | text |\n" + rows + "\nBelow.\n");
+        assertLevel(e, "row0");
+        assertLevel(e, "row19");
+        assertLevel(e, "Below.");
+    }
+
+    /// An item added to a list leaves a gap among the items on the other side.
+    @Test
+    void anItemOneSideAddedLeavesAGapAmongTheItems() throws Exception {
+        final String items = IntStream.range(0, 12).mapToObj(i -> "- item" + i + "\n").collect(Collectors.joining());
+        final ChangeEditor e =
+                rendered("- first\n" + items + "\nBelow.\n", "- first\n- added\n" + items + "\nBelow.\n");
+        assertLevel(e, "item0");
+        assertLevel(e, "Below.");
+    }
+
+    /// A block at the very end only one side has: the sides end level, with the same length to scroll.
+    @Test
+    void aBlockAddedAtTheEndLeavesTheSidesEqualInLength() throws Exception {
+        final String common = paragraphs(5);
+        final ChangeEditor e = rendered(common, common + "A closing block.\n\nAnd another.\n");
+        final int head = on(e, x -> height(x.sides().get(0)));
+        final int tree = on(e, x -> height(x.sides().get(1)));
+        assertThat(head).isCloseTo(tree, within(LEVEL));
+    }
+
+    /// A file read again while its sides show keeps the reader's place, as its texts do.
+    @Test
+    void sidesReadAgainKeepTheirPlace() throws Exception {
+        final String tail = paragraphs(30);
+        final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        scroll(e, 0, 200);
+        final String after = "One.\n\nAdded.\n\n" + tail + "Tail.\n";
+        run(e, x -> x.show(new ChangeTexts(x.root(), x.change(), x.shown().before(), after, ""), true));
+        await().atMost(Duration.ofSeconds(10)).until(() -> on(e, x -> x.diff().right().getText().equals(after)));
+        assertLevel(e, "Paragraph 20.");
+        final int place = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
+        assertThat(place).isCloseTo(200, within(40));
+    }
+
+    /// Sides rendered again start from the top, though the gaps opened after the render keep the view where it was.
+    @Test
+    void sidesRenderedAgainStartFromTheTop() throws Exception {
+        final String tail = paragraphs(30);
+        final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        scroll(e, 0, 200);
+        run(e, ChangeEditor::toggleRendered);
+        run(e, ChangeEditor::toggleRendered);
+        run(e, x -> layOut(x.component()));
+        run(e, x -> { });
+        final int head = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
+        final int tree = on(e, x -> x.sides().get(1).scroll().getVerticalScrollBar().getValue());
+        assertThat(head).isZero();
+        assertThat(tree).isZero();
+    }
+
+    /// A scroll lands on the other side where the blocks both keep say: at a block, on that block; between two, the
+    /// same share of the way; past the last, up to the other side's end.
+    @Test
+    void aScrollFallsBetweenTheBlocksBothKeep() {
+        final int[] here = {100, 200};
+        final int[] there = {100, 300};
+        assertThat(ChangeEditor.across(here, there, 100, 400, 400)).isEqualTo(100);
+        assertThat(ChangeEditor.across(here, there, 150, 400, 400)).isEqualTo(200);
+        assertThat(ChangeEditor.across(here, there, 200, 400, 400)).isEqualTo(300);
+        assertThat(ChangeEditor.across(here, there, 300, 400, 400)).isEqualTo(350);
+        assertThat(ChangeEditor.across(here, there, 400, 400, 400)).isEqualTo(400);
+    }
+
+    /// With no block to go by the scroll is the same share of the length; a side with nothing to scroll stays at its
+    /// top; a block past what either side can scroll to is passed over.
+    @Test
+    void aScrollWithNoBlockToGoByIsAShareOfTheLength() {
+        final int[] none = {};
+        assertThat(ChangeEditor.across(none, none, 50, 100, 300)).isEqualTo(150);
+        assertThat(ChangeEditor.across(none, none, 0, 0, 300)).isZero();
+        assertThat(ChangeEditor.across(new int[] {500}, new int[] {20}, 50, 100, 300)).isEqualTo(150);
+    }
+
+    /// Sides rendered before they had a size, as in a window not yet laid out, level once they have one.
+    @Test
+    void sidesRenderedBeforeTheyHadASizeLevelOnceTheyHaveOne() throws Exception {
+        final String tail = paragraphs(20);
+        final ChangeEditor e = editor();
+        shown(e, texts("README.md", RepoStatus.Kind.MODIFIED, "One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail));
+        run(e, ChangeEditor::toggleRendered);
+        sized(e);
+        assertLevel(e, "Paragraph 10.");
+    }
+
+    /// The header leaves the path to the window's title, and keeps the file's state, what it was renamed from and its
+    /// root.
+    @Test
+    void theHeaderSaysWhatTheWindowsTitleLacks() throws Exception {
+        final ChangeEditor e = editor();
+        shown(e, texts("docs/README.md", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
+        assertThat(str(e, ChangeEditor::titleShown)).doesNotContain("README.md")
+                .contains(RepoChanges.describe(RepoStatus.Kind.MODIFIED)).contains(Labels.shortPath(root.toString()));
+
+        final RepoStatus.FileChange moved = new RepoStatus.FileChange("new.md", "old.md", RepoStatus.Kind.RENAMED);
+        shown(e, new ChangeTexts(root.toString(), moved, "a\n", "b\n", ""));
+        assertThat(str(e, ChangeEditor::titleShown)).doesNotContain("new.md").contains("from old.md");
+    }
+
+    /// With the comparison on screen, a theme chosen shades both the texts and the rendered sides in its colours; once
+    /// unmounted, it no longer hears the theme.
+    @Test
+    void aThemeChosenShadesTheComparisonShownAgain() throws Exception {
+        SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+        try {
+            final ChangeEditor e = editor();
+            shown(e, texts("README.md", RepoStatus.Kind.MODIFIED, "one old word\n", "one new word\n"));
+            run(e, ChangeEditor::toggleRendered);
+            final String darkLine = Theme.hex(Theme.content().removed);
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.FOG, Tint.SLATE_INK));
+            final String lightLine = Theme.hex(Theme.content().removed);
+            assertThat(lightLine).as("the two themes shade differently").isNotEqualToIgnoringCase(darkLine);
+            assertThat(str(e, x -> x.sides().get(0).pane().getText())).as("the rendered side, in the theme chosen")
+                    .containsIgnoringCase(lightLine).doesNotContainIgnoringCase(darkLine);
+            assertThat(on(e, ChangeEditorTest::wordShades)).as("the text's words, in the theme chosen")
+                    .contains(Theme.content().removedWord.getRGB());
+
+            run(e, ChangeEditor::unmount);
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+            assertThat(str(e, x -> x.sides().get(0).pane().getText())).as("unmounted: left as it was")
+                    .containsIgnoringCase(lightLine);
+        } finally {
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+        }
+    }
+
+    /// A file shown on sides of 1000 by 400 pixels, its two sides rendered.
+    private ChangeEditor rendered(final String before, final String after) throws Exception {
+        final ChangeEditor e = editor();
+        shown(e, texts("README.md", RepoStatus.Kind.MODIFIED, before, after));
+        sized(e);
+        run(e, ChangeEditor::toggleRendered);
+        run(e, x -> layOut(x.component()));
+        return e;
+    }
+
+    private static void sized(final ChangeEditor e) throws Exception {
+        run(e, x -> {
+            x.component().setSize(1000, 400);
+            layOut(x.component());
+        });
+    }
+
+    private static void layOut(final Container c) {
+        c.doLayout();
+        for (final Component child : c.getComponents()) {
+            if (child instanceof Container inner) {
+                layOut(inner);
+            }
+        }
+    }
+
+    private static String paragraphs(final int count) {
+        return IntStream.range(0, count).mapToObj(i -> "Paragraph " + i + ".\n\n").collect(Collectors.joining());
+    }
+
+    /// Scrolls side {@code side}, 0 for HEAD's, to {@code y}, and waits for what was queued behind the scroll.
+    private static void scroll(final ChangeEditor e, final int side, final int y) throws Exception {
+        run(e, x -> layOut(x.component()));
+        run(e, x -> x.sides().get(side).scroll().getVerticalScrollBar().setValue(y));
+        run(e, x -> { });
+    }
+
+    /// Asserts {@code text} sits at the same height on the screen on both sides, in at most 3 seconds.
+    private static void assertLevel(final ChangeEditor e, final String text) {
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+            run(e, x -> layOut(x.component()));
+            final int head = on(e, x -> onScreen(x.sides().get(0), text));
+            final int tree = on(e, x -> onScreen(x.sides().get(1), text));
+            assertThat(head).as(text).isCloseTo(tree, within(LEVEL));
+        });
+    }
+
+    /// The height of {@code text}'s first appearance, from the top of the view.
+    private static int onScreen(final RenderedMarkdown side, final String text) {
+        try {
+            final Document d = side.pane().getDocument();
+            final int at = d.getText(0, d.getLength()).indexOf(text);
+            assertThat(at).as(text + " on the page").isNotNegative();
+            return (int) side.pane().modelToView2D(at).getY() - side.scroll().getViewport().getViewPosition().y;
+        } catch (final BadLocationException ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private static int height(final RenderedMarkdown side) {
+        return side.pane().getPreferredSize().height;
+    }
+
+    /// The colours of the words shaded on HEAD's text.
+    private static List<Integer> wordShades(final ChangeEditor e) {
+        return Arrays.stream(e.diff().left().getHighlighter().getHighlights()).map(Highlighter.Highlight::getPainter)
+                .filter(DefaultHighlighter.DefaultHighlightPainter.class::isInstance)
+                .map(p -> ((DefaultHighlighter.DefaultHighlightPainter) p).getColor().getRGB()).toList();
     }
 
     /// An edit is written without asking within a second, the status goes from edited to saved, and the modified

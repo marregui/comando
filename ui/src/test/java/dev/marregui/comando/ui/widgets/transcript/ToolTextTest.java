@@ -9,12 +9,27 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [ToolText] finds what a tool call's summary links to.
+/// [ToolText] finds what a tool call's summary links to and what its card is titled by.
 /// - a call links the file or web address it works on, never a script address
 /// - a skill links its skill file when it exists under the root
 class ToolTextTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /// A Bash call is titled by its description, its first line when it has several; blank, by its command. Other
+    /// tools' descriptions name no title.
+    @Test
+    void aBashCallIsTitledByItsDescription() {
+        final String described = "{\"command\":\"ls\",\"description\":\"List\"}";
+        assertThat(ToolText.title("Bash", JSON.readTree(described))).isEqualTo("List");
+        assertThat(ToolText.title("Bash", JSON.readTree("{\"command\":\"ls\",\"description\":\" a\\nb\"}")))
+                .isEqualTo("a …");
+        assertThat(ToolText.title("Bash", JSON.readTree("{\"command\":\"ls\",\"description\":\" \"}"))).isEqualTo("ls");
+        assertThat(ToolText.title("Bash", JSON.readTree("{\"command\":\"ls\"}"))).isEqualTo("ls");
+        assertThat(ToolText.title("Read", JSON.readTree("{\"file_path\":\"/a\",\"description\":\"x\"}")))
+                .isEqualTo("/a");
+        assertThat(ToolText.summary("Bash", JSON.readTree(described))).isEqualTo("ls");
+    }
 
     /// Read, Write and NotebookEdit link their path, trimmed; WebFetch links an `https` address but not a `javascript:`
     /// one; Bash links nothing.

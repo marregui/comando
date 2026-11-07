@@ -140,7 +140,8 @@ Any number of document panels may be attached to a session
   and Remove the session…, each acting on the focused panel's session with the session menu's enablement.
   A panel without a session shows only the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
-  plans' usage and the work running in every session and query on the right. A click on that count lists who needs you,
+  plans' usage, each under its name, and the work running in every session and query on the right, gold only on what
+  waits for the user's approval. A click on that count lists who needs you,
   who works and who waits, each with what it does and for how long; a click on a line goes to its panel
   ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)). The session bar's time is the whole turn's ("Bash · turn 4 min"); a tool card's is
   the tool's. The kit's version is not here: it is on
@@ -729,7 +730,8 @@ changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-dou
   3 s, so a session's edits show where the user scrolled to. The line match stops after 2 s and the texts are then
   compared as a whole; line ends are compared as git commits them (`core.autocrlf`), a link as its target. A binary
   file, a version over 4 MB, a line over 10 000 characters, a Git LFS file or a submodule is not compared, and the
-  window says why. A terminal with the keyboard keeps ⌘K, its Clear Buffer. The comparison takes the editors' theme.
+  window says why. A terminal with the keyboard keeps ⌘K, its Clear Buffer. The comparison follows the theme chosen, open or not
+  ([record 135](adr/0135-the-comparison-follows-the-theme-and-lies-level.md)).
   The file's menu also opens it in a panel.
 - **Editing** ([record 72](adr/0072-the-comparison-window-edits-rolls-back-and-removes.md)). The working tree's side is
   an editor, the only one of the two: the differences are worked out again 250 ms after typing pauses, and ⌘Z and ⌘⇧Z
@@ -743,7 +745,8 @@ changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-dou
   text as any change made outside it. A removed file stays removed while its text is empty. Links, binary files and
   files not compared are not edited.
 - **Markdown.** A `.md` file's window offers both sides rendered (its eye button, ⌘⇧M), with the renderer an editor
-  panel's preview uses, scrolled together by the share of their length; editing happens on the texts. What changed is
+  panel's preview uses, lying level: blocks that did not change sit at the same height, a block one side lacks leaves a
+  gap of its height, and they scroll together; editing happens on the texts. What changed is
   shaded as in the texts: a block (paragraph, heading, list item, table cell, code block, diagram) whose source lines
   differ is red on `HEAD`'s side and green on the working tree's, and the words that changed inside it more strongly.
 - **Rolling back and removing.** The working tree's right-click menu offers both. Roll back to HEAD gives a changed or

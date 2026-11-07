@@ -24,6 +24,7 @@ import dev.marregui.comando.core.view.Clip;
  * read sends no prompt and spends nothing; safe mode loads no hooks, plugins or MCP servers, so it starts in about a
  * second; no session is saved. The windows come from the command's text, one line each ("Current week (Fable): 17%
  * used · resets Oct 15 at 1:59pm (Europe/Madrid)"); a line in another form is skipped, and a read with none says why.
+ * Claude Code prints no line for a window the server reports no limit for, so a good read may have no session window.
  */
 final class PlanUsageReader {
 

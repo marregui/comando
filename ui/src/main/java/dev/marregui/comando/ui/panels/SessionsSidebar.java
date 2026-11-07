@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -86,8 +87,9 @@ import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
  * alike: the state icon, which a click starts or stops (a session) or connects or disconnects (a connection), the name,
  * the ⓘ that shows its card (a connection's has no summary), and everything else in the row's menu. Sessions are
  * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
- * the tab menu's Sort. Hidden, the column collapses to a rail: its first button shows it again at its width, and one
- * button per tab, in the tabs' icons, shows it at that tab.
+ * the tab menu's Sort. Each list's band is on the focused panel's row: its session, its connection, or the panel itself
+ * among those without a session, and on no row of a list that has none. Hidden, the column collapses to a rail: its
+ * first button shows it again at its width, and one button per tab, in the tabs' icons, shows it at that tab.
  */
 public final class SessionsSidebar {
 
@@ -647,6 +649,8 @@ public final class SessionsSidebar {
      * paint, which the spinner repeats 12 times a second while a session works.
      */
     private String paintedNewestCli = "";
+    /** The focus the bands were last put on; null before the first render. */
+    private Focus bandsFocus;
 
     public void render(final AppState s) {
         state = s;
@@ -661,6 +665,7 @@ public final class SessionsSidebar {
         rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
         loosePanels.render(s);
+        followFocus(s);
         files.render(s);
         instances.render(s);
     }
@@ -1304,6 +1309,22 @@ public final class SessionsSidebar {
     }
 
 
+    /**
+     * Puts each list's band on the focused panel's row when the focus, or what that panel is bound to, changes; a row
+     * selected by hand keeps the band until then. A band is the list's selection, so moving it dispatches nothing.
+     */
+    private void followFocus(final AppState s) {
+        final PanelState p = s.focusedPanel();
+        final Focus now = new Focus(p.id(), p.session(), p.connection());
+        if (now.equals(bandsFocus)) {
+            return;
+        }
+        bandsFocus = now;
+        band(sessions, x -> x.name().equals(now.session()));
+        band(connections, c -> c.name().equals(now.connection()));
+        band(loosePanels.list(), r -> r.panel().id().equals(now.panel()));
+    }
+
     private boolean boundToFocused(final SessionState s) {
         return state != null && state.focusedPanel().session().equals(s.name());
     }
@@ -1419,5 +1440,20 @@ public final class SessionsSidebar {
         final JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(e -> r.run());
         return i;
+    }
+
+    /** Selects the first row of {@code list} that {@code which} accepts; with none, no row. */
+    private static <T> void band(final JList<T> list, final Predicate<T> which) {
+        for (int i = 0; i < list.getModel().getSize(); i++) {
+            if (which.test(list.getModel().getElementAt(i))) {
+                list.setSelectedIndex(i);
+                return;
+            }
+        }
+        list.clearSelection();
+    }
+
+    /** The focused panel and what it is bound to: what the bands stand on. */
+    private record Focus(PanelId panel, String session, String connection) {
     }
 }

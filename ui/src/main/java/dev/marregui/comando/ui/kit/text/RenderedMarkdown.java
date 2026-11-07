@@ -42,7 +42,13 @@ public final class RenderedMarkdown {
 
     /** As {@link #show(String, Path)}, what {@code marks} names shaded as changed. */
     public void show(final String markdown, final Path folder, final MarkdownHtml.Marks marks) {
-        pane.setMarkdown(markdown, folder, marks);
+        show(markdown, folder, marks, MarkdownHtml.Anchors.NONE);
+    }
+
+    /** As {@link #show(String, Path, MarkdownHtml.Marks)}, laid out for a comparison as {@code anchors} says. */
+    public void show(final String markdown, final Path folder, final MarkdownHtml.Marks marks,
+                     final MarkdownHtml.Anchors anchors) {
+        pane.setMarkdown(markdown, folder, marks, anchors);
         pane.setCaretPosition(0);
     }
 }

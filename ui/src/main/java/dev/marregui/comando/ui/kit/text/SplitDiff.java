@@ -13,7 +13,9 @@ import java.awt.RenderingHints;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.BorderFactory;
@@ -65,6 +67,10 @@ public final class SplitDiff {
         boolean deleted() {
             return rightStart == rightEnd;
         }
+    }
+
+    /** A line of the left text and the line of the right text that matches it, unchanged. */
+    public record Pair(int left, int right) {
     }
 
     private static final Pattern WORDS = Pattern.compile("\\w+|\\s+|[^\\w\\s]");
@@ -359,6 +365,21 @@ public final class SplitDiff {
             public void diffEnd() {
             }
         };
+    }
+
+    /**
+     * The blocks both sides keep, in order: each line of {@code left} outside every difference whose match on the right
+     * is one of {@code right}. {@code left} and {@code right} are the lines blocks start on, in ascending order.
+     */
+    public static List<Pair> pairs(final List<Chunk> chunks, final Collection<Integer> left, final Set<Integer> right) {
+        final List<Pair> out = new ArrayList<>();
+        for (final int line : left) {
+            final int match = (int) map(chunks, line, true);
+            if (chunks.stream().noneMatch(c -> line >= c.leftStart() && line < c.leftEnd()) && right.contains(match)) {
+                out.add(new Pair(line, match));
+            }
+        }
+        return out;
     }
 
     /**

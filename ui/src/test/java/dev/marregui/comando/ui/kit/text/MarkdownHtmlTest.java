@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Links stay links; web addresses and note links in text become links, but not inside a link or code.
 /// - Comparison marks shade changed blocks and words.
 /// - Front matter shows as a table of facts, and marks still land on the same lines.
+/// - For a comparison each block, row and item says its source line and a side can leave gaps; a preview does neither.
 class MarkdownHtmlTest {
+
+    private static final String MIXED = """
+            # Title
+
+            Text.
+
+            | a | b |
+            |---|---|
+            | 1 | 2 |
+
+            - item
+            - other
+
+            ```java
+            int x;
+            ```
+            """;
 
     /// Ids are lower case, drop punctuation and inline markup, keep letters of any language and `_`, turn each space
     /// into a hyphen, cover setext headings, count on as `-1`, `-1-1`, `-2` as GitHub does, restart per document, and
@@ -138,11 +157,64 @@ class MarkdownHtmlTest {
         assertThat(html.indexOf("front-key")).as("the facts come first").isLessThan(html.indexOf("Proven"));
     }
 
+    /// A preview has no line in it, and leaves the same page whether it goes through the anchored render or not.
+    @Test
+    void aPreviewSaysNoLine() {
+        final String preview = MarkdownHtml.render(MIXED);
+        assertThat(preview).doesNotContain(MarkdownHtml.LINE);
+        assertThat(anchored(MIXED, MarkdownHtml.Anchors.NONE)).isEqualTo(preview);
+    }
+
+    /// For a comparison a block at the top of the page, a table's body row, a list's item and a fenced block say the
+    /// line they start on, from 0; the table's head row is the table's own line, and a fenced block keeps its class.
+    @Test
+    void aComparedPageSaysTheLineOfEachBlockRowAndItem() {
+        assertThat(anchored(MIXED, MarkdownHtml.Anchors.gaps(Map.of()))).contains(
+                "<h1 id=\"title\" data-line=\"0\">",
+                "<p data-line=\"2\">Text.</p>",
+                "data-line=\"4\"",
+                "<tr data-line=\"6\">",
+                "<li data-line=\"8\">",
+                "<li data-line=\"9\">",
+                "<pre class=\"code\" data-line=\"11\">");
+    }
+
+    /// A gap opens as an empty block above the block of its line, and under the last block for the end of the page.
+    @Test
+    void aGapOpensAboveItsBlockAndAtTheEnd() {
+        final String html = anchored("One.\n\nTwo.\n",
+                MarkdownHtml.Anchors.gaps(Map.of(2, 30, MarkdownHtml.Anchors.END, 12)));
+        assertThat(html).containsPattern("<p data-line=\"0\">One.</p>\\s*<div style=\"height: 30pt[^\"]*\"></div>"
+                + "<p data-line=\"2\">Two.</p>\\s*<div style=\"height: 12pt[^\"]*\"></div>$");
+    }
+
+    /// Among a table's rows and a list's items no block can stand, so a row's cells open the gap above their text, on
+    /// top of the padding a cell has, and an item takes it as a margin.
+    @Test
+    void aGapAmongRowsAndItemsIsTheirOwnSpace() {
+        final String html = anchored(MIXED, MarkdownHtml.Anchors.gaps(Map.of(6, 10, 9, 7)));
+        assertThat(html).doesNotContain("<div style").contains("<td style=\"padding-top: 12pt\">1</td>",
+                "<li data-line=\"9\" style=\"margin-top: 7pt\">");
+    }
+
+    /// A row both shaded and given a gap keeps the two: the gap does not take the shade's place.
+    @Test
+    void aGapKeepsTheShadeOfItsBlock() {
+        final String text = "| a |\n|---|\n| 1 |\n";
+        final String html = MarkdownHtml.render(text, null, MarkdownHtml.Pictures.NONE,
+                new MarkdownHtml.Marks(Set.of(2), List.of(), true), MarkdownHtml.Anchors.gaps(Map.of(2, 10)));
+        assertThat(html).containsPattern("<td style=\"padding-top: 12pt; background-color: [^\"]+\">1</td>");
+    }
+
     /// A mark on a line below front matter shades that line's paragraph, so line numbers count the front matter.
     @Test
     void aComparedTextWithFrontMatterShadesTheSameLines() {
         final String text = "---\nname: x\n---\n\nfirst\n\nsecond\n";
         final String html = MarkdownHtml.render(text, null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(6), List.of(), true));
         assertThat(html).containsPattern("<p style=\"background-color: [^\"]+\">second</p>").contains("<p>first</p>");
+    }
+
+    private static String anchored(final String markdown, final MarkdownHtml.Anchors anchors) {
+        return MarkdownHtml.render(markdown, null, MarkdownHtml.Pictures.NONE, MarkdownHtml.Marks.NONE, anchors);
     }
 }

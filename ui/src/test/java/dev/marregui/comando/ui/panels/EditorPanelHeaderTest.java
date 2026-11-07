@@ -12,6 +12,7 @@ import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
 
+import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
@@ -21,7 +22,9 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.icon.Icons;
 
@@ -32,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the session's controls and name are not in the header; the connection toggle is
 /// - the connection toggle is one icon coloured by state, first of the tools, and its name chip binds another
 /// - every header button is an icon with a tooltip and no button shape
+/// - a page shown rendered has no text to run: the connection, Run and Clear leave, Stop stays while something runs
 /// - the Locate button, after Stop and before Clear, shows a document in Files, else the panel's session in Sessions;
 ///   its icon is the tab's after a left arrow
 class EditorPanelHeaderTest {
@@ -143,6 +147,72 @@ class EditorPanelHeaderTest {
             assertThat(b.getToolTipText()).as(name).isNotBlank();
             assertThat(b.getClientProperty("JButton.buttonType")).as(name + ": no button shape").isEqualTo("toolBarButton");
         }
+    }
+
+    /// A page shown rendered has no text to run: the connection's icon and name, Run and Clear leave the header, the
+    /// run shortcut does nothing, and Stop stays only while a query or a turn is active. Back in the text they return,
+    /// the name only while a connection is bound. The same for a document and for a panel's own text.
+    @Test
+    void aRenderedPageHidesTheToolsOfTheTextAndKeepsStopOnlyWhileSomethingRuns() throws Exception {
+        final ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
+        final SessionState idle = SessionState.closed(SessionSpec.fresh("work", "/w")).withStatus(Status.OPEN, "");
+        final SqlRun query = new SqlRun(1L, A, "local", "select 1", RunStatus.RUNNING, 0, 0L, false, 0L, 0L, 0L,
+                "", 1L, "", false, false);
+        for (final boolean document : List.of(true, false)) {
+            final PanelState panel = new PanelState(A, "notes.md", "local", "work", document);
+            final AppState still = AppState.initial(List.of(panel), List.of(local), List.of(idle));
+            final AppState turn = AppState.initial(List.of(panel), List.of(local), List.of(idle.withTurns(1, 1_000L)));
+            final List<Intent> sent = new ArrayList<>();
+            final EditorPanel[] p = new EditorPanel[1];
+            SwingUtilities.invokeAndWait(() -> {
+                p[0] = new EditorPanel(panel, sent::add, new SchemaRegistry());
+                p[0].editor().load("select 1;\n");
+                p[0].file(Path.of("/s/notes.md"), document);
+                p[0].render(panel, still);
+                if (!p[0].previewing()) {
+                    p[0].togglePreview();
+                }
+            });
+            assertThat(tools(p[0])).as("nothing runs on a page").isEmpty();
+            SwingUtilities.invokeAndWait(() -> p[0].runSelection(Target.AUTO));
+            assertThat(sent).as("the shortcut has no text to run").isEmpty();
+
+            SwingUtilities.invokeAndWait(() -> p[0].render(panel, still.withRuns(List.of(query))));
+            assertThat(tools(p[0])).as("a query runs").containsExactly("Stop");
+            assertThat(button(p[0], "Stop").isEnabled()).isTrue();
+            SwingUtilities.invokeAndWait(() -> p[0].render(panel, turn));
+            assertThat(tools(p[0])).as("a turn runs").containsExactly("Stop");
+            SwingUtilities.invokeAndWait(() -> p[0].render(panel, still));
+            assertThat(tools(p[0])).as("it ended").isEmpty();
+
+            SwingUtilities.invokeAndWait(p[0]::togglePreview);
+            assertThat(tools(p[0])).as("back in the text").contains("Connect or disconnect", "local", "Run", "Stop");
+            assertThat(tools(p[0]).contains("Clear")).as("Clear is the panel's own text's").isEqualTo(!document);
+            SwingUtilities.invokeAndWait(() -> p[0].runSelection(Target.AUTO));
+            assertThat(sent).singleElement().isInstanceOf(Intent.RunText.class);
+
+            final PanelState unbound = new PanelState(A, "notes.md", "", "work", document);
+            SwingUtilities.invokeAndWait(() -> p[0].render(unbound,
+                    AppState.initial(List.of(unbound), List.of(local), List.of(idle))));
+            assertThat(tools(p[0])).as("no connection, no name")
+                    .contains("Connect or disconnect").doesNotContain("local");
+        }
+    }
+
+    /** The tools of the text that show now; "local" stands for the connection's name. */
+    private static List<String> tools(final EditorPanel p) {
+        final List<String> out = new ArrayList<>();
+        for (final String name : List.of("Connect or disconnect", "Run", "Stop", "Clear")) {
+            if (button(p, name).isVisible()) {
+                out.add(name);
+            }
+        }
+        final List<AbstractButton> names = new ArrayList<>();
+        collectText(p, "local", names);
+        if (names.stream().anyMatch(AbstractButton::isVisible)) {
+            out.add("local");
+        }
+        return out;
     }
 
     private static void collectText(final Component c, final String part, final List<AbstractButton> out) {

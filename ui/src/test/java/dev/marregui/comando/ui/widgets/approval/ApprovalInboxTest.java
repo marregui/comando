@@ -362,12 +362,14 @@ class ApprovalInboxTest {
     void alwaysShowsItsRuleAndNeedsASecondPress() {
         inbox.render(List.of(bash(1, "git commit -m x")));
         final Component card = cards().getFirst();
-        assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("Always: Bash(git commit:*)");
+        assertThat(((JTextComponent) named(card, "rule")).getText())
+                .isEqualTo("Always: commands starting \"git commit\"");
         assertThat(((AbstractButton) named(card, "always")).getToolTipText()).contains("Bash(git commit:*)", "settings.local.json");
 
         press(card, KeyEvent.VK_L, 0);
         assertThat(sent).isEmpty();
-        assertThat(((JTextComponent) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git commit:*)");
+        assertThat(((JTextComponent) named(card, "confirm")).getText())
+                .isEqualTo("Press L again to always allow commands starting \"git commit\"");
 
         now.addAndGet(ApprovalInbox.CONFIRM_MILLIS - 1);
         press(card, KeyEvent.VK_L, 0);
@@ -480,9 +482,12 @@ class ApprovalInboxTest {
         try {
             compound.render(List.of(bash(1, "git status && npm test")));
             final Component card = cardsOf(compound).getFirst();
-            assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("Always: Bash(git status), Bash(npm test:*)");
+            assertThat(((JTextComponent) named(card, "rule")).getText())
+                    .isEqualTo("Always: the command \"git status\", commands starting \"npm test\"");
             press(card, KeyEvent.VK_L, 0);
-            assertThat(((JTextComponent) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git status), Bash(npm test:*)");
+            assertThat(((JTextComponent) named(card, "confirm")).getText())
+                    .isEqualTo("Press L again to always allow the command \"git status\","
+                            + " commands starting \"npm test\"");
             press(card, KeyEvent.VK_L, 0);
             assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
         } finally {

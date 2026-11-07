@@ -29,6 +29,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import javax.swing.text.Element;
 import javax.swing.text.ElementIterator;
 import javax.swing.text.StyleConstants;
@@ -44,7 +45,9 @@ import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,6 +59,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A picture rendered before the pane had a width fits once laid out; one drawn above the reader's heading keeps it
 ///   in view.
 /// - Diagrams drawn later take their place without rendering the rest of the page again.
+/// - A page styled before it joined a window takes the theme chosen since, and only then is drawn again.
 class HtmlPaneTest {
 
     /// The pane is not opaque, its body colour is the transcript text, and a Java fence carries the editor's keyword
@@ -436,6 +440,43 @@ class HtmlPaneTest {
         return new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, href, null, click);
     }
 
+    /// A page styled under one theme that joins a window under another takes the rules of the one chosen, as a pane
+    /// made now has them; the listener it starts then is what keeps it there.
+    @Test
+    void aPageStyledBeforeItJoinedAWindowTakesTheThemeChosenSince() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
+            try {
+                final HtmlPane pane = new HtmlPane();
+                pane.setMarkdown("# Heading\n\nText.\n");
+                final String before = rule(pane, "td");
+                Theme.choose(Ground.FOG, Tint.SLATE_INK);
+                final HtmlPane fresh = new HtmlPane();
+                fresh.setMarkdown("# Heading\n\nText.\n");
+                assertThat(rule(fresh, "td")).as("the two grounds' rules differ").isNotEqualTo(before);
+                pane.addNotify();
+                assertThat(rule(pane, "td")).isEqualTo(rule(fresh, "td"));
+                assertThat(rule(pane, "h1")).isEqualTo(rule(fresh, "h1"));
+                pane.removeNotify();
+            } finally {
+                Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
+            }
+        });
+    }
+
+    /// A page styled under the theme still chosen keeps its document as it joins a window: no page is drawn twice.
+    @Test
+    void aPageStyledUnderTheThemeChosenIsNotDrawnAgainAsItJoinsAWindow() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            final HtmlPane pane = new HtmlPane();
+            pane.setMarkdown("# Heading\n");
+            final Document document = pane.getDocument();
+            pane.addNotify();
+            assertThat(pane.getDocument()).isSameAs(document);
+            pane.removeNotify();
+        });
+    }
+
     private static void layOut(final Container c) {
         c.doLayout();
         for (final Component child : c.getComponents()) {
@@ -443,6 +484,13 @@ class HtmlPaneTest {
                 layOut(inner);
             }
         }
+    }
+
+    /// The rule {@code selector} reads under on {@code pane}'s page, as the style sheet resolves it.
+    private static String rule(final HtmlPane pane, final String selector) {
+        final AttributeSet rule = ((HTMLDocument) pane.getDocument()).getStyleSheet().getRule(selector);
+        return String.valueOf(rule.getAttribute(CSS.Attribute.BACKGROUND_COLOR))
+                + rule.getAttribute(CSS.Attribute.COLOR);
     }
 
     private static int top(final JScrollPane scroll) throws Exception {

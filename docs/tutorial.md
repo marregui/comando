@@ -362,8 +362,8 @@ Other permission requests, such as a shell command or a file edit, appear as the
 | **Always** | L, then L again within 3 s | adds the rule to the project's `.claude/settings.local.json`; offered for a shell command or a web fetch |
 | **Deny** | D or Esc | refuses the call |
 
-The card shows the rule its answer adds, such as `Bash(git status:*)` for a command, or the edited file's folder for
-an edit, `Edit(//path/to/project/**)`. **↑** and **↓** move between cards. Whether a request reaches you depends on
+The card says in plain words what its answer adds, such as commands starting `git status`, or any edit under the edited
+file's folder. **↑** and **↓** move between cards. Whether a request reaches you depends on
 your Claude Code permission settings, which comando leaves as they are; a database write from Claude always asks.
 
 ## 7. Terminal, panels, quitting

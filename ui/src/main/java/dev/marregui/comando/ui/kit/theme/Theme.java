@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.ColorUIResource;
 
@@ -391,6 +393,19 @@ public final class Theme {
     public static Runnable onTint(final Runnable listener) {
         TINT_LISTENERS.add(listener);
         return () -> TINT_LISTENERS.remove(listener);
+    }
+
+    /**
+     * Keeps {@code body} on the look chosen while it is in no window: the look reaches windows only, so what is built
+     * before its window opens would stay on the look it was built on, the default before the saved theme is chosen.
+     * Returns what stops it.
+     */
+    public static Runnable followWithoutWindow(final JComponent body) {
+        return onTint(() -> {
+            if (SwingUtilities.getWindowAncestor(body) == null) {
+                SwingUtilities.updateComponentTreeUI(body);
+            }
+        });
     }
 
     /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement run. */

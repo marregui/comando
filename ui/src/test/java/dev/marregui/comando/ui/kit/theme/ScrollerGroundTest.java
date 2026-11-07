@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// A scroller is drawn on the panels' ground: no track or corner shows a colour of its own.
 /// - Every theme's scroll bars and the corner between them are its ground: a plain pane, a sidebar's, an editor's.
 /// - A pane made before another theme is chosen takes the new ground with the rest of the window.
+/// - What is in no window yet follows the theme by itself, until stopped.
 @ExtendWith(OnEdt.class)
 class ScrollerGroundTest {
 
@@ -56,6 +57,22 @@ class ScrollerGroundTest {
             Theme.choose(Ground.FOG, Tint.SLATE_INK);
             SwingUtilities.updateComponentTreeUI(sp);
             assertOnGround(sp, "after the change");
+        });
+    }
+
+    /// What waits for its window, as a dialog's body built at startup, takes a theme chosen meanwhile by itself, until
+    /// it is told to stop.
+    @Test
+    void aBodyWithNoWindowFollowsTheThemeChosen() throws UnsupportedLookAndFeelException {
+        onComandosLook(() -> {
+            Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
+            final JPanel body = new JPanel();
+            final Runnable stop = Theme.followWithoutWindow(body);
+            Theme.choose(Ground.FOG, Tint.SLATE_INK);
+            assertThat(body.getBackground().getRGB() & RGB).isEqualTo(Ground.FOG.color.getRGB() & RGB);
+            stop.run();
+            Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
+            assertThat(body.getBackground().getRGB() & RGB).as("stopped").isEqualTo(Ground.FOG.color.getRGB() & RGB);
         });
     }
 

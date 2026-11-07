@@ -64,6 +64,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.desktop.Platform;
@@ -92,7 +93,7 @@ import dev.marregui.comando.ui.widget.WidgetContext;
  * the card. A question's Other answer is a plain text box in the editors' font ({@link Editors#plain}), 120 characters
  * wide: Enter starts a line, no key in it answers (the Answer button does), Escape returns to the card; it holds
  * nothing once the card is answered. Questions show their options with descriptions; a plan shows rendered; an edit
- * shows its diff.
+ * shows its diff; a Write shows the file's text and its line count, as the transcript's card does.
  *
  * <p>One queue for the window, in three groups (record 131): this session's cards, the focused panel's session's, under
  * its name, first; then the other sessions' cards under each session's name, the session with the oldest card first;
@@ -155,6 +156,8 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
     /** How long a first L waits for the second. */
     static final long CONFIRM_MILLIS = 3_000;
     private static final int AGE_TICK_MILLIS = 30_000;
+    /** The length of a command's description in a card's head, as long as the summary that stands in for it. */
+    private static final int TITLE_CHARS = 160;
     private static final int MENU = Platform.menuShortcutMask();
     private static final String EMPTY = "No approvals waiting. Permission requests from every session arrive here.";
     /**
@@ -505,6 +508,8 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         private final Map<String, JTextComponent> other = new LinkedHashMap<>();
         /** The rules "For session" and "Always" add; null for anything but a tool call. */
         private final PermissionRules.Rules rules;
+        /** {@link #rules} in plain words, as the card says them; empty for anything but a tool call. */
+        private final String scope;
         /**
          * The Always confirmation: its text wrapped on lines of its own, its buttons on a row below. One flowing row
          * reports the height of one line while its buttons wrap below it, out of the card.
@@ -523,12 +528,13 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             setName("approval-" + a.id());
             final JsonNode in = Json.parse(a.inputJson());
             this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asString("")) : null;
+            this.scope = rules == null ? "" : inWords(rules);
             setLayout(new BorderLayout(0, Theme.GAP));
             setBorder(border(Theme.CARD_BORDER));
             setBackground(Theme.CARD);
             setFocusable(true);
             setAlignmentX(Component.LEFT_ALIGNMENT);
-            add(header(a), BorderLayout.NORTH);
+            add(header(a, in), BorderLayout.NORTH);
             add(body(a, in), BorderLayout.CENTER);
             add(footer(a), BorderLayout.SOUTH);
             keys();
@@ -536,7 +542,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             updateReady();
         }
 
-        private JComponent header(final Approval a) {
+        private JComponent header(final Approval a, final JsonNode in) {
             final JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
             p.setOpaque(false);
             final JLabel head = new JLabel("<html><b>" + MarkdownHtml.escape(a.session()) + "</b>&nbsp;&nbsp;" + MarkdownHtml.escape(title(a)) + "&nbsp;&nbsp;</html>");
@@ -550,6 +556,13 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             age.setForeground(Theme.MUTED);
             age.setText(ApprovalInbox.age(a.createdMillis(), clock.getAsLong()));
             p.add(head);
+            if (isWrite(a)) {
+                final JLabel lines = Plain.only(new JLabel(Diffs.writtenLines(in)));
+                lines.setName("lines");
+                lines.setForeground(Theme.MUTED);
+                lines.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, Theme.GAP));
+                p.add(lines);
+            }
             p.add(age);
             return p;
         }
@@ -568,6 +581,10 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 // what the agent would weaken, then the connection as it would be saved
                 case CONNECTION -> code(Json.pretty(in), "json", 10);
                 case TOOL -> {
+                    if (isWrite(a)) {
+                        // sixteen lines stand as tall as the tallest diff, so a Write's card keeps its height
+                        yield code(Diffs.writtenText(in), extension(in.path("file_path").asString("")), 16);
+                    }
                     final Diffs.Edit edit = Diffs.edit(a.toolName(), in);
                     if (edit != null) {
                         yield diff(edit.path(), edit.before(), edit.after());
@@ -700,9 +717,9 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             p.add(buttons);
             confirm.setVisible(false); // shown by a first L or a click on Always; Escape reads it
             if (a.kind() == ApprovalKind.TOOL) {
-                final JTextArea scope = muted((rules.persistable() ? "Always: " : "For session: ") + rules.text());
-                scope.setName("rule");
-                p.add(scope);
+                final JTextArea line = muted((rules.persistable() ? "Always: " : "For session: ") + scope);
+                line.setName("rule");
+                p.add(line);
             }
             if (a.kind() == ApprovalKind.TOOL && rules.persistable()) {
                 confirmText.setName("confirm");
@@ -790,7 +807,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 return;
             }
             armedAt = now;
-            showConfirm("Press L again to always allow " + rules.text());
+            showConfirm("Press L again to always allow " + scope);
             if (disarm != null) {
                 disarm.stop();
             }
@@ -805,7 +822,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
 
         private void alwaysClicked() {
             armedByClick = true;
-            showConfirm("Always allow " + rules.text() + " in this project?");
+            showConfirm("Always allow " + scope + " in this project?");
         }
 
         private void showConfirm(final String text) {
@@ -1091,8 +1108,94 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
             case CONNECTION -> "wants to change connection " + a.summary();
-            case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();
+            case TOOL -> toolTitle(a, Json.parse(a.inputJson()));
         };
+    }
+
+    /** What the tool call {@code a} wants, each thing said once: a file by its path, a command by itself. */
+    private static String toolTitle(final Approval a, final JsonNode in) {
+        final String tool = a.toolName();
+        final String path = switch (tool) {
+            case "Write", "Edit", "MultiEdit" -> in.path("file_path").asString("").strip();
+            case "NotebookEdit" -> in.path("notebook_path").asString("").strip();
+            default -> "";
+        };
+        if (!path.isEmpty()) {
+            return (tool.equals("Write") ? "wants to write " : "wants to edit ") + Labels.shortPath(path);
+        }
+        if (tool.equals("Bash")) {
+            // the command, never the description: it is what runs, and the agent's own words about it could be wrong
+            return "wants to run: " + Clip.keepStart(a.summary(), TITLE_CHARS);
+        }
+        final String rest = withoutToolWord(tool, a.summary());
+        return "wants to use " + tool + (rest.isEmpty() ? "" : ": " + Labels.shortPath(rest));
+    }
+
+    /** {@code summary} without its first word when the tool's name ends in it: "Read /a", "Fetch https://a.org". */
+    private static String withoutToolWord(final String tool, final String summary) {
+        final int space = summary.indexOf(' ');
+        final String first = space < 0 ? summary : summary.substring(0, space);
+        if (first.isEmpty() || !tool.endsWith(first)) {
+            return summary;
+        }
+        return space < 0 ? "" : summary.substring(space + 1);
+    }
+
+    /** What {@code rules} allow in plain words, joined as {@link PermissionRules.Rules#text} joins them. */
+    private static String inWords(final PermissionRules.Rules rules) {
+        return String.join(", ", rules.rules().stream().map(ApprovalInbox::inWords).toList());
+    }
+
+    /** What {@code rule} allows in plain words; a shape with no words prints as the rule. */
+    private static String inWords(final PermissionRules.Rule rule) {
+        final String content = rule.ruleContent();
+        return switch (rule.toolName()) {
+            case "Edit" -> filesInWords("any edit", rule);
+            case "Read" -> filesInWords("any read", rule);
+            case "Bash" -> {
+                if (content.isEmpty()) {
+                    yield "any command";
+                }
+                yield content.endsWith(":*")
+                        ? "commands starting \"" + content.substring(0, content.length() - 2) + "\""
+                        : "the command \"" + content + "\"";
+            }
+            case "WebFetch" -> {
+                if (content.isEmpty()) {
+                    yield "any fetch";
+                }
+                yield content.startsWith("domain:")
+                        ? "any fetch from " + content.substring(content.indexOf(':') + 1)
+                        : rule.text();
+            }
+            default -> rule.text();
+        };
+    }
+
+    /** {@code any}, narrowed to the folder a rule of {@code //abs/dir/**} or {@code ./dir/**} names. */
+    private static String filesInWords(final String any, final PermissionRules.Rule rule) {
+        final String content = rule.ruleContent();
+        if (content.isEmpty()) {
+            return any;
+        }
+        if (!content.endsWith("/**")) {
+            return rule.text();
+        }
+        final String folder = content.substring(0, content.length() - 2);
+        if (folder.startsWith("//")) {
+            return any + " under " + Labels.shortPath(folder.substring(1));
+        }
+        return folder.startsWith("./") ? any + " under " + folder : rule.text();
+    }
+
+    private static boolean isWrite(final Approval a) {
+        return a.kind() == ApprovalKind.TOOL && a.toolName().equals("Write");
+    }
+
+    /** What follows the last dot of {@code path}'s file name, or the whole name: what {@link #code} colours by. */
+    private static String extension(final String path) {
+        final String name = path.substring(path.lastIndexOf('/') + 1);
+        return name.substring(name.lastIndexOf('.') + 1);
     }
 
     private static JButton button(final String text, final String icon, final Runnable action, final boolean primary) {

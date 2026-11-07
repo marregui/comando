@@ -63,7 +63,10 @@ public final class StatusBar {
 
     private final JPanel root = new JPanel(new BorderLayout());
     private final JLabel notice = new JLabel(" ");
+    /** The count at the bar's right: what runs and waits, muted, then what waits for approval, in attention colour. */
+    private final JPanel count = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
     private final JLabel work = new JLabel();
+    private final JLabel approvals = new JLabel();
     /** Claude's plan usage, then Codex's, each a label of its own. */
     private final Usage claudeUsage = new Usage(PlanUsage.CLAUDE, "Claude Code's /usage");
     private final Usage codexUsage = new Usage(PlanUsage.CODEX, "codex app-server");
@@ -79,7 +82,7 @@ public final class StatusBar {
         Usage(final String provider, final String source) {
             this.source = source;
             label.setVisible(false);
-            label.getAccessibleContext().setAccessibleName(provider.equals(PlanUsage.CLAUDE) ? "Plan usage" : provider + " plan usage");
+            label.getAccessibleContext().setAccessibleName(provider + " plan usage");
         }
     }
 
@@ -97,6 +100,8 @@ public final class StatusBar {
     private List<Notice> history = List.of();
     private Notice shown = Notice.NONE;
     private final Targets targets;
+    /** What a click on the count does; a test replaces it, the list needing a window to open on. */
+    Runnable workOpener = this::showWork;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
 
@@ -112,7 +117,9 @@ public final class StatusBar {
         final JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
         right.add(claudeUsage.label);
         right.add(codexUsage.label);
-        right.add(work);
+        count.add(work);
+        count.add(approvals);
+        right.add(count);
         notice.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         notice.getAccessibleContext().setAccessibleName("Status");
         notice.addMouseListener(new MouseAdapter() {
@@ -141,17 +148,22 @@ public final class StatusBar {
         root.add(notice, BorderLayout.CENTER);
         root.add(right, BorderLayout.EAST);
         work.setForeground(Theme.MUTED);
-        work.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        work.setToolTipText("Click to see who is working, and on what");
-        work.getAccessibleContext().setAccessibleName("Work");
-        work.addMouseListener(new MouseAdapter() {
+        approvals.setForeground(Theme.ATTENTION);
+        approvals.setVisible(false);
+        final MouseAdapter opensWork = new MouseAdapter() {
             @Override
             public void mouseClicked(final MouseEvent e) {
                 if (SwingUtilities.isLeftMouseButton(e) && !e.isControlDown()) {
-                    showWork();
+                    workOpener.run();
                 }
             }
-        });
+        };
+        for (final JLabel part : List.of(work, approvals)) {
+            part.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            part.setToolTipText("Click to see who is working, and on what");
+            part.getAccessibleContext().setAccessibleName("Work");
+            part.addMouseListener(opensWork);
+        }
     }
 
     public JComponent component() {
@@ -165,11 +177,13 @@ public final class StatusBar {
     /** At or above this much, as a danger. */
     static final int USAGE_DANGER = 90;
     private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
+    /** The window that resets within hours; a read may not have it. */
+    private static final String SESSION_WINDOW = "Session";
 
     /**
      * Shows a plan's usage limits, Claude's or Codex's, each on its own label: each window's share used, and when the
-     * session window resets; the tooltip has every reset time. A failed read keeps the last good one, muted, with the
-     * reason in the tooltip; with none, it shows nothing.
+     * session window resets; the tooltip has every reset time, and says so when the plan's tool reports no session
+     * window. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, shows nothing.
      */
     public void planUsage(final PlanUsage read) {
         final Usage u = read.provider().equals(PlanUsage.CODEX) ? codexUsage : claudeUsage;
@@ -189,6 +203,9 @@ public final class StatusBar {
         for (final PlanUsage.Window w : u.last.windows()) {
             tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? "" : ", resets " + w.resets())))
                     .append("<br>");
+        }
+        if (u.last.windows().stream().noneMatch(w -> w.name().equals(SESSION_WINDOW))) {
+            tip.append(MarkdownHtml.escape(u.source + " reports no session window")).append("<br>");
         }
         tip.append(MarkdownHtml.escape("Read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(u.last.readAtMillis()))
                 + " from " + u.source + ", every 5 minutes"));
@@ -215,18 +232,18 @@ public final class StatusBar {
     }
 
     /**
-     * "Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the session's reset is the one that comes within hours.
-     * Codex's starts with its name: "Codex Session 4% (resets 12:06) · Week 3%".
+     * "Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the plan's name, then each window; the session's
+     * reset is the one that comes within hours. Codex's reads the same: "Codex Session 4% (resets 12:06) · Week 3%".
      */
     static String usageText(final PlanUsage u) {
-        final StringBuilder sb = new StringBuilder(u.provider().equals(PlanUsage.CLAUDE) ? "" : u.provider() + " ");
+        final StringBuilder sb = new StringBuilder(u.provider() + " ");
         final int start = sb.length();
         for (final PlanUsage.Window w : u.windows()) {
             if (sb.length() > start) {
                 sb.append(" · ");
             }
             sb.append(w.name()).append(' ').append(w.percent()).append('%');
-            if (w.name().equals("Session")) {
+            if (w.name().equals(SESSION_WINDOW)) {
                 final String at = resetTime(w.resets());
                 if (!at.isEmpty()) {
                     sb.append(" (resets ").append(at).append(')');
@@ -413,7 +430,7 @@ public final class StatusBar {
         return list;
     }
 
-    /** The count at the bar's right; for tests. */
+    /** The muted part of the count; for tests. */
     JLabel workLabel() {
         return work;
     }
@@ -427,7 +444,7 @@ public final class StatusBar {
         scroll.setPreferredSize(new Dimension(WORK_WIDTH, Math.min(360, Math.max(40, rows * 22 + 6))));
         menu.add(scroll);
         final int height = menu.getPreferredSize().height;
-        menu.show(work, work.getWidth() - WORK_WIDTH, -height);
+        menu.show(count, count.getWidth() - WORK_WIDTH, -height);
     }
 
     /** The notice with its time and its whole text, for the tooltip. */
@@ -491,10 +508,9 @@ public final class StatusBar {
         if (waiting > 0) {
             w.append(w.isEmpty() ? "" : " · ").append(waiting).append(waiting == 1 ? " session" : " sessions").append(" waiting on background work");
         }
-        if (!s.approvals().isEmpty()) {
-            w.append(w.isEmpty() ? "" : " · ").append(s.approvals().size()).append(" waiting for approval");
-        }
-        work.setText(w.toString());
-        work.setForeground(s.approvals().isEmpty() ? Theme.MUTED : Theme.ATTENTION);
+        final int asked = s.approvals().size();
+        work.setText(w + (asked > 0 && !w.isEmpty() ? " · " : ""));
+        approvals.setText(asked + " waiting for approval");
+        approvals.setVisible(asked > 0);
     }
 }

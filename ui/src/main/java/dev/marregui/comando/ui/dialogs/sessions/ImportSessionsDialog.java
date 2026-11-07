@@ -70,6 +70,7 @@ public final class ImportSessionsDialog {
         this.intents = intents;
         this.catalogue = catalogue;
         this.owner = owner;
+        Theme.followWithoutWindow(content);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         // titles and prompts come from stored conversations: shown as text, never as HTML
         for (final Class<?> type : new Class<?>[]{Object.class, String.class}) {

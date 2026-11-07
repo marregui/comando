@@ -78,8 +78,9 @@ import dev.marregui.comando.ui.widgets.editor.CommandEditor;
  * as a document from the Files tab, is coloured as the file's language, and a Markdown one opens rendered. Such a panel
  * switches between the editor and the rendered text with its header button, which names the other view: Preview while
  * editing, Edit while previewing. An HTML file opens as its text, with a button that opens it in the browser. A link to
- * a file on this machine, of any kind, double-clicked in the rendered text, opens that file in a panel (record 94). A
- * production connection frames the panel in red.
+ * a file on this machine, of any kind, double-clicked in the rendered text, opens that file in a panel (record 94).
+ * Rendered, there is no text to run: the connection, Run and Clear leave the header, and Stop stays while something
+ * runs. A production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -130,6 +131,10 @@ public final class EditorPanel extends JPanel {
     static final int OUTLINE_WAIT_MILLIS = 250;
     static final int OUTLINE_WIDTH = 220;
     private boolean previewing;
+    /** Whether the panel has a connection, whose name shows beside the toggle on the text. */
+    private boolean connectionNamed;
+    /** Whether the panel's query or its session's turn is active: the one thing a rendered page keeps Stop for. */
+    private boolean running;
     /** The rendered Markdown, as the comparison window renders it too. */
     private final RenderedMarkdown preview = new RenderedMarkdown();
     private final HtmlPane rendered = preview.pane();
@@ -773,6 +778,7 @@ public final class EditorPanel extends JPanel {
         }
         ((CardLayout) center.getLayout()).show(center, on ? PREVIEW : EDIT);
         showClear();
+        showTextTools();
         if (!on) {
             editor.requestFocus();
         }
@@ -790,8 +796,16 @@ public final class EditorPanel extends JPanel {
 
     /** Clear is offered for the panel's own text while it is edited, and does something only when there is text. */
     private void showClear() {
-        clear.setVisible(!document);
+        clear.setVisible(!document && !previewing);
         clear.setEnabled(!locked && !previewing && editor.area().getDocument().getLength() > 0);
+    }
+
+    /** The connection and Run work on the text, which a rendered page lacks; Stop stays while something runs. */
+    private void showTextTools() {
+        connectionToggle.setVisible(!previewing);
+        connection.setVisible(!previewing && connectionNamed);
+        run.setVisible(!previewing);
+        stop.setVisible(!previewing || running);
     }
 
     /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else none. */
@@ -898,8 +912,11 @@ public final class EditorPanel extends JPanel {
         return panel;
     }
 
+    /** Runs the selection or the block under the caret; a rendered page has neither. */
     public void runSelection(final Target target) {
-        run(editor.runText(), target);
+        if (!previewing) {
+            run(editor.runText(), target);
+        }
     }
 
     private void run(final String text, final Target target) {
@@ -922,21 +939,22 @@ public final class EditorPanel extends JPanel {
             final String name = cut(cs.name(), NAME_CHARS);
             connectionToggle.setToolTipText(cut(name + " " + statusWord(cs.status()) + "; click to " + (cs.status().isUsable() ? "disconnect" : "connect")
                     + "; its name binds another" + (cs.error().isEmpty() ? "" : " · " + cs.error()), TIP_CHARS));
-            connection.setVisible(true);
             connection.setText(name + " ▾");
             connection.setToolTipText(cut(cs.spec().label() + "; click to bind another connection or unbind", TIP_CHARS));
             setBorder(cs.spec().prod() ? BorderFactory.createLineBorder(Theme.DANGER, 2) : BorderFactory.createEmptyBorder(2, 2, 2, 2));
         } else {
             connectionToggle.setIcon(Icons.get("database-off"));
             connectionToggle.setToolTipText("No connection; click to bind one");
-            connection.setVisible(false);
             setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
         }
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
         // with no open database, the text is prompts and notes: nothing is coloured as SQL
         editor.sqlLive(c.map(cs -> cs.status().isUsable()).orElse(false));
-        final boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);
+        running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false)
+                || x.map(SessionState::isBusy).orElse(false);
         stop.setEnabled(running);
+        connectionNamed = c.isPresent();
+        showTextTools();
         lock(x.map(SessionState::isCheckpointing).orElse(false));
         s.runOf(p.id()).filter(r -> r.status() == RunStatus.FAILED && r.requestId() != errorMarked).ifPresent(r -> {
             errorMarked = r.requestId();

@@ -79,6 +79,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   version
 /// - a connection row matches a session row, its icon connects, its name binds, its ⓘ shows the card, its details hide
 ///   the password
+/// - the band follows the focused panel: its session, its connection, the panel itself in the panels without a session
 /// - each row is kept per session so its HTML is parsed once
 /// - CLI versions compare by number, a missing part as zero
 class SessionsSidebarTest {
@@ -590,6 +591,62 @@ class SessionsSidebarTest {
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Running; click to stop the session");
     }
 
+    /// Each list's band is on the row of the focused panel: its session, even for a document, its connection, and the
+    /// panel itself among the panels without a session; a list with no such row has no band. Moving it dispatches
+    /// nothing. A row selected by hand keeps the band over later renders, until the focus moves or the focused panel is
+    /// bound to something else.
+    @Test
+    void theBandFollowsTheFocusedPanelAndARowSelectedByHandHoldsItUntilTheNextFocus() throws Exception {
+        final PanelState a = new PanelState(new PanelId("a"), "a", "db", "one");
+        final PanelState b = new PanelState(new PanelId("b"), "b", "", "two");
+        final PanelState loose = new PanelState(new PanelId("c"), "loose", "", "");
+        final PanelState document = new PanelState(new PanelId("d"), "notes.md", "", "three", true);
+        final List<ConnectionState> dbs = List.of(ConnectionState.closed(ConnectionSpec.questDbDefaults("db")),
+                ConnectionState.closed(ConnectionSpec.questDbDefaults("other")));
+        final List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("one", "/w")),
+                SessionState.closed(SessionSpec.fresh("two", "/w")),
+                SessionState.closed(SessionSpec.fresh("three", "/w")));
+        final AppState base = AppState.initial(List.of(a, b, loose, document), dbs, sessions);
+        final List<Intent> sent = new CopyOnWriteArrayList<>();
+        final SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(sent::add, new Dialogs(), () -> {
+            });
+            s[0].render(base);
+        });
+        final JList<?> list = find(s[0].component(), JList.class,
+                l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        final JList<?> connections = find(s[0].component(), JList.class,
+                l -> "Connections".equals(l.getAccessibleContext().getAccessibleName()));
+        final JList<?> panels = s[0].loosePanels().list();
+        assertThat(bands(list, connections, panels)).as("from the first render").containsExactly("one", "db", "");
+
+        SwingUtilities.invokeAndWait(() -> s[0].render(base.withFocused(b.id())));
+        assertThat(bands(list, connections, panels)).as("no connection, no band").containsExactly("two", "", "");
+        SwingUtilities.invokeAndWait(() -> s[0].render(base.withFocused(loose.id())));
+        assertThat(bands(list, connections, panels)).as("no session, no band").containsExactly("", "", "loose");
+        SwingUtilities.invokeAndWait(() -> s[0].render(base.withFocused(document.id())));
+        assertThat(bands(list, connections, panels)).as("a document's session").containsExactly("three", "", "");
+
+        final AppState back = base.withFocused(a.id());
+        SwingUtilities.invokeAndWait(() -> {
+            s[0].render(back);
+            list.setSelectedIndex(rowIndex(list, "two"));
+            connections.setSelectedIndex(1);
+            s[0].render(back);
+        });
+        assertThat(bands(list, connections, panels)).as("by hand, the focus unmoved")
+                .containsExactly("two", "other", "");
+        SwingUtilities.invokeAndWait(() -> s[0].render(base.withFocused(b.id())));
+        assertThat(bands(list, connections, panels)).as("the next focus ends it").containsExactly("two", "", "");
+
+        final PanelState rebound = new PanelState(b.id(), "b", "other", "three");
+        SwingUtilities.invokeAndWait(() -> s[0].render(AppState.initial(List.of(rebound, a), dbs, sessions)));
+        assertThat(bands(list, connections, panels)).as("bound to others, the focus unmoved")
+                .containsExactly("three", "other", "");
+        assertThat(sent).as("the band moves no state").isEmpty();
+    }
+
     /// Sessions sort running first, then by name ignoring case; dragging a row sends `OrderSessions` and keeps that
     /// order, also when a session starts, until the Sort item restores it; a drop in place sends nothing.
     @Test
@@ -1017,6 +1074,23 @@ class SessionsSidebarTest {
         SwingUtilities.invokeAndWait(() -> {
             for (int i = 0; i < list.getModel().getSize(); i++) {
                 out.add(((SessionState) list.getModel().getElementAt(i)).name());
+            }
+        });
+        return out;
+    }
+
+    /** What each list's band is on: a session's or a connection's name, a panel's title, or empty for none. */
+    private static List<String> bands(final JList<?>... lists) throws Exception {
+        final List<String> out = new CopyOnWriteArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            for (final JList<?> list : lists) {
+                out.add(switch (list.getSelectedValue()) {
+                    case null -> "";
+                    case SessionState x -> x.name();
+                    case ConnectionState c -> c.name();
+                    case PanelsWithoutSession.Row r -> r.panel().title();
+                    default -> throw new AssertionError(list.getSelectedValue());
+                });
             }
         });
         return out;

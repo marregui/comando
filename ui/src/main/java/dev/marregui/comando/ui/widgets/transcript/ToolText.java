@@ -83,8 +83,14 @@ public final class ToolText {
         return tool;
     }
 
+    /** What a card is titled by: a Bash call's {@code description} when it has one, else its {@link #summary}. */
+    public static String title(final String tool, final JsonNode in) {
+        final String description = tool.equals("Bash") ? in.path("description").asString("") : "";
+        return description.isBlank() ? summary(tool, in) : oneLine(description);
+    }
+
     public static String summary(final String tool, final JsonNode in) {
-        String s = switch (tool) {
+        return oneLine(switch (tool) {
             case "Bash" -> in.path("command").asString("");
             case "Read", "Edit", "MultiEdit", "Write" -> in.path("file_path").asString("");
             case "NotebookEdit" -> in.path("notebook_path").asString("");
@@ -98,13 +104,13 @@ public final class ToolText {
             case "AskUserQuestion" -> in.path("questions").path(0).path("question").asString("");
             case "ExitPlanMode" -> "plan ready";
             default -> firstValue(in);
-        };
-        s = s.strip();
+        });
+    }
+
+    private static String oneLine(final String text) {
+        final String s = text.strip();
         final int eol = s.indexOf('\n');
-        if (eol >= 0) {
-            s = s.substring(0, eol) + " …";
-        }
-        return Clip.keepStart(s, SUMMARY_CHARS);
+        return Clip.keepStart(eol < 0 ? s : s.substring(0, eol) + " …", SUMMARY_CHARS);
     }
 
     private static String firstValue(final JsonNode in) {
