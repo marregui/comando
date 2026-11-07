@@ -351,7 +351,7 @@ answers.
 |---|---|---|
 | tool | Bash, Edit, Write, an MCP tool | Allow once (⏎ or A), For session (S), Always (L twice; Bash and WebFetch only), Deny (D or Esc) |
 | question | `AskUserQuestion` | Answer (⏎ or A, once every question has one), Skip (D or Esc); each question's Other answer is a plain text box in the editors' font, five lines of 120 characters (⏎ a new line; undo, redo, cut, copy, paste, select all; only Answer sends it), gone with the card; answers return in `updatedInput.answers` |
-| plan | `ExitPlanMode` | Approve plan (⏎ or A), "Approve, auto-accept edits" (`setMode` `acceptEdits` for the session), Keep planning (D or Esc) |
+| plan | `ExitPlanMode` | Approve plan (⏎ or A), "Approve, auto-accept edits" (`setMode` `acceptEdits` for the session), Keep planning (D or Esc); in a session running in `bypassPermissions` (the mode it reported; before that, or while it reports `plan`, the kit's), both approvals send `setMode` `bypassPermissions`, since accept edits would ask for more |
 | SQL write | `db_run_sql`, not read-only | Run (⏎ or A), Deny (D or Esc); the card names the connection and statement |
 | connection | `connection_save` clearing `production` or lowering the TLS mode | Allow (⏎ or A), Deny (D or Esc), by the user only: `approval_answer` refuses it for every agent; the card names the connection, what would weaken, and the connection as it would be saved ([§4.2](#42-sql-from-claude)) |
 

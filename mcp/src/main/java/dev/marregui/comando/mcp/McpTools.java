@@ -41,6 +41,7 @@ import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
+import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -65,6 +66,8 @@ public final class McpTools {
 
     private static final System.Logger LOG = System.getLogger(McpTools.class.getName());
     static final String APPROVE = "approve";
+    private static final String BYPASS = "bypassPermissions";
+    private static final String PLAN_MODE = "plan";
     static final int MAX_SQL_ROWS = 200;
     static final int MAX_RESULT_CHARS = 64 * 1024;
     /** Blocks {@code session_read} shows without a cursor: the end of the transcript. */
@@ -238,7 +241,7 @@ public final class McpTools {
         final ApprovalKind kind = ApprovalKind.ofTool(tool);
         final ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asString(""));
         audit.record(session, "approval", tool, redacted(input), decision.toString());
-        return Outcome.ok(permissionResult(tool, (ObjectNode) input, decision));
+        return Outcome.ok(permissionResult(session, tool, (ObjectNode) input, decision));
     }
 
     /** Puts a card in the inbox and waits for the user's answer, or denies at the deadline. */
@@ -316,8 +319,18 @@ public final class McpTools {
         }
     }
 
+    /**
+     * Whether the session runs in bypass. Claude Code ignores a switch to bypass in a session not launched in it, so
+     * the mode the session reported decides; one that reported nothing yet, or the plan it is in, goes by the kit.
+     */
+    private boolean runsInBypass(final String session) {
+        final String reported = state.get().session(session).map(s -> s.info().permissionMode()).orElse("");
+        final boolean unknown = reported.isEmpty() || PLAN_MODE.equals(reported);
+        return BYPASS.equals(unknown ? SessionKind.INSTANCE.defaults().permissionMode() : reported);
+    }
+
     /** The JSON Claude Code expects back from a permission-prompt tool. */
-    String permissionResult(final String tool, final ObjectNode input, final ApprovalDecision decision) {
+    String permissionResult(final String session, final String tool, final ObjectNode input, final ApprovalDecision decision) {
         final ObjectNode r = json.createObjectNode();
         switch (decision) {
             case ApprovalDecision.Deny d -> {
@@ -334,14 +347,18 @@ public final class McpTools {
             case ApprovalDecision.Allow a -> {
                 r.put("behavior", "allow");
                 r.set("updatedInput", input);
-                if (a.scope() == ApprovalDecision.Scope.ONCE) {
+                final boolean plan = ApprovalKind.ofTool(tool) == ApprovalKind.PLAN;
+                // accept edits asks for more than bypass does, so a session in bypass goes back to it
+                final boolean keepsBypass = plan && runsInBypass(session);
+                if (a.scope() == ApprovalDecision.Scope.ONCE && !keepsBypass) {
                     break;
                 }
                 final ObjectNode update = r.putArray("updatedPermissions").addObject();
-                if (ApprovalKind.ofTool(tool) == ApprovalKind.PLAN) {
-                    // a plan approved beyond once sets the session to accept edits, as the terminal's third choice does
+                if (plan) {
+                    // a plan approved beyond once sets the session to accept edits, as the terminal's third choice does;
+                    // a session in bypass gets that mode back on either approval
                     update.put("type", "setMode");
-                    update.put("mode", "acceptEdits");
+                    update.put("mode", keepsBypass ? BYPASS : "acceptEdits");
                     update.put("destination", "session");
                     break;
                 }

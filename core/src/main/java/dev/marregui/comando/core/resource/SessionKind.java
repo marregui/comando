@@ -48,11 +48,17 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         }
     }
 
+    /** Written by the application's start, before the server; read by the session dialog on the EDT and on MCP's virtual threads. */
     private volatile Defaults defaults = Defaults.NONE;
     /** The model Claude Code chose for a session that named none, as a session's start reported it; empty until then. */
     private volatile String cliModel = "";
 
     private SessionKind() {
+    }
+
+    /** The kit's defaults, as the application read them; {@link Defaults#NONE} until then. */
+    public Defaults defaults() {
+        return defaults;
     }
 
     /** The kit's defaults, which the dialog names beside Model and Effort, and its permission mode, in its context line. */

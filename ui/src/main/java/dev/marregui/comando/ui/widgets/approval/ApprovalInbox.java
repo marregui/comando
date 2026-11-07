@@ -684,7 +684,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 case PLAN -> {
                     buttons.add(button("Approve plan  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
                     final JButton edits = button("Approve, auto-accept edits", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
-                    edits.setToolTipText("Approve the plan and accept file edits for the rest of this session");
+                    edits.setToolTipText("Approve the plan and accept file edits for the rest of this session; a session in bypass stays in bypass");
                     buttons.add(edits);
                     buttons.add(button("Keep planning", "deny", this::deny, false));
                 }

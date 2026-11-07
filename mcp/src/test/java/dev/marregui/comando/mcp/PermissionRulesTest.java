@@ -11,6 +11,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.core.resource.SessionKind;
+import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.States;
@@ -214,7 +216,7 @@ class PermissionRulesTest {
     void theScopeButtonsSendTheDerivedRuleToItsDestination() throws Exception {
         final McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         final ObjectNode input = json.createObjectNode().put("file_path", "/a/b/c.java").put("old_string", "x").put("new_string", "y");
-        final JsonNode session = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
+        final JsonNode session = json.readTree(tools.permissionResult("work", "Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
         final JsonNode update = session.path("updatedPermissions").path(0);
         assertThat(update.path("type").asString()).isEqualTo("addRules");
         assertThat(update.path("destination").asString()).isEqualTo("session");
@@ -222,15 +224,15 @@ class PermissionRulesTest {
         assertThat(update.path("rules").path(0).path("ruleContent").asString()).isEqualTo("//a/b/**");
 
         // an Always for an MCP tool or an edit stays in the session, not in the local settings
-        final JsonNode always = json.readTree(tools.permissionResult("mcp__comando__ui_plot", json.createObjectNode(),
+        final JsonNode always = json.readTree(tools.permissionResult("work", "mcp__comando__ui_plot", json.createObjectNode(),
                 new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
         final JsonNode wide = always.path("updatedPermissions").path(0);
         assertThat(wide.path("destination").asString()).isEqualTo("session");
         assertThat(wide.path("rules").path(0).has("ruleContent")).isFalse();
-        final JsonNode edit = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
+        final JsonNode edit = json.readTree(tools.permissionResult("work", "Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
         assertThat(edit.path("updatedPermissions").path(0).path("destination").asString()).isEqualTo("session");
 
-        final JsonNode compound = json.readTree(tools.permissionResult("Bash", json.createObjectNode().put("command", "git status && npm test"),
+        final JsonNode compound = json.readTree(tools.permissionResult("work", "Bash", json.createObjectNode().put("command", "git status && npm test"),
                 new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
         final JsonNode saved = compound.path("updatedPermissions").path(0);
         assertThat(saved.path("destination").asString()).isEqualTo("localSettings");
@@ -238,8 +240,50 @@ class PermissionRulesTest {
         assertThat(saved.path("rules").path(0).path("ruleContent").asString()).isEqualTo("git status:*");
         assertThat(saved.path("rules").path(1).path("ruleContent").asString()).isEqualTo("npm test:*");
 
-        final JsonNode once = json.readTree(tools.permissionResult("Bash", json.createObjectNode().put("command", "ls"), ApprovalDecision.allowOnce()));
+        final JsonNode once = json.readTree(tools.permissionResult("work", "Bash", json.createObjectNode().put("command", "ls"), ApprovalDecision.allowOnce()));
         assertThat(once.has("updatedPermissions")).isFalse();
+    }
+
+    /// A kit in bypass keeps it through a plan's approval, once or for the session: accept edits would ask for every
+    /// write under a protected folder, the kit's own among them.
+    @Test
+    void aPlanApprovedInABypassKitKeepsTheSessionInBypass() throws Exception {
+        final McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        final ObjectNode plan = json.createObjectNode().put("plan", "1. do it");
+        SessionKind.INSTANCE.defaults(new SessionKind.Defaults("", "", "bypassPermissions"));
+        try {
+            for (final ApprovalDecision decision : List.of(ApprovalDecision.allowOnce(),
+                    new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION))) {
+                final JsonNode r = json.readTree(tools.permissionResult("work", "ExitPlanMode", plan, decision));
+                assertThat(r.path("updatedPermissions")).hasSize(1);
+                assertThat(r.path("updatedPermissions").path(0).path("mode").asString()).isEqualTo("bypassPermissions");
+            }
+            final JsonNode bash = json.readTree(tools.permissionResult("work", "Bash", json.createObjectNode().put("command", "ls"),
+                    ApprovalDecision.allowOnce()));
+            assertThat(bash.has("updatedPermissions")).isFalse();
+        } finally {
+            SessionKind.INSTANCE.defaults(SessionKind.Defaults.NONE);
+        }
+    }
+
+    /// Claude Code ignores a switch to bypass in a session not launched in it, so the mode the session reported decides
+    /// over the kit's: a project that overrides the kit keeps accept edits, and a session reporting the plan it is in
+    /// goes by the kit.
+    @Test
+    void theModeTheSessionReportedDecidesOverTheKits() throws Exception {
+        final ObjectNode plan = json.createObjectNode().put("plan", "1. do it");
+        final ApprovalDecision forSession = new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION);
+        SessionKind.INSTANCE.defaults(new SessionKind.Defaults("", "", "bypassPermissions"));
+        try {
+            final JsonNode project = json.readTree(reporting("default").permissionResult("work", "ExitPlanMode", plan, forSession));
+            assertThat(project.path("updatedPermissions").path(0).path("mode").asString()).isEqualTo("acceptEdits");
+            final JsonNode once = json.readTree(reporting("default").permissionResult("work", "ExitPlanMode", plan, ApprovalDecision.allowOnce()));
+            assertThat(once.has("updatedPermissions")).isFalse();
+            final JsonNode planning = json.readTree(reporting("plan").permissionResult("work", "ExitPlanMode", plan, forSession));
+            assertThat(planning.path("updatedPermissions").path(0).path("mode").asString()).isEqualTo("bypassPermissions");
+        } finally {
+            SessionKind.INSTANCE.defaults(SessionKind.Defaults.NONE);
+        }
     }
 
     /// Approving `ExitPlanMode` for the session allows it with the plan unchanged and one update setting the session's
@@ -248,7 +292,7 @@ class PermissionRulesTest {
     void aPlanApprovedWithEditsSwitchesTheSessionToAcceptEdits() throws Exception {
         final McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         final ObjectNode plan = json.createObjectNode().put("plan", "1. do it");
-        final JsonNode r = json.readTree(tools.permissionResult("ExitPlanMode", plan, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
+        final JsonNode r = json.readTree(tools.permissionResult("work", "ExitPlanMode", plan, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
         assertThat(r.path("behavior").asString()).isEqualTo("allow");
         assertThat(r.path("updatedInput").path("plan").asString()).isEqualTo("1. do it");
         assertThat(r.path("updatedPermissions")).hasSize(1);
@@ -257,7 +301,13 @@ class PermissionRulesTest {
         assertThat(update.path("mode").asString()).isEqualTo("acceptEdits");
         assertThat(update.path("destination").asString()).isEqualTo("session");
 
-        final JsonNode approved = json.readTree(tools.permissionResult("ExitPlanMode", plan, ApprovalDecision.allowOnce()));
+        final JsonNode approved = json.readTree(tools.permissionResult("work", "ExitPlanMode", plan, ApprovalDecision.allowOnce()));
         assertThat(approved.has("updatedPermissions")).isFalse();
+    }
+
+    private static McpTools reporting(final String mode) {
+        final SessionInfo info = new SessionInfo("conversation", "opus", "/w", "2.1", mode, List.of());
+        return new McpTools(i -> { }, () -> States.twoPanels().withSession("work", s -> s.withInfo(info)), new TranscriptRegistry(), null,
+                AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
     }
 }
