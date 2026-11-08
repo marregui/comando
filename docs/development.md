@@ -83,6 +83,10 @@ runs one JVM per test class, one at a time, as its windows share one desktop.
 | `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |
 | `LayoutKeeperUiTest` | the sidebar's width kept in `settings.json` comes back at the start (a value that is no number gives the default); a session's arrangement hides the sidebar to its rail and shows it again at its kept width; the width left is saved a second after the window last changed size and the next window opens with it |
 | `QuitTeardownUiTest` | a step of the window's teardown or close that throws stops neither the quit nor the closing of the window's errands |
+| `AttentionUiTest` | a turn that ends behind another panel puts its session under To read in the Sessions tab and the work list; a click on the line focuses its panel and the mark goes ([record 136](adr/0136-finished-work-waits-to-be-read.md)) |
+| `ReportFirstUiTest` | a turn of tools and a report folds to one row; a click opens it and a second closes it; a find opens a closed row and closes it when it moves on; asking for the report puts it at the view's top ([record 137](adr/0137-a-turn-reads-as-its-report.md)) |
+| `SubjectUiTest` | a session in Claude Code's folder shows no branch; a turn's writes put branch and repository on the session bar and the ticket on the card, and the row stays one line ([record 138](adr/0138-a-session-shows-what-it-writes-to.md)) |
+| `SearchUiTest` | ⌘⇧F opens the window with the keyboard in its field and typing lists a previewed hit; ⏎ opens the file at its line and keeps the window, Esc gives the keyboard back; the selection fills the field; the toggles decide what is searched; the Find menu and the palette hold the command; a conversation a session holds opens there with the transcript's Find on the query, another offers Import ([record 139](adr/0139-one-window-finds-in-files-and-conversations.md)) |
 | `FocusRouterUiTest` | a view opened in the lower area while the keyboard is in a panel's text takes nothing from it, and closing it in the background moves nothing ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |
 
 ## 3. Continuous integration
@@ -130,7 +134,7 @@ COMANDO_OPTS="-Dcomando.recordIntents=true" app/build/install/comando/bin/comand
 comando follows the [Java Coding Standard v2.0.3](https://github.com/marregui/java-standard/blob/v2.0.3/STANDARD.md),
 on JDK 25 (`release = 25`). Its rules live there and are cited by ID (`G-<section>.<n>`); this section holds comando's
 own rules, keeps the numbers other documents cite, and is comando's Apply section (§12 of the standard), its parts in
-the table below. Rules 12 to 15 cover what a desktop application meets and the standard leaves open.
+the table below. Rules 12 to 16 cover what a desktop application meets and the standard leaves open.
 
 1. A change to state is an intent; the reducer is the only writer of `AppState`.
 2. Threads follow G-7.10. A thread is of one of the six kinds of [Architecture §6](architecture.md#6-threads) and comes from `Threads`, an owner's `Errands` or
@@ -158,13 +162,17 @@ the table below. Rules 12 to 15 cover what a desktop application meets and the s
 15. A password lives in the keychain (`Secrets`); a token comando issues lives in memory and in files created
     owner-only (`rw-------`). Neither reaches a log line, a notice, the intent log or the audit log. Every owner-only
     file or folder is made through `core`'s `OwnerOnly`, the one helper every module uses.
+16. A file is read through `core`'s `Mapped`: mapped read-only, scanned in place, and only the slice needed decoded.
+    Bytes leave a mapping one by one, never by a bulk copy: a bulk copy off a file cut in place kills the JVM. Outside it
+    stay the libraries that take only a path, process pipes, the instance lock and writes. `FileReadRulesTest`
+    fails the build otherwise ([record 140](adr/0140-every-file-is-read-mapped.md)).
 
 | Part | comando |
 |---|---|
 | 1. Version | v2.0.3, JDK 25. No `AGENTS.md` or `CLAUDE.md` in the repository yet to point an agent here (§12) |
-| 2. Hot paths | A path is hot when the p99 of its frame-time gate exceeds 4 ms. Hot: the transcript renderer (`ui.widgets.transcript.render`: `TranscriptCanvas`, `TextBox`; layouts kept within a window around the view and let go beyond it, only the clip painted), `:ui:transcriptGate`, p99 3.39 ms on the gate's document and 4.75 ms on a 1,500-line code fence ([Architecture §14.5.3](architecture.md#1453-the-frame-time-gate)); the plot (`ui.widgets.plot`: `PlotCanvas`), `:ui:plotGate`, p99 28–32 ms over three runs on an M2 Max, over its 16 ms budget: a crosshair move repaints and re-reduces every series (2026-10-31). Not hot: the grid (`GridTable`), `:ui:gridGate`, p99 1.4–1.5 ms. `Transcript`, which the transcript renderer reads, publishes with release-acquire ordering (a volatile write after the data); so does `ColumnarResult`, which the grid reads. G-1 to G-3 and G-10.7 apply on the hot paths only; what they leave open there is in [§5.1](#51-not-applied) |
+| 2. Hot paths | A path is hot when the p99 of its frame-time gate exceeds 4 ms. Hot: the transcript renderer (`ui.widgets.transcript.render`: `TranscriptCanvas`, `TextBox`; layouts kept within a window around the view and let go beyond it, only the clip painted), `:ui:transcriptGate`, p99 3.09 ms on the gate's document with each turn's row opened and 4.75 ms on a 1,500-line code fence ([Architecture §14.5.3](architecture.md#1453-the-frame-time-gate)); the plot (`ui.widgets.plot`: `PlotCanvas`), `:ui:plotGate`, p99 28–32 ms over three runs on an M2 Max, over its 16 ms budget: a crosshair move repaints and re-reduces every series (2026-10-31). Not hot: the grid (`GridTable`), `:ui:gridGate`, p99 1.4–1.5 ms. `Transcript`, which the transcript renderer reads, publishes with release-acquire ordering (a volatile write after the data); so does `ColumnarResult`, which the grid reads. G-1 to G-3 and G-10.7 apply on the hot paths only; what they leave open there is in [§5.1](#51-not-applied) |
 | 3. Applied and enforced | Enforced by the build or a test: G-10.10 (`-Xlint:all -Werror`, `serial` excluded with its reason beside the flag in `build.gradle.kts`; doclint not yet); G-9.5 (the `this-escape` lint); G-10.2, G-10.8's braces and G-10.11 (the standard's Checkstyle configuration, copied to `config/checkstyle/checkstyle.xml`, on main and test code; any report fails `build`); G-7.10 (`ThreadBudgetTest`: no platform thread and none of the threads `Threads` made alive after close, read from `Threads.alive()`). Applied and checked by review only, no checker in the repository: G-11.7 (every test documented with `///`), G-10.5 (test methods named for the behaviour they prove), G-10.2 on what Checkstyle does not report (fields, try-with-resources variables, multi-catch parameters, basic-for initialisers), G-10.11's fully qualified names. Measured at run time, not enforced: G-7.11 (`EdtWatchdog` logs a stall of the EDT over 200 ms with its length when it ends, and the EDT's stack at 1 s, 2 s for a stall in the JDK's drawing; the `StateLoop` watchdog logs an intent still applying at 1 s with the loop's stack) |
-| 4. Departures kept on purpose | G-14.6 and G-14.11: no JFR code ([§6](#6-quality)). |
+| 4. Departures kept on purpose | G-14.6 and G-14.11: no JFR code ([§6](#6-quality)). G-16.4: `FolderSearch` reads files on its forks, virtual threads, capped at half the cores: comando has no bounded platform kind; until it has one ([record 139](adr/0139-one-window-finds-in-files-and-conversations.md)). G-4.7: `Mapped`'s confined arenas carry no tag or byte count: each lives for one read on one thread and is closed by try-with-resources; until a leak report needs one |
 | 5. Not applied | [§5.1](#51-not-applied): each rule with its sites and why, and either the condition under which it does not fit or the change that must apply it |
 | 6. Project packages | `^dev\.marregui\.comando\.` |
 | 7. Preview features | None |
@@ -290,7 +298,8 @@ becomes a link. A document that is not the owner keeps only what its reader need
 | the terminal and Gradle runs (command, output bound, stop) | [Workbench](workbench.md) §5 |
 | the Files tab and git changes | [Workbench](workbench.md) §6 |
 | what is kept on disk: the data root and each file in it | [Workbench](workbench.md) §7 |
-| the `claude -p` process contract: arguments, MCP configuration, stderr, threads | [Claude Code](claude-code.md) §1 |
+| Find in files: the Search view, its viewer, its keys, what a hit opens | [Workbench](workbench.md) §1.2 |
+| the `claude -p` process contract: arguments, MCP configuration, stderr, threads; the stored conversations and their search; what a session works on, read from its writes | [Claude Code](claude-code.md) §1 |
 | the checkpoint | [Claude Code](claude-code.md) §2 |
 | the MCP tools; the metrics the sessions write and what comando reads back | [Claude Code](claude-code.md) §3 |
 | approvals, permission rules, read-only SQL, production connections, secrets | [Claude Code](claude-code.md) §4 |

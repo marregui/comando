@@ -41,6 +41,7 @@ import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
+import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
@@ -383,8 +384,12 @@ public final class McpTools {
 
     private Outcome show(final String session, final String title, final ViewSpec spec, final JsonNode args) {
         final Placement placement = "side".equalsIgnoreCase(args.path("placement").asString("lower")) ? Placement.SIDE : Placement.LOWER;
-        sink.dispatch(new Intent.ShowView(session, title, spec, placement));
-        return Outcome.ok("shown '" + title + "' (" + spec.type() + ") in the " + placement.name().toLowerCase(Locale.ROOT) + " panel");
+        final Intent.ShowView shown = new Intent.ShowView(session, title, spec, placement);
+        // a view the user moved is updated where it is now (record 141)
+        final Placement where = Reducer.shownAt(state.get(), shown);
+        sink.dispatch(shown);
+        return Outcome.ok("shown '" + title + "' (" + spec.type() + ") in the " + where.name().toLowerCase(Locale.ROOT)
+                + " panel");
     }
 
     private Outcome edit(final String session, final JsonNode args, final EditMode mode) {
@@ -560,6 +565,8 @@ public final class McpTools {
             n.put("connection", p.connection());
             n.put("session", p.session());
             n.put("focused", p.id().equals(s.focused()));
+            n.put("side", p.side());
+            n.put("preview", p.preview());
             s.runOf(p.id()).ifPresent(r -> {
                 final ObjectNode run = n.putObject("lastRun");
                 run.put("sql", clip(r.sql(), 500));

@@ -21,26 +21,59 @@ import static dev.marregui.comando.core.reduce.Shared.notice;
 import static dev.marregui.comando.core.reduce.Shared.savePanels;
 
 /**
- * The panels' rules: adding, closing, removing, reopening, moving, renaming, focusing and binding panels, a session's
- * own panel, and edits to a panel's text.
+ * The panels' rules: adding, closing, removing, reopening, moving, placing, pinning, renaming, focusing and binding
+ * panels, a session's own panel, and edits to a panel's text.
  */
 final class PanelRules {
 
     private PanelRules() {
     }
 
+    /**
+     * Adds a panel at the end of the main tabs and focuses it. A preview takes the place of the preview before it,
+     * which is dropped as a closed document is; the preview's file opened again brings it forward, and opened to stay
+     * pins it (record 141).
+     */
     static Transition addPanel(final AppState s, final Intent.AddPanel i) {
-        if (s.panel(i.panel()).isPresent()) {
-            return Transition.of(s);
+        final Optional<PanelState> open = s.panel(i.panel());
+        if (open.isPresent()) {
+            if (!open.get().preview()) {
+                return Transition.of(s);
+            }
+            if (i.preview()) {
+                return Transition.of(s.withFocused(i.panel()));
+            }
+            final AppState next = s.withPanel(open.get().withPreview(false)).withFocused(i.panel());
+            return new Transition(next, List.of(savePanels(next)));
         }
         final PanelState current = s.focusedPanel();
+        final List<Effect> effects = new ArrayList<>();
+        AppState base = s;
+        boolean side = false;
+        final Optional<PanelState> before = i.preview()
+                ? s.panels().stream().filter(PanelState::preview).findFirst()
+                : Optional.empty();
+        if (before.isPresent()) {
+            side = before.get().side();
+            effects.add(new Effect.ForgetPanel(before.get().id()));
+            // the preview replaced stays in place, untitled, until the new one takes its slot: its title is free, and
+            // the state keeps a panel and its focus meanwhile
+            base = withoutRun(s, before.get().id(), effects).withPanel(before.get().withTitle(""));
+        }
         // a title names a panel to the tools and keys its plots: a title already taken gets a number, "README.md 2"; a
         // session's name is its own panel's, taken too
-        final String title = i.title().isBlank() ? defaultTitle(s) : uniqueTitle(s, i.title().strip());
-        final List<PanelState> panels = new ArrayList<>(s.panels());
-        panels.add(new PanelState(i.panel(), title, current.connection(), "", i.document()));
-        final AppState next = s.withPanels(panels, i.panel());
-        return new Transition(next, List.of(savePanels(next)));
+        final String title = i.title().isBlank() ? defaultTitle(base) : uniqueTitle(base, i.title().strip());
+        final List<PanelState> panels = new ArrayList<>(base.panels());
+        final PanelState added = new PanelState(i.panel(), title, current.connection(), "", i.document(), side,
+                i.preview());
+        if (before.isPresent()) {
+            panels.set(s.panels().indexOf(before.get()), added);
+        } else {
+            panels.add(added);
+        }
+        final AppState next = base.withPanels(panels, i.panel());
+        effects.add(savePanels(next));
+        return new Transition(next, effects);
     }
 
     /** A panel of comando's own closes into the closed list, keeping its file and bindings; a document is dropped. */
@@ -64,43 +97,43 @@ final class PanelRules {
         return dropPanel(clock, s, id, true);
     }
 
+    /**
+     * The main tabs keep one panel at least: the last one there is not closed, and removed it leaves an empty one in
+     * its place. A panel keeps its side when closed, so it reopens where it was; a preview is never kept closed.
+     */
     static Transition dropPanel(final Clock clock, AppState s, final PanelId id, final boolean remove) {
         final Optional<PanelState> panel = s.panel(id);
         if (panel.isEmpty()) {
             return Transition.of(s);
         }
-        if (s.panels().size() == 1) {
+        if (!panel.get().side() && mainTabs(s) == 1) {
             if (!remove) {
-                return Transition.of(notice(clock, s, Notice.Level.WARN, "The last panel cannot be closed"));
+                final String why = s.panels().size() == 1 ? "The last panel cannot be closed"
+                        : "The last panel of the main tabs cannot be closed";
+                return Transition.of(notice(clock, s, Notice.Level.WARN, why));
             }
             // removing the last open panel (by the user, or its file deleted outside) leaves an empty one in its place
             // nextId starts again at every run, while closed panels keep their ids: skip any id a panel holds
             final Shared.Fresh fresh = freshPanel(s);
             s = fresh.state();
             final PanelState empty = new PanelState(fresh.id(), defaultTitle(s), panel.get().connection(), "");
-            s = s.withPanels(List.of(panel.get(), empty), s.focused());
+            final List<PanelState> withEmpty = new ArrayList<>(s.panels());
+            withEmpty.add(withEmpty.indexOf(panel.get()) + 1, empty);
+            s = s.withPanels(withEmpty, s.focused());
         }
         final List<Effect> effects = new ArrayList<>();
-        AppState next = s;
-        final Optional<SqlRun> run = s.runOf(id);
-        if (run.isPresent()) {
-            if (run.get().status().isActive()) {
-                effects.add(new Effect.CancelSql(run.get().requestId()));
-            }
-            effects.add(new Effect.ReleaseResult(run.get().requestId()));
-            next = next.withRuns(s.runs().stream().filter(r -> !r.panel().equals(id)).toList());
-        }
+        AppState next = withoutRun(s, id, effects);
         final int idx = s.panels().indexOf(panel.get());
         final List<PanelState> panels = new ArrayList<>(s.panels());
         panels.remove(idx);
-        final PanelId focused = s.focused().equals(id) ? panels.get(Math.max(0, idx - 1)).id() : s.focused();
+        final PanelId focused = s.focused().equals(id) ? neighbour(panels, idx, panel.get().side()).id() : s.focused();
         next = next.withPanels(panels, focused);
         if (remove) {
             next = notice(clock, next, Notice.Level.INFO, "Removed " + panel.get().title());
             effects.add(new Effect.DeletePanel(id));
         } else {
             effects.add(new Effect.ForgetPanel(id));
-            if (!panel.get().document()) {
+            if (!panel.get().document() && !panel.get().preview()) {
                 final List<PanelState> closed = new ArrayList<>(next.closed());
                 closed.add(panel.get());
                 next = next.withClosed(closed);
@@ -110,7 +143,46 @@ final class PanelRules {
         return new Transition(next, effects);
     }
 
-    /** A closed panel of comando's own comes back after the focused one, with its title, bindings and text. */
+    /** The state without {@code id}'s SQL run: a run still going is cancelled, and its result let go. */
+    private static AppState withoutRun(final AppState s, final PanelId id, final List<Effect> effects) {
+        final Optional<SqlRun> run = s.runOf(id);
+        if (run.isEmpty()) {
+            return s;
+        }
+        if (run.get().status().isActive()) {
+            effects.add(new Effect.CancelSql(run.get().requestId()));
+        }
+        effects.add(new Effect.ReleaseResult(run.get().requestId()));
+        return s.withRuns(s.runs().stream().filter(r -> !r.panel().equals(id)).toList());
+    }
+
+    /**
+     * The panel to focus once the one at {@code idx} has gone: the nearest before it in the same tabs, else after it,
+     * else the one before it in the other tabs.
+     */
+    private static PanelState neighbour(final List<PanelState> panels, final int idx, final boolean side) {
+        for (int j = idx - 1; j >= 0; j--) {
+            if (panels.get(j).side() == side) {
+                return panels.get(j);
+            }
+        }
+        for (int j = idx; j < panels.size(); j++) {
+            if (panels.get(j).side() == side) {
+                return panels.get(j);
+            }
+        }
+        return panels.get(Math.max(0, idx - 1));
+    }
+
+    /** How many open panels the main tabs hold. */
+    private static long mainTabs(final AppState s) {
+        return s.panels().stream().filter(p -> !p.side()).count();
+    }
+
+    /**
+     * A closed panel of comando's own comes back after the focused one, with its title, bindings and text, in the tabs
+     * it was closed in.
+     */
     static Transition reopenPanel(final AppState s, final Intent.ReopenPanel i) {
         if (s.panel(i.panel()).isPresent()) {
             return Transition.of(s.withFocused(i.panel()));
@@ -120,7 +192,9 @@ final class PanelRules {
 
     private static Transition reopen(final AppState s, final PanelState p) {
         final List<PanelState> panels = new ArrayList<>(s.panels());
-        final int at = s.panels().indexOf(s.focusedPanel()) + 1;
+        // after the focused panel when both are in the same tabs, else at the end of its own
+        final PanelState focused = s.focusedPanel();
+        final int at = focused.side() == p.side() ? s.panels().indexOf(focused) + 1 : panels.size();
         panels.add(Math.min(at, panels.size()), p);
         final AppState next = s.withPanels(panels, p.id()).withClosed(s.closed().stream().filter(c -> !c.id().equals(p.id())).toList());
         return new Transition(next, List.of(savePanels(next)));
@@ -140,6 +214,51 @@ final class PanelRules {
         panels.add(to, panels.remove(from));
         final AppState next = s.withPanels(panels, s.focused());
         return new Transition(next, List.of(savePanels(next)));
+    }
+
+    /**
+     * An open panel moves to the end of the right-hand partition ({@code side}) or of the main tabs, and is focused;
+     * the last panel of the main tabs stays there (record 141).
+     */
+    static Transition placePanel(final Clock clock, final AppState s, final Intent.PlacePanel i) {
+        final Optional<PanelState> panel = s.panel(i.panel());
+        if (panel.isEmpty()) {
+            return Transition.of(s);
+        }
+        final Optional<String> refused = placeRefusal(s, i);
+        if (refused.isPresent()) {
+            return Transition.of(notice(clock, s, Notice.Level.WARN, refused.get()));
+        }
+        if (panel.get().side() == i.side()) {
+            return Transition.of(s.withFocused(i.panel()));
+        }
+        final List<PanelState> panels = new ArrayList<>(s.panels());
+        panels.remove(panel.get());
+        panels.add(panel.get().withSide(i.side()));
+        final AppState next = s.withPanels(panels, i.panel());
+        return new Transition(next, List.of(savePanels(next)));
+    }
+
+    /** Why {@link #placePanel} would refuse: the last panel of the main tabs sent to the side. */
+    static Optional<String> placeRefusal(final AppState s, final Intent.PlacePanel i) {
+        return s.panel(i.panel()).filter(p -> i.side() && !p.side() && mainTabs(s) == 1)
+                .map(_ -> "The last panel of the main tabs cannot move to the right side");
+    }
+
+    /** What an agent's close of the main tabs' last panel is told: the close does nothing (record 141). */
+    static Optional<String> closeRefusal(final AppState s, final Intent.ClosePanel i) {
+        return s.panel(i.panel()).filter(p -> !p.side() && mainTabs(s) == 1)
+                .map(_ -> s.panels().size() == 1 ? "The last panel cannot be closed"
+                        : "The last panel of the main tabs cannot be closed");
+    }
+
+    /** The preview tab stays as a tab of its own; saved from now on (record 141). */
+    static Transition pinPanel(final AppState s, final Intent.PinPanel i) {
+        return s.panel(i.panel())
+                .filter(PanelState::preview)
+                .map(p -> s.withPanel(p.withPreview(false)))
+                .map(next -> new Transition(next, List.of(savePanels(next))))
+                .orElse(Transition.of(s));
     }
 
     static Transition renamePanel(final Clock clock, final AppState s, final Intent.RenamePanel i) {

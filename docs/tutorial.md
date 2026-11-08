@@ -45,7 +45,7 @@ its KIT row naming the kit's commit.
 
 | Part | What it is |
 |---|---|
-| **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
+| **Menu bar** | **Edit**, **Find** (the finds of the view in front, and **Find in files…**), and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Tab row's right end** | stop refreshing plots, start or stop the embedded QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
 | **Sidebar**, left | four tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
@@ -53,7 +53,7 @@ its KIT row naming the kit's commit.
 | **Editor** | where you write SQL and prompts, mixed in one text |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here |
 | **Uncommitted changes**, right, ⌘K | what the Files tab's git repositories hold that their last commits do not ([§1.4](#14-uncommitted-changes)) |
-| **Session bar**, under the lower tabs | the focused panel's **session** chip, its icon showing whether it runs, a plug button that starts it, and what it does ([§1.3](#13-the-session-bar)); on the right its model and effort, which you can change there, and its context with the checkpoint button |
+| **Session bar**, under the lower tabs | the focused panel's **session** chip, its icon showing whether it runs and, once the session has written to a repository, that branch and repository; a plug button that starts it, and what it does ([§1.3](#13-the-session-bar)); on the right its model and effort, which you can change there, and its context with the checkpoint button |
 | **Status bar**, bottom | the current message on the left; plan usage and the work running in every session and query on the right ([§1.5](#15-the-status-bar)) |
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in
@@ -69,7 +69,7 @@ does; the menus grey out what cannot run now.
 
 | Tab | Holds | Mouse |
 |---|---|---|
-| **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel; a right click opens its menu, which does the rest; drag a row to order the list yourself |
+| **Sessions** | Claude Code sessions in four groups, each under its heading: **Needs you**, **Working**, **To read** (finished work you have not looked at) and **Idle**; inside a group, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel, and under **To read** opens it at the report; a right click opens its menu, which does the rest; drag a row to order its group yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the ⓘ shows a card of its facts, without a summary; a double click on the name binds the connection to the focused panel |
 | **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder, the kit's or the brain's; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a top-level row's right click shows the changes inside it |
 | **Instances** | the other comando instances on this machine and what their sessions are doing, while the comando Edge runs; then the questions they asked each other | a click on a row shows its card |
@@ -95,11 +95,12 @@ A tab shows one icon, which says what its session is doing; its title never chan
 | a red mark | it failed |
 | a question mark | it waits for your answer |
 
-The check and the red mark stay until you look at the tab; the question mark stays until you answer.
+The check and the red mark stay until you look at the tab or the session starts another turn, also across a restart; the question mark stays until you answer.
 
 Rest the pointer on a tab, or click the ⓘ on a session's row in the **Sessions** tab, for its card: the name in the
-tint; the facts, each once (state and what it does, model and effort, context, folder and branch, conversation, Claude
-Code version, connection); the Linear tickets the panel's text names, once a `linear.app/<workspace>/issue/` link has
+tint; the facts, each once (state and what it does, model and effort, context, folder and branch, the repository the
+session writes to with its branch and ticket, other repositories it wrote to, conversation, Claude Code version,
+connection); the Linear tickets the panel's text names, once a `linear.app/<workspace>/issue/` link has
 shown which workspace to use, each opened in your browser by a double click; and under **Summary**, in the tint, one or
 two short sentences (at most 200 characters) Haiku wrote on what the panel is about. For a session's panel the summary
 reads the last paragraph you wrote there with the session's last response, the rest of the panel as context; for a
@@ -139,8 +140,9 @@ three groups (Changed, Untracked, Removed), each by folder.
 On the left, the current message: click it to go where it is about (a failure's line in the log, which flashes);
 right-click it for the recent messages. On the right: your Claude plan's usage (the session window, the week, and a
 model's weekly window where the plan has one; rest the pointer on it for the reset times; read every 20 minutes), then
-Codex's (session, week) when Codex is installed, then the queries and sessions working and the requests waiting for
-approval. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
+Codex's (session, week) when Codex is installed, then the queries and sessions working, the requests waiting for
+approval and the sessions with finished work to read. Click that count for the list; a click on a **to read** line
+opens the session at its report. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
 
 ### 1.6 Themes of your own
 
@@ -270,7 +272,8 @@ stops working on it, and the connection is ready for the next query.
 
 Results keeps up to 5 000 000 rows of a query. **⌘F** searches the view in front of you (the one with the keyboard,
 else the lower tab in front), **⌘G** and **⌘⇧G** step through the matches, **⌘⇧C** copies the view, **⌘⇧S** exports
-it. **⌘S** saves the panel now; panels also save as you type.
+it. **⌘S** saves the panel now; panels also save as you type. **⌘⇧F** finds in the Files tab's folders and the stored
+conversations, in a window of its own: type, choose with ↑ ↓, and ⏎ opens the hit and keeps the window; ⎋ closes it.
 
 When a statement fails, Results shows the database's error as text you can select and copy. When the error names a
 position and the block was a single statement, the token there is underlined in the editor.
@@ -315,7 +318,9 @@ A session is a Claude Code process that comando starts for you in a working dire
 The **Session** tab shows the whole turn: your prompt in a bubble, every tool call as a card with its input and
 result, and everything else (Claude's text, notes, the turn's time, the "Thinking…" line while Claude thinks) in warm
 ivory on near-black, with headings, list marks and table heads in the tint, Treasure gold at first. The answer that
-ends a turn has a bar of the tint beside it. The theme button at the top right changes the ground and tint
+ends a turn has a bar of the tint beside it. When a turn ends with an answer, the steps before it fold into one row,
+such as "3 tools · 40 s", and the answer stays open under it; click the row to open the steps, click again to close
+them, and ⌘F finds what is inside. The theme button at the top right changes the ground and tint
 ([§1.6](#16-themes-of-your-own)); the editors', terminal's and diffs' colours follow.
 
 **⌘⇧.** interrupts a turn: the turn ends with an "interrupted" line and the session stays alive for the next prompt.
@@ -389,8 +394,8 @@ your Claude Code permission settings, which comando leaves as they are; a databa
    transcripts, and the next prompt resumes the same conversation: type `What was the first question I asked you?` in
    the **tutor** panel and press **⌘⇧⏎**. Connections come back closed, and the embedded QuestDB does not start by
    itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the
-   sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes
-   back empty.
+   sidebar shown or hidden as you left it. Panels you moved to the right side are there again, and so are the Search and
+   Changes views; other views (plots, files, kept results) belong to one run.
 
 Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 
@@ -435,12 +440,14 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘O | open a file in a panel |
 | ⌘⇧M | switch a Markdown panel between its text and the rendered page |
 | ⌘⇧W | close the lower view in front |
-| ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel |
+| ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel: the main tabs first, then the right side's |
 | ⌘⇧O / ⌘⇧K | the focused panel's connection / session settings (a new one when the panel has none) |
 | ⌘⇧P | command palette |
 | ⌘B / ⌘\ | sidebar / side pane |
 | ⌘K | show or hide Uncommitted changes in the side pane |
 | ⌘F, ⌘G ⌘⇧G | find in the view, next, previous |
+| ⌘⇧F | find in files and conversations |
+| F7 / ⇧F7 | the next / previous hit of the search, from the Search view or the preview tab |
 | Home / End | the Session tab's first block / its latest, following it |
 | ⌥↑ / ⌥↓ | the Session tab's previous / next prompt |
 | PgUp / PgDn | a page up / down in the Session tab |

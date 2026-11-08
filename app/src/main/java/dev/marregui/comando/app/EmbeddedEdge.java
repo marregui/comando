@@ -56,6 +56,7 @@ import org.xml.sax.InputSource;
 
 import tools.jackson.core.JacksonException;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
@@ -542,13 +543,17 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     }
 
     private static String sha256(final Path f) throws IOException {
-        try (final InputStream in = Files.newInputStream(f)) {
+        try {
             final MessageDigest d = MessageDigest.getInstance("SHA-256");
-            final byte[] buf = new byte[1 << 16];
-            for (int n; (n = in.read(buf)) > 0; ) {
-                d.update(buf, 0, n);
-            }
-            return HexFormat.of().formatHex(d.digest());
+            return Mapped.read(f, m -> {
+                final byte[] chunk = new byte[1 << 16];
+                try (final InputStream in = m.stream()) {
+                    for (int n; (n = in.read(chunk)) > 0; ) {
+                        d.update(chunk, 0, n);
+                    }
+                }
+                return HexFormat.of().formatHex(d.digest());
+            });
         } catch (final NoSuchAlgorithmException e) {
             throw new IllegalStateException("every JDK has SHA-256", e);
         }
@@ -563,7 +568,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         final Path record = root.resolve("installed");
         final Properties installed = new Properties();
         if (Files.isRegularFile(record)) {
-            installed.load(new StringReader(Files.readString(record)));
+            installed.load(new StringReader(Mapped.text(record)));
         }
         final String zipPath = zip.toAbsolutePath().normalize().toString();
         final long mtime = Files.getLastModifiedTime(zip).toMillis();
@@ -684,7 +689,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     static String adminPassword(final Path root) throws IOException {
         final Path file = root.resolve(PASSWORD_FILE);
         if (Files.isRegularFile(file)) {
-            final String kept = Files.readString(file).strip();
+            final String kept = Mapped.text(file).strip();
             if (kept.matches("[A-Za-z0-9_-]{16,}")) {
                 OwnerOnly.narrow(file);
                 return kept;
@@ -737,7 +742,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         }
         String next;
         try {
-            next = merged(Files.readString(config), ports, password);
+            next = merged(Mapped.text(config), ports, password);
         } catch (final Exception e) {
             // the settings the Edge's own UI saved are not lost: the file stays beside the template that replaces it,
             // under a name of its own, so a later unparseable file never overwrites an earlier one
@@ -796,7 +801,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
 
     /** The run script's JMX port, 9010 as shipped, set to {@code port}. */
     static void patchJmxPort(final Path runScript, final int port) throws IOException {
-        final String s = Files.readString(runScript);
+        final String s = Mapped.text(runScript);
         final String patched = s.replaceAll("jmxremote\\.port=\\d+", "jmxremote.port=" + port);
         if (!patched.equals(s)) {
             AtomicFiles.writeString(runScript, patched);
@@ -871,7 +876,8 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     private Entry read() throws IOException {
         final Entry e;
         try {
-            e = Files.isRegularFile(registry) ? JsonFile.JSON.readValue(registry.toFile(), Entry.class) : null;
+            e = Files.isRegularFile(registry) ? Mapped.read(registry, m -> JsonFile.JSON.readValue(m.stream(),
+                    Entry.class)) : null;
         } catch (final JacksonException ex) {
             throw new IOException(ex.getMessage(), ex);
         }

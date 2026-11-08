@@ -24,6 +24,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -38,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the checkpoint sits beside the context; the bar neither clears nor rewrites
 /// - the chip's menu follows the focused panel's kind
 /// - a session named like HTML is shown as text
+/// - the chip names the branch of what the session works on with the repository's short name, else its folder's branch
 class SessionBarTest {
 
     private static final PanelId A = new PanelId("a");
@@ -220,6 +222,30 @@ class SessionBarTest {
             bar[0].render(AppState.initial(List.of(panel), List.of(), List.of(imported)));
         });
         assertThat(button(bar[0], "Session").getText()).contains("bold</b>").doesNotStartWith("<html>");
+    }
+
+    /// A session writing to `/src/edge` on `eng-1` shows that branch and `edge`, not the branch of its folder.
+    @Test
+    void theChipNamesTheBranchOfTheSubjectAndItsRepository() {
+        final SessionState session = SessionState.closed(SessionSpec.fresh("work", "/w")).withBranch("master")
+                .withSubject(new SessionSubject("/src/edge", "eng-1", "ENG-1", List.of()));
+        assertThat(SessionBar.chipText(session)).isEqualTo("work  ⎇ eng-1 · edge");
+    }
+
+    /// With no branch to read, the repository's name stands alone, with no branch mark.
+    @Test
+    void aSubjectWithoutABranchShowsItsRepository() {
+        final SessionState session = SessionState.closed(SessionSpec.fresh("work", "/w"))
+                .withSubject(new SessionSubject("/src/edge", "", "", List.of()));
+        assertThat(SessionBar.chipText(session)).isEqualTo("work · edge");
+    }
+
+    /// With no writes the branch of the working folder shows as before, and with none the name alone.
+    @Test
+    void withoutASubjectTheChipShowsTheFoldersBranch() {
+        final SessionState session = SessionState.closed(SessionSpec.fresh("work", "/w"));
+        assertThat(SessionBar.chipText(session)).isEqualTo("work");
+        assertThat(SessionBar.chipText(session.withBranch("main"))).isEqualTo("work  ⎇ main");
     }
 
     /** The x of each control a session always shows, laid out at a fixed width. */

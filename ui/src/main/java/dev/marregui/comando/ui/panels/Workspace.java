@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.Component;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -20,6 +21,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -33,11 +35,13 @@ import javax.swing.Box;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.ToolTipManager;
 
@@ -86,11 +90,21 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  */
 public final class Workspace {
 
-    /** A tab as it closed: a panel of comando's own by its id, a document by its file. */
-    public record ClosedPanel(PanelId id, String title, boolean document, Path file) {
+    /**
+     * A tab as it closed: a panel of comando's own by its id, a document by its file; {@code side} when it closed in
+     * the right-hand partition, where it reopens (record 141).
+     */
+    public record ClosedPanel(PanelId id, String title, boolean document, Path file, boolean side) {
     }
 
     static final int CLOSED_KEPT = 10;
+    /**
+     * Asks waiting for a panel to show, at most: one per file being opened or previewed, and the user starts a few at
+     * a time; past this many, the oldest are of panels replaced before they showed.
+     */
+    private static final int WAITING_KEPT = 16;
+    /** The preview tab's close tooltip: it is never reopened, so it offers no ⌘⇧T (record 141). */
+    private static final String PREVIEW_CLOSE_TIP = KeyText.of("Close the preview (⌘W)");
     static final int TITLE_CHARS = 32;
     /** How much of the end of a panel's text its topic and tickets are read from. */
     static final int PANEL_TEXT_READ = 4 * TopicSource.MAX_CHARS;
@@ -103,12 +117,16 @@ public final class Workspace {
     private final PanelTexts texts;
     private final SchemaRegistry schemas;
     private final MovableTabs tabs = named(new MovableTabs(), "workspace");
+    /** The right-hand partition's strip, where the side panels go; null until {@link #partition} hands it over. */
+    private JTabbedPane side;
+    /** The focused panel at the last render: the partition brings a side panel forward when the focus moves to it. */
+    private PanelId focusedBefore;
     private final Map<PanelId, EditorPanel> panels = new LinkedHashMap<>();
     private final Deque<ClosedPanel> closed = new ArrayDeque<>();
-    /** Whether each panel's session or query was at work when last rendered; a change to false is an outcome. */
     private final LongSupplier clock;
+    /** Whether each panel's query ran when last rendered; a change to false is an outcome. */
     private final Map<PanelId, Boolean> lastActive = new HashMap<>();
-    /** Panels whose work ended while another tab was in front, until the user looks at them. */
+    /** Panels whose query ended while another tab was in front, until the user looks at them. */
     private final Set<PanelId> unseen = new HashSet<>();
     /** The panels whose tab title is greyed: their session runs its checkpoint (record 130). */
     private final Set<PanelId> dimmed = new HashSet<>();
@@ -140,6 +158,11 @@ public final class Workspace {
     private final Map<Path, String> toHeading = new HashMap<>();
     /** Log files whose panel shows an entry, by its time, at the render that shows the panel. */
     private final Map<Path, Long> toEntry = new HashMap<>();
+    /**
+     * What runs with a panel once it shows, by its id, the latest ask for a panel replacing the one before; at most
+     * {@link #WAITING_KEPT}, the oldest let go, since a panel replaced before it showed never shows. EDT only.
+     */
+    private final Map<PanelId, Consumer<EditorPanel>> toRun = new LinkedHashMap<>();
     /** The state last rendered, for a deleted file of a closed panel, which has no tab. EDT only. */
     private AppState shown;
     /** What each tab's tooltip would say, which its card shows. EDT only. */
@@ -188,15 +211,11 @@ public final class Workspace {
         this.closer = id -> intents.dispatch(new Intent.ClosePanel(id));
         texts.onOutsideChange(change -> Edt.later(() -> takeOutside(change)));
         texts.onDeleted(deleted -> Edt.later(() -> closeDeleted(deleted)));
-        tabs.putClientProperty("JTabbedPane.tabClosable", true);
-        tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", KeyText.of("Close the panel (⌘W; ⌘⇧T reopens it)"));
-        tabs.putClientProperty("JTabbedPane.tabCloseCallback", (IntConsumer) i -> {
+        TabLook.apply(tabs);
+        tabs.putClientProperty(TabLook.CLOSE_CALLBACK, (IntConsumer) i -> {
             final EditorPanel p = (EditorPanel) tabs.getComponentAt(i);
             closer.accept(p.panel().id());
         });
-        tabs.putClientProperty("JTabbedPane.tabType", "card");
-        tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
-        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         final JButton add = new JButton(Icons.get("add"));
         add.setToolTipText(KeyText.of("New panel (⌘T)"));
         add.getAccessibleContext().setAccessibleName("New panel");
@@ -221,8 +240,10 @@ public final class Workspace {
                 intents.dispatch(new Intent.FocusPanel(p.panel().id()));
             }
         });
-        // a dragged tab moves its panel; the render that follows puts the tabs in the state's order
-        tabs.onMove((from, to) -> intents.dispatch(new Intent.MovePanel(((EditorPanel) tabs.getComponentAt(from)).panel().id(), to)));
+        // a dragged tab moves its panel to where the tab it lands on sits among all panels, side ones included; the
+        // render that follows puts the tabs in the state's order
+        tabs.onMove((from, to) -> intents.dispatch(
+                new Intent.MovePanel(((EditorPanel) tabs.getComponentAt(from)).panel().id(), listIndex(to))));
         hover.setRepeats(false);
         card.onPointerIn(card::stay);
         tabs.addComponentListener(new ComponentAdapter() {
@@ -275,15 +296,13 @@ public final class Workspace {
                     card.stay();
                     card.hide();
                 }
+                focusOnPress(tabs, e);
                 popup(e);
             }
 
             @Override
             public void mouseClicked(final MouseEvent e) {
-                final int i = tabs.indexAtLocation(e.getX(), e.getY());
-                if (i >= 0 && e.getClickCount() == 2) {
-                    rename((EditorPanel) tabs.getComponentAt(i));
-                }
+                pinOrRename(tabs, e);
             }
 
             @Override
@@ -301,23 +320,98 @@ public final class Workspace {
     }
 
     /**
-     * The menu of the tab at {@code index}: close it, the others, or the tabs to its right or its left, in the order
-     * shown. The tabs each item closes are taken as the menu opens, so a tab that closes while it is open changes
-     * nothing.
+     * Hands the side panels to {@code pane}'s strip, where they sit before its views, with the main tabs' close button,
+     * menu, double click and focus on a press; until then side panels stay in the main tabs. Called once, before the
+     * first render.
      */
+    public void partition(final SidePane pane) {
+        side = pane.strip();
+        side.putClientProperty(TabLook.CLOSE_CALLBACK, (IntConsumer) i -> {
+            if (side.getComponentAt(i) instanceof EditorPanel p) {
+                closer.accept(p.panel().id());
+            }
+        });
+        side.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(final MouseEvent e) {
+                focusOnPress(side, e);
+                popup(e);
+            }
+
+            @Override
+            public void mouseClicked(final MouseEvent e) {
+                pinOrRename(side, e);
+            }
+
+            @Override
+            public void mouseReleased(final MouseEvent e) {
+                popup(e);
+            }
+
+            private void popup(final MouseEvent e) {
+                final int i = side.indexAtLocation(e.getX(), e.getY());
+                if (e.isPopupTrigger() && i >= 0 && side.getComponentAt(i) instanceof EditorPanel) {
+                    tabMenu(side, i).show(side, e.getX(), e.getY());
+                }
+            }
+        });
+    }
+
+    /** The menu of the main tab at {@code index}; see {@link #tabMenu(JTabbedPane, int)}. */
     JPopupMenu tabMenu(final int index) {
-        final PanelId clicked = ((EditorPanel) tabs.getComponentAt(index)).panel().id();
-        final int n = tabs.getTabCount();
-        final List<PanelId> others = ids(0, n, index);
-        final List<PanelId> right = ids(index + 1, n, -1);
-        final List<PanelId> left = ids(0, index, -1);
+        return tabMenu(tabs, index);
+    }
+
+    /**
+     * The menu of the panel's tab at {@code index} of {@code strip}: close it, the strip's other panels, or those to
+     * its right or its left, in the order shown; then its move to the other strip, once there is a partition. The tabs
+     * each item closes are taken as the menu opens, so a tab that closes while it is open changes nothing. The last
+     * panel of the main tabs does not move: the main tabs keep one.
+     */
+    JPopupMenu tabMenu(final JTabbedPane strip, final int index) {
+        final PanelId clicked = ((EditorPanel) strip.getComponentAt(index)).panel().id();
+        final int n = strip.getTabCount();
+        final List<PanelId> others = ids(strip, 0, n, index);
+        final List<PanelId> right = ids(strip, index + 1, n, -1);
+        final List<PanelId> left = ids(strip, 0, index, -1);
         final JPopupMenu menu = new JPopupMenu();
         menu.add(menuItem("Close", "close", true, () -> closer.accept(clicked)));
         menu.addSeparator();
         menu.add(menuItem("Close others", null, !others.isEmpty(), () -> closeTabs(clicked, others)));
         menu.add(menuItem("Close to the right", null, !right.isEmpty(), () -> closeTabs(clicked, right)));
         menu.add(menuItem("Close to the left", null, !left.isEmpty(), () -> closeTabs(clicked, left)));
+        if (side != null) {
+            menu.addSeparator();
+            if (strip == side) {
+                menu.add(menuItem("Move to the main tabs", "locate-arrow", true,
+                        () -> intents.dispatch(new Intent.PlacePanel(clicked, false))));
+            } else {
+                menu.add(menuItem("Move to the right side", "sidebar", n > 1,
+                        () -> intents.dispatch(new Intent.PlacePanel(clicked, true))));
+            }
+        }
         return menu;
+    }
+
+    /** A press on a panel's tab focuses its panel, also when the tab is in front already and so selects nothing new. */
+    private void focusOnPress(final JTabbedPane strip, final MouseEvent e) {
+        final int i = strip.indexAtLocation(e.getX(), e.getY());
+        if (!e.isPopupTrigger() && SwingUtilities.isLeftMouseButton(e) && i >= 0 && shown != null
+                && strip.getComponentAt(i) instanceof EditorPanel v && !v.panel().id().equals(shown.focused())) {
+            intents.dispatch(new Intent.FocusPanel(v.panel().id()));
+        }
+    }
+
+    /** A double click on a panel's tab pins it when it is the preview tab, else asks for its new name. */
+    private void pinOrRename(final JTabbedPane strip, final MouseEvent e) {
+        final int i = strip.indexAtLocation(e.getX(), e.getY());
+        if (i >= 0 && e.getClickCount() == 2 && strip.getComponentAt(i) instanceof EditorPanel v) {
+            if (v.panel().preview()) {
+                intents.dispatch(new Intent.PinPanel(v.panel().id()));
+            } else {
+                rename(v);
+            }
+        }
     }
 
     private static JMenuItem menuItem(final String text, final String icon, final boolean enabled, final Runnable run) {
@@ -327,15 +421,28 @@ public final class Workspace {
         return item;
     }
 
-    /** The panels of the tabs from {@code from} to {@code to}, not included, leaving out the tab at {@code skip}. */
-    private List<PanelId> ids(final int from, final int to, final int skip) {
+    /**
+     * The panels of {@code strip}'s tabs from {@code from} to {@code to}, not included, leaving out the tab at
+     * {@code skip}, and the partition's views.
+     */
+    private static List<PanelId> ids(final JTabbedPane strip, final int from, final int to, final int skip) {
         final List<PanelId> out = new ArrayList<>(Math.max(0, to - from));
         for (int i = from; i < to; i++) {
-            if (i != skip) {
-                out.add(((EditorPanel) tabs.getComponentAt(i)).panel().id());
+            if (i != skip && strip.getComponentAt(i) instanceof EditorPanel v) {
+                out.add(v.panel().id());
             }
         }
         return out;
+    }
+
+    /** Where among all panels the main tab at {@code tab} sits: side panels take places in the state's order too. */
+    private int listIndex(final int tab) {
+        final int n = tabs.getTabCount();
+        if (shown == null || n == 0 || !(tabs.getComponentAt(Math.clamp(tab, 0, n - 1)) instanceof EditorPanel at)) {
+            return tab;
+        }
+        final List<PanelId> ids = shown.panels().stream().map(PanelState::id).toList();
+        return ids.indexOf(at.panel().id());
     }
 
     /**
@@ -770,11 +877,22 @@ public final class Workspace {
                 return null;
             }
             final Transcript t = transcripts.apply(name);
-            return t == null || t.size() == 0 ? "" : TopicSource.ofSession(name, "", session.get().spec().workDir(), session.get().branch(), t,
+            return t == null || t.size() == 0 ? "" : TopicSource.ofSession(name, "", workPlace(session.get()),
+                    branchOf(session.get()), t,
                     TopicSource.MAX_CHARS);
         }
         final EditorPanel view = panels.get(new PanelId(key));
         return view == null ? null : topicSource(view.panel(), view);
+    }
+
+    /** Where {@code x} works for its topic: the repository it writes to when known, else its working folder. */
+    private static String workPlace(final SessionState x) {
+        return x.subject().isKnown() ? x.subject().repository() : x.spec().workDir();
+    }
+
+    /** The branch {@code x} works on for its topic: its subject's when known, else its working folder's. */
+    private static String branchOf(final SessionState x) {
+        return x.subject().isKnown() && !x.subject().branch().isEmpty() ? x.subject().branch() : x.branch();
     }
 
     /**
@@ -785,8 +903,8 @@ public final class Workspace {
     private String topicSource(final PanelState p, final EditorPanel view) {
         if (!p.session().isEmpty()) {
             final Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(p.session());
-            final String workDir = session.map(x -> x.spec().workDir()).orElse("");
-            final String branch = session.map(SessionState::branch).orElse("");
+            final String workDir = session.map(Workspace::workPlace).orElse("");
+            final String branch = session.map(Workspace::branchOf).orElse("");
             final Transcript t = transcripts.apply(p.session());
             final String response = t == null ? "" : TopicSource.lastResponse(t);
             String source = TopicSource.ofPanel(p.title(), p.session(), workDir, branch, view.textEnd(PANEL_TEXT_READ), response,
@@ -919,7 +1037,7 @@ public final class Workspace {
         placeCard();
         for (final PanelState p : shown.panels()) {
             final EditorPanel view = panels.get(p.id());
-            if (view != null && tabs.indexOfComponent(view) >= 0) {
+            if (view != null && holder(view) != null) {
                 refreshTab(p, shown, view);
             }
         }
@@ -933,11 +1051,18 @@ public final class Workspace {
     /** One step of the wheel; the spinning tabs are repainted where they are, the editors below are not touched. */
     private void spinTabs() {
         spinner.advance();
-        for (int i = 0; i < tabs.getTabCount(); i++) {
-            if (tabs.getIconAt(i) == spinner) {
-                final Rectangle r = tabs.getUI().getTabBounds(tabs, i);
+        spinTabs(tabs);
+        if (side != null) {
+            spinTabs(side);
+        }
+    }
+
+    private void spinTabs(final JTabbedPane strip) {
+        for (int i = 0; i < strip.getTabCount(); i++) {
+            if (strip.getIconAt(i) == spinner) {
+                final Rectangle r = strip.getUI().getTabBounds(strip, i);
                 if (r != null) {
-                    tabs.repaint(r);
+                    strip.repaint(r);
                 }
             }
         }
@@ -969,6 +1094,53 @@ public final class Workspace {
             }
         }
         toEdit.add(file);
+    }
+
+    /**
+     * Runs {@code then} with the panel {@code id}: now when it shows, else at the render that shows it, in place of
+     * what an earlier ask for it would have run (record 141). Called on the EDT.
+     */
+    public void whenShown(final PanelId id, final Consumer<EditorPanel> then) {
+        final EditorPanel shownNow = panels.get(id);
+        if (shownNow != null) {
+            toRun.remove(id);
+            then.accept(shownNow);
+            return;
+        }
+        toRun.remove(id);
+        toRun.put(id, then);
+        while (toRun.size() > WAITING_KEPT) {
+            toRun.remove(toRun.keySet().iterator().next());
+        }
+    }
+
+    /**
+     * Brings {@code id}'s tab forward in the strip that holds it, over a view the user brought forward in the
+     * partition; true when that strip is the partition's.
+     */
+    public boolean bringForward(final PanelId id) {
+        final EditorPanel view = panels.get(id);
+        final JTabbedPane strip = view == null ? null : holder(view);
+        if (strip != null && strip.getSelectedComponent() != view) {
+            strip.setSelectedComponent(view);
+        }
+        return strip != null && strip == side;
+    }
+
+    /**
+     * The panel ⌘{@code n} goes to, from 1: the main tabs first, left to right, then the partition's; null past the
+     * last (record 141).
+     */
+    public EditorPanel numbered(final int n) {
+        int left = n;
+        for (final JTabbedPane strip : side == null ? List.of(tabs) : List.of(tabs, side)) {
+            for (int i = 0; i < strip.getTabCount() && left > 0; i++) {
+                if (strip.getComponentAt(i) instanceof EditorPanel p && --left == 0) {
+                    return p;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -1028,8 +1200,18 @@ public final class Workspace {
         }
     }
 
+    /** The state's focused panel, in the main tabs or the partition; before a render, the main tab in front. */
     public EditorPanel focused() {
-        return tabs.getSelectedComponent() instanceof EditorPanel p ? p : null;
+        final EditorPanel p = shown == null ? null : panels.get(shown.focused());
+        if (p != null) {
+            return p;
+        }
+        return tabs.getSelectedComponent() instanceof EditorPanel v ? v : null;
+    }
+
+    /** The panel in front of the main tabs, as last rendered; the right side's tabs are not among them. */
+    public Optional<PanelId> mainFront() {
+        return tabs.getSelectedComponent() instanceof EditorPanel v ? Optional.of(v.panel().id()) : Optional.empty();
     }
 
     public EditorPanel panel(final PanelId id) {
@@ -1066,9 +1248,12 @@ public final class Workspace {
                     final EditorPanel gone = panels.remove(id);
                     final PanelState was = gone.panel();
                     final String deletedFile = deletedFiles.remove(id);
-                    final boolean kept = s.closedPanel(id).isPresent();
-                    if (deletedFile == null && (kept || was.document())) {
-                        closed.addFirst(new ClosedPanel(id, was.title(), was.document(), texts.file(id).orElse(null)));
+                    // the preview tab is a passing look at a file: not reopened, so not in the closed list
+                    final boolean kept = !was.preview() && s.closedPanel(id).isPresent();
+                    final boolean document = !was.preview() && was.document();
+                    if (deletedFile == null && (kept || document)) {
+                        closed.addFirst(new ClosedPanel(id, was.title(), was.document(), texts.file(id).orElse(null),
+                                was.side()));
                         while (closed.size() > CLOSED_KEPT) {
                             closed.removeLast();
                         }
@@ -1084,7 +1269,10 @@ public final class Workspace {
                     if (id.value().equals(card.shown())) {
                         card.hide();
                     }
-                    tabs.remove(gone);
+                    final JTabbedPane strip = holder(gone);
+                    if (strip != null) {
+                        strip.remove(gone);
+                    }
                     gone.editor().unmount();
                     if (deletedFile != null) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Removed " + was.title() + ": " + deletedFile
@@ -1094,7 +1282,7 @@ public final class Workspace {
                     } else if (kept) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title()
                                 + KeyText.of("; ⌘⇧T or the Sessions tab reopens it"), false));
-                    } else if (was.document()) {
+                    } else if (document) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title() + KeyText.of(" — ⌘⇧T reopens it"), false));
                     }
                 }
@@ -1105,9 +1293,14 @@ public final class Workspace {
                 bulkSummary = null;
                 bulkClosing.clear();
             }
-            // add new panels at their position, update titles and bindings
-            for (int i = 0; i < s.panels().size(); i++) {
-                final PanelState p = s.panels().get(i);
+            // add new panels at their position in their strip, the main tabs or the partition's, update titles and
+            // bindings; a panel whose strip changed moves to it, the same component with its state
+            int mainAt = 0;
+            int sideAt = 0;
+            boolean movedIn = false;
+            for (final PanelState p : s.panels()) {
+                final JTabbedPane strip = p.side() && side != null ? side : tabs;
+                final int i = strip == tabs ? mainAt++ : sideAt++;
                 EditorPanel view = panels.get(p.id());
                 if (view == null) {
                     view = new EditorPanel(p, intents, schemas);
@@ -1126,12 +1319,17 @@ public final class Workspace {
                         opener.accept(f);
                     });
                     panels.put(p.id(), view);
-                    tabs.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
-                } else if (tabs.indexOfComponent(view) != i) {
-                    tabs.remove(view);
-                    tabs.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
+                    strip.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, strip.getTabCount()));
+                    movedIn |= strip == side;
+                } else if (strip.indexOfComponent(view) != i) {
+                    final JTabbedPane was = holder(view);
+                    if (was != null) {
+                        was.remove(view);
+                    }
+                    strip.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, strip.getTabCount()));
                     // a tab put in again has the strip's colour: its grey, if any, is set again below
                     dimmed.remove(p.id());
+                    movedIn |= strip == side && was != side;
                 }
                 refreshTab(p, s, view);
                 final Path file = texts.file(p.id()).orElse(null);
@@ -1153,11 +1351,19 @@ public final class Workspace {
                     }
                 }
                 view.render(p, s);
+                runWhenShown(p.id(), view);
             }
+            // the strip holding the focused panel shows it; the partition only when the focus or the panel moved there,
+            // so a view the user brought forward over it stays
             final EditorPanel focused = panels.get(s.focused());
-            if (focused != null && tabs.getSelectedComponent() != focused) {
+            final JTabbedPane holding = focused == null ? null : holder(focused);
+            if (holding == tabs && tabs.getSelectedComponent() != focused) {
                 tabs.setSelectedComponent(focused);
+            } else if (holding != null && holding == side && (movedIn || !s.focused().equals(focusedBefore))
+                    && side.getSelectedComponent() != focused) {
+                side.setSelectedComponent(focused);
             }
+            focusedBefore = s.focused();
             spinWhileWorking();
             placeCard();
             // the card shown follows its session: status, context, model; it closes when its panel or session is gone
@@ -1173,26 +1379,70 @@ public final class Workspace {
         }
     }
 
-    /** The tab's status, icon, title mark and tooltip for {@code p} in {@code s}. */
+    /** Runs what waits for the panel {@code id}, now that {@code view} shows it. */
+    private void runWhenShown(final PanelId id, final EditorPanel view) {
+        final Consumer<EditorPanel> then = toRun.remove(id);
+        if (then != null) {
+            then.accept(view);
+        }
+    }
+
+    /** The strip whose tab holds {@code view}, the main tabs or the partition's; null when neither does. */
+    private JTabbedPane holder(final EditorPanel view) {
+        if (tabs.indexOfComponent(view) >= 0) {
+            return tabs;
+        }
+        return side != null && side.indexOfComponent(view) >= 0 ? side : null;
+    }
+
+    /**
+     * The tab's status, icon, title mark and tooltip for {@code p} in {@code s}. The preview tab's title is in italics,
+     * on a label of its own, since a tab's font is the strip's; a side panel's tooltip is the tab's own, the hover card
+     * being the main tabs'.
+     */
     private void refreshTab(final PanelState p, final AppState s, final EditorPanel view) {
         final TabStatus status = track(p, s);
-        final int at = tabs.indexOfComponent(view);
+        final JTabbedPane strip = holder(view);
+        final int at = strip.indexOfComponent(view);
         final String title = title(p);
-        if (!tabs.getTitleAt(at).equals(title)) {
-            tabs.setTitleAt(at, title);
+        if (!strip.getTitleAt(at).equals(title)) {
+            strip.setTitleAt(at, title);
         }
         // at rest, a session's tab shows whether its session is connected, as its row in the sidebar does (record 89)
         final Icon icon = status == TabStatus.IDLE ? s.session(p.session()).map(x -> Icons.get(SessionIcons.of(x.status()))).orElse(icon(status))
                 : icon(status);
-        if (tabs.getIconAt(at) != icon) {
-            tabs.setIconAt(at, icon);
+        if (strip.getIconAt(at) != icon) {
+            strip.setIconAt(at, icon);
         }
         // its session runs its checkpoint: the title greys with the panel, the tab still opens it (record 130)
         final boolean locked = s.session(p.session()).map(SessionState::isCheckpointing).orElse(false);
         if (locked ? dimmed.add(p.id()) : dimmed.remove(p.id())) {
-            tabs.setForegroundAt(at, locked ? LockVeil.dimmed() : null);
+            strip.setForegroundAt(at, locked ? LockVeil.dimmed() : null);
+        }
+        // the preview tab is never reopened, so its close button does not offer ⌘⇧T
+        final String closeTip = p.preview() ? PREVIEW_CLOSE_TIP : null;
+        if (!Objects.equals(view.getClientProperty(TabLook.CLOSE_TIP), closeTip)) {
+            view.putClientProperty(TabLook.CLOSE_TIP, closeTip);
+        }
+        if (p.preview()) {
+            final JLabel label = strip.getTabComponentAt(at) instanceof JLabel l ? l : new JLabel();
+            final Font italic = strip.getFont().deriveFont(Font.ITALIC);
+            if (!italic.equals(label.getFont())) {
+                label.setFont(italic);
+            }
+            label.setText(title);
+            label.setIcon(icon);
+            label.setForeground(locked ? LockVeil.dimmed() : null);
+            if (strip.getTabComponentAt(at) != label) {
+                strip.setTabComponentAt(at, label);
+            }
+        } else if (strip.getTabComponentAt(at) != null) {
+            strip.setTabComponentAt(at, null);
         }
         final String tip = tooltip(p, s, status);
+        if (strip == side) {
+            strip.setToolTipTextAt(at, tip);
+        }
         if (!tip.equals(tips.put(p.id(), tip)) && p.id().value().equals(card.shown())) {
             updateCard(p.id().value());
         }
@@ -1203,20 +1453,21 @@ public final class Workspace {
     }
 
     /**
-     * The tab's status now. Work that ends while another panel is in front marks the panel until the user looks at it;
-     * work that starts again drops the mark, its outcome is superseded. A tab that comes to need the user asks the
-     * desktop for attention, once per change.
+     * The tab's status now. A session's outcome is marked on the session itself, by the reducer (record 136). A query
+     * that ends while another panel is in front marks the panel until the user looks at it; a query that starts again
+     * drops the mark, its outcome is superseded. A tab that comes to need the user asks the desktop for attention, once
+     * per change.
      */
     private TabStatus track(final PanelState p, final AppState s) {
         final PanelId id = p.id();
-        final boolean active = TabStatus.active(p, s, clock.getAsLong());
+        final boolean active = s.runOf(id).map(r -> r.status().isActive()).orElse(false);
         final Boolean before = lastActive.put(id, active);
         if (id.equals(s.focused()) || (active && before != null && !before)) {
             unseen.remove(id);
         } else if (before != null && before && !active) {
             unseen.add(id);
         }
-        final TabStatus status = TabStatus.of(p, s, unseen.contains(id));
+        final TabStatus status = TabStatus.of(p, s, unseen.contains(id), clock.getAsLong());
         final TabStatus was = statuses.put(id, status);
         if (status.wantsAttention() && status != was) {
             attention.run();

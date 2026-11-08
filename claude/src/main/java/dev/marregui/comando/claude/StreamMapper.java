@@ -1,6 +1,8 @@
 package dev.marregui.comando.claude;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,6 +72,9 @@ final class StreamMapper {
     private long contextWindow;
     /** While a stored conversation is read: the message that ended its turn, until its last line is read; else null. */
     private String turnEndingMessage;
+    /** While a stored conversation is read: the timestamps of the turn's first and last lines so far; else empty. */
+    private String turnFirstLine = "";
+    private String turnLastLine = "";
     /**
      * The Agent calls whose sub-agent ended: a foreground one by its call's result, a background one by its task's
      * notification. Written on the strand, read by the sub-agent thread.
@@ -135,8 +140,8 @@ final class StreamMapper {
     /**
      * Maps one line of a stored transcript: user and assistant messages, compaction, nothing live. A stored
      * conversation has no {@code result} lines; a turn ends where a message stopped at the end of its turn
-     * ({@code stop_reason} {@code end_turn}), which gets a {@link Block.TurnEnd#stored()} after the message's last
-     * line.
+     * ({@code stop_reason} {@code end_turn}), which gets a {@link Block.TurnEnd#stored(long)} after the message's last
+     * line, with the time from the turn's first line to its last.
      */
     void acceptHistory(final String line) {
         replaying = true;
@@ -157,6 +162,12 @@ final class StreamMapper {
         // a message is stored a content block per line, each with its stop reason: the turn ends after its last one
         if (turnEndingMessage != null && (type.equals("user") || type.equals("assistant") && !messageId.equals(turnEndingMessage))) {
             endHistoryTurn();
+        }
+        if (typed(e)) {
+            turnFirstLine = ""; // a turn that stopped with no end of its own lends the new one no time
+        }
+        if (type.equals("user") || type.equals("assistant")) {
+            turnLine(e.path("timestamp").asString(""));
         }
         switch (type) {
             case "assistant" -> {
@@ -205,8 +216,50 @@ final class StreamMapper {
     }
 
     private void endHistoryTurn() {
-        transcript.append(Block.TurnEnd.stored());
+        transcript.append(Block.TurnEnd.stored(storedSpan(turnFirstLine, turnLastLine)));
         turnEndingMessage = null;
+        turnFirstLine = "";
+        turnLastLine = "";
+    }
+
+    /**
+     * Whether {@code e} is a prompt, which starts a turn: a user line of the main conversation with no tool's result.
+     */
+    private static boolean typed(final JsonNode e) {
+        if (!e.path("type").asString("").equals("user") || e.path("isSidechain").asBoolean(false)) {
+            return false;
+        }
+        for (final JsonNode block : e.path("message").path("content")) {
+            if (block.path("type").asString("").equals("tool_result")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A line of the turn being read, by its timestamp: kept as text, as only the turn's two ends are parsed. */
+    private void turnLine(final String timestamp) {
+        if (!timestamp.isEmpty()) {
+            turnFirstLine = turnFirstLine.isEmpty() ? timestamp : turnFirstLine;
+            turnLastLine = timestamp;
+        }
+    }
+
+    /**
+     * The millis from {@code first} to {@code last}, ISO instants; {@link Block.TurnEnd#UNTIMED} for no usable times.
+     */
+    private long storedSpan(final String first, final String last) {
+        if (first.isEmpty()) {
+            return Block.TurnEnd.UNTIMED;
+        }
+        try {
+            final long span = Duration.between(Instant.parse(first), Instant.parse(last)).toMillis();
+            return span < 0 ? Block.TurnEnd.UNTIMED : span;
+        } catch (final DateTimeParseException ex) {
+            LOG.log(System.Logger.Level.DEBUG,
+                    "stored turn's time unread [session=" + session + ", timestamp=" + ex.getParsedString() + ']');
+            return Block.TurnEnd.UNTIMED;
+        }
     }
 
     /** Appends the prompt comando sent; called on the strand before the line goes to the process. */

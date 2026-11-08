@@ -101,6 +101,16 @@ public final class FindBar extends JPanel {
         revalidateParent();
     }
 
+    /** Opens the bar for {@code searchable} and finds {@code query} at once; does nothing when it is null. */
+    public void open(final Searchable searchable, final String query) {
+        if (searchable != null) {
+            text.setText(query);
+            open(searchable);
+            typing.stop();
+            find(true);
+        }
+    }
+
     /** Whether the view the bar searches is still in the window; true when it cannot tell. */
     public boolean targetShowing() {
         final JComponent root = target == null ? null : Capabilities.rootOf(target);

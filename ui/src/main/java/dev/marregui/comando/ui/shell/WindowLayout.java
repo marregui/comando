@@ -5,6 +5,7 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,9 +25,9 @@ import dev.marregui.comando.ui.panels.SessionsSidebar;
 /**
  * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root,
  * record 106): its bounds and whether it was maximised, the dividers (the lower one per panel), the sidebar's state
- * and tab, the side pane, the theme (its ground and tint), Linear's site, the folder of the last export, the last
- * Gradle tasks, the outline's choice and the checkpoint threshold. The one place each key is named; a method that
- * changes a setting writes the file.
+ * and tab, the side pane and the views it held, the theme (its ground and tint), Linear's site, the folder of the
+ * last export, the last Gradle tasks, the outline's choice and the checkpoint threshold. The one place each key is
+ * named; a method that changes a setting writes the file.
  */
 final class WindowLayout {
 
@@ -50,6 +51,10 @@ final class WindowLayout {
     static final String CHECKPOINT_THRESHOLD = "sessions.checkpointThresholdPercent";
     /** The token threshold of an earlier version, removed at the first choice of a percentage. */
     static final String CHECKPOINT_THRESHOLD_TOKENS = "sessions.checkpointThresholdTokens";
+    /** The views the right side held at the last save, by type, comma-separated: they open there at the next start. */
+    static final String SIDE_VIEWS = "sidePane.views";
+    /** The views kept on the right side across a restart: the Search view and the Changes view (record 141). */
+    static final Set<String> KEPT_SIDE_VIEWS = Set.of("search", "changes");
 
     private final Settings prefs;
     private final boolean offScreen;
@@ -265,6 +270,22 @@ final class WindowLayout {
     void outlineShown(final boolean shown) {
         prefs.putBoolean("editor.outline", shown);
         prefs.flush();
+    }
+
+    /**
+     * The types of the views kept on the right side ({@link #KEPT_SIDE_VIEWS}) it held at the last save, in their
+     * order there; empty when it held none. A type of no kept view, written by a later version, is left out.
+     */
+    List<String> sideViews() {
+        final String kept = prefs.get(SIDE_VIEWS, "");
+        return kept.isBlank() ? List.of()
+                : Arrays.stream(kept.split(",")).map(String::strip).filter(KEPT_SIDE_VIEWS::contains).distinct()
+                        .toList();
+    }
+
+    /** Keeps the types of the views on the right side for {@link #sideViews}; the next {@link #save} writes them. */
+    void sideViews(final List<String> types) {
+        prefs.put(SIDE_VIEWS, String.join(",", types));
     }
 
     /** Where the side pane's divider was; -1 when it never showed. */

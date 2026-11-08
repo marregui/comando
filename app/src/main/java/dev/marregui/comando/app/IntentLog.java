@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
@@ -241,7 +242,7 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
         int inForce = 0;
         final List<Intent> out = new ArrayList<>();
         final List<Integer> thresholds = new ArrayList<>();
-        for (final String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+        for (final String line : Mapped.lines(file)) {
             if (line.isBlank()) {
                 continue;
             }

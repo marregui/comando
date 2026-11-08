@@ -96,6 +96,16 @@ public final class Actions {
                     List.of(PANEL, Arg.required("title", Type.STRING, "")), Set.of(Intent.RenamePanel.class)),
             new Action("panel_move", Kind.ACT, "Moves a panel's tab to a position, as dragging it does.",
                     List.of(PANEL, Arg.required("index", Type.INTEGER, "0 is the first tab")), Set.of(Intent.MovePanel.class)),
+            new Action("panel_place", Kind.ACT,
+                    "Moves a panel's tab to the end of the right-hand side of the workspace, or back to the main "
+                            + "tabs, and focuses it, as Move to the right side and Move to the main tabs on its tab's "
+                            + "menu do; the main tabs keep one panel at least.",
+                    List.of(PANEL, Arg.optional("side", Type.BOOLEAN, "default true; false: the main tabs")),
+                    Set.of(Intent.PlacePanel.class)),
+            new Action("panel_pin", Kind.ACT,
+                    "Keeps the preview tab, the file shown for a search's hit, as a double click on its tab does: "
+                            + "the next file shown opens a preview of its own.",
+                    List.of(PANEL), Set.of(Intent.PinPanel.class)),
             new Action("panel_focus", Kind.ACT, "Focuses a panel, as clicking its tab does.", List.of(PANEL), Set.of(Intent.FocusPanel.class)),
             new Action("panel_bind_session", Kind.ACT, "Binds a panel to a session, as choosing one in its session chooser does; empty unbinds.",
                     List.of(PANEL, Arg.required("session", Type.STRING, "")), Set.of(Intent.BindSession.class)),
@@ -175,6 +185,13 @@ public final class Actions {
             new Action("view_pin", Kind.ACT, "Pins or unpins a view, as its pin does; a pinned view is never replaced or closed by a session.",
                     List.of(Arg.required("id", Type.INTEGER, "the view's id, from ui_get_state"), Arg.optional("pinned", Type.BOOLEAN, "default true")),
                     Set.of(Intent.PinView.class)),
+            new Action("view_place", Kind.ACT,
+                    "Moves a view to the right-hand side of the workspace or to the lower panel, as Move to the right "
+                            + "side and Move to the lower panel on its tab's menu do; a session's update of the view "
+                            + "still reaches it there.",
+                    List.of(Arg.required("id", Type.INTEGER, "the view's id, from ui_get_state"),
+                            Arg.required("placement", Type.STRING, "").among(List.of("side", "lower"))),
+                    Set.of(Intent.PlaceView.class)),
             new Action("view_close", Kind.ACT, "Closes any view the user could close, as its ✕ does; a pinned view is unpinned first by view_pin.",
                     List.of(Arg.required("id", Type.INTEGER, "")), Set.of(Intent.CloseView.class)),
             new Action("ui_set_layout", Kind.ACT, "Arranges the window: focus, lower tab, sidebar, side pane, lower share.", List.of(),
@@ -216,7 +233,8 @@ public final class Actions {
             Intent.ConnectionFailed.class, Intent.SchemaChanged.class, Intent.ConnectionLost.class, Intent.ConnectionTested.class,
             Intent.SessionStarted.class, Intent.SessionRanAt.class, Intent.SessionInit.class, Intent.SessionActivity.class,
             Intent.SessionTasksChanged.class, Intent.SessionTurnRunning.class, Intent.SessionTurnEnded.class, Intent.SessionExited.class,
-            Intent.SessionBranch.class, Intent.SessionContext.class, Intent.CommandFinished.class, Intent.FolderLoaded.class,
+            Intent.SessionBranch.class, Intent.SessionSubjectRead.class, Intent.SessionContext.class,
+                    Intent.CommandFinished.class, Intent.FolderLoaded.class,
             Intent.ReposLoaded.class, Intent.ChangeRead.class, Intent.PlanUsageRead.class,
             Intent.InstancesChanged.class, Intent.DecisionsRead.class);
 

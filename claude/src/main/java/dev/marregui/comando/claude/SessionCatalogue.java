@@ -1,8 +1,6 @@
 package dev.marregui.comando.claude;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -13,6 +11,8 @@ import java.util.stream.Stream;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.files.Mapped;
 
 /**
  * Lists the conversations Claude Code stored on disk, {@code <projects>/<project>/<session id>.jsonl}, for
@@ -92,9 +92,9 @@ public final class SessionCatalogue {
         String title = "";
         String lastPrompt = "";
         long size;
-        try (final RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
-            size = raf.length();
-            for (final String line : lines(raf, 0, (int) Math.min(size, HEAD_BYTES), false)) {
+        try (final Mapped m = Mapped.open(file)) {
+            size = m.size();
+            for (final String line : lines(m, 0, (int) Math.min(size, HEAD_BYTES), false)) {
                 final JsonNode n = parse(line);
                 if (n != null && cwd.isEmpty() && n.hasNonNull("cwd")) {
                     cwd = n.path("cwd").asString("");
@@ -102,7 +102,7 @@ public final class SessionCatalogue {
                 }
             }
             final long tailStart = Math.max(0, size - TAIL_BYTES);
-            for (final String line : lines(raf, tailStart, (int) (size - tailStart), tailStart > 0)) {
+            for (final String line : lines(m, tailStart, (int) (size - tailStart), tailStart > 0)) {
                 final JsonNode n = parse(line);
                 if (n == null) {
                     continue;
@@ -129,7 +129,8 @@ public final class SessionCatalogue {
                     }
                 }
             }
-        } catch (final IOException e) {
+        } catch (final IOException | InternalError e) {
+            // an InternalError is the file cut while mapped: this one conversation is left out, as for a failed read
             LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + file + ']', e);
             return null;
         }
@@ -147,15 +148,12 @@ public final class SessionCatalogue {
         }
     }
 
-    private static List<String> lines(final RandomAccessFile raf, final long from, final int length, final boolean skipFirst) throws IOException {
-        final byte[] buf = new byte[length];
-        raf.seek(from);
-        raf.readFully(buf);
-        final List<String> lines = new ArrayList<>(new String(buf, StandardCharsets.UTF_8).lines().toList());
+    private static List<String> lines(final Mapped file, final long from, final int length, final boolean skipFirst) {
+        final List<String> lines = new ArrayList<>(file.text(from, from + length).lines().toList());
         if (skipFirst && !lines.isEmpty()) {
             lines.removeFirst(); // the read started mid-line
         }
-        if (!lines.isEmpty() && from + length < raf.length()) {
+        if (!lines.isEmpty() && from + length < file.size()) {
             lines.removeLast(); // the read ended mid-line
         }
         return lines;

@@ -99,8 +99,17 @@ public sealed interface Block {
 
     /**
      * The {@code result} that ended a turn; or, read from a stored conversation, the end of a turn without its numbers.
+     * {@code spanMillis} is how far apart the stored lines of that turn were written, {@link #UNTIMED} for a live turn
+     * or when the lines do not say: a stored conversation records no duration, and a span is not one.
      */
-    record TurnEnd(double costUsd, long durationMillis, int numTurns, boolean error, String text) implements Block {
+    record TurnEnd(
+            double costUsd,
+            long durationMillis,
+            int numTurns,
+            boolean error,
+            String text,
+            long spanMillis
+    ) implements Block {
         /** The duration of a turn read from a stored conversation, which records none. */
         public static final long UNTIMED = -1L;
 
@@ -108,14 +117,35 @@ public sealed interface Block {
             Objects.requireNonNull(text, "text");
         }
 
+        /** The end of a live turn, which has its own duration. */
+        public TurnEnd(
+                final double costUsd,
+                final long durationMillis,
+                final int numTurns,
+                final boolean error,
+                final String text
+        ) {
+            this(costUsd, durationMillis, numTurns, error, text, UNTIMED);
+        }
+
         /** A turn of a stored conversation that ended: its last message stopped at the end of the turn. */
         public static TurnEnd stored() {
-            return new TurnEnd(-1.0, UNTIMED, 0, false, "");
+            return stored(UNTIMED);
+        }
+
+        /** {@link #stored()} with the time between the turn's first and last stored lines. */
+        public static TurnEnd stored(final long spanMillis) {
+            return new TurnEnd(-1.0, UNTIMED, 0, false, "", spanMillis);
         }
 
         /** False for a turn read from a stored conversation, with no time, cost or count. */
         public boolean timed() {
             return durationMillis != UNTIMED;
+        }
+
+        /** How long the turn took: its duration, else its stored span; {@link #UNTIMED} when neither is known. */
+        public long tookMillis() {
+            return timed() ? durationMillis : spanMillis;
         }
 
         @Override

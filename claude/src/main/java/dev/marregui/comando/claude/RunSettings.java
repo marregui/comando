@@ -1,19 +1,18 @@
 package dev.marregui.comando.claude;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.files.Mapped;
 
 /**
  * The model and effort a session's message ran at, read from the transcript Claude Code writes beside its stream: the
@@ -59,13 +58,13 @@ final class RunSettings {
             return Optional.empty();
         }
         final byte[] needle = ('"' + messageId + '"').getBytes(StandardCharsets.UTF_8);
-        try (FileChannel channel = FileChannel.open(f, StandardOpenOption.READ); Arena arena = Arena.ofConfined()) {
-            final long length = channel.size();
+        try (final Mapped mapped = Mapped.open(f)) {
+            final long length = mapped.size();
             if (length == 0L) {
                 return Optional.empty();
             }
             final long from = Math.max(0L, length - TAIL);
-            final MemorySegment tail = channel.map(FileChannel.MapMode.READ_ONLY, from, length - from, arena);
+            final MemorySegment tail = mapped.segment().asSlice(from);
             for (long at = lastIndexOf(tail, needle, tail.byteSize()); at >= 0L; ) {
                 final long lineStart = lastIndexOf(tail, NEWLINE, at) + 1L;
                 final long newline = indexOf(tail, NEWLINE[0], at);
@@ -76,7 +75,7 @@ final class RunSettings {
                 }
                 final MemorySegment line = tail.asSlice(lineStart, lineEnd - lineStart);
                 if (lastIndexOf(line, ASSISTANT, line.byteSize()) >= 0L) {
-                    final JsonNode e = json.readTree(line.toArray(ValueLayout.JAVA_BYTE));
+                    final JsonNode e = json.readTree(Mapped.bytes(line));
                     if (e.path("type").asString("").equals("assistant")
                             && e.path("message").path("id").asString("").equals(messageId)) {
                         final String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));

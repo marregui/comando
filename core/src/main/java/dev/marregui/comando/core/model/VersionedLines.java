@@ -1,13 +1,14 @@
 package dev.marregui.comando.core.model;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import dev.marregui.comando.core.files.Mapped;
 
 /**
  * A file comando keeps as one entry a line, its schema's version in a first line {@code # comando <format>, version
@@ -49,7 +50,7 @@ public final class VersionedLines {
         }
         final List<String> out = new ArrayList<>();
         boolean first = true;
-        for (final String raw : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+        for (final String raw : Mapped.lines(file)) {
             final String line = raw.strip();
             if (first) {
                 first = false;

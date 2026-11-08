@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.FlowLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,13 +11,18 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.action.ToolButton;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -25,7 +32,8 @@ import dev.marregui.comando.ui.widget.WidgetRegistry;
 
 /**
  * The view tabs of one placement inside a tabbed pane, after {@code fixedTabs} tabs the owner keeps.
- * A tab carries a pin toggle and a close button; a view re-renders when its version changes.
+ * A tab carries a pin toggle and a close button, and no close button of the strip's own; its right-click menu moves the
+ * view to the other placement. A view re-renders when its version changes.
  */
 final class ViewTabs {
 
@@ -40,7 +48,13 @@ final class ViewTabs {
     private final WidgetContext context;
     private final Map<Long, Tab> open = new LinkedHashMap<>();
 
-    ViewTabs(final JTabbedPane tabs, final int fixedTabs, final Placement placement, final WidgetRegistry registry, final WidgetContext context) {
+    ViewTabs(
+            final JTabbedPane tabs,
+            final int fixedTabs,
+            final Placement placement,
+            final WidgetRegistry registry,
+            final WidgetContext context
+    ) {
         this.tabs = tabs;
         this.fixedTabs = fixedTabs;
         this.placement = placement;
@@ -64,6 +78,7 @@ final class ViewTabs {
                 final JComponent header = header(v);
                 t = new Tab(v, w, header);
                 open.put(v.id(), t);
+                w.component().putClientProperty(TabLook.CLOSABLE, false);
                 tabs.addTab(Plain.text(v.title()), w.component());
                 tabs.setTabComponentAt(tabs.getTabCount() - 1, header);
                 changed = true;
@@ -75,6 +90,7 @@ final class ViewTabs {
                     w.unmount();
                     w = registry.create(v.spec().type(), context);
                     w.render(v.spec());
+                    w.component().putClientProperty(TabLook.CLOSABLE, false);
                     if (at >= 0) {
                         tabs.setComponentAt(at, w.component());
                     }
@@ -122,29 +138,71 @@ final class ViewTabs {
         return open.size();
     }
 
+    /** The right-click menu of view {@code v}'s tab: the move to the other placement. */
+    JPopupMenu menu(final ViewState v) {
+        final Placement other = placement == Placement.SIDE ? Placement.LOWER : Placement.SIDE;
+        final JMenuItem move = other == Placement.LOWER
+                ? new JMenuItem("Move to the lower panel", Icons.get("import"))
+                : new JMenuItem("Move to the right side", Icons.get("sidebar"));
+        move.addActionListener(_ -> dispatch(new Intent.PlaceView(v.id(), other)));
+        final JPopupMenu m = new JPopupMenu();
+        m.add(move);
+        return m;
+    }
+
     private JComponent header(final ViewState v) {
         final JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         p.setOpaque(false);
         final JLabel title = new JLabel(Plain.text(v.title()), Icons.get(icon(v.spec().type()), 14), JLabel.LEFT);
-        title.setToolTipText(Plain.text(v.session().isEmpty() ? v.title() : v.title() + " · placed by " + v.session()));
-        final JButton pin = small(v.pinned() ? "pin" : "pin", v.pinned() ? "Unpin: Claude may replace this view" : "Pin: Claude will not replace this view");
+        final String placedBy = v.session().isEmpty() ? v.title() : v.title() + " · placed by " + v.session();
+        title.setToolTipText(Plain.text(placedBy));
+        final String pinTip = v.pinned()
+                ? "Unpin: Claude may replace this view"
+                : "Pin: Claude will not replace this view";
+        final JButton pin = small("pin", pinTip, () -> dispatch(new Intent.PinView(v.id(), !v.pinned())));
         pin.setForeground(v.pinned() ? Theme.tint().body : Theme.MUTED);
-        pin.setBorder(v.pinned() ? BorderFactory.createMatteBorder(0, 0, 2, 0, Theme.tint().body) : BorderFactory.createEmptyBorder(0, 0, 2, 0));
-        pin.addActionListener(e -> context.intents().dispatch(new Intent.PinView(v.id(), !v.pinned())));
-        final JButton close = small("close", "Close the view");
-        close.addActionListener(e -> context.intents().dispatch(new Intent.CloseView(v.id())));
+        pin.setBorder(v.pinned()
+                ? BorderFactory.createMatteBorder(0, 0, 2, 0, Theme.tint().body)
+                : BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        final JButton close = small("close", KeyText.of("Close the view (⌘W)"),
+                () -> dispatch(new Intent.CloseView(v.id())));
+        // the header and its title (for its tooltip) take the tab's clicks: each selects the tab or opens its menu
+        final MouseAdapter clicks = new MouseAdapter() {
+            @Override
+            public void mousePressed(final MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    menu(v).show(e.getComponent(), e.getX(), e.getY());
+                } else if (SwingUtilities.isLeftMouseButton(e)) {
+                    final int at = indexOf(v.id());
+                    if (at >= 0) {
+                        tabs.setSelectedIndex(at);
+                    }
+                }
+            }
+
+            @Override
+            public void mouseReleased(final MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    menu(v).show(e.getComponent(), e.getX(), e.getY());
+                }
+            }
+        };
+        p.addMouseListener(clicks);
+        title.addMouseListener(clicks);
         p.add(title);
         p.add(pin);
         p.add(close);
         return p;
     }
 
-    private static JButton small(final String icon, final String tip) {
-        final JButton b = new JButton(Icons.get(icon, 12));
-        b.putClientProperty("JButton.buttonType", "toolBarButton");
-        b.setToolTipText(tip);
-        b.getAccessibleContext().setAccessibleName(tip);
-        b.setFocusable(false);
+    private void dispatch(final Intent intent) {
+        context.intents().dispatch(intent);
+    }
+
+    /** A {@link ToolButton} at the tab's 12px icon size, so the header keeps the tab's height. */
+    private static JButton small(final String icon, final String tip, final Runnable r) {
+        final JButton b = ToolButton.of(icon, tip, r);
+        b.setIcon(Icons.get(icon, 12));
         return b;
     }
 

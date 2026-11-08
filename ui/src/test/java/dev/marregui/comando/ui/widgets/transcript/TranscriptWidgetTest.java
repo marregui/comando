@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [TranscriptWidget]: a session's transcript on its own ground, following the end, with the sub-agent strip.
 /// - the transcript is drawn on the viewport's ground
 /// - a transcript loaded while hidden, another transcript and a prompt sent from a panel all follow the end
+/// - asked for the report, the transcript stops following; with no report it stays as it is
 /// - a waiting approval marks its tool call and survives a reload
 /// - zoom stops at the font limits and turns back at once
 /// - the strip names running sub-agents, then background ones, and hides when none run; a chip click reveals its card
@@ -106,6 +107,35 @@ class TranscriptWidgetTest {
         final Transcript second = new Transcript();
         fill(second, 0, 10);
         widget.render(new TranscriptView("b", second));
+        assertThat(widget.following()).isTrue();
+    }
+
+    /// Going to the last report leaves the end: the transcript stops following and the way back to the end shows.
+    @Test
+    void askingForTheReportStopsFollowing() {
+        final Transcript t = new Transcript();
+        t.append(new Block.UserPrompt("go", "", ""));
+        t.append(new Block.AssistantText("m", 0, "Done.", false, ""));
+        t.append(new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+        widget.render(new TranscriptView("s", t));
+        assertThat(widget.following()).isTrue();
+
+        widget.showReport();
+
+        assertThat(widget.following()).isFalse();
+        assertThat(widget.latestShown()).isTrue();
+    }
+
+    /// With no report to go to, the transcript goes on following its end.
+    @Test
+    void askingForAReportThatIsNotThereChangesNothing() {
+        final Transcript t = new Transcript();
+        t.append(new Block.UserPrompt("go", "", ""));
+        t.append(new Block.AssistantText("m", 0, "Still working.", false, ""));
+        widget.render(new TranscriptView("s", t));
+
+        widget.showReport();
+
         assertThat(widget.following()).isTrue();
     }
 

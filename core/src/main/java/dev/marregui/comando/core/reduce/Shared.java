@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 
 /**
@@ -28,6 +29,19 @@ final class Shared {
 
     static List<SessionSpec> sessionSpecs(final AppState s) {
         return s.sessions().stream().map(SessionState::spec).toList();
+    }
+
+    /**
+     * {@code x}, whose work has ended, with that work marked for the user to read, unless the user is looking at it:
+     * the focused panel is on the session (record 136).
+     */
+    static SessionState finished(final AppState s, final SessionState x, final long nowMillis) {
+        return x.name().equals(focusedSession(s)) ? x : x.withSpec(x.spec().withUnread(nowMillis));
+    }
+
+    /** The session of the focused panel, empty when it has none. */
+    static String focusedSession(final AppState s) {
+        return s.panel(s.focused()).map(PanelState::session).orElse("");
     }
 
     /**

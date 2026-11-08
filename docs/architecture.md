@@ -88,17 +88,17 @@ One immutable record of metadata and ids. Lists hold tens of entries, so lookups
 
 | Field | Holds |
 |---|---|
-| `panels` | each open editor panel: id, title, connection and session bindings, whether it is a document (a file from outside comando's folder) |
+| `panels` | each open editor panel: id, title, connection and session bindings, whether it is a document (a file from outside comando's folder), whether it sits in the right-hand partition (`side`) and whether it is the preview tab (`preview`, never saved; record 141) |
 | `closed` | comando's own panels the user closed, kept with their bindings until removed |
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
-| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint compacts when it ends, whether the automatic checkpoint is armed (record 129), whether the automatic checkpoint's compaction is followed by a carry-on prompt (`checkpointContinues`, `Reducer.CONTINUE_PROMPT`), whether the carry-on ran and no prompt of the user's or another session's has since (`carriedOn`, which holds the next automatic checkpoint back), and `checkpointTurns`, the turns still to end up to the checkpoint command or its `/compact`: while non-zero the session is locked and every intent on it but an interrupt or a stop is dropped (record 130) |
+| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, what its writes say it works on (`SessionSubject`, record 138), process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint compacts when it ends, whether the automatic checkpoint is armed (record 129), whether the automatic checkpoint's compaction is followed by a carry-on prompt (`checkpointContinues`, `Reducer.CONTINUE_PROMPT`), whether the carry-on ran and no prompt of the user's or another session's has since (`carriedOn`, which holds the next automatic checkpoint back), and `checkpointTurns`, the turns still to end up to the checkpoint command or its `/compact`: while non-zero the session is locked and every intent on it but an interrupt or a stop is dropped (record 130) |
 | `instances` | the other comando instances on the comando Edge and the questions between them (`InstancesState`, record 124) |
 | `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group whose row shows them ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `later` | the decisions automatic checkpoints held back, oldest first, kept in `decisions.json` (record 131) |
-| `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
+| `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version, and its home: where the user moved it, which a view shown again with the same title keeps (record 141) |
 | `lowerTab` | the selected lower tab: Session, Approvals, Terminal, Results, or a view |
 | `notice`, `notices` | the standing status-bar message (level, text, time, subject) and the last 50 |
 | `nextId` | the next request, view, run or held-back decision id; it never goes back, and decisions read at start lift it above `decisions.json`'s `lastId` (record 131, amended) |
@@ -113,14 +113,14 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 
 | Group | Intents |
 |---|---|
-| Panels | `AddPanel`, `ClosePanel`, `ReopenPanel`, `RemovePanel`, `RenamePanel`, `MovePanel`, `FocusPanel`, `BindConnection`, `BindSession`, `OpenSession` |
+| Panels | `AddPanel`, `ClosePanel`, `ReopenPanel`, `RemovePanel`, `RenamePanel`, `MovePanel`, `PlacePanel` (to the partition or the main tabs), `PinPanel` (the preview tab stays), `FocusPanel`, `BindConnection`, `BindSession`, `OpenSession` |
 | Running text | `RunText` (target auto, SQL or Claude), `RefreshSql` (a live plot's re-run), `CancelRun` |
 | SQL events | `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled`, `SqlWarning` |
 | Connections | `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `SchemaChanged`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
-| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `SessionRanAt` (the model and effort a turn ran at), `SessionContext` (record 120), `PromptSession` (one session prompting another, record 44, and an instance's consult, record 123), `PlanUsageRead` |
+| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `SessionSubjectRead` (what a session's writes name, record 138), `SessionRanAt` (the model and effort a turn ran at), `SessionContext` (record 120), `PromptSession` (one session prompting another, record 44, and an instance's consult, record 123), `PlanUsageRead` |
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Decisions held back | `DecisionHeldBack`, `DecisionsSettled`, `DecisionsRead`, `SettleDecision`, `DismissDecision` |
-| Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
+| Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `PlaceView` (a view moved between the lower panel and the partition), `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
 | Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead`, `RollBack`, `RemoveFiles`, `Unstage` (the git writes of the Changes view and the comparison window) |
 | Notices | `Notify`, `DismissNotice` |
@@ -148,6 +148,7 @@ it: `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules` (runs and connection
 | Same state for no change | focusing the focused panel returns the same object, so nothing re-renders |
 | User wins | `ShowView` replaces an unpinned view with the same title, session and placement; a pinned view is never replaced |
 | Repositories | after any intent, folders that changed, or a Changes view that appeared or went, add `WatchRepos` with every folder and whether the view shows; `App` asks for the first read at start |
+| To read | `Shared.finished` sets `SessionSpec.unreadMillis` to the time when a turn's work ends or a session exits at work, unless the focused panel is on it; after every intent a session busy or the focused panel's loses the mark, and when a mark changed, one `SaveSessions` replaces any other (record 136) |
 | The folders window | `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change to `folders.json` read while the window was open; a list naming one folder twice saves nothing |
 | The user's file | `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and saves nothing; the kit's folders join the list read at start, once per root, and are saved ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
 
@@ -220,6 +221,7 @@ returns; outcomes come back as intents.
 | `QueryPort` | `query`, `describe` (futures of text rows, for Claude) | `db` `DbAdapter` | `mcp` (`db_run_sql`, `db_describe`) |
 | `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget`, `showSubagent` | `claude` `ClaudeAdapter` | `EffectRouter` |
 | `TopicPort` | `read` (a tab's topic, delivered to a callback; a topic is view data and never passes the reducer) | `claude` `ClaudeTopics` | `ui` (the tabs' cards) |
+| `SearchPort` | `search`, `cancel` (a search's answers go to its sink: derived data that never passes the reducer; record 139) | `app` `Searcher` | `ui` (`SearchWidget`, through `SearchHub`) |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `mcp` `McpServer` | `claude` (a ticket per process) |
 | `ApprovalPort` | `resolve` | `mcp` `McpServer` | `EffectRouter` |
 | `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange`, `rollBack`, `removeFiles`, `unstage` | `tools` `ToolsAdapter` | `EffectRouter` |
@@ -273,6 +275,12 @@ bound or an interrupt the program's descendants are killed, then the program. A 
 `AtomicFiles`: a temporary file of a unique name beside the target, moved over it atomically where the file system
 can.
 
+A search from the Search view ([Workbench §1.2](workbench.md#12-panels), [record 139](adr/0139-one-window-finds-in-files-and-conversations.md))
+runs on two strands of `app`'s `Searcher`: `search-scan` runs a search's sources in turn, and `search-hits`, a timed
+strand, hands what they found to the view every 100 ms. `FolderSearch` reads files on forks, `folder-search-<n>`, at
+most half the cores, and collects them in the same call: virtual threads, as comando has no bounded platform kind
+([Development §5](development.md#5-code-rules), departures). The preview tab opens a hit's file as any panel opens a file.
+
 Each module's own threads, with what stops each, are in the module's section below.
 
 How work crosses threads:
@@ -323,25 +331,26 @@ window exists rolls back through the same `close()`, without the save, as there 
 
 | Created | Part | Closed | Closing it |
 |---|---|---|---|
-| 1 | the root, named for every module (`KitRoot.use`) | 16 | restores the root that was named before |
-| 2 | `kit-check` | 15 | stops the kit's periodic read and the queues' |
-| 3 | `KitGit` | 14 | lets a backup's `git add` or `git commit` under way finish, up to its 60 s bound, so no `.git/index.lock` is left, then kills its git runs and every process they started |
-| 4 | `Store` | 13 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call), then interrupts what is left (each file is written through `AtomicFiles`, so an interrupted write leaves the old one) |
-| 5 | `App`'s errands | 12 | interrupts the start-up check and waits for it |
-| 6 | `IntentLog` (when recording) | 11 | closes the log after the loop, so the shutdown's intents are recorded |
-| 7 | `StateLoop` | 10 | stops the reducer after the queued intents, then its look on the watchdog; a reducer thread still alive after 2 s (`CLOSE_MILLIS`) is logged with its stack, and the loop hands out no more effects |
-| 8 | `DbAdapter` | 9 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer (at most 2 s), and lets the cancels sent finish (2 s, then 2 s more after an interrupt): at most 9 s |
-| 9 | `MermaidDiagrams` | 8 | stops `mmdc` and its children |
-| 10 | `LocalImages` | 7 | stops reading pictures and drawing SVGs |
-| 11 | `McpServer` | 6 | denies every waiting approval, stops the server |
-| 12 | `ClaudeAdapter` | 5 | SIGTERM to each `claude` process and every process it started; SIGKILL 2 s later to what is left of them, a child that ignored the SIGTERM after `claude` exited included; the session strands end on one 2 s bound (2 s more after an interrupt); deletes every MCP configuration file and revokes its token |
-| 13 | `ToolsAdapter` | 4 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll; lets a queued repository write (stage, roll back, remove) finish within 10 s, one git run, so no `.git/index.lock` is left, then stops git; its errands last |
-| 14 | `ClaudeTopics` | 3 | drops the waiting asks, stops a read under way |
-| 15 | `MqttPeerBroker` (unless `-Dcomando.peers=false`) | 2 | stops following the Edge, disconnects (so the broker drops the last will), at most 2 s |
-| 16 | `Peers` | 1 | clears this instance's presence on the comando Edge (at most 2 s), interrupts the answers under way, which reply `error`, and fails this instance's questions still waiting |
-| 17 | `EmbeddedEdge` | 17 | stops the Edge this instance started (SIGTERM to its recorded pid, bounded wait) and clears `~/.comando-edge.json` |
-| 18 | `EmbeddedQuestDb` | 18 | closes after the lanes |
-| 19 | `ComandoUi` | 19 | closes last: terminals (a shell or a job it started still alive 2 s after the hangup and SIGTERM is killed), live plots, the EDT's watchdog look, the window, the window's errands; each step is guarded, so one that throws is logged and the next still runs, the errands always close and the quit always reaches the application |
+| 1 | the root, named for every module (`KitRoot.use`) | 17 | restores the root that was named before |
+| 2 | `kit-check` | 16 | stops the kit's periodic read and the queues' |
+| 3 | `KitGit` | 15 | lets a backup's `git add` or `git commit` under way finish, up to its 60 s bound, so no `.git/index.lock` is left, then kills its git runs and every process they started |
+| 4 | `Store` | 14 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call), then interrupts what is left (each file is written through `AtomicFiles`, so an interrupted write leaves the old one) |
+| 5 | `App`'s errands | 13 | interrupts the start-up check and waits for it |
+| 6 | `IntentLog` (when recording) | 12 | closes the log after the loop, so the shutdown's intents are recorded |
+| 7 | `StateLoop` | 11 | stops the reducer after the queued intents, then its look on the watchdog; a reducer thread still alive after 2 s (`CLOSE_MILLIS`) is logged with its stack, and the loop hands out no more effects |
+| 8 | `DbAdapter` | 10 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer (at most 2 s), and lets the cancels sent finish (2 s, then 2 s more after an interrupt): at most 9 s |
+| 9 | `MermaidDiagrams` | 9 | stops `mmdc` and its children |
+| 10 | `LocalImages` | 8 | stops reading pictures and drawing SVGs |
+| 11 | `McpServer` | 7 | denies every waiting approval, stops the server |
+| 12 | `ClaudeAdapter` | 6 | SIGTERM to each `claude` process and every process it started; SIGKILL 2 s later to what is left of them, a child that ignored the SIGTERM after `claude` exited included; the session strands end on one 2 s bound (2 s more after an interrupt); deletes every MCP configuration file and revokes its token |
+| 13 | `ToolsAdapter` | 5 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll; lets a queued repository write (stage, roll back, remove) finish within 10 s, one git run, so no `.git/index.lock` is left, then stops git; its errands last |
+| 14 | `ClaudeTopics` | 4 | drops the waiting asks, stops a read under way |
+| 15 | `Searcher` | 3 | ends the running search and both its strands |
+| 16 | `MqttPeerBroker` (unless `-Dcomando.peers=false`) | 2 | stops following the Edge, disconnects (so the broker drops the last will), at most 2 s |
+| 17 | `Peers` | 1 | clears this instance's presence on the comando Edge (at most 2 s), interrupts the answers under way, which reply `error`, and fails this instance's questions still waiting |
+| 18 | `EmbeddedEdge` | 18 | stops the Edge this instance started (SIGTERM to its recorded pid, bounded wait) and clears `~/.comando-edge.json` |
+| 19 | `EmbeddedQuestDb` | 19 | closes after the lanes |
+| 20 | `ComandoUi` | 20 | closes last: terminals (a shell or a job it started still alive 2 s after the hangup and SIGTERM is killed), live plots, the EDT's watchdog look, the window, the window's errands; each step is guarded, so one that throws is logged and the next still runs, the errands always close and the quit always reaches the application |
 
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
 job in the foreground, a Gradle run; Cancel is the default. The shells' jobs are looked up off the EDT, every shell
@@ -365,18 +374,18 @@ registries for data too large to copy with every state in [§4.5](#45-stores-out
 
 | Package | Holds |
 |---|---|
-| `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo`; `InstancesState`, the other instances on the comando Edge and the questions between them ([record 124](adr/0124-the-sidebar-shows-the-instances.md)) |
+| `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo`, `SessionSubject`; `Attention`, what a session asks of the user, the first that applies (record 136); `InstancesState`, the other instances on the comando Edge and the questions between them ([record 124](adr/0124-the-sidebar-shows-the-instances.md)) |
 | `intent` | `Intent`, the sealed interface of every change; `EditMode` |
 | `action` | `Action` and `Actions`: every user action as an agent's tool, with its arguments and class, and every kind of intent classified (offered, event, window, not yet) ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)) |
 | `reduce` | `Reducer`; the rules of each domain ([§4.3](#43-the-reducer)): `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules`, `ApprovalRules`, `DecisionRules`, `FolderRules`, `ViewRules`, `Shared`; `Transition` (the next state and its effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog`, `ExecutorStop` (an owner's bounded stop of its executors), with `Threads.alive` listing the live threads by name for tests; `Queues`, the depth and peak of each unbounded queue (the intent queue, every strand, a timed strand's waiting and delayed tasks, each `claude` process's stdin), counted with two atomic operations a task, a timed strand's queue, which the JDK keeps, sampled at each submission, and read for the metrics log; `Processes`, the one way a short command is run |
-| `port` | the interfaces adapters implement ([§8.2](#82-interface-with-the-rest-of-the-app)); among them `InstancesPort` (`ask`, `deny`, `forget`, `role`: what the user does from the Instances tab, implemented by `mcp`'s `Peers`, record 124) and `ServerSwitch` (`name`, `isRunning`, `want(up)`, `status`: a local server an agent starts or stops naming the direction, the comando Edge or the embedded QuestDB, record 121) |
-| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `Decision` (a decision an automatic checkpoint held back), `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `VersionedLines` (a file of one entry a line whose first line names its format and version, record 133); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
+| `port` | the interfaces adapters implement ([§8.2](#82-interface-with-the-rest-of-the-app)); among them `SearchPort` (`search`, `cancel`, with its `Sink` and `Source`: record 139), `InstancesPort` (`ask`, `deny`, `forget`, `role`: what the user does from the Instances tab, implemented by `mcp`'s `Peers`, record 124) and `ServerSwitch` (`name`, `isRunning`, `want(up)`, `status`: a local server an agent starts or stops naming the direction, the comando Edge or the embedded QuestDB, record 121) |
+| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `Decision` (a decision an automatic checkpoint held back), `PermissionRules`, `PlanUsage`, `Topic`, `SearchHit`, `SearchQuery`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `VersionedLines` (a file of one entry a line whose first line names its format and version, record 133); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |
-| `files` | `OwnerOnly`: the one way any module makes a data-root file `rw-------` or folder `rwx------`, at creation and narrowed again at each start whatever the umask (rule 15); `App` narrows `logs`, `run`, `audit` and `metrics`; `Logging`, `IntentLog`, `MetricsLog` and `mcp`'s `AuditLog` (which recreates its folder and narrows its files) make theirs through it, `ClaudeAdapter` the `run` folder and each `.mcp.json`, `ClaudeProcess` its stderr temporary file, `EmbeddedEdge` the Edge's `conf/`, `config.xml` and `admin-password` |
+| `files` | `OwnerOnly`: the one way any module makes a data-root file `rw-------` or folder `rwx------`, at creation and narrowed again at each start whatever the umask (rule 15); `App` narrows `logs`, `run`, `audit` and `metrics`; `Logging`, `IntentLog`, `MetricsLog` and `mcp`'s `AuditLog` (which recreates its folder and narrows its files) make theirs through it, `ClaudeAdapter` the `run` folder and each `.mcp.json`, `ClaudeProcess` its stderr temporary file, `EmbeddedEdge` the Edge's `conf/`, `config.xml` and `admin-password`. `Mapped`: every file read, mapped read-only and scanned in place, decoding only the slice asked for, malformed UTF-8 as the replacement character (rule 16, record 140): `read` for a mapping that ends with its body, `open` for one a single thread holds, `text`, `bytes`, `lines`, `head`, `linesWith`, and on a mapping `text(from, to)`, `lines`, `stream()`, `stream(from, to)`; a file cut while mapped fails as an `IOException`. `ByteScan`: finds a needle in mapped bytes, ASCII letters in either case, every other byte as itself |
 | `result` | `ResultView` (read access to a run's rows), `ResultRegistry`, `ColumnKind`, `Formats`, `ResultText` (a result as column names and text rows, SQL NULL as a null cell) |
 | `transcript` | `Block`, `Transcript` (one writer, many readers), `TranscriptRegistry`, `TopicSource` (what a tab's topic is read from) |
 | `console` | `Console` (a command run's output), `ConsoleRegistry` |
@@ -406,6 +415,8 @@ Readers take `StateLoop.state()`, a consistent snapshot, from any thread. `app` 
 | `HomeDir` | `~` expansion and shortening; Claude Code's folder, the root `KitRoot` resolves | every module |
 | `KitRoot` | the root and the brain ([Kit and brain §3.1](kit-and-brain.md#31-the-root)): the kit from `CLAUDE_CONFIG_DIR`, else `~/.claude`, `~/comando-kit` or `~/.claude/comando-kit`, the first that holds a `comando-kit.json`, which is the kit even when its manifest does not read (comando then runs with no kit and a notice says why; it never passes on to the next folder); the brain, only with a kit, from `COMANDO_BRAIN`, else the manifest's `brain`, else `<root>/BRAIN`; each manifest folder under its `root`, `kit` or `brain` | `app` names it once (`KitRoot.use`) and parses `comando-kit.json` through `claude`'s `KitJson`, as `core` reads no JSON |
 | `Clip` | a label shortened the same way in the window and in what Claude is told | `ui`, `claude`, `mcp`, `tools` |
+| `Attention` | what a session asks of the user: needs you, working, to read, idle | the Sessions tab, the work list, the tabs |
+| `Mapped` | how a file is read (rule 16) | every module |
 | `PermissionRules` | the allow rules an approval adds | `mcp`, the approval card |
 
 **Adding a change.** A new intent is a record in `Intent`, a case in `Reducer` and a classification in `Actions` (sent by an action, an event, the window's own, or not yet; `ActionParityTest` fails otherwise). A new effect is a record in `Effect`,
@@ -422,17 +433,17 @@ The thread kit: [§6](#6-threads); stalls and an `Error`: [§4.4](#44-effects).
 
 ### 8.4 Tests
 
-Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTest`, `KitFoldersTest` and
-`AtomicFilesTest`, and the child processes of `ProcessesTest`. They use `testkit`'s `FakeClock` and `States`.
+Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTest`, `KitFoldersTest`,
+`AtomicFilesTest` and `MappedTest`, and the child processes of `ProcessesTest`. They use `testkit`'s `FakeClock` and `States`.
 
 | Subject | Tests |
 |---|---|
-| reducer | `ReducerTest`, `ReducerNoticeAndLayoutTest`, `ReducerSubagentTest`, `ReducerChangesTest`, `ReducerFamilyTest` (the creation family kept when the user removes its root, saved, the walk up the creators unbounded and loop-safe), `ReducerDecisionsTest` (the decisions automatic checkpoints hold back, record 131) |
+| reducer | `ReducerTest`, `ReducerAttentionTest` (the To read mark: set, cleared, saved, kept), `ReducerNoticeAndLayoutTest`, `ReducerSubagentTest`, `ReducerChangesTest`, `ReducerFamilyTest` (the creation family kept when the user removes its root, saved, the walk up the creators unbounded and loop-safe), `ReducerDecisionsTest` (the decisions automatic checkpoints hold back, record 131) |
 | loop and threads | `StateLoopTest` (`applyNow` drives the loop without its thread), `ThreadKitTest`, `ExecutorStopTest` (an owner's executors have ended when its close returns; `now` gives up at its bound and says so), `WatchdogTest` (a look that fails does not stop the others), `NotifyLoggedTest`, `ProcessesTest`, `QueuesTest` (a gauge's depth and peak; a strand's gauge gone when it ends) |
 | effects | `EffectRouterTest` (each effect to its own port method with its own arguments; every effect the sealed interface permits has a row) |
 | dispatch | `ClassifierTest`, `BlocksTest`, `StatementsTest` |
 | stores | `TranscriptTest`, `TopicSourceTest`, `ConsoleTest`, `FormatsTest`, `ResultTextTest` |
-| state and model | `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `InstanceNameTest`, `AtomicFilesTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`, `KitJobTest`, `LinearTicketsTest`; `OwnerOnlyTest` (`files`) |
+| state and model | `AttentionTest`, `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `InstanceNameTest`, `AtomicFilesTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`, `KitJobTest`, `LinearTicketsTest`; `OwnerOnlyTest`, `MappedTest`, `ByteScanTest` (`files`) |
 
 ```
 ./gradlew :core:test
@@ -605,7 +616,9 @@ One package, `dev.marregui.comando.claude`.
 | `CodexUsageReader` | the Codex plan's usage limits from `codex app-server` (`account/rateLimits/read` over JSON-RPC on stdio), which sends no prompt; without Codex installed or signed in, the read says why |
 | `ClaudeTopics` | the tabs' topics: one or two sentences from Haiku (`claude --safe-mode -p --model haiku`, no tools, no saved session), one read at a time, at most one ask waiting per tab |
 | `ClaudeVersion` | `claude --version` against the tested range, 2.1.316 (the newest Claude Code on the release's day, its minimum) inclusive to 2.2.0 exclusive: a warning outside it, not a refusal |
-| `GitBranch` | the working directory's branch from `.git/HEAD`, without running git |
+| `GitBranch` | the working directory's branch from `.git/HEAD`, without running git; `top`, the repository holding a folder, which need not exist |
+| `SessionSubjects` | what a session works on, from its own writes ([Claude Code §1.5](claude-code.md#15-what-a-session-works-on)): a pass over the blocks added since the last, at a turn's end and after a history load, on the session's strand |
+| `TranscriptSearch` | a word in the messages of the stored conversations ([Claude Code §1.4](claude-code.md#14-stored-conversations)): each file mapped, its bytes scanned, only a line holding the word parsed; no index |
 | `KitJson` | a kit's `comando-kit.json` read into `core`'s `KitRoot.Manifest` by the schema of [record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md) §2.1: `kit` is the version, 1 when absent, a later one refused; refused whole when it is not JSON, has no name, or names a folder outside its root (`KitRoot.refused` says why; `brain` is optional, `<root>/BRAIN` when absent); a folder that breaks the rules `FolderKind` holds every folder to is left out and named in `Manifest.problems`; `repair()` rewrites the file without those entries, the old one kept as `comando-kit.json.bak-<time>`, one per repair, never overwritten; `resolve()`, the root comando runs on |
 | `KitJobsCli` | the kit's scheduled jobs through the root's `install/kit.py` (record 117): `jobs --json` read into `core`'s `KitJobs`, the whole list handed to `jobs set` on standard input, `job run` for one; each call through `Processes`, at most 60 s |
 | `RootLaunch` | what every `claude` comando starts gets from the root: its environment and `--settings` ([Kit and brain §3.1](kit-and-brain.md#31-the-root)), the kit's settings merged into a `--settings` already given; the root of the session `kit` ([Kit and brain §3.4](kit-and-brain.md#34-version-and-upgrade)); `COMANDO_HOME`, the instance's data root, for every process (record 122, amended), and `COMANDO_BRAIN`, the brain's folder, with a kit; `COMANDO_CREATED_BY` for a session an agent made and `CONTEXT_CHECKPOINT_BY` for one launched while comando runs the checkpoint (record 129), both taken out of every other process ([Claude Code §1.1](claude-code.md#11-the-process)) |
@@ -636,6 +649,7 @@ every tab: however many panels ask, at most one Haiku process runs.
 | `ClaudeAdapter.watchPlanUsage(every)` | reads both plans' usage now and every period | `app` at start (every 20 min) |
 | `ClaudeAdapter.metrics(log)`, `checkpointByComando()` | the `MetricsLog` the sessions write, and `CONTEXT_CHECKPOINT_BY` on every session launched (record 129) | `app`'s wiring |
 | `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog and the session dialog |
+| `TranscriptSearch.scan(query, found, ended)` | a `SearchPort.Source`: the hits in the stored conversations, newest first, and how many files failed | `app`'s wiring |
 | `ClaudeVersion.check(executable, launch)` | a warning, or empty | `app` at start |
 | `KitJson.resolve`, `KitJson.read` | the root and its kit | `app`'s `AppConfig` |
 | `KitJobsCli` | the kit's jobs: read, save, run | `app`'s `RootSetup` |
@@ -646,7 +660,8 @@ every tab: however many panels ask, at most one Haiku process runs.
 start sessions without comando's tools) and `ClaudeSettings`.
 
 **Sends back.** `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`,
-`SessionTasksChanged`, `SessionExited`, `SessionBranch`, `SessionRanAt` (the model and effort a message ran at),
+`SessionTasksChanged`, `SessionExited`, `SessionBranch`, `SessionSubjectRead`, `SessionRanAt` (the model and effort a
+message ran at),
 `SessionContext` (the context size a turn ended with, record 120), `PlanUsageRead`, `ShowView` and `RefreshView` (a
 subagent's conversation as a lower view, followed while it grows), `Notify`.
 
@@ -683,7 +698,9 @@ revokes its token. `ClaudeVersion.check` runs on its caller's thread, bounded at
 | `SubagentFilesTest`, `SubagentFilesProbeTest` | the fixtures in `src/test/resources/subagents/`; generated inputs |
 | `PlanUsageReaderTest`, `CodexUsageReaderTest`, `ClaudeTopicsTest` | reads against fake scripts written in a temporary folder; `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close |
 | `ClaudeVersionTest` | the version parse, the half-open tested range, a missing executable |
-| `SessionCatalogueTest`, `GitBranchTest` | stored conversations newest first; the branch from any directory, a detached head |
+| `SessionCatalogueTest`, `GitBranchTest` | stored conversations newest first; the branch from any directory, a detached head, the repository holding a folder |
+| `SessionSubjectsTest` | the latest write's repository wins and the others follow; only the write tools count, and only when they succeeded; a path under the working folder or Claude Code's folder dropped with no `.git` read; a pass reads only what is new; the ticket in upper case; the adapter reads at turn end and after a history load |
+| `TranscriptSearchTest` | only a typed prompt and an answer's text count; a word as JSON writes it, ASCII in either case; the snippet; the title a hit goes by; newest first, top level only; a stopped scan; a file cut while mapped |
 | `KitJobsCliTest` | a stand-in `kit.py` recording its arguments and standard input: the report read, the list handed over in the manifest's form, `job run`, and each failure read as a reason |
 | `KitJsonTest`, `RootLaunchTest` | a `comando-kit.json` as the kit's installer writes it, broken ones refused, roots resolved with it; the environment and `--settings` each `claude` gets, the upgrade session's exception, a real process's `CLAUDE_CONFIG_DIR` |
 
@@ -835,6 +852,7 @@ One package, `dev.marregui.comando.tools`.
 | `Args` | splits the tasks the user typed as a POSIX shell splits words, without expansion |
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
 | `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without hidden entries, excluded names and the entries a caller skips; read whole, or only as deep as the Files tab shows it: one level, plus each open subfolder and one level inside it, a subfolder not read holding one `…` entry (`ViewSpec.TreeNode.NOT_READ`) so it can still be opened |
+| `FolderSearch` | a `SearchPort.Source`: the Files tab's folders, less its excludes, `FolderRoot.ALWAYS_EXCLUDED` and hidden entries; names first, then each file mapped and scanned with `ByteScan`, at most `Searcher.SCANNERS` at once and 500 000 files in all. A NUL in the first 8 kB skips a file, a line's slice is clipped to 200 characters, and a file or folder that fails counts as failed; no index (record 139) |
 | `ListingLines` | the lines a listing file (an index file that names the entries beside it) gives an entry, taken out once the entry went to the Trash; other lines naming it stay and are reported |
 | `ToolSettings` | where the tools are, by convention: a `gradle-serial` executable on comando's `PATH` when there is one, and the JDK for child processes |
 | `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the backup of the brain or the kit's root (`git add -A`, a commit when anything changed whose message says what it adds, `Brain backup <date>: <top folders and counts>` or `Kit backup …`, then one line a file, `git push`) only when the folder is a repository's top with a remote; remote runs bounded at 120 s, the commit at 60 s |
@@ -874,6 +892,7 @@ reads the open folders again. Nothing is deleted for good.
 | `ToolPort` | `runGradle(runId, workDir, tasks)`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders(folders, open)` (the one-argument form reads whole), `deleteFiles(folder, paths)`, `watchRepos(folders, changesShown)`, `readChange(root, change, ask)`, `rollBack(root, changes)`, `removeFiles(root, paths)`, `unstage(root, paths)` | the reducer's effects, through `EffectRouter` |
 | `ToolsAdapter.pollFolders(every)` | starts the folder poll | `app` at start (every 5 s) |
 | `ToolsAdapter.Trash` | `moveToTrash(file)`; `Trash.NONE` for tests and desktops without one | implemented in `ui` (`DesktopTrash`), passed in by `app` |
+| `FolderSearch.scan(query, found, ended)` | a `SearchPort.Source`: the hits in the folders, in the walk's order on the scanning thread, and how many failed | `app`'s wiring |
 | `KitGit` | `version(root)`, `canBackUp(brain)`, `backUp(brain, today)`, `backUp(repo, what, today)` | `app`'s `RootSetup`, off the EDT: the kit's version at start and every 6 hours, the brain's and the kit's backups when the user asks for them |
 
 **Needs.** The `IntentSink`, the `ConsoleRegistry` it writes, a `Supplier<ToolSettings>` (`app` passes
@@ -891,6 +910,7 @@ The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 |---|---|---|---|
 | `gradle-<run>`, `tool-kill-<run>` | errands of the adapter | the run's process; the SIGKILL 2 s after a stop | `close()`, last, once the processes have ended |
 | `tool-output-<run>` | fork | the run's output while the run waits for its process | its run, at most 2 s after the exit |
+| `folder-search-<n>` | fork | a search's file reads, at most half the cores | `FolderSearch.scan`, which collects them; the search's end stops their reading |
 | `folder-read`, `repo-read`, `file-trash` | errands | a read asked for now; the repositories read at once when `watchRepos` changes them; moves to the Trash and the listing edits | `close()` |
 | `folder-poll` | timed strand | reads the watched repositories, then the open folders, each as deep as the Files tab shows it, every period | `close()` |
 | `change-read` | strand | a changed file's two versions, one at a time | `close()` |
@@ -909,6 +929,7 @@ run, sends SIGTERM to every run's process tree and SIGKILL 2 s later, and closes
 | `ToolsAdapterTest` | Gradle runs against a fake `gradlew` (a shell script that prints its arguments and writes one failing JUnit report); folder reads in temporary directories, a folder read only as deep as it shows (a counting lister names each folder listed), a subfolder opened read at once |
 | `GitTest`, `ToolsAdapterReposTest` | a repository built with the real `git` in a temporary directory: a change of each kind, an ignored folder |
 | `KitGitTest` | the kit's version and the brain's and the kit's backups, their messages, against a checkout and a bare remote on disk |
+| `FolderSearchTest` | a line hit and its number, names before lines; what the tab leaves out; a binary file passed over; a long line clipped, the mark in characters; hits in the walk's order on the scanning thread; a refused hit or an ended search stops the reading; what cannot be read counted; links and special files; overlapping folders read once; a match across a chunk's seam |
 | `ListingLinesTest`, `ToolSettingsTest` | unit tests |
 
 ```
@@ -937,9 +958,9 @@ other), and no test orders them.
 |---|---|
 | `kit.*` | what every part builds on: theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, layout, resource actions, desktop, vcs; each package and its classes in [§14.2](#142-the-uikit-package) |
 | `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`, `Unmountable` (listeners and timers released in one call); `capability`: `Searchable`, `Copyable`, `Exportable`, `Zoomable`, `FindBar`, `Capabilities` |
-| `widgets.*` | one package per widget: `approval` (`ApprovalInbox`), `changes` (`ChangesWidget`, `ChangeEditor`), `console` (`ConsoleWidget`), `diff` (`DiffWidget`), `editor` (`CommandEditor`, `PanelDocument`, `PanelTokenMaker`, `SqlCompletion`), `markdown` (`MarkdownWidget`), `plot` (`PlotWidget`, `PlotCanvas`), `table` (`TableViewWidget`, `GridTable`, `TableSource`), `terminal` (`TerminalWidget`, `Pty`, `InputGate`), `text` (`TextWidget`), `tree` (`TreeWidget`) |
+| `widgets.*` | one package per widget: `approval` (`ApprovalInbox`), `changes` (`ChangesWidget`, `ChangeEditor`), `console` (`ConsoleWidget`), `diff` (`DiffWidget`), `editor` (`CommandEditor`, `PanelDocument`, `PanelTokenMaker`, `SqlCompletion`), `markdown` (`MarkdownWidget`), `plot` (`PlotWidget`, `PlotCanvas`), `search` (`SearchWidget`, `SearchTree`, `SearchHub`), `table` (`TableViewWidget`, `GridTable`, `TableSource`), `terminal` (`TerminalWidget`, `Pty`, `InputGate`), `text` (`TextWidget`), `tree` (`TreeWidget`) |
 | `widgets.transcript` | `TranscriptWidget`, `TranscriptView`, `AgentWidget` (a sub-agent's tab), `AgentStrip`, `ToolText`; `doc`: `MarkdownDoc`, `Para`, `Span`; `render`: `TranscriptCanvas` (the painted transcript), `Items` and its `Item`s (`ToolCallItem` among them), `Paras`, `Rich`, `TextBox`, `Placed`, `Style`, `Marks`, `Fold`, `Finder` (find within cells), `AgentTracker` |
-| `panels` | the window's regions: `Workspace`, `EditorPanel` (with `OutlinePane`), `LowerPanel`, `SidePane`, `StatusBar`, `SessionBar`, `ResultsView` (with `PlanTree`), `TerminalTabs`, `ViewTabs`, `SessionsSidebar` (its rows: `IconRow`, `SessionRow`, `ConnectionRow`; `PanelsWithoutSession`), `FilesTab` (its watch carries each folder's open subfolders, none while the filter has text; every expand and collapse re-checks it; a reveal into a subfolder not read yet waits for that read), `InstancesTab` (the other instances from their presence on the comando Edge, the questions between them, record 124), `TabCard`, `CardFacts`, `Delegation`, `TabStatus`, `SessionIcons`, `CommandButton`, `ThemeButton`, `ThemeChooser` and `ModeSwitch` (the popover under the swatch and its Dark / Light switch, record 128), `LockVeil` (greys the views of a session whose checkpoint runs, record 130) |
+| `panels` | the window's regions: `Workspace` (the main tabs and the right-hand partition's strip, record 141; `TabLook`, the look both strips share), `EditorPanel` (with `OutlinePane`), `LowerPanel`, `SidePane`, `StatusBar`, `SessionBar`, `ResultsView` (with `PlanTree`), `TerminalTabs`, `ViewTabs`, `SessionsSidebar` (its rows: `IconRow`, `SessionRow`, `ConnectionRow`; `PanelsWithoutSession`), `FilesTab` (its watch carries each folder's open subfolders, none while the filter has text; every expand and collapse re-checks it; a reveal into a subfolder not read yet waits for that read), `InstancesTab` (the other instances from their presence on the comando Edge, the questions between them, record 124), `TabCard`, `CardFacts`, `Delegation`, `TabStatus`, `SessionIcons`, `CommandButton`, `ThemeButton`, `ThemeChooser` and `ModeSwitch` (the popover under the swatch and its Dark / Light switch, record 128), `LockVeil` (greys the views of a session whose checkpoint runs, record 130) |
 | `dialogs` | `FormRows` (the labelled rows, list side and frame the folders and jobs windows share), `folders` (`FoldersEditor`, `FoldersDialog`), `jobs` (`JobsEditor`, `JobsDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions; `ConversationField`, the session's conversation picked from those stored; `ProjectSettings`, the working folder's own `.claude/settings.json` and `settings.local.json` and the permission mode they set over the kit's), `sessions` (`ImportSessionsDialog`, `StoredConversation`) |
 | `shell` | `ComandoUi` (the frame and the UI port) and the parts it delegates to: `Commands` (the command table), `MenuBuilder` and `Menus`, `Keys`, `LayoutKeeper` (splits and panes), `FocusRouter` and `FocusOrigins` (where the keyboard goes back to), `PanelFiles` (files opened, panels saved, views exported), `QuitFlow` and `ClosingCover`, `ShellParts`; then `WindowLayout`, `Settings`, `HelpActions`, `HelpFiles`, `About`, `MarkdownSheet`, `AppIcon`, `KitActions`, `JobActions`, `LivePlots`, `ResultViews`, `Attachments`, `Notifier`, `OpenFiles`, `DiffWindow`, `WorkedIn`, `ThemeFade` (a chosen theme fading in over the one before, record 103); `ServerToggle` and `Setup`, implemented in `app` |
 | (top) | `PanelTexts`: editor text between saves, implemented in `app` |
@@ -988,7 +1009,7 @@ runs) moves to an errand of `UiErrands`.
 | `text` | editors, find, diffs, Markdown and links ([§14.2.2](#1422-text)); `Tooltips`, `FrontMatter`, `LocalImages` |
 | `tree`, `layout`, `tabs` | `TreeView`, `ShrinkingRow`, `TabStrip`, `MovableTabs` ([§14.2.3](#1423-trees-tabs-and-overlays)) |
 | `vcs` | `RepoChanges`: the watched git repositories on the EDT, looked up by path (a file's change, a folder holding one), with git's colour for each kind. `OpenedFiles`: the files opened in comando, kept in `opened-files`, so the Files tab stops marking a new file once it is opened. The Files tab and the Changes view keep one each |
-| `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `FileSearch`, `DesktopTrash` (the Files tab's Trash), `Links` ([§14.2.2](#1422-text)) |
+| `desktop` | `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `FileSearch`, `DesktopTrash` (the Files tab's Trash), `Links` ([§14.2.2](#1422-text)) |
 
 #### 14.2.1 Threads
 
@@ -1063,7 +1084,8 @@ Every user action is a `Command`: id, label, icon, key, menu path or area, actio
 palette (⌘⇧P) come from the `ActionRegistry`.
 
 `MenuBuilder` builds the menu bar from `Menus`. The bar holds only what has no key or control in the window, and what
-macOS expects in a menu: after the application menu macOS draws, Edit, then Help, which holds the palette, a separator
+macOS expects in a menu: after the application menu macOS draws, Edit, Find (the view's finds and Find in files,
+record 139), then Help, which holds the palette, a separator
 and the help ([record 114](adr/0114-help-menu-and-corner-buttons.md), replacing
 [record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). The refreshing plots, the embedded QuestDB and the
 comando Edge (each of the last two when comando has one) are buttons at the tab row's right end, left of the theme's
@@ -1119,6 +1141,7 @@ the view closes. A view tab has a pin toggle and a close button.
 | `table` | `TableViewWidget` over `GridTable` | rows, only the visible ones painted, each cell formatted into one reused buffer; sort and find run on the EDT, so a sort stops at 200 000 rows and a find at 2 000 000 cells, the first rows that fit; a copy takes at most 200 000 rows; a growing result appends rows |
 | `plot` | `PlotWidget` over `PlotCanvas` | series over shared axes, each pixel column reduced to its min and max; more than 100 000 points are sorted off the EDT; time axes step on clock units; drag to zoom, double-click to reset |
 | `changes` | `ChangesWidget` | the Files tab's git repositories: Changed, Untracked and Removed, by folder. A file opens the side-by-side window, whose body is `ChangeEditor`: edited and saved every second with an edited/saved cue, undo by keys, roll back and remove from its menu, Markdown rendered. The selection's menu rolls back or removes its files ([Workbench §6.1](workbench.md#61-changes)) |
+| `search` | `SearchWidget` | Find in files and conversations: a field, then the hits by folder, folder chain and file, each named by its heading and line; the conversations last. The selection shows a file's hit in the preview tab through `SearchHub.Previews`, which the shell gives (record 141); `SearchHub` keeps the text and toggles while comando runs ([Workbench §1.2](workbench.md#12-panels), record 139) |
 | `diff` | `DiffWidget` | a unified diff |
 | `markdown` | `MarkdownWidget` | rendered Markdown; a view replaced by another document starts at its top |
 | `text` | `TextWidget` | a file or text, read-only, highlighted, at a line; a header button opens it in IntelliJ |
@@ -1201,6 +1224,7 @@ every tint (`Theme.ATTENTION`), a status colour as red is for errors.
 | subagent card | adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools". An Agent call whose result says it launched its subagent into the background reads "running in background · …" while the session lists that subagent among its open tasks, and done once it leaves the list. A card with no nested blocks shows no count: a stored conversation keeps a subagent's blocks in a file of its own. The header links to the subagent's stored conversation |
 | note | an icon by kind and the first line; error notes start open |
 | hook group | consecutive hook outputs as one line: "hooks · UserPromptSubmit, SessionStart (3)" |
+| turn row | `Items.StepsItem`, the hook group's sibling: at `TurnEnd` the items back to the prompt, under one line, "44 tools · 6 min", "· 1 failed" in the danger colour (record 137) |
 | turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); a failed turn shows its error first, in red; an interrupted turn reads "interrupted · 12.0 s", in the ivory of any text |
 
 #### 14.5.2 The widget
@@ -1255,12 +1279,20 @@ with its session. A nested subagent's link opens its own tab the same way. Two s
 session's does, under a line that reads "Updating while the sub-agent runs."; when updates stop, the line says why
 ([Claude Code §1.4](claude-code.md#14-stored-conversations)).
 
+A turn folds at `TurnEnd`, when `TranscriptCanvas.frameReport` knows its report ([record 137](adr/0137-a-turn-reads-as-its-report.md)):
+`foldSteps` moves the items back to the prompt under a `StepsItem`, `spliceTops` rewrites `items`, and `readerOn`,
+`selectionMeets` and `closeHeld` hold a fold open while the reader is on it, its height taken above the view. `Fold`
+says who opened it, and a click lasts as long as the canvas; fold state is not saved. `TranscriptWidget.showReport`
+stops following and puts the last report's first line at the view's top; a following transcript stays at its end when a
+turn ends. A stored turn's `TurnEnd` carries `spanMillis`, which `timed()` and `summary()` do not read.
+
 #### 14.5.3 The frame-time gate
 
 `./gradlew :ui:transcriptGate` replays `SyntheticSession` (8 turns, 41 tool calls with a subagent, about 10 k tokens)
-one 16-character delta per frame, laying out and painting a 1200 × 800 viewport at the end, then streams a
-9 000-character open thinking block. It fails when either 99th percentile exceeds 16 ms. It also prints, without failing
-on them, the frames of a 1 500-line code fence whose last 100 lines stream (a growing block keeps the layouts of its
+one 16-character delta per frame, laying out and painting a 1200 × 800 viewport at the end, then replays it with each
+turn's row opened as it forms, since most of a finished transcript is otherwise one row per turn. It streams a
+9 000-character open thinking block, and times folding, opening and closing a turn of 224 calls. It fails when any of
+those 99th percentiles exceeds 16 ms. It also prints, without failing on them, the frames of a 1 500-line code fence whose last 100 lines stream (a growing block keeps the layouts of its
 whole lines), the time of the idle pass after a width change, which lays out only the window around the view, the time
 of a full exact relayout, and the time of a find over 2 000 blocks (the first search and the next match for a word in
 most of them, and a search from the end for a word in a few). A find needs no layout. A find, a copy of everything and
@@ -1287,6 +1319,13 @@ re-reduces every series (p50 27 ms), while a zoom step costs p50 14 ms.
 | find, a word in most blocks | 540 ms |
 | find, a word in a few blocks | 457 ms |
 
+| Measure (2026-11-07, turns folding) | p50 | p99 |
+|---|---|---|
+| the replay, each row opened as it forms | 1.09 ms | 3.09 ms |
+| a turn of 224 calls, folding as it ends | 0.13 ms | 0.24 ms |
+| a turn of 224 calls, opening | 5.67 ms | 15.44 ms |
+| a turn of 224 calls, closing | 0.06 ms | 0.23 ms |
+
 On one core the find took 1.4 s: the font code contends, so 12 cores give about 2.7 times.
 
 **A known departure: the Markdown preview.** A panel's preview (`EditorPanel.showPreview`, `RenderedMarkdown`,
@@ -1308,7 +1347,7 @@ the synthetic session at a scroll offset to a PNG.
 | Interface | Methods | Caller |
 |---|---|---|
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage`; each hands its work to the EDT, an errand (`showFile`) or the store (`forgetPanel`, `deletePanel`) and returns | the reducer's effects, through `EffectRouter` |
-| `ComandoUi(Dependencies)`, `topics(port)`, `instances(port)`, `checkpointThreshold(consumer)`, `start()`, `kitStatus(status)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through the port `topics` sets before `start()`; acts on the other instances through the `InstancesPort` `instances` sets (`mcp`'s `Peers`, record 124); tells the given consumer the checkpoint threshold the settings hold (record 129); shows the kit's version on the Files tab's KIT row; closes terminals, live plots, the EDT watchdog and the window, then the errands | `app` |
+| `ComandoUi(Dependencies)`, `topics(port)`, `search(port)`, `instances(port)`, `checkpointThreshold(consumer)`, `start()`, `kitStatus(status)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through the port `topics` sets before `start()`; acts on the other instances through the `InstancesPort` `instances` sets (`mcp`'s `Peers`, record 124); tells the given consumer the checkpoint threshold the settings hold (record 129); shows the kit's version on the Files tab's KIT row; closes terminals, live plots, the EDT watchdog and the window, then the errands | `app` |
 | `MermaidDiagrams.install(cache)`, `LocalImages.install(cache)` and their `shutdown()` | the drawing services Markdown previews use, with their caches under the data root | `app` |
 | `DesktopTrash.moveToTrash(file)` | the desktop's Trash | `app` passes it to `tools` as its `Trash` |
 
@@ -1357,7 +1396,7 @@ roll back, remove, unstage), notices ([§4.2](#42-intents)).
 
 | Errand | Does |
 |---|---|
-| `open-file`, `show-file`, `reveal`, `external-editor`, `opened-files` | a file read for a panel or the side pane; a folder opened in the desktop's file manager; the external editor; `opened-files` written |
+| `open-file`, `preview-file`, `show-file`, `reveal`, `opened-files` | a file read for a panel, the preview tab or the side pane; a folder opened in the desktop's file manager; `opened-files` written |
 | `open-link`, `note-link`, `log-entry` | a link or a `[[name]]` note found and opened; the log opened at an entry |
 | `outline` | a document's headings for its outline |
 | `export`, `plot-prepare`, `diff-compute` | a view written to a file; a plot's series; a comparison's differences |
@@ -1380,14 +1419,14 @@ Tests that drive components with Swing timers run on the EDT through the `OnEdt`
 | (top) | `UiArchitectureTest`, `PanelTextsTitleTest` |
 | `kit.action` | `CommandPaletteTest`, `KeyPriorityTest`, `MenuBarTest` |
 | `kit.async` | `EdtTest`, `EdtWatchdogTest`, `DebouncerTest`, `ShownTimerTest`, `SharedClockTest`, `WaitersTest` |
-| `kit.desktop` | `BrowserTest`, `ExternalEditorTest`, `FileChoosersTest`, `FileSearchTest`, `LinksTest`, `PlatformTest` |
+| `kit.desktop` | `BrowserTest`, `FileChoosersTest`, `FileSearchTest`, `LinksTest`, `PlatformTest` |
 | `kit.format`, `kit.icon`, `kit.layout`, `kit.overlay` | `JsonTest`, `KeyTextTest`, `VersionsTest`; `GildedIconsTest`, `SpinnerIconTest`; `ShrinkingRowTest`; `FlashTest`, `OverlayTest` |
 | `kit.resource`, `kit.tabs`, `kit.tree`, `kit.vcs` | `ResourceActionsTest`; `MovableTabsTest`, `TabStripTest`; `TreeViewTest`; `OpenedFilesTest`, `RepoChangesTest` |
 | `kit.text` | `MarkdownHtmlTest`, `HtmlPaneTest`, `ContentSheetTest`, `DarkPageTest`, `FrontMatterTest`, `FencesTest`, `MermaidDiagramsTest`, `LocalImagesTest`, `PlainTest`, `LogLinesTest`, `TextLinksTest`, `NoteLinksTest`, `SourceLinksTest`, `EditorsTest`, `EditorThemesTest`, `DiffsTest`, `SplitDiffTest`, `CaseFoldTest` |
 | `kit.theme` | `NamedThemeTest`, `ContentPaletteTest`, `OnGroundTest`, `SerifTest`, `TooltipTintTest`, `TypeAndSpacingRulesTest`, `ThemeFilesTest`, `ThemeChoiceTest`, `ThemePreviewTest`, `FocusRingTest` |
 | `widgets.*` | `ApprovalInboxTest`, `ApprovalInboxGroupsTest`; `ChangesWidgetTest`, `ChangeEditorTest`; `CommandEditorTest`, `PanelTokenMakerTest`, `SqlCompletionTest`; `PlotCanvasTest`; `GridTableTest`, `TableSourceTest`; `TerminalWidgetTest`, `TerminalKeysTest`, `PtyTest`, `InputGateTest`; `TextWidgetTest`; `TreeWidgetTest` |
-| `widgets.transcript` | `TranscriptWidgetTest`, `AgentWidgetTest`, `AgentStripTest`, `AgentStripFollowTest`, `SubagentViewRefreshTest`, `ToolTextTest`; `doc`: `MarkdownDocTest`; `render`: `TranscriptCanvasTest`, `TranscriptCanvasViewportTest`, `TranscriptReadingTest`, `TextBoxTest`, `FinderTest`, `ParasTest`, `RichFallbackTest`, `TintSheetTest`, `AgentStatusTest`, `AgentStatusEdgesTest`, `AgentBackgroundTest` |
-| `panels` | `WorkspaceTest`, `EditorPanelHeaderTest`, `EditorPanelOutlineTest`, `EditorPanelPreviewTest`, `PanelTextsTest`, `PanelsWithoutSessionTest`, `SessionsSidebarTest`, `SessionRowControlsTest`, `SidebarLookTest`, `SessionBarTest`, `TabStatusTest`, `FilesTabTest`, `FilesTabGroupsTest`, `FilesTabJobsTest`, `ResultsViewTest`, `PlanTreeTest`, `StatusBarNoticeTest`, `StatusBarUsageTest`, `TerminalTabsTest`, `ViewTabsTest`, `TabCardTest`, `ThemeChooserTest`, `CheckpointLockTest`, `LowerPanelApprovalsTest`, `InstancesTabTest` |
+| `widgets.transcript` | `TranscriptWidgetTest`, `AgentWidgetTest`, `AgentStripTest`, `AgentStripFollowTest`, `SubagentViewRefreshTest`, `ToolTextTest`; `doc`: `MarkdownDocTest`; `render`: `TranscriptCanvasTest`, `TranscriptCanvasViewportTest`, `TranscriptReadingTest`, `TranscriptFoldTest`, `TextBoxTest`, `FinderTest`, `ParasTest`, `RichFallbackTest`, `TintSheetTest`, `AgentStatusTest`, `AgentStatusEdgesTest`, `AgentBackgroundTest` |
+| `panels` | `WorkspaceTest`, `WorkspacePartitionTest`, `EditorPanelHitsTest`, `EditorPanelHeaderTest`, `EditorPanelOutlineTest`, `EditorPanelPreviewTest`, `PanelTextsTest`, `PanelsWithoutSessionTest`, `SessionsSidebarTest`, `SessionRowControlsTest`, `SidebarLookTest`, `SessionBarTest`, `TabStatusTest`, `CardFactsTest`, `FilesTabTest`, `FilesTabGroupsTest`, `FilesTabJobsTest`, `ResultsViewTest`, `PlanTreeTest`, `StatusBarNoticeTest`, `StatusBarUsageTest`, `StatusBarWorkTest`, `TerminalTabsTest`, `ViewTabsTest`, `TabCardTest`, `ThemeChooserTest`, `CheckpointLockTest`, `LowerPanelApprovalsTest`, `InstancesTabTest` |
 | `dialogs.*` | `FormRowsTest`, `FoldersEditorTest`, `JobsEditorTest`, `ResourceDialogTest`, `ProjectSettingsTest`, `ImportSessionsDialogTest` |
 | `shell` | `MenusTest`, `DiffWindowTest` (edits waiting to be written forgotten when their file changed elsewhere and was dropped), `QuitWorkTest` (what quitting would stop, which the quit question lists), `CommandsTest` (the checkpoint threshold's parser: 10 to 100, anything else refused), `CommandKeysTest`, `KeyTextUseTest`, `WindowLayoutTest`, `FocusOriginsTest`, `OpenFileTest`, `QuitQuestionTest`, `ClosingCoverTest`, `SettingsTest`, `HelpFilesTest`, `AboutTest`, `MarkdownSheetTest`, `KitActionsTest`, `JobActionsTest`, `LivePlotsTest`, `ResultViewsTest`, `AttachmentsTest`, `NotifierTest`, `WorkedInTest` |
 
@@ -1425,6 +1464,7 @@ One package, `dev.marregui.comando.app`.
 | `EmbeddedEdge` | `ui`'s `ServerToggle` and `core`'s `ServerSwitch`: the one comando Edge on the machine, from the zip `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP` names, else the pinned release downloaded into `edge/dist`; a child process from a distribution zip installed in `edge/`, every listener on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010); `~/.comando-edge.json` names its pid and the instance that started it, which alone stops it; no other process is signalled ([Workbench §4.1](workbench.md#41-the-comando-edge)) |
 | `MqttPeerBroker` | `mcp`'s `PeerBroker` on the HiveMQ MQTT client (MQTT 5, async): client `comando-<instance>` to `127.0.0.1:18883` while `~/.comando-edge.json` names a live Edge, read every 5 s; reconnects 1 s after a drop, then at most every 5 s, while the Edge runs, and stops trying once it does not; the subscriptions renewed after every connect; the last will set at connect; messages to their handlers on one strand ([record 123](adr/0123-instances-consult-each-other.md)) |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and the brain's backup through `tools`' `KitGit`, its scheduled jobs through `claude`'s `KitJobsCli`, the manifest's repair through `KitJson.repair` |
+| `Searcher` | implements `SearchPort`: one search at a time, its sources in turn on `search-scan`, its hits to the sink every 100 ms on `search-hits`; it stops at 1 000 hits and says so, and a new search or `cancel` ends the running one by generation, after which its sink hears nothing more (record 139) |
 | `Welcome` | the first panel's text on a fresh data root |
 
 **Build and close order, and quit:** [§7](#7-ownership-and-exit).
@@ -1459,6 +1499,7 @@ What `app` connects, and nothing else does:
 | `mcp` `McpTools` | the data root's `agents.json` | `McpTools.agentsFile`: the callers' grants |
 | `mcp` `Peers` | `McpTools` | the instance tools |
 | `ui` (the Instances tab) | `mcp` `Peers` | `InstancesPort`, set with `ComandoUi.instances` |
+| `ui` (the Search view) | `Searcher`, over `tools` `FolderSearch` and `claude` `TranscriptSearch` | `SearchPort`, set with `ComandoUi.search`; each source a `SearchPort.Source` |
 | `ui` (the settings) | the reducer and `claude` | the checkpoint threshold (record 129) |
 | the kit's `settings.json` | `SessionKind`'s defaults | the model the CLI observes (record 125) |
 | `EmbeddedEdge.startedHere`, the kit's commit | `Peers` | this instance's presence |
@@ -1483,6 +1524,8 @@ root (`KitRoot.use`) and gives the Files tab the kit's folders at the first star
 | `edge-toggle`, `edge-start`, `edge-stop`, `edge-check` | errands of `EmbeddedEdge` | one start or stop from the toggle or an agent's `ServerSwitch.want`, up to 60 s for the admin API to answer; a read of the registry at most once a second for the button | `EmbeddedEdge.close()` |
 | `peer-broker` | timed strand of `MqttPeerBroker` | whether the registry names a live Edge, at start and every 5 s; connects or leaves | `MqttPeerBroker.close()` |
 | `peer-messages` | strand of `MqttPeerBroker` | the MQTT client's callbacks (its RxJava scheduler) and every message to its handlers, in order | `MqttPeerBroker.close()`, after the disconnect |
+| `search-scan` | strand of `Searcher` | one search's sources, in turn | `Searcher.close()` |
+| `search-hits` | timed strand of `Searcher` | the hits found, to the sink every 100 ms | `Searcher.close()` |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook | the JVM's exit |
 
 The MQTT client adds one Netty event loop thread, a platform thread of the library's, while a client exists.
@@ -1497,10 +1540,12 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 | `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `EmbeddedQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the embedded QuestDB, the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
 | `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run, audit and metrics folders owner-only and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
 | `MqttPeerBrokerTest` | without a broker or a port: a question's response topic and correlation data through the client's types, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays | `./gradlew :app:test` |
+| `SearcherTest` | sources in turn, the end after every hit; a new search or a cancel silences the last one; the limit and the cut; hits in batches while a source reads; a source that fails counts as one and the next runs; a close ends a running search and leaves no thread | `./gradlew :app:test` |
 | `StoreTest`'s keychain round trip | writes and deletes one login keychain item | `./gradlew :app:test -PkeychainTest=true` |
 | `EmbeddedEdgeTest`'s live start | downloads the pinned open-source Edge release (359 MB), runs it on free loopback ports, connects to its broker port, stops it | `./gradlew :app:test -PedgeLiveTest=true` |
 | `ThreadRulesTest` | ArchUnit over every module: platform threads only in `StateLoop`, `Watchdog`, `ClaudeProcess` and `Main`; virtual threads, executors other than per-task virtual ones, pools and `java.util.Timer` only in `Threads`; nothing on the JDK's shared fork-join pool | `./gradlew :app:test` |
 | `ColourRulesTest` | ArchUnit: colours made and named only in `ui`'s `kit.theme` | `./gradlew :app:test` |
+| `FileReadRulesTest` | ArchUnit over every module: no main class calls `Files.readString`, `readAllBytes`, `readAllLines`, `lines`, `newBufferedReader` or `newInputStream`, or depends on `FileInputStream`, `FileReader` or `RandomAccessFile` (rule 16) | `./gradlew :app:test` |
 | `AdrIndexTest` | `docs/adr/README.md` against the records: one row each, its title, date, deciders and status word for word | `./gradlew :app:test` |
 | the window tests | the real window, one JVM per class; each class and what it checks in [Development §2.1](development.md#21-the-window-tests) | `./gradlew :app:uiTest` |
 

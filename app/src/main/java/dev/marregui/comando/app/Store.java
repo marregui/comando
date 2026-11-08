@@ -72,9 +72,20 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * A panel as stored: its title, bindings and the name of its file; {@code closed} is true for a closed panel of
      * comando's own, absent for an open one. {@code content} is written only when the panel's file could not be, and
      * read from a {@code panels.json} written before panels had files; it moves into the file at the next save.
+     * {@code side} is true for a panel in the right-hand partition, absent for one of the main tabs, so a file without
+     * it reads as before (records 133, 141).
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    record StoredPanel(String id, String title, String connection, String session, String file, String content, Boolean closed) {
+    record StoredPanel(
+            String id,
+            String title,
+            String connection,
+            String session,
+            String file,
+            String content,
+            Boolean closed,
+            Boolean side
+    ) {
     }
 
     /** What the store held at start: the open panels, in tab order, and the closed ones. */
@@ -276,7 +287,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             }
             final String title = nz(sp.title(), "panel");
             final boolean document = sp.file() != null && Path.of(sp.file()).isAbsolute();
-            final PanelState panel = new PanelState(new PanelId(sp.id()), title, nz(sp.connection(), ""), nz(sp.session(), ""), document);
+            final boolean side = Boolean.TRUE.equals(sp.side());
+            final PanelState panel = new PanelState(new PanelId(sp.id()), title, nz(sp.connection(), ""),
+                    nz(sp.session(), ""), document, side, false);
             (isClosed ? shut : p).add(panel);
             texts.put(sp.id(), textOf(sp, title));
         }
@@ -305,6 +318,10 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             LOG.log(System.Logger.Level.INFO, "sessions bound to several panels keep their first [sessions=" + unbound + ']');
             notices.accept("A session has one panel now: " + String.join("; ", unbound));
             schedulePanels();
+        }
+        if (!p.isEmpty() && p.stream().allMatch(PanelState::side)) {
+            // the main tabs keep one panel at least: the last one there may have been a preview, which is not saved
+            p.set(0, p.getFirst().withSide(false));
         }
         if (p.isEmpty()) {
             final PanelState first = new PanelState(PanelId.random(), "scratch", c.isEmpty() ? "" : c.getFirst().name(), "");
@@ -929,7 +946,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         // panels.json under the stored name, a document's absolute path, so it comes back on its own
                         // file, never in panels/
                         final String name = files.storedName(id).orElse(null);
-                        unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name, text, null));
+                        unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name,
+                                text, null, side(was)));
                         LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + was.title() + ']', e);
                         notices.accept("Cannot write " + (name == null ? "the file" : name) + " for the closed panel " + was.title() + ": "
                                 + reason(e) + "; comando keeps trying, and the panel comes back at the next start if it still cannot");
@@ -1176,6 +1194,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return all;
     }
 
+    /** {@code side} as stored: true for a panel in the right-hand partition, absent for one of the main tabs. */
+    private static Boolean side(final PanelState p) {
+        return p.side() ? Boolean.TRUE : null;
+    }
+
     /** An exception's message, else its type's name. */
     private static String reason(final Exception e) {
         return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -1206,7 +1229,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         IOException failed = null;
         for (final PanelState p : meta) {
             final String id = p.id().value();
-            if (removed.contains(id)) {
+            // a preview is not kept: its text stays dirty, written once the preview is pinned
+            if (removed.contains(id) || p.preview()) {
                 continue;
             }
             final Boolean isClosed = shut.contains(p) ? Boolean.TRUE : null;
@@ -1236,7 +1260,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 }
                 failed = failed == null ? e : failed;
             }
-            out.add(new StoredPanel(id, p.title(), p.connection(), p.session(), name, content, isClosed));
+            out.add(new StoredPanel(id, p.title(), p.connection(), p.session(), name, content, isClosed, side(p)));
         }
         for (final Iterator<StoredPanel> it = unsaved.values().iterator(); it.hasNext(); ) {
             final StoredPanel u = it.next();
@@ -1245,7 +1269,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 files.write(u.id(), u.content());
                 it.remove();
             } catch (final IOException e) {
-                out.add(new StoredPanel(u.id(), u.title(), u.connection(), u.session(), files.storedName(u.id()).orElse(null), u.content(), null));
+                out.add(new StoredPanel(u.id(), u.title(), u.connection(), u.session(),
+                        files.storedName(u.id()).orElse(null), u.content(), null, u.side()));
                 failed = failed == null ? e : failed;
             }
         }

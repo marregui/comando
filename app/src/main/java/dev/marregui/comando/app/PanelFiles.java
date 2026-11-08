@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.ui.PanelTexts;
 
@@ -115,7 +116,7 @@ final class PanelFiles {
             titles.put(id, title);
         }
         // a panel's own file that cannot be read leaves the panel unbound, so the next save takes another name instead
-        final String text = exists ? Files.readString(f, StandardCharsets.UTF_8) : "";
+        final String text = exists ? Mapped.text(f) : "";
         names.put(id, name);
         titles.put(id, title);
         if (exists) {
@@ -197,7 +198,7 @@ final class PanelFiles {
         if (now.equals(stamps.get(id)) || now.equals(reported.get(id))) {
             return Optional.empty();
         }
-        final String text = Files.readString(f, StandardCharsets.UTF_8);
+        final String text = Mapped.text(f);
         // an editor still writing changes the stamp under the read: the next look gets the whole text
         if (!stamp(f).equals(now)) {
             return Optional.empty();

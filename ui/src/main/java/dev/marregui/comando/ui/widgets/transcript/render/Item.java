@@ -47,7 +47,7 @@ abstract class Item {
     }
 
     final int layout(final int w, final Style s) {
-        if (!dirty && w == width && s == style) {
+        if (!dirty && w == width && s == style && !wantsMore()) {
             return height;
         }
         width = w;
@@ -69,6 +69,7 @@ abstract class Item {
         guessed = height;
         guessedWidth = width;
         guessedStyle = style;
+        children().forEach(Item::release);
         discard();
     }
 
@@ -96,6 +97,16 @@ abstract class Item {
     /** True when the next layout at {@code w} with {@code s} does work. */
     final boolean needsLayout(final int w, final Style s) {
         return dirty || w != width || s != style;
+    }
+
+    /** True when {@code y} below this item's top is further than its layout at {@code w} with {@code s} reaches. */
+    boolean needsLayoutTo(final int w, final Style s, final int y) {
+        return needsLayout(w, s);
+    }
+
+    /** True when the layout stands but stopped short of what the next layout is to reach. */
+    boolean wantsMore() {
+        return false;
     }
 
     /**
@@ -199,6 +210,11 @@ abstract class Item {
 
     /** All text of the block, open or closed, for find and copy. */
     abstract String text();
+
+    /** What a find looks for in this item while it is closed: what {@link #findTexts} reads once it is open. */
+    String findable() {
+        return text();
+    }
 
     /** The block as Markdown for copying; empty for blocks that are not copied. */
     String markdown() {

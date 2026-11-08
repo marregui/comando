@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.LongSupplier;
 
@@ -18,6 +19,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.loop.Queues;
 
@@ -81,13 +83,10 @@ public final class MetricsLog {
                 continue;
             }
             try {
-                final List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-                for (int j = lines.size() - 1; j >= 0; j--) {
-                    final String line = lines.get(j);
-                    // the text only skips lines that cannot be the one; the event's own fields decide
-                    if (!line.contains(id)) {
-                        continue;
-                    }
+                // the bytes only skip lines that cannot be the one; the event's own fields decide
+                final List<String> lines = Mapped.linesWith(file,
+                        id.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
+                for (final String line : lines.reversed()) {
                     final JsonNode e = json.readTree(line);
                     if (e.path("event").asString("").equals("turn") && e.path("conversation").asString("").equals(id)) {
                         final long context = e.path("context").asLong(-1);

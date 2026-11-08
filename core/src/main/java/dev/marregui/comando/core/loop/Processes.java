@@ -1,7 +1,6 @@
 package dev.marregui.comando.core.loop;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+
+import dev.marregui.comando.core.files.Mapped;
 
 /**
  * Runs a program with a time limit and collects what it writes: the one way comando runs a short command. Standard
@@ -128,9 +129,7 @@ public final class Processes {
 
     /** The first {@code max} bytes of {@code file}. */
     private static byte[] head(final Path file, final int max) throws IOException {
-        try (final InputStream in = Files.newInputStream(file)) {
-            return in.readNBytes(max);
-        }
+        return Mapped.head(file, max);
     }
 
     private static void deleteQuietly(final Path file) {

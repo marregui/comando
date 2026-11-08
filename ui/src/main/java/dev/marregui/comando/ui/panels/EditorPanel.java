@@ -16,10 +16,13 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -36,8 +39,10 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Document;
 import javax.swing.text.Element;
+import javax.swing.text.Highlighter;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
@@ -62,6 +67,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Flash;
 import dev.marregui.comando.ui.kit.text.Editors;
+import dev.marregui.comando.ui.kit.text.HitMarks;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.LogLines;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -163,6 +169,26 @@ public final class EditorPanel extends JPanel {
     /** The log's viewport, watched once the panel holds a log. */
     private JViewport watched;
     private long pendingEntryUntil;
+    private final Highlighter.HighlightPainter hitPainter =
+            new DefaultHighlighter.DefaultHighlightPainter(Theme.FIND_MATCH);
+    private final Highlighter.HighlightPainter currentHitPainter =
+            new DefaultHighlighter.DefaultHighlightPainter(Theme.FIND_CURRENT);
+    /** The highlights of the hits marked (record 141), taken off as the text changes. EDT only. */
+    private final List<Object> hitTags = new ArrayList<>();
+    /** The marks shown, start and end each, in the text's order. EDT only. */
+    private List<int[]> hitMarks = List.of();
+    /** Where the current hit's mark starts; -1 for none. EDT only. */
+    private int currentHit = -1;
+    /** Where the caret was put for the current hit, scrolled to the middle once laid out; -1 for none. EDT only. */
+    private int hitCaret = -1;
+    /** The current hit waits for the text to be laid out to come to the middle of the view. EDT only. */
+    private boolean hitWaits;
+    /** The text shows a search's hits: a Markdown document shows its text, where they are marked. EDT only. */
+    private boolean showsHits;
+    /** The text changes because the file changed on disk, not because the user edits it. EDT only. */
+    private boolean reloadingText;
+    /** The preview tab was asked to stay, for the user's first edit; asked once. EDT only. */
+    private boolean pinAsked;
 
     public EditorPanel(final PanelState panel, final IntentSink intents, final SchemaRegistry schemas) {
         super(new BorderLayout(0, 0));
@@ -242,6 +268,9 @@ public final class EditorPanel extends JPanel {
             @Override
             public void componentResized(final ComponentEvent e) {
                 showPendingEntry();
+                if (hitWaits) {
+                    centreHit();
+                }
             }
         });
         center.add(editor.component(), EDIT);
@@ -272,12 +301,14 @@ public final class EditorPanel extends JPanel {
             public void insertUpdate(final DocumentEvent e) {
                 showClear();
                 outlineSoon();
+                textChanged();
             }
 
             @Override
             public void removeUpdate(final DocumentEvent e) {
                 showClear();
                 outlineSoon();
+                textChanged();
             }
 
             @Override
@@ -371,7 +402,7 @@ public final class EditorPanel extends JPanel {
         browser.setVisible(document && isHtml());
         if (!renders && previewing()) {
             showPreview(false);
-        } else if (renders && opened) {
+        } else if (renders && opened && !showsHits) {
             showPreview(true);
         }
     }
@@ -503,6 +534,156 @@ public final class EditorPanel extends JPanel {
     /** Whether new lines keep the log's view at its end; for tests. */
     boolean followsEnd() {
         return followsEnd;
+    }
+
+    /**
+     * Marks {@code marks} in the text, the current one brighter with the caret on it and scrolled to the middle; the
+     * marks before go (record 141).
+     */
+    public void showHits(final HitMarks marks) {
+        clearHits();
+        final Map<Integer, Integer> ends = new TreeMap<>();
+        int caret = -1;
+        for (int i = 0; i < marks.hits().size(); i++) {
+            final HitMarks.Hit hit = marks.hits().get(i);
+            final String line = lineText(hit.line());
+            if (line == null) {
+                // a hit on the file's name, or on a line the text no longer has: the file's top
+                if (i == marks.current()) {
+                    caret = 0;
+                }
+                continue;
+            }
+            final int lineStart = lineStart(hit.line());
+            final List<Integer> starts = hit.startsIn(line);
+            for (final int start : starts) {
+                ends.put(lineStart + start, lineStart + start + hit.match().length());
+            }
+            if (i == marks.current()) {
+                currentHit = starts.isEmpty() ? -1 : lineStart + hit.nearestIn(line, starts);
+                caret = starts.isEmpty() ? lineStart : currentHit;
+                showsHits = true;
+            }
+        }
+        final Highlighter highlighter = editor.area().getHighlighter();
+        final List<int[]> made = new ArrayList<>();
+        try {
+            for (final Map.Entry<Integer, Integer> e : ends.entrySet()) {
+                final Highlighter.HighlightPainter painter = e.getKey() == currentHit ? currentHitPainter : hitPainter;
+                hitTags.add(highlighter.addHighlight(e.getKey(), e.getValue(), painter));
+                made.add(new int[]{e.getKey(), e.getValue()});
+            }
+        } catch (final BadLocationException e) {
+            throw new IllegalStateException("a mark lies on a line of the text", e);
+        }
+        hitMarks = List.copyOf(made);
+        showsHits |= !made.isEmpty();
+        // the hits are marked in the text: a Markdown document shows it, the keyboard left where it is
+        if (showsHits && previewing) {
+            switchView(false);
+        }
+        if (caret >= 0) {
+            editor.area().setCaretPosition(caret);
+            hitCaret = caret;
+            // once the caret has scrolled itself into view and the text card is laid out
+            Edt.later(this::centreHit);
+        }
+    }
+
+    /** Takes every hit's mark off. */
+    public void clearHits() {
+        if (hitTags.isEmpty() && hitCaret < 0) {
+            return;
+        }
+        final Highlighter highlighter = editor.area().getHighlighter();
+        for (final Object tag : hitTags) {
+            highlighter.removeHighlight(tag);
+        }
+        hitTags.clear();
+        hitMarks = List.of();
+        currentHit = -1;
+        hitCaret = -1;
+        hitWaits = false;
+    }
+
+    /** The marks of the hits shown, start and end each, in the text's order; for tests. */
+    List<int[]> hitMarks() {
+        return hitMarks;
+    }
+
+    /** Where the current hit's mark starts, -1 for none; for tests. */
+    int currentHit() {
+        return currentHit;
+    }
+
+    /**
+     * Scrolls the current hit to the middle of the view; a text not laid out yet does it once it is. A hit on the
+     * file's name shows its top.
+     */
+    private void centreHit() {
+        hitWaits = false;
+        if (hitCaret < 0) {
+            return;
+        }
+        final RSyntaxTextArea area = editor.area();
+        final JViewport port = viewport();
+        if (port == null || port.getExtentSize().height <= 0) {
+            hitWaits = true;
+            return;
+        }
+        try {
+            final Rectangle2D at = area.modelToView2D(Math.min(hitCaret, area.getDocument().getLength()));
+            if (at == null) {
+                hitWaits = true;
+                return;
+            }
+            final int height = port.getExtentSize().height;
+            area.scrollRectToVisible(new Rectangle(0, Math.max(0, (int) at.getY() - height / 2), 1, height));
+        } catch (final BadLocationException _) {
+            // the offset is clamped to the text
+        }
+    }
+
+    /** The text of line {@code number}, from 1, without its line end; null for a line the text does not have. */
+    private String lineText(final int number) {
+        final RSyntaxTextArea area = editor.area();
+        if (number <= 0 || number > area.getLineCount()) {
+            return null;
+        }
+        try {
+            final int start = area.getLineStartOffset(number - 1);
+            final String text = area.getText(start, area.getLineEndOffset(number - 1) - start);
+            return text.endsWith("\n") ? text.substring(0, text.length() - 1) : text;
+        } catch (final BadLocationException e) {
+            throw new IllegalStateException("the line is in the text", e);
+        }
+    }
+
+    private int lineStart(final int number) {
+        try {
+            return editor.area().getLineStartOffset(number - 1);
+        } catch (final BadLocationException e) {
+            throw new IllegalStateException("the line is in the text", e);
+        }
+    }
+
+    /**
+     * The text changed: the hits' marks no longer sit on them, and a preview tab the user edits stays (record 141); a
+     * reload of the file from disk is not the user's edit.
+     */
+    private void textChanged() {
+        clearHits();
+        if (panel.preview() && !pinAsked && !reloadingText) {
+            Edt.later(this::pinIfEdited);
+        }
+    }
+
+    private void pinIfEdited() {
+        // a file loaded into the panel leaves nothing to undo; the user's edit does
+        if (!pinAsked && panel.preview() && editor.area().canUndo()) {
+            pinAsked = true;
+            intents.dispatch(new Intent.PinPanel(panel.id()));
+        }
     }
 
     /**
@@ -769,6 +950,14 @@ public final class EditorPanel extends JPanel {
     }
 
     private void showPreview(final boolean on) {
+        switchView(on);
+        if (!on) {
+            editor.requestFocus();
+        }
+    }
+
+    /** Shows the rendered page when {@code on}, else the text, the keyboard left where it is. */
+    private void switchView(final boolean on) {
         previewing = on;
         showMode();
         if (on) {
@@ -779,9 +968,6 @@ public final class EditorPanel extends JPanel {
         ((CardLayout) center.getLayout()).show(center, on ? PREVIEW : EDIT);
         showClear();
         showTextTools();
-        if (!on) {
-            editor.requestFocus();
-        }
     }
 
     /** The folder of the panel's file, which its Markdown's relative image links resolve against; null before one. */
@@ -850,14 +1036,18 @@ public final class EditorPanel extends JPanel {
      * caret was at its end stays at the end.
      */
     public void reload(final String text) {
-        if (isLog()) {
-            reloadLog(text);
-            showPendingEntry();
-            return;
+        reloadingText = true;
+        try {
+            if (isLog()) {
+                reloadLog(text);
+            } else {
+                editor.reload(text);
+            }
+        } finally {
+            reloadingText = false;
         }
-        editor.reload(text);
         showPendingEntry();
-        if (previewing()) {
+        if (!isLog() && previewing()) {
             final int at = rendered.getCaretPosition();
             rendered.setMarkdown(text, folder());
             rendered.setCaretPosition(Math.min(at, rendered.getDocument().getLength()));

@@ -1,8 +1,10 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Graphics;
+import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
@@ -15,6 +17,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +27,7 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -42,6 +46,8 @@ import javax.swing.JViewport;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
+import javax.swing.border.AbstractBorder;
+import javax.swing.border.Border;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 
@@ -57,6 +63,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Attention;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
@@ -86,8 +93,10 @@ import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
  * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session row and a connection row are
  * alike: the state icon, which a click starts or stops (a session) or connects or disconnects (a connection), the name,
  * the ⓘ that shows its card (a connection's has no summary), and everything else in the row's menu. Sessions are
- * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
- * the tab menu's Sort. Each list's band is on the focused panel's row: its session, its connection, or the panel itself
+ * grouped by what they want from the user ({@link Attention}, record 136), a heading in the first row of each group
+ * that has any; within a group they are listed running first, then by name, until the user drags one: from then on in
+ * the order the user left them, until the tab menu's Sort. A drag orders a group: a drop in another group is ignored.
+ * Each list's band is on the focused panel's row: its session, its connection, or the panel itself
  * among those without a session, and on no row of a list that has none. Hidden, the column collapses to a rail: its
  * first button shows it again at its width, and one button per tab, in the tabs' icons, shows it at that tab.
  */
@@ -271,6 +280,8 @@ public final class SessionsSidebar {
     private boolean manualOrder;
     /** Where copied details go; the system clipboard, or a test's list. */
     Consumer<String> clipboard = text -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+    /** The time groups are read at; the system's, or a test's. */
+    LongSupplier clock = System::currentTimeMillis;
 
     /** {@code toggle} hides or shows the sidebar, as ⌘B does; the owner calls {@link #show}. */
     public SessionsSidebar(final IntentSink intents, final Dialogs dialogs, final PanelTexts texts, final Runnable toggle) {
@@ -302,6 +313,9 @@ public final class SessionsSidebar {
                     selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
                     paintedNewestCli);
             r.hovered(index == hoveredSession);
+            final Attention group = group(s);
+            r.setBorder(opensGroup(index) ? headed(group) : ROW_BORDER);
+            r.getAccessibleContext().setAccessibleDescription(heading(group));
             return r;
         });
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
@@ -352,6 +366,9 @@ public final class SessionsSidebar {
                 } else if (e.getClickCount() == 2) {
                     // a click on the name selects; its card is the ⓘ's, so a double click acts with no card first
                     leaveCard();
+                    if (Attention.of(state, s, clock.getAsLong()) == Attention.TO_READ) {
+                        onReport.accept(s.name());
+                    }
                     intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()));
                 }
             }
@@ -373,7 +390,7 @@ public final class SessionsSidebar {
                 restOn(null);
                 // the order held while the pointer was on the list takes effect now
                 if (state != null) {
-                    sync(sessionModel, ordered(state.sessions(), manualOrder), sessions);
+                    showSessions(grouped(state));
                 }
             }
 
@@ -654,7 +671,7 @@ public final class SessionsSidebar {
 
     public void render(final AppState s) {
         state = s;
-        sync(sessionModel, pointerOnList ? held(shownSessions(), s.sessions()) : ordered(s.sessions(), manualOrder), sessions);
+        showSessions(pointerOnList ? heldRows(s) : grouped(s));
         spinWhileWorking();
         // a session reporting a newer CLI version changes the other rows too: theirs is older now
         final String newest = newestCli();
@@ -668,6 +685,18 @@ public final class SessionsSidebar {
         followFocus(s);
         files.render(s);
         instances.render(s);
+    }
+
+    /** Once a second: a session whose reading turn never came moves to To read with no state change to say so. */
+    public void tick() {
+        if (state != null && !pointerOnList) {
+            showSessions(grouped(state));
+        }
+    }
+
+    /** What a double click on a To read row asks for besides the open: {@code report} shows that session's report. */
+    public void onReport(final Consumer<String> report) {
+        onReport = report;
     }
 
     /**
@@ -695,6 +724,8 @@ public final class SessionsSidebar {
     }
 
     private static final String SORT_TIP = "Sort: running first, then by name";
+/** A row's own border, as {@link IconRow} sets it; the renderer puts it back on a row that stops opening a group. */
+    private static final Border ROW_BORDER = BorderFactory.createEmptyBorder(3, 4, 3, 4);
 
     /** Whether the order a drag set stands, not running first, then by name; the owner keeps it across restarts. */
     public boolean manualOrder() {
@@ -709,7 +740,107 @@ public final class SessionsSidebar {
     private void order(final boolean manual) {
         manualOrder = manual;
         if (state != null) {
-            sync(sessionModel, ordered(state.sessions(), manual), sessions);
+            showSessions(grouped(state));
+        }
+    }
+
+    /** {@code s}'s sessions as the list shows them, each put in the group it belongs to now. */
+    private List<SessionState> grouped(final AppState s) {
+        final long now = clock.getAsLong();
+        groups.clear();
+        s.sessions().forEach(x -> groups.put(x.name(), Attention.of(s, x, now)));
+        return grouped(ordered(s.sessions(), manualOrder), groups);
+    }
+
+    /** {@code rows} group by group, their order kept within each. */
+    static List<SessionState> grouped(final List<SessionState> rows, final Map<String, Attention> groups) {
+        return rows.stream().sorted(Comparator.comparing((SessionState x) -> groups.get(x.name()))).toList();
+    }
+
+    /** {@code s}'s sessions in the rows held under the pointer: each in its group as shown, a new one in its own. */
+    private List<SessionState> heldRows(final AppState s) {
+        final long now = clock.getAsLong();
+        groups.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
+        s.sessions().forEach(x -> groups.computeIfAbsent(x.name(), _ -> Attention.of(s, x, now)));
+        return held(shownSessions(), s.sessions());
+    }
+
+    /**
+     * Lists {@code rows}. A heading is part of its row's height, which the list measures again only when its model
+     * changes: a heading that moved with no row changing says so.
+     */
+    private void showSessions(final List<SessionState> rows) {
+        sync(sessionModel, rows, sessions);
+        final List<Attention> now = rows.stream().map(this::group).toList();
+        if (!now.equals(shownGroups)) {
+            shownGroups = now;
+            if (!rows.isEmpty()) {
+                sessionModel.set(0, rows.getFirst());
+            }
+        }
+    }
+
+    private Attention group(final SessionState s) {
+        return groups.getOrDefault(s.name(), Attention.IDLE);
+    }
+
+    /** Whether the row at {@code index} is the first of its group, and so holds the group's heading. */
+    private boolean opensGroup(final int index) {
+        return index <= 0 || group(sessionModel.get(index - 1)) != group(sessionModel.get(index));
+    }
+
+    /** What the list calls {@code group}. */
+    static String heading(final Attention group) {
+        return switch (group) {
+            case NEEDS_YOU -> "Needs you";
+            case WORKING -> "Working";
+            case TO_READ -> "To read";
+            case IDLE -> "Idle";
+        };
+    }
+
+    /** The border of the row that opens {@code group}. */
+    private Border headed(final Attention group) {
+        return headed.computeIfAbsent(group, g -> BorderFactory.createCompoundBorder(new GroupHeading(heading(g)),
+                ROW_BORDER));
+    }
+
+    /**
+     * The first row of a group wears its heading as a border above its own: the list keeps one row per session, so its
+     * indexes, the hit tests and the drag know nothing of headings. Painted as the sidebar's other group headers.
+     */
+    private static final class GroupHeading extends AbstractBorder {
+        private final JLabel label;
+
+        GroupHeading(final String text) {
+            label = SidebarLook.header(text);
+        }
+
+        @Override
+        public Insets getBorderInsets(final Component c, final Insets insets) {
+            insets.set(label.getPreferredSize().height, 0, 0, 0);
+            return insets;
+        }
+
+        @Override
+        public void paintBorder(
+                final Component c,
+                final Graphics g,
+                final int x,
+                final int y,
+                final int w,
+                final int h
+        ) {
+            final int height = label.getPreferredSize().height;
+            g.setColor(Theme.ground());
+            g.fillRect(x, y, w, height);
+            label.setSize(w, height);
+            final Graphics at = g.create(x, y, w, height);
+            try {
+                label.paint(at);
+            } finally {
+                at.dispose();
+            }
         }
     }
 
@@ -719,6 +850,13 @@ public final class SessionsSidebar {
      * (record 90).
      */
     private boolean pointerOnList;
+    /** The group each session is listed in; held with the rows while the pointer is on the list. */
+    private final Map<String, Attention> groups = new HashMap<>();
+    /** The groups of the rows as last listed, top down. */
+    private List<Attention> shownGroups = List.of();
+    private final Map<Attention, Border> headed = new EnumMap<>(Attention.class);
+    /** Shows a session's report: a double click on a To read row asks for it. */
+    private Consumer<String> onReport = _ -> { };
 
     private List<SessionState> shownSessions() {
         return Collections.list(sessionModel.elements());
@@ -751,21 +889,39 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The session at {@code from} dropped into the gap before {@code gap} (the list's size for after the last): the
-     * list as shown, with that move, becomes the stored order, and the user's order stands from then on.
+     * The session at {@code from} dropped into the gap before {@code gap} (the list's size for after the last): it
+     * moves beside the row of its group it now touches, the other sessions keep their order, grouped or not, and the
+     * user's order stands from then on. A gap with no row of the session's group beside it is ignored: what a session
+     * wants of the user decides its group, not a drag.
      */
     void drop(final int from, final int gap) {
         if (from < 0 || from >= sessionModel.size() || gap < 0 || gap > sessionModel.size() || gap == from || gap == from + 1) {
             return;
         }
         final List<SessionState> shown = new ArrayList<>(Collections.list(sessionModel.elements()));
+        if (!inGroup(shown, from, gap)) {
+            return;
+        }
+        final List<String> order = new ArrayList<>(ordered(state.sessions(),
+                manualOrder).stream().map(SessionState::name).toList());
         final SessionState moved = shown.remove(from);
-        shown.add(gap > from ? gap - 1 : gap, moved);
+        final int at = gap > from ? gap - 1 : gap;
+        shown.add(at, moved);
+        order.remove(moved.name());
+        final boolean before = at + 1 < shown.size() && group(shown.get(at + 1)) == group(moved);
+        order.add(before ? Math.max(0, order.indexOf(shown.get(at + 1).name()))
+                : order.indexOf(shown.get(at - 1).name()) + 1, moved.name());
         order(true);
         // shown at once; the stored order follows when the state comes back
         sync(sessionModel, shown, sessions);
         sessions.setSelectedValue(moved, true);
-        intents.dispatch(new Intent.OrderSessions(shown.stream().map(SessionState::name).toList()));
+        intents.dispatch(new Intent.OrderSessions(order));
+    }
+
+    /** Whether a row of {@code from}'s group sits beside {@code gap}, a gap not next to {@code from} itself. */
+    private boolean inGroup(final List<SessionState> shown, final int from, final int gap) {
+        final Attention group = group(shown.get(from));
+        return gap > 0 && group(shown.get(gap - 1)) == group || gap < shown.size() && group(shown.get(gap)) == group;
     }
 
     /** What a session's copy puts on the clipboard. */
@@ -971,7 +1127,10 @@ public final class SessionsSidebar {
             for (final int i : getSelectedIndices()) {
                 final Rectangle r = getCellBounds(i, i);
                 if (r != null) {
-                    SidebarLook.bar(g, r);
+                    // a heading above the row is not the row
+                    final int heading = layOutRow(sessionModel.get(i),
+                            i).getInsets().top - ROW_BORDER.getBorderInsets(this).top;
+                    SidebarLook.bar(g, new Rectangle(r.x, r.y + heading, r.width, r.height - heading));
                 }
             }
             final int n = getModel().getSize();

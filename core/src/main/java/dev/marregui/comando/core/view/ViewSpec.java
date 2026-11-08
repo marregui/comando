@@ -199,6 +199,21 @@ public sealed interface ViewSpec {
         }
     }
 
+    /**
+     * Find in files and conversations (record 139): the side pane's view of a search, its hits by where they are. The
+     * view carries no data: the query and the hits are the widget's, kept while comando runs.
+     */
+    record Search() implements ViewSpec {
+
+        /** Every Search view's title: one view, whatever it finds. */
+        public static final String TITLE = "Find in files";
+
+        @Override
+        public String type() {
+            return "search";
+        }
+    }
+
     enum RunState { RUNNING, PASSED, FAILED, CANCELLED }
 
     /**

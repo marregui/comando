@@ -228,7 +228,9 @@ final class QueryRules {
     /** True when the explorer shows the connection's schema, so a reload after a schema change shows it again. */
     private static boolean explorerShows(final AppState s, final String connection) {
         final String title = Effect.LoadSchema.viewTitle(connection);
-        return s.views().stream().anyMatch(v -> !v.pinned() && v.session().isEmpty() && v.placement() == Placement.SIDE && v.title().equals(title));
+        // found by its home: the user may have moved the explorer to the lower panel (record 141)
+        return s.views().stream().anyMatch(v -> !v.pinned() && v.session().isEmpty() && v.home() == Placement.SIDE
+                && v.title().equals(title));
     }
 
     /**

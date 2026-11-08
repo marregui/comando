@@ -32,7 +32,7 @@ Configure Files tab folders, which keeps them in `folders.json` ([§6](#6-the-fi
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86), whether finished work waits to be read (record 136) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | none |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -81,7 +81,8 @@ Any number of document panels may be attached to a session
   the front again, from a session tab or a file tab; a panel never in front keeps it as it is; kept across restarts for
   the panels open or reopenable ([record 115](adr/0115-the-lower-divider-per-panel.md)). A file opened to read, a
   document no session works in, takes the whole height: the lower area hides until ⌃1–⌃4, a lower tab or a request
-  waiting in Approvals asks for it while that file is in front, and then stays for that file.
+  waiting in Approvals asks for it while that file is in front, and then stays for that file. A file moved to the right
+  side leaves the lower area as the main tabs' front panel has it, and the side opens at the width a side view does.
 - **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
   arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
@@ -116,8 +117,9 @@ Any number of document panels may be attached to a session
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The session bar**, under the lower panel, shows the focused panel's session
   ([record 105](adr/0105-a-session-bar-under-the-lower-panel.md)). On the left: its chip, the session's state icon (as
-  on its row: orange running, grey stopped, faint starting, red failed) with its name and ⎇ branch, whose menu is the
-  session chip's menu above; a plug (green when running) that starts or stops it, its tooltip "Running; click to stop
+  on its row: orange running, grey stopped, faint starting, red failed) with its name, then ⎇ branch and the
+  short name of the repository the session last wrote to; before any such write, the working folder's ⎇ branch, and none
+  while that folder is in Claude Code's folder ([record 138](adr/0138-a-session-shows-what-it-writes-to.md)). Its menu is the session chip's menu above; a plug (green when running) that starts or stops it, its tooltip "Running; click to stop
   the session" or "Stopped; click to start it"; a fresh start, shown once the session has a conversation and usable
   while it is stopped (a new conversation starts; the old one stays importable); then what the session does, "working ·
   12 s", last, so that nothing moves as it changes. On the right: the model and the effort, each a menu that changes it
@@ -142,8 +144,11 @@ Any number of document panels may be attached to a session
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
   plans' usage, each under its name, and the work running in every session and query on the right, gold only on what
   waits for the user's approval. A click on that count lists who needs you,
-  who works and who waits, each with what it does and for how long; a click on a line goes to its panel
-  ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)). The session bar's time is the whole turn's ("Bash · turn 4 min"); a tool card's is
+  whose finished work waits to be read, who works and who waits, each with what it does and for how long; a click on a
+  line goes to its panel ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)), and does
+  nothing for a session with no panel open. The count adds "2 to read" while finished work waits; such a line reads
+  "name · to read · 3 min", and its click opens the session, with a panel if it has none, at its report
+  ([record 136](adr/0136-finished-work-waits-to-be-read.md)). The session bar's time is the whole turn's ("Bash · turn 4 min"); a tool card's is
   the tool's. The kit's version is not here: it is on
   the Files tab's KIT row ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)).
 - **The header** holds icons without a button's shape, at the right. First the connection: a database icon in its
@@ -166,8 +171,9 @@ Any number of document panels may be attached to a session
   query finished out of view; a spinner while one runs; an hourglass while background work the session started has not
   ended; otherwise, for a session's panel, the session's state icon ([§1.4](#14-the-sidebar)), and the file icon for a
   panel without a session. The icon is the tab's one mark and the title stays plain: the question mark holds until the
-  request is answered, the red mark and the check until the tab is looked at. A waiting request or a failure bounces
-  the Dock while the window is not active.
+  request is answered, the red mark and the check until the tab is looked at. For a session the check and the red
+  mark are its To read mark ([§1.4](#14-the-sidebar)), so a new turn clears them too and a restart keeps them; a query's
+  are the panel's own ([record 136](adr/0136-finished-work-waits-to-be-read.md)). A waiting request or a failure bounces the Dock while the window is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
   lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties the
   Session tab once the turn has ended, while the conversation goes on
@@ -177,6 +183,54 @@ Any number of document panels may be attached to a session
   of the view keeps its place as blocks arrive or change. Keys move through it: Home, End, ⌥↑ ⌥↓ (prompts), PgUp PgDn
   ([§2.3](#23-keys)). ⌘F counts and steps through the matches over the whole conversation, opening the closed cards that
   hold one.
+  A finished turn reads as its report ([record 137](adr/0137-a-turn-reads-as-its-report.md)): when it ends, what came before the
+  report, back to its prompt, goes under one row, "44 tools · 6 min", and the report stays open beneath it. The count
+  takes calls at any depth, a failed one adds "· 1 failed" in the danger colour, and a turn without calls reads "no
+  tools"; a stored turn has its row too, timed by the span of its stored lines. A click opens and closes the row as any
+  fold, and holds until the transcript is built again, as after switching sessions, which folds every turn anew. No row
+  forms for a live turn, a turn with no report, a turn that failed or that you stopped, or a run of only hooks and
+  notes; a running sub-agent keeps its turn open until it ends. A prompt never goes under a row, so ⌥↑ ⌥↓ walk the same prompts, and steps before a prompt sent
+  mid-turn stay open. A row forms open while you read one of its steps or your selection meets them, and stays open
+  until a click; its height is taken above the view, so nothing moves. ⌘F reads inside the rows and opens them, not
+  their titles; a find that moves on closes what it opened, and clearing it keeps the current match's row open. Export
+  to Markdown gives every step, and a closed row gives nothing to ⌘A.
+- **Find in files** (⌘⇧F) looks through the Files tab's folders and the stored conversations from the **Search** view
+  in the side pane, as ⌘K opens the Changes view ([record 139](adr/0139-one-window-finds-in-files-and-conversations.md)).
+  The menu bar is Edit, Find and Help; the Find menu holds the view's Find…, Find next and Find previous, then Find in
+  files…, which the palette has too. ⌘⇧F with the keyboard in the view closes it; elsewhere, the viewer included, it brings the view forward with the keyboard in its field.
+  The field starts with the main window's selection when that is one line, else with the last search, kept while
+  comando runs, the view closed and opened again included; a selection in a transcript does not fill it. Two check
+  boxes, Files and Conversations, both on, say where to look, and with both off the foot says "Nothing to search: turn
+  on Files or Conversations". A search starts 200 ms after the last keystroke and ends the one before it. ASCII letters
+  match in either case.
+- **The hits show by where they are**, as the Changes view shows a repository: each folder of the Files tab with its
+  count, its folders (a folder holding only one folder is one row, `docs/adr`), each file with its count, then each
+  hit, named by its snippet, with the Markdown headings above it and its line as detail (`Setup › macOS · line 12`); a
+  file whose name matches says so. The conversations come last, each under its title, a hit named by who wrote the
+  message and when. Every row is open but those you closed, and the hit selected stays selected as more arrive. The
+  foot says "Searching…", then the count of hits and sources, adding ", cut at 1,000" when a search stops at its limit
+  and ", 3 not read" for what failed.
+- **The preview tab** reads the hit selected ([record 141](adr/0141-the-right-side-is-a-partition-of-the-workspace.md)):
+  one tab of the main strip, its title in italics, reused for each hit. ↓ or ⏎ in the field moves to the first hit;
+  moving the selection shows the hit's file there without taking the keyboard; ⏎ or a double click gives the tab the
+  keyboard. The file shows in comando's editor, every hit of the file marked and the selected one in the brighter
+  colour; F7 and ⇧F7 (**Find ▸ Next hit**, **Previous hit**) go to the next and the previous hit in the order of the view, from
+  the view or the preview tab. A double click on the tab, an edit,
+  or **Open** in the view keeps it as a tab that stays; the next hit then opens a new preview. A conversation's hit opens
+  in the session that holds it, with the transcript's Find on the query, or the Import dialog when no session holds it;
+  its row's tooltip shows the message around the match. **Show in Files tab** reveals the file. The view's buttons are
+  icons; their tooltips say what they do. In files a search takes what the Files tab shows: its folders, without what
+  the tab leaves out and without hidden entries, names first, then lines, one hit a line. A file with a NUL in its
+  first 8 kB is passed over as binary. What counts in a conversation:
+  [Claude Code §1.4](claude-code.md#14-stored-conversations). Nothing is indexed and nothing is saved.
+- **The right side is a partition of the workspace**
+  ([record 141](adr/0141-the-right-side-is-a-partition-of-the-workspace.md)): any tab can go there from its
+  right-click menu. A panel (a session, a file, a SQL editor) has **Move to the right side** and, there, **Move to the
+  main tabs**; a view (a help page, Changes, Search, a result) has **Move to the right side** and **Move to the lower
+  panel**. The right side's tabs look and close as the main ones do. ⌘1–9 count the main tabs first, then the right
+  side's panels; ⌘W closes the focused panel wherever it is, and ⌘⇧T reopens it where it was. Panels on the right stay
+  there after a restart, and so do the Search and Changes views. The main tabs keep one panel at least; the lower
+  panel's own tabs (Session, Approvals, Terminal, Results) follow the focused panel and stay below.
 - **The corner's buttons**, left of the swatch: stop refreshing plots, start or stop the embedded QuestDB, and start or stop the comando Edge ([§4.1](#41-the-comando-edge)); each shows what
   it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)). The
   shell has no button: it starts when its tab is shown ([§5.1](#51-terminal)).
@@ -286,19 +340,24 @@ it starts or stops, red when it failed; it spins while the session works and sho
 background work. The name is dimmed while its own panel is not open and takes the accent colour while one of its panels
 has the focus. Marks follow the name: a gold ↑ when the session runs an older Claude Code than another running session
 (each start runs the CLI installed then; start it again to use the newer), the context in purple once its checkpoint
-is due, and ⚑ with the count of approvals waiting. A double click on the row opens its panel.
+is due, and ⚑ with the count of approvals waiting. A double click on the row opens its panel; on a To read row, at
+the last turn's report: its first line goes to the top of the view, or the view stays where it is when there is no
+report.
 
 A click on the ⓘ at the right edge of the row the pointer is over shows the card the panel tabs show; a click on the
 name only selects the row, so a double click opens its panel with no card coming up first
 ([record 87](adr/0087-a-session-row-shows-the-tabs-card.md)): the card of the session's panel (the focused panel when it
 is the session's, else its own), or, for a session with no panel open, a card of its own whose summary is read from the
 end of its conversation. Its title is set in the headings' serif, in the tint; then come its facts (`CardFacts`), each
-once and only when known: State, Model · effort, Context, Folder · branch, Conversation, Claude Code, and the panel's
-Session, Connection and File where the title does not say them; then, for a session that delegated, its sub-agents, the
+once and only when known: State, Model · effort, Context, Folder · branch, the Repository the session last wrote to,
+its Branch and the Ticket that branch names, Also (the other repositories it wrote to, the latest first)
+([record 138](adr/0138-a-session-shows-what-it-writes-to.md)), Conversation, Claude Code, and the panel's Session, Connection and File
+where the title does not say them; then, for a session that delegated, its sub-agents, the
 latest eight, each a line with its state (running, in background, done, failed) and the tool calls inside it, which a
 double click opens as the sub-agent's own tab in the lower panel
 ([record 109](adr/0109-a-sub-agent-is-a-session-tab.md)); then, under **Summary**, one or two sentences, at most 200
-characters, that Haiku writes on what the panel is about: written the first time the card shows, again when it shows
+characters, that Haiku writes on what the panel is about, told where the session works (the repository and branch it
+writes to when known, else its folder and branch): written the first time the card shows, again when it shows
 after what it is read from changed, and at its ↻ button, never on a timer; then the Linear tickets the panel's text
 names, once a `linear.app/<workspace>/issue/` link has shown which workspace to use, each opened in the browser by a
 double click. The card stands beside the rows, after the longest name, its top at the row's, so no name is under it;
@@ -321,7 +380,7 @@ Everything else is in the row's menu:
 | Compact the conversation | running | sends `/compact` from the session's panel |
 | Rewrite ‹panel› as a document | running, with a panel open; off while its text is blank | sends the panel's text to the session with an instruction to rewrite it as a Markdown document and put it in place with `ui_set_editor` ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)) |
 | Model: ‹family› ▸, Effort: ‹level› ▸ | always | each names what the session runs at; a choice saves and, on a running session, sends `/model` or `/effort` |
-| Copy details | always | as ⌘C on the row: name, path, branch, full conversation id, status, uptime and start, context with tokens, model and effort, Claude Code version |
+| Copy details | always | as ⌘C on the row: name, path, branch, the repository written to with its branch, the ticket, the other repositories, full conversation id, status, uptime and start, context with tokens, model and effort, Claude Code version |
 | Edit…, Clone…, Remove… | always | the session dialog; a copy; removal with its own panel |
 
 The model and effort shown are what the session runs at, the same in the row, its card and menus, and the session bar.
@@ -336,9 +395,20 @@ not `default`), and the effort the one set for the session, else the one Claude 
 (`modelSettings.<model>.effortLevel`, else `effortLevel`); while stopped, the ones set for the next start, else
 "default" ([record 89](adr/0089-a-session-row-is-one-line.md)).
 
-The rows are listed running first, then by name, until a row is dragged. While the pointer is on the list, a session
-that starts or stops keeps its row, and the order applies when the pointer leaves, so a second click lands on the same
-session. A dragged order then stands (saved in `sessions.json`) until Sort in the tab's menu
+The rows are grouped by what each session asks of you ([record 136](adr/0136-finished-work-waits-to-be-read.md)), the first that
+applies: **Needs you**, a request waits; **Working**, a turn or background work runs, or work handed off came back in
+the last 60 s and its reading turn has yet to run; **To read**, finished work not looked at yet; **Idle**, the rest. A
+group's heading is painted in its first row, a group with no session shows nothing, and a row's accessible description
+says its group.
+
+A session goes under To read when a turn ends, fails or is interrupted, when work it handed off comes back, or when it
+exits at work, unless the focused panel is on it; a turn that only hands work off marks nothing. The mark goes when the
+focused panel comes to the session or a new turn starts. It is saved in `sessions.json`, so it outlasts a restart.
+
+Inside a group the rows are listed running first, then by name, until a row is dragged. A drag orders rows inside their
+group; a drop among another group's rows is ignored. While the pointer is on the list, every row keeps its place and
+its group, and a new session waits last under its own group; the order applies when the pointer leaves, so a second
+click lands on the same session. A dragged order then stands (saved in `sessions.json`) until Sort in the tab's menu
 ([record 53](adr/0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md)). Import lists stored conversations
 ([Claude Code §1.4](claude-code.md#14-stored-conversations)).
 
@@ -823,8 +893,9 @@ welcome text.
 
 Connections and sessions come back closed (sessions with their stored transcripts); folders as stored, none read until
 opened; panels with their bindings and text, a binding to a name that no longer exists dropped; the window's size,
-position and dividers, the sidebar's tab and whether it shows, and whether the sessions keep a dragged order. Views,
-results and terminals belong to one run and are not restored.
+position and dividers, the sidebar's tab and whether it shows, and whether the sessions keep a dragged order. A
+session with finished work to read comes back under To read. Views, results and terminals belong to one run and are not
+restored.
 
 ### 7.4 Panel files
 

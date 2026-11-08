@@ -21,6 +21,7 @@ import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionInfo;
+import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -38,11 +39,34 @@ public sealed interface Intent {
      * makes the id so the reducer stays deterministic. {@code document} marks a file opened from outside comando's
      * panels folder.
      */
-    record AddPanel(PanelId panel, String title, boolean document) implements Intent {
+    record AddPanel(PanelId panel, String title, boolean document, boolean preview) implements Intent {
+        /** A panel that stays. */
+        public AddPanel(final PanelId panel, final String title, final boolean document) {
+            this(panel, title, document, false);
+        }
+
         /** A panel of comando's own. */
         public AddPanel(final PanelId panel, final String title) {
-            this(panel, title, false);
+            this(panel, title, false, false);
         }
+    }
+
+    /**
+     * Moves an open panel's tab to the right-hand partition of the workspace ({@code side}) or back to the main tabs,
+     * at the end of them, and focuses it; the main tabs keep one panel at least (record 141).
+     */
+    record PlacePanel(PanelId panel, boolean side) implements Intent {
+    }
+
+    /** Keeps the preview tab as a tab that stays: the next file previewed opens a tab of its own (record 141). */
+    record PinPanel(PanelId panel) implements Intent {
+    }
+
+    /**
+     * Moves a view to {@code placement}: the lower panel or the right-hand partition; its home, where a view shown
+     * again under its title is found, stays (record 141).
+     */
+    record PlaceView(long id, Placement placement) implements Intent {
     }
 
     /** Closes a panel: one of comando's own is kept, closed, with its file and bindings; a document is dropped. */
@@ -465,6 +489,10 @@ public sealed interface Intent {
     }
 
     record SessionBranch(String name, String branch) implements Intent {
+    }
+
+    /** What session {@code name}'s own writes say it works on (record 138). */
+    record SessionSubjectRead(String name, SessionSubject subject) implements Intent {
     }
 
     /**

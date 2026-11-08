@@ -20,6 +20,7 @@ import tools.jackson.databind.cfg.EnumFeature;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
@@ -107,7 +108,7 @@ final class JsonFile<T> {
             return null;
         }
         try {
-            return content(JSON.readTree(path.toFile()));
+            return content(Mapped.read(path, m -> JSON.readTree(m.stream())));
         } catch (final JacksonException e) {
             throw new IOException(e.getMessage(), e);
         }
@@ -122,7 +123,7 @@ final class JsonFile<T> {
             return null;
         }
         try {
-            return content(JSON.readTree(path.toFile()));
+            return content(Mapped.read(path, m -> JSON.readTree(m.stream())));
         } catch (final LaterVersion e) {
             refused = e.getMessage();
             LOG.log(System.Logger.Level.WARNING, "a store file of a later version, kept and not written [file=" + path + ", " + e.getMessage() + ']');

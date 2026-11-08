@@ -1,7 +1,6 @@
 package dev.marregui.comando.core.view;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -11,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.HomeDir;
 
 /**
@@ -51,8 +51,8 @@ public record FileView(Path path, String title, ViewSpec spec, boolean binary) {
         }
         byte[] bytes;
         // the read itself is bounded: a file that grows between a size check and the read is still refused
-        try (final InputStream in = Files.newInputStream(path)) {
-            bytes = in.readNBytes((int) MAX_BYTES + 1);
+        try {
+            bytes = Mapped.head(path, MAX_BYTES + 1L);
         } catch (final FileSystemException e) {
             throw new IOException(e.getReason() != null ? e.getReason() : e.getClass().getSimpleName(), e);
         }

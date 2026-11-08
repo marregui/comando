@@ -43,11 +43,31 @@ final class FocusRouter {
     private LowerTab renderedLowerTab = LowerTab.SESSION;
     /** Where the keyboard goes back to after this render; null when nothing closed. */
     private FocusOrigins.Origin back;
+    /** A render runs, between {@link #beforeRender} and {@link #afterRender}. */
+    private boolean rendering;
 
     FocusRouter(final ComandoUi.Dependencies deps, final ShellParts parts, final LayoutKeeper layout) {
         this.deps = deps;
         this.parts = parts;
         this.layout = layout;
+    }
+
+    /**
+     * The keyboard moved to {@code c}: a panel it entered that is not the focused one, a side panel beside the main tab
+     * in front or the main tab beside a focused side panel, becomes the focused panel, so the commands, the lower tabs
+     * and the keyboard's way back mean it.
+     */
+    void keyboardMoved(final Component c) {
+        if (rendering || c == null || SwingUtilities.getWindowAncestor(c) != parts.frame()) {
+            return;
+        }
+        if (SwingUtilities.getAncestorOfClass(EditorPanel.class, c) instanceof EditorPanel p) {
+            final AppState s = deps.state().get();
+            final PanelId id = p.panel().id();
+            if (!id.equals(s.focused()) && s.panel(id).isPresent()) {
+                deps.intents().dispatch(new Intent.FocusPanel(id));
+            }
+        }
     }
 
     /** The lower tab the last render showed. */
@@ -66,10 +86,12 @@ final class FocusRouter {
                 o -> o.owner().isDisplayable() && (o.ownerKey() == null ? !inLower(o.owner()) || o.front() == null || openNow.contains(o.front())
                         : openNow.contains(o.ownerKey())));
         renderedFront = "panel:" + s.focused().value();
+        rendering = true;
     }
 
     /** After the panes changed at a render: the keyboard goes where the render left it to go. */
     void afterRender(final AppState s) {
+        rendering = false;
         final LowerPanel lower = parts.lower();
         // the last card answered: the Session tab came forward, and the keyboard the inbox held goes with it
         final Component owner = focusOwnerInFrame();
@@ -228,6 +250,19 @@ final class FocusRouter {
         }
         final long id = parts.lower().viewHolding(c);
         return id >= 0 ? id : parts.side().viewHolding(c);
+    }
+
+    /**
+     * Gives {@code target} the keyboard once it shows, now when it shows already; asked at a render, it wins over the
+     * way back that render finds, as a preview tab replaced by the next one keeps the keyboard in the new one.
+     */
+    void focusOnceShown(final Component target) {
+        if (!rendering && target.isShowing()) {
+            focusAfterRender = null;
+            Edt.later(target::requestFocusInWindow);
+        } else {
+            focusAfterRender = new FocusAfterRender(target, target::requestFocusInWindow);
+        }
     }
 
     /**

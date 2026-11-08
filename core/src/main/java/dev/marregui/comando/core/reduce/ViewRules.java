@@ -34,15 +34,42 @@ final class ViewRules {
     /** Longest view title kept; a session's title past it is clipped, so a tab never fills the window. */
     static final int VIEW_TITLE_CHARS = 80;
 
-    static Transition showView(final Clock clock, final AppState s, final Intent.ShowView shown) {
-        final Intent.ShowView i = shown.title().length() <= VIEW_TITLE_CHARS ? shown
-                : new Intent.ShowView(shown.session(), Clip.keepStart(shown.title(), VIEW_TITLE_CHARS), shown.spec(), shown.placement());
+    /** Where {@code shown} lands: where the view it replaces is now, else where it asks (record 141). */
+    static Placement shownAt(final AppState s, final Intent.ShowView shown) {
+        return replaced(s, clipped(shown)).map(ViewState::placement).orElse(shown.placement());
+    }
+
+    /** {@code shown} with its title clipped to {@link #VIEW_TITLE_CHARS}. */
+    private static Intent.ShowView clipped(final Intent.ShowView shown) {
+        return shown.title().length() <= VIEW_TITLE_CHARS ? shown
+                : new Intent.ShowView(shown.session(), Clip.keepStart(shown.title(), VIEW_TITLE_CHARS), shown.spec(),
+                        shown.placement());
+    }
+
+    /** The view {@code i}, its title clipped, replaces: unpinned, same title and session, placed there first. */
+    private static Optional<ViewState> replaced(final AppState s, final Intent.ShowView i) {
         for (final ViewState v : s.views()) {
-            if (!v.pinned() && v.title().equals(i.title()) && v.session().equals(i.session()) && v.placement() == i.placement()) {
-                // the user's own command (session "") shows its view again; a session's update in place stays put
-                final AppState next = s.withViews(replaceView(s.views(), v.replaced(i.spec())));
-                return Transition.of(i.session().isEmpty() && i.placement() == Placement.LOWER ? next.withLowerTab(LowerTab.view(v.id())) : next);
+            if (!v.pinned() && v.title().equals(i.title()) && v.session().equals(i.session())
+                    && v.home() == i.placement()) {
+                return Optional.of(v);
             }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Shows a view: one shown before under the title, by the same session and placed there first, is replaced where it
+     * is now, wherever the user moved it since (record 141); else a new one opens.
+     */
+    static Transition showView(final Clock clock, final AppState s, final Intent.ShowView shown) {
+        final Intent.ShowView i = clipped(shown);
+        final Optional<ViewState> before = replaced(s, i);
+        if (before.isPresent()) {
+            final ViewState v = before.get();
+            // the user's own command (session "") shows its view again; a session's update in place stays put
+            final AppState next = s.withViews(replaceView(s.views(), v.replaced(i.spec())));
+            final boolean lower = i.session().isEmpty() && v.placement() == Placement.LOWER;
+            return Transition.of(lower ? next.withLowerTab(LowerTab.view(v.id())) : next);
         }
         final long id = s.nextId();
         final List<ViewState> views = new ArrayList<>(s.views());
@@ -96,13 +123,33 @@ final class ViewRules {
         return new Transition(notice(clock, next, Notice.Level.INFO, i.session() + " " + String.join(", ", done) + undo), effects);
     }
 
+    /**
+     * Moves a view to the lower panel, whose tab it becomes, or to the right-hand partition; a lower tab moved away
+     * gives the lower panel back to the session's tab. Its home stays (record 141).
+     */
+    static Transition placeView(final AppState s, final Intent.PlaceView i) {
+        final Optional<ViewState> view = s.view(i.id());
+        if (view.isEmpty() || view.get().placement() == i.placement()) {
+            return Transition.of(s);
+        }
+        final AppState next = s.withViews(replaceView(s.views(), view.get().placed(i.placement())));
+        return Transition.of(switch (i.placement()) {
+            case LOWER -> next.withLowerTab(LowerTab.view(i.id()));
+            case SIDE -> isLowerTab(s, i.id()) ? next.withLowerTab(LowerTab.SESSION) : next;
+        });
+    }
+
+    private static boolean isLowerTab(final AppState s, final long id) {
+        return s.lowerTab().kind() == LowerTab.Kind.VIEW && s.lowerTab().viewId() == id;
+    }
+
     static Transition closeView(final AppState s, final long id) {
         final Optional<ViewState> view = s.view(id);
         if (view.isEmpty()) {
             return Transition.of(s);
         }
         AppState next = s.withViews(s.views().stream().filter(v -> v.id() != id).toList());
-        if (s.lowerTab().kind() == LowerTab.Kind.VIEW && s.lowerTab().viewId() == id) {
+        if (isLowerTab(s, id)) {
             next = next.withLowerTab(LowerTab.SESSION); // the first tab
         }
         final List<Effect> effects = new ArrayList<>();
@@ -132,7 +179,8 @@ final class ViewRules {
 
     static Transition refreshView(final AppState s, final Intent.RefreshView i) {
         return Transition.of(s.views().stream()
-                .filter(v -> !v.pinned() && v.session().isEmpty() && v.title().equals(i.title()) && v.placement() == Placement.LOWER)
+                .filter(v -> !v.pinned() && v.session().isEmpty() && v.title().equals(i.title())
+                        && v.home() == Placement.LOWER)
                 .findFirst().map(v -> s.withViews(replaceView(s.views(), v.replaced(i.spec())))).orElse(s));
     }
 
@@ -174,7 +222,8 @@ final class ViewRules {
         final long runId = s.nextId();
         final List<Effect> effects = new ArrayList<>();
         for (final ViewState v : s.views()) {
-            if (!v.pinned() && v.title().equals(title) && v.placement() == Placement.LOWER && v.spec() instanceof ViewSpec.Console c) {
+            if (!v.pinned() && v.title().equals(title) && v.home() == Placement.LOWER
+                    && v.spec() instanceof ViewSpec.Console c) {
                 if (c.state() == ViewSpec.RunState.RUNNING) {
                     effects.add(new Effect.CancelCommand(c.runId()));
                 }
@@ -182,10 +231,13 @@ final class ViewRules {
             }
         }
         Transition shown = showView(clock, s.withIdTaken(), new Intent.ShowView("", title, ViewSpec.Console.running(runId, title, panel), Placement.LOWER));
-        // a re-run replaces its view in place, which keeps the tab; the user asked for this run, so show it
+        // a re-run replaces its view in place, which keeps the tab; the user asked for this run, so show it, in the
+        // lower panel unless the user moved the view to the side
         final AppState placed = shown.state();
         final AppState withTab = placed.views().stream()
-                .filter(v -> v.spec() instanceof ViewSpec.Console c && c.runId() == runId).findFirst()
+                .filter(v -> v.spec() instanceof ViewSpec.Console c && c.runId() == runId
+                        && v.placement() == Placement.LOWER)
+                .findFirst()
                 .map(v -> placed.withLowerTab(LowerTab.view(v.id()))).orElse(placed);
         shown = new Transition(withTab, shown.effects());
         effects.add(start.apply(runId));

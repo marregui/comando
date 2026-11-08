@@ -21,6 +21,7 @@ import tools.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.dispatch.Target;
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -40,6 +41,7 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.view.Placement;
 
 /**
  * The actions of the registry that are not among comando's first tools (record 121): their schemas, and performing them
@@ -181,6 +183,9 @@ final class ActionTools {
             case "panel_remove" -> send(new Intent.RemovePanel(panel(s, args, true).id(), caller));
             case "panel_rename" -> send(new Intent.RenamePanel(panel(s, args, false).id(), text(args, "title")));
             case "panel_move" -> send(new Intent.MovePanel(panel(s, args, false).id(), args.path("index").asInt(0)));
+            case "panel_place" -> send(new Intent.PlacePanel(panel(s, args, false).id(),
+                    args.path("side").asBoolean(true)));
+            case "panel_pin" -> send(new Intent.PinPanel(panel(s, args, false).id()));
             case "panel_focus" -> send(new Intent.FocusPanel(panel(s, args, false).id()));
             case "panel_bind_session" -> send(new Intent.BindSession(panel(s, args, false).id(), args.path("session").asString("").strip()));
             case "panel_bind_connection" -> send(new Intent.BindConnection(panel(s, args, false).id(), args.path("connection").asString("").strip()));
@@ -199,6 +204,7 @@ final class ActionTools {
             case "connection_schema" -> send(new Intent.ExploreSchema(connection(s, args).name()));
             case "connection_remove" -> send(new Intent.RemoveConnection(connection(s, args).name()));
             case "view_pin" -> send(new Intent.PinView(view(s, args).id(), args.path("pinned").asBoolean(true)));
+            case "view_place" -> send(new Intent.PlaceView(view(s, args).id(), placement(args)));
             case "view_close" -> viewClose(s, args);
             case "notice_dismiss" -> send(new Intent.DismissNotice());
             case "gradle_run" -> send(new Intent.RunGradle(panel(s, args, false).id(), text(args, "tasks")));
@@ -525,6 +531,10 @@ final class ActionTools {
                 .orElseThrow(() -> new IllegalArgumentException("no view " + id + "; views: " + s.views().stream().map(v -> v.id() + " " + v.title()).toList()));
     }
 
+    private static Placement placement(final JsonNode args) {
+        return "side".equals(text(args, "placement")) ? Placement.SIDE : Placement.LOWER;
+    }
+
     private static Target target(final JsonNode args) {
         return switch (args.path("target").asString("").strip().toLowerCase(Locale.ROOT)) {
             case "sql" -> Target.SQL;
@@ -583,7 +593,7 @@ final class ActionTools {
             return false;
         }
         try {
-            final JsonNode root = json.readTree(Files.readString(file));
+            final JsonNode root = json.readTree(Mapped.text(file));
             // a file of a later version grants nothing this comando could misread (record 133)
             if (Peers.later(root)) {
                 return false;

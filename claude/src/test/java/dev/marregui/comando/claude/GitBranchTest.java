@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Walks parent directories until it finds a repository.
 /// - Returns a short object id for a detached HEAD.
 /// - Returns empty outside a repository.
+/// - Names the top folder of the repository holding a folder, which need not exist.
 class GitBranchTest {
 
     /// A nested `a/b` directory inherits `feature/x` from its ancestor's symbolic `HEAD`, proving upward repository
@@ -35,5 +36,15 @@ class GitBranchTest {
     @Test
     void outsideARepositoryIsEmpty(@TempDir final Path dir) {
         assertThat(GitBranch.of(dir)).isEmpty();
+    }
+
+    /// A folder not yet on disk inside `repo` gives `repo`, as a session may have moved the file it wrote; a folder
+    /// outside any repository gives none.
+    @Test
+    void theTopIsTheNearestFolderHoldingGit(@TempDir final Path tmp) throws Exception {
+        final Path repo = tmp.resolve("repo");
+        Files.createDirectories(repo.resolve(".git"));
+        assertThat(GitBranch.top(repo.resolve("gone/deep"))).contains(repo);
+        assertThat(GitBranch.top(tmp.resolve("other"))).isEmpty();
     }
 }

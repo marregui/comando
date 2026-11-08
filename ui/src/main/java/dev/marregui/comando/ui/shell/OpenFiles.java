@@ -1,9 +1,11 @@
 package dev.marregui.comando.ui.shell;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import dev.marregui.comando.core.files.ByteScan;
+import dev.marregui.comando.core.files.Mapped;
 
 /** Which files open in a panel: text small enough to edit; the rest shows read-only in the side pane. */
 final class OpenFiles {
@@ -14,20 +16,13 @@ final class OpenFiles {
     private OpenFiles() {
     }
 
-    /** At most {@link #MAX_PANEL_BYTES} and without a NUL byte in its first 8 kB; called off the EDT. */
+    /** At most {@link #MAX_PANEL_BYTES} and not binary ({@link ByteScan#isBinary}); called off the EDT. */
     static boolean isText(final Path file) {
         try {
             if (Files.size(file) > MAX_PANEL_BYTES) {
                 return false;
             }
-            try (final InputStream in = Files.newInputStream(file)) {
-                for (final byte b : in.readNBytes(8192)) {
-                    if (b == 0) {
-                        return false;
-                    }
-                }
-            }
-            return true;
+            return Mapped.read(file, m -> !ByteScan.isBinary(m.segment()));
         } catch (final IOException e) {
             return true; // the panel's own read says why it cannot open
         }

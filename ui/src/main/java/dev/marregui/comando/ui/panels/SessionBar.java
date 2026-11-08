@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.BorderLayout;
+import java.io.File;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -23,6 +24,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -245,8 +247,18 @@ public final class SessionBar {
         return m;
     }
 
-    /** The session chip: name and branch, which change only when the session or its branch does; shown as text. */
+    /**
+     * The session chip: its name, then the branch of what it works on with that repository's short name, else the
+     * branch of its working folder; these change only when the session or its work does; shown as text.
+     */
     static String chipText(final SessionState ss) {
+        final SessionSubject subject = ss.subject();
+        if (subject.isKnown()) {
+            final String path = subject.repository();
+        final String repository = path.substring(path.lastIndexOf(File.separatorChar) + 1);
+            final String branch = subject.branch().isEmpty() ? "" : "  ⎇ " + subject.branch();
+        return Plain.text(ss.name() + branch + " · " + repository);
+        }
         return Plain.text(ss.name() + (ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch()));
     }
 

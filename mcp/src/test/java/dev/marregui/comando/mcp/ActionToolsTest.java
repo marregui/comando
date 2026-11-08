@@ -111,6 +111,19 @@ class ActionToolsTest {
         assertThat(call("foreman", "session_stop", "{\"session\":\"users\"}").error()).as("stopping is always allowed").isFalse();
     }
 
+    /// `panel_place` answers why the last panel of the main tabs stays there and sends nothing; a panel on the side
+    /// goes back to the main tabs.
+    @Test
+    void panelPlaceKeepsTheLastPanelOfTheMainTabs() throws Exception {
+        state.set(state.get().withPanel(state.get().panel(States.P1).orElseThrow().withSide(true)));
+        final McpTools.Outcome refused = call("foreman", "panel_place", "{\"panel\":\"two\"}");
+        assertThat(refused.text()).isEqualTo("refused: The last panel of the main tabs cannot move to the right side");
+        assertThat(sink.of(Intent.PlacePanel.class)).isEmpty();
+
+        assertThat(call("foreman", "panel_place", "{\"panel\":\"one\",\"side\":false}").error()).isFalse();
+        assertThat(sink.of(Intent.PlacePanel.class)).containsExactly(new Intent.PlacePanel(States.P1, false));
+    }
+
     /// Rule 1: an approval is not answered by the session that asks for it nor by a session that created the asker; any
     /// other caller answers it, allowing with a scope or denying with a message.
     @Test
@@ -253,6 +266,8 @@ class ActionToolsTest {
         calls.put("panel_remove", "{\"panel\":\"shut\"}");
         calls.put("panel_rename", "{\"panel\":\"" + p2 + "\",\"title\":\"renamed\"}");
         calls.put("panel_move", "{\"panel\":\"" + p2 + "\",\"index\":0}");
+        calls.put("panel_place", "{\"panel\":\"" + p2 + "\"}");
+        calls.put("panel_pin", "{\"panel\":\"" + p2 + "\"}");
         calls.put("panel_focus", "{\"panel\":\"" + p2 + "\"}");
         calls.put("panel_bind_session", "{\"panel\":\"" + p2 + "\",\"session\":\"mine\"}");
         calls.put("panel_bind_connection", "{\"panel\":\"" + p2 + "\",\"connection\":\"local\"}");
@@ -271,6 +286,7 @@ class ActionToolsTest {
         calls.put("connection_schema", "{\"name\":\"local\"}");
         calls.put("connection_remove", "{\"name\":\"local\"}");
         calls.put("view_pin", "{\"id\":9}");
+        calls.put("view_place", "{\"id\":9,\"placement\":\"side\"}");
         calls.put("view_close", "{\"id\":9}");
         calls.put("notice_dismiss", "{}");
         calls.put("gradle_run", "{\"panel\":\"" + p1 + "\",\"tasks\":\"build\"}");

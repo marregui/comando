@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -18,14 +20,18 @@ import dev.marregui.comando.testkit.SyntheticSession;
 /**
  * The renderer's frame-time gate (plan 4a.4): replays the synthetic session one stream delta per frame, each frame
  * applying the change, laying out and painting a 1200 x 800 viewport at the end, as the widget does while following a
- * live turn. Then streams a long thinking block, which stays open while it streams. Prints percentiles; exits 1 when
- * either p99 exceeds 16 ms, 2 when the JVM is still alive {@value #EXIT_GRACE_MILLIS} ms after the measurement: AWT
- * ends the JVM by itself once nothing posts to it, so a Swing timer or a displayable component left behind would
- * otherwise hang the gate for as long as its caller waits.
+ * live turn. A turn that ends folds, which leaves little above the end, so the session is replayed again with each row
+ * opened as it forms. Then streams a long thinking block, which stays open while it streams, and times folding, opening
+ * and closing a turn of {@value #LONG_TURN_CALLS} calls, the longest on record. Prints percentiles; exits 1 when any of
+ * those p99 exceeds 16 ms, 2 when the JVM is still alive {@value #EXIT_GRACE_MILLIS} ms after the measurement: AWT ends
+ * the JVM by itself once nothing posts to it, so a Swing timer or a displayable component left behind would otherwise
+ * hang the gate for as long as its caller waits.
  */
 public final class TranscriptGate {
 
     private static final long EXIT_GRACE_MILLIS = 10_000;
+    private static final int LONG_TURN_CALLS = 224;
+    private static final int LONG_TURN_ROUNDS = 200;
 
     private TranscriptGate() {
     }
@@ -64,9 +70,12 @@ public final class TranscriptGate {
         final BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB_PRE);
 
         // warm-up pass: class loading and JIT, then the measured pass on a fresh canvas
-        run(steps, width, height, img, null);
+        run(steps, width, height, img, null, false);
         final long[] frames = new long[steps.size()];
-        final TranscriptCanvas canvas = run(steps, width, height, img, frames);
+        final TranscriptCanvas canvas = run(steps, width, height, img, frames, false);
+        run(steps, width, height, img, null, true);
+        final long[] openFrames = new long[steps.size()];
+        final TranscriptCanvas opened = run(steps, width, height, img, openFrames, true);
 
         // a width change with the view at the end: what is visible is laid out at once, the rest when idle
         final JViewport viewport = new JViewport();
@@ -97,6 +106,8 @@ public final class TranscriptGate {
         final long[] codeFrames = codeFence(delta, width, height, img);
         findInLongTranscript(width, height, img);
         final long[] find = findInLongTranscript(width, height, img);
+        longTurn(width, height, img);
+        final long[][] longTurn = longTurn(width, height, img);
 
         final long[] sorted = frames.clone();
         Arrays.sort(sorted);
@@ -109,6 +120,13 @@ public final class TranscriptGate {
         System.out.printf(Locale.ROOT, "width change: visible part laid out and painted %.2f ms, idle pass %.2f ms in 8 ms slices%n",
                 ms(resize), ms(idle));
         System.out.printf(Locale.ROOT, "full exact relayout %.2f ms, paint after a scroll %.2f ms%n", ms(full), ms(scrollPaint));
+        final long[] openSorted = openFrames.clone();
+        Arrays.sort(openSorted);
+        final double openP99 = ms(openSorted[(int) (openSorted.length * 0.99)]);
+        System.out.printf(Locale.ROOT,
+                "the same frames, each row opened as it forms, content %d px: p50 %.2f ms, p99 %.2f ms, max %.2f ms%n",
+                opened.contentHeight(), ms(openSorted[openSorted.length / 2]), openP99,
+                        ms(openSorted[openSorted.length - 1]));
         final long[] thinkingSorted = thinkingFrames.clone();
         Arrays.sort(thinkingSorted);
         final double thinkingP99 = ms(thinkingSorted[(int) (thinkingSorted.length * 0.99)]);
@@ -121,15 +139,32 @@ public final class TranscriptGate {
                 ms(codeSorted[codeSorted.length - 1]));
         System.out.printf(Locale.ROOT, "find in %d blocks, a word in most: first search %.2f ms, the next match %.2f ms; "
                 + "a word in a few, from the end backwards: %.2f ms%n", find[2], ms(find[0]), ms(find[1]), ms(find[3]));
-        if (p99 > 16.0 || thinkingP99 > 16.0) {
+        double longTurnP99 = 0.0;
+        final String[] names = {"folding as it ends", "opening", "closing"};
+        for (int i = 0; i < longTurn.length; i++) {
+            Arrays.sort(longTurn[i]);
+            final double worst = ms(longTurn[i][(int) (longTurn[i].length * 0.99)]);
+            longTurnP99 = Math.max(longTurnP99, worst);
+            System.out.printf(Locale.ROOT, "a turn of %d calls, %s (%d frames): p50 %.2f ms, p99 %.2f ms%n",
+                    LONG_TURN_CALLS, names[i],
+                    longTurn[i].length, ms(longTurn[i][longTurn[i].length / 2]), worst);
+        }
+        if (p99 > 16.0 || thinkingP99 > 16.0 || openP99 > 16.0 || longTurnP99 > 16.0) {
             System.out.println("GATE FAILED: p99 above 16 ms");
             System.exit(1);
         }
         System.out.println("GATE PASSED");
     }
 
-    private static TranscriptCanvas run(final List<SyntheticSession.Step> steps, final int width, final int height, final BufferedImage img, final long[] frames) {
-        final TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+    private static TranscriptCanvas run(
+            final List<SyntheticSession.Step> steps,
+            final int width,
+            final int height,
+            final BufferedImage img,
+            final long[] frames,
+            final boolean rowsOpen
+    ) {
+        final TranscriptCanvas canvas = new TranscriptCanvas(_ -> { });
         canvas.setSize(width, height);
         int n = 0;
         for (int i = 0; i < steps.size(); i++) {
@@ -141,6 +176,9 @@ public final class TranscriptGate {
                 canvas.update(s.index(), s.block());
             }
             canvas.ensureLayout(width);
+            if (rowsOpen && s.block() instanceof Block.TurnEnd) {
+                openRows(canvas, width);
+            }
             paintTop(canvas, width, height, img, Math.max(0, canvas.contentHeight() - height));
             if (frames != null) {
                 frames[i] = System.nanoTime() - t;
@@ -149,13 +187,95 @@ public final class TranscriptGate {
         return canvas;
     }
 
+    private static void openRows(final TranscriptCanvas canvas, final int width) {
+        for (final Item item : canvas.topLevel()) {
+            if (item instanceof Items.StepsItem row && !row.isOpen()) {
+                click(canvas, row);
+            }
+        }
+        canvas.ensureLayout(width);
+    }
+
+    /** A click on the row's heading. */
+    private static void click(final TranscriptCanvas canvas, final Items.StepsItem row) {
+        final int y = canvas.topOf(row) + 6;
+        canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, 40, y,
+                1, false, MouseEvent.BUTTON1));
+        canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_RELEASED, 0L, 0, 40, y, 1, false,
+                MouseEvent.BUTTON1));
+    }
+
+    /**
+     * A turn of {@value #LONG_TURN_CALLS} calls of the shapes a real turn has, an edit whose card opens by itself, a
+     * file
+     * read and a command with a long result, a text every eight calls, then its report. Each round times one frame for
+     * each of: the end of the turn folding it, a click opening the row, a click closing it.
+     */
+    private static Block.ToolCall longTurnCall(final int call) {
+        final String id = "t" + call;
+        final String lines = "a line of the file\\n".repeat(40);
+        return switch (call % 3) {
+            case 0 -> new Block.ToolCall(id, "Edit",
+                    "{\"file_path\":\"/w/F" + call + ".java\",\"old_string\":\"" + lines
+                    + "\",\"new_string\":\"" + lines + "x\"}", "ok", Block.ToolStatus.DONE, "");
+            case 1 -> new Block.ToolCall(id, "Read", "{\"file_path\":\"/w/F" + call + ".java\"}", "one\ntwo\nthree",
+                    Block.ToolStatus.DONE, "");
+            default -> new Block.ToolCall(id, "Bash", "{\"command\":\"ls " + call + "\"}", "a line\n".repeat(30),
+                    Block.ToolStatus.DONE, "");
+        };
+    }
+
+    private static long[][] longTurn(final int width, final int height, final BufferedImage img) {
+        final long[][] times = new long[3][LONG_TURN_ROUNDS];
+        for (int round = 0; round < LONG_TURN_ROUNDS; round++) {
+            final TranscriptCanvas canvas = new TranscriptCanvas(_ -> { });
+            canvas.setSize(width, height);
+            int n = 0;
+            canvas.append(n++, new Block.UserPrompt("Go through the module.", "main", ""));
+            for (int call = 0; call < LONG_TURN_CALLS; call++) {
+                canvas.append(n++, longTurnCall(call));
+                if (call % 8 == 7) {
+                    canvas.append(n++, new Block.AssistantText("m" + call, 0, "Looking further into it.", false, ""));
+                }
+            }
+            canvas.append(n++, new Block.AssistantText("report", 0, "What was found.", false, ""));
+            canvas.ensureLayout(width);
+            paintTop(canvas, width, height, img, Math.max(0, canvas.contentHeight() - height));
+
+            final long t0 = System.nanoTime();
+            canvas.append(n, new Block.TurnEnd(0.05, 360_000L, LONG_TURN_CALLS, false, "success"));
+            canvas.ensureLayout(width);
+            paintTop(canvas, width, height, img, Math.max(0, canvas.contentHeight() - height));
+            times[0][round] = System.nanoTime() - t0;
+
+            final Items.StepsItem row = (Items.StepsItem) canvas.topLevel().get(1);
+            times[1][round] = clickFrame(canvas, row, width, height, img);
+            times[2][round] = clickFrame(canvas, row, width, height, img);
+        }
+        return times;
+    }
+
+    private static long clickFrame(
+            final TranscriptCanvas canvas,
+            final Items.StepsItem row,
+            final int width,
+            final int height,
+            final BufferedImage img
+    ) {
+        final long t = System.nanoTime();
+        click(canvas, row);
+        canvas.ensureLayout(width);
+        paintTop(canvas, width, height, img, canvas.topOf(row));
+        return System.nanoTime() - t;
+    }
+
     /** Streams about 9 000 characters of thinking, 40 words a line, one delta per frame, painting the end. */
     private static long[] thinking(final int delta, final int width, final int height, final BufferedImage img) {
         final StringBuilder text = new StringBuilder();
         for (int i = 0; i < 1500; i++) {
             text.append("word").append(i % 7).append(i % 40 == 39 ? '\n' : ' ');
         }
-        final TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+        final TranscriptCanvas canvas = new TranscriptCanvas(_ -> { });
         canvas.setSize(width, height);
         canvas.append(0, new Block.Thinking("t", 0, text.substring(0, delta), 1, true, ""));
         final long[] frames = new long[text.length() / delta];
@@ -180,7 +300,7 @@ public final class TranscriptGate {
         }
         final String head = code.substring(0, nthLine(code, 1403));
         final String full = code.append("```\n").toString();
-        final TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+        final TranscriptCanvas canvas = new TranscriptCanvas(_ -> { });
         canvas.setSize(width, height);
         canvas.append(0, new Block.AssistantText("m", 0, head, true, ""));
         canvas.ensureLayout(width);
@@ -209,7 +329,7 @@ public final class TranscriptGate {
      */
     private static long[] findInLongTranscript(final int width, final int height, final BufferedImage img) {
         final Transcript session = SyntheticSession.transcript();
-        final TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+        final TranscriptCanvas canvas = new TranscriptCanvas(_ -> { });
         canvas.setSize(width, height);
         int n = 0;
         while (n < 2000) {
@@ -226,7 +346,7 @@ public final class TranscriptGate {
         canvas.find("timeout", true);
         final long next = System.nanoTime() - t1;
         canvas.clearFind();
-        final TranscriptCanvas fresh = new TranscriptCanvas(href -> { });
+        final TranscriptCanvas fresh = new TranscriptCanvas(_ -> { });
         fresh.setSize(width, height);
         for (int i = 0; i < n; i++) {
             fresh.append(i, session.get(i % session.size()));

@@ -12,6 +12,7 @@ import javax.swing.Icon;
 
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.format.Versions;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -125,6 +126,17 @@ final class SessionRow extends IconRow {
         sb.append("Path: ").append(s.spec().workDir()).append('\n');
         if (!s.branch().isEmpty()) {
             sb.append("Branch: ").append(s.branch()).append('\n');
+        }
+        final SessionSubject subject = s.subject();
+        if (subject.isKnown()) {
+            sb.append("Repository: ").append(subject.repository());
+            sb.append(subject.branch().isEmpty() ? "" : " · " + subject.branch()).append('\n');
+            if (!subject.ticket().isEmpty()) {
+                sb.append("Ticket: ").append(subject.ticket()).append('\n');
+            }
+            if (!subject.others().isEmpty()) {
+                sb.append("Also: ").append(String.join(" · ", subject.others())).append('\n');
+            }
         }
         sb.append("Session id: ").append(s.spec().claudeSessionId().isEmpty() ? "none yet" : s.spec().claudeSessionId()).append('\n');
         sb.append("Status: ").append(s.status().isUsable() ? "running" : s.status().name().toLowerCase(Locale.ROOT)).append('\n');

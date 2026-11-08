@@ -7,12 +7,15 @@ import java.util.function.IntSupplier;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.Reflection;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /**
@@ -65,7 +68,33 @@ public final class Reducer {
     }
 
     public Transition apply(final AppState s, final Intent intent) {
-        return withDesktopError(s, withRepoWatch(s, reduce(s, intent)));
+        return withDesktopError(s, withRepoWatch(s, withUnread(s, reduce(s, intent))));
+    }
+
+    /**
+     * Whichever intent led here, a session the focused panel is on has been looked at, and one with a turn running has
+     * superseded what it finished: neither has anything to read (record 136). The mark lives in the session's spec, so
+     * a change of it, set by the rules or cleared here, is saved as it stands now.
+     */
+    private static Transition withUnread(final AppState before, final Transition t) {
+        final String focused = Shared.focusedSession(t.state());
+        AppState next = t.state();
+        for (final SessionState x : t.state().sessions()) {
+            if (x.spec().unread() && (x.isBusy() || x.name().equals(focused))) {
+                next = next.withSession(x.withSpec(x.spec().withUnread(0L)));
+            }
+        }
+        if (next == t.state() && unread(before).equals(unread(next))) {
+            return t;
+        }
+        final List<Effect> effects = new ArrayList<>(t.effects());
+        effects.removeIf(e -> e instanceof Effect.SaveSessions);
+        effects.add(new Effect.SaveSessions(Shared.sessionSpecs(next)));
+        return new Transition(next, effects);
+    }
+
+    private static List<SessionSpec> unread(final AppState s) {
+        return s.sessions().stream().map(SessionState::spec).filter(SessionSpec::unread).toList();
     }
 
     /**
@@ -107,6 +136,11 @@ public final class Reducer {
         return new Transition(t.state(), effects);
     }
 
+    /** Where {@code shown} lands once reduced: where the view it replaces is now, else where it asks (record 141). */
+    public static Placement shownAt(final AppState s, final Intent.ShowView shown) {
+        return ViewRules.shownAt(s, shown);
+    }
+
     /**
      * The session a Settle of decision {@code id} goes to, as the reducer will choose it: the decision's own while it
      * has a checkpoint command, else the focused panel's session when it has one; empty when the decision is gone or
@@ -130,7 +164,8 @@ public final class Reducer {
      * Why the reducer would refuse {@code intent} on {@code s}, in the words of its notice; empty when it would apply
      * it. An agent's action tool asks before it sends, so a refusal is the tool's answer and not only a notice the agent
      * never reads: the checkpoint lock (record 130), a session or panel name taken (record 88), a stopped session that
-     * another session would start (record 44), a command with nothing to send or no session to settle a decision in.
+     * another session would start (record 44), a command with nothing to send or no session to settle a decision in,
+     * the last panel of the main tabs sent to the side (record 141).
      * The answer holds for {@code s}; intents queued before this one may still change the outcome.
      */
     public static Optional<String> refusal(final AppState s, final Intent intent) {
@@ -147,6 +182,8 @@ public final class Reducer {
                     .orElseGet(() -> Optional.of(s.decision(i.id()).isEmpty() ? "No decision " + i.id()
                             : "No session to settle it in: open a session with a checkpoint command"));
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
+            case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
+            case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);
             default -> Optional.empty();
         };
     }
@@ -165,6 +202,9 @@ public final class Reducer {
             case Intent.RemovePanel i -> PanelRules.removePanel(clock, s, i.panel());
             case Intent.RenamePanel i -> PanelRules.renamePanel(clock, s, i);
             case Intent.MovePanel i -> PanelRules.movePanel(s, i);
+            case Intent.PlacePanel i -> PanelRules.placePanel(clock, s, i);
+            case Intent.PinPanel i -> PanelRules.pinPanel(s, i);
+            case Intent.PlaceView i -> ViewRules.placeView(s, i);
             case Intent.ReopenPanel i -> PanelRules.reopenPanel(s, i);
             case Intent.FocusPanel i -> PanelRules.focusPanel(s, i);
             case Intent.BindConnection i -> PanelRules.bindConnection(clock, s, i);
@@ -210,6 +250,7 @@ public final class Reducer {
             case Intent.SessionRanAt i -> SessionRules.sessionRanAt(s, i);
             case Intent.SessionExited i -> SessionRules.sessionExited(clock, s, i);
             case Intent.SessionBranch i -> SessionRules.sessionBranch(s, i);
+            case Intent.SessionSubjectRead i -> SessionRules.sessionSubject(s, i);
             case Intent.SessionContext i -> SessionRules.sessionContext(s, i, threshold());
             case Intent.OpenSubagent i -> SessionRules.openSubagent(clock, s, i);
 

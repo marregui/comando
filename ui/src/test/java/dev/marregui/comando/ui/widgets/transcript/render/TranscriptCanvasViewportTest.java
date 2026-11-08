@@ -47,7 +47,9 @@ class TranscriptCanvasViewportTest {
         System.setProperty("java.awt.headless", "true");
     }
 
-    /** {@code copies} sessions one after another, with distinct tool ids: about 73 top-level items per copy. */
+    /**
+     * {@code copies} sessions one after another, with distinct tool ids: about 73 items per copy, their turns folded.
+     */
     private static List<Block> session(final int copies) {
         final Transcript t = SyntheticSession.transcript();
         final List<Block> out = new ArrayList<>();
@@ -315,7 +317,7 @@ class TranscriptCanvasViewportTest {
         rebuildAtEnd(session(27));
         paintView(); // the visible pass grows the content while the view shows the end: the end is kept
         viewport.doLayout();
-        viewport.setViewPosition(new Point(0, 50_000)); // the user scrolls up before the next slice
+        viewport.setViewPosition(new Point(0, canvas.contentHeight() / 2)); // the user scrolls up before the next slice
         paintView();
         canvas.refineAll();
         viewport.doLayout();
@@ -326,7 +328,8 @@ class TranscriptCanvasViewportTest {
     @Test
     void findRightAfterAnAppendDuringTheIdlePassKeepsTheView() {
         rebuildAtEnd(session(27));
-        viewport.setViewPosition(new Point(0, 100_000)); // the user reads mid-session; the end was never shown
+        final int mid = canvas.contentHeight() / 2;
+        viewport.setViewPosition(new Point(0, mid)); // the user reads mid-session; the end was never shown
         paintView();
         viewport.doLayout();
         final BufferedImage shown = paintView();
@@ -335,7 +338,8 @@ class TranscriptCanvasViewportTest {
         assertThat(canvas.find("no such text anywhere", true)).isZero(); // before the validation the append asked for
         viewport.doLayout();
         final BufferedImage after = paintView();
-        assertThat(viewport.getViewPosition().y).as("a find with no match leaves the view where the user read").isGreaterThan(50_000);
+        assertThat(viewport.getViewPosition().y).as("a find with no match leaves the view where the user read")
+                .isGreaterThan(mid / 2);
     }
 
     /// Copying a selection right after an append, before validation, returns text and changes under 5% of the view.
@@ -389,7 +393,7 @@ class TranscriptCanvasViewportTest {
     @Test
     void aSliceAfterAnAppendWithTheViewMidSessionKeepsTheView() {
         rebuildAtEnd(session(27));
-        viewport.setViewPosition(new Point(0, 100_000));
+        viewport.setViewPosition(new Point(0, canvas.contentHeight() / 2));
         final BufferedImage shown = paintView();
         viewport.doLayout();
         canvas.append(next++, new Block.AssistantText("live", 0, "A new answer arrives.", true, ""));

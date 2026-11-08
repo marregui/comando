@@ -55,6 +55,9 @@ import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
  * scrolls a following transcript to its end. A prompt the user sent from a panel always lands in view: it
  * follows again. While it does not follow, a "Latest" button over the bottom right returns to the end.
  *
+ * <p>A turn that ended on a report folds what came before it to one row. {@link #showReport()} stops following and puts
+ * the last report at the top of the view, as soon as the pane is on screen.
+ *
  * <p>While sub-agents run, a strip above the transcript names them; a sub-agent card's header links to its stored
  * conversation.
  */
@@ -94,6 +97,8 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private int built;
     /** Follow the end on the next change; set from the scroll bar only while the pane is showing. */
     private boolean following = true;
+    /** {@link #showReport} was asked while the pane was not on screen: the report shows when the pane does. */
+    private boolean reportAsked;
     private int barMaximum = -1;
     private int barExtent = -1;
     private List<Approval> waiting = List.of();
@@ -120,8 +125,12 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         scroll.getVerticalScrollBar().getModel().addChangeListener(e -> barChanged());
         canvas.onAgentsChanged(this::updateStrip);
         scroll.addHierarchyListener(e -> {
-            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && scroll.isShowing() && following) {
-                SwingUtilities.invokeLater(this::scrollToEnd);
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && scroll.isShowing()) {
+                if (reportAsked) {
+                    SwingUtilities.invokeLater(this::scrollToReport);
+                } else if (following) {
+                    SwingUtilities.invokeLater(this::scrollToEndIfFollowing);
+                }
             }
         });
         for (final Move m : Move.values()) {
@@ -189,7 +198,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         strip.show(transcript == null ? List.of() : canvas.runningAgents(), tasks);
         if (shown != strip.isVisible() && following) {
             // the strip took or gave back a line of the view: a transcript that followed its end still shows it
-            SwingUtilities.invokeLater(this::scrollToEnd); // after the layout the change asked for
+            SwingUtilities.invokeLater(this::scrollToEndIfFollowing); // after the layout the change asked for
         }
     }
 
@@ -236,6 +245,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         canvas.setWaiting(waiting);
         canvas.setBackgroundTasks(tasks);
         following = true;
+        reportAsked = false;
         built = 0;
         updateLatest();
         updateStrip();
@@ -268,7 +278,14 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         updateLatest();
         updateStrip();
         if (follow) {
-            SwingUtilities.invokeLater(this::scrollToEnd);
+            SwingUtilities.invokeLater(this::scrollToEndIfFollowing);
+        }
+    }
+
+    /** A scroll queued while following; a report asked for since then stopped the following, and stays in view. */
+    private void scrollToEndIfFollowing() {
+        if (following) {
+            scrollToEnd();
         }
     }
 
@@ -328,6 +345,33 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         bar.setValue(to);
         following = atEnd();
         updateLatest();
+    }
+
+    /**
+     * Shows the last turn's report from its first line: the transcript stops following its end and the report's top
+     * goes to the top of the view. A transcript with no report stays where it is. On a pane not on screen yet the move
+     * waits for it to show.
+     */
+    public void showReport() {
+        if (canvas.reportTop() < 0) {
+            return;
+        }
+        following = false;
+        updateLatest();
+        if (scroll.isShowing()) {
+            scrollToReport();
+        } else {
+            reportAsked = true;
+        }
+    }
+
+    private void scrollToReport() {
+        reportAsked = false;
+        scroll.validate();
+        final int top = canvas.reportTop();
+        if (top >= 0) {
+            scroll.getVerticalScrollBar().setValue(top);
+        }
     }
 
     /**

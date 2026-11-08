@@ -804,6 +804,288 @@ final class Items {
         }
     }
 
+    /**
+     * What a turn did before its report, on one row: {@code 44 tools · 6 min}, and {@code · 1 failed} in the danger
+     * colour when calls failed. The steps are the top-level items the turn showed, at the width and style they had, so
+     * opening shows them as they were and a layout they hold stands. The row is no text of the conversation: find reads
+     * the steps, and no word of the row opens every turn.
+     */
+    static final class StepsItem extends Item {
+        private static final int TEXT_X = 18;
+        private final List<Item> steps;
+        private final long tookMillis;
+        private final Fold fold = new Fold(false);
+        private TextBox header;
+        private int row;
+        private int[] tops = new int[0];
+        /** The layout stopped at {@link #laidTo}: every step above it is laid out, the rest hold estimates. */
+        private boolean partial;
+        private int laidTo;
+        /** It stopped on {@link #deadlineNanos}, short of {@link #shownTo}. */
+        private boolean outOfTime;
+        /** The layout under way reaches {@link #shownTo} by {@link #deadlineNanos}, not every step. */
+        private boolean bounded;
+        private int shownTo;
+        private long deadlineNanos;
+
+        /**
+         * The closed row of {@code steps}; {@code tookMillis} is {@link Block.TurnEnd#UNTIMED} when the turn's time is
+         * unknown.
+         */
+        StepsItem(final List<Item> steps, final long tookMillis) {
+            super(steps.getFirst().block);
+            this.steps = steps;
+            this.tookMillis = tookMillis;
+        }
+
+        boolean isOpen() {
+            return fold.isOpen();
+        }
+
+        @Override
+        Fold fold() {
+            return fold;
+        }
+
+        @Override
+        List<Item> children() {
+            return steps;
+        }
+
+        /** True while a call of the turn still works: a sub-agent in the background, a call with no result yet. */
+        boolean working() {
+            for (int k = 0, n = steps.size(); k < n; k++) {
+                final Item step = steps.get(k);
+                if (step instanceof ToolItem card && card.isActive()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** The steps let their layout go: the row hides them, and they lay out again when it opens. */
+        void dropSteps() {
+            for (int k = 0, n = steps.size(); k < n; k++) {
+                final Item step = steps.get(k);
+                step.discard();
+            }
+            dropPositions();
+        }
+
+        private void dropPositions() {
+            tops = new int[0];
+            partial = false;
+            outOfTime = false;
+        }
+
+        /**
+         * Lays out at {@code w} the steps from the first down to {@code to} below this item's top, until {@code
+         * deadlineNanos}: opening a row costs what the view shows, not the turn's length, and the steps below hold
+         * estimates until the idle pass reaches them. Steps are laid from the first, so what lies above the view is
+         * exact and a step in view stays where it is.
+         */
+        int layoutTo(final int w, final Style s, final int to, final long deadlineNanos) {
+            bounded = true;
+            shownTo = to;
+            this.deadlineNanos = deadlineNanos;
+            final int h = layout(w, s);
+            bounded = false;
+            return h;
+        }
+
+        /** True when the last layout ran out of time before it reached what it was asked to. */
+        boolean outOfTime() {
+            return outOfTime;
+        }
+
+        @Override
+        boolean needsLayoutTo(final int w, final Style s, final int y) {
+            return needsLayout(w, s) || partial && laidTo <= y;
+        }
+
+        @Override
+        boolean wantsMore() {
+            return partial && (!bounded || laidTo <= shownTo);
+        }
+
+        /** The height of the row above the steps, as laid out. */
+        int rowHeight() {
+            return row;
+        }
+
+        /** The top of {@code step} within this item, as laid out; 0 when the steps are not shown. */
+        int topOf(final Item step) {
+            for (int i = 0; i < tops.length; i++) {
+                if (steps.get(i) == step) {
+                    return tops[i];
+                }
+            }
+            return 0;
+        }
+
+        /** {@code 44 tools · 6 min}: the calls at any depth, and the turn's time when it is known. */
+        String title() {
+            final int n = calls(steps, false);
+            final String tools = n == 0 ? "no tools" : n == 1 ? "1 tool" : n + " tools";
+            return tookMillis == Block.TurnEnd.UNTIMED ? tools : tools + " · " + took(tookMillis);
+        }
+
+        /** The calls at any depth that failed. */
+        int failed() {
+            return calls(steps, true);
+        }
+
+        /** {@code 40 s}, {@code 6 min}, {@code 1 h 05 min}: a row gives the size of a turn, not its seconds. */
+        private static String took(final long millis) {
+            return millis < 60_000 ? Labels.elapsed(millis) : Labels.uptime(millis);
+        }
+
+        private static int calls(final List<Item> items, final boolean failed) {
+            int n = 0;
+            for (int k = 0, size = items.size(); k < size; k++) {
+                final Item item = items.get(k);
+                if (item instanceof ToolItem card && (!failed || card.call().status() == Block.ToolStatus.ERROR)) {
+                    n++;
+                }
+                n += calls(item.children(), failed);
+            }
+            return n;
+        }
+
+        @Override
+        void dropLayout() {
+            header = null;
+            dropPositions();
+        }
+
+        /** The row as it reads: the title, the failures in the danger colour, the open or closed mark. */
+        Rich heading(final Style s) {
+            final Rich text = new Rich(s.small, s.outside).append(title());
+            final int failed = failed();
+            if (failed > 0) {
+                text.append(" · " + failed + " failed", s.small, Theme.DANGER);
+            }
+            return text.append(fold.isOpen() ? "  ▾" : "  ▸");
+        }
+
+        @Override
+        int doLayout(final int w, final Style s) {
+            header = new TextBox(heading(s)).noWrap();
+            row = 2 + Math.max(14, header.layout(Math.max(40, w - TEXT_X), s)) + 2;
+            int h = row;
+            dropPositions();
+            if (fold.isOpen()) {
+                tops = new int[steps.size()];
+                for (int i = 0; i < tops.length; i++) {
+                    tops[i] = h;
+                    if (!partial && bounded && (h > shownTo || System.nanoTime() - deadlineNanos > 0)) {
+                        partial = true;
+                        outOfTime = h <= shownTo;
+                        laidTo = h;
+                    }
+                    final Item step = steps.get(i);
+                    h += partial && step.needsLayout(w, s) ? step.estimate(w, s) : step.layout(w, s);
+                }
+            }
+            return h;
+        }
+
+        @Override
+        int guess(final int w, final Style s) {
+            int h = 20;
+            if (fold.isOpen()) {
+                for (int k = 0, n = steps.size(); k < n; k++) {
+                    final Item step = steps.get(k);
+                    h += step.estimate(w, s);
+                }
+            }
+            return h;
+        }
+
+        @Override
+        void paint(final Graphics2D g, final int x, final int y, final Rectangle clip, final Marks marks) {
+            Icons.get("tool", 12).paintIcon(marks.component(), g, x, y + 3);
+            Paras.paintBox(g, header, x + TEXT_X, y + 2, clip, marks);
+            for (int i = 0; i < tops.length; i++) {
+                final Item step = steps.get(i);
+                final int top = y + tops[i];
+                if (step.laidOut() && top + step.height >= clip.y && top <= clip.y + clip.height) {
+                    step.paint(g, x, top, clip, marks);
+                }
+            }
+        }
+
+        @Override
+        void collect(final int x, final int y, final List<Placed> out) {
+            for (int i = 0; i < tops.length; i++) {
+                if (steps.get(i).laidOut()) {
+                    steps.get(i).collect(x, y + tops[i], out);
+                }
+            }
+        }
+
+        @Override
+        void findTexts(final List<String> out) {
+            if (fold.isOpen()) {
+                for (int k = 0, n = steps.size(); k < n; k++) {
+                    final Item step = steps.get(k);
+                    step.findTexts(out);
+                }
+            }
+        }
+
+        /** The step shown at {@code py} (relative), -1 when none. */
+        private int stepAt(final int py) {
+            for (int i = 0; i < tops.length; i++) {
+                if (steps.get(i).laidOut() && py >= tops[i] && py < tops[i] + steps.get(i).height) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        @Override
+        Item toggleAt(final int px, final int py) {
+            if (py < row) {
+                return this;
+            }
+            final int i = stepAt(py);
+            return i < 0 ? null : steps.get(i).toggleAt(px, py - tops[i]);
+        }
+
+        @Override
+        String headerLinkAt(final int px, final int py) {
+            final int i = stepAt(py);
+            return i < 0 ? null : steps.get(i).headerLinkAt(px, py - tops[i]);
+        }
+
+        @Override
+        boolean toggle() {
+            fold.toggle();
+            invalidate();
+            return true;
+        }
+
+        @Override
+        String text() {
+            return "";
+        }
+
+        /** The steps as they read unfolded: an export does not depend on what is folded. */
+        @Override
+        String markdown() {
+            final StringBuilder sb = new StringBuilder();
+            for (int k = 0, n = steps.size(); k < n; k++) {
+                final Item step = steps.get(k);
+                final String m = step.markdown();
+                if (!m.isEmpty()) {
+                    sb.append(sb.isEmpty() ? "" : "\n\n").append(m);
+                }
+            }
+            return sb.toString();
+        }
+    }
+
     static final class TurnItem extends Item {
         private TextBox label;
         private float labelWidth;
@@ -814,6 +1096,11 @@ final class Items {
 
         private Block.TurnEnd turn() {
             return (Block.TurnEnd) block;
+        }
+
+        /** The turn failed or the user stopped it: it got as far as it did, and its last text is no conclusion. */
+        boolean cutShort() {
+            return turn().error();
         }
 
         /** The user stopped the turn: not a failure, so it reads as any text outside a card. */
@@ -837,6 +1124,13 @@ final class Items {
             }
             Formats.appendMillis(sb, t.durationMillis());
             return sb.toString();
+        }
+
+        /**
+         * How long the turn took, in its own numbers or by its stored lines; {@link Block.TurnEnd#UNTIMED} if unknown.
+         */
+        long tookMillis() {
+            return turn().tookMillis();
         }
 
         Color color(final Style s) {

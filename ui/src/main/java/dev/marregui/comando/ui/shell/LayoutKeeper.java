@@ -28,6 +28,7 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -40,6 +41,13 @@ final class LayoutKeeper {
 
     private static final System.Logger LOG = System.getLogger(LayoutKeeper.class.getName());
     static final long TYPING_PAUSE_MILLIS = 2_000;
+    /**
+     * The narrowest a stored partition divider leaves either side; one narrower is not put back. 200 px is a
+     * judgement, not a measurement: room for a view's header, a short title beside its icon buttons.
+     */
+    private static final int MIN_SIDE_WIDTH = 200;
+    /** The share of the width the panels take beside the partition when no divider is stored. */
+    private static final double SIDE_SHARE = 0.55;
 
     private record LayoutSnapshot(boolean sidebar, boolean sidePaneHidden, int lowerDivider) {
     }
@@ -53,6 +61,10 @@ final class LayoutKeeper {
     private final int outerDividerSize;
     private final JSplitPane vertical;
     private final JSplitPane editorAndSide;
+    /** The partition's divider as the look and feel draws it; none while the partition is hidden. */
+    private final int sideDividerSize;
+    /** Stops the partition following the theme while out of a window. */
+    private final Runnable stopSideTheme;
     private final JPanel top;
     /** Each panel's lower divider, as last set while it was in front; brought back when it comes to the front. */
     private final Map<PanelId, Integer> panelDividers = new HashMap<>();
@@ -65,10 +77,18 @@ final class LayoutKeeper {
     /** The lower divider while the lower area last showed: where it comes back when a panel has none of its own. */
     private int shownDivider = -1;
     private boolean sidePaneShown;
+    /** The partition's divider while it last showed, put back when it shows again; -1 before it first shows. */
+    private int sideDivider = -1;
     /** The user or Claude hid the side pane; a change in the side views shows it again. */
     private boolean sidePaneHidden;
     /** The side views at the last render, by id, with their versions. */
     private Map<Long, Long> sideVersions = Map.of();
+    /** The panels in the partition at the last render; null before the first, whose panels were there at the start. */
+    private Set<PanelId> sidePanels;
+    /** The types of the side views reopened at the start that have not shown yet: they leave a hidden pane hidden. */
+    private final Set<String> reopening = new HashSet<>();
+    /** The side panel focused at the last render; null when the focus was in the main tabs. */
+    private PanelId sideFocused;
     /** The panes as they were before a session last arranged them; Restore layout puts them back. */
     private LayoutSnapshot beforeArrange;
     /** The layout a session asked for while the user typed, applied at the pause; null when none waits. */
@@ -98,10 +118,17 @@ final class LayoutKeeper {
             }
         };
         top = new JPanel(new BorderLayout());
-        top.add(parts.workspace().component(), BorderLayout.CENTER);
-        editorAndSide = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        editorAndSide.setResizeWeight(0.55);
+        // the partition stays in the window while hidden, collapsed as the sidebar is, so every theme chosen reaches it
+        editorAndSide = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, parts.workspace().component(),
+                parts.side().component());
+        editorAndSide.setResizeWeight(SIDE_SHARE);
         editorAndSide.setBorder(BorderFactory.createEmptyBorder());
+        sideDividerSize = editorAndSide.getDividerSize();
+        parts.side().component().setVisible(false);
+        editorAndSide.setDividerSize(0);
+        top.add(editorAndSide, BorderLayout.CENTER);
+        // and while it is out of a window all the same, a theme chosen still reaches it
+        stopSideTheme = Theme.followWithoutWindow(parts.side().component());
         vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, parts.lower().component());
         vertical.setResizeWeight(0.45);
         vertical.setBorder(BorderFactory.createEmptyBorder());
@@ -151,9 +178,12 @@ final class LayoutKeeper {
         });
     }
 
-    /** Stops the save timer and the key clock. */
+    /** Stops the save timer, the key clock and the partition's theme. */
     void stop() {
-        layoutSaver.stop();
+        stopSideTheme.run();
+        if (layoutSaver != null) {
+            layoutSaver.stop();
+        }
         Toolkit.getDefaultToolkit().removeAWTEventListener(keyClock);
         Toolkit.getDefaultToolkit().removeAWTEventListener(windowLook);
     }
@@ -228,7 +258,10 @@ final class LayoutKeeper {
 
     /** The user asked for a side view: the side pane shows it, even when the user hid the pane earlier. */
     void revealSidePane() {
-        sidePaneHidden = false;
+        if (sidePaneHidden) {
+            sidePaneHidden = false;
+            render.run();
+        }
     }
 
     /** Hides the side pane while it shows, else shows it. */
@@ -238,9 +271,10 @@ final class LayoutKeeper {
     }
 
     /**
-     * The side pane at a render, {@code hasSide} when it has views: a hidden side pane comes back for a new side view
-     * of the user's or of the focused panel's session; another session's view, an update of a view, or only a change
-     * of focus leaves it hidden; the user's own commands that show a side view reveal the pane themselves.
+     * The side pane at a render, {@code hasSide} when it has panels or views: a hidden side pane comes back for a new
+     * side view of the user's or of the focused panel's session, and for a panel moved there or focused there; another
+     * session's view, an update of a view, or only a change of focus to the main tabs leaves it hidden; the user's own
+     * commands that show a side view reveal the pane themselves.
      */
     void sidePane(final AppState s, final boolean hasSide) {
         final String mine = s.focusedPanel().session();
@@ -249,40 +283,58 @@ final class LayoutKeeper {
             if (v.placement() == Placement.SIDE) {
                 versions.put(v.id(), v.version());
                 final Long before = sideVersions.get(v.id());
-                // a new view only: an update of a view the user has (a schema reloaded after a DDL) leaves it hidden
-                if (before == null && (v.session().isEmpty() || v.session().equals(mine))) {
+                // a new view only: an update of a view the user has (a schema reloaded after a DDL) leaves it hidden,
+                // and so does a view the side held when comando last quit, open again
+                final boolean reopened = before == null && v.session().isEmpty() && reopening.remove(v.spec().type());
+                if (before == null && !reopened && (v.session().isEmpty() || v.session().equals(mine))) {
                     sidePaneHidden = false;
                 }
             }
         }
         sideVersions = versions;
+        final Set<PanelId> panels = new HashSet<>();
+        for (final PanelState p : s.panels()) {
+            if (p.side()) {
+                panels.add(p.id());
+                // a panel moved there, or focused there (⌘n, a session's focus), shows the partition
+                final boolean focusedThere = p.id().equals(s.focused()) && !p.id().equals(sideFocused);
+                if (sidePanels != null && (!sidePanels.contains(p.id()) || focusedThere)) {
+                    sidePaneHidden = false;
+                }
+            }
+        }
+        sidePanels = panels;
+        sideFocused = panels.contains(s.focused()) ? s.focused() : null;
         final boolean show = hasSide && !sidePaneHidden;
         if (show != sidePaneShown) {
             showSidePane(show);
         }
     }
 
+    /**
+     * Shows the partition at its saved width, or collapses it with no divider to drag; it never leaves the window, so
+     * it is on the theme chosen while hidden too.
+     */
     private void showSidePane(final boolean show) {
+        if (sidePaneShown && !show) {
+            sideDivider = editorAndSide.getDividerLocation();
+        }
         sidePaneShown = show;
-        top.removeAll();
+        parts.side().component().setVisible(show);
+        editorAndSide.setDividerSize(show ? sideDividerSize : 0);
         if (show) {
-            editorAndSide.setLeftComponent(parts.workspace().component());
-            editorAndSide.setRightComponent(parts.side().component());
-            top.add(editorAndSide, BorderLayout.CENTER);
             // place the divider once the split has a size; a stored position that would hide either side is ignored
             Edt.later(() -> {
                 final int width = editorAndSide.getWidth();
-                final int saved = windowLayout.sideDivider();
-                if (width > 0 && saved >= 200 && saved <= width - 200) {
+                final int saved = sideDivider > 0 ? sideDivider : windowLayout.sideDivider();
+                if (width > 0 && saved >= MIN_SIDE_WIDTH && saved <= width - MIN_SIDE_WIDTH) {
                     editorAndSide.setDividerLocation(saved);
                 } else {
-                    editorAndSide.setDividerLocation(0.55);
+                    editorAndSide.setDividerLocation(SIDE_SHARE);
                 }
             });
-        } else {
-            top.add(parts.workspace().component(), BorderLayout.CENTER);
         }
-        top.revalidate();
+        editorAndSide.revalidate();
         top.repaint();
     }
 
@@ -312,10 +364,15 @@ final class LayoutKeeper {
      * The lower area for the panel in front. A document no session works in, a file opened to read, takes the whole
      * height and the lower area hides, until it is {@code asked} for while that document is in front (a lower tab
      * chosen, ⌃1–⌃4, a request waiting in Approvals); then it shows for that document for the rest of the window's
-     * life. Any other panel shows it, at the height it had when that panel was last in front.
+     * life. Any other panel shows it, at the height it had when that panel was last in front. The panel in front is
+     * the main tabs': a panel on the right side, focused or not, sits beside the lower area and leaves it as it is
+     * (record 141).
      */
     void lowerFor(final AppState s, final boolean asked) {
-        final PanelState front = s.focusedPanel();
+        final PanelState focused = s.focusedPanel();
+        final PanelState front = focused.side()
+                ? parts.workspace().mainFront().flatMap(s::panel).orElse(focused)
+                : focused;
         final boolean reading = front.document() && front.session().isEmpty();
         if (reading && asked) {
             lowerAskedFor.add(front.id());
@@ -429,7 +486,10 @@ final class LayoutKeeper {
 
     // ---- kept across restarts
 
-    /** Puts back the window's bounds, its dividers, the sidebar, the side pane, the theme and Linear's site. */
+    /**
+     * Puts back the window's bounds, its dividers, the sidebar, the side pane and its Search and Changes views, the
+     * theme and Linear's site.
+     */
     void restore() {
         final int h = windowLayout.restoreBounds(parts.frame());
         parts.sidebar().selectTab(windowLayout.sidebarTab());
@@ -442,6 +502,13 @@ final class LayoutKeeper {
         shownDivider = windowLayout.lowerDivider(h);
         panelDividers.putAll(windowLayout.panelDividers());
         sidePaneHidden = windowLayout.sidePaneHidden();
+        // the Search and the Changes views the right side held at the last quit open there again, the pane as it was
+        for (final String type : windowLayout.sideViews()) {
+            reopening.add(type);
+            deps.intents().dispatch(type.equals("search")
+                    ? new Intent.ShowView("", ViewSpec.Search.TITLE, new ViewSpec.Search(), Placement.SIDE)
+                    : new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes(), Placement.SIDE));
+        }
     }
 
     private void save() {
@@ -450,9 +517,12 @@ final class LayoutKeeper {
         final Map<PanelId, Integer> kept = new HashMap<>(panelDividers);
         kept.keySet().removeIf(id -> s.panel(id).isEmpty() && s.closedPanel(id).isEmpty());
         windowLayout.panelDividers(kept);
+        windowLayout.sideViews(s.views().stream().filter(v -> v.placement() == Placement.SIDE).map(v -> v.spec().type())
+                .filter(WindowLayout.KEPT_SIDE_VIEWS::contains).distinct().toList());
         windowLayout.save(parts.frame(), new WindowLayout.Saved(parts.sidebar().isShown(),
                 parts.sidebar().isShown() ? outer.getDividerLocation() : -1, parts.sidebar().selectedTab(), parts.sidebar().manualOrder(),
-                sidePaneHidden, vertical.getDividerLocation(), sidePaneShown ? editorAndSide.getDividerLocation() : -1));
+                sidePaneHidden, vertical.getDividerLocation(),
+                sidePaneShown ? editorAndSide.getDividerLocation() : sideDivider));
     }
 
     /** Saves the layout; a failure is logged, not thrown. */

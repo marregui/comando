@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.dialogs.resource;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.HomeDir;
 
 /**
@@ -74,9 +76,9 @@ final class ProjectSettings {
     /** {@code permissions.defaultMode} in {@code file}; empty when it sets none or does not read. */
     private static String modeOf(final Path file) {
         try {
-            final JsonNode root = JSON.readTree(file.toFile());
+            final JsonNode root = Mapped.read(file, m -> JSON.readTree(m.stream()));
             return root == null ? "" : root.path("permissions").path("defaultMode").asString("").strip();
-        } catch (final JacksonException e) {
+        } catch (final IOException | JacksonException _) {
             return "";
         }
     }

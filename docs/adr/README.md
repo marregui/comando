@@ -156,3 +156,9 @@ row and its record differ, or when a record has no row.
 | [133](0133-every-stored-file-has-a-schema-and-a-version.md) | Every file comando keeps has a schema and a version | 2026-11-01 | Miguel and Claude | accepted; built |
 | [134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) | The window says who works, and gives its room to what is read | 2026-11-06 | Miguel and Claude | accepted; amended by [record 135](0135-the-comparison-follows-the-theme-and-lies-level.md) |
 | [135](0135-the-comparison-follows-the-theme-and-lies-level.md) | The comparison follows the theme and lies level, and cards say what they ask | 2026-11-06 | Miguel and Claude | accepted; built |
+| [136](0136-finished-work-waits-to-be-read.md) | Finished work waits to be read, and the lists say what each session asks of you | 2026-11-07 | Miguel and Claude | accepted |
+| [137](0137-a-turn-reads-as-its-report.md) | A turn reads as its report | 2026-11-07 | Miguel and Claude | accepted |
+| [138](0138-a-session-shows-what-it-writes-to.md) | A session shows the repository it writes to | 2026-11-07 | Miguel and Claude | accepted; built |
+| [139](0139-one-window-finds-in-files-and-conversations.md) | Find in files and conversations: a view, and one window to read a hit | 2026-11-07 | Miguel and Claude | accepted; built |
+| [140](0140-every-file-is-read-mapped.md) | Every file is read mapped | 2026-11-07 | Miguel and Claude | accepted; built |
+| [141](0141-the-right-side-is-a-partition-of-the-workspace.md) | The right side is a partition of the workspace | 2026-11-08 | Miguel and Claude | accepted; built |

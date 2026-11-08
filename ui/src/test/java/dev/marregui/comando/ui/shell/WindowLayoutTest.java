@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.shell;
 
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The sidebar tab in front is kept across the older layouts' indexes, the newest key winning.
 /// - A tab that is gone reads as Sessions.
 /// - Each panel's lower divider is kept, and a save replaces the ones before.
+/// - The Search and Changes views on the right side are kept in their order; other types are left out.
 class WindowLayoutTest {
 
     private final Settings prefs = Settings.inMemory();
@@ -82,5 +84,19 @@ class WindowLayoutTest {
         prefs.put("theme.ground", "ONYX");
         prefs.put("theme.tint", "SILVER");
         assertThat(layout.theme()).as("a ground no theme has, then the tint").isEqualTo(NamedTheme.SLATE_SILVER);
+    }
+
+    /// The types of the views on the right side are read back by a new layout in their order; nothing saved reads as
+    /// none, and a type of a view not kept there, or one repeated, is left out.
+    @Test
+    void theSearchAndChangesViewsOnTheRightSideAreKeptInTheirOrder() {
+        final WindowLayout layout = new WindowLayout(prefs);
+        assertThat(layout.sideViews()).as("nothing saved").isEmpty();
+        layout.sideViews(List.of("changes", "search"));
+        assertThat(new WindowLayout(prefs).sideViews()).containsExactly("changes", "search");
+        prefs.put("sidePane.views", "table, search,later-type,search");
+        assertThat(layout.sideViews()).as("only the kept types, once each").containsExactly("search");
+        layout.sideViews(List.of());
+        assertThat(layout.sideViews()).as("none left on the right side").isEmpty();
     }
 }

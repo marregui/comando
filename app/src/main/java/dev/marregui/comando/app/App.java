@@ -23,10 +23,12 @@ import dev.marregui.comando.claude.ClaudeVersion;
 import dev.marregui.comando.claude.MetricsLog;
 import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.SessionCatalogue;
+import dev.marregui.comando.claude.TranscriptSearch;
 import dev.marregui.comando.claude.UiInstructions;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
@@ -55,6 +57,7 @@ import dev.marregui.comando.mcp.AuditLog;
 import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
 import dev.marregui.comando.mcp.Peers;
+import dev.marregui.comando.tools.FolderSearch;
 import dev.marregui.comando.tools.KitGit;
 import dev.marregui.comando.tools.ToolSettings;
 import dev.marregui.comando.tools.ToolsAdapter;
@@ -214,6 +217,9 @@ public final class App implements AutoCloseable {
                     questDb, edge, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
             ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
+            // the search window's answers: its threads end with the application (record 139)
+            ui.search(own(new Searcher(List.of(new FolderSearch(Searcher.SCANNERS, Searcher.MAX_HITS + 1),
+                    new TranscriptSearch(root.projects())))));
             ui.checkpointThreshold(checkpointThreshold::set);
             // the instances consult each other through the comando Edge while it runs, whichever instance started it
             // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
@@ -310,10 +316,10 @@ public final class App implements AutoCloseable {
             return SessionKind.Defaults.NONE;
         }
         try {
-            final JsonNode s = JsonFile.JSON.readTree(file.toFile());
+            final JsonNode s = Mapped.read(file, m -> JsonFile.JSON.readTree(m.stream()));
             return new SessionKind.Defaults(s.path("model").asString(""), s.path("effortLevel").asString(""),
                     s.path("permissions").path("defaultMode").asString(""));
-        } catch (final JacksonException e) {
+        } catch (final IOException | JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the kit's settings [file=" + file + ", cause=" + e.getMessage() + ']');
             return SessionKind.Defaults.NONE;
         }

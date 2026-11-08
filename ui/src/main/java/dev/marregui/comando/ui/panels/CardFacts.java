@@ -3,18 +3,21 @@ package dev.marregui.comando.ui.panels;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.ui.kit.format.Labels;
 
 /**
  * What a card says above its summary (record 90): a title, the panel's or the headless session's name, and the facts,
- * one a line, each said once: the state, then for a session its model, context, folder, conversation and Claude Code,
- * then the panel's session when the title does not name it, its connection, and its file unless it is a session's own.
+ * one a line, each said once: the state, then for a session its model, context, folder, what it works on (repository,
+ * branch, ticket and the other repositories it wrote to, record 138), conversation and Claude Code, then the panel's
+ * session when the title does not name it, its connection, and its file unless it is a session's own.
  * Copy details copies more, for a clipboard ({@link SessionRow#details}). A connection's card has facts alone.
  */
 record CardFacts(String title, List<Fact> facts) {
@@ -44,6 +47,13 @@ record CardFacts(String title, List<Fact> facts) {
                         + (s.reflection().due() && SessionBar.showsCheckpoint(s) ? " · checkpoint due" : ""));
             }
             add(facts, "Folder", Labels.shortPath(s.spec().workDir()) + (s.branch().isEmpty() ? "" : " · " + s.branch()));
+            final SessionSubject subject = s.subject();
+            if (subject.isKnown()) {
+                add(facts, "Repository", Labels.shortPath(subject.repository()));
+                add(facts, "Branch", subject.branch());
+                add(facts, "Ticket", subject.ticket());
+                add(facts, "Also", subject.others().stream().map(Labels::shortPath).collect(Collectors.joining(" · ")));
+            }
             final String id = s.spec().claudeSessionId();
             add(facts, "Conversation", id.substring(0, Math.min(8, id.length())));
             if (!SessionRow.cliText(s).isEmpty()) {

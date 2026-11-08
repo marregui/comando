@@ -52,7 +52,9 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   URL and a bearer token); the file names comando's server, that token, and `"timeout": 3600000`, which lets an approval
   card wait up to 55 minutes. Deleted when the process exits, and its token revoked, also when a newer run has already
   replaced the process (the newer run keeps its own token); files a killed comando left are deleted at the next start.
-- **Working directory.** The session's; the session bar shows its git branch, read from `.git/HEAD` after each turn.
+- **Working directory.** The session's; its git branch is read from `.git/HEAD` after each turn, and is none while the
+  folder is in Claude Code's folder, where a kit lives. What the session writes to may be elsewhere:
+  [§1.5](#15-what-a-session-works-on).
 - **Threads.** stdout is read on a platform thread, `claude-out-<session>`, the one operating-system thread a session
   costs: a read of a process pipe holds its carrier thread even from a virtual thread (measured on JDK 25). The stdin
   writer, fed by a queue, and the exit waiter are virtual threads. stderr goes to a temporary file (`0600`) whose last
@@ -122,8 +124,20 @@ of text and shown to 400 lines.
 - **History.** A session with a conversation id shows its stored transcript without starting a process. After a
   restart every session comes back closed with its transcript; nothing is sent until the user sends something, and the
   first prompt resumes the conversation. A stored conversation records no turn results; a turn ends where a message
-  stopped at the end of its turn (`stop_reason` `end_turn`) and gets a turn end without time, as it did live; one cut
-  off mid-turn gets none.
+  stopped at the end of its turn (`stop_reason` `end_turn`) and gets a turn end with no duration, as it did live, which
+  carries the span between the turn's first and last lines for its row in the transcript
+  ([record 137](adr/0137-a-turn-reads-as-its-report.md)); one cut off mid-turn gets none.
+- **Search.** `TranscriptSearch` looks through the top-level `projects/*/*.jsonl`, newest first, with no index and no
+  subagent files. It maps each file and scans the bytes for the word as JSON writes it, ASCII letters in either case; a
+  word that is not ASCII is looked for as UTF-8, so text stored as `\uXXXX` is not found. Only a line holding the word is
+  parsed, and the word must lie in a typed prompt or in an assistant text block: not a key, metadata, thinking or a tool.
+  A prompt is a human-origin user line that is not meta, a side chain or a compact summary, and whose text does not
+  start with `<`, `[Request interrupted` or the line a continued conversation opens with. A message gives one hit, at
+  its first match, with at most 200 characters around it, 60 of them before. A hit goes under the conversation's latest
+  custom title, else its agent name, else the first 8 characters of its id. A line that does not parse is passed over; a
+  file cut while mapped counts as failed; a stop is honoured per file and per megabyte scanned
+  ([record 138](adr/0138-a-session-shows-what-it-writes-to.md)). The hits go to the Search view
+  ([Workbench §1.2](workbench.md#12-panels), [record 139](adr/0139-one-window-finds-in-files-and-conversations.md)).
 - **Background subagents** (observed in a `-p` stream-json run of Claude Code 2.1.302 with comando's flags;
   undocumented): an Agent call with `run_in_background` returns at once, its result text reading "Async agent launched
   successfully. … agentId: <id>"; `<id>` is the `task_id` of its `local_agent` task in `background_tasks_changed`, and
@@ -148,6 +162,26 @@ of text and shown to 400 lines.
   once; the oldest stops first. A file missing or moved by a later Claude Code gives the notice "transcript not found
   for this sub-agent" ([record 64](adr/0064-sub-agents-are-shown-live.md)). The tab itself is in
   [Architecture §14.5.2](architecture.md#1452-the-widget).
+
+### 1.5 What a session works on
+
+A session's working folder says where it runs, not what it changes: one run from a kit's folder writes to a repository
+elsewhere. So `SessionSubjects` reads the subject from the session's own writes ([record 138](adr/0138-a-session-shows-what-it-writes-to.md)),
+in a pass over the blocks added since the last one, at a turn's end and after a history load, on the session's strand.
+
+- **What counts.** A `Write`, `Edit`, `MultiEdit` or `NotebookEdit` call that succeeded, by its `file_path` or
+  `notebook_path`. A running write ends the pass, and the next starts there. `Bash` is not parsed.
+- **What is dropped.** A path under the working folder or Claude Code's folder, by its written and its real form, before
+  any file is looked at.
+- **The repository.** The nearest folder up the path that holds `.git` (`GitBranch.top`). The latest write's repository
+  is the subject, the others follow, the latest first.
+- **The ticket.** The first run of two or more letters, a dash and digits in the branch, in upper case.
+- **Its life.** A view cleared rewinds the pass and keeps the repositories; a new conversation forgets them. A change
+  sends `SessionSubjectRead`. A real repository as the working folder shows its branch as before, with no ticket, and
+  the adapter gives no branch while the working folder is in Claude Code's folder.
+
+Where it shows: [Workbench §1.2](workbench.md#12-panels) for the session bar, [§1.4](workbench.md#14-the-sidebar) for
+the card and the row's copy.
 
 ## 2. The checkpoint
 
@@ -256,11 +290,11 @@ sends for the same gesture:
 | Area | Tools |
 |---|---|
 | sessions | `session_new` (name, work dir, model, effort, checkpoint, and an optional first `prompt` that starts it; no permission mode and no extra directories: the kit's and the working folder's settings hold them, [§1.1](#11-the-process)), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
-| panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
+| panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_place`, `panel_pin`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
 | decisions held back | `decision_hold` (title, detail; the calling session's automatic checkpoint holds a decision back), `decisions_settled` (ids), `decision_settle`, `decision_dismiss` (id; the Later group's buttons); `ui_get_state` lists `later` with ids ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
-| views and the window | `view_pin`, `view_close`, `notice_dismiss` |
+| views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
 | servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 

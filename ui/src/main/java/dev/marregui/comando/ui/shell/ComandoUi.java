@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
@@ -45,10 +46,12 @@ import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.core.model.SearchHit;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.port.UiPort;
 import dev.marregui.comando.core.resource.ConnectionKind;
@@ -57,6 +60,7 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
+import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -80,6 +84,7 @@ import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.text.HitMarks;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.ThemeFiles;
@@ -100,6 +105,8 @@ import dev.marregui.comando.ui.widgets.console.ConsoleWidget;
 import dev.marregui.comando.ui.widgets.diff.DiffWidget;
 import dev.marregui.comando.ui.widgets.markdown.MarkdownWidget;
 import dev.marregui.comando.ui.widgets.plot.PlotWidget;
+import dev.marregui.comando.ui.widgets.search.SearchHub;
+import dev.marregui.comando.ui.widgets.search.SearchWidget;
 import dev.marregui.comando.ui.widgets.table.TableViewWidget;
 import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
@@ -150,6 +157,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private final Dependencies deps;
+    /** Answers the search window: written once through {@link #search} before the build, read on the EDT. */
+    private volatile SearchPort search = SearchPort.NONE;
     /** Reads the tabs' topics; the build hands it to the workspace. */
     private volatile TopicPort topics = TopicPort.NONE;
     /** The other comando instances, for the sidebar's Instances tab. */
@@ -177,6 +186,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private ShellParts parts;
     private LayoutKeeper layout;
     private FocusRouter focus;
+    /** The session whose report a To read row asked for, until its transcript is in front; empty when none. */
+    private String reportFor = "";
+    /** The session whose transcript is to be searched for {@link #findQuery} once it is the one shown. */
+    private String findFor = "";
+    private String findQuery = "";
     private PanelFiles files;
     private QuitFlow quitFlow;
     /** Told the name of each step of closing before it runs ({@link #beforeEachStep}); nothing by default. */
@@ -199,7 +213,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final OpenedFiles openedFiles;
     /** Refreshes what changes with time alone: elapsed times, the server state. */
     private Timer tickTimer;
-    private final PropertyChangeListener focusListener = e -> actions.refresh();
+    private final PropertyChangeListener focusListener = e -> {
+        if (e.getNewValue() instanceof Component c) {
+            focus.keyboardMoved(c);
+        }
+        actions.refresh();
+    };
     /** The requests waiting at the last render: one more is a reason to show the lower area. */
     private int renderedApprovals;
     private boolean tornDown;
@@ -250,6 +269,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Edt.later(this::build);
     }
 
+    /** What the search window scans; set before {@link #start()}. None by default. */
+    public void search(final SearchPort port) {
+        search = port;
+    }
+
     /** How the tabs' cards read each panel's topic; set before {@link #start()}. None by default. */
     public void topics(final TopicPort port) {
         topics = port;
@@ -285,8 +309,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         widgets.register("plot", ViewSpec.Plot.class, c -> new PlotWidget());
         widgets.register("diff", ViewSpec.Diff.class, c -> new DiffWidget());
         widgets.register("markdown", ViewSpec.Markdown.class, c -> new MarkdownWidget());
-        widgets.register("text", ViewSpec.Text.class, c -> new TextWidget());
+        widgets.register("text", ViewSpec.Text.class, c -> new TextWidget((file, line) -> {
+            files.previewFile(file, HitMarks.line(line), true);
+            files.pinFile(file);
+        }));
         widgets.register("tree", ViewSpec.Tree.class, TreeWidget::new);
+        widgets.register("search", ViewSpec.Search.class, c -> new SearchWidget(parts.searchHub()));
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));
         widgets.register("agent", ViewSpec.Agent.class, c -> new AgentWidget(c, deps.transcripts()));
         widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile, new ChangesWidget.Actions() {
@@ -357,6 +385,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onThemeChosen(this::themeChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         final SidePane side = new SidePane(ctx, widgets);
+        // the panels moved to the right side are the partition's, beside its views
+        workspace.partition(side);
         final SessionsSidebar sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
             @Override
             public ResourceActions.Editor sessions() {
@@ -400,6 +430,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.cards(workspace.rowCards());
         sidebar.watchOpened(openedFiles);
         final StatusBar status = new StatusBar(deps.intents(), this::noticeTarget);
+        // a To read row lands on the report of the session it opens (record 136)
+        status.onReport(this::showReportOf);
+        sidebar.onReport(this::showReportOf);
         final SessionBar sessionBar = new SessionBar(deps.intents());
         sessionBar.checkpointThreshold(windowLayout::checkpointThreshold);
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
@@ -425,7 +458,41 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
         jobs.attach(sidebar);
         final FindBar findBar = new FindBar();
-        parts = new ShellParts(frame, workspace, lower, side, sidebar, status, sessionBar, findBar, diffWindow, livePlots);
+        final SearchHub.Opener hitOpener = new SearchHub.Opener() {
+            @Override
+            public void open(final SearchHit hit, final String query) {
+                openHit(hit, query);
+            }
+
+            @Override
+            public boolean inSession(final String conversation) {
+                return sessionOf(conversation).isPresent();
+            }
+
+            @Override
+            public void showInFiles(final SearchHit hit) {
+                if (!sidebar.isShown()) {
+                    layout.toggleSidebar();
+                }
+                sidebar.revealFile(Path.of(hit.source()));
+            }
+        };
+        // a file's hits are read in the preview tab of the workspace (record 141); built below, read at a hit's choice
+        final SearchHub.Previews previews = new SearchHub.Previews() {
+            @Override
+            public void preview(final Path file, final HitMarks marks, final boolean takeKeyboard) {
+                files.previewFile(file, marks, takeKeyboard);
+            }
+
+            @Override
+            public void pin(final Path file) {
+                files.pinFile(file);
+            }
+        };
+        final SearchHub searchHub = new SearchHub(() -> FolderRoot.withGroupRoots(deps.state().get().folders()),
+                () -> search, previews, hitOpener);
+        parts = new ShellParts(frame, workspace, lower, side, sidebar, status, sessionBar, findBar, diffWindow,
+                searchHub, livePlots);
         layout = new LayoutKeeper(deps, windowLayout, parts, this::render);
         focus = new FocusRouter(deps, parts, layout);
         files = new PanelFiles(deps, parts, focus, layout, windowLayout, openedFiles, render::request);
@@ -561,11 +628,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * Once a second: elapsed times on the session bar, the panels' tabs and the results, uptimes on the session rows.
+     * Once a second: elapsed times on the session bar, the panels' tabs and the results, uptimes on the session rows,
+     * and the sessions whose reading turn never came, which turn to To read.
      */
     private void tick() {
         parts.sessionBar().tick();
         parts.workspace().tick();
+        parts.sidebar().tick();
+        parts.status().tick();
         parts.lower().results().tick();
     }
 
@@ -583,12 +653,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         final AppState s = deps.state().get();
         // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
         focus.beforeRender(s);
-        layout.lowerFor(s, !s.lowerTab().equals(focus.renderedLowerTab()) || s.approvals().size() > renderedApprovals);
+        final boolean lowerAsked = !s.lowerTab().equals(focus.renderedLowerTab())
+                || s.approvals().size() > renderedApprovals;
         renderedApprovals = s.approvals().size();
         parts.livePlots().onState(s);
         parts.sidebar().render(s);
         parts.workspace().render(s);
+        // after the tabs: the lower area follows the main tabs' front panel, which a move to the right side changes
+        layout.lowerFor(s, lowerAsked);
         parts.lower().render(s);
+        landOnReport(s);
+        landOnFind(s);
         layout.sidePane(s, parts.side().render(s));
         parts.status().render(s);
         parts.sessionBar().render(s);
@@ -604,6 +679,61 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (!quitFlow.quitting()) {
             // a render already asked for when quit began must not take back the closing title
             parts.frame().setTitle(InstanceName.display(InstanceName.current()));
+        }
+    }
+
+    /** Brings the Session tab forward for {@code session}'s report, shown once its transcript is the one in front. */
+    private void showReportOf(final String session) {
+        reportFor = session;
+        focus.showLowerAndFocus(LowerTab.SESSION, parts.lower().transcript().component(), () -> { });
+    }
+
+    /** The report asked for, once the Session tab shows that session; a session removed meanwhile asks no more. */
+    private void landOnReport(final AppState s) {
+        if (s.session(reportFor).isEmpty()) {
+            reportFor = "";
+        } else if (parts.lower().transcriptSession().equals(reportFor)) {
+            parts.lower().transcript().showReport();
+            reportFor = "";
+        }
+    }
+
+    /**
+     * Opens a hit of the Search view: a file as a tab that stays, the preview tab that shows it pinned (record 141); a
+     * conversation a session holds in that session's panel, with the transcript's Find on the query; any other
+     * conversation by the Import dialog, which lists it.
+     */
+    private void openHit(final SearchHit hit, final String query) {
+        if (hit.kind() != SearchHit.Kind.CONVERSATION) {
+            files.pinFile(Path.of(hit.source()));
+            return;
+        }
+        final Optional<String> session = sessionOf(hit.conversation());
+        if (session.isEmpty()) {
+            openImport();
+            return;
+        }
+        findFor = session.get();
+        findQuery = query;
+        deps.intents().dispatch(new Intent.OpenSession(findFor, deps.state().get().focused(), PanelId.random()));
+        focus.showLowerAndFocus(LowerTab.SESSION, parts.lower().transcript().component(), () -> { });
+        // the session already in front renders nothing new
+        landOnFind(deps.state().get());
+    }
+
+    /** The session of this instance that holds {@code conversation}. */
+    private Optional<String> sessionOf(final String conversation) {
+        return deps.state().get().sessions().stream().map(SessionState::spec)
+                .filter(spec -> conversation.equals(spec.claudeSessionId())).map(SessionSpec::name).findFirst();
+    }
+
+    /** The Find asked for, once the Session tab shows that session; a session removed meanwhile asks no more. */
+    private void landOnFind(final AppState s) {
+        if (s.session(findFor).isEmpty()) {
+            findFor = "";
+        } else if (parts.lower().transcriptSession().equals(findFor)) {
+            parts.findBar().open(parts.lower().transcript(), findQuery);
+            findFor = "";
         }
     }
 

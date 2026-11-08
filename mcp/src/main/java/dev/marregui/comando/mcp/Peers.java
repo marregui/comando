@@ -35,6 +35,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
@@ -279,7 +280,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 return;
             }
             try {
-                final JsonNode root = json.readTree(Files.readString(seenFile));
+                final JsonNode root = json.readTree(Mapped.text(seenFile));
                 if (later(root)) {
                     seenRefused = true;
                     LOG.log(System.Logger.Level.WARNING, seenFile + " is of a later version; kept as it is, not written, and the instances seen "
@@ -722,7 +723,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return Optional.empty();
         }
         try {
-            final JsonNode root = json.readTree(Files.readString(file));
+            final JsonNode root = json.readTree(Mapped.text(file));
             if (later(root)) {
                 return Optional.of(file + " is of a later version, so its deny list cannot be checked");
             }
@@ -922,7 +923,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             if (instanceFile == null) {
                 throw new IOException("this instance has no data root");
             }
-            final ObjectNode root = Files.isRegularFile(instanceFile) && json.readTree(Files.readString(instanceFile)) instanceof ObjectNode o
+            final ObjectNode root = Files.isRegularFile(instanceFile)
+                    && json.readTree(Mapped.text(instanceFile)) instanceof ObjectNode o
                     ? o : json.createObjectNode();
             if (later(root)) {
                 throw new IOException("it is of a later version, written by a later comando; it is kept as it is");
@@ -982,7 +984,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (agentsFile == null) {
             throw new IOException("this instance has no agents.json");
         }
-        final ObjectNode root = Files.isRegularFile(agentsFile) && json.readTree(Files.readString(agentsFile)) instanceof ObjectNode o
+        final ObjectNode root = Files.isRegularFile(agentsFile)
+                && json.readTree(Mapped.text(agentsFile)) instanceof ObjectNode o
                 ? o : json.createObjectNode();
         if (later(root)) {
             throw new IOException("it is of a later version, written by a later comando; it is kept as it is");
@@ -1011,7 +1014,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         try {
             final List<String> out = new ArrayList<>();
-            json.readTree(Files.readString(agentsFile)).path("peers").path("deny").forEach(d -> out.add(slug(d.asString(""))));
+            json.readTree(Mapped.text(agentsFile)).path("peers").path("deny").forEach(d
+                    -> out.add(slug(d.asString(""))));
             return out;
         } catch (final IOException | RuntimeException e) {
             return List.of();

@@ -74,6 +74,26 @@ class StoreTest {
         assertThat(notices).anyMatch(n -> n.startsWith("Cannot write sessions.json"));
     }
 
+    /// A session's unread mark outlives a restart, and a file written before the mark reads as read.
+    @Test
+    void theUnreadMarkRoundTripsAndAFileWithoutItReadsAsRead() throws Exception {
+        try (final Store store = new Store(home)) {
+            store.load();
+            store.saveSessions(List.of(SessionSpec.fresh("read", "/w"),
+                    SessionSpec.fresh("done", "/w").withUnread(1L)));
+        }
+        try (final Store store = new Store(home)) {
+            assertThat(store.load().sessions()).extracting(SessionSpec::unread).containsExactly(false, true);
+        }
+
+        Files.writeString(home.resolve("sessions.json"),
+                "{\"version\":1,\"sessions\":[{\"name\":\"old\",\"workDir\":\"/tmp\",\"model\":\"\",\"effort\":\"\","
+                        + "\"budgetUsd\":0.0,\"claudeSessionId\":\"\",\"startMode\":\"NEW\"}]}");
+        try (final Store store = new Store(home)) {
+            assertThat(store.load().sessions()).singleElement().extracting(SessionSpec::unread).isEqualTo(false);
+        }
+    }
+
     /// Connections, sessions, the panel bound to them and the panel's text survive a close and a fresh load unchanged.
     @Test
     void roundTripOfSpecsBindingsAndText() {
@@ -91,6 +111,54 @@ class StoreTest {
             assertThat(loaded.sessions()).singleElement().extracting(SessionSpec::claudeSessionId).isEqualTo("abc");
             assertThat(loaded.panels()).containsExactly(new PanelState(id, "work", "lab", "edge"));
             assertThat(store.load(id)).isEqualTo("SELECT 42;");
+        }
+    }
+
+    /// A panel on the right-hand side comes back there, open or closed, and a preview tab is not kept; `panels.json`
+    /// names the side only for a panel on it, at the same version.
+    @Test
+    void theSideRoundTripsAndAPreviewIsNotKept() throws Exception {
+        final PanelState main = new PanelState(new PanelId("main"), "main", "", "");
+        final PanelState side = new PanelState(new PanelId("side"), "side", "", "", false, true, false);
+        final PanelState preview = new PanelState(new PanelId("hit"), "hit", "", "", false, false, true);
+        final PanelState shut = new PanelState(new PanelId("shut"), "shut", "", "", false, true, false);
+        try (final Store store = new Store(home)) {
+            store.load();
+            store.savePanels(List.of(main, side, preview), List.of(shut));
+        }
+        final JsonNode written = JsonFile.JSON.readTree(home.resolve("panels.json").toFile());
+        assertThat(written.path("version").asInt()).isEqualTo(1);
+        final List<String> ids = new ArrayList<>();
+        final List<Boolean> sides = new ArrayList<>();
+        written.path("panels").forEach(n -> {
+            ids.add(n.path("id").asString());
+            sides.add(n.has("side") ? n.path("side").asBoolean() : null);
+        });
+        assertThat(ids).as("no preview").containsExactly("main", "side", "shut");
+        assertThat(sides).as("no key for the main tabs").containsExactly(null, true, true);
+        try (final Store store = new Store(home)) {
+            final Store.Loaded loaded = store.load();
+            assertThat(loaded.panels()).containsExactly(main, side);
+            assertThat(loaded.closed()).containsExactly(shut);
+        }
+    }
+
+    /// A `panels.json` written before the right-hand side reads every panel as one of the main tabs, and one whose
+    /// open panels are all on the side gives the first back to the main tabs, which keep one panel at least.
+    @Test
+    void aPanelWithoutTheSideKeyIsOneOfTheMainTabs() throws Exception {
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[]");
+        Files.writeString(home.resolve("panels.json"), "[{\"id\":\"a\",\"title\":\"t\",\"content\":\"x\"}]");
+        try (final Store store = new Store(home)) {
+            assertThat(store.load().panels()).containsExactly(new PanelState(new PanelId("a"), "t", "", ""));
+        }
+
+        Files.writeString(home.resolve("panels.json"),
+                "[{\"id\":\"a\",\"title\":\"t\",\"content\":\"x\",\"side\":true},"
+                        + "{\"id\":\"b\",\"title\":\"u\",\"content\":\"y\",\"side\":true}]");
+        try (final Store store = new Store(home)) {
+            assertThat(store.load().panels()).extracting(PanelState::side).containsExactly(false, true);
         }
     }
 

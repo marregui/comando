@@ -1,16 +1,12 @@
 package dev.marregui.comando.claude;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +24,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.ByteScan;
+import dev.marregui.comando.core.files.Mapped;
+
 /**
  * The conversations Claude Code stores for a session's sub-agents. Not documented (2.1.302): beside the session's
  * {@code <session-id>.jsonl} sits a directory {@code <session-id>/subagents/} holding, per sub-agent,
@@ -36,6 +35,9 @@ import tools.jackson.databind.node.ObjectNode;
  */
 final class SubagentFiles {
 
+    private static final byte[] ASSISTANT = ByteScan.needle("\"assistant\"");
+    /** What {@link #spend} reports, in the order of its totals. */
+    private static final List<String> SPEND_FIELDS = List.of("calls", "input", "output", "cache_read", "cache_create");
     private static final System.Logger LOG = System.getLogger(SubagentFiles.class.getName());
 
     /** The most of a conversation read; a longer one is read from where its last this many bytes start. */
@@ -100,11 +102,37 @@ final class SubagentFiles {
             if (Files.size(meta) > META_BYTES) {
                 return null;
             }
-            return json.readTree(Files.readAllBytes(meta));
+            return json.readTree(Mapped.bytes(meta));
         } catch (final IOException | JacksonException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + meta + ']', e);
             return null;
         }
+    }
+
+    /** One assistant record into {@code totals}, in the order of {@link #SPEND_FIELDS}; a message is counted once. */
+    private static void addSpend(
+            final JsonNode n,
+            final Set<String> seen,
+            final Set<String> models,
+            final long[] totals
+    ) {
+        if (n == null || !n.path("type").asString("").equals("assistant")) {
+            return;
+        }
+        final JsonNode m = n.path("message");
+        final String id = m.path("id").asString("");
+        if (!id.isEmpty() && !seen.add(id)) {
+            return;
+        }
+        totals[0]++;
+        if (!m.path("model").asString("").isEmpty()) {
+            models.add(m.path("model").asString(""));
+        }
+        final JsonNode u = m.path("usage");
+        totals[1] += u.path("input_tokens").asLong(0);
+        totals[2] += u.path("output_tokens").asLong(0);
+        totals[3] += u.path("cache_read_input_tokens").asLong(0);
+        totals[4] += u.path("cache_creation_input_tokens").asLong(0);
     }
 
     /**
@@ -114,43 +142,25 @@ final class SubagentFiles {
      */
     static ObjectNode spend(final Path file, final ObjectMapper json) {
         final ObjectNode out = json.createObjectNode();
-        long calls = 0;
-        long input = 0;
-        long output = 0;
-        long cacheRead = 0;
-        long cacheCreate = 0;
+        final long[] totals = new long[SPEND_FIELDS.size()];
         final Set<String> seen = new HashSet<>();
         final Set<String> models = new TreeSet<>();
-        try (final BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = in.readLine()) != null) {
-                final JsonNode n = parse(line, json);
-                if (n == null || !n.path("type").asString("").equals("assistant")) {
-                    continue;
-                }
-                final JsonNode m = n.path("message");
-                final String id = m.path("id").asString("");
-                if (!id.isEmpty() && !seen.add(id)) {
-                    continue;
-                }
-                calls++;
-                if (!m.path("model").asString("").isEmpty()) {
-                    models.add(m.path("model").asString(""));
-                }
-                final JsonNode u = m.path("usage");
-                input += u.path("input_tokens").asLong(0);
-                output += u.path("output_tokens").asLong(0);
-                cacheRead += u.path("cache_read_input_tokens").asLong(0);
-                cacheCreate += u.path("cache_creation_input_tokens").asLong(0);
-            }
+        try {
+            Mapped.read(file, mapped -> {
+                mapped.lines(bytes -> {
+                    if (ByteScan.indexOf(bytes, ASSISTANT, 0L) >= 0L) {
+                        addSpend(parse(Mapped.decode(bytes), json), seen, models, totals);
+                    }
+                    return true;
+                });
+                return null;
+            });
         } catch (final IOException | UncheckedIOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read [file=" + file + ']', e);
         }
-        out.put("calls", calls);
-        out.put("input", input);
-        out.put("output", output);
-        out.put("cache_read", cacheRead);
-        out.put("cache_create", cacheCreate);
+        for (int i = 0; i < totals.length; i++) {
+            out.put(SPEND_FIELDS.get(i), totals[i]);
+        }
         models.forEach(out.withArray("models")::add);
         return out;
     }
@@ -165,7 +175,7 @@ final class SubagentFiles {
     static long size(final Path file) {
         try {
             return Files.size(file);
-        } catch (final IOException e) {
+        } catch (final IOException _) {
             return 0L;
         }
     }
@@ -246,21 +256,24 @@ final class SubagentFiles {
          * A file shorter than what was read was replaced, and is read again from its start.
          */
         void read() throws IOException {
-            try (final FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
-                final long size = ch.size();
+            try (final Mapped m = Mapped.open(file)) {
+                final long size = m.size();
                 if (offset < 0 || size < offset) {
                     reset();
                     offset = 0;
                     if (size > scanBytes) {
                         cut = true;
-                        task = taskOf(firstLine(ch));
+                        task = taskOf(firstLine(m));
                         first = false;
-                        offset = lineStart(ch, size - scanBytes, size);
+                        offset = lineStart(m, size - scanBytes, size);
                     }
                 }
-                consume(ch, size);
-            } catch (final NoSuchFileException e) {
+                consume(m, size);
+            } catch (final NoSuchFileException _) {
                 // not written yet
+            } catch (final InternalError e) {
+                // the file was cut shorter while mapped: the next read finds it shorter and starts again
+                LOG.log(System.Logger.Level.DEBUG, "cannot read file cut while mapped [file=" + file + ']', e);
             }
         }
 
@@ -306,30 +319,13 @@ final class SubagentFiles {
         /**
          * Parses the whole lines from {@link #offset} to {@code size}, read a chunk at a time; a line may span chunks.
          */
-        private void consume(final FileChannel ch, final long size) throws IOException {
-            final ByteArrayOutputStream line = new ByteArrayOutputStream();
-            final ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
-            long at = offset;
-            while (at < size) {
-                buf.clear();
-                buf.limit((int) Math.min(CHUNK_BYTES, size - at));
-                final int n = ch.read(buf, at);
-                if (n <= 0) {
-                    break;
+        private void consume(final Mapped m, final long size) {
+            final MemorySegment bytes = m.segment();
+            for (long at = offset; at < size; at++) {
+                if (bytes.get(ValueLayout.JAVA_BYTE, at) == '\n') {
+                    accept(m.text(offset, at));
+                    offset = at + 1;
                 }
-                final byte[] b = buf.array();
-                int from = 0;
-                for (int i = 0; i < n; i++) {
-                    if (b[i] == '\n') {
-                        line.write(b, from, i - from);
-                        accept(line.toString(StandardCharsets.UTF_8));
-                        line.reset();
-                        from = i + 1;
-                        offset = at + i + 1;
-                    }
-                }
-                line.write(b, from, n - from);
-                at += n;
             }
         }
 
@@ -442,13 +438,11 @@ final class SubagentFiles {
         }
 
         /** The file's first line when it ends within {@link #HEAD_BYTES}; else empty. */
-        private static String firstLine(final FileChannel ch) throws IOException {
-            final ByteBuffer buf = ByteBuffer.allocate((int) Math.min(HEAD_BYTES, ch.size()));
-            ch.read(buf, 0);
-            final byte[] b = buf.array();
-            for (int i = 0; i < buf.position(); i++) {
-                if (b[i] == '\n') {
-                    return new String(b, 0, i, StandardCharsets.UTF_8);
+        private static String firstLine(final Mapped m) {
+            final long end = Math.min(HEAD_BYTES, m.size());
+            for (long i = 0; i < end; i++) {
+                if (m.segment().get(ValueLayout.JAVA_BYTE, i) == '\n') {
+                    return m.text(0L, i);
                 }
             }
             return "";
@@ -458,21 +452,11 @@ final class SubagentFiles {
          * The first line start at or after {@code pos}: {@code pos} itself when the byte before it ends a line;
          * {@code size} when none.
          */
-        private static long lineStart(final FileChannel ch, final long pos, final long size) throws IOException {
-            final ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
-            for (long at = pos - 1; at < size; ) {
-                buf.clear();
-                buf.limit((int) Math.min(CHUNK_BYTES, size - at));
-                final int n = ch.read(buf, at);
-                if (n <= 0) {
-                    break;
+        private static long lineStart(final Mapped m, final long pos, final long size) {
+            for (long at = pos - 1; at < size; at++) {
+                if (m.segment().get(ValueLayout.JAVA_BYTE, at) == '\n') {
+                    return at + 1;
                 }
-                for (int i = 0; i < n; i++) {
-                    if (buf.get(i) == '\n') {
-                        return at + i + 1;
-                    }
-                }
-                at += n;
             }
             return size;
         }
@@ -485,7 +469,7 @@ final class SubagentFiles {
         }
         try {
             return json.readTree(line);
-        } catch (final JacksonException e) {
+        } catch (final JacksonException _) {
             return null;
         }
     }

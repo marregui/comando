@@ -13,7 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.JTextComponent;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
@@ -113,13 +115,13 @@ final class Commands {
                 workspace.rename(p);
             }
         });
-        // ⌘W closes the view that has the keyboard, else the panel
+        // ⌘W closes the view that has the keyboard, else the panel that has it, in the main tabs or on the right side
         cmd("file.close", "Close", key(KeyEvent.VK_W, shortcut), () -> {
             final long view = focus.focusedView();
             if (view >= 0) {
                 deps.intents().dispatch(new Intent.CloseView(view));
             } else {
-                files.closePanel(focusedId());
+                files.closePanel(keyboardPanel());
             }
         });
         cmd("view.export", "Export view…", key(KeyEvent.VK_S, shortcut | SHIFT), files::export, () -> focus.capability(Exportable.class) != null);
@@ -144,6 +146,13 @@ final class Commands {
                 () -> focus.capability(Searchable.class) != null);
         cmd("view.findNext", "Find next", key(KeyEvent.VK_G, shortcut), () -> findBar.next(true), () -> findBar.isOpen());
         cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, shortcut | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
+        cmd("view.findInFiles", "Find in files…", key(KeyEvent.VK_F, shortcut | SHIFT), this::toggleSearch);
+        // the search's hits, while the preview tab or the Search view has the keyboard; elsewhere F7 stays the
+        // component's own (the Changes view's differences), and the comparison window, a window of its own, keeps
+        // its own
+        cmd("view.nextHit", "Next hit", key(KeyEvent.VK_F7, 0), () -> parts.searchHub().step(1), this::onHits);
+        cmd("view.previousHit", "Previous hit", key(KeyEvent.VK_F7, SHIFT), () -> parts.searchHub().step(-1),
+                this::onHits);
         final KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
         cmd("edit.complete", "Complete SQL", complete, () -> Keys.forward(focus.editorArea(), complete, true),
                 () -> focus.editorFocused() && Keys.forward(focus.editorArea(), complete, false));
@@ -290,7 +299,7 @@ final class Commands {
         });
         cmd("view.sidebar", "Sidebar", key(KeyEvent.VK_B, shortcut), layout::toggleSidebar);
         cmd("view.sidePane", "Side pane", key(KeyEvent.VK_BACK_SLASH, shortcut), layout::toggleSidePane,
-                () -> layout.sidePaneShown() || parts.side().hasViews());
+                () -> layout.sidePaneShown() || parts.side().hasViews() || parts.side().hasPanels());
         // ⌘K, IntelliJ's key for its commit view; a focused terminal keeps it as its Clear Buffer
         cmd("view.changes", "Uncommitted changes", key(KeyEvent.VK_K, shortcut), this::toggleChanges);
         cmd("view.files", "Files", null, () -> {
@@ -326,8 +335,8 @@ final class Commands {
         cmd("panel.next", "Next panel", key(KeyEvent.VK_CLOSE_BRACKET, shortcut | SHIFT), () -> workspace.selectRelative(1));
         cmd("panel.previous", "Previous panel", key(KeyEvent.VK_OPEN_BRACKET, shortcut | SHIFT), () -> workspace.selectRelative(-1));
         for (int i = 1; i <= 9; i++) {
-            final int index = i - 1;
-            cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, shortcut), () -> workspace.select(index));
+            final int n = i;
+            cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, shortcut), () -> goToPanel(n));
         }
         cmd("view.zoomIn", "Zoom in", key(KeyEvent.VK_EQUALS, shortcut), () -> zoom(1), () -> focus.capability(Zoomable.class) != null);
         cmd("view.zoomOut", "Zoom out", key(KeyEvent.VK_MINUS, shortcut), () -> zoom(-1), () -> focus.capability(Zoomable.class) != null);
@@ -373,12 +382,18 @@ final class Commands {
     }
 
     /**
-     * What an Edit command acts on: the comparison window's text while it has the keyboard, since macOS's menu bar
+     * What an Edit command acts on: the text of the comparison window while it has the keyboard, since macOS's menu bar
      * takes the command's key before that window sees it; else the main window's.
      */
     private Component editTarget() {
         final Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
         return c != null && parts.diffWindow().holds(c) ? c : focus.focusOwnerInFrame();
+    }
+
+    /** The text selected in the main window's focused text, when it is one line; a search has no use for more. */
+    private String selectedLine() {
+        final String selected = focus.focusOwnerInFrame() instanceof JTextComponent t ? t.getSelectedText() : null;
+        return selected == null || selected.indexOf('\n') >= 0 ? "" : selected;
     }
 
     private static KeyStroke key(final int code, final int modifiers) {
@@ -389,6 +404,48 @@ final class Commands {
 
     private PanelId focusedId() {
         return deps.state().get().focused();
+    }
+
+    /** The panel that has the keyboard, in the main tabs or on the right side; else the focused one. */
+    private PanelId keyboardPanel() {
+        final Component c = focus.focusOwnerInFrame();
+        if (c != null && SwingUtilities.getAncestorOfClass(EditorPanel.class, c) instanceof EditorPanel p
+                && deps.state().get().panel(p.panel().id()).isPresent()) {
+            return p.panel().id();
+        }
+        return focusedId();
+    }
+
+    /** ⌘{@code n}: the {@code n}th panel, the main tabs' first, then the right side's, takes the keyboard. */
+    private void goToPanel(final int n) {
+        final EditorPanel p = parts.workspace().numbered(n);
+        if (p != null) {
+            deps.intents().dispatch(new Intent.FocusPanel(p.panel().id()));
+            // the focused panel asked for again renders nothing new: its tab comes forward here, over a side view
+            if (parts.workspace().bringForward(p.panel().id())) {
+                layout.revealSidePane();
+            }
+            focus.focusOnceShown(p.focusTarget());
+        }
+    }
+
+    /**
+     * The preview tab or the Search view has the keyboard: F7 and ⇧F7 walk the search's hits; the comparison window
+     * keeps its own F7, which macOS's menu bar would otherwise take first.
+     */
+    private boolean onHits() {
+        final Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (owner != null && parts.diffWindow().holds(owner)) {
+            return false;
+        }
+        final AppState s = deps.state().get();
+        final long view = focus.focusedView();
+        if (view >= 0) {
+            return s.view(view).map(v -> v.spec() instanceof ViewSpec.Search).orElse(false);
+        }
+        final Component c = focus.focusOwnerInFrame();
+        return c != null && SwingUtilities.getAncestorOfClass(EditorPanel.class, c) instanceof EditorPanel p
+                && s.panel(p.panel().id()).map(PanelState::preview).orElse(false);
     }
 
     private Optional<SessionState> focusedSession() {
@@ -452,6 +509,35 @@ final class Commands {
             layout.revealSidePane();
             deps.intents().dispatch(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes(), Placement.SIDE));
         }
+    }
+
+    /**
+     * Opens the Search view in the side pane with the keyboard in its field, the selection, when it is one line, as its
+     * text; a view open already takes the keyboard, and one that has it closes, as ⌘K does the Changes view.
+     */
+    private void toggleSearch() {
+        final Optional<ViewState> open = deps.state().get().views().stream()
+                .filter(v -> v.spec() instanceof ViewSpec.Search).findFirst();
+        if (open.isPresent() && focus.focusedView() == open.get().id()) {
+            deps.intents().dispatch(new Intent.CloseView(open.get().id()));
+            return;
+        }
+        // the selection is read before the side pane moves the keyboard
+        final String selection = selectedLine();
+        layout.revealSidePane();
+        if (open.isPresent()) {
+            // a view shown again with the same spec renders nothing new, so its tab is brought forward here, where the
+            // user moved it
+            if (open.get().placement() == Placement.LOWER) {
+                deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.view(open.get().id())));
+            } else {
+                parts.side().front(open.get().id());
+            }
+        } else {
+            deps.intents().dispatch(new Intent.ShowView("", ViewSpec.Search.TITLE, new ViewSpec.Search(),
+                    Placement.SIDE));
+        }
+        parts.searchHub().ask(selection);
     }
 
     /** Asks for Gradle tasks, naming the build they run in; the last ones are remembered across restarts. */

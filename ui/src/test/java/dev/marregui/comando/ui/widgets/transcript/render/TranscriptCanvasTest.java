@@ -65,6 +65,16 @@ class TranscriptCanvasTest {
         }
     }
 
+    /** As {@link #load}, with every turn's row opened before the first layout, as a click on each would. */
+    private void loadOpen(final List<SyntheticSession.Step> steps) {
+        load(steps);
+        for (final Item item : canvas.topLevel()) {
+            if (item instanceof Items.StepsItem row) {
+                row.toggle();
+            }
+        }
+    }
+
     private BufferedImage paint(final int width, final int height) {
         canvas.setSize(width, height);
         canvas.ensureLayout(width);
@@ -247,7 +257,7 @@ class TranscriptCanvasTest {
     /// A synthetic session lays out taller than 5 000 px, and taller still at half the width.
     @Test
     void wholeSessionLaysOutAndPaints() {
-        load(SyntheticSession.steps(24));
+        loadOpen(SyntheticSession.steps(24));
         paint(1000, 700);
         assertThat(canvas.contentHeight()).isGreaterThan(5000);
         // narrower means taller: the text wraps
@@ -260,7 +270,7 @@ class TranscriptCanvasTest {
     /// the view at the new width and leaves the items far below it estimated; a full layout gives the exact height.
     @Test
     void aWidthChangeLaysOutTheViewNowAndTheWindowAroundItWhenIdle() {
-        load(SyntheticSession.steps(10_000));
+        loadOpen(SyntheticSession.steps(10_000));
         canvas.setSize(1000, 700);
         canvas.layoutFully(1000);
         canvas.ensureLayout(600);
@@ -376,7 +386,7 @@ class TranscriptCanvasTest {
     /// Select all copies the text of every box, prompt and answer alike; clearing the selection empties it.
     @Test
     void selectAllCopiesTextOfEveryBox() {
-        load(SyntheticSession.steps(10_000));
+        loadOpen(SyntheticSession.steps(10_000));
         paint(1000, 700);
         canvas.selectAll();
         final String text = canvas.selectionText();

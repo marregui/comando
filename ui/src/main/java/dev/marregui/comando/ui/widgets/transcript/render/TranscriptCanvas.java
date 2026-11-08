@@ -43,7 +43,8 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  * layout go and keeps its height. Painting visits only the items that intersect the clip. Find, select-all and copy
  * read the blocks' text and lay out nothing ({@link Item#findTexts}). Text can
  * be selected across blocks with the mouse and copied; links open through a callback; tool cards, thinking,
- * notes and hook groups open and close with a click on their header.
+ * notes and hook groups open and close with a click on their header. A turn that ended with a report folds what it did
+ * before the report to one row, which opens and closes the same way.
  */
 public final class TranscriptCanvas extends JComponent implements Scrollable, Marks {
 
@@ -72,13 +73,16 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private final List<Item> byIndex = new ArrayList<>();
     /** How many indexes hold an item. */
     private int held;
-    /** The card or hook group each nested item sits in. */
+    /** The card, hook group or turn's steps each nested item sits in. */
     private final Map<Item, Item> parentOf = new IdentityHashMap<>();
+    /** The turns' steps held open by a call that still works: each closes when its last one ends. */
+    private final List<Items.StepsItem> heldOpen = new ArrayList<>();
     /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
     private final ShownTimer ticker = new ShownTimer(this, 1000, this::tick);
     private LongSupplier clock = System::currentTimeMillis;
     /** The cards by id, what they run, and the approvals that hold them up. */
-    private final AgentTracker agents = new AgentTracker(this::nowMillis, parentOf::get, this::updateTicker, this::repaint);
+    private final AgentTracker agents =
+            new AgentTracker(this::nowMillis, parentOf::get, this::runningChanged, this::repaint);
     private final Consumer<String> links;
     private int[] tops = new int[0];
     /** Heights used for positions: exact, or estimated while {@link #estimated}. */
@@ -89,6 +93,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * pass puts the view back at the end, as long as the view is still there (a scroll away gives the end up).
      */
     private int endKeptAt = -1;
+    /**
+     * How long a slice of layout may hold the event thread: the idle pass's slice before this change. Unmeasured as a
+     * bound of its own; the gate's frames (`TranscriptGate`, 16 ms p99) are what it must keep.
+     */
+    private static final long SLICE_NANOS = 8_000_000L;
     private final Timer refiner = new Timer(1, e -> refine());
     private int total;
     /** Counts changes of blocks, folds and style: a find's matches counted before the last one are counted again. */
@@ -174,6 +183,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         held = 0;
         agents.clear();
         parentOf.clear();
+        heldOpen.clear();
+        // the places of the blocks that left: nothing appended from now on reads them as its own
+        tops = new int[0];
+        heights = new int[0];
         updateTicker();
         clearSelection();
         // another session's blocks: the next find, even with the text the find bar kept, is a new one that opens the
@@ -235,8 +248,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         } else {
             items.add(shown);
-            if (shown instanceof Items.TurnItem) {
-                frameReport();
+            if (shown instanceof Items.TurnItem turn) {
+                final int report = frameReport();
+                if (report >= 0 && !turn.cutShort()) {
+                    foldSteps(report, turn.tookMillis());
+                }
             }
         }
         agents.appended();
@@ -246,18 +262,148 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /**
      * The turn just ended: its last text, when nothing but notes, hooks or thinking came after it, is its report and
-     * takes the report's frame. A turn that ended on a tool call or a prompt has none.
+     * takes the report's frame. A turn that ended on a tool call or a prompt has none. Returns the report's place, -1
+     * when there is none.
      */
-    private void frameReport() {
+    private int frameReport() {
         for (int i = items.size() - 2; i >= 0; i--) {
             final Item item = items.get(i);
             if (item instanceof Items.TextItem text) {
                 text.report(true);
-                return;
+                return i;
             }
             if (!(item instanceof Items.NoteItem || item instanceof Items.HookGroupItem || item instanceof Items.ThinkingItem)) {
-                return;
+                return -1;
             }
+        }
+        return -1;
+    }
+
+    /**
+     * What the turn did before its report goes on one row: the items since its prompt, or since the turn before when
+     * it has none here, once a call or a text is among them, as a row of hook notes is no shorter folded. A turn that
+     * failed or was stopped has no conclusion to stand for its steps, and does not get here. The row stays open
+     * while a call of the turn works, and where the reader is: on those items with the view away from the end, or with
+     * the selection in or across them. Prompts stay at the top level, so going from prompt to prompt is unchanged.
+     */
+    private void foldSteps(final int report, final long tookMillis) {
+        int from = report;
+        boolean steps = false;
+        while (from > 0 && !(items.get(from - 1) instanceof Items.PromptItem
+                || items.get(from - 1) instanceof Items.TurnItem)) {
+            from--;
+            steps |= items.get(from) instanceof Items.ToolItem || items.get(from) instanceof Items.TextItem;
+        }
+        if (!steps) {
+            return;
+        }
+        final boolean readerThere = readerOn(from, report) || selectionMeets(from, report);
+        final List<Item> run = items.subList(from, report);
+        final Items.StepsItem fold = new Items.StepsItem(List.copyOf(run), tookMillis);
+        final boolean working = fold.working();
+        fold.fold().follow(working || readerThere);
+        run.clear();
+        items.add(from, fold);
+        for (final Item step : fold.children()) {
+            parentOf.put(step, fold);
+        }
+        spliceTops(from, report, fold);
+        if (working) {
+            heldOpen.add(fold);
+        }
+        if (!fold.isOpen()) {
+            fold.dropSteps();
+        }
+        finder.folded(fold);
+    }
+
+    /**
+     * The items from {@code from} up to {@code to} became {@code fold}: its place is the span they had, and what
+     * follows keeps its own, so the next layout's {@link Anchor} reads the same content at the same place and an item
+     * below the fold stays where it is on screen. An open fold is placed by the step at the top of the view, whose
+     * exact place in the fold may differ from the estimates above it: that step does not move.
+     */
+    private void spliceTops(final int from, final int to, final Items.StepsItem fold) {
+        if (from >= tops.length) {
+            return;
+        }
+        final int end = Math.min(to, tops.length);
+        final int rest = tops.length - end;
+        final int bottom = tops[end - 1] + heights[end - 1];
+        final Rectangle vis = getVisibleRect();
+        int step = from;
+        while (step < end - 1 && tops[step] + heights[step] <= vis.y) {
+            step++;
+        }
+        final int stepTop = tops[step];
+        final int foldTop = tops[from];
+        heights[from] = bottom - foldTop;
+        System.arraycopy(tops, end, tops, from + 1, rest);
+        System.arraycopy(heights, end, heights, from + 1, rest);
+        tops = Arrays.copyOf(tops, from + 1 + rest);
+        heights = Arrays.copyOf(heights, from + 1 + rest);
+        if (fold.isOpen()) {
+            fold.layoutTo(laidWidth, style(), vis.y + vis.height - foldTop, System.nanoTime() + SLICE_NANOS);
+            tops[from] = stepTop - fold.topOf(fold.children().get(step - from));
+            heights[from] = bottom - tops[from];
+        }
+    }
+
+    /** True when the view shows some of the items from {@code from} up to {@code to} and is away from the end. */
+    private boolean readerOn(final int from, final int to) {
+        final int known = Math.min(to, tops.length);
+        if (!(getParent() instanceof JViewport) || laidWidth < 0 || from >= known) {
+            return false;
+        }
+        final Rectangle vis = getVisibleRect();
+        return vis.height > 0 && !showsEnd(vis) && vis.y < tops[known - 1] + heights[known - 1]
+                && vis.y + vis.height > tops[from];
+    }
+
+    /** True when the selection starts or ends in the items from {@code from} up to {@code to}, or runs across them. */
+    private boolean selectionMeets(final int from, final int to) {
+        if (allSelected) {
+            return true;
+        }
+        if (anchorBox == null && focusBox == null) {
+            return false;
+        }
+        boolean before = false;
+        boolean after = false;
+        for (int i = 0; i < items.size(); i++) {
+            if (selects(items.get(i))) {
+                if (i >= from && i < to) {
+                    return true;
+                }
+                before |= i < from;
+                after |= i >= to;
+            }
+        }
+        return before && after;
+    }
+
+    /** The calls of folds held open may have ended: the folds with none left close, unless the reader is on them. */
+    private void closeHeld() {
+        boolean closed = false;
+        for (int k = heldOpen.size() - 1; k >= 0; k--) {
+            final Items.StepsItem fold = heldOpen.get(k);
+            if (!fold.working()) {
+                heldOpen.remove(k);
+                final int i = items.indexOf(fold);
+                if (!readerOn(i, i + 1) && !selectionMeets(i, i + 1)) {
+                    fold.fold().follow(false);
+                }
+                if (!fold.isOpen()) {
+                    fold.foldChanged();
+                    fold.dropSteps();
+                    finder.folded(fold);
+                    closed = true;
+                }
+            }
+        }
+        if (closed) {
+            structureChanged = true;
+            changed();
         }
     }
 
@@ -346,8 +492,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /**
-     * Opens the card {@code toolUseId} and the cards around it, and scrolls its top-level item to the top of the view;
-     * false when there is no such card.
+     * Opens the card {@code toolUseId} and the cards around it, and scrolls its top-level item to the top of the view,
+     * or the step it sits in when that item is a turn's steps; false when there is no such card.
      */
     public boolean reveal(final String toolUseId) {
         final Items.ToolItem card = agents.card(toolUseId);
@@ -361,7 +507,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         }
         Item top = card;
+        Item step = card;
         while (parentOf.get(top) != null) {
+            step = top;
             top = parentOf.get(top);
         }
         final int index = items.indexOf(top);
@@ -371,11 +519,16 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         structureChanged = true;
         changed();
         ensureLayout(getWidth() > 0 ? getWidth() : viewportWidth());
+        int y = tops[index];
+        if (top instanceof Items.StepsItem fold) {
+            layOut(index);
+            y = tops[index] + fold.topOf(step);
+        }
         if (getParent() instanceof JViewport v) {
             v.setViewSize(new Dimension(Math.max(getWidth(), 1), total));
         }
         final Rectangle visible = getVisibleRect();
-        scrollRectToVisible(new Rectangle(0, tops[index], 1, Math.max(1, visible.height)));
+        scrollRectToVisible(new Rectangle(0, y, 1, Math.max(1, visible.height)));
         repaint();
         return true;
     }
@@ -473,6 +626,37 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     private void updateTicker() {
         ticker.want(agents.hasRunning());
+    }
+
+    private void runningChanged(final Items.ToolItem card) {
+        updateTicker();
+        if (card.isActive()) {
+            openRowOf(card);
+        }
+        if (!heldOpen.isEmpty()) {
+            closeHeld();
+        }
+    }
+
+    /**
+     * {@code card} works, and the row its turn folded to closed before anyone knew: a rebuilt transcript reads the
+     * session's open tasks after its blocks. The row opens as it would have held, unless it was held and the user
+     * closed it; a row a find opened is held as well, so the next find does not close it over the working card.
+     */
+    private void openRowOf(final Items.ToolItem card) {
+        Item top = card;
+        while (parentOf.get(top) != null) {
+            top = parentOf.get(top);
+        }
+        if (top instanceof Items.StepsItem fold && (!fold.isOpen() || fold.fold().revealed())
+                && !heldOpen.contains(fold)) {
+            fold.fold().follow(true);
+            heldOpen.add(fold);
+            fold.foldChanged();
+            finder.folded(fold);
+            structureChanged = true;
+            changed();
+        }
     }
 
     private void tick() {
@@ -592,14 +776,16 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             final Item item = items.get(i);
             tops[i] = y;
             int h;
-            if (!item.needsLayout(inner, s)) {
+            if (!item.needsLayoutTo(inner, s, exact ? Integer.MAX_VALUE : hi - y)) {
                 h = item.height;
-            } else if (exact || (item.laidOut() && item.isDirty()) || (y <= hi && y + item.estimate(inner, s) >= lo)) {
+            } else if (exact) {
                 h = item.layout(inner, s);
+            } else if ((item.laidOut() && item.isDirty()) || (y <= hi && y + item.estimate(inner, s) >= lo)) {
+                h = layOutTo(item, inner, s, hi - y, System.nanoTime() + SLICE_NANOS);
             } else {
                 h = item.estimate(inner, s);
-                guessed = true;
             }
+            guessed |= item.needsLayoutTo(inner, s, Integer.MAX_VALUE);
             heights[i] = h;
             y += h;
         }
@@ -610,6 +796,16 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             refiner.start();
         }
         keep(anchor);
+    }
+
+    /**
+     * Lays out {@code item} at {@code width}, a row of steps only down to {@code to} below its top, by {@code
+     * deadlineNanos}.
+     */
+    private static int layOutTo(final Item item, final int width, final Style s, final int to,
+            final long deadlineNanos) {
+        return item instanceof Items.StepsItem fold ? fold.layoutTo(width, s, to, deadlineNanos) : item.layout(width,
+                s);
     }
 
     /**
@@ -625,11 +821,16 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             return null;
         }
         final Rectangle vis = getVisibleRect();
-        if (vis.height <= 0 || vis.y + vis.height >= total - 40 || (endKeptAt >= 0 && vis.y == endKeptAt)) {
+        if (vis.height <= 0 || showsEnd(vis)) {
             return null;
         }
         final int i = indexAt(vis.y, n);
         return i >= n ? null : new Anchor(items.get(i), i, tops[i], vis.y);
+    }
+
+    /** True when {@code vis} shows the end of the content, or did when the idle pass last grew it. */
+    private boolean showsEnd(final Rectangle vis) {
+        return vis.y + vis.height >= total - 40 || (endKeptAt >= 0 && vis.y == endKeptAt);
     }
 
     /**
@@ -711,8 +912,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             final int n = Math.min(tops.length, items.size());
             for (int i = indexAt(clip.y, n); i < n && tops[i] <= clip.y + clip.height; i++) {
                 final Item item = items.get(i);
-                if (item.needsLayout(laidWidth, s)) {
-                    heights[i] = item.layout(laidWidth, s);
+                final int to = clip.y + clip.height - tops[i];
+                if (item.needsLayoutTo(laidWidth, s, to)) {
+                    heights[i] = layOutTo(item, laidWidth, s, to, System.nanoTime() + SLICE_NANOS);
                     changed = true;
                 }
             }
@@ -737,7 +939,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      */
     private boolean refine() {
         final Style s = style();
-        final long deadline = System.nanoTime() + 8_000_000L;
+        final long deadlineNanos = System.nanoTime() + SLICE_NANOS;
         final View before = view();
         final Rectangle vis = getVisibleRect();
         final int band = band(vis);
@@ -763,13 +965,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 continue;
             }
             final Item item = items.get(i);
-            if (item.needsLayout(laidWidth, s)) {
-                if (System.nanoTime() - deadline > 0) {
+            if (item.needsLayoutTo(laidWidth, s, hi - tops[i])) {
+                if (System.nanoTime() - deadlineNanos > 0) {
                     left = true;
                     break;
                 }
-                heights[i] = item.layout(laidWidth, s);
+                heights[i] = layOutTo(item, laidWidth, s, hi - tops[i], deadlineNanos);
                 changed = true;
+                left = item instanceof Items.StepsItem fold && fold.outOfTime();
             }
         }
         if (!left) {
@@ -817,7 +1020,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     private boolean anyStale(final Style s) {
         for (final Item item : items) {
-            if (item.needsLayout(laidWidth, s)) {
+            if (item.needsLayoutTo(laidWidth, s, Integer.MAX_VALUE)) {
                 return true;
             }
         }
@@ -847,7 +1050,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             ensureLayout(Math.max(getWidth(), 1)); // blocks appended since the last layout get their positions first
         }
         final Rectangle vis = getVisibleRect();
-        final boolean atEnd = (endKeptAt >= 0 && vis.y == endKeptAt) || vis.y + vis.height >= total - 40;
+        final boolean atEnd = showsEnd(vis);
         if (items.isEmpty() || tops.length != items.size()) {
             return new View(atEnd, 0, 0, vis.height); // never laid out: nothing shown yet
         }
@@ -1215,27 +1418,39 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         final List<Placed> boxes = new ArrayList<>();
         final List<String> texts = new ArrayList<>();
         for (int i = from; i <= to; i++) {
-            final Item item = items.get(i);
-            if (item.laidOut()) {
-                boxes.clear();
-                item.collect(0, 0, boxes);
-                for (final Placed p : boxes) {
-                    final int[] r = selection(p.box());
-                    if (r[0] < r[1]) {
-                        appendLine(sb, p.box().text().substring(r[0], r[1]));
-                    }
+            copy(items.get(i), sb, boxes, texts);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Adds what the selection takes of {@code item}: a laid-out item its boxes, one that is not its text as the blocks
+     * give it; an open row step by step, as its steps below the view may not be laid out yet.
+     */
+    private void copy(final Item item, final StringBuilder sb, final List<Placed> boxes, final List<String> texts) {
+        if (item instanceof Items.StepsItem row && row.isOpen() && row.laidOut()) {
+            final List<Item> steps = row.children();
+            for (int k = 0, n = steps.size(); k < n; k++) {
+                copy(steps.get(k), sb, boxes, texts);
+            }
+        } else if (item.laidOut()) {
+            boxes.clear();
+            item.collect(0, 0, boxes);
+            for (final Placed p : boxes) {
+                final int[] r = selection(p.box());
+                if (r[0] < r[1]) {
+                    appendLine(sb, p.box().text().substring(r[0], r[1]));
                 }
-            } else {
-                texts.clear();
-                item.findTexts(texts);
-                for (final String t : texts) {
-                    if (!t.isEmpty()) {
-                        appendLine(sb, t);
-                    }
+            }
+        } else {
+            texts.clear();
+            item.findTexts(texts);
+            for (final String t : texts) {
+                if (!t.isEmpty()) {
+                    appendLine(sb, t);
                 }
             }
         }
-        return sb.toString();
     }
 
     private static void appendLine(final StringBuilder sb, final String text) {
@@ -1290,6 +1505,20 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         finder.clear();
     }
 
+    /** Lays out the top-level item at {@code index} alone if it is not; the block at the view's top stays in place. */
+    private void layOut(final int index) {
+        final Item item = items.get(index);
+        final Style s = style();
+        if (item.needsLayoutTo(laidWidth, s, Integer.MAX_VALUE)) {
+            // its exact height may differ from the estimate
+            final Anchor anchor = anchor();
+            heights[index] = item.layout(laidWidth, s);
+            recomputeTops();
+            keep(anchor);
+            revalidate();
+        }
+    }
+
     /** What a find needs from the canvas. */
     private final class FindHost implements Finder.Host {
 
@@ -1307,18 +1536,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         @Override
         public List<Placed> place(final int index) {
             ensureLayout(getWidth() > 0 ? getWidth() : viewportWidth());
-            final Item item = items.get(index);
-            final Style s = style();
-            if (item.needsLayout(laidWidth, s)) {
-                // its exact height may differ from the estimate: the block at the top of the view stays where it is
-                final Anchor anchor = anchor();
-                heights[index] = item.layout(laidWidth, s);
-                recomputeTops();
-                keep(anchor);
-                revalidate();
-            }
+            layOut(index);
             final List<Placed> out = new ArrayList<>();
-            item.collect(PAD_X, tops[index], out);
+            items.get(index).collect(PAD_X, tops[index], out);
             return out;
         }
 
@@ -1392,6 +1612,23 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         }
         return found;
+    }
+
+    /** The top of the last turn's report as laid out now, -1 when that turn ended with none. */
+    public int reportTop() {
+        ensureLayout(getWidth() > 0 ? getWidth() : viewportWidth());
+        boolean ended = false;
+        for (int i = items.size() - 1; i >= 0; i--) {
+            final Item item = items.get(i);
+            if (item instanceof Items.TextItem text && text.isReport()) {
+                return tops[i];
+            }
+            if (ended && (item instanceof Items.TurnItem || item instanceof Items.PromptItem)) {
+                return -1; // the turn before: its report is not what the last turn came to
+            }
+            ended |= item instanceof Items.TurnItem;
+        }
+        return -1;
     }
 
     /** The top of the top-level item {@code item} as laid out now, -1 when it is not one; for tests. */

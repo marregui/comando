@@ -16,9 +16,8 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.desktop.ExternalEditor;
+import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.TextSearch;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -37,22 +36,22 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
     private final JPanel root = new JPanel(new BorderLayout());
     private final JPanel header = new JPanel(new BorderLayout());
     private final JLabel pathLabel = new JLabel();
-    private final JButton openExternal = new JButton("Open in IntelliJ", Icons.get("export"));
+    private final JButton openInPanel;
     private Path file;
     private int line;
 
-    public TextWidget() {
+    /** A text view whose file {@code opener} opens in a panel at the line shown; null offers none. */
+    public TextWidget(final Opener opener) {
         header.setBorder(BorderFactory.createEmptyBorder(2, Theme.GAP, 2, Theme.GAP));
         pathLabel.setForeground(Theme.MUTED);
-        openExternal.putClientProperty("JButton.buttonType", "toolBarButton");
-        openExternal.setToolTipText("Open the file at this line in IntelliJ IDEA");
-        openExternal.addActionListener(e -> {
+        openInPanel = ToolButton.of("open-file", "Open in a panel", () -> {
             if (file != null) {
-                ExternalEditor.open(file, line);
+                opener.open(file, line);
             }
         });
+        openInPanel.setVisible(opener != null);
         header.add(pathLabel, BorderLayout.CENTER);
-        header.add(openExternal, BorderLayout.EAST);
+        header.add(openInPanel, BorderLayout.EAST);
         root.add(header, BorderLayout.NORTH);
         root.add(scroll, BorderLayout.CENTER);
         Capabilities.mark(root, this);
@@ -141,5 +140,12 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
     @Override
     public void resetZoom() {
         area.setFont(Theme.mono());
+    }
+
+    /** Opens a file in comando's editor, in a panel, the caret at {@code line}; 0 for its start. */
+    @FunctionalInterface
+    public interface Opener {
+
+        void open(Path file, int line);
     }
 }

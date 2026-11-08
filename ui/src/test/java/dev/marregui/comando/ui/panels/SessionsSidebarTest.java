@@ -45,6 +45,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
@@ -52,6 +54,8 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Attention;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.PanelState;
@@ -773,6 +777,210 @@ class SessionsSidebarTest {
 
         assertThat(SessionsSidebar.held(List.of(developer, improvement), List.of(goose, improvement)))
                 .as("a removed session goes, a new one comes last").containsExactly(improvement, goose);
+    }
+
+    /** {@code x} as the reducer leaves it when its work ends with the user elsewhere. */
+    private static SessionState unread(final SessionState x) {
+        return x.withSpec(x.spec().withUnread(1L));
+    }
+
+    /** What the row at {@code index} says of its group. */
+    private static String group(final JList<?> list, final int index) throws Exception {
+        return on(() -> description(list, index));
+    }
+
+    private static <T> String description(final JList<T> list, final int index) {
+        return list.getCellRenderer().getListCellRendererComponent(list, list.getModel().getElementAt(index), index,
+                false, false)
+                .getAccessibleContext().getAccessibleDescription();
+    }
+
+    private static SessionsSidebar sidebar(final AppState state, final List<Intent> intents) throws Exception {
+        final SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, new Dialogs(), () -> {
+            });
+            s[0].render(state);
+        });
+        return s[0];
+    }
+
+    private static JList<?> sessionList(final SessionsSidebar sidebar) {
+        return find(sidebar.component(), JList.class,
+                l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+    }
+
+    /** Four sessions, one for each group, stored in the opposite order. */
+    private static AppState oneOfEachGroup() {
+        final SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w"));
+        final SessionState read = unread(SessionState.closed(SessionSpec.fresh("read", "/w")));
+        final SessionState busy = SessionState.closed(SessionSpec.fresh("busy", "/w")).withStatus(Status.OPEN,
+                "").withTurns(1, 1L);
+        final SessionState asks = SessionState.closed(SessionSpec.fresh("asks", "/w"));
+        return AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of(idle,
+                read, busy, asks))
+                .withApprovals(List.of(new Approval(1L, "asks", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
+    }
+
+    /// The rows read in the groups' order, each saying its group, and only the first row of a group carries a heading,
+    /// which makes it taller; a group with no session shows nothing.
+    @Test
+    void sessionsAreGroupedByWhatTheyAskOfTheUser() throws Exception {
+        final AppState state = oneOfEachGroup();
+        final SessionsSidebar sidebar = sidebar(state, new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        assertThat(names(list)).containsExactly("asks", "busy", "read", "idle");
+        assertThat(List.of(group(list, 0), group(list, 1), group(list, 2), group(list, 3)))
+                .containsExactly("Needs you", "Working", "To read", "Idle");
+
+        final SessionState other = SessionState.closed(SessionSpec.fresh("other", "/w"));
+        final AppState idle = state.withApprovals(List.of()).withSessions(List.of(state.session("idle").orElseThrow(),
+                other));
+        SwingUtilities.invokeAndWait(() -> sidebar.render(idle));
+        assertThat(names(list)).containsExactly("idle", "other");
+        assertThat(cell(list, 0).height).as("the heading sits in the first row").isGreaterThan(cell(list, 1).height);
+    }
+
+    /// Within a group the list's own order holds: a sort, or the stored order once the user dragged.
+    @Test
+    void aGroupKeepsTheListsOrder() {
+        final SessionState a = SessionState.closed(SessionSpec.fresh("a", "/w"));
+        final SessionState b = SessionState.closed(SessionSpec.fresh("b", "/w"));
+        final SessionState c = SessionState.closed(SessionSpec.fresh("c", "/w"));
+        final Map<String, Attention> groups = Map.of("a", Attention.IDLE, "b", Attention.TO_READ, "c", Attention.IDLE);
+        assertThat(SessionsSidebar.grouped(List.of(c, a, b), groups)).containsExactly(b, c, a);
+    }
+
+    /// A drop beside rows of the session's group moves it; a drop in another group changes nothing and sends nothing.
+    @Test
+    void aDragOrdersAGroupAndADropInAnotherGroupIsIgnored() throws Exception {
+        final SessionState a = unread(SessionState.closed(SessionSpec.fresh("a", "/w")));
+        final SessionState b = unread(SessionState.closed(SessionSpec.fresh("b", "/w")));
+        final SessionState c = SessionState.closed(SessionSpec.fresh("c", "/w"));
+        final SessionState d = SessionState.closed(SessionSpec.fresh("d", "/w"));
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(),
+                List.of(a, b, c, d));
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final SessionsSidebar sidebar = sidebar(state, intents);
+        final JList<?> list = sessionList(sidebar);
+        assertThat(names(list)).containsExactly("a", "b", "c", "d");
+
+        SwingUtilities.invokeAndWait(() -> sidebar.drop(3, 1));
+        assertThat(names(list)).as("an Idle row among the To read ones").containsExactly("a", "b", "c", "d");
+        assertThat(intents).isEmpty();
+        assertThat(sidebar.manualOrder()).isFalse();
+
+        SwingUtilities.invokeAndWait(() -> sidebar.drop(1, 0));
+        assertThat(names(list)).containsExactly("b", "a", "c", "d");
+        assertThat(intents).containsExactly(new Intent.OrderSessions(List.of("b", "a", "c", "d")));
+
+        // the last of a group dropped at its end: the gap has the group on its one side
+        intents.clear();
+        SwingUtilities.invokeAndWait(() -> sidebar.drop(2, 4));
+        assertThat(names(list)).containsExactly("b", "a", "d", "c");
+    }
+
+    /// A drag inside a group moves that session alone: `b`, working, sits between `a` and `c` in the stored order, and
+    /// `c` dragged above `a` leaves `a` before `b` for when `b` is back in their group.
+    @Test
+    void aDragInsideAGroupLeavesTheSessionsOfOtherGroupsWhereTheyWere() throws Exception {
+        final SessionState a = SessionState.closed(SessionSpec.fresh("a", "/w"));
+        final SessionState b = SessionState.closed(SessionSpec.fresh("b", "/w")).withTurns(1, 1_000L);
+        final SessionState c = SessionState.closed(SessionSpec.fresh("c", "/w"));
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(),
+                List.of(a, b, c));
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final SessionsSidebar sidebar = sidebar(state, intents);
+        final JList<?> list = sessionList(sidebar);
+        assertThat(names(list)).containsExactly("b", "a", "c");
+
+        SwingUtilities.invokeAndWait(() -> sidebar.drop(2, 1));
+
+        assertThat(names(list)).containsExactly("b", "c", "a");
+        assertThat(intents).containsExactly(new Intent.OrderSessions(List.of("c", "a", "b")));
+    }
+
+    /// A double click on a To read row asks for the session's report and opens it; on any other row it only opens.
+    @Test
+    void aDoubleClickOnAToReadRowAsksForItsReport() throws Exception {
+        final AppState state = oneOfEachGroup();
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final List<String> reports = new CopyOnWriteArrayList<>();
+        final SessionsSidebar sidebar = sidebar(state, intents);
+        sidebar.onReport(reports::add);
+        final JList<?> list = sessionList(sidebar);
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+
+        click(list, cell(list, 3), 2);
+        assertThat(reports).as("an idle row").isEmpty();
+        assertThat(intents).filteredOn(Intent.OpenSession.class::isInstance).hasSize(1);
+
+        click(list, cell(list, 2), 2);
+        assertThat(reports).containsExactly("read");
+        assertThat(intents).filteredOn(Intent.OpenSession.class::isInstance).hasSize(2);
+    }
+
+    /// With the pointer on the list a row keeps its place and its group, and leaving lets it move.
+    @Test
+    void aRowUnderThePointerKeepsItsGroupUntilThePointerLeaves() throws Exception {
+        final AppState state = oneOfEachGroup();
+        final SessionsSidebar sidebar = sidebar(state, new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        final AppState read = state.withSession(state.session("read")
+                .map(x -> x.withSpec(x.spec().withUnread(0L))).orElseThrow());
+        SwingUtilities.invokeAndWait(() -> {
+            list.dispatchEvent(mouse(list, MouseEvent.MOUSE_ENTERED, 10, 30, 0));
+            sidebar.render(read);
+        });
+        assertThat(names(list)).containsExactly("asks", "busy", "read", "idle");
+        assertThat(group(list, 2)).isEqualTo("To read");
+
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_EXITED, -1, -1, 0)));
+        assertThat(group(list, 2)).isEqualTo("Idle");
+    }
+
+    /// A heading can move with no session changing, a request being the app's and not the session's: the row that now
+    /// opens a group grows to hold its heading.
+    @Test
+    void aHeadingThatMovesWithNoRowChangingStillGetsItsHeight() throws Exception {
+        final SessionState a = SessionState.closed(SessionSpec.fresh("a", "/w"));
+        final SessionState b = SessionState.closed(SessionSpec.fresh("b", "/w"));
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(),
+                List.of(a, b));
+        final SessionsSidebar sidebar = sidebar(state, new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        final int plain = cell(list, 1).height;
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withApprovals(List.of(
+                new Approval(1L, "a", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)))));
+        assertThat(names(list)).containsExactly("a", "b");
+        assertThat(cell(list, 1).height).isGreaterThan(plain);
+    }
+
+    /// Work whose reading turn never came turns To read at the tick, with no state change to carry it.
+    @Test
+    void theTickMovesAReturnWhoseGraceEnded() throws Exception {
+        final BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        final SessionState open = SessionState.closed(SessionSpec.fresh("back", "/w")).withStatus(Status.OPEN, "");
+        final SessionState returned = unread(open.withTurns(1, 1_000L).withTasks(List.of(agent), 1_500L).withTurns(0,
+                2_000L)
+                .withTasks(List.of(), 10_000L));
+        final AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(),
+                List.of(returned));
+        final long[] now = {11_000L};
+        final SessionsSidebar sidebar = sidebar(state.withSessions(List.of()), new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        SwingUtilities.invokeAndWait(() -> {
+            sidebar.clock = () -> now[0];
+            sidebar.render(state);
+        });
+        assertThat(group(list, 0)).isEqualTo("Working");
+
+        now[0] = 10_000L + Attention.REPORT_GRACE_MILLIS;
+        SwingUtilities.invokeAndWait(sidebar::tick);
+        assertThat(group(list, 0)).isEqualTo("To read");
     }
 
     /// A running session's details list name, path, branch, id, status, uptime, context share and model in that order;

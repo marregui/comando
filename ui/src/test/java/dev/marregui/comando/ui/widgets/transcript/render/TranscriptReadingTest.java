@@ -391,6 +391,11 @@ class TranscriptReadingTest {
                 canvas.update(s.index(), s.block());
             }
         }
+        for (final Item item : canvas.topLevel()) { // every turn's row open, or the kinds it holds do not paint
+            if (item instanceof Items.StepsItem row) {
+                row.toggle();
+            }
+        }
         paint(1000, 700);
         assertThat(canvas.contentHeight()).isGreaterThan(5000);
     }

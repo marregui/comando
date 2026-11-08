@@ -21,6 +21,7 @@ import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 
 import static dev.marregui.comando.core.reduce.Shared.clear;
+import static dev.marregui.comando.core.reduce.Shared.finished;
 import static dev.marregui.comando.core.reduce.Shared.freshPanel;
 import static dev.marregui.comando.core.reduce.Shared.notice;
 import static dev.marregui.comando.core.reduce.Shared.savePanels;
@@ -104,8 +105,9 @@ final class SessionRules {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, refused.get().reason(), refused.get().subject()));
         }
         if (i.previousName().isEmpty()) {
-            // a new session is cut off from no family: a family is recorded only by a removal, never taken from the intent
-            final SessionSpec spec = i.spec().withFamily("");
+            // a new session is cut off from no family: a family is recorded only by a removal, never taken from the
+            // intent; nor has it anything to read
+            final SessionSpec spec = i.spec().withFamily("").withUnread(0L);
             final List<SessionState> sessions = new ArrayList<>(s.sessions());
             sessions.add(SessionState.closed(spec));
             final AppState next = s.withSessions(sessions);
@@ -125,10 +127,11 @@ final class SessionRules {
         final boolean renamed = !i.previousName().equals(spec.name());
         final List<SessionState> sessions = new ArrayList<>(s.sessions().size());
         for (final SessionState x : s.sessions()) {
-            // the form has no carried summary, creator nor family: they stay as they were (record 121); the sessions it
-            // made name it by its new name, so a rename cuts no creation family (rule 1)
+            // the form has no carried summary, creator, family nor unread mark: they stay as they were (records 121,
+            // 136); the sessions it made name it by its new name, so a rename cuts no creation family (rule 1)
             sessions.add(x.name().equals(i.previousName())
-                    ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy()).withFamily(x.spec().family()))
+                    ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy())
+                    .withFamily(x.spec().family()).withUnread(x.spec().unreadMillis()))
                     : renamed && x.spec().createdBy().equals(i.previousName()) ? x.withSpec(x.spec().withCreatedBy(spec.name())) : x);
         }
         AppState next = s.withSessions(sessions);
@@ -143,7 +146,7 @@ final class SessionRules {
                 effects.add(new Effect.LoadHistory(spec));
             }
         }
-        if (old.status().isUsable() && !old.spec().equals(spec)) {
+        if (old.status().isUsable() && !old.spec().withUnread(0L).equals(spec.withUnread(0L))) {
             next = notice(clock, next, Notice.Level.INFO, "Session " + spec.name() + ": changes apply at the next start", Notice.session(spec.name()));
         }
         return new Transition(next, effects);
@@ -340,6 +343,8 @@ final class SessionRules {
         SessionState x = found.get();
         final boolean expected = x.status() == Status.CLOSING || i.exitCode() == 0;
         final long now = clock.millis();
+        // the process took its turn or its background work with it: where the work got to is the outcome
+        final boolean working = x.isBusy() || x.isAwaitingHandOff() && x.lastTurnError().isEmpty();
         x = x.withStatus(expected ? Status.CLOSED : Status.FAILED, expected ? "" : i.error())
                 .withTurns(0, now)
                 .withActivity("", now)
@@ -348,6 +353,9 @@ final class SessionRules {
                 // locked
                 .withCheckpointCompacts(false)
                 .withCheckpointTurns(0);
+        if (working) {
+            x = finished(s, x, now);
+        }
         final List<Effect> effects = new ArrayList<>();
         AppState next = ApprovalRules.withdrawApprovals(s.withSession(x), i.name(), "session ended", effects);
         if (!expected) {
@@ -394,6 +402,10 @@ final class SessionRules {
 
     static Transition sessionBranch(final AppState s, final Intent.SessionBranch i) {
         return Transition.of(s.withSession(i.name(), x -> x.withBranch(i.branch())));
+    }
+
+    static Transition sessionSubject(final AppState s, final Intent.SessionSubjectRead i) {
+        return Transition.of(s.withSession(i.name(), x -> x.withSubject(i.subject())));
     }
 
     /**

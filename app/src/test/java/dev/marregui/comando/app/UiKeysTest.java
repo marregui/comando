@@ -644,8 +644,9 @@ class UiKeysTest {
                 for (int i = 0; i < bar.getMenuCount(); i++) {
                     titles.add(bar.getMenu(i).getText());
                 }
-                assertThat(titles).as("Actions is Help now").containsExactly("Edit", "Help");
-                return Stream.of(bar.getMenu(1).getMenuComponents()).filter(JMenuItem.class::isInstance).map(c -> ((JMenuItem) c).getText()).toList();
+                assertThat(titles).as("Actions is Help now, after Find").containsExactly("Edit", "Find", "Help");
+                return Stream.of(bar.getMenu(2).getMenuComponents()).filter(JMenuItem.class::isInstance).map(c
+                        -> ((JMenuItem) c).getText()).toList();
             });
             assertThat(help).as("the palette and the help; the theme, the shell, the plots and the server are buttons")
                     .containsExactly("Command palette", "Tutorial", "Keyboard shortcuts", "Markdown sheet", "Show the log", "Show the Edge's log", "Show QuestDB's log", "Reveal comando folder");

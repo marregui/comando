@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.text.LogLines;
@@ -47,7 +48,7 @@ final class HelpFiles {
                 break;
             }
             try {
-                if (LogLines.offsetOf(Files.readString(file), atMillis) >= 0) {
+                if (LogLines.offsetOf(Mapped.text(file), atMillis) >= 0) {
                     return Optional.of(file);
                 }
             } catch (final IOException e) {
@@ -81,7 +82,7 @@ final class HelpFiles {
             text = KeyText.of(tutorialText(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
         }
         final Path file = tutorial(home);
-        if (Files.isRegularFile(file) && Files.readString(file, StandardCharsets.UTF_8).equals(text)) {
+        if (Files.isRegularFile(file) && Mapped.text(file).equals(text)) {
             return file;
         }
         Files.createDirectories(file.getParent());

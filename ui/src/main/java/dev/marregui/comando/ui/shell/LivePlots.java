@@ -121,7 +121,9 @@ final class LivePlots {
     void onState(final AppState s) {
         last = s;
         for (final Live l : Map.copyOf(live).values()) {
-            final boolean viewOpen = s.views().stream().anyMatch(v -> v.title().equals(l.title) && v.placement() == Placement.LOWER);
+            // found by its home: a plot moved to the right side still plots (record 141)
+            final boolean viewOpen = s.views().stream()
+                    .anyMatch(v -> v.title().equals(l.title) && v.home() == Placement.LOWER);
             if (l.shown && !viewOpen || s.panel(l.panel).isEmpty()) {
                 stop(l.panel);
                 continue;

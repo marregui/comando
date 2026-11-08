@@ -25,7 +25,7 @@ final class Finder {
         /** The top-level items in order. */
         List<Item> items();
 
-        /** The card or hook group {@code item} sits in; null at the top level. */
+        /** The card, hook group or turn's steps {@code item} sits in; null at the top level. */
         Item parentOf(Item item);
 
         /** The fold of {@code item} changed: it and the items around it lay out again. */
@@ -183,6 +183,26 @@ final class Finder {
         matchBox[count] = box;
         matchAt[count] = at;
         count++;
+    }
+
+    /**
+     * {@code item} closed by itself, its turn over, and may have taken top-level items in: under a find it opens again
+     * when it holds the text, as it would have for the find, and the matches are counted again as their places moved.
+     * They keep their order, so the current one stays.
+     */
+    void folded(final Item item) {
+        if (!active()) {
+            return;
+        }
+        final List<Item> closed = new ArrayList<>();
+        closedContaining(item, needle, closed);
+        for (final Item i : closed) {
+            if (i.fold().reveal()) {
+                host.foldChanged(i);
+                revealed.add(i);
+            }
+        }
+        count();
     }
 
     /** The next find of a new text starts where the current match begins. */
@@ -348,7 +368,7 @@ final class Finder {
 
     /** True when the item or any block nested in it, at any depth, contains {@code needle}. */
     private static boolean subtreeContains(final Item item, final String needle) {
-        if (CaseFold.contains(item.text(), needle)) {
+        if (CaseFold.contains(item.findable(), needle)) {
             return true;
         }
         for (final Item c : item.children()) {

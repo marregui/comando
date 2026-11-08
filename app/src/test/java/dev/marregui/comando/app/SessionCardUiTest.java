@@ -107,7 +107,8 @@ class SessionCardUiTest {
             assertThat(facts).anyMatch(f -> f.startsWith("default · effort")).noneMatch(f -> f.equals("work"));
             assertThat(onEdt(() -> text(card, "tab-card-topic"))).as("the panel's card, whose summary is read").isNotNull();
             assertThat(onEdt(() -> list.getToolTipText(new MouseEvent(list, MouseEvent.MOUSE_MOVED, 0, 0,
-                    list.getCellBounds(0, 0).x + 60, list.getCellBounds(0, 0).y + 6, 0, false)))).as("no tooltip over the text").isNull();
+                    list.getCellBounds(1, 1).x + 60, list.getCellBounds(1, 1).y + 6, 0,
+                            false)))).as("no tooltip over the text").isNull();
 
             final Path out = Path.of("build/snapshots/session-card.png");
             Files.createDirectories(out.getParent());

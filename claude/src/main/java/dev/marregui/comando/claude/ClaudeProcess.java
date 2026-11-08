@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Queues;
@@ -193,17 +193,15 @@ final class ClaudeProcess {
 
     /** Keeps the last lines of stderr, read from the end of its file, and deletes the file. */
     private void readStderrTail() {
-        try (final RandomAccessFile f = new RandomAccessFile(stderrFile.toFile(), "r")) {
-            final long length = f.length();
-            final long from = Math.max(0L, length - STDERR_TAIL_BYTES);
-            final byte[] end = new byte[(int) (length - from)];
-            f.seek(from);
-            f.readFully(end);
-            List<String> lines = new String(end, StandardCharsets.UTF_8).lines().toList();
-            if (from > 0L && !lines.isEmpty()) {
-                lines = lines.subList(1, lines.size()); // a tail cut mid-file starts with a partial line
-            }
-            stderrTail = String.join("\n", lines.subList(Math.max(0, lines.size() - STDERR_LINES), lines.size()));
+        try {
+            stderrTail = Mapped.read(stderrFile, f -> {
+                final long from = Math.max(0L, f.size() - STDERR_TAIL_BYTES);
+                List<String> lines = f.text(from, f.size()).lines().toList();
+                if (from > 0L && !lines.isEmpty()) {
+                    lines = lines.subList(1, lines.size()); // a tail cut mid-file starts with a partial line
+                }
+                return String.join("\n", lines.subList(Math.max(0, lines.size() - STDERR_LINES), lines.size()));
+            });
         } catch (final IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read stderr", e);
         }

@@ -344,6 +344,70 @@ class StreamMapperTest {
         assertThat(blocks(Block.TurnEnd.class)).isEmpty();
     }
 
+    /// A turn stopped with no end stored lends the next one nothing: a five second turn does not read as a day.
+    @Test
+    void aStoredTurnLendsNoTimeFromATurnThatNeverEnded() {
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-01T10:00:00.000Z","message":{"role":"user","content":"stopped the next minute"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-01T10:00:20.000Z","message":{"id":"m1","role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}""");
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-02T10:00:00.000Z","message":{"role":"user","content":"the next day"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T10:00:05.000Z","message":{"id":"m2","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}""");
+        mapper.endHistory();
+
+        assertThat(blocks().getLast()).isEqualTo(Block.TurnEnd.stored(5_000L));
+    }
+
+    /// A stored turn's span runs from its first stored line to its last, through the lines of its tool calls, and
+    /// leaves
+    /// out a hook's line after it and the next turn's lines; the end stays untimed.
+    @Test
+    void aStoredTurnSpansItsFirstAndLastLines() {
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-02T10:00:00.000Z","message":{"role":"user","content":"go"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T10:01:00.000Z","message":{"id":"m1","role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}""");
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-02T10:02:00.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"x"}]}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T10:06:30.000Z","message":{"id":"m2","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}""");
+        mapper.acceptHistory("""
+                {"type":"system","timestamp":"2026-01-02T10:09:00.000Z","subtype":"stop_hook_summary"}""");
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-02T11:00:00.000Z","message":{"role":"user","content":"and now"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T11:00:05.000Z","message":{"id":"m3","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Fixed."}]}}""");
+        mapper.endHistory();
+
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::spanMillis).containsExactly(390_000L, 5_000L);
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::timed).containsOnly(false);
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::tookMillis).containsExactly(390_000L, 5_000L);
+    }
+
+    /// A turn with no usable times has no span: lines without a timestamp, one that does not parse, and a last line
+    /// older than the first each end the turn as an untimed stored one.
+    @Test
+    void aStoredTurnWithNoUsableTimesHasNoSpan() {
+        mapper.acceptHistory("""
+                {"type":"user","message":{"role":"user","content":"no times"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","message":{"id":"m1","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"One."}]}}""");
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"yesterday","message":{"role":"user","content":"a bad time"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T10:00:00.000Z","message":{"id":"m2","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Two."}]}}""");
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-02T10:00:09.000Z","message":{"role":"user","content":"time goes back"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T10:00:00.000Z","message":{"id":"m3","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Three."}]}}""");
+        mapper.endHistory();
+
+        assertThat(blocks(Block.TurnEnd.class)).containsExactly(Block.TurnEnd.stored(), Block.TurnEnd.stored(),
+                Block.TurnEnd.stored());
+    }
+
     /// The set of background tasks reported follows the session's own background work: an agent is listed while it runs
     /// and removed when it completes, while a command run by that agent and a task the CLI runs on its own are not in
     /// it.

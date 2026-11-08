@@ -1,8 +1,6 @@
 package dev.marregui.comando.claude;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -25,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
@@ -37,6 +36,7 @@ import dev.marregui.comando.core.port.ClaudePort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -210,6 +210,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         Run current;
         Path workDir;
         String branch = "";
+        final SessionSubjects subjects = new SessionSubjects(settings.projectsDir(), json);
+        SessionSubject subject = SessionSubject.NONE;
         /** The last start failed and said so; a prompt sent after it adds no second error. Cleared by a start. */
         boolean startFailed;
         /** A process of the session runs; read by the sub-agent thread, which follows running sessions only. */
@@ -348,6 +350,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         s.run(() -> {
             s.transcript.clear();
+            s.subjects.rewind(); // the tab empties, the conversation goes on: what it wrote to stands
             s.mapper.forgetBlocks();
             s.transcript.changed();
         });
@@ -368,19 +371,26 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 // a conversation a checkpoint cleared has no file until its first prompt; what it carries still shows
                 if (!spec.carried().isEmpty()) {
                     s.transcript.clear();
+                    s.subjects.forget();
                     s.mapper.carried(spec.carried());
                     s.transcript.changed();
+                    readSubject(s, Path.of(spec.workDir()));
                 }
                 return;
             }
             s.transcript.clear();
-            try (final BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    if (!line.isBlank()) {
-                        s.mapper.acceptHistory(line);
-                    }
-                }
+            s.subjects.forget();
+            try {
+                Mapped.read(file, m -> {
+                    m.lines(bytes -> {
+                        final String line = Mapped.decode(bytes);
+                        if (!line.isBlank()) {
+                            s.mapper.acceptHistory(line);
+                        }
+                        return true;
+                    });
+                    return null;
+                });
             } catch (final IOException e) {
                 s.mapper.note(Block.NoteKind.ERROR, "Cannot read the stored conversation: " + e.getMessage());
             }
@@ -393,11 +403,13 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 s.mapper.carried(spec.carried());
             }
             s.transcript.changed();
-            final String b = GitBranch.of(Path.of(spec.workDir()));
+            final Path workDir = Path.of(spec.workDir());
+            final String b = branchOf(s, workDir);
             if (!b.isEmpty()) {
                 s.branch = b;
                 sink.dispatch(new Intent.SessionBranch(spec.name(), b));
             }
+            readSubject(s, workDir);
         });
     }
 
@@ -697,6 +709,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             if (spec.startMode() == StartMode.NEW) {
                 // the Session tab shows one conversation: the new one starts empty, the old stays in its file
                 s.transcript.clear();
+                s.subjects.forget();
                 s.mapper.forgetBlocks();
             }
             LOG.log(System.Logger.Level.INFO, "claude started [session=" + s.name + ", pid=" + run.process.pid() + ", mode=" + spec.startMode()
@@ -787,10 +800,25 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (s.workDir == null) {
             return;
         }
-        final String b = GitBranch.of(s.workDir);
+        final String b = branchOf(s, s.workDir);
         if (!b.equals(s.branch)) {
             s.branch = b;
             sink.dispatch(new Intent.SessionBranch(s.name, b));
+        }
+        readSubject(s, s.workDir);
+    }
+
+    /** The working folder's branch; none in the kit, where every session may start: it says nothing of the work. */
+    private static String branchOf(final Session s, final Path workDir) {
+        return s.subjects.inKit(workDir) ? "" : GitBranch.of(workDir);
+    }
+
+    /** Reads the blocks added since the last pass and tells the window when what the session works on changed. */
+    private void readSubject(final Session s, final Path workDir) {
+        final SessionSubject read = s.subjects.pass(s.transcript, workDir);
+        if (!read.equals(s.subject)) {
+            s.subject = read;
+            sink.dispatch(new Intent.SessionSubjectRead(s.name, read));
         }
     }
 

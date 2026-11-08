@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.UnaryOperator;
 
@@ -45,13 +46,18 @@ final class AgentTracker {
     private Set<Items.ToolItem> waitingCards = Collections.newSetFromMap(new IdentityHashMap<>());
     private List<Approval> waitingFor = List.of();
     private final LongSupplier clock;
-    /** The card or hook group an item sits in; null at the top level. */
+    /** The card, hook group or turn's steps an item sits in; null at the top level. */
     private final UnaryOperator<Item> parentOf;
     /** Runs when the set of running cards may have changed. */
-    private final Runnable runningChanged;
+    private final Consumer<Items.ToolItem> runningChanged;
     private final Runnable repaint;
 
-    AgentTracker(final LongSupplier clock, final UnaryOperator<Item> parentOf, final Runnable runningChanged, final Runnable repaint) {
+    AgentTracker(
+            final LongSupplier clock,
+            final UnaryOperator<Item> parentOf,
+            final Consumer<Items.ToolItem> runningChanged,
+            final Runnable repaint
+    ) {
         this.clock = clock;
         this.parentOf = parentOf;
         this.runningChanged = runningChanged;
@@ -146,7 +152,7 @@ final class AgentTracker {
             running.remove(card);
             runningAgents.remove(card);
         }
-        runningChanged.run();
+        runningChanged.accept(card);
     }
 
     /**

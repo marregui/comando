@@ -87,6 +87,8 @@ final class Keys {
             | Where | Keys | Does |
             |---|---|---|
             | Find bar | ⏎, ⇧⏎, ⎋ | next match, previous match, close |
+            | Find in files | ↑ ↓, ⏎, ⎋ or ⌘W | the hit above or below, open the hit and keep the window,
+                    close it and give the keyboard back |
             | Transcript | ⌘C, ⌘A | copy the selection, select all |
             | Sessions list | ⌘C | copy the selected session's details |
             | Files tab | ⏎ | open the selected file in a panel |

@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -14,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Predicate;
+
+import dev.marregui.comando.core.files.Mapped;
 
 /**
  * Wiki-style links, {@code [[name]]}, {@code [[name#heading]]} and {@code [[name|label]]}, as Obsidian and Claude
@@ -184,8 +185,8 @@ public final class NoteLinks {
     /** The {@code name:} a Markdown file's front matter declares; null when it has none. */
     static String declaredName(final Path file) {
         byte[] head;
-        try (final InputStream in = Files.newInputStream(file)) {
-            head = in.readNBytes(HEAD_BYTES);
+        try {
+            head = Mapped.head(file, HEAD_BYTES);
         } catch (final IOException e) {
             return null;
         }

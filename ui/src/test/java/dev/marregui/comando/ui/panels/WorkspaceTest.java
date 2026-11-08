@@ -50,6 +50,7 @@ import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Attention;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
@@ -226,6 +227,11 @@ class WorkspaceTest {
                 .containsExactly("spec.md was deleted outside comando; the panel's unsaved edits write it again");
     }
 
+    /** {@code x} as the reducer leaves it when its work ends with the user elsewhere. */
+    private static SessionState unread(final SessionState x) {
+        return x.withSpec(x.spec().withUnread(1L));
+    }
+
     /// A background tab shows the spinner icon and wants it turned while its turn runs, its timer waiting until the
     /// window shows; it gets the question mark and one attention request when the session asks, the check when the
     /// turn ends unseen, which clears once focused, and a failed turn asks for attention again until a new turn
@@ -269,7 +275,8 @@ class WorkspaceTest {
         assertThat(attention).as("the same need asks once").hasValue(1);
 
         // answered, the turn ends unseen: done, the check, no spinner, no attention
-        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withApprovals(List.of()).withSession(session.withTurns(0, 2L))));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withApprovals(List.of())
+                .withSession(unread(session.withTurns(0, 2L)))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
         assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("check"));
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
@@ -277,15 +284,17 @@ class WorkspaceTest {
         assertThat(attention).hasValue(1);
 
         // looking at it clears the check: the session's own icon is back
-        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withFocused(P)));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withFocused(P).withSession(session.withTurns(0,
+                2L))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.IDLE);
         assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("claude"));
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
 
         // a failed turn while away: an error, with attention; a new turn starting supersedes it
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withFocused(other).withSession(session.withTurns(1, 3L))));
-        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 3L).withTurns(0, 4L)
-                .withLastTurnError("rate limited"))));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(unread(session.withTurns(1,
+                3L).withTurns(0, 4L)
+                .withLastTurnError("rate limited")))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
         assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("error"));
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
@@ -296,7 +305,7 @@ class WorkspaceTest {
     }
 
     /// Returned background work is not marked done before its reading turn; with no reading turn within
-    /// [TabStatus#REPORT_GRACE_MILLIS], the tick marks it done without a state change.
+    /// [Attention#REPORT_GRACE_MILLIS], the tick marks it done without a state change.
     @Test
     void returnedBackgroundWorkMarksTheTabFinishedOnlyWhenNoReadingTurnFollows() throws Exception {
         final PanelId other = new PanelId("o");
@@ -317,11 +326,12 @@ class WorkspaceTest {
 
         // the work returns; its reading turn has not started a second later
         now[0] = 61_000L;
-        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(waiting.withTasks(List.of(), 60_000L))));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(unread(waiting.withTasks(List.of(),
+                60_000L)))));
         assertThat(w[0].statuses()).as("not finished before the turn that reads it").doesNotContainEntry(P, TabStatus.DONE);
 
         // no reading turn within the grace: the tick marks it finished, with no state change to wait for
-        now[0] = 60_000L + TabStatus.REPORT_GRACE_MILLIS;
+        now[0] = 60_000L + Attention.REPORT_GRACE_MILLIS;
         SwingUtilities.invokeAndWait(() -> w[0].tick());
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
     }
@@ -341,7 +351,7 @@ class WorkspaceTest {
                     List.of(open.withTurns(1, 1_000L))).withFocused(other);
             w[0].render(s[0]);
             final SessionState failed = open.withTurns(1, 1_000L).withTasks(List.of(agent), 1_500L).withTurns(0, 2_000L).withLastTurnError("rate limited");
-            w[0].render(s[0] = s[0].withSession(failed));
+            w[0].render(s[0] = s[0].withSession(unread(failed)));
         });
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
     }

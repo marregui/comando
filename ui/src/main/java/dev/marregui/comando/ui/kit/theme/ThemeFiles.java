@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.kit.theme;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -9,6 +8,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import dev.marregui.comando.core.files.Mapped;
 
 /**
  * The user's themes (record 126): every {@code *.json} in a folder, the data root's {@code themes}, read once at start
@@ -42,7 +43,7 @@ public final class ThemeFiles {
         for (final Path f : files) {
             final String name = f.getFileName().toString();
             try {
-                final ThemeSpec spec = ThemeSpec.parse(Files.readString(f, StandardCharsets.UTF_8));
+                final ThemeSpec spec = ThemeSpec.parse(Mapped.text(f));
                 if (ids.contains(spec.id())) {
                     problems.add(name + ": the id " + spec.id() + " is another theme's");
                     continue;

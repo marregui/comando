@@ -1,5 +1,6 @@
 package dev.marregui.comando.tools;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.FileVisitOption;
@@ -27,6 +28,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -89,7 +91,7 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
             f.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             final DocumentBuilder b = f.newDocumentBuilder();
-            final Document doc = b.parse(file.toFile());
+            final Document doc = b.parse(new ByteArrayInputStream(Mapped.bytes(file)));
             final Element suite = doc.getDocumentElement();
             final List<Case> cases = new ArrayList<>();
             final NodeList list = suite.getElementsByTagName("testcase");

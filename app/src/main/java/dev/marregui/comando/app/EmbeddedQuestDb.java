@@ -18,6 +18,7 @@ import io.questdb.Bootstrap;
 import io.questdb.DefaultBootstrapConfiguration;
 import io.questdb.ServerMain;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.AtomicFiles;
@@ -207,7 +208,8 @@ final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable
             return Optional.empty();
         }
         final Path shipped = root.resolve("conf").resolve("log.conf");
-        if (Files.isRegularFile(shipped) && Files.readAllLines(shipped).stream().map(String::strip).anyMatch(l -> l.startsWith("w.file.class="))) {
+        if (Files.isRegularFile(shipped)
+                && Mapped.lines(shipped).stream().map(String::strip).anyMatch(l -> l.startsWith("w.file.class="))) {
             return Optional.empty();
         }
         Files.createDirectories(ours.getParent());

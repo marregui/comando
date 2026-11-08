@@ -9,6 +9,7 @@ import dev.marregui.comando.ui.panels.SidePane;
 import dev.marregui.comando.ui.panels.StatusBar;
 import dev.marregui.comando.ui.panels.Workspace;
 import dev.marregui.comando.ui.widget.capability.FindBar;
+import dev.marregui.comando.ui.widgets.search.SearchHub;
 
 /** The window's parts, built once on the EDT by the shell; what its collaborators act on. */
 record ShellParts(
@@ -21,5 +22,6 @@ record ShellParts(
         SessionBar sessionBar,
         FindBar findBar,
         DiffWindow diffWindow,
+        SearchHub searchHub,
         LivePlots livePlots) {
 }

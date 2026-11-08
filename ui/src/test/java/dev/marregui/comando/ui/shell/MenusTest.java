@@ -49,16 +49,22 @@ class MenusTest {
         return subs;
     }
 
-    /// [Menus#bar] is exactly Edit and Help with the listed item ids in order, no submenus, and one separator in Help.
+    /// [Menus#bar] is exactly Edit, Find and Help with the listed item ids in order, no submenus, one separator before
+    /// Find in files and the search's hits, and one in Help.
     @Test
-    void editThenHelpFlatThePaletteThenTheHelp() {
+    void editFindThenHelpFlatThePaletteThenTheHelp() {
         final List<MenuEntry.Menu> bar = Menus.bar();
-        assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Help");
+        assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit",
+                "Find", "Help");
         assertThat(ids(bar)).containsExactly(
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
+                "view.find", "view.findNext", "view.findPrevious", "view.findInFiles",
+                "view.nextHit", "view.previousHit",
                 "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog", "help.questDbLog", "help.dataRoot");
         assertThat(submenus(bar)).as("flat: the themes are the swatch's").isEmpty();
         assertThat(bar.get(1).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
+                .as("one separator between the view's Find and the window's").isEqualTo(1);
+        assertThat(bar.get(2).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
                 .as("one separator between the palette and the help").isEqualTo(1);
     }
 

@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.RepoStatus;
@@ -237,7 +238,7 @@ final class Git implements AutoCloseable {
                 } else if (Files.size(file) > MAX_FILE_BYTES) {
                     return ChangeTexts.noted(rootName, change, "larger than " + MAX_FILE_BYTES / (1024 * 1024) + " MB: not compared");
                 } else {
-                    after = Files.readAllBytes(file);
+                    after = Mapped.bytes(file);
                 }
             } catch (final IOException e) {
                 return ChangeTexts.noted(rootName, change, "cannot be read: " + e.getMessage());

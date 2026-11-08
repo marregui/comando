@@ -17,6 +17,7 @@ import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
@@ -67,7 +68,7 @@ final class Settings {
     static Settings open(final Path file, final Preferences legacy) {
         if (Files.exists(file)) {
             try {
-                final JsonNode root = JSON.readTree(file.toFile());
+                final JsonNode root = Mapped.read(file, m -> JSON.readTree(m.stream()));
                 final int version = root != null && root.isObject() ? root.path(VERSION_KEY).asInt(1) : 1;
                 if (version > VERSION) {
                     final Settings later = new Settings(file, new TreeMap<>());
@@ -79,7 +80,7 @@ final class Settings {
                     return later;
                 }
                 return new Settings(file, read(root));
-            } catch (final JacksonException e) {
+            } catch (final IOException | JacksonException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read the settings, kept aside [file=" + file + ']', e);
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".unreadable"), StandardCopyOption.REPLACE_EXISTING);

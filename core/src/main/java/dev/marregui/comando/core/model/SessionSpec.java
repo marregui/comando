@@ -24,6 +24,9 @@ import java.util.Objects;
  *                        removed session's name, so the sessions it made, and theirs, stay one family once their
  *                        chain of creators no longer reaches it (record 121, rule 1); empty while the chain does, and
  *                        for a session no removal cut off. Kept by every edit; only the reducer sets it
+ * @param unreadMillis    when the session finished work the user has not looked at (record 136); 0 for none, which is
+ *                        also what a {@code sessions.json} without the field reads as. Kept by every edit; only the
+ *                        reducer sets it
  */
 public record SessionSpec(
         String name,
@@ -36,7 +39,8 @@ public record SessionSpec(
         String checkpoint,
         String carried,
         String createdBy,
-        String family) {
+        String family,
+        long unreadMillis) {
 
     /** The checkpoint command of a session that never set one: what the Checkpoint button sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
@@ -79,16 +83,52 @@ public record SessionSpec(
         }
     }
 
+    /** A session with nothing to read. */
+    public SessionSpec(
+            final String name,
+            final String workDir,
+            final String model,
+            final String effort,
+            final double budgetUsd,
+            final String claudeSessionId,
+            final StartMode startMode,
+            final String checkpoint,
+            final String carried,
+            final String createdBy,
+            final String family
+    ) {
+        this(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy,
+                family, 0L);
+    }
+
     /** A session no removal cut off from its creation family. */
-    public SessionSpec(final String name, final String workDir, final String model, final String effort, final double budgetUsd,
-                       final String claudeSessionId, final StartMode startMode, final String checkpoint, final String carried,
-                       final String createdBy) {
+    public SessionSpec(
+            final String name,
+            final String workDir,
+            final String model,
+            final String effort,
+            final double budgetUsd,
+            final String claudeSessionId,
+            final StartMode startMode,
+            final String checkpoint,
+            final String carried,
+            final String createdBy
+    ) {
         this(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, "");
     }
 
     /** A session the user made: no creator recorded. */
-    public SessionSpec(final String name, final String workDir, final String model, final String effort, final double budgetUsd,
-                       final String claudeSessionId, final StartMode startMode, final String checkpoint, final String carried) {
+    public SessionSpec(
+            final String name,
+            final String workDir,
+            final String model,
+            final String effort,
+            final double budgetUsd,
+            final String claudeSessionId,
+            final StartMode startMode,
+            final String checkpoint,
+            final String carried
+    ) {
         this(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, "");
     }
 
@@ -101,7 +141,8 @@ public record SessionSpec(
      * summary still waits for the next prompt.
      */
     public SessionSpec restarted() {
-        return new SessionSpec(name, workDir, model, effort, budgetUsd, "", StartMode.NEW, checkpoint, carried, createdBy, family);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, "", StartMode.NEW, checkpoint, carried,
+                createdBy, family, unreadMillis);
     }
 
     /**
@@ -113,38 +154,57 @@ public record SessionSpec(
     }
 
     public SessionSpec withName(final String newName) {
-        return new SessionSpec(newName, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, family);
+        return new SessionSpec(newName, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint,
+                carried, createdBy, family, unreadMillis);
     }
 
     /** After Claude Code reports its session id, later starts resume that conversation. */
     public SessionSpec resumable(final String sessionId) {
-        return new SessionSpec(name, workDir, model, effort, budgetUsd, sessionId, StartMode.RESUME, checkpoint, carried, createdBy, family);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, sessionId, StartMode.RESUME, checkpoint,
+                carried, createdBy, family, unreadMillis);
     }
 
     public SessionSpec withCheckpoint(final String newCheckpoint) {
-        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, newCheckpoint, carried, createdBy, family);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, newCheckpoint,
+                carried, createdBy, family, unreadMillis);
     }
 
     /** The checkpoint's summary that goes in front of the next prompt; empty once it has gone. */
     public SessionSpec withCarried(final String newCarried) {
-        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, newCarried, createdBy, family);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint,
+                newCarried, createdBy, family, unreadMillis);
     }
 
     public SessionSpec withModel(final String newModel) {
-        return new SessionSpec(name, workDir, newModel, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, family);
+        return new SessionSpec(name, workDir, newModel, effort, budgetUsd, claudeSessionId, startMode, checkpoint,
+                carried, createdBy, family, unreadMillis);
     }
 
     public SessionSpec withEffort(final String newEffort) {
-        return new SessionSpec(name, workDir, model, newEffort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, family);
+        return new SessionSpec(name, workDir, model, newEffort, budgetUsd, claudeSessionId, startMode, checkpoint,
+                carried, createdBy, family, unreadMillis);
     }
 
     /** The same session, recorded as created by {@code creator} (a session or client name; empty for the user). */
     public SessionSpec withCreatedBy(final String creator) {
-        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, creator, family);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
+                creator, family, unreadMillis);
     }
 
     /** The same session, recorded as of the creation family whose root was {@code root}, the removed session's name. */
     public SessionSpec withFamily(final String root) {
-        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried, createdBy, root);
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
+                createdBy, root, unreadMillis);
+    }
+
+    /** Whether the session finished work the user has not looked at. */
+    public boolean unread() {
+        return unreadMillis > 0;
+    }
+
+    /** The same session, with its work finished at {@code atMillis} for the user to read; 0 when nothing waits. */
+    public SessionSpec withUnread(final long atMillis) {
+        return new SessionSpec(name, workDir, model, effort, budgetUsd, claudeSessionId, startMode, checkpoint, carried,
+                createdBy, family, atMillis);
     }
 }

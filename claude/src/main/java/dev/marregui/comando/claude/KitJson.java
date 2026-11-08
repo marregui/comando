@@ -24,6 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
@@ -134,7 +135,7 @@ public final class KitJson {
     private static JsonNode tree(final Path file) throws IOException {
         JsonNode root;
         try {
-            root = JSON.readTree(file.toFile());
+            root = Mapped.read(file, m -> JSON.readTree(m.stream()));
         } catch (final JacksonException e) {
             throw new IOException(e.getMessage(), e);
         }

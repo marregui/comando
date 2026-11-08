@@ -22,7 +22,9 @@ import java.util.stream.Stream;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
@@ -185,7 +187,7 @@ public final class MermaidDiagrams {
                     stop(p);
                     failures.put(key, "mmdc did not finish within " + timeout.toSeconds() + " s");
                 } else if (p.exitValue() != 0 || !Files.isRegularFile(out)) {
-                    failures.put(key, "mmdc cannot draw it: " + firstLine(Files.readString(err, StandardCharsets.UTF_8)));
+                    failures.put(key, "mmdc cannot draw it: " + firstLine(Mapped.text(err)));
                 } else {
                     AtomicFiles.move(out, png);
                 }
@@ -268,18 +270,22 @@ public final class MermaidDiagrams {
 
     /** A PNG's size in pixels from its header, or zeros when it cannot be read. */
     private static int[] size(final Path png) {
-        try (final ImageInputStream in = ImageIO.createImageInputStream(png.toFile())) {
-            final Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
-            if (readers == null || !readers.hasNext()) {
-                return new int[]{0, 0};
-            }
-            final ImageReader r = readers.next();
-            try {
-                r.setInput(in);
-                return new int[]{r.getWidth(0), r.getHeight(0)};
-            } finally {
-                r.dispose();
-            }
+        try {
+            return Mapped.read(png, m -> {
+                try (final ImageInputStream in = new MemoryCacheImageInputStream(m.stream())) {
+                    final Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
+                    if (!readers.hasNext()) {
+                        return new int[]{0, 0};
+                    }
+                    final ImageReader r = readers.next();
+                    try {
+                        r.setInput(in);
+                        return new int[]{r.getWidth(0), r.getHeight(0)};
+                    } finally {
+                        r.dispose();
+                    }
+                }
+            });
         } catch (final IOException e) {
             return new int[]{0, 0};
         }

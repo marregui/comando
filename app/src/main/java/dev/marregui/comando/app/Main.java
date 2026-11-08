@@ -12,6 +12,7 @@ import javax.swing.JOptionPane;
 
 import tools.jackson.core.JacksonException;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.model.InstanceName;
 
 /** Entry point: configuration, logging, one instance per data root, the application, an exit that closes all once. */
@@ -67,9 +68,9 @@ public final class Main {
             return null;
         }
         try {
-            final String name = JsonFile.JSON.readTree(file.toFile()).path("name").asString("");
+            final String name = Mapped.read(file, m -> JsonFile.JSON.readTree(m.stream())).path("name").asString("");
             return name.isBlank() ? null : name;
-        } catch (final JacksonException e) {
+        } catch (final IOException | JacksonException _) {
             return null;
         }
     }
@@ -84,8 +85,8 @@ public final class Main {
             return "";
         }
         try {
-            return JsonFile.JSON.readTree(file.toFile()).path("role").asString("").strip();
-        } catch (final JacksonException e) {
+            return Mapped.read(file, m -> JsonFile.JSON.readTree(m.stream())).path("role").asString("").strip();
+        } catch (final IOException | JacksonException _) {
             return "";
         }
     }

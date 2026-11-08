@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Attention;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
@@ -37,12 +38,14 @@ enum TabStatus {
     }
 
     /**
-     * The status of {@code p}'s tab in {@code s}; {@code unread} says its last work ended while another tab was in
-     * front and the user has not looked since.
+     * The status of {@code p}'s tab in {@code s} at {@code nowMillis}. A session's unread outcome is the session's own
+     * ({@link Attention#unread}), the one answer the Sessions tab and the work list read; {@code unseen} says a query
+     * of the panel ended while another tab was in front and the user has not looked since.
      */
-    static TabStatus of(final PanelState p, final AppState s, final boolean unread) {
+    static TabStatus of(final PanelState p, final AppState s, final boolean unseen, final long nowMillis) {
         final Optional<SessionState> session = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
         final Optional<RunStatus> run = s.runOf(p.id()).map(SqlRun::status);
+        final boolean unread = unseen || session.map(x -> Attention.unread(x, nowMillis)).orElse(false);
         if (session.isPresent() && s.pendingApprovals(session.get().name()) > 0) {
             return NEEDS_YOU;
         }
@@ -59,26 +62,6 @@ enum TabStatus {
             return WAITING;
         }
         return session.isPresent() ? IDLE : NONE;
-    }
-
-    /**
-     * How long after background work returns its reading turn may take to make its first model call before the work
-     * counts as finished: a large context with a cold cache takes tens of seconds; a return that starts no turn is
-     * rare.
-     */
-    static final long REPORT_GRACE_MILLIS = 60_000;
-
-    /**
-     * Whether work is going on at {@code nowMillis}, for the unread tracking: a change from true to false is an outcome
-     * to look at. Waiting on the background work the last turn started is work going on, and so is the moment
-     * background work returns until the turn that reads it starts (at most {@link #REPORT_GRACE_MILLIS}): the turn that
-     * handed it off is not the outcome. A later turn that ends while older work runs on is, and so is a hand-off turn
-     * that failed.
-     */
-    static boolean active(final PanelState p, final AppState s, final long nowMillis) {
-        final boolean session = !p.session().isEmpty() && s.session(p.session()).map(x -> x.isBusy()
-                || (x.isAwaitingHandOff() || x.isReturning(nowMillis, REPORT_GRACE_MILLIS)) && x.lastTurnError().isEmpty()).orElse(false);
-        return session || s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false);
     }
 
     private static boolean failed(final SessionState ss) {

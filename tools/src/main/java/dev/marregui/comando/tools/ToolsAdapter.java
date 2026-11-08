@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
@@ -835,7 +836,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 continue;
             }
             try {
-                final ListingLines.Result r = ListingLines.without(Files.readString(e.getKey(), StandardCharsets.UTF_8), e.getValue());
+                final ListingLines.Result r = ListingLines.without(Mapped.text(e.getKey()), e.getValue());
                 if (r.removed() > 0) {
                     AtomicFiles.writeString(e.getKey(), r.text());
                     text.append("; ").append(r.removed()).append(r.removed() == 1 ? " line" : " lines").append(" out of ").append(where);

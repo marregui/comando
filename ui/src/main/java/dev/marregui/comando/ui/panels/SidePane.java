@@ -13,7 +13,11 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
 
-/** Views placed beside the editor: files Claude opened, diffs, plots, the Changes view. Hidden when it holds none. */
+/**
+ * The workspace's right-hand partition: one strip, in the main tabs' look, holding the side panels the workspace hands
+ * it, first, then the views placed beside the editor (files Claude opened, diffs, plots, the Changes view). Hidden when
+ * it holds neither.
+ */
 public final class SidePane {
 
     private final JTabbedPane tabs = named(new JTabbedPane(), "side");
@@ -22,8 +26,7 @@ public final class SidePane {
     private Map<Long, Long> versions = Map.of();
 
     public SidePane(final WidgetContext context, final WidgetRegistry registry) {
-        tabs.putClientProperty("JTabbedPane.tabType", "underlined");
-        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        TabLook.apply(tabs);
         views = new ViewTabs(tabs, 0, Placement.SIDE, registry, context);
     }
 
@@ -41,11 +44,32 @@ public final class SidePane {
         return -1;
     }
 
+    /** Brings the tab of view {@code id} forward, when the pane holds it. */
+    public void front(final long id) {
+        final int i = views.indexOf(id);
+        if (i >= 0) {
+            tabs.setSelectedIndex(i);
+        }
+    }
+
     public boolean hasViews() {
         return views.size() > 0;
     }
 
-    /** Shows the side views of {@code s}, the one new or shown again in front; returns whether the pane holds any. */
+    /** Whether the partition holds a side panel. */
+    public boolean hasPanels() {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof EditorPanel) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Shows the side views of {@code s}, the one new or shown again in front; returns whether the partition holds a
+     * view or a panel. The workspace renders its side panels into the strip before.
+     */
     public boolean render(final AppState s) {
         final boolean changed = views.render(s.views());
         if (changed) {
@@ -70,7 +94,12 @@ public final class SidePane {
                 }
             }
         }
-        return views.size() > 0;
+        return views.size() > 0 || hasPanels();
+    }
+
+    /** The strip the workspace places its side panels in. */
+    JTabbedPane strip() {
+        return tabs;
     }
 
     private static JTabbedPane named(final JTabbedPane tabs, final String name) {

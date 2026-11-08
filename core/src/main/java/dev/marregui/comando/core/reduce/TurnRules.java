@@ -21,6 +21,7 @@ import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 
 import static dev.marregui.comando.core.reduce.Shared.clear;
+import static dev.marregui.comando.core.reduce.Shared.finished;
 import static dev.marregui.comando.core.reduce.Shared.notice;
 import static dev.marregui.comando.core.reduce.Shared.sessionSpecs;
 
@@ -312,7 +313,8 @@ final class TurnRules {
         final boolean ran = found.get().isBusy();
         if (i.error() && found.get().status() == Status.FAILED) {
             // a prompt to a session whose start failed: the start's error already stands, once
-            return Transition.of(s.withSession(found.get().withTurns(Math.max(0, i.queued()), now).withActivity("", now)));
+            final SessionState ended = found.get().withTurns(Math.max(0, i.queued()), now).withActivity("", now);
+            return Transition.of(s.withSession(ran && !ended.isBusy() ? finished(s, ended, now) : ended));
         }
         SessionState x = found.get()
                 .withTurns(Math.max(0, i.queued()), now)
@@ -404,6 +406,10 @@ final class TurnRules {
             if (!interrupted && (i.error() || ran && !x.isAwaitingHandOff())) {
                 effects.add(new Effect.DesktopNotify(i.name(), i.error() ? "Turn failed: " + i.message() : "Turn finished"));
             }
+            // the same outcome for the user to read; an interrupt is one too, though nothing tells the desktop of it
+            if (i.error() && !interrupted || ran && !x.isAwaitingHandOff()) {
+                next = next.withSession(finished(next, x, now));
+            }
             // nothing runs or is queued: a statement card still waiting belongs to a call the turn abandoned (an
             // interrupt), and answering Run would act after the fact. Other cards may belong to a background
             // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them. While
@@ -439,7 +445,13 @@ final class TurnRules {
     }
 
     static Transition sessionTasksChanged(final Clock clock, final AppState s, final Intent.SessionTasksChanged i) {
-        return Transition.of(s.withSession(i.name(), x -> x.withTasks(i.open(), clock.millis())));
+        return Transition.of(s.withSession(i.name(), x -> {
+            final SessionState y = x.withTasks(i.open(), clock.millis());
+            // the session's background work has returned, whichever turn left it: an outcome, once no reading turn
+            // takes over (see Attention)
+            return x.isWaiting() && !y.isWaiting() && !y.isBusy() && y.lastTurnError().isEmpty()
+                    ? finished(s, y, clock.millis()) : y;
+        }));
     }
 
     static Transition sessionTurnRunning(final Clock clock, final AppState s, final Intent.SessionTurnRunning i) {

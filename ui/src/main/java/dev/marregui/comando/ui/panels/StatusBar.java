@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
@@ -35,6 +37,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Attention;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
@@ -89,9 +92,15 @@ public final class StatusBar {
     /**
      * A line of the work list: who, what it does now, and the panel a click goes to, empty when it has none.
      *
-     * @param rank needs you, then working, then waiting
+     * @param rank   needs you, then to read, then working, then waiting
+     * @param toRead the session whose finished work this line stands for, which a click opens at its report; empty on
+     *               every other line
      */
-    record WorkRow(int rank, String text, Optional<PanelId> panel) {
+    record WorkRow(int rank, String text, Optional<PanelId> panel, String toRead) {
+
+        WorkRow(final int rank, final String text, final Optional<PanelId> panel) {
+            this(rank, text, panel, "");
+        }
     }
 
     private final IntentSink intents;
@@ -100,8 +109,12 @@ public final class StatusBar {
     private List<Notice> history = List.of();
     private Notice shown = Notice.NONE;
     private final Targets targets;
+    /** Told the session a click on a To read line opens, for the window to land on its report. */
+    private Consumer<String> onReport = _ -> { };
     /** What a click on the count does; a test replaces it, the list needing a window to open on. */
     Runnable workOpener = this::showWork;
+    /** The time the work is read at; the system's, or a test's. */
+    LongSupplier clock = System::currentTimeMillis;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
 
@@ -361,24 +374,37 @@ public final class StatusBar {
     }
 
 
-    /** What every session and query is doing in {@code s}: who needs you first, then who works, then who waits. */
-    static List<WorkRow> workRows(final AppState s) {
+    /** Told of each session a click on a To read line opens, before it opens. */
+    public void onReport(final Consumer<String> report) {
+        onReport = report;
+    }
+
+    /**
+     * What every session and query is doing in {@code s}: who needs you first, then what is there to read, then who
+     * works, then who waits.
+     */
+    static List<WorkRow> workRows(final AppState s, final long now) {
         final List<WorkRow> rows = new ArrayList<>();
         for (final SessionState x : s.sessions()) {
+            if (Attention.of(s, x, now) == Attention.TO_READ) {
+                rows.add(new WorkRow(1, x.name() + " · to read" + since(x.spec().unreadMillis(), now),
+                        s.homePanel(x.name()).map(PanelState::id), x.name()));
+            }
             final int asked = s.pendingApprovals(x.name());
             final String doing = SessionBar.busyText(x).strip();
             if (asked > 0 || !doing.isEmpty()) {
                 final String what = asked > 0
                         ? "needs you: " + asked + (asked == 1 ? " request" : " requests")
-                                + since(oldestAsk(s, x.name()))
+                                + since(oldestAsk(s, x.name()), now)
                         : doing;
-                final int rank = asked > 0 ? 0 : x.isBusy() ? 1 : 2;
+                final int rank = asked > 0 ? 0 : x.isBusy() ? 2 : 3;
                 rows.add(new WorkRow(rank, x.name() + " · " + what, s.homePanel(x.name()).map(PanelState::id)));
             }
         }
         for (final PanelState p : s.panels()) {
             s.runOf(p.id()).filter(r -> r.status().isActive()).ifPresent(r -> rows.add(
-                    new WorkRow(1, p.title() + " · query running" + since(r.startedMillis()), Optional.of(p.id()))));
+                    new WorkRow(2, p.title() + " · query running" + since(r.startedMillis(), now),
+                            Optional.of(p.id()))));
         }
         rows.sort(Comparator.comparingInt(WorkRow::rank));
         return rows;
@@ -390,15 +416,15 @@ public final class StatusBar {
                 .orElse(0L);
     }
 
-    /** " · 4 min 02 s" since {@code millis}; empty for 0, which is not yet started. */
-    private static String since(final long millis) {
-        return millis > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - millis) : "";
+    /** " · 4 min 02 s" from {@code millis} to {@code now}; empty for 0, which is not yet started. */
+    private static String since(final long millis, final long now) {
+        return millis > 0 ? " · " + Labels.elapsed(now - millis) : "";
     }
 
     /** The work list as it stands at the last render; {@code then} runs before a click on a row goes to its panel. */
     JList<WorkRow> workList(final Runnable then) {
         final DefaultListModel<WorkRow> model = new DefaultListModel<>();
-        model.addAll(state == null ? List.of() : workRows(state));
+        model.addAll(state == null ? List.of() : workRows(state, clock.getAsLong()));
         final JList<WorkRow> list = new JList<>(model);
         list.getAccessibleContext().setAccessibleName("Work");
         list.setCellRenderer(new DefaultListCellRenderer() {
@@ -411,7 +437,8 @@ public final class StatusBar {
                 if (!selected && r.rank() == 0) {
                     c.setForeground(Theme.ATTENTION);
                 }
-                c.setToolTipText(Tooltips.wrapped(r.text() + (r.panel().isPresent() ? " · click to go there" : "")));
+                c.setToolTipText(Tooltips.wrapped(r.text() + (!r.toRead().isEmpty() ? " · click to read it"
+                        : r.panel().isPresent() ? " · click to go there" : "")));
                 return c;
             }
         });
@@ -420,14 +447,26 @@ public final class StatusBar {
             public void mouseClicked(final MouseEvent e) {
                 final int i = list.locationToIndex(e.getPoint());
                 if (i >= 0 && SwingUtilities.isLeftMouseButton(e) && !e.isControlDown()) {
-                    model.get(i).panel().ifPresent(p -> {
-                        then.run();
-                        intents.dispatch(new Intent.FocusPanel(p));
-                    });
+                    go(model.get(i), then);
                 }
             }
         });
         return list;
+    }
+
+    /** A To read line opens its session, which may have no panel, at its report; any other line goes to its panel. */
+    private void go(final WorkRow r, final Runnable then) {
+        if (!r.toRead().isEmpty()) {
+            then.run();
+            onReport.accept(r.toRead());
+            intents.dispatch(r.panel().<Intent>map(Intent.FocusPanel::new)
+                    .orElseGet(() -> new Intent.OpenSession(r.toRead(), state.focused(), PanelId.random())));
+            return;
+        }
+        r.panel().ifPresent(p -> {
+            then.run();
+            intents.dispatch(new Intent.FocusPanel(p));
+        });
     }
 
     /** The muted part of the count; for tests. */
@@ -483,19 +522,34 @@ public final class StatusBar {
                 ? " · click to go there, right-click for recent notices" : " · click for recent notices")));
         notice.setForeground(color(n.level()));
         notice.setIcon(n.text().isEmpty() ? null : Icons.get(icon(n.level()), 14));
+        showWork(s);
+    }
+
+    /** Once a second: a session whose reading turn never came counts as to read with no state change to say so. */
+    public void tick() {
+        if (state != null) {
+            showWork(state);
+        }
+    }
+
+    private void showWork(final AppState s) {
         int running = 0;
         for (final SqlRun r : s.runs()) {
             if (r.status().isActive()) {
                 running++;
             }
         }
+        final long now = clock.getAsLong();
         int busy = 0;
         int waiting = 0;
+        int toRead = 0;
         for (final SessionState x : s.sessions()) {
             if (x.isBusy()) {
                 busy++;
             } else if (x.isWaiting()) {
                 waiting++;
+            } else if (Attention.of(s, x, now) == Attention.TO_READ) {
+                toRead++;
             }
         }
         final StringBuilder w = new StringBuilder();
@@ -507,6 +561,9 @@ public final class StatusBar {
         }
         if (waiting > 0) {
             w.append(w.isEmpty() ? "" : " · ").append(waiting).append(waiting == 1 ? " session" : " sessions").append(" waiting on background work");
+        }
+        if (toRead > 0) {
+            w.append(w.isEmpty() ? "" : " · ").append(toRead).append(" to read");
         }
         final int asked = s.approvals().size();
         work.setText(w + (asked > 0 && !w.isEmpty() ? " · " : ""));

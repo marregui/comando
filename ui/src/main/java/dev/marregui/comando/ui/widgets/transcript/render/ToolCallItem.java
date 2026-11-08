@@ -573,6 +573,14 @@ class ToolCallItem extends Item {
         if (!fold.isOpen()) {
             return;
         }
+        ownTexts(out);
+        for (final Item child : children) {
+            child.findTexts(out);
+        }
+    }
+
+    /** The card's own texts a find reads once it is open: its input as shown and its result as clipped. */
+    private void ownTexts(final List<String> out) {
         final Block.ToolCall c = call();
         final String in = inputText(c, Json.parse(c.inputJson()));
         if (!in.isEmpty()) {
@@ -581,9 +589,6 @@ class ToolCallItem extends Item {
         final String result = Rich.detab(plainResult(c));
         if (!result.isEmpty()) {
             out.add(result);
-        }
-        for (final Item child : children) {
-            child.findTexts(out);
         }
     }
 
@@ -633,6 +638,14 @@ class ToolCallItem extends Item {
         // decoded input values, so find matches text with quotes, backslashes or newlines as shown
         final Block.ToolCall c = call();
         return c.name() + '\n' + ToolText.values(Json.parse(c.inputJson())) + c.resultText();
+    }
+
+    /** What {@link #findTexts} reads once the card is open: not its title, nor what the card clips. */
+    @Override
+    String findable() {
+        final List<String> out = new ArrayList<>();
+        ownTexts(out);
+        return String.join("\n", out);
     }
 
     @Override

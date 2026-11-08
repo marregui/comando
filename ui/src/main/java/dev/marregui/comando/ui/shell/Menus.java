@@ -20,9 +20,10 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
 /**
  * The menu bar, the icons and tooltips of its entries, and where every other command belongs. The bar holds only what
  * has no key and no control in the window, and what macOS expects in a menu: after the application menu macOS draws,
- * Edit (the clipboard and undo) and Help, the palette and the help, flat. The theme, the refreshing plots, the
- * embedded server and the Edge are buttons at the tab row's right end instead ({@link #corner}); the shell has none
- * (record 114, amended 2026-11-01). Every other command keeps its key, its control and the palette, and is listed by
+ * Edit (the clipboard and undo), Find (the view's and the files'), and Help, the palette and the help, flat. The
+ * theme, the refreshing plots, the embedded server and the Edge are buttons at the tab row's right end instead
+ * ({@link #corner}); the shell has none (record 114, amended 2026-11-01). Every other command keeps its key, its
+ * control and the palette, and is listed by
  * its area ("Session", "Results") in the palette and the keyboard shortcuts.
  * <p>
  * Every item has an icon and a one-line tooltip: what it does, and one fact its label does not say; macOS shows both
@@ -40,6 +41,12 @@ final class Menus {
             Map.entry("edit.paste", "paste"),
             Map.entry("edit.selectAll", "select-all"),
             // Help
+            Map.entry("view.find", "search"),
+            Map.entry("view.findNext", "search"),
+            Map.entry("view.findPrevious", "search"),
+            Map.entry("view.findInFiles", "search"),
+            Map.entry("view.nextHit", "search"),
+            Map.entry("view.previousHit", "search"),
             Map.entry("view.palette", "palette"),
             Map.entry("help.tutorial", "tutorial"),
             Map.entry("help.keys", "keyboard"),
@@ -92,6 +99,12 @@ final class Menus {
             Map.entry("edit.copy", "Copy the selection: text, cells, transcript blocks or a session's details"),
             Map.entry("edit.paste", "Paste the clipboard's text at the caret"),
             Map.entry("edit.selectAll", "Select all of the focused text, table or transcript"),
+            Map.entry("view.find", "Find text in the view that has the keyboard"),
+            Map.entry("view.findNext", "Go to the next match of the find bar's text"),
+            Map.entry("view.findPrevious", "Go to the previous match of the find bar's text"),
+            Map.entry("view.findInFiles", "Search the Files tab's folders and the stored conversations"),
+            Map.entry("view.nextHit", "Show the search's next hit in the preview tab"),
+            Map.entry("view.previousHit", "Show the search's previous hit in the preview tab"),
             Map.entry("view.palette", "Run any command by typing part of its name"),
             Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
             Map.entry("server.start", "Start QuestDB on this machine: PostgreSQL wire 8812, console 9000"),
@@ -137,10 +150,12 @@ final class Menus {
         return KeyText.of(TIPS.get(id));
     }
 
-    /** The menu bar after the application menu macOS draws: Edit, then Help: the palette, then the help. */
+    /** The menu bar after the application menu macOS draws: Edit, Find, then Help: the palette, then the help. */
     static List<MenuEntry.Menu> bar() {
         return List.of(
                 menu("Edit", null, "edit.undo", "edit.redo", SEPARATOR, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll"),
+                menu("Find", null, "view.find", "view.findNext", "view.findPrevious", SEPARATOR, "view.findInFiles",
+                        "view.nextHit", "view.previousHit"),
                 menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog", "help.questDbLog", "help.dataRoot"));
     }
 
@@ -191,7 +206,7 @@ final class Menus {
         put(a, "Connection", "server.start", "server.stop", "edge.start", "edge.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog",
                 "connection.test", "connection.copyDetails", "connection.clone", "connection.remove");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
-        put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
+        put(a, "Edit", "view.copy", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");
         put(a, "Kit", "kit.upgrade", "kit.backup", "kit.backupKit", "kit.repair");
         put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",

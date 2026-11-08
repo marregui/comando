@@ -6,7 +6,6 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,6 +24,7 @@ import java.util.concurrent.RejectedExecutionException;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 
 import com.github.weisj.jsvg.SVGDocument;
 import com.github.weisj.jsvg.parser.LoaderContext;
@@ -33,6 +33,7 @@ import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
 import com.github.weisj.jsvg.view.FloatSize;
 import com.github.weisj.jsvg.view.ViewBox;
 
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
@@ -180,19 +181,21 @@ public final class LocalImages {
 
     /** A PNG, JPEG or GIF is shown as it is: only its size is read, from its header. */
     private static Picture rasterSize(final Path file) throws IOException {
-        try (final ImageInputStream in = ImageIO.createImageInputStream(file.toFile())) {
-            final Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
-            if (readers == null || !readers.hasNext()) {
-                return new Picture.Unavailable(file.getFileName() + " is not a picture comando can read");
+        return Mapped.read(file, m -> {
+            try (final ImageInputStream in = new MemoryCacheImageInputStream(m.stream())) {
+                final Iterator<ImageReader> readers = ImageIO.getImageReaders(in);
+                if (!readers.hasNext()) {
+                    return new Picture.Unavailable(file.getFileName() + " is not a picture comando can read");
+                }
+                final ImageReader r = readers.next();
+                try {
+                    r.setInput(in, true, true);
+                    return new Picture.Ready(file, r.getWidth(0), r.getHeight(0));
+                } finally {
+                    r.dispose();
+                }
             }
-            final ImageReader r = readers.next();
-            try {
-                r.setInput(in, true, true);
-                return new Picture.Ready(file, r.getWidth(0), r.getHeight(0));
-            } finally {
-                r.dispose();
-            }
-        }
+        });
     }
 
     /**
@@ -204,11 +207,9 @@ public final class LocalImages {
             return new Picture.Unavailable("SVG pictures are not drawn here");
         }
         final Path png = cache.resolve(cacheName(key));
-        SVGDocument doc;
-        try (final InputStream in = Files.newInputStream(key.file())) {
-            final LoaderContext context = LoaderContext.builder().externalResourcePolicy(beside(key.file())).build();
-            doc = new SVGLoader().load(in, key.file().toUri(), context);
-        }
+        final LoaderContext context = LoaderContext.builder().externalResourcePolicy(beside(key.file())).build();
+        final SVGDocument doc = Mapped.read(key.file(), m -> new SVGLoader().load(m.stream(), key.file().toUri(),
+                context));
         if (doc == null) {
             return new Picture.Unavailable(key.file().getFileName() + " is not an SVG comando can read");
         }
