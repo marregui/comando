@@ -600,6 +600,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 case QUESTION -> "question";
                 case PLAN -> "plan";
                 case SQL_WRITE, CONNECTION -> "database";
+                case TERMINAL -> "terminal";
                 case TOOL -> "warning";
             }));
             age.setName("age");
@@ -630,6 +631,8 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 case SQL_WRITE -> code(in.path("sql").asString(""), "sql", 8);
                 // what the agent would weaken, then the connection as it would be saved
                 case CONNECTION -> code(Json.pretty(in), "json", 10);
+                // what would be typed, as the shell would read it
+                case TERMINAL -> code(in.path("text").asString(""), "sh", 8);
                 case TOOL -> {
                     if (isWrite(a)) {
                         // sixteen lines stand as tall as the tallest diff, so a Write's card keeps its height
@@ -742,7 +745,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                     buttons.add(button("Run  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
                     buttons.add(button("Deny  D", "deny", this::deny, false));
                 }
-                case CONNECTION -> {
+                case CONNECTION, TERMINAL -> {
                     buttons.add(button("Allow  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
                     buttons.add(button("Deny  D", "deny", this::deny, false));
                 }
@@ -1226,6 +1229,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
             case CONNECTION -> "wants to change connection " + a.summary();
+            case TERMINAL -> "wants to type into the Terminal of " + a.summary();
             case TOOL -> toolTitle(a, Json.parse(a.inputJson()));
         };
     }

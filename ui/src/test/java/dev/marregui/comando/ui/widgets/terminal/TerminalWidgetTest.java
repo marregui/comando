@@ -28,6 +28,7 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
@@ -44,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - only a foreground job counts as running
 /// - on macOS ⌘A selects the terminal buffer
 /// - closing ends every process the shell started, one that ignores SIGTERM after the grace
+/// - an agent's typing never starts a shell; `^C` typed ends the job in front, not the shell; the last lines read back
 class TerminalWidgetTest {
 
     private static final String HOME = System.getProperty("user.home");
@@ -494,6 +496,77 @@ class TerminalWidgetTest {
         assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).as("returns at the bound")
                 .isBetween(900L, 6_000L);
         assertThat(jobs).containsExactly(Map.entry("slow", TerminalWidget.UNCHECKED_JOB));
+    }
+
+    // ---- what an agent types and reads
+
+    /// A terminal whose shell never started types nothing and starts nothing; it has no page, no line, no output.
+    @Test
+    void typingIntoAStoppedTerminalStartsNothing(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
+        final AtomicReference<Boolean> typed = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            t.set(new TerminalWidget(dir, List.of("/bin/sh", "-i")));
+            typed.set(t.get().type("echo never\r"));
+        });
+        assertThat(typed.get()).isFalse();
+        assertThat(t.get().isStarted()).isFalse();
+        assertThat(t.get().shell()).isEmpty();
+        assertThat(t.get().page(0, 10, 1_000)).isEmpty();
+        assertThat(t.get().page(-1, 10, 1_000)).isEmpty();
+        assertThat(t.get().nextLine()).isZero();
+        assertThat(t.get().alternateScreen()).isFalse();
+        assertThat(t.get().lastOutputNanos()).isEmpty();
+    }
+
+    /// In a real interactive `/bin/sh`, `sleep 30` typed then `^C` typed ends the sleep within 2 s and leaves the
+    /// shell running; the last lines read back hold the command, and no more of them than asked for.
+    @Test
+    void controlCTypedEndsTheJobInFrontAndLeavesTheShell(@TempDir final Path dir) throws Exception {
+        final AtomicReference<TerminalWidget> t = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            t.set(new TerminalWidget(dir, List.of("/bin/sh", "-i")));
+            t.get().start();
+        });
+        final AtomicReference<ProcessHandle> shell = new AtomicReference<>();
+        try {
+            Awaitility.await("the shell's first output").atMost(Duration.ofSeconds(8))
+                    .until(() -> t.get().lastOutputNanos().isPresent());
+            final AtomicReference<Boolean> typed = new AtomicReference<>();
+            SwingUtilities.invokeAndWait(() -> typed.set(t.get().type("echo PID=$$\r")));
+            assertThat(typed.get()).isTrue();
+            final Pattern pid = Pattern.compile("^PID=(\\d+)$", Pattern.MULTILINE);
+            final AtomicReference<Matcher> echoed = new AtomicReference<>();
+            Awaitility.await("the shell's pid on the screen").atMost(Duration.ofSeconds(8)).until(() -> {
+                echoed.set(pid.matcher(t.get().page(0, 0, 64 * 1024).orElseThrow().text()));
+                return echoed.get().find();
+            });
+            shell.set(ProcessHandle.of(Long.parseLong(echoed.get().group(1))).orElseThrow());
+            SwingUtilities.invokeAndWait(() -> typed.set(t.get().type("sleep 30\r")));
+            assertThat(typed.get()).isTrue();
+            Awaitility.await("sleep runs in front").atMost(Duration.ofSeconds(8))
+                    .until(() -> t.get().runningJob().filter(j -> j.contains("sleep")).isPresent());
+
+            SwingUtilities.invokeAndWait(() -> typed.set(t.get().type("\u0003")));
+            assertThat(typed.get()).isTrue();
+            Awaitility.await("the sleep ended").atMost(Duration.ofSeconds(2))
+                    .until(() -> shell.get().descendants().noneMatch(ProcessHandle::isAlive));
+            assertThat(shell.get().isAlive()).as("the shell").isTrue();
+            assertThat(t.get().isRunning()).isTrue();
+
+            final TerminalPort.Page all = t.get().page(-1, 50, 64 * 1024).orElseThrow();
+            assertThat(all.text()).contains("sleep 30");
+            assertThat(all.alternate()).isFalse();
+            final TerminalPort.Page last = t.get().page(-1, 2, 64 * 1024).orElseThrow();
+            assertThat(last.text().split("\n")).hasSizeLessThanOrEqualTo(2);
+            assertThat(last.first()).isGreaterThanOrEqualTo(all.first());
+            assertThat(t.get().nextLine()).isEqualTo(last.next());
+        } finally {
+            if (shell.get() != null) {
+                shell.get().descendants().forEach(ProcessHandle::destroyForcibly);
+            }
+            SwingUtilities.invokeAndWait(() -> t.get().close());
+        }
     }
 
     private static void sleep(final long millis) {

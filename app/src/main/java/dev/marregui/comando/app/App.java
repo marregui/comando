@@ -230,6 +230,8 @@ public final class App implements AutoCloseable {
             ui.search(own(new Searcher(List.of(new FolderSearch(Searcher.SCANNERS, Searcher.MAX_HITS + 1),
                     new TranscriptSearch(root.projects())))));
             ui.checkpointThreshold(checkpointThreshold::set);
+            // agents reach the panels' Terminals through the window, which refuses them until it is built (record 148)
+            mcpTools.terminals(ui.terminals());
             // the instances consult each other through the comando Edge while it runs, whichever instance started it
             // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
             if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {

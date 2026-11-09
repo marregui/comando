@@ -52,6 +52,7 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.SearchPort;
+import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.port.UiPort;
 import dev.marregui.comando.core.resource.ConnectionKind;
@@ -97,6 +98,7 @@ import dev.marregui.comando.ui.panels.SessionBar;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 import dev.marregui.comando.ui.panels.SidePane;
 import dev.marregui.comando.ui.panels.StatusBar;
+import dev.marregui.comando.ui.panels.TerminalAccess;
 import dev.marregui.comando.ui.panels.Workspace;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
@@ -186,6 +188,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final WindowLayout windowLayout;
     /** The window's parts; null before the build. */
     private ShellParts parts;
+    /** The panels' Terminals as agents reach them (record 148); both suppliers are read on the EDT, where the build sets the parts. */
+    private final TerminalAccess terminals;
     private LayoutKeeper layout;
     /** The workspace's preview tab, which the Search and Files written views read files in (records 141, 143). */
     private Previews previews;
@@ -245,6 +249,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         this.help = new HelpActions(deps, this::frame, this::openFile, actions::run, () -> layout.revealSidePane(), actions::all);
         this.kit = new KitActions(deps, this::frame);
         this.jobs = new JobActions(deps, this::frame, this::openFile);
+        this.terminals = new TerminalAccess(() -> parts == null ? null : parts.lower().terminals(), deps.state());
     }
 
     private JFrame frame() {
@@ -286,6 +291,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** What the Instances tab acts through (record 124); set before {@link #start}, as the build reads it. */
     public void instances(final InstancesPort port) {
         instances = port == null ? InstancesPort.NONE : port;
+    }
+
+    /** The panels' Terminals for agents (record 148): any thread but the EDT; refused until the window is built. */
+    public TerminalPort terminals() {
+        return terminals;
     }
 
     /**

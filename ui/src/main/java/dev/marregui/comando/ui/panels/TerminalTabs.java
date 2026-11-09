@@ -29,7 +29,8 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
  * terminal is shown, in the working directory of the panel's session at that moment, else the home
  * directory; an exit bar and a restart use the directory of the panel's session in the latest rendered
  * state when the bar shows and when Restart is clicked. A shell the user stopped stays stopped until it is
- * started, restarted or clicked, or its tab is shown again.
+ * started, restarted or clicked, or its tab is shown again. Agents reach the terminals through
+ * {@link TerminalAccess}, which creates and starts them without showing them.
  */
 public final class TerminalTabs {
 
@@ -88,12 +89,7 @@ public final class TerminalTabs {
         last = s;
         final PanelId id = s.focused();
         final Path dir = directory(s, s.focusedPanel());
-        final TerminalWidget t = terminals.computeIfAbsent(id, k -> {
-            final TerminalWidget w = factory.apply(dir);
-            w.setDirectorySource(() -> currentDirectory(k));
-            cards.add(w.component(), k.value());
-            return w;
-        });
+        final TerminalWidget t = terminals.computeIfAbsent(id, k -> create(k, dir));
         if (!t.isRunning()) {
             t.setDirectory(dir);
         }
@@ -102,6 +98,25 @@ public final class TerminalTabs {
             layout.show(cards, id.value());
         }
         return t;
+    }
+
+    /**
+     * The panel's terminal, created without being shown when it has none: the card in front and the focused panel stay
+     * as they are. A new terminal opens in the directory of the panel's session in the latest state, else the home
+     * directory.
+     */
+    public TerminalWidget ensure(final PanelId panel) {
+        return terminals.computeIfAbsent(panel, k -> {
+            final Path dir = currentDirectory(k);
+            return create(k, dir == null ? Path.of(System.getProperty("user.home")) : dir);
+        });
+    }
+
+    private TerminalWidget create(final PanelId panel, final Path dir) {
+        final TerminalWidget w = factory.apply(dir);
+        w.setDirectorySource(() -> currentDirectory(panel));
+        cards.add(w.component(), panel.value());
+        return w;
     }
 
     /** The directory of {@code panel}'s session in the latest state, or null when the panel is gone from it. */
@@ -153,10 +168,20 @@ public final class TerminalTabs {
      * started, restarted or clicked, or its tab is shown again.
      */
     public void stopFocused() {
-        final TerminalWidget t = focused();
+        if (shown != null) {
+            stop(shown);
+        }
+    }
+
+    /**
+     * Stops the panel's shell and what runs in it, and frees its emulator, as {@link #stopFocused} does for the focused
+     * panel; nothing when the panel has no terminal.
+     */
+    public void stop(final PanelId panel) {
+        final TerminalWidget t = terminals.get(panel);
         if (t != null) {
             t.close();
-            stopped.add(shown);
+            stopped.add(panel);
         }
     }
 

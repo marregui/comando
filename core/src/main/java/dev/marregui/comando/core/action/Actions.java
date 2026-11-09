@@ -232,6 +232,58 @@ public final class Actions {
             new Action("folders_browse", Kind.READ, "Reads the Files tab's folders again, as Refresh does.",
                     List.of(Arg.optional("names", Type.STRINGS, "default: every folder")), Set.of(Intent.BrowseFolders.class, Intent.WatchFolders.class)),
 
+            // ---- terminals: each editor panel's Terminal in the lower panel, reached through the terminal port, which
+            // sends no intent (record 148)
+            new Action("terminal_list", Kind.READ,
+                    "Lists every editor panel's Terminal: its panel's title and id, whether its shell started and "
+                            + "still runs, the shell's pid, the foreground job (empty at the prompt), its folder, the "
+                            + "number its next line carries, and whether a full-screen program holds the screen. "
+                            + "Answers JSON.",
+                    List.of(), Set.of()),
+            new Action("terminal_start", Kind.ACT,
+                    "Starts a panel's shell, as the Terminal's start does, without bringing the Terminal to the "
+                            + "front. A shell that runs is left as it is, and the answer says so with its folder.",
+                    List.of(PANEL, Arg.optional("directory", Type.STRING,
+                            "an absolute folder that exists; default: the panel's folder")),
+                    Set.of()),
+            new Action("terminal_send", Kind.ACT,
+                    "Types text into a panel's running shell, then Enter, as typing in its Terminal does: what it "
+                            + "types runs with the user's rights. A card asks the user first, unless the user granted "
+                            + "this caller \"terminal\" in agents.json; a denied card is refused. Refused when the "
+                            + "shell does not run (terminal_start starts it). Answers what the terminal took; read the "
+                            + "output with terminal_read.",
+                    List.of(PANEL,
+                            Arg.required("text", Type.STRING,
+                                    "at most 4096 characters; no control characters but tab and newline"),
+                            Arg.optional("enter", Type.BOOLEAN, "default true: Enter after the text")),
+                    Set.of()),
+            new Action("terminal_read", Kind.READ,
+                    "Reads a panel's Terminal: the lines from since, or the last lines, at most 65536 characters, "
+                            + "then one closing line [first, next, oldest, skipped, more, job, alternate, waited, "
+                            + "matched]. Pass next as the following read's since; lines trimmed or cleared meanwhile "
+                            + "are counted as skipped. With wait_seconds it waits until until matches a line, the "
+                            + "output is quiet for quiet_ms, or the shell ends.",
+                    List.of(PANEL,
+                            Arg.optional("since", Type.INTEGER,
+                                    "the first line's number, from a closing line's next; default: the last lines"),
+                            Arg.optional("lines", Type.INTEGER,
+                                    "without since: how many of the last lines; default 200, at most 2000"),
+                            Arg.optional("until", Type.STRING,
+                                    "a Java regular expression a line at or after since must match"),
+                            Arg.optional("quiet_ms", Type.INTEGER,
+                                    "end the wait after this long without output, 100 to 10000"),
+                            Arg.optional("wait_seconds", Type.INTEGER,
+                                    "how long to wait at most; default 0, at most 120")),
+                    Set.of()),
+            new Action("terminal_interrupt", Kind.ACT,
+                    "Sends Ctrl-C to a panel's foreground job, as Ctrl-C in its Terminal does; the shell stays. "
+                            + "Refused when no job runs.",
+                    List.of(PANEL), Set.of()),
+            new Action("terminal_stop", Kind.DESTRUCTIVE,
+                    "Ends a panel's shell and what runs under it, as the Terminal's stop does. Its scrollback is "
+                            + "lost: read what you need with terminal_read first.",
+                    List.of(PANEL), Set.of()),
+
             // ---- the approval prompt itself, which Claude Code calls
             new Action("approve", Kind.READ, "Claude Code's permission prompt: a card, and a wait for the answer. Claude Code calls it; do not call it yourself.",
                     List.of(), Set.of(Intent.ApprovalRequested.class, Intent.ApprovalWithdrawn.class)));

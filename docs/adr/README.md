@@ -168,3 +168,4 @@ row and its record differ, or when a record has no row.
 | [145](0145-agents-read-held-results-a-page-at-a-time.md) | Agents read held results a page at a time | 2026-11-09 | Miguel and Claude | accepted; built |
 | [146](0146-every-metric-goes-to-the-machine-questdb.md) | Every metric goes to the machine's QuestDB | 2026-11-09 | Miguel and Claude | accepted; dual write built, cutover after the check |
 | [147](0147-a-theme-says-what-it-does-to-the-mind.md) | A theme says what it does to the mind | 2026-11-09 | Miguel and Claude | accepted; built |
+| [148](0148-agents-drive-a-panel-terminal.md) | Agents drive a panel's Terminal | 2026-11-09 | Miguel and Claude | accepted; built |

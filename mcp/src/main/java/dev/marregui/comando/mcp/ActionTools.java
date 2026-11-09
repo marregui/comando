@@ -36,6 +36,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ServerSwitch;
+import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
@@ -53,7 +54,8 @@ import dev.marregui.comando.core.view.Placement;
  * in the data root's {@code agents.json}, or, on a session, for one of that session's creators. A stopped session is
  * started again only for its creators (record 44), by whichever action reaches it. A connection's production flag and
  * TLS mode are lowered only through a card the user allows, and a connection pointed elsewhere loses its stored password
- * (records 20, 23). Every act posts a notice naming the caller.
+ * (records 20, 23). Text reaches a panel's Terminal only through a card the user allows, unless the user granted the
+ * caller {@link #TERMINAL} (record 148). Every act posts a notice naming the caller.
  * <p>
  * An action asks the reducer first whether it would refuse the intent ({@link Reducer#refusal}) and answers that
  * refusal; otherwise it answers {@code sent: <intent>}: the intent is applied in order, after what the window queued
@@ -72,10 +74,16 @@ final class ActionTools {
      * {@code {"grants": {"<caller>": ["destructive"]}}}.
      */
     static final String DESTRUCTIVE = "destructive";
+    /**
+     * The grant that lets a caller type into a panel's Terminal without a card, in {@code agents.json}:
+     * {@code {"grants": {"<caller>": ["terminal"]}}} (record 148).
+     */
+    static final String TERMINAL = "terminal";
     private final IntentSink sink;
     private final Supplier<AppState> state;
     private final Asker asker;
     private final ObjectMapper json = new ObjectMapper();
+    private final TerminalTools terminals;
     private volatile Path agentsFile;
     private volatile List<ServerSwitch> servers = List.of();
 
@@ -83,6 +91,7 @@ final class ActionTools {
         this.sink = sink;
         this.state = state;
         this.asker = asker;
+        this.terminals = new TerminalTools(asker, caller -> granted(caller, TERMINAL), json);
     }
 
     /** Where the user's grants live; without one no caller holds a grant. */
@@ -93,6 +102,11 @@ final class ActionTools {
     /** The servers {@code server_start} and {@code server_stop} reach; none until the application sets them. */
     void servers(final List<ServerSwitch> servers) {
         this.servers = List.copyOf(servers);
+    }
+
+    /** The panels' Terminals the terminal tools reach; until the application sets them, every one answers not ready. */
+    void terminals(final TerminalPort port) {
+        terminals.port(port);
     }
 
     /** The servers, for the state's {@code servers}. */
@@ -215,13 +229,21 @@ final class ActionTools {
             case "server_stop" -> server(args).want(false);
             case "folders_browse" -> send(new Intent.BrowseFolders(args.has("names") ? strings(args, "names")
                     : s.folders().stream().map(f -> f.name()).toList()));
+            case "terminal_list" -> terminals.list();
+            case "terminal_start" -> terminals.start(s, args);
+            case "terminal_send" -> terminals.send(caller, s, args);
+            case "terminal_read" -> terminals.read(s, args);
+            case "terminal_interrupt" -> terminals.interrupt(s, args);
+            case "terminal_stop" -> terminals.stop(s, args);
             default -> throw new IllegalArgumentException(tool + " has no runner yet");
         };
         // a decision held back brings nothing forward (record 131): no notice
         if (action.kind() != Action.Kind.READ && !done.startsWith("refused") && !"decision_hold".equals(tool)) {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, caller + ": " + tool.replace('_', ' ') + " — " + done, false, ""));
         }
-        return done.startsWith("refused") ? McpTools.Outcome.fail(done) : McpTools.Outcome.ok(done);
+        // a page of a Terminal's text may itself begin with "refused": a read fails only for its own refusals
+        final boolean refused = "terminal_read".equals(tool) ? !TerminalTools.isPage(done) : done.startsWith("refused");
+        return refused ? McpTools.Outcome.fail(done) : McpTools.Outcome.ok(done);
     }
 
     private String sessionNew(final String caller, final AppState s, final JsonNode args) {
@@ -338,6 +360,11 @@ final class ActionTools {
         if (card.kind() == ApprovalKind.CONNECTION) {
             // clearing production or lowering TLS guards the user's data against agents: no agent allows it (D2)
             return "refused: card " + id + " weakens connection guards; only the user answers it, in the window (record 23)";
+        }
+        if (card.kind() == ApprovalKind.TERMINAL) {
+            // what the card types runs with the user's rights: no agent allows it for another
+            return "refused: card " + id + " types into a Terminal with the user's rights; only the user answers it, "
+                    + "in the window (record 148)";
         }
         final ApprovalDecision decision = switch (args.path("decision").asString("").strip()) {
             case "allow" -> new ApprovalDecision.Allow(switch (args.path("scope").asString("once").strip()) {
@@ -539,7 +566,7 @@ final class ActionTools {
         return s.session(name).orElseThrow(() -> new IllegalArgumentException("no session '" + name + "'; sessions: " + names(s)));
     }
 
-    private static PanelState panel(final AppState s, final JsonNode args, final boolean orClosed) {
+    static PanelState panel(final AppState s, final JsonNode args, final boolean orClosed) {
         final String key = text(args, "panel");
         final Stream<PanelState> all = orClosed ? Stream.concat(s.panels().stream(), s.closed().stream()) : s.panels().stream();
         return all.filter(p -> p.id().value().equals(key) || p.title().equalsIgnoreCase(key)).findFirst()

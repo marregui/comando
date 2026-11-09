@@ -608,6 +608,20 @@ class ReducerTest {
         assertThat(effects).noneMatch(Effect.ResolveApproval.class::isInstance);
     }
 
+    /// A terminal card still waiting when its turn ends with nothing queued is withdrawn, as a statement card is: an
+    /// Allow after the fact would type into whatever the shell then runs (record 148).
+    @Test
+    void aTurnThatEndsWithdrawsItsTerminalCard() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "log in to GitHub", Target.CLAUDE));
+        final Approval typing = new Approval(11L, "work", ApprovalKind.TERMINAL, "terminal_send", "{\"text\":\"gh auth refresh\"}", "one", 1L);
+        apply(new Intent.ApprovalRequested(typing));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.10, 10_000L, 200_000L, true, "interrupted"));
+        assertThat(state.approvals()).isEmpty();
+        assertThat(effects).contains(new Effect.ResolveApproval(typing, new ApprovalDecision.Deny("the turn ended")));
+    }
+
     /// A turn that ends with nothing queued denies its own cards with `the turn ended`, keeps a background task's card,
     /// and keeps the cost and context tokens already known.
     @Test

@@ -300,6 +300,7 @@ sends for the same gesture:
 | views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
 | servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
+| terminals | `terminal_list`, `terminal_start`, `terminal_send`, `terminal_read`, `terminal_interrupt`, `terminal_stop`* (any editor panel's Terminal, [record 148](adr/0148-agents-drive-a-panel-terminal.md): a send asks a TERMINAL card only the user answers, unless `agents.json` grants `"terminal"`; a read is plain text of numbered logical lines from `since`, at most 64 kB, and can wait up to 120 s for `until`, quiet output or the shell's end; an interrupt is Ctrl-C to the foreground job; a stop ends the shell and loses its scrollback) |
 
 - **What an action answers.** An action asks the reducer first whether it would refuse the intent (`Reducer.refusal`:
   the checkpoint lock, a name another panel holds, a stopped session another session would start, a command with nothing
@@ -320,7 +321,8 @@ sends for the same gesture:
   session answers it ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md), amended).
 - **Rule 2.** A destructive tool (marked * above) runs only for a caller the user granted it in the data root's
   `agents.json`, `{"grants": {"<caller>": ["destructive"]}}`, read at each call; `session_clear` and `session_remove`
-  also run for the session's creator, directly or through others, so a caller cleans up the sessions it made.
+  also run for the session's creator, directly or through others, so a caller cleans up the sessions it made. A grant
+  `"terminal"` lets its caller type into a Terminal without a card ([record 148](adr/0148-agents-drive-a-panel-terminal.md)).
 - **Start rule.** A stopped session starts again only for the user or one of its creators, by whichever action reaches
   it: `session_start`, `session_fresh`, and `panel_run` into its panel, `session_command`, `session_checkpoint` and
   `decision_settle`, which would start it; the reducer refuses the start and the tool answers the refusal. Stopping and

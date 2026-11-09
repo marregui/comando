@@ -664,6 +664,11 @@ shell, Stop the shell and Restart the shell act on the focused panel's shell; St
 stays stopped until it is started or restarted, its terminal clicked, or its tab shown again. The corner has no shell
 button ([record 114](adr/0114-help-menu-and-corner-buttons.md), amended 2026-11-01).
 
+Agents reach any panel's Terminal with the `terminal_*` tools ([record 148](adr/0148-agents-drive-a-panel-terminal.md),
+[Claude Code integration](claude-code.md)): an agent's start does not bring the Terminal to the front; what an agent
+types waits for the user's Allow on a TERMINAL card, unless `agents.json` grants the agent `"terminal"`; Ctrl-C from an
+agent reaches only a running job; its stop ends the shell, as Stop the shell does.
+
 ### 5.2 Gradle runs
 
 ⌥⌘G asks for tasks (the last ones used, `build` the first time) and runs them in the build of the focused panel's

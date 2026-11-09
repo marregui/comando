@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a session directory that does not exist falls back to home
 /// - terminals without shells run no jobs; a job is named with its panel
 /// - a shell the user stopped stays stopped at the next render, and starts when its tab is shown again
+/// - a terminal made for a panel not focused is not shown; a panel's shell is stopped without focusing it
 class TerminalTabsTest {
 
     private static final PanelId P1 = new PanelId("p1");
@@ -163,6 +164,64 @@ class TerminalTabsTest {
             assertThat(afterStop).as("stopped").isFalse();
             assertThat(afterRender).as("still stopped at the next render").isFalse();
             assertThat(afterShowing).as("started as its tab is shown again").isTrue();
+        } finally {
+            SwingUtilities.invokeAndWait(tabs::closeAll);
+        }
+    }
+
+    /// A terminal made for the panel not focused opens where its panel is bound, and leaves the focused panel's terminal
+    /// the one in front; a second call gives the same terminal.
+    @Test
+    void aTerminalMadeForAPanelNotFocusedIsNotShown(@TempDir final Path root) throws Exception {
+        final Path edge = Files.createDirectory(root.resolve("edge"));
+        final AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "edge")), List.of(),
+                List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString()))));
+        final TerminalTabs tabs = new TerminalTabs();
+        final AtomicReference<TerminalWidget> made = new AtomicReference<>();
+        final AtomicReference<TerminalWidget> front = new AtomicReference<>();
+        final AtomicBoolean madeVisible = new AtomicBoolean(true);
+        final AtomicBoolean frontVisible = new AtomicBoolean();
+        final AtomicBoolean same = new AtomicBoolean();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                tabs.render(s, false);
+                made.set(tabs.ensure(P2));
+                same.set(tabs.ensure(P2) == made.get());
+                front.set(tabs.focused());
+                madeVisible.set(made.get().component().isVisible());
+                frontVisible.set(tabs.terminal(P1).component().isVisible());
+            });
+            assertThat(made.get()).isSameAs(tabs.terminal(P2));
+            assertThat(made.get().directory()).isEqualTo(edge);
+            assertThat(same).as("made once").isTrue();
+            assertThat(front.get()).as("the focused panel's terminal stays in front").isSameAs(tabs.terminal(P1));
+            assertThat(madeVisible).as("the new card is not shown").isFalse();
+            assertThat(frontVisible).isTrue();
+            assertThat(made.get().isStarted()).as("made, not started").isFalse();
+        } finally {
+            SwingUtilities.invokeAndWait(tabs::closeAll);
+        }
+    }
+
+    /// A stop ends the shell of the panel named, focused or not, and leaves the others running; a panel without a
+    /// terminal is left as it is.
+    @Test
+    void aStopEndsTheShellOfThePanelNamed() throws Exception {
+        final AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "")), List.of(), List.of());
+        final TerminalTabs tabs = new TerminalTabs(dir -> new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 30")));
+        final AtomicBoolean focusedRunning = new AtomicBoolean();
+        final AtomicBoolean otherRunning = new AtomicBoolean(true);
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                tabs.render(s, true);
+                tabs.ensure(P2).start();
+                tabs.stop(P2);
+                tabs.stop(new PanelId("none"));
+                focusedRunning.set(tabs.focusedRunning());
+                otherRunning.set(tabs.terminal(P2).isRunning());
+            });
+            assertThat(otherRunning).as("stopped").isFalse();
+            assertThat(focusedRunning).as("the focused panel's shell still runs").isTrue();
         } finally {
             SwingUtilities.invokeAndWait(tabs::closeAll);
         }

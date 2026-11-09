@@ -14,7 +14,12 @@ public enum ApprovalKind {
      * An agent asks, through {@code connection_save}, to clear a connection's production flag or to weaken its TLS
      * mode: guards the user set against the agent itself (records 20, 23).
      */
-    CONNECTION;
+    CONNECTION,
+    /**
+     * An agent asks, through {@code terminal_send}, to type into a panel's Terminal: what it types runs with the user's
+     * rights (record 148). Only the user answers it.
+     */
+    TERMINAL;
 
     public static ApprovalKind ofTool(final String toolName) {
         return switch (toolName) {

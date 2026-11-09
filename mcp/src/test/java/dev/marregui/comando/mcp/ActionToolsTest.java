@@ -229,7 +229,8 @@ class ActionToolsTest {
     /// destructive grant; the card is `users`', a session of another family.
     @Test
     void eachActionsRunnerSendsItsOwnIntentForAValidCall() throws Exception {
-        Files.writeString(home.resolve("agents.json"), "{\"grants\": {\"foreman\": [\"destructive\"]}}");
+        Files.writeString(home.resolve("agents.json"), "{\"grants\": {\"foreman\": [\"destructive\", \"terminal\"]}}");
+        tools.terminals(new TerminalToolsTest.FakeTerminals());
         final AppState s = state.get();
         final String p1 = s.panel(States.P1).orElseThrow().title();
         final String p2 = s.panel(States.P2).orElseThrow().title();
@@ -294,6 +295,12 @@ class ActionToolsTest {
         calls.put("server_start", "{\"server\":\"edge\"}");
         calls.put("server_stop", "{\"server\":\"edge\"}");
         calls.put("folders_browse", "{}");
+        calls.put("terminal_list", "{}");
+        calls.put("terminal_start", "{\"panel\":\"" + p1 + "\"}");
+        calls.put("terminal_send", "{\"panel\":\"" + p1 + "\",\"text\":\"ls\"}");
+        calls.put("terminal_read", "{\"panel\":\"" + p1 + "\"}");
+        calls.put("terminal_interrupt", "{\"panel\":\"" + p1 + "\"}");
+        calls.put("terminal_stop", "{\"panel\":\"" + p1 + "\"}");
         final Set<String> built = tools.builtIn();
         assertThat(calls.keySet()).as("a call for every action the runner performs")
                 .containsExactlyInAnyOrderElementsOf(Actions.ALL.stream().map(Action::tool).filter(t -> !built.contains(t)).toList());

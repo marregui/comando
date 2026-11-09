@@ -52,6 +52,7 @@ import com.jediterm.terminal.ui.settings.SettingsProvider;
 
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
@@ -97,12 +98,15 @@ public final class TerminalWidget implements Zoomable, Searchable {
     private final JButton restartButton = Plain.only(new JButton());
     private final JLabel empty = Plain.only(new JLabel());
     private final InputGate gate = new InputGate(this::write);
+    /** Numbers the output in lines across this terminal's shells, for agents that read it (record 148). */
+    private final LineLedger ledger = new LineLedger();
     private final Timer gatePoll = new Timer(GATE_POLL_MILLIS, e -> pollGate());
     private final List<String> command;
     private Path directory;
     private Supplier<Path> directorySource;
     private Term term;
-    private Pty pty;
+    /** Written on the EDT by start and close; read there and, by the agents' reads, on other threads. */
+    private volatile Pty pty;
     private float fontSize = Theme.mono().getSize2D();
     private String findText = "";
     /** Set by the emulator on any change of the buffer, cleared by a find that searches it again. */
@@ -201,7 +205,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return;
         }
         pty = started;
-        term = new Term(new Settings(() -> fontSize));
+        final Settings settings = new Settings(() -> fontSize);
+        term = new Term(settings);
+        ledger.attach(term.getTerminalTextBuffer(), term.getTerminal(), settings.getBufferMaxLinesCount());
         // the palette is read at each paint; another tint or ground repaints it (record 101)
         final Term shown = term;
         SidebarLook.whileShown(shown, shown::repaint);
@@ -306,9 +312,54 @@ public final class TerminalWidget implements Zoomable, Searchable {
             start();
         }
         final Pty p = pty;
-        if (p == null) {
-            return;
+        if (p != null) {
+            enqueue(p, text);
         }
+    }
+
+    /**
+     * Types {@code text} into the shell as {@link #send} does, but never starts one: false, and nothing written, when
+     * the shell is not running (record 148).
+     */
+    public boolean type(final String text) {
+        final Pty p = pty;
+        if (p == null || !p.process().isAlive()) {
+            return false;
+        }
+        enqueue(p, text);
+        return true;
+    }
+
+    /**
+     * The shell's text from logical line {@code since}, or its last {@code lines} lines when {@code since} is negative,
+     * at most {@code maxChars} characters; empty before the first start. Safe off the EDT. See {@link TerminalPort}
+     * for the numbering.
+     */
+    public Optional<TerminalPort.Page> page(final long since, final int lines, final int maxChars) {
+        // before the buffer's lock: ps takes milliseconds, and the emulator waits for the lock
+        final String job = runningJob().orElse("");
+        return ledger.page(since, lines, maxChars, job);
+    }
+
+    /** The number of the logical line the cursor is on, the {@code next} of a page; 0 before the first start. */
+    public long nextLine() {
+        return ledger.next();
+    }
+
+    /** Whether a full-screen program (vim, less) holds the alternate screen. */
+    public boolean alternateScreen() {
+        return ledger.alternate();
+    }
+
+    /** {@link System#nanoTime()} of the shell's last output; empty when it has written none. */
+    public Optional<Long> lastOutputNanos() {
+        final Pty p = pty;
+        final long at = p == null ? InputGate.NO_OUTPUT : p.lastOutputNanos();
+        return at == InputGate.NO_OUTPUT ? Optional.empty() : Optional.of(at);
+    }
+
+    /** Hands {@code text} to the gate, which writes it now or once {@code p}'s shell is ready. */
+    private void enqueue(final Pty p, final String text) {
         if (gate.send(text, System.nanoTime(), p.lastOutputNanos())) {
             gatePoll.start();
         }
@@ -349,7 +400,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return Optional.empty();
         }
         try {
-            return foregroundJob(p.process().pid(), p.process().toHandle(), command.getFirst(), TerminalWidget::ps);
+            // pty4j's process has no handle: the shell's is looked up by its id, which no other process holds while it runs
+            return foregroundJob(p.process().pid(), command.getFirst());
         } catch (final UnsupportedOperationException e) {
             return Optional.of(UNCHECKED_JOB);
         }
@@ -362,7 +414,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
      */
     public record Shell(long pid, String command, ProcessHandle handle) {
 
-        /** A shell known by its process id alone, as the system lists it now; for tests. */
+        /** A shell known by its process id alone, its handle as the system lists that id now. */
         public Shell(final long pid, final String command) {
             this(pid, command, pid < 0 ? null : ProcessHandle.of(pid).orElse(null));
         }
@@ -375,7 +427,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return Optional.empty();
         }
         try {
-            return Optional.of(new Shell(p.process().pid(), command.getFirst(), p.process().toHandle()));
+            return Optional.of(new Shell(p.process().pid(), command.getFirst()));
         } catch (final UnsupportedOperationException e) {
             return Optional.of(new Shell(-1, command.getFirst(), null));
         }
@@ -564,6 +616,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     private void removeTerm() {
         if (term != null) {
+            ledger.detach();
             root.remove(term);
             term.close();
             term = null;

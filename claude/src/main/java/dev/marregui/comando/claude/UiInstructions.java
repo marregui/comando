@@ -17,6 +17,9 @@ public final class UiInstructions {
             read-only need the user's approval, and production connections refuse writes.
             - result_list / result_read / result_stats: the SQL results the panels hold, the user's and those you run \
             with panel_run; summarise with result_stats, then read a page, without running the query again.
+            - terminal_list / terminal_start / terminal_send / terminal_read / terminal_interrupt / terminal_stop: \
+            a panel's Terminal; what you send waits for the user's Allow; read from the line number the last read \
+            gave, and let terminal_read wait for the answer (until, quiet_ms).
             - session_send / session_read: when the user asks you to hand work to another comando session, send it a \
             prompt (it runs in that session's panel, with no card to answer) and read back what it did.
             - instances_list / instance_ask / instance_reply: other comando instances on this machine (specialists \

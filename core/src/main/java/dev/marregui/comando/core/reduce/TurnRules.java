@@ -410,13 +410,13 @@ final class TurnRules {
             if (i.error() && !interrupted || ran && !x.isAwaitingHandOff()) {
                 next = next.withSession(finished(next, x, now));
             }
-            // nothing runs or is queued: a statement card still waiting belongs to a call the turn abandoned (an
+            // nothing runs or is queued: a statement or terminal card still waiting belongs to a call the turn abandoned (an
             // interrupt), and answering Run would act after the fact. Other cards may belong to a background
             // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them. While
             // background work runs, any card may be its own: none is withdrawn, an approval is never missed.
             if (!x.isWaiting()) {
                 next = ApprovalRules.withdrawApprovals(next, i.name(), "the turn ended", effects,
-                        a -> a.kind() == ApprovalKind.SQL_WRITE);
+                        a -> a.kind() == ApprovalKind.SQL_WRITE || a.kind() == ApprovalKind.TERMINAL);
             }
         }
         return new Transition(next, effects);

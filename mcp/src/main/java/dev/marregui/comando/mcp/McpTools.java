@@ -45,6 +45,7 @@ import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
+import dev.marregui.comando.core.port.TerminalPort;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -196,6 +197,11 @@ public final class McpTools {
     /** The local servers agents start and stop as the toggles do (record 121); the application sets them once. */
     public void servers(final List<ServerSwitch> servers) {
         actions.servers(servers);
+    }
+
+    /** The panels' Terminals agents drive (record 148); the application sets it once its window is built. */
+    public void terminals(final TerminalPort port) {
+        actions.terminals(port);
     }
 
     /** The other comando instances this one consults and answers (record 123); the application sets it once. */
