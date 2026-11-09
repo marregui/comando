@@ -40,10 +40,9 @@ class WorkListUiTest {
     /// its panel forward.
     @Test
     void aClickOnTheCountListsWhoWorksAndALineGoesThere() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
                 home.resolve("projects"), false), "work-list", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
@@ -70,8 +69,6 @@ class WorkListUiTest {
             click(list, onEdt(() -> list.getCellBounds(0, 0)));
 
             Awaitility.await("its panel in front").atMost(WAIT).until(() -> bound.equals(loop.state().focused()));
-        } finally {
-            app.close();
         }
     }
 

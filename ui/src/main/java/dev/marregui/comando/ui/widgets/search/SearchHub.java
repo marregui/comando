@@ -11,6 +11,7 @@ import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.SearchHit;
 import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.ui.kit.text.HitMarks;
+import dev.marregui.comando.ui.kit.text.Previews;
 
 /**
  * What the Search view (record 139) shares with the rest of comando, and keeps while comando runs: the text, the
@@ -20,13 +21,13 @@ import dev.marregui.comando.ui.kit.text.HitMarks;
 public final class SearchHub {
 
     private final Supplier<List<FolderRoot>> folders;
+    private final Opener opener;
     private final Supplier<SearchPort> port;
     private final Viewer viewer;
-    private final Opener opener;
-    private String text = "";
-    private boolean files = true;
     private boolean conversations = true;
+    private boolean files = true;
     private Listener listener;
+    private String text = "";
 
     public SearchHub(
             final Supplier<List<FolderRoot>> folders,
@@ -108,19 +109,6 @@ public final class SearchHub {
         return listener == view;
     }
 
-    /** The preview tab of the workspace, where a file's hits are read (record 141); comando's shell gives it. */
-    public interface Previews {
-
-        /**
-         * Shows {@code file} in the preview tab, replacing the file it showed, {@code marks} marked and the current one
-         * in view; {@code takeKeyboard} gives the tab the keyboard, else the keyboard stays where it is.
-         */
-        void preview(Path file, HitMarks marks, boolean takeKeyboard);
-
-        /** Keeps the preview tab of {@code file} as a tab that stays, with the keyboard in it. */
-        void pin(Path file);
-    }
-
     /** Opens what a hit points at in comando. */
     public interface Opener {
 
@@ -185,12 +173,6 @@ public final class SearchHub {
             step = next;
         }
 
-        private void step(final int by) {
-            if (step != null) {
-                step.accept(by);
-            }
-        }
-
         /** {@code h} as the preview tab marks it: a name's hit marks nothing, a line's hit its match. */
         private static HitMarks.Hit mark(final SearchHit h) {
             if (h.kind() == SearchHit.Kind.NAME) {
@@ -198,6 +180,12 @@ public final class SearchHub {
             }
             final int start = Math.min(Math.max(h.matchStart(), 0), h.snippet().length());
             return new HitMarks.Hit(h.line(), h.match(), start, h.snippet().substring(0, start));
+        }
+
+        private void step(final int by) {
+            if (step != null) {
+                step.accept(by);
+            }
         }
     }
 }

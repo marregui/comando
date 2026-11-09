@@ -21,7 +21,7 @@ collection, 121 MB of native allocation.
 
 | Question | Rule | Why |
 |---|---|---|
-| a stall below its limit | one INFO line when it ends: `the EDT was busy for <ms> ms [<kind>] in=<frame> comando=<frame:line>` | the length, the kind and two frames group stalls by cause with a search; no stack for what nobody noticed |
+| a stall below its limit | one INFO line when it ends: `the EDT was busy [millis=<ms>, kind=<kind>, in=<frame>, comando=<frame:line>]` (the key=value shape since 2026-11-08) | the length, the kind and two frames group stalls by cause with a search; no stack for what nobody noticed |
 | kind | `startup` (no probe answered yet), `drawing`, `comando` (a comando frame on the stack), `jdk` (neither) | names whose stall it is |
 | drawing | the EDT waits on Java2D's render queue (its lock, or a flush to finish) before any comando frame, or is in Java2D with no comando frame | the wait is the GPU pipeline's, whoever called the paint |
 | a hang | 1 s, or 2 s for `drawing`: a WARNING with the EDT's stack taken at that moment, then a WARNING when it answers; the user's notice from 1 s, as before | the stack of what holds the EDT now, only when it was noticed |

@@ -13,9 +13,17 @@ import dev.marregui.comando.core.state.LowerTab;
  * @param focus      a panel to focus once the user pauses typing, or null; set for a session's request only
  * @param tab        a lower tab to select with that focus, or null
  * @param session    the session that asked for the focus, checked again when the focus is applied; empty otherwise
+ * @param transcript the transcript above the prompt (show) or below it (hide), kept for the next start (record 144)
  */
-public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId focus,
-                     LowerTab tab, String session) {
+public record Layout(
+        Toggle sidebar,
+        Toggle sidePane,
+        double lowerShare,
+        PanelId focus,
+        LowerTab tab,
+        String session,
+        Toggle transcript
+) {
 
     public enum Toggle { KEEP, SHOW, HIDE }
 
@@ -34,14 +42,31 @@ public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId
         this(sidebar, sidePane, lowerShare, focus, tab, "");
     }
 
+    public Layout(
+            final Toggle sidebar,
+            final Toggle sidePane,
+            final double lowerShare,
+            final PanelId focus,
+            final LowerTab tab,
+            final String session
+    ) {
+        this(sidebar, sidePane, lowerShare, focus, tab, session, Toggle.KEEP);
+    }
+
     public Layout {
         if (!Double.isNaN(lowerShare) && (lowerShare < 0.05 || lowerShare > 0.95)) {
             throw new IllegalArgumentException("lower_share must be between 0.05 and 0.95, was " + lowerShare);
         }
         session = session == null ? "" : session;
+        transcript = transcript == null ? Toggle.KEEP : transcript;
     }
 
     public boolean changesNothing() {
-        return sidebar == Toggle.KEEP && sidePane == Toggle.KEEP && Double.isNaN(lowerShare) && focus == null && tab == null;
+        return sidebar == Toggle.KEEP
+                && sidePane == Toggle.KEEP
+                && Double.isNaN(lowerShare)
+                && focus == null
+                && tab == null
+                && transcript == Toggle.KEEP;
     }
 }

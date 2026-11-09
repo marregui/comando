@@ -98,9 +98,8 @@ class CheckpointLockUiTest {
         claude.toFile().setExecutable(true);
         final AppConfig config = new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"),
                 false);
-        final App app = new App(config, "lock", () -> {
-        });
-        try {
+        try (final App app = new App(config, "lock", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20))
@@ -110,7 +109,10 @@ class CheckpointLockUiTest {
                     .until(() -> loop.state().homePanel("work").isPresent());
             final PanelId panel = loop.state().homePanel("work").orElseThrow().id();
             Awaitility.await("its panel shown").atMost(Duration.ofSeconds(10))
-                    .until(() -> editor() != null && editor().panel().id().equals(panel));
+                    .until(() -> {
+                        final EditorPanel e = editor();
+                        return e != null && onEdt(e::panel).id().equals(panel);
+                    });
             loop.dispatch(new Intent.StartSession("work"));
             Awaitility.await("running").atMost(Duration.ofSeconds(20))
                     .until(() -> session(loop).status() == Status.OPEN);
@@ -147,8 +149,6 @@ class CheckpointLockUiTest {
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20))
                     .until(() -> session(loop).status() == Status.CLOSED);
-        } finally {
-            app.close();
         }
     }
 

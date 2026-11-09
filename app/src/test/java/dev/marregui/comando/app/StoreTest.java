@@ -251,6 +251,31 @@ class StoreTest {
         }
     }
 
+    /// A decision's options come back from `decisions.json` as saved, in order; a file written before decisions had
+    /// options reads each decision with none, its answer a typed line.
+    @Test
+    void theDecisionsOptionsRoundTripAndAFileWithoutThemReadsAsNone() throws Exception {
+        final List<Decision> held = List.of(
+                new Decision(3, "work", "Merge the two entries?", "", 1_000L, List.of("Yes", "No")),
+                new Decision(4, "work", "Why?", "", 2_000L));
+        try (final Store store = new Store(home)) {
+            store.saveDecisions(held, 4L);
+        }
+        try (final Store store = new Store(home)) {
+            assertThat(store.loadDecisions()).as("as saved").isEqualTo(new Store.Decisions(held, 4L));
+        }
+        Files.writeString(home.resolve("decisions.json"), """
+                {"version": 1, "lastId": 5, "decisions": [
+                  {"id": 5, "session": "work", "title": "Archive the old lane?", "detail": "", "createdMillis": 3000}
+                ]}
+                """);
+        try (final Store store = new Store(home)) {
+            final Decision before = new Decision(5, "work", "Archive the old lane?", "", 3_000L);
+            assertThat(store.loadDecisions()).as("written before options")
+                    .isEqualTo(new Store.Decisions(List.of(before), 5L));
+        }
+    }
+
     /// On the first start on a kit's root its folders are put first and recorded, and afterwards they are neither added
     /// again nor kept once the user took them out; a root with no kit adds nothing.
     @Test

@@ -26,18 +26,16 @@ final class QuitFlow {
 
     private final ComandoUi.Dependencies deps;
     private final ShellParts parts;
-    private final LayoutKeeper layout;
-    /** Stops what the window runs; once, at quit or at close. */
+    /** Saves the layout and stops what the window runs; once, at quit or at close. */
     private final Runnable teardown;
     private boolean quitting;
     private boolean confirmingQuit;
     /** The macOS quit requests waiting for the answer to the open question. */
     private final List<QuitResponse> pendingQuits = new ArrayList<>();
 
-    QuitFlow(final ComandoUi.Dependencies deps, final ShellParts parts, final LayoutKeeper layout, final Runnable teardown) {
+    QuitFlow(final ComandoUi.Dependencies deps, final ShellParts parts, final Runnable teardown) {
         this.deps = deps;
         this.parts = parts;
-        this.layout = layout;
         this.teardown = teardown;
     }
 
@@ -80,10 +78,9 @@ final class QuitFlow {
         quitting = true;
         try {
             final long start = System.nanoTime();
-            layout.saveQuietly();
             teardown.run();
             final long millis = (System.nanoTime() - start) / 1_000_000;
-            LOG.log(System.Logger.Level.INFO, "quitting [window teardown millis=" + millis + ']');
+            LOG.log(System.Logger.Level.INFO, "quitting [teardownMillis=" + millis + ']');
             closing(frame);
         } catch (final RuntimeException e) {
             // the window could not stop cleanly: comando quits all the same, or it would stay with its lock held

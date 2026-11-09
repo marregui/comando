@@ -381,6 +381,24 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.focused()).isEqualTo(P2);
         assertThat(effects).containsExactly(new Effect.Arrange(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN, P1, null, "work")));
         assertThat(state.notice().text()).isEqualTo("work will focus one once you pause typing, arranged the panes (Restore layout in the palette undoes it)");
+
+        // the transcript's side rides on the same arrange as the focus (record 144)
+        apply(new Intent.SessionLayout("work", P1, null, new Layout(
+                Layout.Toggle.KEEP,
+                Layout.Toggle.KEEP,
+                Double.NaN,
+                null,
+                null,
+                "",
+                Layout.Toggle.HIDE)));
+        assertThat(effects).containsExactly(new Effect.Arrange(new Layout(
+                Layout.Toggle.KEEP,
+                Layout.Toggle.KEEP,
+                Double.NaN,
+                P1,
+                null,
+                "work",
+                Layout.Toggle.HIDE)));
     }
 
     // ---- one error per failed start, background runs, subjects cleared by removal and withdrawal

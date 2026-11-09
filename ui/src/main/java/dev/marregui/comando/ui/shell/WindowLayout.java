@@ -262,6 +262,19 @@ final class WindowLayout {
         return prefs.getBoolean("sidePane.hidden", false);
     }
 
+    /**
+     * Whether the lower panel, the transcript's, sits above the editor while a session panel is in front (record 144);
+     * on until the user turns it off.
+     */
+    boolean transcriptAbove() {
+        return prefs.getBoolean("layout.transcriptAbove", false);
+    }
+
+    void transcriptAbove(final boolean above) {
+        prefs.putBoolean("layout.transcriptAbove", above);
+        prefs.flush();
+    }
+
     /** Whether panels open with their document's outline: the user's last choice (record 113). */
     boolean outlineShown() {
         return prefs.getBoolean("editor.outline", false);

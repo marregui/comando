@@ -73,9 +73,9 @@ class ThreadBudgetTest {
         claude.toFile().setExecutable(true);
         final Set<Long> before = platformThreads().keySet();
         final Set<Thread> madeBefore = Set.copyOf(Threads.alive());
-        final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "budget", () -> {
-        });
-        try {
+        try (final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"),
+                false), "budget", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> !comandos(before).isEmpty());
@@ -101,8 +101,6 @@ class ThreadBudgetTest {
             }
             Awaitility.await("the sessions' readers gone").atMost(Duration.ofSeconds(20))
                     .until(() -> comandos(before).keySet().stream().noneMatch(n -> n.startsWith(SESSION_READER)));
-        } finally {
-            app.close();
         }
         // each owner waits for its strands in close, so they are gone when it returns; the bound covers only a
         // strand's thread ending just after its executor says it has terminated

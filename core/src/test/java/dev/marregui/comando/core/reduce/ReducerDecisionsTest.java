@@ -1,12 +1,15 @@
 package dev.marregui.comando.core.reduce;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Decision;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
@@ -23,6 +26,9 @@ import static org.assertj.core.api.Assertions.tuple;
 /// - settled and dismissed decisions leave; decisions read at start replace the list unsaved
 /// - Settle sends the checkpoint command without the automatic argument, to the decision's session or the focused one
 /// - Settle is refused while the target session's checkpoint runs
+/// - a decision keeps its options, stripped, blanks dropped
+/// - answers go to each decision's session, one prompt per session in the group's order, and the decisions answered
+///   leave, saved once
 class ReducerDecisionsTest {
 
     private final FakeClock clock = new FakeClock();
@@ -152,5 +158,104 @@ class ReducerDecisionsTest {
         apply(new Intent.SettleDecision(1L));
         assertThat(effects).isEmpty();
         assertThat(Reducer.refusedWhileCheckpointing(state, new Intent.SettleDecision(1L))).isTrue();
+    }
+
+    /// Answers to a session whose checkpoint runs are kept, not sent: a prompt would cancel the checkpoint's compaction
+    /// (record 130). The decision stays and a notice says why.
+    @Test
+    void answersWaitWhileTheirSessionsCheckpointRuns() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.DecisionHeldBack("work", "One", "", List.of("Yes", "No")));
+        apply(new Intent.DecisionsAnswered(Map.of(1L, "Yes")));
+        assertThat(effects).isEmpty();
+        assertThat(state.later()).extracting(Decision::id).containsExactly(1L);
+        assertThat(state.notice().text()).startsWith("Kept the answers for work");
+    }
+
+    /// Answers kept for two reasons in one batch, a session running its checkpoint and a session gone with no session
+    /// in front to take its answer, are named in one notice, so neither hides the other.
+    @Test
+    void answersKeptForTwoReasonsShowInOneNotice() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.DecisionHeldBack("work", "One", ""));
+        apply(new Intent.DecisionHeldBack("gone", "Two", ""));
+        // the panel in front has no session, so the answer to the gone session's decision has nowhere to go
+        apply(new Intent.FocusPanel(States.P2));
+        apply(new Intent.DecisionsAnswered(Map.of(1L, "yes", 2L, "no")));
+        assertThat(state.later()).extracting(Decision::id).containsExactly(1L, 2L);
+        assertThat(state.notice().text()).contains("Kept the answers for work")
+                .contains("No session to send some answers to");
+    }
+
+    /// A decision held back with options keeps them in order, stripped, the blank ones dropped; one without options
+    /// keeps none, its answer a typed line.
+    @Test
+    void aDecisionKeepsItsOptionsStrippedWithoutTheBlankOnes() {
+        apply(new Intent.DecisionHeldBack("work", "Ship it?", "", List.of(" Yes ", "", "  ", "No")));
+        apply(new Intent.DecisionHeldBack("work", "Why?", ""));
+        assertThat(state.later()).extracting(Decision::options).containsExactly(List.of("Yes", "No"), List.of());
+    }
+
+    /// Answers to decisions of two sessions: each session gets one prompt, its lines in the order the user answered,
+    /// a blank answer and an unknown id left out; the decisions answered leave the group, saved once, and the one left
+    /// blank stays.
+    @Test
+    void answersGoToEachSessionInOnePromptAndTheAnsweredDecisionsLeave() {
+        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
+        apply(new Intent.DecisionHeldBack("work", "Merge?", "", List.of("Yes", "No")));
+        apply(new Intent.DecisionHeldBack("other", "Archive?", ""));
+        apply(new Intent.DecisionHeldBack("work", "Rename?", ""));
+        apply(new Intent.DecisionHeldBack("work", "Later?", ""));
+        final List<Long> ids = state.later().stream().map(Decision::id).toList();
+        final Map<Long, String> answers = new LinkedHashMap<>();
+        answers.put(ids.get(2), " call it Tyne ");
+        answers.put(ids.get(1), "keep it");
+        answers.put(99L, "no such decision");
+        answers.put(ids.get(3), "  ");
+        answers.put(ids.getFirst(), "Yes");
+        apply(new Intent.DecisionsAnswered(answers));
+        assertThat(effects).filteredOn(Effect.SendToClaude.class::isInstance).map(Effect.SendToClaude.class::cast)
+                .extracting(Effect.SendToClaude::name, Effect.SendToClaude::text)
+                .containsExactly(
+                        tuple("work",
+                                "Answers to the decisions you held for me:\n- Rename?: call it Tyne\n- Merge?: Yes"),
+                        tuple("other", "Answers to the decisions you held for me:\n- Archive?: keep it"));
+        assertThat(state.later()).extracting(Decision::title).as("left blank: still waits").containsExactly("Later?");
+        assertThat(effects).filteredOn(Effect.SaveDecisions.class::isInstance).as("saved once")
+                .containsExactly(new Effect.SaveDecisions(state.later(), state.nextId() - 1));
+    }
+
+    /// An answer to a decision whose session is gone goes to the focused panel's session, as Settle's does; with no
+    /// session to go to, the decision stays, a warning says so, and nothing is sent or saved.
+    @Test
+    void anAnswerWhoseSessionIsGoneGoesToTheFocusedSessionElseItStays() {
+        apply(new Intent.DecisionHeldBack("gone", "One", ""));
+        apply(new Intent.DecisionsAnswered(Map.of(1L, "yes")));
+        assertThat(effects).filteredOn(Effect.SendToClaude.class::isInstance).map(Effect.SendToClaude.class::cast)
+                .extracting(Effect.SendToClaude::name).containsExactly("work");
+        assertThat(state.later()).isEmpty();
+
+        apply(new Intent.DecisionHeldBack("gone", "Two", ""));
+        apply(new Intent.FocusPanel(P2));
+        apply(new Intent.DecisionsAnswered(Map.of(2L, "yes")));
+        assertThat(effects).isEmpty();
+        assertThat(state.later()).extracting(Decision::title).containsExactly("Two");
+        assertThat(state.notice().level()).isEqualTo(Notice.Level.WARN);
+    }
+
+    /// Nothing answered changes nothing: no answers, only blank ones, or only ids no longer kept.
+    @Test
+    void nothingAnsweredChangesNothing() {
+        apply(new Intent.DecisionHeldBack("work", "One", ""));
+        final AppState before = state;
+        for (final Map<Long, String> answers : List.of(Map.<Long, String>of(), Map.of(1L, " "), Map.of(7L, "yes"))) {
+            apply(new Intent.DecisionsAnswered(answers));
+            assertThat(effects).as(answers.toString()).isEmpty();
+            assertThat(state).as(answers.toString()).isSameAs(before);
+        }
     }
 }

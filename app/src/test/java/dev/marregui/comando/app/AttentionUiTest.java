@@ -49,10 +49,9 @@ class AttentionUiTest {
     /// line focuses its panel; the session is no longer marked, its row is under Idle and the count has no To read.
     @Test
     void aTurnEndedOutOfSightIsToReadUntilItsLineIsClicked() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
                 home.resolve("projects"), false), "attention", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
@@ -75,11 +74,10 @@ class AttentionUiTest {
                     && l.getText().contains("1 to read"));
             click(count, onEdt(() -> new Rectangle(0, 0, count.getWidth(), count.getHeight())));
 
-            @SuppressWarnings("unchecked")
-            final JList<Object> list = await(JList.class,
+            final JList<?> list = await(JList.class,
                     l -> "Work".equals(l.getAccessibleContext().getAccessibleName()));
             assertThat(onEdt(() -> list.getModel().getSize())).isEqualTo(1);
-            assertThat(onEdt(() -> list.getModel().getElementAt(0).toString())).contains("work · to read");
+            assertThat(onEdt(() -> drawn(list, 0))).as("its line, as the list draws it").startsWith("work · to read");
             click(list, onEdt(() -> list.getCellBounds(0, 0)));
 
             Awaitility.await("its panel in front").atMost(WAIT).until(() -> bound.equals(loop.state().focused()));
@@ -88,8 +86,6 @@ class AttentionUiTest {
             Awaitility.await("out of To read").atMost(WAIT).until(() -> "Idle".equals(group(sessions)));
             Awaitility.await("out of the count").atMost(WAIT).until(() -> onEdt(() -> !count.getText()
                     .contains("to read")));
-        } finally {
-            app.close();
         }
     }
 
@@ -108,10 +104,9 @@ class AttentionUiTest {
     }
 
     private void clickLandsOnTheReport(final boolean chip) throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
                 home.resolve("projects"), false), "attention", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
@@ -156,8 +151,6 @@ class AttentionUiTest {
             final TranscriptCanvas canvas = await(TranscriptCanvas.class, c -> c.reportTop() > 0);
             Awaitility.await("the report at the top of the view").atMost(WAIT).until(() -> onEdt(
                     () -> canvas.getParent() instanceof JViewport v && v.getViewPosition().y == canvas.reportTop()));
-        } finally {
-            app.close();
         }
     }
 
@@ -177,6 +170,13 @@ class AttentionUiTest {
         final Component row = list.getCellRenderer().getListCellRendererComponent(list,
                 list.getModel().getElementAt(index), index, false, false);
         return row.getAccessibleContext().getAccessibleDescription();
+    }
+
+    /// The text row `index` of `list` shows, as its renderer draws it.
+    private static <T> String drawn(final JList<T> list, final int index) {
+        final Component row = list.getCellRenderer().getListCellRendererComponent(list,
+                list.getModel().getElementAt(index), index, false, false);
+        return row instanceof JLabel l ? l.getText() : "";
     }
 
     private static void click(final Component c, final Rectangle at) throws Exception {

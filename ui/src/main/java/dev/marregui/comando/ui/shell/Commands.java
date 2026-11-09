@@ -147,9 +147,8 @@ final class Commands {
         cmd("view.findNext", "Find next", key(KeyEvent.VK_G, shortcut), () -> findBar.next(true), () -> findBar.isOpen());
         cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, shortcut | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
         cmd("view.findInFiles", "Find in files…", key(KeyEvent.VK_F, shortcut | SHIFT), this::toggleSearch);
-        // the search's hits, while the preview tab or the Search view has the keyboard; elsewhere F7 stays the
-        // component's own (the Changes view's differences), and the comparison window, a window of its own, keeps
-        // its own
+        // the search's hits, while the preview tab or the Search view has the keyboard; a changed file's differences
+        // are walked in the comparison window, a window of its own, which keeps its own F7
         cmd("view.nextHit", "Next hit", key(KeyEvent.VK_F7, 0), () -> parts.searchHub().step(1), this::onHits);
         cmd("view.previousHit", "Previous hit", key(KeyEvent.VK_F7, SHIFT), () -> parts.searchHub().step(-1),
                 this::onHits);
@@ -302,6 +301,7 @@ final class Commands {
                 () -> layout.sidePaneShown() || parts.side().hasViews() || parts.side().hasPanels());
         // ⌘K, IntelliJ's key for its commit view; a focused terminal keeps it as its Clear Buffer
         cmd("view.changes", "Uncommitted changes", key(KeyEvent.VK_K, shortcut), this::toggleChanges);
+        cmd("view.deliverables", "Files written by the session", null, this::toggleDeliverables);
         cmd("view.files", "Files", null, () -> {
             final SessionsSidebar sidebar = parts.sidebar();
             if (!sidebar.isShown()) {
@@ -311,6 +311,11 @@ final class Commands {
             sidebar.focusFilesFilter();
         });
         cmd("view.restoreLayout", "Restore layout", null, layout::restoreArranged, layout::arranged);
+        // a trial (record 144): the transcript above the prompt on a session's panel, or back below it
+        cmd("view.transcriptAbove", "Transcript above the prompt", null, () -> layout.transcriptAbove(true),
+                () -> !layout.transcriptAbove());
+        cmd("view.transcriptBelow", "Transcript below the prompt", null, () -> layout.transcriptAbove(false),
+                layout::transcriptAbove);
         // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
         cmd("view.session", "Session", key(KeyEvent.VK_1, lowerTabKey), () -> focus.showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
         cmd("view.approvals", "Approvals", key(KeyEvent.VK_2, lowerTabKey),
@@ -503,11 +508,24 @@ final class Commands {
      */
     private void toggleChanges() {
         final Optional<ViewState> open = deps.state().get().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst();
-        if (open.isPresent() && ((ViewSpec.Changes) open.get().spec()).root().isEmpty()) {
+        if (open.isPresent() && open.get().spec() instanceof final ViewSpec.Changes changes && changes.root().isEmpty()) {
             deps.intents().dispatch(new Intent.CloseView(open.get().id()));
         } else {
             layout.revealSidePane();
             deps.intents().dispatch(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes(), Placement.SIDE));
+        }
+    }
+
+    /** Opens the Files written view in the side pane (record 143); closes it when it is open. */
+    private void toggleDeliverables() {
+        final Optional<ViewState> open = deps.state().get().views().stream()
+                .filter(v -> v.spec() instanceof ViewSpec.Deliverables).findFirst();
+        if (open.isPresent()) {
+            deps.intents().dispatch(new Intent.CloseView(open.get().id()));
+        } else {
+            layout.revealSidePane();
+            deps.intents().dispatch(new Intent.ShowView("", ViewSpec.Deliverables.TITLE, new ViewSpec.Deliverables(),
+                    Placement.SIDE));
         }
     }
 

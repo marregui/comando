@@ -55,60 +55,60 @@ import dev.marregui.comando.ui.widget.capability.Copyable;
  * the selection is kept as hits arrive. Moving the selection shows a file's hit in the workspace's preview tab, every
  * hit of the file marked, without taking the keyboard from the rows (record 141); a conversation's hit reads in its
  * row's tooltip. Enter or a double click on a file's hit keeps its preview tab, on a conversation's opens it in its
- * session. ↓ or Enter in the field moves to the first hit; F7 and ⇧F7 walk the hits in the order the view shows them.
- * The text and the toggles stay in the {@link SearchHub} while comando runs.
+ * session. ↓ or Enter in the field moves to the first hit; F7 and ⇧F7 walk the hits in the order the view shows
+ * them. The text and the toggles stay in the {@link SearchHub} while comando runs.
  */
 public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
 
-    /**
-     * How long after the last keystroke a search starts; set by record 139, unmeasured, as {@code FindBar}'s pause is.
-     */
-    static final int TYPING_MILLIS = 200;
     /**
      * How long hits that arrive are gathered before the rows are built again: a search hands hits over file by file,
      * and a tree built per file would cost the EDT more than it shows. Unmeasured: under a keystroke's pause.
      */
     static final int GATHER_MILLIS = 100;
+    /**
+     * How long after the last keystroke a search starts; set by record 139, unmeasured, as {@code FindBar}'s pause is.
+     */
+    static final int TYPING_MILLIS = 200;
     /** Rows looked at, at most, for rows to open after a build; as the Changes view. */
     private static final int MAX_ROWS_OPENED = 3_000;
 
-    private final SearchHub hub;
     private final SearchHub.Listener asked = this::ask;
-    private final TreeView tree = new TreeView();
-    private final JTextField field = new JTextField();
-    private final JToggleButton files = toggle("files", "Files", "Search the folders of the Files tab");
+    private final JPanel body = new JPanel(new BorderLayout());
+    /** The rows the user closed, by {@link SearchTree#key}: every other row is open. */
+    private final Set<String> closed = new HashSet<>();
     private final JToggleButton conversations = toggle("session", "Conversations",
             "Search the stored conversations of Claude Code");
+    private final JTextField field = new JTextField();
+    private final JToggleButton files = toggle("files", "Files", "Search the folders of the Files tab");
     private final JLabel foot = Plain.only(new JLabel(" "));
-    private final JPanel body = new JPanel(new BorderLayout());
-    private final Debouncer typing = new Debouncer(TYPING_MILLIS, this::search);
     private final Timer gather = new Timer(GATHER_MILLIS, _ -> {
         build();
         firstHeard();
     });
     private final List<SearchHit> hits = new ArrayList<>();
+    private final SearchHub hub;
     private final Map<String, SearchHit> targets = new HashMap<>();
-    /** The rows the user closed, by {@link SearchTree#key}: every other row is open. */
-    private final Set<String> closed = new HashSet<>();
-    private ViewSpec.TreeNode root = ViewSpec.TreeNode.NONE;
+    private final TreeView tree = new TreeView();
+    private final Debouncer typing = new Debouncer(TYPING_MILLIS, this::search);
     private boolean built;
-    /** True while rows are built: the selection they restore and the rows they open are not the user's moves. */
-    private boolean rendering;
+    private boolean cut;
+    private int failed;
+    /** ↓ or ⏎ came before the new search's first answer: its first hit is selected as it comes. */
+    private boolean firstWhenHeard;
+    /** The field asked for the keyboard before it showed: it takes it as it shows. */
+    private boolean focusWhenShown = true;
     /** The search whose answers count; another's are dropped here, on the thread that decides. */
     private Listening listening;
     /** The text of the search listed. */
     private String query = "";
-    /** The text of the search last started; it becomes {@link #query} as its first answer replaces the rows. */
-    private String started = "";
+    /** True while rows are built: the selection they restore and the rows they open are not the user's moves. */
+    private boolean rendering;
     /** The new search has said nothing yet, so the hits before it still show. */
     private boolean replacing;
-    private boolean cut;
-    private int failed;
+    private ViewSpec.TreeNode root = ViewSpec.TreeNode.NONE;
     private boolean searching;
-    /** The field asked for the keyboard before it showed: it takes it as it shows. */
-    private boolean focusWhenShown = true;
-    /** ↓ or ⏎ came before the new search's first answer: its first hit is selected as it comes. */
-    private boolean firstWhenHeard;
+    /** The text of the search last started; it becomes {@link #query} as its first answer replaces the rows. */
+    private String started = "";
 
     public SearchWidget(final SearchHub hub) {
         this.hub = hub;
@@ -162,6 +162,23 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
     @Override
     public boolean canCopy() {
         return built;
+    }
+
+    /** A toggle of what is searched: an icon, named {@code name}, its tooltip {@code tip}; on at first. */
+    private static JToggleButton toggle(final String icon, final String name, final String tip) {
+        final JToggleButton b = new JToggleButton(Icons.get(icon));
+        b.setToolTipText(Tooltips.wrapped(tip));
+        b.getAccessibleContext().setAccessibleName(name);
+        b.putClientProperty("JButton.buttonType", "toolBarButton");
+        // a click leaves the keyboard where it was
+        b.setFocusable(false);
+        return b;
+    }
+
+    private static JMenuItem item(final String text, final String icon, final Runnable r) {
+        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
+        i.addActionListener(_ -> r.run());
+        return i;
     }
 
     /** Searches {@code text} with the keyboard in the field; the text already searched is not searched again. */
@@ -300,28 +317,6 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
         cut = false;
         failed = 0;
         build();
-    }
-
-    /** Hears one search, and hands what it says to the EDT, where a search no longer running is dropped. */
-    private final class Listening implements SearchPort.Sink {
-
-        @Override
-        public void hits(final List<SearchHit> found) {
-            Edt.later(() -> {
-                if (listening == this) {
-                    heard(found);
-                }
-            });
-        }
-
-        @Override
-        public void done(final boolean wasCut, final int notRead) {
-            Edt.later(() -> {
-                if (listening == this) {
-                    ended(wasCut, notRead);
-                }
-            });
-        }
     }
 
     private void heard(final List<SearchHit> found) {
@@ -528,23 +523,6 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
         menu.show(e.getComponent(), e.getX(), e.getY());
     }
 
-    /** A toggle of what is searched: an icon, named {@code name}, its tooltip {@code tip}; on at first. */
-    private static JToggleButton toggle(final String icon, final String name, final String tip) {
-        final JToggleButton b = new JToggleButton(Icons.get(icon));
-        b.setToolTipText(Tooltips.wrapped(tip));
-        b.getAccessibleContext().setAccessibleName(name);
-        b.putClientProperty("JButton.buttonType", "toolBarButton");
-        // a click leaves the keyboard where it was
-        b.setFocusable(false);
-        return b;
-    }
-
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(_ -> r.run());
-        return i;
-    }
-
     /** A conversation's hit reads in its row's tooltip: the message around the match; other rows keep the default. */
     private String tip(final DefaultMutableTreeNode node) {
         final SearchHit hit = node.getUserObject() instanceof ViewSpec.TreeNode n ? targets.get(n.link()) : null;
@@ -566,5 +544,27 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
             return null;
         }
         return Icons.get(SearchTree.CONVERSATIONS.equals(n.label()) ? "session" : "folder");
+    }
+
+    /** Hears one search, and hands what it says to the EDT, where a search no longer running is dropped. */
+    private final class Listening implements SearchPort.Sink {
+
+        @Override
+        public void hits(final List<SearchHit> found) {
+            Edt.later(() -> {
+                if (listening == this) {
+                    heard(found);
+                }
+            });
+        }
+
+        @Override
+        public void done(final boolean wasCut, final int notRead) {
+            Edt.later(() -> {
+                if (listening == this) {
+                    ended(wasCut, notRead);
+                }
+            });
+        }
     }
 }

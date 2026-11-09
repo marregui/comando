@@ -114,7 +114,14 @@ final class ViewRules {
         final List<Effect> effects = new ArrayList<>();
         if (panes || focus != null) {
             final Layout base = panes ? i.layout() : Layout.KEEP;
-            effects.add(new Effect.Arrange(new Layout(base.sidebar(), base.sidePane(), base.lowerShare(), focus, laterTab, focus == null ? "" : i.session())));
+            effects.add(new Effect.Arrange(new Layout(
+                    base.sidebar(),
+                    base.sidePane(),
+                    base.lowerShare(),
+                    focus,
+                    laterTab,
+                    focus == null ? "" : i.session(),
+                    base.transcript())));
         }
         if (done.isEmpty()) {
             return Transition.of(s);

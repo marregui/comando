@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import dev.marregui.comando.core.model.SearchHit;
 import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.ui.kit.text.HitMarks;
+import dev.marregui.comando.ui.kit.text.Previews;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,7 +22,7 @@ class SearchHubTest {
 
     private final List<String> calls = new ArrayList<>();
     private final List<HitMarks> shown = new ArrayList<>();
-    private final SearchHub hub = new SearchHub(List::of, () -> SearchPort.NONE, new SearchHub.Previews() {
+    private final SearchHub hub = new SearchHub(List::of, () -> SearchPort.NONE, new Previews() {
         @Override
         public void preview(final Path file, final HitMarks marks, final boolean takeKeyboard) {
             calls.add("preview " + file + (takeKeyboard ? " keyboard" : ""));

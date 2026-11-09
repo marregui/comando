@@ -134,11 +134,15 @@ public final class Actions {
 
             // ---- decisions held back: the Approvals tab's Later group (record 131)
             new Action("decision_hold", Kind.ACT,
-                    "Holds a decision back for the user: called by this session's automatic checkpoint (its command carries --auto), which asks the "
-                            + "user nothing. The decision waits in the Approvals tab's Later group, kept across restarts, until a checkpoint the user "
-                            + "starts settles it.",
+                    "Holds a decision back for the user: called by this session's automatic checkpoint (its command "
+                            + "carries --auto), or by a report that files the decisions it leaves the user, which asks "
+                            + "the user nothing. The decision waits in the Approvals tab's Later group, kept across "
+                            + "restarts, until the user answers it there or a checkpoint the user starts settles it. "
+                            + "Options become the buttons of its card; without them the user types the answer.",
                     List.of(Arg.required("title", Type.STRING, "one line: what is to be decided"),
-                            Arg.optional("detail", Type.STRING, "what the user needs to decide it, a few lines")),
+                            Arg.optional("detail", Type.STRING, "what the user needs to decide it, a few lines"),
+                            Arg.optional("options", Type.STRINGS,
+                                    "the answers offered, in order; each a button on the card")),
                     Set.of(Intent.DecisionHeldBack.class)),
             new Action("decisions_settled", Kind.ACT,
                     "Removes decisions from the Later group once a checkpoint the user started has asked them and the user answered. "
@@ -194,7 +198,10 @@ public final class Actions {
                     Set.of(Intent.PlaceView.class)),
             new Action("view_close", Kind.ACT, "Closes any view the user could close, as its ✕ does; a pinned view is unpinned first by view_pin.",
                     List.of(Arg.required("id", Type.INTEGER, "")), Set.of(Intent.CloseView.class)),
-            new Action("ui_set_layout", Kind.ACT, "Arranges the window: focus, lower tab, sidebar, side pane, lower share.", List.of(),
+            new Action("ui_set_layout", Kind.ACT,
+                    "Arranges the window: focus, lower tab, sidebar, side pane, lower share, transcript above or "
+                            + "below.",
+                    List.of(),
                     Set.of(Intent.SessionLayout.class, Intent.Arrange.class, Intent.SelectLowerTab.class, Intent.SessionFocus.class)),
             new Action("ui_get_state", Kind.READ, "What the window shows: panels, sessions, approvals, connections, folders, views.", List.of(), Set.of()),
             new Action("ui_notify", Kind.READ, "A status-bar message and a desktop notification.", List.of(), Set.of(Intent.Notify.class)),
@@ -243,8 +250,9 @@ public final class Actions {
             Intent.RefreshView.class, "a live plot redraws itself as its result grows; an agent shows a plot with ui_plot");
 
     /**
-     * User intents not offered yet, each with the reason (record 121 §3): they take a git change or a folder entry the
-     * window holds and comando's state does not, so the action needs the repository status read first.
+     * User intents not offered to agents, each with the reason (record 121 §3): most take a git change or a folder
+     * entry the window holds and comando's state does not, so the action needs the repository status read first; the
+     * answers to held decisions are the user's own (record 142).
      */
     public static final Map<Class<? extends Intent>, String> NOT_YET = notYet();
 
@@ -261,6 +269,9 @@ public final class Actions {
         m.put(Intent.DeleteFiles.class, "a Files-tab entry: needs the folder tree the window holds (record 121, increment 2)");
         m.put(Intent.AddFolder.class, "the folders window (record 121, increment 3, with the Setup actions)");
         m.put(Intent.SaveFolders.class, "the folders window (record 121, increment 3, with the Setup actions)");
+        m.put(Intent.DecisionsAnswered.class, "the user's answers to the decisions sessions held for them "
+                + "(record 142): a session holds a decision with decision_hold and gets the answers as a prompt; it "
+                + "does not answer its own");
         return Map.copyOf(m);
     }
 

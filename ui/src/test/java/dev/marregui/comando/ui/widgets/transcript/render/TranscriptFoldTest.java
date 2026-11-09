@@ -23,6 +23,7 @@ import dev.marregui.comando.ui.kit.async.OnEdt;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /// [TranscriptCanvas] reads report first: what a turn did before its report goes on one row when the turn ends.
 /// - the steps, interim text included, leave the top level; the report and the turn's end stay; a click opens the row
@@ -40,7 +41,8 @@ class TranscriptFoldTest {
 
     private static final int W = 1000;
     private static final int H = 700;
-    private static final String LAUNCHED = "Async agent launched successfully.\nagentId: a58 (internal ID)\nThe agent is working in the background.";
+    private static final String LAUNCHED = "Async agent launched successfully.\nagentId: a58 (internal ID)\n"
+            + "The agent is working in the background.";
 
     private final AtomicLong now = new AtomicLong(1_000_000L);
     private TranscriptCanvas canvas;
@@ -60,12 +62,6 @@ class TranscriptFoldTest {
             viewport = new JViewport();
             canvas.clock(now::get);
         });
-    }
-
-    private int add(final Block b) {
-        final int at = next++;
-        canvas.append(at, b);
-        return at;
     }
 
     private static Block.ToolCall tool(final String id) {
@@ -91,6 +87,27 @@ class TranscriptFoldTest {
     }
 
     /** A prompt, three calls with text between them, and a report, without the turn's end. */
+    private static Block.ToolCall agent(final String id) {
+        return new Block.ToolCall(id, "Agent",
+                "{\"description\":\"watch\",\"prompt\":\"Do it.\",\"run_in_background\":true}", "",
+                Block.ToolStatus.RUNNING, "");
+    }
+
+    private static Block.ToolCall launched(final String id, final String agentId) {
+        return agent(id).withResult("Async agent launched successfully.\nagentId: " + agentId
+                + " (internal ID)\nThe agent is working in the background.", false);
+    }
+
+    private static BackgroundTask task(final String agentId) {
+        return new BackgroundTask(agentId, "local_agent", "watch", 0L);
+    }
+
+    private int add(final Block b) {
+        final int at = next++;
+        canvas.append(at, b);
+        return at;
+    }
+
     private void turn() {
         add(new Block.UserPrompt("go", "", ""));
         add(tool("t1"));
@@ -135,16 +152,20 @@ class TranscriptFoldTest {
 
     /** The turn's row, which must be there. */
     private Items.StepsItem row() {
-        return canvas.topLevel().stream().filter(Items.StepsItem.class::isInstance).map(Items.StepsItem.class::cast)
-                .findFirst().orElseThrow();
+        for (final Item item : canvas.topLevel()) {
+            if (item instanceof Items.StepsItem fold) {
+                return fold;
+            }
+        }
+        throw new AssertionError("no row at the top level");
     }
 
     private boolean folded() {
         return canvas.topLevel().stream().anyMatch(Items.StepsItem.class::isInstance);
     }
 
-    private List<String> shape() {
-        return canvas.topLevel().stream().map(i -> i.getClass().getSimpleName()).toList();
+    private List<Class<?>> shape() {
+        return canvas.topLevel().stream().<Class<?>>map(Object::getClass).toList();
     }
 
     private void click(final int x, final int y, final int clicks) {
@@ -198,7 +219,8 @@ class TranscriptFoldTest {
         turn();
         add(end(372_000));
 
-        assertThat(shape()).containsExactly("PromptItem", "StepsItem", "TextItem", "TurnItem");
+        assertThat(shape()).containsExactly(Items.PromptItem.class, Items.StepsItem.class, Items.TextItem.class,
+                Items.TurnItem.class);
         assertThat(row().title()).isEqualTo("3 tools · 6 min");
         assertThat(row().isOpen()).isFalse();
         assertThat(row().failed()).isZero();
@@ -291,7 +313,8 @@ class TranscriptFoldTest {
         add(new Block.Note(Block.NoteKind.INFO, "a note", ""));
         add(end(40_000));
 
-        assertThat(shape()).containsExactly("PromptItem", "StepsItem", "TextItem", "NoteItem", "TurnItem");
+        assertThat(shape()).containsExactly(Items.PromptItem.class, Items.StepsItem.class, Items.TextItem.class,
+                Items.NoteItem.class, Items.TurnItem.class);
         assertThat(row().title()).isEqualTo("no tools · 40 s");
     }
 
@@ -306,8 +329,8 @@ class TranscriptFoldTest {
         add(text("Both done."));
         add(end(1_000));
 
-        assertThat(shape()).containsExactly("PromptItem", "ToolItem", "PromptItem", "StepsItem", "TextItem",
-                "TurnItem");
+        assertThat(shape()).containsExactly(Items.PromptItem.class, Items.ToolItem.class, Items.PromptItem.class,
+                Items.StepsItem.class, Items.TextItem.class, Items.TurnItem.class);
         assertThat(row().title()).startsWith("1 tool · ");
     }
 
@@ -654,21 +677,6 @@ class TranscriptFoldTest {
         assertThat(canvas.reportTop()).isGreaterThan(canvas.topOf(row()));
     }
 
-    private static Block.ToolCall agent(final String id) {
-        return new Block.ToolCall(id, "Agent",
-                "{\"description\":\"watch\",\"prompt\":\"Do it.\",\"run_in_background\":true}", "",
-                Block.ToolStatus.RUNNING, "");
-    }
-
-    private static Block.ToolCall launched(final String id, final String agentId) {
-        return agent(id).withResult("Async agent launched successfully.\nagentId: " + agentId
-                + " (internal ID)\nThe agent is working in the background.", false);
-    }
-
-    private static BackgroundTask task(final String agentId) {
-        return new BackgroundTask(agentId, "local_agent", "watch", 0L);
-    }
-
     /// Two rows held open close in one update while the selection lies in a report: the first has let its steps go
     /// when the second asks where the selection is, and nothing reads them.
     @Test
@@ -808,7 +816,7 @@ class TranscriptFoldTest {
 
         assertThat(row().isOpen()).isTrue();
         assertThat(canvas.topOf(row()) + row().topOf(step) - viewport.getViewPosition().y)
-                .isCloseTo(before, org.assertj.core.data.Offset.offset(1));
+                .isCloseTo(before, within(1));
     }
 
     /// A selection from the prompt to the report across an open row whose steps below the view are not laid out yet
@@ -852,7 +860,8 @@ class TranscriptFoldTest {
     @Test
     void aWordTheCardDoesNotShowOpensNoRow() {
         add(new Block.UserPrompt("go", "", ""));
-        add(new Block.ToolCall("t1", "Bash", "{\"command\":\"ls\",\"description\":\"zebra\"}", "ok", Block.ToolStatus.DONE, ""));
+        add(new Block.ToolCall("t1", "Bash", "{\"command\":\"ls\",\"description\":\"zebra\"}", "ok",
+                Block.ToolStatus.DONE, ""));
         add(text("The report."));
         add(end(1_000));
         lay();

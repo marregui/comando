@@ -54,13 +54,14 @@ class FocusBackUiTest {
         for (final String n : new String[]{"a.txt", "b.txt", "c.txt", "d.txt"}) {
             Files.writeString(work.resolve(n), n + "\n");
         }
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "focus", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
 
             final PanelId a = open(loop, work.resolve("a.txt"));
             keyboardTo(editorOf(a));
@@ -84,8 +85,6 @@ class FocusBackUiTest {
             keyboardTo(editorOf(d));
             loop.dispatch(new Intent.ClosePanel(d));
             Awaitility.await("the keyboard back in the list").atMost(WAIT).until(() -> onEdt(() -> frame().getMostRecentFocusOwner()) == list);
-        } finally {
-            app.close();
         }
     }
 
@@ -97,13 +96,14 @@ class FocusBackUiTest {
         for (final String n : new String[]{"main.txt", "review.txt", "report.txt", "other.txt"}) {
             Files.writeString(work.resolve(n), n + "\n");
         }
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "focus", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             final PanelId main = open(loop, work.resolve("main.txt"));
             keyboardTo(editorOf(main));
             final PanelId report = open(loop, work.resolve("report.txt")); // first opened from main
@@ -126,8 +126,6 @@ class FocusBackUiTest {
             final PanelId other = open(loop, work.resolve("other.txt"));
             loop.dispatch(new Intent.ClosePanel(other));
             Awaitility.await("back to the review panel").atMost(WAIT).until(() -> loop.state().focused().equals(review));
-        } finally {
-            app.close();
         }
     }
 
@@ -137,13 +135,14 @@ class FocusBackUiTest {
     void aFileOpenedFromTheSessionTabGoesBackToThatSessionsPanelWithItsSessionTabInFront() throws Exception {
         final Path work = Files.createDirectories(home.resolve("work"));
         Files.writeString(work.resolve("report.md"), "# Report\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "focus", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             // a session comes with its own panel (record 88): reviews, then main at its right
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("reviews", work.toString())));
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("main", work.toString())));
@@ -167,8 +166,6 @@ class FocusBackUiTest {
             Awaitility.await("the reviews panel in front, its Session tab with the keyboard").atMost(WAIT)
                     .until(() -> loop.state().focused().equals(reviews) && loop.state().lowerTab().equals(LowerTab.SESSION)
                             && onEdt(() -> frame().getMostRecentFocusOwner()) == canvas);
-        } finally {
-            app.close();
         }
     }
 
@@ -180,13 +177,14 @@ class FocusBackUiTest {
         for (final String n : new String[]{"review.txt", "main.txt", "f.txt", "g.txt"}) {
             Files.writeString(work.resolve(n), n + "\n");
         }
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "focus", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             final PanelId review = open(loop, work.resolve("review.txt"));
             final PanelId main = open(loop, work.resolve("main.txt"));
             loop.dispatch(new Intent.FocusPanel(review));
@@ -213,8 +211,6 @@ class FocusBackUiTest {
             Awaitility.await("G gone").atMost(WAIT).until(() -> loop.state().panel(g).isEmpty());
             Awaitility.await("still at review").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(3))
                     .until(() -> loop.state().focused().equals(review) && keyboardIn(review));
-        } finally {
-            app.close();
         }
     }
 

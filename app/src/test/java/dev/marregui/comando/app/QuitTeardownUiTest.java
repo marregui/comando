@@ -7,10 +7,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
@@ -98,11 +100,12 @@ class QuitTeardownUiTest {
         final CountDownLatch release = new CountDownLatch(1);
         final CountDownLatch interrupted = new CountDownLatch(1);
         // this test's window is the one the start adds: another test's, left showing, must not be the one closed
-        final Set<Frame> before = Set.of(Frame.getFrames());
+        final Set<Frame> before = onEdt(() -> Set.of(Frame.getFrames()));
         JFrame f = null;
         try {
             app[0].start();
-            Awaitility.await("the window").atMost(WAIT).until(() -> app[0].loop().state().focused() != null && frame(before) != null);
+            Awaitility.await("the window").atMost(WAIT).until(()
+                    -> app[0].loop().state().focused() != null && onEdt(() -> frame(before) != null));
             ClosingSteps.beforeEach(app[0].ui(), step -> {
                 seen.add(step);
                 if (step.equals(failing)) {
@@ -118,14 +121,13 @@ class QuitTeardownUiTest {
             });
 
             // posted as the window manager posts it: what the quit throws stays on the event thread
-            f = frame(before);
+            f = onEdt(() -> frame(before));
             Toolkit.getDefaultToolkit().getSystemEventQueue().postEvent(new WindowEvent(f, WindowEvent.WINDOW_CLOSING));
 
             final boolean wasInterrupted = interrupted.await(WAIT.toSeconds(), TimeUnit.SECONDS);
             final JFrame shown = f;
-            final boolean[] disposed = new boolean[1];
-            SwingUtilities.invokeAndWait(() -> disposed[0] = !shown.isDisplayable());
-            return new Quit(quits.get(), wasInterrupted, List.copyOf(seen), disposed[0]);
+            final boolean disposed = onEdt(() -> !shown.isDisplayable());
+            return new Quit(quits.get(), wasInterrupted, List.copyOf(seen), disposed);
         } finally {
             release.countDown();
             app[0].close();
@@ -144,5 +146,22 @@ class QuitTeardownUiTest {
             }
         }
         return null;
+    }
+
+    /// What `call` returns, run on the EDT; its failure is thrown here.
+    private static <T> T onEdt(final Callable<T> call) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
+        final AtomicReference<Exception> failed = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                out.set(call.call());
+            } catch (final Exception e) {
+                failed.set(e);
+            }
+        });
+        if (failed.get() != null) {
+            throw failed.get();
+        }
+        return out.get();
     }
 }

@@ -46,13 +46,14 @@ class OutlineUiTest {
     void theOutlineButtonShowsTheHeadingsAndADoubleClickScrollsThePageToOne() throws Exception {
         final Path doc = home.resolve("plan.md");
         Files.writeString(doc, "# Plan\n\n" + "A line of text.\n\n".repeat(120) + "## Far section\n\nThe end.\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "outline", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.OpenFile("", doc.toString(), 0));
             Awaitility.await("its panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("plan.md"));
 
@@ -79,8 +80,6 @@ class OutlineUiTest {
                         MouseEvent.BUTTON1));
             });
             Awaitility.await("scrolled to the far section").atMost(WAIT).until(() -> onEdt(() -> page.getViewPosition().y) > 500);
-        } finally {
-            app.close();
         }
     }
 
@@ -90,14 +89,13 @@ class OutlineUiTest {
     void thePaneComingAndGoingLeavesTheKeyboardInTheText() throws Exception {
         final Path doc = home.resolve("notes.md");
         Files.writeString(doc, "Just a line.\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
                 home.resolve("projects"), false), "outline-keys", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20))
-                    .until(() -> loop.state().focused() != null && frame() != null);
+                    .until(() -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.OpenFile("", doc.toString(), 0));
             Awaitility.await("its panel").atMost(WAIT)
                     .until(() -> loop.state().focusedPanel().title().equals("notes.md"));
@@ -122,8 +120,6 @@ class OutlineUiTest {
             Awaitility.await("the pane gone").atMost(WAIT).until(() -> onEdt(() -> find(frame(), JList.class,
                     l -> "outline-list".equals(l.getName()) && l.isShowing()) == null));
             assertThat(onEdt(() -> frame().getMostRecentFocusOwner())).as("the pane went").isSameAs(text);
-        } finally {
-            app.close();
         }
     }
 

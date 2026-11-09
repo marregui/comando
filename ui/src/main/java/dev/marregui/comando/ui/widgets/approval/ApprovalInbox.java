@@ -65,6 +65,7 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.desktop.Platform;
@@ -97,9 +98,14 @@ import dev.marregui.comando.ui.widget.WidgetContext;
  *
  * <p>One queue for the window, in three groups (record 131): this session's cards, the focused panel's session's, under
  * its name, first; then the other sessions' cards under each session's name, the session with the oldest card first;
- * then Later, the decisions automatic checkpoints held back, under each session's name, each with Settle (its session
- * asks now) and Dismiss. Within a group the oldest comes first. Up and Down follow that order. A decision takes no
- * keyboard: its buttons are clicked.</p>
+ * then Later, the decisions held back (by a checkpoint, a report, a question with no answer in time), under each
+ * session's name, each with Settle (its session asks now) and Dismiss. Within a group the oldest comes first. Up and
+ * Down follow that order. A decision takes no keyboard but in its typed answer: its buttons are clicked.</p>
+ *
+ * <p>A decision is answered on its card (record 142): one of its options, chosen as a question's, or, when it has
+ * none, a line typed. Send answers sends every card answered at once, in the group's order; each decision's session
+ * gets one prompt with its answers, and the cards not answered stay. A choice stays through every render while its
+ * decision is held.</p>
  *
  * <p>Each time the inbox comes forward ({@link #shown}) it shows its top, this session's oldest request first, unless
  * the keyboard is in a card. A request arriving while it is in front moves nothing.</p>
@@ -168,7 +174,8 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
     private static final String SETTLE_ELSEWHERE = "Runs %s's checkpoint; %s has no checkpoint command";
     private static final String SETTLE_GONE = "Runs %s's checkpoint; session %s was removed";
     private static final String SETTLE_LOCKED = "The session runs its checkpoint; Settle once it has ended";
-    private static final String LATER_NOTE = "Held back by automatic checkpoints. Settle asks the session now.";
+    private static final String LATER_NOTE = "Held back for you. Answer and send, or Settle: the session asks now.";
+    private static final String SEND_TIP = "Send answers: each answered decision's session gets them in one prompt";
     /** The Other answer's size: a paragraph of five lines, 120 characters wide. */
     static final int OTHER_ROWS = 5;
     static final int OTHER_COLUMNS = 120;
@@ -209,6 +216,16 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
     private final JLabel otherSessions = section("Other sessions");
     private final JLabel later = section("Later");
     private final JTextArea laterNote = muted(LATER_NOTE);
+    /** The Later group's bar under its note: Send answers. */
+    private final JPanel laterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)) {
+        @Override
+        public Dimension getMaximumSize() {
+            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+    };
+    private final JButton sendAnswers = ToolButton.of("check", SEND_TIP, this::sendAnswers);
+    /** The decisions in view order: by session, the session with the oldest first, each oldest first. */
+    private final List<DecisionRow> laterOrder = new ArrayList<>();
     /** The approvals the user answered in this inbox whose cards are still shown. */
     private final Set<Long> answered = new HashSet<>();
     private final ShownTimer ages = new ShownTimer(overlay, AGE_TICK_MILLIS, this::tick);
@@ -235,6 +252,12 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         FocusRing.install(scroll);
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         overlay.showEmpty(EMPTY);
+        sendAnswers.setName("send-answers");
+        laterBar.setName("later-bar");
+        laterBar.setOpaque(false);
+        laterBar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        laterBar.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, 0, Theme.SPACE_XS, 0));
+        laterBar.add(sendAnswers);
     }
 
     @Override
@@ -262,6 +285,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         decisions.values().removeIf(r -> !held.contains(r.decision.id()));
         answered.retainAll(ids);
         lay(queue);
+        updateSend();
         if (cards.isEmpty() && decisions.isEmpty()) {
             overlay.showEmpty(EMPTY);
         } else {
@@ -297,6 +321,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         final List<Component> want = new ArrayList<>();
         final Set<String> named = new HashSet<>();
         order.clear();
+        laterOrder.clear();
         final String own = queue.session();
         final List<Approval> mine = queue.approvals().stream().filter(a -> !own.isEmpty() && a.session().equals(own)).toList();
         if (!mine.isEmpty()) {
@@ -322,10 +347,12 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         if (!held.isEmpty()) {
             want.add(later);
             want.add(laterNote);
+            want.add(laterBar);
             for (final Map.Entry<String, List<Decision>> e : held.entrySet()) {
                 want.add(name("later", e.getKey(), named));
                 for (final Decision d : e.getValue()) {
                     final DecisionRow r = decisions.get(d.id());
+                    laterOrder.add(r);
                     want.add(r);
                     want.add(r.gap);
                 }
@@ -483,6 +510,29 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         final int i = order.indexOf(from) + step;
         if (i >= 0 && i < order.size()) {
             focus.request(order.get(i));
+        }
+    }
+
+    /** Send answers: on while a card of the Later group holds an answer. */
+    private void updateSend() {
+        boolean any = false;
+        for (final DecisionRow r : laterOrder) {
+            any |= !r.answer().isEmpty();
+        }
+        sendAnswers.setEnabled(any);
+    }
+
+    /** Every answered card's answer, by its decision's id, in the group's order; the cards not answered stay. */
+    private void sendAnswers() {
+        final Map<Long, String> answers = new LinkedHashMap<>();
+        for (final DecisionRow r : laterOrder) {
+            final String a = r.answer();
+            if (!a.isEmpty()) {
+                answers.put(r.decision.id(), a);
+            }
+        }
+        if (!answers.isEmpty()) {
+            context.intents().dispatch(new Intent.DecisionsAnswered(answers));
         }
     }
 
@@ -976,10 +1026,17 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         }
     }
 
-    /** A decision held back: its title, its detail (muted), its age, Settle and Dismiss. It takes no keyboard. */
+    /**
+     * A decision held back: its title, its detail (muted), its age, its answer (one of its options, or a line typed
+     * when it has none), Settle and Dismiss. It takes no keyboard but in the typed line.
+     */
     private final class DecisionRow extends JPanel {
         private final Decision decision;
         private final JLabel age = Plain.only(new JLabel());
+        /** One radio button per option, in a group: one choice. */
+        private final List<AbstractButton> options = new ArrayList<>();
+        /** The typed answer; shown only for a decision without options. */
+        private final JTextField typed = new JTextField(OTHER_COLUMNS);
         private final JButton settle;
         /** The space under the row. */
         private final Component gap = Box.createVerticalStrut(Theme.GAP);
@@ -1006,11 +1063,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             head.add(title);
             head.add(age);
             add(head, BorderLayout.NORTH);
-            if (!d.detail().isBlank()) {
-                final JTextArea detail = muted(d.detail());
-                detail.setName("detail");
-                add(detail, BorderLayout.CENTER);
-            }
+            add(body(d), BorderLayout.CENTER);
             final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
             buttons.setOpaque(false);
             settle = button("Settle", "checkpoint", () -> context.intents().dispatch(new Intent.SettleDecision(d.id())), false);
@@ -1022,6 +1075,71 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
             dismiss.setToolTipText("Drops the decision unasked");
             buttons.add(dismiss);
             add(buttons, BorderLayout.SOUTH);
+        }
+
+        /** Its detail, then its options and an Other answer, as a question card offers, or the typed line alone. */
+        private JComponent body(final Decision d) {
+            final JPanel p = new JPanel();
+            p.setOpaque(false);
+            p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+            if (!d.detail().isBlank()) {
+                final JTextArea detail = muted(d.detail());
+                detail.setName("detail");
+                p.add(detail);
+            }
+            final ButtonGroup group = new ButtonGroup();
+            for (final String option : d.options()) {
+                // options come from Claude: shown as text, never as HTML
+                final AbstractButton b = Plain.only(new JRadioButton());
+                b.setText(option); // after the guard: Swing decides on HTML when the text is set
+                b.setActionCommand(option);
+                b.setName("option");
+                b.setOpaque(false);
+                b.setFocusable(false);
+                b.setAlignmentX(Component.LEFT_ALIGNMENT);
+                b.addItemListener(e -> updateSend());
+                group.add(b);
+                options.add(b);
+                p.add(b);
+            }
+            typed.setName("answer");
+            typed.putClientProperty("JTextField.placeholderText", options.isEmpty() ? "Your answer" : "Other answer");
+            typed.setAlignmentX(Component.LEFT_ALIGNMENT);
+            // its columns wide, as a question's Other answer; narrower only when the card is
+            typed.setMaximumSize(typed.getPreferredSize());
+            typed.getDocument().addDocumentListener(new DocumentListener() {
+                @Override
+                public void insertUpdate(final DocumentEvent e) {
+                    updateSend();
+                }
+
+                @Override
+                public void removeUpdate(final DocumentEvent e) {
+                    updateSend();
+                }
+
+                @Override
+                public void changedUpdate(final DocumentEvent e) {
+                    updateSend();
+                }
+            });
+            p.add(Box.createVerticalStrut(Theme.SPACE_XS));
+            p.add(typed);
+            return p;
+        }
+
+        /** The line typed, stripped, else the option chosen, as a question card answers; empty while it has neither. */
+        String answer() {
+            final String line = typed.getText().strip();
+            if (!line.isEmpty()) {
+                return line;
+            }
+            for (final AbstractButton b : options) {
+                if (b.isSelected()) {
+                    return b.getActionCommand();
+                }
+            }
+            return "";
         }
 
         /**

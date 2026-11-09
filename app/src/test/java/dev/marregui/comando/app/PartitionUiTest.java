@@ -11,6 +11,7 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
@@ -104,8 +105,7 @@ class PartitionUiTest {
     /// the right side by "Move to the right side" on its tab and back by "Move to the lower panel".
     @Test
     void aPanelAndTheChangesViewMoveToTheRightSideByTheirTabsMenuAndBack() throws Exception {
-        final App app = start("partition-move");
-        try {
+        try (final App app = start("partition-move")) {
             final PanelId notes = addPanel(app, "notes");
             final JTabbedPane main = strip("workspace");
             final JTabbedPane side = strip("side");
@@ -134,8 +134,6 @@ class PartitionUiTest {
             clickItem("Move to the lower panel");
             until("the Changes view below again", () -> placement(app, id) == Placement.LOWER
                     && onEdt(() -> titled(lower, ViewSpec.Changes.TITLE) >= 0));
-        } finally {
-            app.close();
         }
     }
 
@@ -145,17 +143,13 @@ class PartitionUiTest {
     @Test
     void aFileMovedToTheRightSideLeavesTheLowerPanelAndOpensAtASideViewsWidth() throws Exception {
         final int viewWidth;
-        final App first = start("partition-width-view", "data-view");
-        try {
+        try (final App first = start("partition-width-view", "data-view")) {
             showChanges(first, Placement.SIDE);
             final JTabbedPane side = strip("side");
             until("the Changes view on the right side", () -> onEdt(side::isShowing));
             viewWidth = onEdt(() -> sideWidth(side));
-        } finally {
-            first.close();
         }
-        final App app = start("partition-width-file", "data-file");
-        try {
+        try (final App app = start("partition-width-file", "data-file")) {
             final PanelId file = panelId("readme");
             app.loop().dispatch(new Intent.AddPanel(file, "README.md", true));
             final JTabbedPane main = strip("workspace");
@@ -170,8 +164,6 @@ class PartitionUiTest {
                     && side.isShowing() && lower.isShowing()));
             assertThat(app.loop().state().focused()).as("the file keeps the keyboard").isEqualTo(file);
             assertThat(onEdt(() -> sideWidth(side))).as("a side view's width").isCloseTo(viewWidth, within(2));
-        } finally {
-            app.close();
         }
     }
 
@@ -179,8 +171,7 @@ class PartitionUiTest {
     /// second; ⌘W with the side panel focused closes it there, and ⌘⇧T reopens it on the right side.
     @Test
     void theKeysGoAcrossBothStripsAndCloseAndReopenOnTheRightSide() throws Exception {
-        final App app = start("partition-keys");
-        try {
+        try (final App app = start("partition-keys")) {
             final PanelId first = app.loop().state().focused();
             final PanelId second = addPanel(app, "second");
             final PanelId third = addPanel(app, "third");
@@ -207,8 +198,6 @@ class PartitionUiTest {
             press(KeyEvent.VK_T, shortcut | InputEvent.SHIFT_DOWN_MASK);
             until("⌘⇧T: back on the right side", () -> app.loop().state().panel(third).map(PanelState::side)
                     .orElse(false) && onEdt(() -> indexOf(side, third) >= 0));
-        } finally {
-            app.close();
         }
     }
 
@@ -217,8 +206,7 @@ class PartitionUiTest {
     /// before it in the colour of the sidebar's divider.
     @Test
     void thePartitionShownAfterALightThemeChosenWhileHiddenIsLight() throws Exception {
-        final App app = start("partition-theme");
-        try {
+        try (final App app = start("partition-theme")) {
             final JTabbedPane main = strip("workspace");
             assertThat(onEdt(() -> find(frame(), JTabbedPane.class, t -> "side".equals(t.getName()) && t.isShowing())))
                     .as("hidden: nothing on the right side").isNull();
@@ -244,8 +232,6 @@ class PartitionUiTest {
                             && SwingUtilities.getAncestorOfClass(JSplitPane.class, p) == null)));
             assertThat(divider.getRGB()).as("the partition's divider in the theme's [colour=" + divider + ']')
                     .isEqualTo(sidebars.getRGB());
-        } finally {
-            app.close();
         }
     }
 
@@ -255,8 +241,7 @@ class PartitionUiTest {
     void aSidePanelAndTheSideViewsComeBackAfterARestart() throws Exception {
         final Path settings = home.resolve("data").resolve("settings.json");
         final PanelId notes = panelId("notes");
-        final App app = start("partition-restart");
-        try {
+        try (final App app = start("partition-restart")) {
             addPanel(app, "notes");
             app.loop().dispatch(new Intent.PlacePanel(notes, true));
             app.loop().dispatch(new Intent.ShowView("", ViewSpec.Search.TITLE, new ViewSpec.Search(), Placement.SIDE));
@@ -264,18 +249,11 @@ class PartitionUiTest {
             final JTabbedPane side = strip("side");
             until("the panel and both views on the right side", () -> onEdt(() -> indexOf(side, notes) >= 0
                     && titled(side, ViewSpec.Search.TITLE) >= 0 && titled(side, ViewSpec.Changes.TITLE) >= 0));
-            // the layout is saved a second after the window last changed size
-            onEdt(() -> {
-                frame().setSize(frame().getWidth() + 1, frame().getHeight());
-                return null;
-            });
-            until("the side views saved", () -> JsonFile.JSON.readTree(settings.toFile()).path("sidePane.views")
-                    .asString("").split(",").length == 2);
-        } finally {
-            app.close();
         }
-        final App again = start("partition-restart-again");
-        try {
+        final String kept = JsonFile.JSON.readTree(settings.toFile()).path("sidePane.views").asString("");
+        assertThat(Arrays.stream(kept.split(",")).map(String::strip)).as("the side views saved by the close")
+                .containsExactlyInAnyOrder("search", "changes");
+        try (final App again = start("partition-restart-again")) {
             until("the panel on the right side again", () -> again.loop().state().panel(notes).map(PanelState::side)
                     .orElse(false));
             final JTabbedPane side = strip("side");
@@ -284,8 +262,6 @@ class PartitionUiTest {
                     && side.isShowing()));
             assertThat(again.loop().state().views()).filteredOn(v -> v.placement() == Placement.SIDE)
                     .extracting(v -> v.spec().type()).containsExactlyInAnyOrder("search", "changes");
-        } finally {
-            again.close();
         }
     }
 
@@ -305,9 +281,15 @@ class PartitionUiTest {
                 false);
         final App app = new App(config, name, () -> {
         });
-        app.start();
-        Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> app.loop().state().focused() != null
-                && frame() != null);
+        try {
+            app.start();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> app.loop().state().focused() != null
+                    && onEdt(() -> frame() != null));
+        } catch (final Exception | AssertionError e) {
+            // the caller's try-with-resources holds the window only once it is returned
+            app.close();
+            throw e;
+        }
         return app;
     }
 
@@ -498,10 +480,6 @@ class PartitionUiTest {
         return null;
     }
 
-    private interface EdtCall<T> {
-        T call() throws Exception;
-    }
-
     private static <T> T onEdt(final EdtCall<T> call) throws Exception {
         final AtomicReference<T> out = new AtomicReference<>();
         final AtomicReference<Exception> err = new AtomicReference<>();
@@ -516,5 +494,9 @@ class PartitionUiTest {
             throw err.get();
         }
         return out.get();
+    }
+
+    private interface EdtCall<T> {
+        T call() throws Exception;
     }
 }

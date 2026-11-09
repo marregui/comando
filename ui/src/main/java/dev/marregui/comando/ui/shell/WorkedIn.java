@@ -13,6 +13,7 @@ import tools.jackson.databind.JsonNode;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.format.Json;
+import dev.marregui.comando.ui.kit.vcs.RepositoryTop;
 
 /**
  * The folders a session has worked in, read from its own tool calls (record 111): the repository of each file a call
@@ -25,8 +26,6 @@ final class WorkedIn {
     static final int MAX_ROOTS = 8;
     /** How many transcript blocks are read, from the end. */
     static final int MAX_BLOCKS = 4_000;
-    /** How far up from a file a repository's top is looked for. */
-    static final int MAX_UP = 12;
     private static final List<String> FIELDS = List.of("file_path", "notebook_path", "path");
 
     private WorkedIn() {
@@ -50,7 +49,7 @@ final class WorkedIn {
                     final Path named = Path.of(value).normalize();
                     final Path folder = Files.isDirectory(named) ? named : named.getParent();
                     if (folder != null) {
-                        out.add(repositoryOf(folder));
+                        out.add(RepositoryTop.above(folder).orElse(folder));
                     }
                 } catch (final InvalidPathException e) {
                     // a value that is no path names no folder
@@ -60,14 +59,4 @@ final class WorkedIn {
         return new ArrayList<>(out);
     }
 
-    /** The top of the git repository holding {@code folder}, else {@code folder} itself. */
-    static Path repositoryOf(final Path folder) {
-        Path at = folder;
-        for (int i = 0; at != null && i < MAX_UP; i++, at = at.getParent()) {
-            if (Files.exists(at.resolve(".git"))) {
-                return at;
-            }
-        }
-        return folder;
-    }
 }

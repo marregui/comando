@@ -43,8 +43,7 @@ class LayoutKeeperUiTest {
     void theSidebarsWidthIsKeptAndAnArrangementHidesAndShowsIt() throws Exception {
         final Path data = Files.createDirectories(home.resolve("data"));
         Files.writeString(data.resolve("settings.json"), "{\"version\": 1, \"divider.sidebar\": 333}");
-        App app = start("layout");
-        try {
+        try (final App app = start("layout")) {
             final StateLoop loop = app.loop();
             final JSplitPane outer = outer();
             Awaitility.await("restored at its kept width").atMost(WAIT).until(() -> onEdt(outer::getDividerLocation) == 333);
@@ -65,15 +64,10 @@ class LayoutKeeperUiTest {
             });
             Awaitility.await("saved a second after the resize").atMost(WAIT)
                     .until(() -> Files.readString(data.resolve("settings.json")).matches("(?s).*\"divider\\.sidebar\"\\s*:\\s*300\\b.*"));
-        } finally {
-            app.close();
         }
-        app = start("layout-again");
-        try {
+        try (final App _ = start("layout-again")) {
             final JSplitPane outer = outer();
             Awaitility.await("the width left kept for the next window").atMost(WAIT).until(() -> onEdt(outer::getDividerLocation) == 300);
-        } finally {
-            app.close();
         }
     }
 
@@ -83,13 +77,10 @@ class LayoutKeeperUiTest {
     void aValueThatIsNoNumberGivesTheDefault() throws Exception {
         final Path data = Files.createDirectories(home.resolve("data"));
         Files.writeString(data.resolve("settings.json"), "{\"version\": 1, \"divider.sidebar\": \"wide\"}");
-        final App app = start("layout-default");
-        try {
+        try (final App _ = start("layout-default")) {
             final JSplitPane outer = outer();
             Awaitility.await("the default width").atMost(WAIT).until(() -> onEdt(outer::getDividerLocation) == 260);
             assertThat(onEdt(() -> frame().isDisplayable())).isTrue();
-        } finally {
-            app.close();
         }
     }
 
@@ -97,8 +88,15 @@ class LayoutKeeperUiTest {
         final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 name, () -> {
         });
-        app.start();
-        Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> app.loop().state().focused() != null && frame() != null);
+        try {
+            app.start();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> app.loop().state().focused() != null && onEdt(() -> frame() != null));
+        } catch (final RuntimeException | AssertionError e) {
+            // the caller's try-with-resources holds the window only once it is returned
+            app.close();
+            throw e;
+        }
         return app;
     }
 

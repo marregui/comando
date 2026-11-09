@@ -209,7 +209,9 @@ final class Menus {
         put(a, "Edit", "view.copy", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");
         put(a, "Kit", "kit.upgrade", "kit.backup", "kit.backupKit", "kit.repair");
-        put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",
+        put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes",
+                "view.deliverables", "view.restoreLayout", "view.transcriptAbove", "view.transcriptBelow",
+                "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");
         put(a, "comando", "app.about", "app.quit");

@@ -76,10 +76,10 @@ class LinksUiTest {
                 Verify.
                 """);
         final List<String> browsed = new CopyOnWriteArrayList<>();
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "links", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
@@ -108,7 +108,6 @@ class LinksUiTest {
             assertThat(browsed).containsExactly("https://example.org/guide");
         } finally {
             Links.browseWith(Browser::open);
-            app.close();
         }
     }
 
@@ -121,10 +120,10 @@ class LinksUiTest {
         final Path doc = work.resolve("BRAIN/SCRATCHPAD/2026-10-28/harness/07-fleet-vision.md");
         Files.createDirectories(doc.getParent());
         Files.writeString(doc, "# Fleet vision\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "links", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
@@ -145,8 +144,6 @@ class LinksUiTest {
             loop.dispatch(new Intent.OpenFile("lane", "harness/07-fleet-vision.md", 0));
             Awaitility.await("followed again: the same panel").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(3))
                     .until(() -> loop.state().panels().size() == after);
-        } finally {
-            app.close();
         }
     }
 

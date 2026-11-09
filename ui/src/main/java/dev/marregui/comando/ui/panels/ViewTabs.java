@@ -142,8 +142,8 @@ final class ViewTabs {
     JPopupMenu menu(final ViewState v) {
         final Placement other = placement == Placement.SIDE ? Placement.LOWER : Placement.SIDE;
         final JMenuItem move = other == Placement.LOWER
-                ? new JMenuItem("Move to the lower panel", Icons.get("import"))
-                : new JMenuItem("Move to the right side", Icons.get("sidebar"));
+                ? new JMenuItem("Move to the lower panel", Icons.get("move-lower"))
+                : new JMenuItem("Move to the right side", Icons.get("move-side"));
         move.addActionListener(_ -> dispatch(new Intent.PlaceView(v.id(), other)));
         final JPopupMenu m = new JPopupMenu();
         m.add(move);

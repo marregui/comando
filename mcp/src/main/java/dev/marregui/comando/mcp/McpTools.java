@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -69,6 +70,8 @@ public final class McpTools {
     static final String APPROVE = "approve";
     private static final String BYPASS = "bypassPermissions";
     private static final String PLAN_MODE = "plan";
+    /** The detail line of a held-back question that took several options (record 142). */
+    private static final String SEVERAL = "Several may apply: choose one, or name them all in Other answer.";
     static final int MAX_SQL_ROWS = 200;
     static final int MAX_RESULT_CHARS = 64 * 1024;
     /** Blocks {@code session_read} shows without a cursor: the end of the transcript. */
@@ -268,7 +271,11 @@ public final class McpTools {
             return d;
         } catch (final TimeoutException e) {
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "no answer within " + approvalTimeout.toMinutes() + " minutes"));
-            return new ApprovalDecision.Deny("No answer from the user within " + approvalTimeout.toMinutes() + " minutes.");
+            final String unanswered = "No answer from the user within " + approvalTimeout.toMinutes() + " minutes.";
+            final int held = kind == ApprovalKind.QUESTION ? heldBack(session, inputJson) : 0;
+            final String waits = (held == 1 ? " The question waits" : " The questions wait")
+                    + " in the Approvals tab's Later group; the user's answers come to this session as a prompt.";
+            return new ApprovalDecision.Deny(held == 0 ? unanswered : unanswered + waits);
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "comando is shutting down"));
@@ -282,6 +289,53 @@ public final class McpTools {
                 approvalByCall.remove(call, id);
             }
         }
+    }
+
+    /**
+     * A question card no one answered in time moves to the Later group (record 142): one decision per question, its
+     * header and the options' descriptions as the detail, the option labels as its options; a question that took
+     * several options says so in its detail, as the Later card offers one choice and an Other answer. Answers how many
+     * it held; none for input that is not a list of questions.
+     */
+    private int heldBack(final String session, final String inputJson) {
+        final JsonNode questions;
+        try {
+            questions = json.readTree(inputJson).path("questions");
+        } catch (final JacksonException e) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "question card input unreadable, not held back [session=" + session + ", error=" + e.getMessage()
+                            + ']');
+            return 0;
+        }
+        int held = 0;
+        for (final JsonNode q : questions) {
+            final String question = q.path("question").asString("").strip();
+            if (question.isEmpty()) {
+                continue;
+            }
+            final List<String> detail = new ArrayList<>();
+            final String header = q.path("header").asString("").strip();
+            if (!header.isEmpty()) {
+                detail.add(header);
+            }
+            final List<String> options = new ArrayList<>();
+            for (final JsonNode o : q.path("options")) {
+                final String label = o.path("label").asString("").strip();
+                final String description = o.path("description").asString("").strip();
+                if (!label.isEmpty()) {
+                    options.add(label);
+                    if (!description.isEmpty()) {
+                        detail.add(label + ": " + description);
+                    }
+                }
+            }
+            if (q.path("multiSelect").asBoolean(false) && options.size() > 1) {
+                detail.add(SEVERAL);
+            }
+            sink.dispatch(new Intent.DecisionHeldBack(session, question, String.join("\n", detail), options));
+            held++;
+        }
+        return held;
     }
 
     /** Tells the tools which panels take no text (a log); the application calls it once, with the store's view. */
@@ -382,8 +436,10 @@ public final class McpTools {
         return r.toString();
     }
 
-    private Outcome show(final String session, final String title, final ViewSpec spec, final JsonNode args) {
-        final Placement placement = "side".equalsIgnoreCase(args.path("placement").asString("lower")) ? Placement.SIDE : Placement.LOWER;
+    private Outcome show(final String session, final String asked, final ViewSpec spec, final JsonNode args) {
+        final Placement placement = ViewSpecs.placement(spec, args);
+        // one Files written view whatever title the call gives: a view is found again by its title
+        final String title = spec instanceof ViewSpec.Deliverables ? ViewSpec.Deliverables.TITLE : asked;
         final Intent.ShowView shown = new Intent.ShowView(session, title, spec, placement);
         // a view the user moved is updated where it is now (record 141)
         final Placement where = Reducer.shownAt(state.get(), shown);
@@ -486,9 +542,11 @@ public final class McpTools {
             };
         }
         final Layout layout = new Layout(toggle(args.path("sidebar")), toggle(args.path("side_pane")),
-                args.path("lower_share").isNumber() ? args.path("lower_share").asDouble(0) : Double.NaN);
+                args.path("lower_share").isNumber() ? args.path("lower_share").asDouble(0) : Double.NaN, null, null, "",
+                toggle(args.path("transcript_above")));
         if (target == null && lower == null && layout.changesNothing()) {
-            return Outcome.fail("nothing to change: pass panel, lower_tab, sidebar, side_pane or lower_share");
+            return Outcome.fail(
+                    "nothing to change: pass panel, lower_tab, sidebar, side_pane, lower_share or transcript_above");
         }
         // the user's window: a session may focus only its own panels, and select a tab only while the user looks at
         // one of them; the user sees a notice and can undo an arrangement with View > Restore layout
@@ -612,11 +670,13 @@ public final class McpTools {
             n.put("tool", a.toolName());
             n.put("summary", clip(a.summary(), 300));
         }
-        // the decisions automatic checkpoints held back, oldest first: the Approvals tab's Later group (record 131)
+        // the decisions sessions held back, oldest first: the Approvals tab's Later group (records 131, 142)
         final ArrayNode later = root.putArray("later");
         for (final Decision d : s.later()) {
-            later.addObject().put("id", d.id()).put("session", d.session()).put("title", d.title()).put("detail", d.detail())
-                    .put("created", d.createdMillis());
+            final ObjectNode n = later.addObject().put("id", d.id()).put("session", d.session()).put("title", d.title())
+                    .put("detail", d.detail()).put("created", d.createdMillis());
+            final ArrayNode options = n.putArray("options");
+            d.options().forEach(options::add);
         }
         final ArrayNode folders = root.putArray("folders");
         s.folders().forEach(f -> folders.addObject().put("name", f.name()).put("path", f.path()));

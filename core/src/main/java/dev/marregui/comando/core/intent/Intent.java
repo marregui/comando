@@ -1,5 +1,7 @@
 package dev.marregui.comando.core.intent;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -516,8 +518,33 @@ public sealed interface Intent {
 
     // ---- decisions held back (record 131)
 
-    /** A session's automatic checkpoint held a decision back for the user: it joins the Approvals tab's Later group. */
-    record DecisionHeldBack(String session, String title, String detail) implements Intent {
+    /**
+     * A session held a decision back for the user (its automatic checkpoint, a report, a question card with no answer
+     * in time): it joins the Approvals tab's Later group.
+     *
+     * @param options the answers offered, in order; empty when the answer is a line the user types
+     */
+    record DecisionHeldBack(String session, String title, String detail, List<String> options) implements Intent {
+        public DecisionHeldBack {
+            options = options == null ? List.of() : List.copyOf(options);
+        }
+
+        /** A decision answered by a line the user types; for tests, the application builds the canonical form. */
+        public DecisionHeldBack(final String session, final String title, final String detail) {
+            this(session, title, detail, List.of());
+        }
+    }
+
+    /**
+     * The user answered a batch of the Later group's decisions (record 142): each decision's session gets one prompt
+     * with its answers, and the decisions answered leave the group.
+     *
+     * @param answers the answer to each decision, by its id, in the Later group's order; a blank answer is dropped
+     */
+    record DecisionsAnswered(Map<Long, String> answers) implements Intent {
+        public DecisionsAnswered {
+            answers = Collections.unmodifiableMap(new LinkedHashMap<>(answers));
+        }
     }
 
     /** A checkpoint the user started settled these decisions: they leave the Later group. */

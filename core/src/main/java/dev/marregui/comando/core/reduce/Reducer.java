@@ -184,7 +184,31 @@ public final class Reducer {
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
             case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
             case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);
-            default -> Optional.empty();
+            case Intent.AddPanel _, Intent.PinPanel _, Intent.PlaceView _, Intent.RemovePanel _, Intent.RenamePanel _,
+                    Intent.MovePanel _, Intent.ReopenPanel _, Intent.FocusPanel _, Intent.BindConnection _,
+                    Intent.BindSession _, Intent.OpenSession _, Intent.RefreshSql _, Intent.RefreshView _,
+                    Intent.CancelRun _, Intent.SqlStarted _, Intent.SqlRows _, Intent.SqlCompleted _,
+                    Intent.SqlFailed _, Intent.SqlCancelled _, Intent.SqlWarning _, Intent.SaveConnection _,
+                    Intent.RemoveConnection _, Intent.AddFolder _, Intent.SaveFolders _, Intent.FoldersRead _,
+                    Intent.OpenConnection _, Intent.CloseConnection _, Intent.TestConnection _,
+                    Intent.ConnectionOpened _, Intent.ConnectionClosed _, Intent.ConnectionFailed _,
+                    Intent.ExploreSchema _, Intent.SchemaChanged _, Intent.ConnectionLost _, Intent.ConnectionTested _,
+                    Intent.RemoveSession _, Intent.ImportSessions _, Intent.StartSession _, Intent.StopSession _,
+                    Intent.StartFresh _, Intent.OrderSessions _, Intent.InterruptSession _, Intent.ClearTranscript _,
+                    Intent.SetSessionModel _, Intent.SetSessionEffort _, Intent.SessionStarted _, Intent.SessionRanAt _,
+                    Intent.SessionInit _, Intent.SessionActivity _, Intent.SessionTasksChanged _,
+                    Intent.SessionTurnRunning _, Intent.SessionTurnEnded _, Intent.SessionExited _,
+                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionContext _,
+                    Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
+                    Intent.DecisionHeldBack _, Intent.DecisionsAnswered _, Intent.DecisionsSettled _,
+                    Intent.DecisionsRead _, Intent.DismissDecision _, Intent.ShowView _, Intent.CloseView _,
+                    Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _, Intent.SessionLayout _,
+                    Intent.SessionFocus _, Intent.PromptSession _, Intent.EditPanel _, Intent.OpenFile _,
+                    Intent.OpenSubagent _, Intent.RunGradle _, Intent.CommandFinished _, Intent.CancelCommand _,
+                    Intent.BrowseFolders _, Intent.WatchFolders _, Intent.FolderLoaded _, Intent.ReposLoaded _,
+                    Intent.OpenChange _, Intent.ChangeRead _, Intent.DeleteFiles _, Intent.RollBack _,
+                    Intent.RemoveFiles _, Intent.Unstage _, Intent.InstancesChanged _, Intent.PlanUsageRead _,
+                    Intent.Notify _, Intent.DismissNotice _ -> Optional.empty();
         };
     }
 
@@ -272,6 +296,7 @@ public final class Reducer {
             case Intent.DecisionsRead i -> DecisionRules.read(s, i);
             case Intent.SettleDecision i -> DecisionRules.settle(clock, s, i);
             case Intent.DismissDecision i -> DecisionRules.dismissed(s, i);
+            case Intent.DecisionsAnswered i -> DecisionRules.answered(clock, s, i);
 
             case Intent.AddFolder i -> FolderRules.addFolder(clock, s, i.spec());
             case Intent.SaveFolders i -> FolderRules.saveFolders(clock, s, i);

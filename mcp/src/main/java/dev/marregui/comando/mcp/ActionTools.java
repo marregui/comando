@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -358,17 +360,20 @@ final class ActionTools {
     }
 
     /**
-     * Holds a decision back for the calling session (record 131). Only a session holds a decision back: the Later group
-     * lists each under the session whose checkpoint held it. It answers no id: the checkpoint that settles it later reads
-     * the ids from {@code ui_get_state}.
+     * Holds a decision back for the calling session (records 131 and 142), with the options its card offers, if any.
+     * Only a session holds a decision back: the Later group lists each under the session whose checkpoint or report
+     * held it. It answers no id: the checkpoint that settles it later reads the ids from {@code ui_get_state}.
      */
     private String decisionHold(final String caller, final AppState s, final JsonNode args) {
         if (s.session(caller).isEmpty()) {
             return "refused: " + caller + " is not a session; a decision is held back by the session whose automatic checkpoint runs";
         }
-        final String sent = send(new Intent.DecisionHeldBack(caller, text(args, "title"), args.path("detail").asString("").strip()));
+        final List<String> options = args.has("options") ? options(args) : List.of();
+        final String detail = args.path("detail").asString("").strip();
+        final String sent = send(new Intent.DecisionHeldBack(caller, text(args, "title"), detail, options));
         return sent.startsWith("refused") ? sent
-                : "held back; it waits in the Approvals tab's Later group until a checkpoint the user starts settles it";
+                : "held back; it waits in the Approvals tab's Later group until the user answers it there or a "
+                        + "checkpoint the user starts settles it";
     }
 
     private static Decision decision(final AppState s, final JsonNode args) {
@@ -378,27 +383,51 @@ final class ActionTools {
     }
 
     /**
+     * {@code decision_hold}'s options: a JSON array of strings, or that array as JSON text, which Claude Code sends for
+     * an array argument at times.
+     */
+    private List<String> options(final JsonNode args) {
+        return list(args, "options", "a list of strings, the answers offered", JsonNode::isString, JsonNode::asString);
+    }
+
+    /**
      * {@code decisions_settled}'s ids: a JSON array of integers, or that array as JSON text, which Claude Code sends for
      * an array argument at times.
      */
     private List<Long> ids(final JsonNode args) {
-        JsonNode a = args.path("ids");
+        return list(args, "ids", "a list of integers, the decisions' ids from ui_get_state",
+                x -> x.isIntegralNumber() && x.canConvertToLong(), JsonNode::asLong);
+    }
+
+    /**
+     * The array {@code args} holds under {@code field}, or that array as JSON text; every element must be one
+     * {@code fits} accepts, and {@code read} takes its value. {@code what} says what the field is, for the refusal.
+     */
+    private <T> List<T> list(
+            final JsonNode args,
+            final String field,
+            final String what,
+            final Predicate<JsonNode> fits,
+            final Function<JsonNode, T> read
+    ) {
+        JsonNode a = args.path(field);
         if (a.isString()) {
             try {
                 a = json.readTree(a.asString());
             } catch (final RuntimeException e) {
-                throw new IllegalArgumentException("ids is a list of integers, the decisions' ids from ui_get_state; " + args.path("ids") + " is not one");
+                throw new IllegalArgumentException(
+                        field + " is " + what + " [" + field + "=" + args.path(field) + ']', e);
             }
         }
         if (!a.isArray()) {
-            throw new IllegalArgumentException("ids is a list of integers, the decisions' ids from ui_get_state");
+            throw new IllegalArgumentException(field + " is " + what + " [" + field + "=" + a + ']');
         }
-        final List<Long> out = new ArrayList<>();
+        final List<T> out = new ArrayList<>();
         for (final JsonNode x : a) {
-            if (!x.isIntegralNumber() || !x.canConvertToLong()) {
-                throw new IllegalArgumentException("ids is a list of integers; " + x + " is not one");
+            if (!fits.test(x)) {
+                throw new IllegalArgumentException(field + " is " + what + " [element=" + x + ']');
             }
-            out.add(x.asLong());
+            out.add(read.apply(x));
         }
         return out;
     }

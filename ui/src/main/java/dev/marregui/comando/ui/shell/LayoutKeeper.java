@@ -48,8 +48,10 @@ final class LayoutKeeper {
     private static final int MIN_SIDE_WIDTH = 200;
     /** The share of the width the panels take beside the partition when no divider is stored. */
     private static final double SIDE_SHARE = 0.55;
+    /** The panels' share of a window's growth, the lower area taking the rest; set by hand with the first window. */
+    private static final double PANELS_SHARE = 0.45;
 
-    private record LayoutSnapshot(boolean sidebar, boolean sidePaneHidden, int lowerDivider) {
+    private record LayoutSnapshot(boolean sidebar, boolean sidePaneHidden, int lowerDivider, boolean transcriptAbove) {
     }
 
     private final ComandoUi.Dependencies deps;
@@ -72,10 +74,17 @@ final class LayoutKeeper {
     private PanelId dividerPanel;
     /** The lower divider's width as the look and feel draws it; none while the lower area is hidden. */
     private final int verticalDividerSize;
+    /** The lower area sits above the panels: a session panel is in front and the user keeps it there (record 144). */
+    private boolean lowerAbove;
     /** The documents whose lower area the user asked for, while they were in front, in this window. */
     private final Set<PanelId> lowerAskedFor = new HashSet<>();
     /** The lower divider while the lower area last showed: where it comes back when a panel has none of its own. */
     private int shownDivider = -1;
+    /**
+     * The panels' height a flip set above before the split had a height to set it in, or -1: applied once the split is
+     * laid out, as the lower area's height above them depends on the split's.
+     */
+    private int pendingDivider = -1;
     private boolean sidePaneShown;
     /** The partition's divider while it last showed, put back when it shows again; -1 before it first shows. */
     private int sideDivider = -1;
@@ -130,15 +139,25 @@ final class LayoutKeeper {
         // and while it is out of a window all the same, a theme chosen still reaches it
         stopSideTheme = Theme.followWithoutWindow(parts.side().component());
         vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, parts.lower().component());
-        vertical.setResizeWeight(0.45);
+        vertical.setResizeWeight(PANELS_SHARE);
         vertical.setBorder(BorderFactory.createEmptyBorder());
         verticalDividerSize = vertical.getDividerSize();
         // a move of the divider, by the user, an arrangement or the window's resize, is the panel in front's
         vertical.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
             // a hidden lower area gives the panels the whole height: that is no height the user chose
             if (dividerPanel != null && vertical.getDividerLocation() > 0 && parts.lower().component().isVisible()) {
-                panelDividers.put(dividerPanel, vertical.getDividerLocation());
-                shownDivider = vertical.getDividerLocation();
+                panelDividers.put(dividerPanel, divider());
+                shownDivider = divider();
+            }
+        });
+        vertical.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(final ComponentEvent e) {
+                if (pendingDivider >= 0 && vertical.getHeight() > 0) {
+                    final int panels = pendingDivider;
+                    pendingDivider = -1;
+                    divider(panels);
+                }
             }
         });
         // the session bar closes the column of the panels and the lower panel; the window's status bar runs under all
@@ -379,7 +398,8 @@ final class LayoutKeeper {
         }
         final boolean shown = !reading || lowerAskedFor.contains(front.id());
         final Component lower = parts.lower().component();
-        if (shown != lower.isVisible()) {
+        final boolean wasShown = lower.isVisible();
+        if (shown != wasShown) {
             lower.setVisible(shown);
             vertical.setDividerSize(shown ? verticalDividerSize : 0);
             if (shown) {
@@ -388,11 +408,85 @@ final class LayoutKeeper {
             }
             vertical.revalidate();
         }
+        // the transcript above the prompt while a session's panel is in front; no flip while the lower area is hidden,
+        // whose divider then gives the panels the whole height: shown again, it flips from the last height shown
+        if (shown) {
+            place(windowLayout.transcriptAbove() && !front.document() && !front.session().isEmpty(),
+                    wasShown ? divider() : shownDivider);
+        }
         if (shown) {
             lowerDividerOf(front.id());
         } else {
             dividerPanel = front.id();
         }
+    }
+
+    /**
+     * Puts the lower area {@code above} the panels or below them. A divider is kept as the panels' height when below,
+     * whichever way it shows, so a panel's height comes back the same after a flip and in the files written before.
+     */
+    private void place(final boolean above, final int kept) {
+        if (above == lowerAbove) {
+            return;
+        }
+        // set while the components move, so the listener does not take the moves for the user's
+        final PanelId was = dividerPanel;
+        dividerPanel = null;
+        lowerAbove = above;
+        final Component lower = parts.lower().component();
+        // taking the sides out moves the keyboard away from the component that has it, or had it last while the window
+        // was in the background: it is given back after
+        final Window window = SwingUtilities.getWindowAncestor(vertical);
+        final Component owner = window == null ? null : window.getMostRecentFocusOwner();
+        final boolean inside = owner != null && SwingUtilities.isDescendingFrom(owner, vertical);
+        vertical.setTopComponent(null);
+        vertical.setBottomComponent(null);
+        vertical.setTopComponent(above ? lower : top);
+        vertical.setBottomComponent(above ? top : lower);
+        // the lower area takes the same, larger share of a window's growth either way
+        vertical.setResizeWeight(above ? 1 - PANELS_SHARE : PANELS_SHARE);
+        divider(kept);
+        vertical.revalidate();
+        if (inside) {
+            owner.requestFocusInWindow();
+        }
+        dividerPanel = was;
+    }
+
+    /** The lower divider as the panels' height with the lower area below them, whichever way it shows. */
+    private int divider() {
+        if (pendingDivider >= 0) {
+            return pendingDivider;
+        }
+        final int at = vertical.getDividerLocation();
+        // above, a hidden lower area leaves the divider at 0: the panels' whole height, as it is at the bottom below
+        return lowerAbove ? Math.max(0, height() - Math.max(0, at) - vertical.getDividerSize()) : at;
+    }
+
+    /** Puts the lower divider at {@code panels}, the panels' height with the lower area below them. */
+    private void divider(final int panels) {
+        if (lowerAbove && panels > 0 && height() <= 0) {
+            pendingDivider = panels;
+            return;
+        }
+        pendingDivider = -1;
+        vertical.setDividerLocation(lowerAbove && panels > 0
+                ? Math.max(0, height() - panels - vertical.getDividerSize()) : panels);
+    }
+
+    private int height() {
+        // before the first layout the split has no height of its own yet: the window's content stands in for it
+        return vertical.getHeight() > 0 ? vertical.getHeight() : parts.frame().getContentPane().getHeight();
+    }
+
+    /** Turns the transcript above the prompt on or off (record 144), kept for the next start. */
+    void transcriptAbove(final boolean above) {
+        windowLayout.transcriptAbove(above);
+        render.run();
+    }
+
+    boolean transcriptAbove() {
+        return windowLayout.transcriptAbove();
     }
 
     /**
@@ -406,13 +500,13 @@ final class LayoutKeeper {
         }
         dividerPanel = front;
         Integer at = panelDividers.get(front);
-        if (at == null && shownDivider > 0 && vertical.getDividerLocation() > shownDivider) {
+        if (at == null && shownDivider > 0 && divider() > shownDivider) {
             at = shownDivider;
         }
-        if (at != null && at != vertical.getDividerLocation()) {
-            vertical.setDividerLocation(at);
+        if (at != null && at != divider()) {
+            divider(at);
         } else if (vertical.getDividerLocation() > 0) {
-            panelDividers.put(front, vertical.getDividerLocation());
+            panelDividers.put(front, divider());
         }
     }
 
@@ -442,7 +536,8 @@ final class LayoutKeeper {
         pendingLayout = null;
         if (beforeArrange == null) {
             // Restore layout goes back to before the first arrangement the user has not undone
-            beforeArrange = new LayoutSnapshot(parts.sidebar().isShown(), sidePaneHidden, vertical.getDividerLocation());
+            beforeArrange = new LayoutSnapshot(parts.sidebar().isShown(), sidePaneHidden, divider(),
+                    windowLayout.transcriptAbove());
         }
         applyLayout(layout);
     }
@@ -455,8 +550,11 @@ final class LayoutKeeper {
             sidePaneHidden = layout.sidePane() == Layout.Toggle.HIDE;
             render.run();
         }
+        if (layout.transcript() != Layout.Toggle.KEEP) {
+            transcriptAbove(layout.transcript() == Layout.Toggle.SHOW);
+        }
         if (!Double.isNaN(layout.lowerShare())) {
-            vertical.setDividerLocation(1.0 - layout.lowerShare());
+            vertical.setDividerLocation(lowerAbove ? layout.lowerShare() : 1.0 - layout.lowerShare());
         }
         if (layout.focus() != null) {
             // the reducer checks again that the panel is still the session's: it may have been rebound meanwhile
@@ -479,8 +577,9 @@ final class LayoutKeeper {
             toggleSidebar();
         }
         sidePaneHidden = b.sidePaneHidden();
+        windowLayout.transcriptAbove(b.transcriptAbove());
         render.run();
-        vertical.setDividerLocation(b.lowerDivider());
+        divider(b.lowerDivider());
         deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Restored the layout", false));
     }
 
@@ -521,7 +620,7 @@ final class LayoutKeeper {
                 .filter(WindowLayout.KEPT_SIDE_VIEWS::contains).distinct().toList());
         windowLayout.save(parts.frame(), new WindowLayout.Saved(parts.sidebar().isShown(),
                 parts.sidebar().isShown() ? outer.getDividerLocation() : -1, parts.sidebar().selectedTab(), parts.sidebar().manualOrder(),
-                sidePaneHidden, vertical.getDividerLocation(),
+                sidePaneHidden, divider(),
                 sidePaneShown ? editorAndSide.getDividerLocation() : sideDivider));
     }
 

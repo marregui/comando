@@ -383,10 +383,10 @@ public final class Workspace {
         if (side != null) {
             menu.addSeparator();
             if (strip == side) {
-                menu.add(menuItem("Move to the main tabs", "locate-arrow", true,
+                menu.add(menuItem("Move to the main tabs", "move-main", true,
                         () -> intents.dispatch(new Intent.PlacePanel(clicked, false))));
             } else {
-                menu.add(menuItem("Move to the right side", "sidebar", n > 1,
+                menu.add(menuItem("Move to the right side", "move-side", n > 1,
                         () -> intents.dispatch(new Intent.PlacePanel(clicked, true))));
             }
         }

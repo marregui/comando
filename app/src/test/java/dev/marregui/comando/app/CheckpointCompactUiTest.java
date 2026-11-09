@@ -90,9 +90,9 @@ class CheckpointCompactUiTest {
                 done
                 """.formatted(stdin, init, init, SUMMARY_JSON, SUMMARY_JSON, init));
         claude.toFile().setExecutable(true);
-        final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "checkpoint", () -> {
-        });
-        try {
+        try (final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"),
+                false), "checkpoint", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && editor() != null);
@@ -101,7 +101,10 @@ class CheckpointCompactUiTest {
             Awaitility.await("its own panel").atMost(Duration.ofSeconds(10)).until(() -> loop.state().homePanel("work").isPresent());
             final PanelId panel = loop.state().homePanel("work").orElseThrow().id();
             Awaitility.await("its panel shown").atMost(Duration.ofSeconds(10))
-                    .until(() -> editor() != null && editor().panel().id().equals(panel));
+                    .until(() -> {
+                        final EditorPanel e = editor();
+                        return e != null && onEdt(e::panel).id().equals(panel);
+                    });
             loop.dispatch(new Intent.EditPanel(panel, NOTES, EditMode.REPLACE, ""));
             loop.dispatch(new Intent.StartSession("work"));
             Awaitility.await("running").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.OPEN);
@@ -132,8 +135,6 @@ class CheckpointCompactUiTest {
 
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);
-        } finally {
-            app.close();
         }
     }
 
@@ -180,9 +181,9 @@ class CheckpointCompactUiTest {
                 done
                 """.formatted(stdin, init, init, SUMMARY_JSON, SUMMARY_JSON, init));
         claude.toFile().setExecutable(true);
-        final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"), false), "checkpoint-auto", () -> {
-        });
-        try {
+        try (final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"),
+                false), "checkpoint-auto", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && editor() != null);
@@ -206,8 +207,6 @@ class CheckpointCompactUiTest {
 
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);
-        } finally {
-            app.close();
         }
     }
 

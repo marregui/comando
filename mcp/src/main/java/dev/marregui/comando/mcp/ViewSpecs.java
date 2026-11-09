@@ -11,6 +11,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /**
@@ -36,8 +37,22 @@ final class ViewSpecs {
             case "text" -> new ViewSpec.Text(path(text(data, "path", false)), text(data, "text", true), text(data, "syntax", false),
                     data.path("line").asInt(0));
             case "tree" -> new ViewSpec.Tree(node(data.path("root"), 0));
-            default -> throw new IllegalArgumentException("unknown view type '" + type + "'; use table, plot, diff, markdown, text or tree");
+            case "deliverables" -> new ViewSpec.Deliverables();
+            default -> throw new IllegalArgumentException("unknown view type; use table, plot, diff, markdown, text, "
+                    + "tree or deliverables [type=" + type + ']');
         };
+    }
+
+    /**
+     * Where {@code spec} shows: where {@code args} place it, {@code side} or {@code lower}; with no placement, the
+     * files a session wrote in the side pane (record 143) and every other view in the lower panel.
+     */
+    static Placement placement(final ViewSpec spec, final JsonNode args) {
+        final String asked = args.path("placement").asString("");
+        if (asked.isEmpty()) {
+            return spec instanceof ViewSpec.Deliverables ? Placement.SIDE : Placement.LOWER;
+        }
+        return "side".equalsIgnoreCase(asked) ? Placement.SIDE : Placement.LOWER;
     }
 
     /** A text view's path: empty, or one the file system can name, so the view can show it. */

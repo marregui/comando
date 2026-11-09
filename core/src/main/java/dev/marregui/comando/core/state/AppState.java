@@ -32,7 +32,7 @@ import dev.marregui.comando.core.model.PanelId;
  * @param notices the most recent notices, oldest first, at most {@link #NOTICE_HISTORY}, including those that did
  *                not reach the status bar because an error was standing
  * @param instances the other comando instances on the comando Edge and the questions between them (record 124)
- * @param later   the decisions automatic checkpoints held back for the user, oldest first (record 131)
+ * @param later   the decisions sessions held back for the user, oldest first (records 131, 142)
  */
 public record AppState(
         List<PanelState> panels,
@@ -291,7 +291,7 @@ public record AppState(
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, newApprovals, later, views, lowerTab, notice, notices, instances, nextId);
     }
 
-    /** The decisions automatic checkpoints held back (record 131). */
+    /** The decisions sessions held back (records 131, 142). */
     public AppState withLater(final List<Decision> newLater) {
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, newLater, views, lowerTab, notice, notices, instances, nextId);
     }

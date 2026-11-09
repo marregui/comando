@@ -51,7 +51,7 @@ import dev.marregui.comando.ui.PanelTexts.Outside;
 
 /**
  * The store files: {@code connections.json}, {@code sessions.json}, {@code folders.json} (the Files tab's folders),
- * {@code decisions.json} (the decisions automatic checkpoints held back), {@code panels.json} (each panel's title,
+ * {@code decisions.json} (the decisions sessions held back), {@code panels.json} (each panel's title,
  * bindings and file name, and whether it is closed) and one Markdown file per panel under {@code panels/} with its
  * text ({@link PanelFiles}). A panel of comando's own is kept, closed or open,
  * until it is removed or its file is deleted outside comando; its text stays in memory while it is closed, so it
@@ -763,7 +763,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * The decisions automatic checkpoints held back (record 131); none without a readable {@code decisions.json} (an
+     * The decisions sessions held back (records 131, 142); none without a readable {@code decisions.json} (an
      * unreadable one is moved aside).
      */
     Decisions loadDecisions() {

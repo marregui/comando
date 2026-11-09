@@ -61,13 +61,14 @@ class ThemeFadeUiTest {
     /// window; within a second it is gone and the look's background is midnight's. Picking it again lays no picture.
     @Test
     void aThemeChosenFadesInOverTheOneBefore() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "theme-fade", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(() -> frame().getHeight()) > 400);
             assertThat(onEdt(Theme::groundChosen)).isEqualTo(Ground.GRAPHITE);
 
@@ -84,7 +85,6 @@ class ThemeFadeUiTest {
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
-            app.close();
         }
     }
 
@@ -92,13 +92,14 @@ class ThemeFadeUiTest {
     /// brings, which X11 delivers after the dispose, is not the click elsewhere that the swatch's own click must not undo.
     @Test
     void aChooserClosedWithEscOpensAgainAtOnce() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "theme-reopen", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             for (int round = 0; round < 2; round++) {
                 final JDialog chooser = onEdt(() -> {
                     find(frame(), JButton.class, b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName())).doClick(0);
@@ -117,8 +118,6 @@ class ThemeFadeUiTest {
                 });
                 assertThat(onEdt(ThemeFadeUiTest::chooser)).as("closed by Esc").isNull();
             }
-        } finally {
-            app.close();
         }
     }
 
@@ -133,13 +132,14 @@ class ThemeFadeUiTest {
                  "tint": {"label": "Rose", "highlight": "#FFE3EC", "body": "#F2A7C0", "shade": "#B5627F"}}
                 """);
         Files.writeString(themes.resolve("broken.json"), "{\"id\": ");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "theme-file", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             Awaitility.await("the notice for the broken file").atMost(WAIT).until(() -> loop.state().notices().stream()
                     .anyMatch(n -> n.text().startsWith("Theme file left out: broken.json: not JSON")));
             assertThat(NamedTheme.values()).extracting(t -> t.label).hasSize(13).last().isEqualTo("Ink and rose");
@@ -154,7 +154,6 @@ class ThemeFadeUiTest {
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
-            app.close();
         }
     }
 
@@ -163,13 +162,14 @@ class ThemeFadeUiTest {
     /// `-Dcomando.lightShot=<file>` the light window is also written to that PNG, to be looked at.
     @Test
     void aLightThemeTurnsTheWholeWindowLightAndBack() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "theme-light", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(() -> frame().getHeight()) > 400);
 
             pick(NamedTheme.PAPER_OCHRE);
@@ -191,7 +191,6 @@ class ThemeFadeUiTest {
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
-            app.close();
         }
     }
 
@@ -202,13 +201,14 @@ class ThemeFadeUiTest {
     /// and gold to Paper and ochre and back, at most 0.5 % of the pixels apart (a caret's blink, an antialiased edge).
     @Test
     void theFadeEndsOnTheWindowAsItThenPaints() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "theme-end", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(() -> frame().getHeight()) > 400);
             for (final NamedTheme t : new NamedTheme[]{NamedTheme.PAPER_OCHRE, NamedTheme.GRAPHITE_GOLD}) {
                 // the switch turns the window to the twin: its knob slides, then the fade runs
@@ -236,7 +236,6 @@ class ThemeFadeUiTest {
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
-            app.close();
         }
     }
 
@@ -247,13 +246,14 @@ class ThemeFadeUiTest {
     void aTabBehindShowsTheNewThemeTheFirstTimeItComesForward() throws Exception {
         final Path one = Files.writeString(home.resolve("one.md"), "# One\n\nText.\n");
         final Path two = Files.writeString(home.resolve("two.md"), "# Two\n\nText.\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "theme-tabs", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.OpenFile("", one.toString(), 0));
             Awaitility.await("one's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("one.md"));
             loop.dispatch(new Intent.OpenFile("", two.toString(), 0));
@@ -284,7 +284,6 @@ class ThemeFadeUiTest {
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
-            app.close();
         }
     }
 

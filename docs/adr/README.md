@@ -162,3 +162,6 @@ row and its record differ, or when a record has no row.
 | [139](0139-one-window-finds-in-files-and-conversations.md) | Find in files and conversations: a view, and one window to read a hit | 2026-11-07 | Miguel and Claude | accepted; built |
 | [140](0140-every-file-is-read-mapped.md) | Every file is read mapped | 2026-11-07 | Miguel and Claude | accepted; built |
 | [141](0141-the-right-side-is-a-partition-of-the-workspace.md) | The right side is a partition of the workspace | 2026-11-08 | Miguel and Claude | accepted; built |
+| [142](0142-one-decision-queue.md) | One decision queue | 2026-11-08 | Miguel and Claude | accepted; built |
+| [143](0143-a-session-lists-the-files-it-wrote.md) | A session lists the files it wrote | 2026-11-08 | Miguel and Claude | accepted; built |
+| [144](0144-the-transcript-sits-above-the-prompt.md) | The transcript sits above the prompt | 2026-11-08 | Miguel and Claude | accepted; built, on trial |

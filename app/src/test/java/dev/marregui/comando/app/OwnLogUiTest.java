@@ -43,12 +43,12 @@ class OwnLogUiTest {
         for (int i = 0; i < 300; i++) {
             log.info("filler " + i);
         }
-        final App app = new App(config, "ownlog", () -> {
-        });
-        try {
+        try (final App app = new App(config, "ownlog", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             final Path file = config.logDir().resolve("comando-0.log");
             loop.dispatch(new Intent.OpenFile("", file.toString(), 0));
             Awaitility.await("the log's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().startsWith("comando-0"));
@@ -58,23 +58,21 @@ class OwnLogUiTest {
 
             log.info("written while the log is open");
             Awaitility.await("the new line shows").atMost(WAIT).until(() -> onEdt(area::getText).contains("written while the log is open"));
-            final JViewport v = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, area);
+            final JViewport v = onEdt(() -> (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, area));
             Awaitility.await("the view at the end").atMost(WAIT).until(() -> onEdt(() -> {
                 final Rectangle seen = v.getViewRect();
                 return seen.y + seen.height >= v.getView().getHeight() - 2 * area.getLineHeight();
             }));
-        } finally {
-            app.close();
         }
-        Awaitility.await("the first window gone").atMost(WAIT).until(() -> frame() == null);
+        Awaitility.await("the first window gone").atMost(WAIT).until(() -> onEdt(() -> frame() == null));
 
         // the next start brings the log's panel back, as comando's restart does: it is as live as one just opened
-        final App again = new App(config, "ownlog", () -> {
-        });
-        try {
+        try (final App again = new App(config, "ownlog", () -> {
+        })) {
             again.start();
             final StateLoop loop = again.loop();
-            Awaitility.await("the window again").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window again").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             Awaitility.await("the log's panel back").atMost(WAIT).until(() -> loop.state().panels().stream().anyMatch(p -> p.title().startsWith("comando-0")));
             loop.state().panels().stream().filter(p -> p.title().startsWith("comando-0")).findFirst()
                     .ifPresent(p -> loop.dispatch(new Intent.FocusPanel(p.id())));
@@ -84,8 +82,6 @@ class OwnLogUiTest {
             Awaitility.await("the log shown again").atMost(WAIT).until(() -> onEdt(area::getText).contains("filler 299"));
             log.info("written after the restart");
             Awaitility.await("the line after the restart shows").atMost(WAIT).until(() -> onEdt(area::getText).contains("written after the restart"));
-        } finally {
-            again.close();
         }
     }
 

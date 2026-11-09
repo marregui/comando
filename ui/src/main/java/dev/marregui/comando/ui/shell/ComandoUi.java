@@ -85,6 +85,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.HitMarks;
+import dev.marregui.comando.ui.kit.text.Previews;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.ThemeFiles;
@@ -102,6 +103,7 @@ import dev.marregui.comando.ui.widget.WidgetRegistry;
 import dev.marregui.comando.ui.widget.capability.FindBar;
 import dev.marregui.comando.ui.widgets.changes.ChangesWidget;
 import dev.marregui.comando.ui.widgets.console.ConsoleWidget;
+import dev.marregui.comando.ui.widgets.deliverables.DeliverablesWidget;
 import dev.marregui.comando.ui.widgets.diff.DiffWidget;
 import dev.marregui.comando.ui.widgets.markdown.MarkdownWidget;
 import dev.marregui.comando.ui.widgets.plot.PlotWidget;
@@ -185,6 +187,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** The window's parts; null before the build. */
     private ShellParts parts;
     private LayoutKeeper layout;
+    /** The workspace's preview tab, which the Search and Files written views read files in (records 141, 143). */
+    private Previews previews;
     private FocusRouter focus;
     /** The session whose report a To read row asked for, until its transcript is in front; empty when none. */
     private String reportFor = "";
@@ -317,6 +321,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         widgets.register("search", ViewSpec.Search.class, c -> new SearchWidget(parts.searchHub()));
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));
         widgets.register("agent", ViewSpec.Agent.class, c -> new AgentWidget(c, deps.transcripts()));
+        widgets.register("deliverables", ViewSpec.Deliverables.class,
+                c -> new DeliverablesWidget(new DeliverablesWidget.Focus() {
+                    @Override
+                    public String session() {
+                        return deps.state().get().focusedPanel().session();
+                    }
+
+                    @Override
+                    public Runnable listen(final Runnable change) {
+                        final StateLoop.Listener l = (_, _) -> change.run();
+                        deps.loop().addListener(l);
+                        return () -> deps.loop().removeListener(l);
+                    }
+                }, deps.transcripts(), openedFiles, previews));
         widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile, new ChangesWidget.Actions() {
             // the comparison window drops its edits to a file rolled back or removed, and closes
             @Override
@@ -478,7 +496,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         };
         // a file's hits are read in the preview tab of the workspace (record 141); built below, read at a hit's choice
-        final SearchHub.Previews previews = new SearchHub.Previews() {
+        previews = new Previews() {
             @Override
             public void preview(final Path file, final HitMarks marks, final boolean takeKeyboard) {
                 files.previewFile(file, marks, takeKeyboard);
@@ -496,7 +514,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         layout = new LayoutKeeper(deps, windowLayout, parts, this::render);
         focus = new FocusRouter(deps, parts, layout);
         files = new PanelFiles(deps, parts, focus, layout, windowLayout, openedFiles, render::request);
-        quitFlow = new QuitFlow(deps, parts, layout, this::teardown);
+        quitFlow = new QuitFlow(deps, parts, this::teardown);
         final JPanel south = new JPanel(new BorderLayout());
         south.add(findBar, BorderLayout.NORTH);
         south.add(status.component(), BorderLayout.SOUTH);
@@ -556,7 +574,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** The EDT reached its hang limit: its stack goes to the log, where the stall's notice will take the user. */
     private void hung(final EdtWatchdog.Stall stall) {
         hangLoggedAt = System.currentTimeMillis();
-        LOG.log(System.Logger.Level.WARNING, "the EDT has not answered for " + stall.millis() + " ms " + label(stall) + ":\n" + stall.stack());
+        LOG.log(System.Logger.Level.WARNING, "the EDT has not answered [millis=" + stall.millis() + ", " + fields(stall) + "]:\n"
+                + stall.stack());
     }
 
     /**
@@ -569,10 +588,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (stall.reported()) {
             // the watchdog reported this stall just before, on this thread
             where = hangLoggedAt;
-            LOG.log(System.Logger.Level.WARNING, "the EDT answered again after " + millis + " ms");
+            LOG.log(System.Logger.Level.WARNING, "the EDT answered again [millis=" + millis + ']');
         } else {
             where = System.currentTimeMillis();
-            LOG.log(System.Logger.Level.INFO, "the EDT was busy for " + millis + " ms " + label(stall));
+            LOG.log(System.Logger.Level.INFO, "the EDT was busy [millis=" + millis + ", " + fields(stall) + ']');
         }
         if (millis >= 1_000) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The window stopped responding for "
@@ -622,9 +641,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** {@code [kind] in=… comando=…}, the part of a stall's line that groups stalls of one cause. */
-    private static String label(final EdtWatchdog.Stall stall) {
-        return stall.where().isEmpty() ? "[" + stall.kind() + "]" : "[" + stall.kind() + "] " + stall.where();
+    /** {@code kind=…, in=…, comando=…}, the part of a stall's line that groups stalls of one cause. */
+    private static String fields(final EdtWatchdog.Stall stall) {
+        // where is "in=<frame> comando=<frame:line>"; frames hold no space
+        return stall.where().isEmpty() ? "kind=" + stall.kind() : "kind=" + stall.kind() + ", " + stall.where().replace(" ", ", ");
     }
 
     /**
@@ -1055,13 +1075,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             beforeStep.accept(what);
             step.run();
         } catch (final RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "closing the window: " + what + " failed", e);
+            LOG.log(System.Logger.Level.WARNING, "closing the window failed [step=" + what + ']', e);
         }
     }
 
     /**
-     * Stops what the window runs: its timers and listeners, the shells, the live plots and the watchdog; once, at quit
-     * or at close. No state renders after it, so the closing window keeps its title.
+     * Saves the layout, then stops what the window runs: its timers and listeners, the shells, the live plots and the
+     * watchdog; once, at quit or at close. No state renders after it, so the closing window keeps its title.
      */
     private void teardown() {
         if (tornDown) {
@@ -1070,6 +1090,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         tornDown = true;
         // told before the steps and outside their guard, so a test can fail the teardown itself
         beforeStep.accept("teardown");
+        // first, before any step changes what the window shows: a quit and a close (the shutdown hook's path, where
+        // no quit flow ran) save the same layout, once
+        step("layout saved", layout::saveQuietly);
         // the comparison's edits reach their file before the store closes on the quit path only: on the shutdown
         // hook's path the store closes first, and the edits are kept only if the application calls saveEdits before it
         step("comparison's edits", parts.diffWindow()::saveNow);

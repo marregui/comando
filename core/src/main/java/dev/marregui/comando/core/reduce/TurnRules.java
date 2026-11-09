@@ -239,7 +239,7 @@ final class TurnRules {
         };
     }
 
-    private static boolean locked(final AppState s, final String name) {
+    static boolean locked(final AppState s, final String name) {
         return !name.isEmpty() && s.session(name).map(SessionState::isCheckpointing).orElse(false);
     }
 

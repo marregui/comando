@@ -214,6 +214,21 @@ public sealed interface ViewSpec {
         }
     }
 
+    /**
+     * The files the session that has the keyboard wrote (record 143), in the order it first wrote each, gold until
+     * opened as in the Files tab. The view carries no data: the widget reads the session's transcript.
+     */
+    record Deliverables() implements ViewSpec {
+
+        /** Every Deliverables view's title: one view, whichever session has the keyboard. */
+        public static final String TITLE = "Files written";
+
+        @Override
+        public String type() {
+            return "deliverables";
+        }
+    }
+
     enum RunState { RUNNING, PASSED, FAILED, CANCELLED }
 
     /**

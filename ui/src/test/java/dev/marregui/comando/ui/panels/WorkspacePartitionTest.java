@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
@@ -50,94 +52,6 @@ class WorkspacePartitionTest {
     private static final PanelId C = new PanelId("c");
     private static final PanelId D = new PanelId("d");
 
-    /** Panel text in memory, each panel's file from a map. */
-    private static final class Texts implements PanelTexts {
-        private final Map<PanelId, Path> files;
-
-        Texts(final Map<PanelId, Path> files) {
-            this.files = files;
-        }
-
-        @Override
-        public String load(final PanelId panel) {
-            return "";
-        }
-
-        @Override
-        public Optional<Path> file(final PanelId panel) {
-            return Optional.ofNullable(files.get(panel));
-        }
-
-        @Override
-        public boolean document(final PanelId panel) {
-            return files.containsKey(panel);
-        }
-
-        @Override
-        public void changed(final PanelId panel, final String text) {
-        }
-
-        @Override
-        public void forget(final PanelId panel) {
-        }
-    }
-
-    /** A widget showing a label, for the side views. */
-    private static final class Label implements Widget<ViewSpec.Markdown> {
-        private final JLabel label = new JLabel();
-
-        @Override
-        public JComponent component() {
-            return label;
-        }
-
-        @Override
-        public void render(final ViewSpec.Markdown view) {
-            label.setText(view.markdown());
-        }
-
-        @Override
-        public void unmount() {
-        }
-    }
-
-    /** A workspace handing its side panels to a partition, both built on the EDT, recording the intents sent. */
-    private static final class Fixture {
-        final List<Intent> intents = new CopyOnWriteArrayList<>();
-        Workspace workspace;
-        SidePane side;
-
-        static Fixture of(final Map<PanelId, Path> files) throws Exception {
-            final Fixture f = new Fixture();
-            SwingUtilities.invokeAndWait(() -> {
-                final WidgetRegistry registry = new WidgetRegistry();
-                registry.register("markdown", ViewSpec.Markdown.class, _ -> new Label());
-                f.side = new SidePane(new WidgetContext(f.intents::add, new ActionRegistry()), registry);
-                f.workspace = new Workspace(f.intents::add, new Texts(files), new SchemaRegistry());
-                f.workspace.partition(f.side);
-            });
-            return f;
-        }
-
-        JTabbedPane main() {
-            return (JTabbedPane) workspace.component();
-        }
-
-        JTabbedPane strip() {
-            return (JTabbedPane) side.component();
-        }
-
-        /** Renders {@code s} as the shell does: the workspace first, then the partition; returns whether it shows. */
-        boolean render(final AppState s) throws Exception {
-            final boolean[] shows = new boolean[1];
-            SwingUtilities.invokeAndWait(() -> {
-                workspace.render(s);
-                shows[0] = side.render(s);
-            });
-            return shows[0];
-        }
-    }
-
     private static PanelState panel(final PanelId id, final boolean side) {
         return new PanelState(id, id.value(), "", "").withSide(side);
     }
@@ -173,6 +87,23 @@ class WorkspacePartitionTest {
         return out;
     }
 
+    /// What `read` returns, read on the EDT; its failure is thrown here.
+    private static <T> T onEdt(final Callable<T> read) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
+        final AtomicReference<Exception> failure = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                out.set(read.call());
+            } catch (final Exception e) {
+                failure.set(e);
+            }
+        });
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+        return out.get();
+    }
+
     /// A side panel sits in the partition before its side view and the partition shows; placed back in the main tabs,
     /// the same component sits there at its place and the partition, holding only the view, still shows; without the
     /// view it hides.
@@ -182,23 +113,24 @@ class WorkspacePartitionTest {
         final AppState s = AppState.initial(List.of(panel(A, false), panel(B, true)), List.of(), List.of())
                 .withViews(List.of(sideView(7)));
         assertThat(f.render(s)).isTrue();
-        final EditorPanel b = f.workspace.panel(B);
-        assertThat(components(f.main())).containsExactly(f.workspace.panel(A));
-        assertThat(f.strip().getTabCount()).isEqualTo(2);
-        assertThat(f.strip().getComponentAt(0)).isSameAs(b);
-        assertThat(f.side.hasPanels()).isTrue();
-        assertThat(f.side.hasViews()).isTrue();
+        final EditorPanel a = onEdt(() -> f.workspace.panel(A));
+        final EditorPanel b = onEdt(() -> f.workspace.panel(B));
+        assertThat(onEdt(() -> components(f.main()))).containsExactly(a);
+        assertThat(onEdt(() -> f.strip().getTabCount())).isEqualTo(2);
+        assertThat(onEdt(() -> f.strip().getComponentAt(0))).isSameAs(b);
+        assertThat(onEdt(f.side::hasPanels)).isTrue();
+        assertThat(onEdt(f.side::hasViews)).isTrue();
 
         final AppState back = s.withPanels(List.of(panel(A, false), panel(B, false)), A);
         assertThat(f.render(back)).as("the view keeps the partition shown").isTrue();
-        assertThat(components(f.main())).containsExactly(f.workspace.panel(A), b);
-        assertThat(f.workspace.panel(B)).isSameAs(b);
-        assertThat(f.side.hasPanels()).isFalse();
-        assertThat(f.strip().getTabCount()).isEqualTo(1);
+        assertThat(onEdt(() -> components(f.main()))).containsExactly(a, b);
+        assertThat(onEdt(() -> f.workspace.panel(B))).isSameAs(b);
+        assertThat(onEdt(f.side::hasPanels)).isFalse();
+        assertThat(onEdt(() -> f.strip().getTabCount())).isEqualTo(1);
 
         assertThat(f.render(back.withViews(List.of()))).as("neither a panel nor a view: hidden").isFalse();
         assertThat(f.render(s.withViews(List.of()))).as("a side panel alone shows it").isTrue();
-        assertThat(f.strip().getComponentAt(0)).isSameAs(b);
+        assertThat(onEdt(() -> f.strip().getComponentAt(0))).isSameAs(b);
     }
 
     /// `focused()` is the state's focused panel, a side one included. The focus moving to a side panel brings its tab
@@ -210,22 +142,25 @@ class WorkspacePartitionTest {
         final AppState s = AppState.initial(List.of(panel(A, false), panel(B, true)), List.of(), List.of())
                 .withViews(List.of(sideView(7)));
         f.render(s);
-        assertThat(f.workspace.focused()).isSameAs(f.workspace.panel(A));
-        assertThat(f.strip().getSelectedIndex()).as("the new view comes forward").isEqualTo(1);
+        final EditorPanel a = onEdt(() -> f.workspace.panel(A));
+        final EditorPanel b = onEdt(() -> f.workspace.panel(B));
+        assertThat(onEdt(f.workspace::focused)).isSameAs(a);
+        assertThat(onEdt(() -> f.strip().getSelectedIndex())).as("the new view comes forward").isEqualTo(1);
 
         final AppState onB = s.withFocused(B);
         f.render(onB);
-        assertThat(f.workspace.focused()).isSameAs(f.workspace.panel(B));
-        assertThat(f.strip().getSelectedComponent()).isSameAs(f.workspace.panel(B));
-        assertThat(f.main().getSelectedComponent()).isSameAs(f.workspace.panel(A));
+        assertThat(onEdt(f.workspace::focused)).isSameAs(b);
+        assertThat(onEdt(() -> f.strip().getSelectedComponent())).isSameAs(b);
+        assertThat(onEdt(() -> f.main().getSelectedComponent())).isSameAs(a);
 
         SwingUtilities.invokeAndWait(() -> f.side.front(7));
         f.render(onB);
-        assertThat(f.strip().getSelectedIndex()).as("the focus did not move: the view stays in front").isEqualTo(1);
-        assertThat(f.workspace.focused()).isSameAs(f.workspace.panel(B));
+        assertThat(onEdt(() -> f.strip().getSelectedIndex())).as("the focus did not move: the view stays in front")
+                .isEqualTo(1);
+        assertThat(onEdt(f.workspace::focused)).isSameAs(b);
 
         f.render(onB.withFocused(A));
-        assertThat(f.workspace.focused()).isSameAs(f.workspace.panel(A));
+        assertThat(onEdt(f.workspace::focused)).isSameAs(a);
     }
 
     /// ⌘n goes to the main tabs left to right, then the partition's panels, whatever their order among all panels;
@@ -242,10 +177,10 @@ class WorkspacePartitionTest {
             }
         });
         assertThat(at[0]).isNull();
-        assertThat(at[1]).isSameAs(f.workspace.panel(B));
-        assertThat(at[2]).isSameAs(f.workspace.panel(D));
-        assertThat(at[3]).isSameAs(f.workspace.panel(A));
-        assertThat(at[4]).isSameAs(f.workspace.panel(C));
+        assertThat(at[1]).isSameAs(onEdt(() -> f.workspace.panel(B)));
+        assertThat(at[2]).isSameAs(onEdt(() -> f.workspace.panel(D)));
+        assertThat(at[3]).isSameAs(onEdt(() -> f.workspace.panel(A)));
+        assertThat(at[4]).isSameAs(onEdt(() -> f.workspace.panel(C)));
         assertThat(at[5]).isNull();
     }
 
@@ -351,10 +286,10 @@ class WorkspacePartitionTest {
         f.render(s.withPanels(List.of(panel(A, false), preview, document), A));
         f.intents.clear();
         f.render(s.withPanels(List.of(panel(A, false), document), A));
-        assertThat(f.workspace.hasClosed()).as("a preview closed is not reopened").isFalse();
+        assertThat(onEdt(f.workspace::hasClosed)).as("a preview closed is not reopened").isFalse();
         assertThat(f.intents).noneMatch(Intent.Notify.class::isInstance);
         f.render(s.withPanels(List.of(panel(A, false)), A));
-        assertThat(f.workspace.popClosed()).map(Workspace.ClosedPanel::id).contains(C);
+        assertThat(onEdt(f.workspace::popClosed)).map(Workspace.ClosedPanel::id).contains(C);
     }
 
     /// `whenShown` runs at once with a panel shown, a side one included; for a panel not shown yet it runs once, at
@@ -374,13 +309,13 @@ class WorkspacePartitionTest {
             f.workspace.whenShown(C, replaced::add);
             f.workspace.whenShown(C, ran::add);
         });
-        assertThat(ran).containsExactly(f.workspace.panel(B));
+        assertThat(ran).containsExactly(onEdt(() -> f.workspace.panel(B)));
 
         final PanelState mainC = new PanelState(C, "c.md", "", "", true);
         final AppState withC = s.withPanels(List.of(panel(A, false), sideB, mainC), A);
         f.render(withC);
         f.render(withC);
-        assertThat(ran).containsExactly(f.workspace.panel(B), f.workspace.panel(C));
+        assertThat(ran).containsExactly(onEdt(() -> f.workspace.panel(B)), onEdt(() -> f.workspace.panel(C)));
         assertThat(replaced).isEmpty();
     }
 
@@ -395,12 +330,102 @@ class WorkspacePartitionTest {
                 "JTabbedPane.scrollButtonsPolicy",
                 "JTabbedPane.tabClosable",
                 "JTabbedPane.tabCloseToolTipText")) {
-            assertThat(f.strip().getClientProperty(key)).as(key).isNotNull().isEqualTo(f.main().getClientProperty(key));
+            assertThat(onEdt(() -> f.strip().getClientProperty(key))).as(key).isNotNull()
+                    .isEqualTo(onEdt(() -> f.main().getClientProperty(key)));
         }
-        assertThat(f.strip().getClientProperty("JTabbedPane.tabType")).isEqualTo("card");
-        assertThat(f.strip().getTabLayoutPolicy())
-                .isEqualTo(f.main().getTabLayoutPolicy())
+        assertThat(onEdt(() -> f.strip().getClientProperty("JTabbedPane.tabType"))).isEqualTo("card");
+        assertThat(onEdt(() -> f.strip().getTabLayoutPolicy()))
+                .isEqualTo(onEdt(() -> f.main().getTabLayoutPolicy()))
                 .isEqualTo(JTabbedPane.SCROLL_TAB_LAYOUT);
-        assertThat(((JComponent) f.strip().getComponentAt(0)).getClientProperty(TabLook.CLOSABLE)).isEqualTo(false);
+        assertThat(onEdt(() -> ((JComponent) f.strip().getComponentAt(0)).getClientProperty(TabLook.CLOSABLE)))
+                .isEqualTo(false);
+    }
+
+    /** Panel text in memory, each panel's file from a map. */
+    private static final class Texts implements PanelTexts {
+        private final Map<PanelId, Path> files;
+
+        Texts(final Map<PanelId, Path> files) {
+            this.files = files;
+        }
+
+        @Override
+        public String load(final PanelId panel) {
+            return "";
+        }
+
+        @Override
+        public Optional<Path> file(final PanelId panel) {
+            return Optional.ofNullable(files.get(panel));
+        }
+
+        @Override
+        public boolean document(final PanelId panel) {
+            return files.containsKey(panel);
+        }
+
+        @Override
+        public void changed(final PanelId panel, final String text) {
+        }
+
+        @Override
+        public void forget(final PanelId panel) {
+        }
+    }
+
+    /** A widget showing a label, for the side views. */
+    private static final class Label implements Widget<ViewSpec.Markdown> {
+        private final JLabel label = new JLabel();
+
+        @Override
+        public JComponent component() {
+            return label;
+        }
+
+        @Override
+        public void render(final ViewSpec.Markdown view) {
+            label.setText(view.markdown());
+        }
+
+        @Override
+        public void unmount() {
+        }
+    }
+
+    /** A workspace handing its side panels to a partition, both built on the EDT, recording the intents sent. */
+    private static final class Fixture {
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        Workspace workspace;
+        SidePane side;
+
+        static Fixture of(final Map<PanelId, Path> files) throws Exception {
+            final Fixture f = new Fixture();
+            SwingUtilities.invokeAndWait(() -> {
+                final WidgetRegistry registry = new WidgetRegistry();
+                registry.register("markdown", ViewSpec.Markdown.class, _ -> new Label());
+                f.side = new SidePane(new WidgetContext(f.intents::add, new ActionRegistry()), registry);
+                f.workspace = new Workspace(f.intents::add, new Texts(files), new SchemaRegistry());
+                f.workspace.partition(f.side);
+            });
+            return f;
+        }
+
+        JTabbedPane main() {
+            return (JTabbedPane) workspace.component();
+        }
+
+        JTabbedPane strip() {
+            return (JTabbedPane) side.component();
+        }
+
+        /** Renders {@code s} as the shell does: the workspace first, then the partition; returns whether it shows. */
+        boolean render(final AppState s) throws Exception {
+            final boolean[] shows = new boolean[1];
+            SwingUtilities.invokeAndWait(() -> {
+                workspace.render(s);
+                shows[0] = side.render(s);
+            });
+            return shows[0];
+        }
     }
 }

@@ -47,13 +47,14 @@ class FocusRouterUiTest {
     @Test
     void aViewOpenedAndClosedInTheBackgroundLeavesTheKeyboardWhereItIs() throws Exception {
         final Path file = Files.writeString(home.resolve("a.txt"), "a\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "router", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.OpenFile("", file.toString(), 0));
             Awaitility.await("a.txt in front").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("a.txt"));
             final PanelId a = loop.state().panels().stream().filter(p -> p.title().equals("a.txt")).map(PanelState::id).findFirst()
@@ -74,8 +75,6 @@ class FocusRouterUiTest {
             Awaitility.await("its tab gone").atMost(WAIT).until(() -> onEdt(() -> find(frame(), JTabbedPane.class,
                     t -> t.indexOfTab("notes") >= 0) == null));
             assertThat(onEdt(() -> frame().getMostRecentFocusOwner())).as("nothing moved by a close in the background").isSameAs(text);
-        } finally {
-            app.close();
         }
     }
 

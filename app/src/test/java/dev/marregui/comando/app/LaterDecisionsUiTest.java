@@ -7,11 +7,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import javax.swing.AbstractButton;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 import org.awaitility.Awaitility;
@@ -32,6 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a decision held back joins the Approvals tab's Later group and the tab's title, and brings nothing forward
 /// - it is kept in `decisions.json` and read back by the next start
 /// - Dismiss in the Later group removes it, from the window and the file
+/// - decisions of two sessions answered on their cards, one by an option and one by a typed line, go in one Send
+///   answers, in the group's order, and leave the group
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class LaterDecisionsUiTest {
 
@@ -45,9 +51,8 @@ class LaterDecisionsUiTest {
     void aDecisionHeldBackWaitsInTheLaterGroupAcrossARestartUntilDismissed() throws Exception {
         final Path data = home.resolve("data");
         final AppConfig config = new AppConfig(data, home.resolve("no-claude").toString(), home.resolve("projects"), false);
-        App app = new App(config, "later", () -> {
-        });
-        try {
+        try (final App app = new App(config, "later", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             awaitWindow(loop);
@@ -64,13 +69,10 @@ class LaterDecisionsUiTest {
             Awaitility.await("decisions.json").atMost(Duration.ofSeconds(10))
                     .until(() -> Files.exists(data.resolve("decisions.json"))
                             && Files.readString(data.resolve("decisions.json")).contains("Merge the two feedback entries?"));
-        } finally {
-            app.close();
         }
 
-        app = new App(config, "later", () -> {
-        });
-        try {
+        try (final App app = new App(config, "later", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             awaitWindow(loop);
@@ -90,8 +92,60 @@ class LaterDecisionsUiTest {
                     .until(() -> "Approvals".equals(onEdt(LaterDecisionsUiTest::approvalsTitle)));
             Awaitility.await("the file emptied").atMost(Duration.ofSeconds(10))
                     .until(() -> !Files.readString(data.resolve("decisions.json")).contains("Merge"));
-        } finally {
-            app.close();
+        }
+    }
+
+    /// Two decisions of two sessions, `work`'s with options and held first, `docs`'s answered by a typed line: an
+    /// option chosen and a line typed, Send answers dispatches one `DecisionsAnswered` holding both, `work`'s first,
+    /// and the reducer takes both out of the Later group.
+    @Test
+    void decisionsOfTwoSessionsAreAnsweredInOneSend() throws Exception {
+        final AppConfig config = new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false);
+        try (final App app = new App(config, "later", () -> {
+        })) {
+            app.start();
+            final StateLoop loop = app.loop();
+            awaitWindow(loop);
+            final List<Intent.DecisionsAnswered> seen = new CopyOnWriteArrayList<>();
+            loop.addObserver(i -> {
+                if (i instanceof Intent.DecisionsAnswered a) {
+                    seen.add(a);
+                }
+            });
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("work", home.toString())));
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("docs", home.toString())));
+            Awaitility.await("the sessions").atMost(Duration.ofSeconds(10))
+                    .until(() -> loop.state().session("work").isPresent() && loop.state().session("docs").isPresent());
+            loop.dispatch(new Intent.DecisionHeldBack("work", "Merge the two feedback entries?", "",
+                    List.of("Merge", "Keep both")));
+            Awaitility.await("work's").atMost(Duration.ofSeconds(10)).until(() -> loop.state().later().size() == 1);
+            loop.dispatch(new Intent.DecisionHeldBack("docs", "Name the release?", "the next one"));
+            Awaitility.await("docs's").atMost(Duration.ofSeconds(10)).until(() -> loop.state().later().size() == 2);
+            final long work = loop.state().later().getFirst().id();
+            final long docs = loop.state().later().getLast().id();
+            final String docsRow = "decision-" + docs;
+            Awaitility.await("both rows").atMost(Duration.ofSeconds(10))
+                    .until(() -> onEdt(() -> first(Component.class, c -> docsRow.equals(c.getName()))) != null);
+            SwingUtilities.invokeAndWait(() -> {
+                final Component workRow = first(Component.class, c -> ("decision-" + work).equals(c.getName()));
+                final List<AbstractButton> options = new ArrayList<>();
+                collect(workRow, AbstractButton.class, b -> "option".equals(b.getName()), options);
+                options.getLast().doClick();
+                final Component docsCard = first(Component.class, c -> docsRow.equals(c.getName()));
+                final List<JTextField> typed = new ArrayList<>();
+                collect(docsCard, JTextField.class, f -> "answer".equals(f.getName()), typed);
+                typed.getFirst().setText("2026.16");
+                first(AbstractButton.class, b -> "send-answers".equals(b.getName())).doClick();
+            });
+            Awaitility.await("sent").atMost(Duration.ofSeconds(10)).until(() -> !seen.isEmpty());
+            final Map<Long, String> expected = new LinkedHashMap<>();
+            expected.put(work, "Keep both");
+            expected.put(docs, "2026.16");
+            assertThat(seen).hasSize(1);
+            assertThat(seen.getFirst().answers()).containsExactlyEntriesOf(expected);
+            Awaitility.await("answered, out of the group").atMost(Duration.ofSeconds(10))
+                    .until(() -> loop.state().later().isEmpty());
         }
     }
 

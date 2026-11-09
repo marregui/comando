@@ -48,12 +48,13 @@ class LocateUiTest {
         Files.writeString(doc, "# Plan\n");
         final Path data = Files.createDirectories(home.resolve("data"));
         Files.writeString(data.resolve("folders.json"), "[{\"name\": \"Notes\", \"path\": \"" + home.resolve("notes") + "\"}]");
-        final App app = new App(new AppConfig(data, home.resolve("no-claude").toString(), home.resolve("projects"), false), "locate", () -> {
-        });
-        try {
+        try (final App app = new App(new AppConfig(data, home.resolve("no-claude").toString(),
+                home.resolve("projects"), false), "locate", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.OpenFile("", doc.toString(), 0));
             Awaitility.await("its panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("plan.md"));
 
@@ -76,8 +77,6 @@ class LocateUiTest {
             @SuppressWarnings("unchecked")
             final JList<Object> sessions = await(JList.class, "the Sessions list", l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
             Awaitility.await("the session selected").atMost(WAIT).until(() -> onEdt(() -> selectedName(sessions).equals("helper")));
-        } finally {
-            app.close();
         }
     }
 

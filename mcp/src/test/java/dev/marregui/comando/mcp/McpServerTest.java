@@ -471,6 +471,18 @@ class McpServerTest {
                 List.of(List.of("1", "x"), Arrays.asList("2", null), List.of("3", "null"))));
     }
 
+    /// `ui_show_view` type `deliverables` shows the one Files written view in the side pane, whatever title the call
+    /// gives, so a second call finds the same view (record 143).
+    @Test
+    void theFilesWrittenViewIsOneViewInTheSidePane() throws Exception {
+        final JsonNode r = tool("ui_show_view", "{\"type\":\"deliverables\",\"title\":\"mine\",\"data\":{}}");
+        assertThat(r.path("isError").asBoolean(false)).isFalse();
+        final Intent.ShowView show = sink.await(Intent.ShowView.class, WAIT);
+        assertThat(show.title()).isEqualTo(ViewSpec.Deliverables.TITLE);
+        assertThat(show.spec()).isEqualTo(new ViewSpec.Deliverables());
+        assertThat(show.placement()).isEqualTo(Placement.SIDE);
+    }
+
     /// A table row of the wrong width, a plot with unequal x and y, and a path no file system can name are tool errors
     /// that say why, and no view is shown.
     @Test
@@ -599,6 +611,16 @@ class McpServerTest {
         assertThat(text(tool("ui_set_layout", "{\"lower_tab\":\"nope\"}"))).contains("no view 'nope'");
         assertThat(text(tool("ui_set_layout", "{\"lower_share\":2}"))).contains("between 0.05 and 0.95");
         assertThat(text(tool("ui_set_layout", "{}"))).contains("nothing to change");
+    }
+
+    /// `ui_set_layout` with `transcript_above` false alone sends one SessionLayout that puts the transcript below the
+    /// prompt and changes nothing else (record 144).
+    @Test
+    void layoutPutsTheTranscriptBelow() throws Exception {
+        final JsonNode r = tool("ui_set_layout", "{\"transcript_above\":false}");
+        assertThat(r.path("isError").asBoolean(false)).isFalse();
+        assertThat(sink.await(Intent.SessionLayout.class, WAIT)).isEqualTo(new Intent.SessionLayout("work", null, null,
+                new Layout(Layout.Toggle.KEEP, Layout.Toggle.KEEP, Double.NaN, null, null, "", Layout.Toggle.HIDE)));
     }
 
     /// A panel named in another letter case is found, as the editor tools find it.

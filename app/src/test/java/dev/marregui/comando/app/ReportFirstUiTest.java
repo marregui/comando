@@ -56,15 +56,14 @@ class ReportFirstUiTest {
     /// closes both.
     @Test
     void aTurnOfToolsAndAReportFoldsToOneRowAClickOpensItAFindRevealsInsideIt() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
                 home.resolve("projects"), false),
                 "report-first", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
-                    -> loop.state().focused() != null && frame() != null);
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh(SESSION, home.toString())));
             loop.dispatch(new Intent.BindSession(loop.state().focusedPanel().id(), SESSION));
             Awaitility.await("the session").atMost(WAIT).until(() -> loop.state().session(SESSION).isPresent());
@@ -96,8 +95,6 @@ class ReportFirstUiTest {
             assertThat(onEdt(() -> canvas.find("nothing says this", true))).as("a find that moves on").isZero();
             assertThat(onEdt(() -> canvas.isCardOpen("t7"))).as("the card closes with it").isFalse();
             assertThat(onEdt(canvas::reportTop)).as("and so does the row").isEqualTo(closed);
-        } finally {
-            app.close();
         }
     }
 
@@ -209,10 +206,6 @@ class ReportFirstUiTest {
         return null;
     }
 
-    private interface EdtCall<T> {
-        T call() throws Exception;
-    }
-
     private static <T> T onEdt(final EdtCall<T> call) throws Exception {
         final AtomicReference<T> out = new AtomicReference<>();
         final AtomicReference<Exception> err = new AtomicReference<>();
@@ -227,5 +220,9 @@ class ReportFirstUiTest {
             throw err.get();
         }
         return out.get();
+    }
+
+    private interface EdtCall<T> {
+        T call() throws Exception;
     }
 }

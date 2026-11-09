@@ -47,10 +47,9 @@ class DiffThemeUiTest {
     /// theme chosen with it open turns them all dark.
     @Test
     void theComparisonOpensOnTheThemeChosenAndFollowsTheNext() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
                 home.resolve("projects"), false), "diff-theme", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
@@ -73,7 +72,6 @@ class DiffThemeUiTest {
                     () -> !bright(dialog.getContentPane().getBackground()) && !bright(page.getBackground())));
         } finally {
             choose(Ground.GRAPHITE, Tint.TREASURE);
-            app.close();
         }
     }
 

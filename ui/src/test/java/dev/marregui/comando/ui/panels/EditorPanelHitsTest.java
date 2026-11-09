@@ -5,7 +5,9 @@ import java.awt.Container;
 import java.awt.Rectangle;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -76,12 +78,11 @@ class EditorPanelHitsTest {
         show(p, new HitMarks(List.of(hit(3, "baz foo", 4, 3), hit(2, "foo bar FOO", 8, 3)), 1));
 
         assertThat(marks(p)).containsExactly(List.of(6, 9), List.of(14, 17), List.of(22, 25));
-        assertThat(p.currentHit()).isEqualTo(14);
-        assertThat(p.editor().area().getCaretPosition()).isEqualTo(14);
-        final Highlighter.Highlight[] painted = p.editor().area().getHighlighter().getHighlights();
-        assertThat(colourAt(painted, 14)).isSameAs(Theme.FIND_CURRENT);
-        assertThat(colourAt(painted, 6)).isSameAs(Theme.FIND_MATCH);
-        assertThat(colourAt(painted, 22)).isSameAs(Theme.FIND_MATCH);
+        assertThat(onEdt(p::currentHit)).isEqualTo(14);
+        assertThat(onEdt(() -> p.editor().area().getCaretPosition())).isEqualTo(14);
+        assertThat(onEdt(() -> colourAt(p, 14))).isSameAs(Theme.FIND_CURRENT);
+        assertThat(onEdt(() -> colourAt(p, 6))).isSameAs(Theme.FIND_MATCH);
+        assertThat(onEdt(() -> colourAt(p, 22))).isSameAs(Theme.FIND_MATCH);
     }
 
     /// The snippet drops the line's indent: the current mark is still the occurrence its text points at.
@@ -92,7 +93,7 @@ class EditorPanelHitsTest {
         show(p, new HitMarks(List.of(hit(1, "call(x); call(y);", 9, 4)), 0));
 
         assertThat(marks(p)).containsExactly(List.of(8, 12), List.of(17, 21));
-        assertThat(p.currentHit()).isEqualTo(17);
+        assertThat(onEdt(p::currentHit)).isEqualTo(17);
     }
 
     /// Without the text before the match, the occurrence nearest its column past the indent is current.
@@ -103,7 +104,7 @@ class EditorPanelHitsTest {
         show(p, new HitMarks(List.of(new HitMarks.Hit(1, "a", 12, "")), 0));
 
         assertThat(marks(p)).containsExactly(List.of(6, 7), List.of(13, 14), List.of(20, 21));
-        assertThat(p.currentHit()).isEqualTo(13);
+        assertThat(onEdt(p::currentHit)).isEqualTo(13);
     }
 
     /// ASCII letters match in either case, as the search finds them.
@@ -114,7 +115,7 @@ class EditorPanelHitsTest {
         show(p, new HitMarks(List.of(hit(1, "FOO foo fOo", 4, 3)), 0));
 
         assertThat(marks(p)).containsExactly(List.of(0, 3), List.of(4, 7), List.of(8, 11));
-        assertThat(p.currentHit()).isEqualTo(4);
+        assertThat(onEdt(p::currentHit)).isEqualTo(4);
     }
 
     /// The current hit comes to the middle of the view.
@@ -132,12 +133,12 @@ class EditorPanelHitsTest {
 
         show(p, new HitMarks(List.of(hit(200, "line 200", 5, 3)), 0));
 
-        final JViewport v = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, p.editor().area());
-        final Rectangle seen = v.getViewRect();
-        final int caretY = (int) p.editor().area().modelToView2D(p.currentHit()).getY();
+        final Rectangle seen = onEdt(() -> ((JViewport) SwingUtilities.getAncestorOfClass(JViewport.class,
+                p.editor().area())).getViewRect());
+        final int caretY = onEdt(() -> (int) p.editor().area().modelToView2D(p.currentHit()).getY());
+        final int lineHeight = onEdt(() -> p.editor().area().getLineHeight());
         assertThat(caretY).as("caret " + caretY + " in " + seen)
-                .isBetween(seen.y + seen.height / 2 - p.editor().area().getLineHeight() * 2,
-                        seen.y + seen.height / 2 + p.editor().area().getLineHeight() * 2);
+                .isBetween(seen.y + seen.height / 2 - lineHeight * 2, seen.y + seen.height / 2 + lineHeight * 2);
     }
 
     /// A hit on the file's name marks nothing and puts the caret at the top; a line asked for alone gets the caret.
@@ -149,12 +150,12 @@ class EditorPanelHitsTest {
         show(p, new HitMarks(List.of(new HitMarks.Hit(0, "notes", -1, "")), 0));
 
         assertThat(marks(p)).isEmpty();
-        assertThat(p.currentHit()).isEqualTo(-1);
-        assertThat(p.editor().area().getCaretPosition()).isZero();
+        assertThat(onEdt(p::currentHit)).isEqualTo(-1);
+        assertThat(onEdt(() -> p.editor().area().getCaretPosition())).isZero();
 
         show(p, HitMarks.line(3));
 
-        assertThat(p.editor().area().getCaretPosition()).isEqualTo(8);
+        assertThat(onEdt(() -> p.editor().area().getCaretPosition())).isEqualTo(8);
     }
 
     /// A Markdown document opens rendered, but its hits are marked in its text, which it then shows.
@@ -164,11 +165,11 @@ class EditorPanelHitsTest {
             e.editor().load("# Plan\n\nthe budget stays\n");
             e.file(Path.of("/s/plan.md"), true);
         });
-        assertThat(p.previewing()).isTrue();
+        assertThat(onEdt(p::previewing)).isTrue();
 
         show(p, new HitMarks(List.of(hit(3, "the budget stays", 4, 6)), 0));
 
-        assertThat(p.previewing()).isFalse();
+        assertThat(onEdt(p::previewing)).isFalse();
         assertThat(marks(p)).containsExactly(List.of(12, 18));
     }
 
@@ -176,20 +177,20 @@ class EditorPanelHitsTest {
     @Test
     void anEditTakesTheMarksOff() throws Exception {
         final EditorPanel p = withText("foo foo\n");
-        final int before = p.editor().area().getHighlighter().getHighlights().length;
+        final int before = onEdt(() -> painted(p));
         show(p, new HitMarks(List.of(hit(1, "foo foo", 0, 3)), 0));
-        assertThat(p.editor().area().getHighlighter().getHighlights()).hasSize(before + 2);
+        assertThat(onEdt(() -> painted(p))).isEqualTo(before + 2);
 
         SwingUtilities.invokeAndWait(() -> insert(p, 0, "x"));
 
         assertThat(marks(p)).isEmpty();
-        assertThat(p.currentHit()).isEqualTo(-1);
-        assertThat(p.editor().area().getHighlighter().getHighlights()).hasSize(before);
+        assertThat(onEdt(p::currentHit)).isEqualTo(-1);
+        assertThat(onEdt(() -> painted(p))).isEqualTo(before);
 
         show(p, new HitMarks(List.of(hit(1, "xfoo foo", 1, 3)), 0));
         SwingUtilities.invokeAndWait(p::clearHits);
         assertThat(marks(p)).isEmpty();
-        assertThat(p.editor().area().getHighlighter().getHighlights()).hasSize(before);
+        assertThat(onEdt(() -> painted(p))).isEqualTo(before);
     }
 
     /// The preview tab's text loaded or reloaded from disk leaves it a preview; the user's edits keep it, asked once.
@@ -231,8 +232,9 @@ class EditorPanelHitsTest {
         }
     }
 
-    private static Object colourAt(final Highlighter.Highlight[] painted, final int start) {
-        for (final Highlighter.Highlight h : painted) {
+    /// The colour the highlight of `p`'s text that starts at `start` is painted in; null when none starts there.
+    private static Object colourAt(final EditorPanel p, final int start) {
+        for (final Highlighter.Highlight h : p.editor().area().getHighlighter().getHighlights()) {
             if (h.getStartOffset() == start && h.getPainter() instanceof DefaultHighlighter.DefaultHighlightPainter d) {
                 return d.getColor();
             }
@@ -247,5 +249,27 @@ class EditorPanelHitsTest {
                 layOut(child);
             }
         }
+    }
+
+    /// How many highlights `p`'s text has, marks of hits and every other kind.
+    private static int painted(final EditorPanel p) {
+        return p.editor().area().getHighlighter().getHighlights().length;
+    }
+
+    /// What `read` returns, read on the EDT; its failure is thrown here.
+    private static <T> T onEdt(final Callable<T> read) throws Exception {
+        final AtomicReference<T> out = new AtomicReference<>();
+        final AtomicReference<Exception> failure = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                out.set(read.call());
+            } catch (final Exception e) {
+                failure.set(e);
+            }
+        });
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+        return out.get();
     }
 }

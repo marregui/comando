@@ -97,7 +97,7 @@ class SearchUiTest {
         app.start();
         loop = app.loop();
         Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null
-                && frame() != null);
+                && onEdt(() -> frame() != null));
         loop.dispatch(new Intent.OpenFile("", open.toString(), 0));
         Awaitility.await("its panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("open.txt"));
         final RSyntaxTextArea editor = editor();

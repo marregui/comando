@@ -83,8 +83,18 @@ Any number of document panels may be attached to a session
   document no session works in, takes the whole height: the lower area hides until ⌃1–⌃4, a lower tab or a request
   waiting in Approvals asks for it while that file is in front, and then stays for that file. A file moved to the right
   side leaves the lower area as the main tabs' front panel has it, and the side opens at the width a side view does.
-- **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
-  arranged them; it is greyed out while nothing was arranged.
+- **Files written** (Window ▸ "Files written by the session", [record 143](adr/0143-a-session-lists-the-files-it-wrote.md)):
+  a side-pane view of the files the session with the keyboard wrote (its Write, Edit, MultiEdit and NotebookEdit
+  calls), in the order it first wrote each, gold until opened as in the Files tab. ↓/↑ show a row's file in the preview
+  tab without taking the keyboard; Enter or a double click keeps the tab. It follows the focused session and grows as
+  the session writes.
+- **The transcript above the prompt** (a trial that ended, off by default,
+  [record 144](adr/0144-the-transcript-sits-above-the-prompt.md)): turned on, while a session's panel is in front, the
+  lower area, where its transcript is, sits above the panels; a file, an SQL editor or a document in front puts it back
+  below. Its height stays the same across the flip. Window ▸ "Transcript above the prompt" turns it on and "Transcript
+  below the prompt" off again; kept in `settings.json` (`layout.transcriptAbove`, off by default).
+- **Restore layout** (palette) puts the sidebar, side pane, lower divider and the transcript's side back as they were
+  before a session arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
 - **Closing returns to where you came from.** Each panel and view remembers where you were just before you last
   arrived at it, an opening included (a panel, a view, the Files tab, a lower tab of the panel in front). Closing the
@@ -858,7 +868,7 @@ the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
 | `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out; and, since version 2, where the kit put each folder last, so a kit folder still there follows the kit and the brain at every start while one the user pointed elsewhere stays ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
 | `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
-| `decisions.json` | the decisions automatic checkpoints held back, until settled or dismissed ([Claude Code §4.1](claude-code.md#41-approval-cards)) |
+| `decisions.json` | the decisions sessions held back, with their options, until answered, settled or dismissed ([Claude Code §4.1](claude-code.md#41-approval-cards)) |
 | `instances-seen.json` | the other instances seen, so the Instances tab lists those that left until **Forget** ([§4.3](#43-the-instances-tab)) |
 | `questdb/` | the embedded QuestDB's data |
 | `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)): `dist/` (the downloaded distribution), its home unzipped from it, `installed` (the zip and its time), `conf/` (owner-only), `data/` and `log/`, kept across reinstalls, `admin-password` (the admin account's, owner-only) and `stdout.log` |

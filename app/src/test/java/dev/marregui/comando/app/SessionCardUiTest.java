@@ -67,10 +67,10 @@ class SessionCardUiTest {
     /// pixels with no name under it; the name has no tooltip; the card follows onto another name and closes once left.
     @Test
     void aClickOnASessionsNameShowsTheTabsCardWhichFollowsThePointerOntoOtherNames() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "card", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             // the tab in front is kept across starts: whatever an earlier window left, Sessions comes to the front
@@ -182,18 +182,16 @@ class SessionCardUiTest {
                     l -> "agent-state".equals(l.getName()) && l.isShowing())) != null);
             assertThat(onEdt(() -> first(JLabel.class, l -> "agent-state".equals(l.getName()) && l.isShowing()).getText()))
                     .isEqualTo("Updating while the sub-agent runs.");
-        } finally {
-            app.close();
         }
     }
 
     /// A click on a connection's ⓘ shows a card of the connection's facts with no summary area.
     @Test
     void aClickOnAConnectionsNameShowsACardOfItsFactsWithoutASummary() throws Exception {
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "card", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             // the tab in front is kept across starts: whatever an earlier window left, Sessions comes to the front
@@ -226,8 +224,6 @@ class SessionCardUiTest {
             ImageIO.write(onEdt(() -> paint(card, card.getHeight())), "png", out.toFile());
             ImageIO.write(onEdt(() -> paint(list, list.getCellBounds(list.getModel().getSize() - 1, list.getModel().getSize() - 1).y
                     + list.getCellBounds(0, 0).height + 8)), "png", out.resolveSibling("connection-rows.png").toFile());
-        } finally {
-            app.close();
         }
     }
 
@@ -241,13 +237,14 @@ class SessionCardUiTest {
                 {"type":"user","cwd":"%s","gitBranch":"main","message":{"role":"user","content":"draft the release notes"}}
                 {"type":"ai-title","aiTitle":"Edge release notes"}
                 """.formatted(folder.toString().replace("\\", "\\\\")));
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "session-dialog", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && comandoFrame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> comandoFrame() != null));
             onEdt(() -> {
                 final Component target = comandoFrame().getMostRecentFocusOwner() != null ? comandoFrame().getMostRecentFocusOwner() : comandoFrame().getRootPane();
                 final long now = System.currentTimeMillis();
@@ -279,8 +276,6 @@ class SessionCardUiTest {
             assertThat(spec.claudeSessionId()).isEqualTo(ID);
             assertThat(spec.startMode()).isEqualTo(StartMode.FORK);
             assertThat(spec.workDir()).isEqualTo(folder.toString());
-        } finally {
-            app.close();
         }
     }
 

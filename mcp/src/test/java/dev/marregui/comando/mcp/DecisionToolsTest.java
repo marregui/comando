@@ -33,6 +33,8 @@ import static org.assertj.core.api.Assertions.tuple;
 /// - `decisions_settled` takes a JSON array of integers, or that array as JSON text, and refuses anything else
 /// - `decision_settle` is refused as locked while the target session's checkpoint runs; `decision_dismiss` removes one
 /// - `ui_get_state` lists the decisions held back under `later`
+/// - `decision_hold` takes options, an array of strings or that array as JSON text, which become the card's buttons
+/// - a question card no one answers in time moves to the Later group, one decision per question; a tool's card does not
 class DecisionToolsTest {
 
     private final ObjectMapper json = new ObjectMapper();
@@ -158,18 +160,95 @@ class DecisionToolsTest {
     }
 
     /// `ui_get_state` lists the decisions held back under `later`, oldest first, each with its id, session, title,
-    /// detail and when it was held back.
+    /// detail, when it was held back and its options, so a session asked to settle it sees the choices.
     @Test
     void theStateListsTheDecisionsHeldBack() throws Exception {
         assertThat(json.readTree(tools.stateJson()).path("later").isArray()).as("an empty list when none").isTrue();
         call("work", "decision_hold", "{\"title\":\"One\",\"detail\":\"why it matters\"}");
-        call("other", "decision_hold", "{\"title\":\"Two\"}");
+        call("other", "decision_hold", "{\"title\":\"Two\",\"options\":[\"Yes\",\"No\"]}");
         final JsonNode later = json.readTree(call("work", "ui_get_state", "{}").text()).path("later");
         assertThat(later).hasSize(2);
         final JsonNode one = later.get(0);
         assertThat(List.of(one.path("id").asLong(), one.path("session").asString(), one.path("title").asString(), one.path("detail").asString(),
                 one.path("created").asLong())).containsExactly(1L, "work", "One", "why it matters", clock.millis());
         assertThat(later.get(1).path("session").asString()).isEqualTo("other");
+        assertThat(one.path("options")).as("a typed answer lists none").isEmpty();
+        assertThat(later.get(1).path("options")).extracting(JsonNode::asString).containsExactly("Yes", "No");
+    }
+
+    /// `decision_hold` with options sends them in order, as given or as JSON text, and the decision kept has them
+    /// without the blank one; options that are not a list of strings are refused and hold nothing back. Its schema
+    /// offers `options` as an array of strings and its description says they become the card's buttons.
+    @Test
+    void aDecisionIsHeldBackWithItsOptions() throws Exception {
+        JsonNode definition = null;
+        for (final JsonNode d : tools.definitions()) {
+            if ("decision_hold".equals(d.path("name").asString(""))) {
+                definition = d;
+            }
+        }
+        assertThat(definition).isNotNull();
+        final JsonNode options = definition.path("inputSchema").path("properties").path("options");
+        assertThat(options.path("type").asString()).isEqualTo("array");
+        assertThat(options.path("items").path("type").asString()).isEqualTo("string");
+        assertThat(definition.path("description").asString()).contains("report").contains("buttons");
+
+        final McpTools.Outcome ok = call("work", "decision_hold",
+                "{\"title\":\"Ship it?\",\"options\":[\"Yes\",\" \",\"Not yet\"]}");
+        assertThat(ok.error()).as(ok.text()).isFalse();
+        assertThat(ok.text()).contains("answers it there");
+        final McpTools.Outcome asText = call("work", "decision_hold",
+                "{\"title\":\"Colour?\",\"options\":\"[\\\"Red\\\",\\\"Blue\\\"]\"}");
+        assertThat(asText.error()).as(asText.text()).isFalse();
+        assertThat(of(Intent.DecisionHeldBack.class)).extracting(Intent.DecisionHeldBack::options)
+                .containsExactly(List.of("Yes", " ", "Not yet"), List.of("Red", "Blue"));
+        assertThat(state.get().later()).extracting(Decision::title, Decision::options)
+                .containsExactly(tuple("Ship it?", List.of("Yes", "Not yet")),
+                        tuple("Colour?", List.of("Red", "Blue")));
+
+        for (final String bad : List.of("{\"title\":\"x\",\"options\":\"Yes\"}", "{\"title\":\"x\",\"options\":[1]}")) {
+            final McpTools.Outcome refused = call("work", "decision_hold", bad);
+            assertThat(refused.error()).as(bad).isTrue();
+            assertThat(refused.text()).as(bad).contains("list of strings");
+        }
+        assertThat(state.get().later()).hasSize(2);
+    }
+
+    /// A question card (AskUserQuestion) no one answers within the approval timeout is withdrawn and denied, and each
+    /// of its questions waits in the Later group under the asking session: the question its title, its header and the
+    /// options' descriptions its detail (and, for a question that took several, a line saying so), the option labels
+    /// its options; the denial says the question waits there. A tool's card that times out is denied as before and
+    /// leaves nothing to answer.
+    @Test
+    void aQuestionNoOneAnswersInTimeWaitsInTheLaterGroup() throws Exception {
+        final QueryPort db = null;
+        final McpTools quick = new McpTools(sink, state::get, new TranscriptRegistry(), db, AuditLog.none(), clock,
+                Duration.ofMillis(50));
+        final String questions = "{\"questions\":["
+                + "{\"question\":\"Which store?\",\"header\":\"Store\",\"multiSelect\":false,\"options\":["
+                + "{\"label\":\"Mapped\",\"description\":\"read in place\"},"
+                + "{\"label\":\"Heap\",\"description\":\"\"}]},"
+                + "{\"question\":\"Ship today?\",\"header\":\"\",\"multiSelect\":true,\"options\":["
+                + "{\"label\":\"Yes\"},{\"label\":\"No\"}]}]}";
+        final JsonNode denied = json.readTree(quick.call("work", "approve",
+                json.readTree("{\"tool_name\":\"AskUserQuestion\",\"input\":" + questions + "}")).text());
+        assertThat(denied.path("behavior").asString()).isEqualTo("deny");
+        assertThat(denied.path("message").asString()).contains("No answer from the user")
+                .contains("questions wait in the Approvals tab's Later group");
+        assertThat(of(Intent.ApprovalWithdrawn.class)).hasSize(1);
+        assertThat(state.get().later())
+                .extracting(Decision::session, Decision::title, Decision::detail, Decision::options)
+                .containsExactly(
+                        tuple("work", "Which store?", "Store\nMapped: read in place", List.of("Mapped", "Heap")),
+                        tuple("work", "Ship today?", "Several may apply: choose one, or name them all in Other answer.",
+                                List.of("Yes", "No")));
+
+        final JsonNode bash = json.readTree(quick.call("work", "approve",
+                json.readTree("{\"tool_name\":\"Bash\",\"input\":{\"command\":\"make\"}}")).text());
+        assertThat(bash.path("behavior").asString()).isEqualTo("deny");
+        assertThat(bash.path("message").asString()).doesNotContain("Later group");
+        assertThat(of(Intent.ApprovalWithdrawn.class)).hasSize(2);
+        assertThat(state.get().later()).as("a tool's card leaves nothing to answer").hasSize(2);
     }
 
     private McpTools.Outcome call(final String caller, final String tool, final String args) throws Exception {

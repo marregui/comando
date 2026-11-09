@@ -128,6 +128,10 @@ val uiTest = tasks.register<Test>("uiTest") {
         "**/SubjectUiTest.class",
         "**/SearchUiTest.class",
         "**/PartitionUiTest.class",
+        "**/CompareKeysUiTest.class",
+        "**/QuestionLaterUiTest.class",
+        "**/DeliverablesUiTest.class",
+        "**/TranscriptAboveUiTest.class",
     )
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1

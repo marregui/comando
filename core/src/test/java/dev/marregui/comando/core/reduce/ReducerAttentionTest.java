@@ -2,6 +2,7 @@ package dev.marregui.comando.core.reduce;
 
 import java.util.List;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.dispatch.Target;
@@ -60,8 +61,9 @@ class ReducerAttentionTest {
     }
 
     private void assertSavedAs(final boolean unread) {
-        assertThat(effects).filteredOn(Effect.SaveSessions.class::isInstance).singleElement()
-                .satisfies(e -> assertThat(((Effect.SaveSessions) e).specs()).filteredOn(x -> x.name().equals("work"))
+        assertThat(effects).filteredOn(Effect.SaveSessions.class::isInstance)
+                .singleElement(InstanceOfAssertFactories.type(Effect.SaveSessions.class))
+                .satisfies(e -> assertThat(e.specs()).filteredOn(x -> x.name().equals("work"))
                         .extracting(SessionSpec::unread).containsExactly(unread));
     }
 

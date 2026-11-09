@@ -60,6 +60,18 @@ class NoteLinksTest {
         assertThat(NoteLinks.resolve(repo.resolve("KB/claude"), "MEMORY")).contains(repo.resolve("KB/claude/MEMORY.md"));
     }
 
+    /// A folder further below the repository's top than a written file's lookup goes still has that top as its root,
+    /// so a deep note's links reach the whole repository.
+    @Test
+    void aDeepFolderHasItsRepositorysTopAsItsRoot() throws IOException {
+        Files.createDirectories(repo.resolve(".git"));
+        Path deep = repo;
+        for (int i = 0; i < 20; i++) {
+            deep = deep.resolve("d" + i);
+        }
+        assertThat(NoteLinks.rootOf(Files.createDirectories(deep))).isEqualTo(repo);
+    }
+
     /// A file without front matter is still found when the link's dashes are its name's underscores.
     @Test
     void aNameWithDashesFindsAFileWithUnderscores() throws IOException {

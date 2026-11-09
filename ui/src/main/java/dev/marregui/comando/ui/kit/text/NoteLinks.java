@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.ui.kit.vcs.RepositoryTop;
 
 /**
  * Wiki-style links, {@code [[name]]}, {@code [[name#heading]]} and {@code [[name|label]]}, as Obsidian and Claude
@@ -105,12 +106,8 @@ public final class NoteLinks {
 
     /** The git repository that holds {@code folder}: the nearest folder with a {@code .git}; else {@code folder}. */
     static Path root(final Path folder) {
-        for (Path p = folder; p != null; p = p.getParent()) {
-            if (Files.exists(p.resolve(".git"))) {
-                return p;
-            }
-        }
-        return folder;
+        // a note's links reach as far up as the repository goes
+        return RepositoryTop.above(folder, Integer.MAX_VALUE).orElse(folder);
     }
 
     private static boolean named(final Path f, final String key) {

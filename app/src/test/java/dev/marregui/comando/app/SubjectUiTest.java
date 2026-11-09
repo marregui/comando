@@ -59,9 +59,8 @@ class SubjectUiTest {
         head(repo, "feature/eng-1-x");
         final String claude = fakeClaude(repo.resolve("src/F.java")).toString();
         final AppConfig config = new AppConfig(home.resolve("data"), claude, kit.resolve("projects"), false);
-        final App app = new App(config, "subject", () -> {
-        });
-        try {
+        try (final App app = new App(config, "subject", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             Awaitility.await("the window").atMost(WAIT)
@@ -90,8 +89,6 @@ class SubjectUiTest {
                 collect(card, JLabel.class, l -> "tab-card-fact".equals(l.getName()), out);
                 return out.stream().map(JLabel::getText).toList();
             })).anyMatch(f -> f.endsWith("/acme")).contains("feature/eng-1-x", "ENG-1");
-        } finally {
-            app.close();
         }
     }
 

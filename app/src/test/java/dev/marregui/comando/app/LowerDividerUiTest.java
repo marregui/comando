@@ -42,13 +42,14 @@ class LowerDividerUiTest {
     void eachPanelBringsBackItsOwnLowerDivider() throws Exception {
         final Path one = Files.writeString(home.resolve("one.md"), "# One\n");
         final Path two = Files.writeString(home.resolve("two.md"), "# Two\n");
-        final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
                 "divider", () -> {
-        });
-        try {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(()
+                    -> loop.state().focused() != null && onEdt(() -> frame() != null));
             loop.dispatch(new Intent.OpenFile("", one.toString(), 0));
             Awaitility.await("one's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("one.md"));
             final PanelId first = loop.state().focused();
@@ -78,8 +79,6 @@ class LowerDividerUiTest {
             Awaitility.await("one's divider back").atMost(WAIT).until(() -> onEdt(vertical::getDividerLocation) == 150);
             loop.dispatch(new Intent.FocusPanel(second));
             Awaitility.await("two's divider back").atMost(WAIT).until(() -> onEdt(vertical::getDividerLocation) == 350);
-        } finally {
-            app.close();
         }
     }
 

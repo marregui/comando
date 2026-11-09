@@ -18,7 +18,7 @@ public interface PersistencePort {
     void saveFolders(List<FolderRoot> folders);
 
     /**
-     * The decisions automatic checkpoints held back (record 131), and an id at or above every decision id given so far.
+     * The decisions sessions held back (records 131, 142), and an id at or above every decision id given so far.
      */
     void saveDecisions(List<Decision> decisions, long lastId);
 

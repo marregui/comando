@@ -266,13 +266,13 @@ typed command carry no argument and ask as before; answering their cards is what
 | `approve` | `tool_name`, `input`, `tool_use_id` | Claude Code's permission prompt: a card, and a wait for the answer ([§4](#4-approvals-and-safety)) |
 | `ui_show_table` | `title`, `columns`, `rows`, `placement` | a table view |
 | `ui_plot` | `title`, `x_label`, `y_label`, `time_x`, `series` (`name`, `x`, `y`), or `x` and `y` for one series named after the title, `placement` | a plot; with `time_x`, x is epoch milliseconds; an array sent as JSON text reads as the array |
-| `ui_show_view` | `type`, `title`, `data`, `placement` | a `markdown`, `diff`, `text`, `tree`, `table` or `plot` view |
+| `ui_show_view` | `type`, `title`, `data`, `placement` | a `markdown`, `diff`, `text`, `tree`, `table` or `plot` view; `deliverables` (no data) shows the one Files written view, in the side pane unless placed lower ([record 143](adr/0143-a-session-lists-the-files-it-wrote.md)) |
 | `ui_set_editor` | `text`, `panel`, `force` | replaces a panel's text, one step the user's ⌘Z undoes |
 | `ui_insert` | `text`, `panel`, `mode`, `force` | adds text as its own block: at the end (`append`), or after the block that ran last (`insert`); the user's caret and selection stay put |
 | `ui_open_file` | `path`, `line` | shows a file in the side pane: Markdown rendered when no `line` is given, other text read-only at the line, binary said so; `~/` and relative paths resolve; at most 4 MB |
 | `ui_notify` | `text`, `level` | a status-bar message, and a desktop notification while the window is not active |
 | `ui_get_state` | none | panels with bindings and last run, connections, sessions (busy, `waitingOn`), open views |
-| `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes and the lower share change after the same pause; Restore layout in the palette undoes it |
+| `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share`, `transcript_above` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes, the lower share and the transcript's side (`transcript_above`, [record 144](adr/0144-the-transcript-sits-above-the-prompt.md)) change after the same pause; Restore layout in the palette undoes it |
 | `ui_close_view` | `id` | closes a view this session placed; the user's or pinned views are refused |
 | `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§4.2](#42-sql-from-claude)); returns the first result as tab-separated text in PostgreSQL COPY text form (`\N` is SQL NULL; a tab, newline, carriage return or backslash in a value is escaped); `show` also opens it as a table, SQL NULL shown as `null` in muted italics, told apart from the text `null` |
 | `db_describe` | `table`, `connection` | a table's columns and types, in the COPY text form of `db_run_sql` |
@@ -292,7 +292,7 @@ sends for the same gesture:
 | sessions | `session_new` (name, work dir, model, effort, checkpoint, and an optional first `prompt` that starts it; no permission mode and no extra directories: the kit's and the working folder's settings hold them, [§1.1](#11-the-process)), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
 | panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_place`, `panel_pin`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
-| decisions held back | `decision_hold` (title, detail; the calling session's automatic checkpoint holds a decision back), `decisions_settled` (ids), `decision_settle`, `decision_dismiss` (id; the Later group's buttons); `ui_get_state` lists `later` with ids ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
+| decisions held back | `decision_hold` (title, detail, optional `options`, the card's choices; a report or the calling session's automatic checkpoint holds a decision back, [record 142](adr/0142-one-decision-queue.md)), `decisions_settled` (ids), `decision_settle`, `decision_dismiss` (id; the Later group's buttons); `ui_get_state` lists `later` with ids and options ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
 | views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
 | servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
@@ -409,13 +409,23 @@ how Claude Code matches them and never allow more than the command could do (`Pe
 - The Approvals tab is one queue for the window, in groups
   ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): the focused panel's session's cards first, under its
   name; then each other session's cards under its name, the group holding the oldest card first; then **Later**, the
-  decisions automatic checkpoints held back, under each session's name, each with its title, detail and age, **Settle**
+  decisions sessions held back, under each session's name, each with its title, detail and age, **Settle**
   (sends that session its checkpoint command without `--auto`, so it asks; the focused panel's session when the
   decision's own is gone or has no checkpoint command; its tooltip names the session it sends to ("Runs the checkpoint
   of work"; "Runs main's checkpoint; c has no checkpoint command"; "Runs main's checkpoint; session c was removed");
   off while that session's checkpoint runs, its tooltip saying to Settle once it has ended, and off with the reducer's
   reason as its tooltip when no session can take it) and **Dismiss** (drops it unasked). The title counts both, "Approvals
   (2 · 3 later)"; a decision held back brings nothing forward and posts no notice.
+- A Later decision is answered on its card ([record 142](adr/0142-one-decision-queue.md)): one toggle per option and
+  an Other answer line when it has options, as a question card has, else a one-line field. **Send answers** under the
+  group sends every answered card at once: each session gets one prompt, "Answers to the decisions you held for me:"
+  and a line per decision; a decision whose session is gone goes to the focused panel's session. The answered
+  decisions leave the group and the unanswered stay; a session running its checkpoint or stopping keeps its answers on
+  the cards, and a notice says to send them again once it can.
+- A question card that no one answers within the approval timeout is withdrawn and its call denied, as before, and each
+  of its questions waits in Later, its options the question's labels (one that took several says so in its detail);
+  the denial says so. A permission card that times
+  out is only denied.
 - The Approvals tab comes forward at its top, the focused session's oldest card first, however it is brought forward (a new card, a
   click, ⌃2); a card arriving while it is in front, or while the keyboard is in a card, moves nothing.
 - Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the

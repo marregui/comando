@@ -136,7 +136,7 @@
   },
   {
     "name": "ui_show_view",
-    "description": "Shows a view in comando. type markdown: data {markdown}. diff: data {path, before, after}. text: data {path, text, syntax, line}. tree: data {root: {label, detail, children: [...]}}. table and plot take the same data as ui_show_table and ui_plot.",
+    "description": "Shows a view in comando. type markdown: data {markdown}. diff: data {path, before, after}. text: data {path, text, syntax, line}. tree: data {root: {label, detail, children: [...]}}. table and plot take the same data as ui_show_table and ui_plot. deliverables: data {}, the files the session with the keyboard wrote, titled Files written, in the side pane unless placement says lower.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -148,7 +148,8 @@
             "text",
             "tree",
             "table",
-            "plot"
+            "plot",
+            "deliverables"
           ]
         },
         "title": {
@@ -280,7 +281,7 @@
   },
   {
     "name": "ui_set_layout",
-    "description": "Arranges comando's window. Every argument is optional: panel focuses an editor panel by id or title; lower_tab selects results, session, approvals, terminal, or a view in the lower panel by id or title; sidebar and side_pane show (true) or hide (false) those panes; lower_share sets the lower panel's share of the window height, 0.05 to 0.95. The window is the user's: panel must be one bound to this session; lower_tab is selected only while the user looks at a panel of this session; a panel to focus (with its lower_tab) and pane changes wait until the user pauses typing, and the user can undo pane changes. Use it when the user asks, not to follow your own work.",
+    "description": "Arranges comando's window. Every argument is optional: panel focuses an editor panel by id or title; lower_tab selects results, session, approvals, terminal, or a view in the lower panel by id or title; sidebar and side_pane show (true) or hide (false) those panes; lower_share sets the lower panel's share of the window height, 0.05 to 0.95; transcript_above puts the lower panel, with the session's transcript, above a session's panel (true) or below it (false), kept for the next start. The window is the user's: panel must be one bound to this session; lower_tab is selected only while the user looks at a panel of this session; a panel to focus (with its lower_tab) and pane changes wait until the user pauses typing, and the user can undo pane changes. Use it when the user asks, not to follow your own work.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -300,6 +301,9 @@
           "type": "number",
           "minimum": 0.05,
           "maximum": 0.95
+        },
+        "transcript_above": {
+          "type": "boolean"
         }
       }
     }

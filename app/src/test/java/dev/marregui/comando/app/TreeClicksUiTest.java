@@ -111,9 +111,9 @@ class TreeClicksUiTest {
         final KitRoot kitRoot = KitRoot.resolve(root.toString(), home, KitJson::read);
         assertThat(kitRoot.kit()).isPresent();
 
-        final App app = new App(new AppConfig(data, home.resolve("no-claude").toString(), kitRoot, false), "kit", () -> {
-        });
-        try {
+        try (final App app = new App(new AppConfig(data, home.resolve("no-claude").toString(), kitRoot, false),
+                "kit", () -> {
+        })) {
             app.start();
             final StateLoop loop = app.loop();
             assertThat(loop.state().folders()).extracting(FolderRoot::name).as("the kit's first, the user's kept")
@@ -129,8 +129,6 @@ class TreeClicksUiTest {
                     .until(() -> Files.readString(data.resolve("folders.json")).contains(root.resolve("BRAIN/MEMORY").toString()));
             assertThat(onEdt(() -> first(JLabel.class, l -> "Kit".equals(l.getAccessibleContext().getAccessibleName()))))
                     .as("the kit is no longer in the status bar (record 119)").isNull();
-        } finally {
-            app.close();
         }
     }
 
