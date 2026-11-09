@@ -318,8 +318,11 @@ class PeersTest {
         b.window.transcripts.of("work").append(new Block.AssistantText("m1", 0, "X is a broker.\nDetails.", false, ""));
         b.window.transcripts.of("work").append(new Block.UserPrompt("a subagent's prompt", "work", "tool-1"));
         b.peers.tick();
+        // the presence after the last change: the periodic tick or the connect may send one made between the updates
+        // above, busy without its activity or before the transcript's lines
         final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
-                i -> i.instances().others().stream().anyMatch(o -> o.edge() && o.sessions().stream().anyMatch(InstancesState.Member::busy)), WAIT)
+                i -> i.instances().others().stream().anyMatch(o -> o.edge() && o.sessions().stream()
+                        .anyMatch(m -> m.busy() && "running Bash".equals(m.activity()) && !m.reply().isEmpty())), WAIT)
                 .instances();
         final InstancesState.Member work = seen.others().getFirst().sessions().getFirst();
         assertThat(work.activity()).isEqualTo("running Bash");
