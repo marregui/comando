@@ -42,4 +42,36 @@ public final class ResultText {
         }
         return rows;
     }
+
+    /**
+     * Rows {@code from} up to {@code from + count} of the first {@code rows} rows, only the given columns in that
+     * order, as display cells with SQL NULL as a null cell. {@code rows} is the caller's one read of
+     * {@code rowCount()}.
+     */
+    public static List<List<String>> page(
+            final ResultView r,
+            final int rows,
+            final int from,
+            final int count,
+            final int[] columns
+    ) {
+        // in long, so a count near Integer.MAX_VALUE cannot wrap the end below from
+        final int end = (int) Math.min(rows, (long) from + count);
+        final List<List<String>> page = new ArrayList<>(Math.max(0, end - from));
+        final StringBuilder sb = new StringBuilder();
+        for (int i = from; i < end; i++) {
+            final List<String> row = new ArrayList<>(columns.length);
+            for (final int c : columns) {
+                if (r.isNull(i, c)) {
+                    row.add(null);
+                    continue;
+                }
+                sb.setLength(0);
+                r.format(i, c, sb);
+                row.add(sb.toString());
+            }
+            page.add(row);
+        }
+        return page;
+    }
 }

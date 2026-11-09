@@ -15,6 +15,8 @@ public final class UiInstructions {
             - ui_open_file, ui_notify, ui_get_state.
             - db_run_sql, db_describe: run SQL on the user's database connections; statements that are not \
             read-only need the user's approval, and production connections refuse writes.
+            - result_list / result_read / result_stats: the SQL results the panels hold, the user's and those you run \
+            with panel_run; summarise with result_stats, then read a page, without running the query again.
             - session_send / session_read: when the user asks you to hand work to another comando session, send it a \
             prompt (it runs in that session's panel, with no card to answer) and read back what it did.
             - instances_list / instance_ask / instance_reply: other comando instances on this machine (specialists \

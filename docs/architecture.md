@@ -299,6 +299,7 @@ Bounded waits:
 | An approval card | 55 min (the MCP configuration comando writes gives its server a 60 min timeout) | `deny`, card withdrawn |
 | `db_run_sql` for Claude | 90 s | a queued statement is withdrawn; the tool says so |
 | `db_describe` | 60 s | tool error |
+| `result_stats` | 20 s of scanning | the per-column figures over the rows scanned, and how many |
 | `session_read` with `wait_seconds` | at most 600 s | the blocks so far, status still working |
 | `instance_ask`, `instance_reply` with `wait_seconds` | at most 600 s (default 300) | an id to read the reply with later |
 | Another instance's question: its consult turn | 600 s | the reply `timeout` |
@@ -737,7 +738,8 @@ One package, `dev.marregui.comando.mcp`.
 | `AuditLog` | every tool call and approval decision, appended to `audit/audit-<UTC date>.jsonl`; never read back |
 
 The tools: `approve`; `ui_show_table`, `ui_plot`, `ui_show_view`, `ui_set_editor`, `ui_insert`, `ui_open_file`,
-`ui_notify`, `ui_get_state`, `ui_set_layout`, `ui_close_view`; `db_run_sql`, `db_describe`; `session_send`,
+`ui_notify`, `ui_get_state`, `ui_set_layout`, `ui_close_view`; `db_run_sql`, `db_describe`; `result_list`,
+`result_read`, `result_stats`, which read the `ResultRegistry` the application hands `McpTools`; `session_send`,
 `session_read`; `instances_list`, `instance_ask`, `instance_reply`; and, through `ActionTools`, every other action of
 `core`'s `Actions`. Their arguments and limits are in [Claude Code §3.2](claude-code.md#32-the-tools).
 

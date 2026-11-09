@@ -210,6 +210,9 @@ public final class Actions {
             // ---- databases
             new Action("db_run_sql", Kind.ACT, "Runs SQL on a connection under the SQL policy.", List.of(), Set.of(Intent.RunText.class)),
             new Action("db_describe", Kind.READ, "A table's columns and types.", List.of(), Set.of()),
+            new Action("result_list", Kind.READ, "The SQL results the panels hold, with their columns.", List.of(), Set.of()),
+            new Action("result_read", Kind.READ, "A page of a held result's rows.", List.of(), Set.of()),
+            new Action("result_stats", Kind.READ, "A held result summarised per column.", List.of(), Set.of()),
 
             // ---- servers: the toggles at the top of the workspace, which call the server and send no intent
             new Action("server_start", Kind.ACT,

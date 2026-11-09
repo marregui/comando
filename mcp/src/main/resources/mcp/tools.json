@@ -375,6 +375,71 @@
     }
   },
   {
+    "name": "result_list",
+    "description": "Lists the SQL results comando holds, one per panel, as {results, omitted}: the user's runs and those an agent ran with panel_run. Each has its id (r and the run's id, as ui_get_state's lastRun.result names it), panel, connection, SQL, status (RUNNING while rows still arrive), rows, whether the fetch stopped at its row limit, its start in UTC, and its columns with their types; entries past 64 kB are left out whole and counted in omitted. Read a result with result_read, summarise it with result_stats; neither runs the query again.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "result_read",
+    "description": "Reads rows of a held result a page at a time, as tab-separated text in the PostgreSQL COPY text form db_run_sql uses (\\N is SQL NULL). The closing line names the rows shown, the total, and the next offset. The query is not run again, so the page is the rows the user sees. A result still fetching answers from the rows that have arrived. Narrow first: result_stats for the shape, SQL for aggregates.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "description": "The result's id from result_list, e.g. r42."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 200
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Only these columns, in this order; default: all."
+        }
+      },
+      "required": [
+        "result"
+      ]
+    }
+  },
+  {
+    "name": "result_stats",
+    "description": "Summarises a held result per column, without reading its rows into the conversation: type, SQL NULLs, smallest and largest value, and distinct values (exact below 10000, else 'at least 10000'), as COPY text. A scan longer than 20 s answers with the rows it reached and says so.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "description": "The result's id from result_list, e.g. r42."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Only these columns; default: all."
+        }
+      },
+      "required": [
+        "result"
+      ]
+    }
+  },
+  {
     "name": "session_send",
     "description": "Sends a prompt to another comando session; nothing is asked of the user. The prompt, headed [from session <this session>], is added to that session's panel as a block of its own and run there, so the user sees what was sent and by whom; a busy session takes it after its current turn. Only when the user asked you to hand work to another session. The answer gives the cursor for session_read.",
     "inputSchema": {

@@ -191,6 +191,7 @@ public final class App implements AutoCloseable {
             McpTools mcpTools;
             try {
                 mcpTools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
+                mcpTools.results(results);
                 mcpTools.readOnly(panel -> store.document(panel) && store.file(panel).map(PanelTexts::isLog).orElse(false));
                 // the user's grants to callers: who may run destructive actions (record 121)
                 mcpTools.agentsFile(config.home().resolve("agents.json"));
@@ -247,8 +248,9 @@ public final class App implements AutoCloseable {
             owned.addLast(questDb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
             owned.addLast(ui);
-            LOG.log(System.Logger.Level.INFO, "comando " + version + " ready [home=" + config.home() + ", mcp=" + mcp.url()
-                    + ", claude=" + config.claudeExecutable() + ", root=" + root.dir() + ", kit=" + (root.kit().isPresent() ? root.name() : "none") + ']');
+            LOG.log(System.Logger.Level.INFO, "comando ready [version=" + version + ", home=" + config.home()
+                    + ", mcp=" + mcp.url() + ", claude=" + config.claudeExecutable() + ", root=" + root.dir()
+                    + ", kit=" + (root.kit().isPresent() ? root.name() : "none") + ']');
         } catch (final RuntimeException | Error e) {
             // roll back: close what was built, in reverse order, then report the cause; the kit check's strand too, when
             // the failure came before it was owned

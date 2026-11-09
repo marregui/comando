@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +23,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
+import org.jetbrains.annotations.TestOnly;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -44,12 +47,17 @@ import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
+import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.result.ResultStats;
+import dev.marregui.comando.core.result.ResultText;
+import dev.marregui.comando.core.result.ResultView;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -73,7 +81,26 @@ public final class McpTools {
     /** The detail line of a held-back question that took several options (record 142). */
     private static final String SEVERAL = "Several may apply: choose one, or name them all in Other answer.";
     static final int MAX_SQL_ROWS = 200;
+    /**
+     * The most rows one call returns, {@code db_run_sql}'s {@code max_rows} and {@code result_read}'s {@code limit}:
+     * set with the tool's first version, not measured; the {@link #MAX_RESULT_CHARS} budget cuts a page sooner.
+     */
+    static final int MAX_PAGE_ROWS = 10_000;
     static final int MAX_RESULT_CHARS = 64 * 1024;
+    /** The id prefix of a held result: {@code r} and the run's request id. */
+    static final String RESULT_PREFIX = "r";
+    /**
+     * How long {@code result_stats} scans before it answers with the rows it reached: well under the 90 s that
+     * {@code db_run_sql} gives a statement. Not measured on a 5 M-row result; a timed scan of one wide text result
+     * would settle whether it is ever reached.
+     */
+    static final Duration STATS_LIMIT = Duration.ofSeconds(20);
+    /**
+     * Scans running at once: each holds a virtual thread's carrier for its CPU work, and two leave the other carriers
+     * (one per core) to the fetches and tool calls. Not measured; a timed fetch beside concurrent scans would settle
+     * it.
+     */
+    static final int MAX_SCANS = 2;
     /** Blocks {@code session_read} shows without a cursor: the end of the transcript. */
     static final int READ_TAIL = 40;
     static final int MAX_WAIT_SECONDS = 600;
@@ -106,6 +133,13 @@ public final class McpTools {
     private final ActionTools actions;
     /** The other comando instances, through the comando Edge (record 123); null until the application wires them. */
     private volatile Peers peers;
+    /**
+     * The rows of the panels' runs (record 145), written once by the application thread before the server starts and
+     * read by the request threads; null until then.
+     */
+    private volatile ResultRegistry results;
+    /** Permits for {@link #MAX_SCANS} scans; a call that finds none is refused, never queued. */
+    private final Semaphore scans = new Semaphore(MAX_SCANS);
     private final AtomicLong approvalIds = new AtomicLong(1_000_000L);
     private final ConcurrentHashMap<Long, CompletableFuture<ApprovalDecision>> pending = new ConcurrentHashMap<>();
     /**
@@ -169,6 +203,11 @@ public final class McpTools {
         this.peers = peers;
     }
 
+    /** The rows of the panels' runs, which the result tools read (record 145); the application sets it once. */
+    public void results(final ResultRegistry results) {
+        this.results = results;
+    }
+
     /** Runs tool {@code name} for {@code session}; never throws for bad input, which becomes an error outcome. */
     Outcome call(final String session, final String name, final JsonNode args) {
         return call(session, name, args, null);
@@ -216,6 +255,9 @@ public final class McpTools {
                 case "ui_close_view" -> closeView(session, args);
                 case "db_run_sql" -> runSql(session, args);
                 case "db_describe" -> describe(session, args);
+                case "result_list" -> Outcome.ok(resultList());
+                case "result_read" -> resultRead(args);
+                case "result_stats" -> resultStats(args);
                 case "session_send" -> sessionSend(session, args);
                 case "session_read" -> sessionRead(args);
                 case "instances_list" -> peers().list();
@@ -630,6 +672,10 @@ public final class McpTools {
                 run.put("sql", clip(r.sql(), 500));
                 run.put("status", r.status().name());
                 run.put("rows", r.rowCount());
+                final ResultRegistry registry = results;
+                if (registry != null && registry.get(r.requestId()) != null) {
+                    run.put("result", RESULT_PREFIX + r.requestId());
+                }
                 if (!r.error().isEmpty()) {
                     run.put("error", r.error());
                 }
@@ -804,7 +850,7 @@ public final class McpTools {
             return Outcome.fail("sql is required");
         }
         final ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
-        final int maxRows = Math.max(1, Math.min(args.path("max_rows").asInt(MAX_SQL_ROWS), 10_000));
+        final int maxRows = Math.max(1, Math.min(args.path("max_rows").asInt(MAX_SQL_ROWS), MAX_PAGE_ROWS));
         if (!SqlPolicy.isReadOnly(sql)) {
             if (spec.prod()) {
                 return Outcome.fail("connection " + spec.name() + " is a production connection; comando refuses statements that are not read-only");
@@ -879,6 +925,227 @@ public final class McpTools {
     }
 
     /**
+     * Every panel's held result: its id, panel, connection, SQL, state, rows and columns with their types, as many as
+     * fit in {@link #MAX_RESULT_CHARS}; {@code omitted} counts those left out.
+     */
+    String resultList() {
+        final AppState s = state.get();
+        final ResultRegistry registry = results;
+        final ObjectNode root = json.createObjectNode();
+        final ArrayNode list = root.putArray("results");
+        int size = 0;
+        int omitted = 0;
+        for (final PanelState p : s.panels()) {
+            final Optional<SqlRun> run = s.runOf(p.id());
+            final ResultView view = run.isEmpty() || registry == null ? null : registry.get(run.get().requestId());
+            if (view == null) {
+                continue;
+            }
+            final ObjectNode n = resultEntry(p, run.get(), view);
+            // an entry is kept whole or left out, so the answer stays valid JSON
+            final int length = n.toString().length() + 1;
+            if (omitted > 0 || size + length > MAX_RESULT_CHARS - 64) {
+                omitted++;
+                continue;
+            }
+            list.add(n);
+            size += length;
+        }
+        root.put("omitted", omitted);
+        return root.toString();
+    }
+
+    private ObjectNode resultEntry(final PanelState p, final SqlRun r, final ResultView view) {
+        final ObjectNode n = json.createObjectNode();
+        n.put("id", RESULT_PREFIX + r.requestId());
+        n.put("panel", p.title());
+        n.put("connection", r.connection());
+        n.put("sql", clip(r.sql(), 500));
+        n.put("status", r.status().name());
+        n.put("rows", view.rowCount());
+        n.put("truncated", r.truncated());
+        // a wall-clock timestamp a reader compares with others, in UTC
+        n.put("started", Instant.ofEpochMilli(r.startedMillis()).toString());
+        final ArrayNode columns = n.putArray("columns");
+        for (int c = 0; c < view.columnCount(); c++) {
+            columns.addObject().put("name", view.columnName(c)).put("type", view.typeName(c));
+        }
+        return n;
+    }
+
+    /**
+     * Rows {@code offset} on of a held result as COPY text, as {@code db_run_sql} returns them, at most {@code limit}
+     * and {@link #MAX_RESULT_CHARS}; the closing line names the next offset. A row cut at the budget is not counted as
+     * read, so the next page starts with it, unless it is the page's first: then it can never fit, and the next page
+     * starts after it.
+     */
+    private Outcome resultRead(final JsonNode args) {
+        final Held held = held(args);
+        final int offset = Math.max(0, args.path("offset").asInt(0));
+        final int limit = Math.max(1, Math.min(args.path("limit").asInt(MAX_SQL_ROWS), MAX_PAGE_ROWS));
+        final int[] columns = columns(held.view(), args.path("columns"));
+        // one read of the count: rows below it stay valid while the fetch appends more
+        final int rows = held.view().rowCount();
+        final List<String> names = new ArrayList<>(columns.length);
+        for (final int c : columns) {
+            names.add(held.view().columnName(c));
+        }
+        final String header = copyLine(names);
+        if (header.length() >= MAX_RESULT_CHARS) {
+            return Outcome.fail("the column names alone fill " + MAX_RESULT_CHARS / 1024 + " kB; pass columns");
+        }
+        final StringBuilder sb = new StringBuilder(header).append('\n');
+        final Budget budget = appendRows(sb, ResultText.page(held.view(), rows, offset, limit, columns));
+        final int read = budget.cut() ? Math.max(1, budget.appended() - 1) : budget.appended();
+        final int end = offset + read;
+        sb.append('(');
+        if (budget.appended() == 0) {
+            sb.append("no rows from offset ").append(offset).append(" of ").append(rows);
+        } else {
+            sb.append("rows ").append(offset).append('-').append(offset + budget.appended() - 1)
+                    .append(" of ").append(rows);
+        }
+        if (held.run().status().isActive()) {
+            sb.append(", still fetching");
+        } else if (held.run().truncated()) {
+            sb.append(", the fetch stopped at its row limit");
+        }
+        if (budget.cut()) {
+            sb.append(", the last cut at ").append(MAX_RESULT_CHARS / 1024).append(" kB");
+        }
+        if (end < rows) {
+            sb.append("; next offset ").append(end);
+        }
+        return Outcome.ok(sb.append(')').toString());
+    }
+
+    /** Per column of a held result: type, nulls, min, max and distinct values, as COPY text. */
+    private Outcome resultStats(final JsonNode args) {
+        final Held held = held(args);
+        final int[] columns = columns(held.view(), args.path("columns"));
+        if (!scans.tryAcquire()) {
+            return Outcome.fail(MAX_SCANS + " result_stats scans are running; ask again when one has answered");
+        }
+        final ResultStats stats;
+        try {
+            stats = ResultStats.of(held.view(), held.view().rowCount(), columns,
+                    System.nanoTime() + STATS_LIMIT.toNanos());
+        } finally {
+            scans.release();
+        }
+        return Outcome.ok(statsText(stats, held.run().status().isActive()));
+    }
+
+    /** {@code stats} as COPY text within {@link #MAX_RESULT_CHARS}, the closing line saying what the scan covered. */
+    static String statsText(final ResultStats stats, final boolean fetching) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append(copyLine(List.of("column", "type", "nulls", "min", "max", "distinct"))).append('\n');
+        final List<List<String>> lines = new ArrayList<>(stats.columns().size());
+        for (final ResultStats.Column c : stats.columns()) {
+            final List<String> cells = new ArrayList<>(6);
+            cells.add(c.name());
+            cells.add(c.type());
+            cells.add(Integer.toString(c.nulls()));
+            cells.add(c.min());
+            cells.add(c.max());
+            cells.add(c.distinctCapped() ? "at least " + c.distinct() : Integer.toString(c.distinct()));
+            lines.add(cells);
+        }
+        final Budget budget = appendRows(sb, lines);
+        sb.append('(').append(stats.scanned()).append(" of ").append(stats.rowCount()).append(" rows scanned");
+        if (stats.partial()) {
+            sb.append(", stopped at ").append(STATS_LIMIT.toSeconds()).append(" s");
+        }
+        if (fetching) {
+            sb.append(", still fetching");
+        }
+        final int whole = budget.cut() ? budget.appended() - 1 : budget.appended();
+        if (whole < lines.size()) {
+            sb.append("; ").append(lines.size() - whole).append(" columns cut or left out at ")
+                    .append(MAX_RESULT_CHARS / 1024).append(" kB: pass columns");
+        }
+        return sb.append(')').toString();
+    }
+
+    /** What {@link #appendRows} wrote: the lines appended, and whether the last of them was cut. */
+    private record Budget(int appended, boolean cut) {
+    }
+
+    /**
+     * Appends {@code rows} to {@code sb} as COPY lines until {@link #MAX_RESULT_CHARS}: the budget holds for every
+     * character, so a line that does not fit is cut, not passed whole, and the lines after it are left out.
+     */
+    private static Budget appendRows(final StringBuilder sb, final List<List<String>> rows) {
+        int appended = 0;
+        for (final List<String> row : rows) {
+            final int room = MAX_RESULT_CHARS - sb.length();
+            if (room <= 0) {
+                return new Budget(appended, false);
+            }
+            final String line = copyLine(row);
+            sb.append(copyClip(line, room)).append('\n');
+            appended++;
+            if (line.length() > room) {
+                return new Budget(appended, true);
+            }
+        }
+        return new Budget(appended, false);
+    }
+
+    /** A held result and the run that made it. */
+    private record Held(SqlRun run, ResultView view) {
+    }
+
+    /** The result {@code args.result} names, {@code r} and a run id, or the id alone. */
+    private Held held(final JsonNode args) {
+        final String id = args.path("result").asString("").strip();
+        if (id.isEmpty()) {
+            throw new IllegalArgumentException("result is required; result_list names the results held");
+        }
+        final long requestId;
+        try {
+            requestId = Long.parseLong(id.startsWith(RESULT_PREFIX) ? id.substring(RESULT_PREFIX.length()) : id);
+        } catch (final NumberFormatException e) {
+            throw new IllegalArgumentException("no result '" + id + "'; result_list names the results held", e);
+        }
+        final ResultRegistry registry = results;
+        final Optional<SqlRun> run = state.get().run(requestId);
+        final ResultView view = run.isEmpty() || registry == null ? null : registry.get(requestId);
+        if (view == null) {
+            throw new IllegalArgumentException("result " + RESULT_PREFIX + requestId + " is not held: a panel lets"
+                    + " its result go when it runs again or closes; result_list names those held");
+        }
+        return new Held(run.get(), view);
+    }
+
+    /** The indexes of the columns {@code names} lists, in its order; every column when it is empty. */
+    private static int[] columns(final ResultView view, final JsonNode names) {
+        if (!names.isArray() || names.isEmpty()) {
+            final int[] all = new int[view.columnCount()];
+            for (int c = 0; c < all.length; c++) {
+                all[c] = c;
+            }
+            return all;
+        }
+        final int[] picked = new int[names.size()];
+        for (int i = 0; i < picked.length; i++) {
+            final String name = names.get(i).asString("");
+            int found = -1;
+            for (int c = 0; c < view.columnCount() && found < 0; c++) {
+                if (view.columnName(c).equals(name)) {
+                    found = c;
+                }
+            }
+            if (found < 0) {
+                throw new IllegalArgumentException("no column '" + name + "'; columns: "
+                        + String.join(", ", ResultText.columns(view)));
+            }
+            picked[i] = found;
+        }
+        return picked;
+    }
+
+    /**
      * The named connection; else that of the caller's panel: the focused one when it is the caller's, else its first,
      * else its closed one.
      */
@@ -922,24 +1189,10 @@ public final class McpTools {
         }
         final StringBuilder sb = new StringBuilder();
         sb.append(copyClip(copyLine(rows.columns()), MAX_RESULT_CHARS)).append('\n');
-        int shown = 0;
-        boolean cut = false;
-        for (final List<String> row : rows.rows()) {
-            final int room = MAX_RESULT_CHARS - sb.length();
-            if (room <= 0) {
-                break;
-            }
-            // the budget holds for every character: one huge cell is cut, not passed whole
-            final String line = copyLine(row);
-            cut = line.length() > room;
-            sb.append(copyClip(line, room)).append('\n');
-            shown++;
-            if (cut) {
-                break;
-            }
-        }
+        final Budget budget = appendRows(sb, rows.rows());
+        final int shown = budget.appended();
         sb.append('(').append(shown).append(shown == 1 ? " row" : " rows");
-        if (cut) {
+        if (budget.cut()) {
             sb.append(", the last cut at " + MAX_RESULT_CHARS / 1024 + " kB");
         }
         if (shown < rows.rows().size() || rows.truncated()) {
@@ -1033,6 +1286,7 @@ public final class McpTools {
     }
 
     /** For tests: approvals waiting for an answer. */
+    @TestOnly
     Map<Long, CompletableFuture<ApprovalDecision>> pending() {
         return pending;
     }

@@ -43,11 +43,16 @@ import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.reduce.Transition;
+import dev.marregui.comando.core.result.ColumnKind;
+import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.result.ResultStats;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -56,6 +61,7 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.FakeClock;
+import dev.marregui.comando.testkit.FakeResult;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.States;
 
@@ -211,7 +217,8 @@ class McpServerTest {
 
         final JsonNode tools = rpc("tools/list", "{}").path("result").path("tools");
         assertThat(tools).extracting(t -> t.path("name").asString())
-                .contains("approve", "ui_show_table", "ui_plot", "ui_show_view", "db_run_sql", "db_describe", "session_send", "session_read");
+                .contains("approve", "ui_show_table", "ui_plot", "ui_show_view", "db_run_sql", "db_describe",
+                        "result_list", "result_read", "result_stats", "session_send", "session_read");
 
         // Claude Code 2.1.296 asks for server/discover first and falls back to initialize on this error
         assertThat(rpc("server/discover", "{}").path("error").path("code").asInt()).isEqualTo(-32601);
@@ -983,5 +990,157 @@ class McpServerTest {
     @Test
     void describeListsColumns() throws Exception {
         assertThat(text(tool("db_describe", "{\"table\":\"trades\"}"))).startsWith("column\ttype\nts\tTIMESTAMP");
+    }
+
+
+    /// Holds `data` as panel p1's run 42, with its columns `id` (LONG) and `name` (TEXT), the run in `status`.
+    private ResultRegistry holdRows(final List<List<Object>> data, final SqlRun run) {
+        final ResultRegistry registry = new ResultRegistry();
+        registry.put(new FakeResult(42L, List.of("id", "name"), List.of(ColumnKind.LONG, ColumnKind.TEXT), data));
+        state.set(state.get().withRun(run));
+        tools.results(registry);
+        return registry;
+    }
+
+    /// Holds a result of `rows` rows (`id` 0, 1, … and `name` "n0", "n1", …, every third name NULL) for panel
+    /// p1's run 42, with the run in `status`.
+    private ResultRegistry holdResult(final int rows, final RunStatus status) {
+        final List<List<Object>> data = new ArrayList<>(rows);
+        for (int i = 0; i < rows; i++) {
+            final List<Object> row = new ArrayList<>(2);
+            row.add((long) i);
+            row.add(i % 3 == 2 ? null : "n" + i);
+            data.add(row);
+        }
+        return holdRows(data, run42().withStatus(status));
+    }
+
+    /// Panel p1's run 42, started.
+    private static SqlRun run42() {
+        return SqlRun.queued(42L, States.P1, "local", "select id, name from t").started(0L);
+    }
+
+    /// `result_list` names the panel's held result with its id, panel, connection, SQL, status, rows and typed
+    /// columns, and `ui_get_state` names the same id on the panel's last run.
+    @Test
+    void resultListNamesTheHeldResultsAndStateLinksThem() throws Exception {
+        holdResult(5, RunStatus.DONE);
+        final JsonNode root = json.readTree(text(tool("result_list", "{}")));
+        assertThat(root.path("omitted").asInt()).isZero();
+        final JsonNode list = root.path("results");
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).path("id").asString()).isEqualTo("r42");
+        assertThat(list.get(0).path("panel").asString()).isEqualTo("one");
+        assertThat(list.get(0).path("connection").asString()).isEqualTo("local");
+        assertThat(list.get(0).path("status").asString()).isEqualTo("DONE");
+        assertThat(list.get(0).path("rows").asInt()).isEqualTo(5);
+        assertThat(list.get(0).path("columns").get(1).path("type").asString()).isEqualTo("TEXT");
+        final JsonNode panels = json.readTree(tools.stateJson()).path("panels");
+        assertThat(panels.get(0).path("lastRun").path("result").asString()).isEqualTo("r42");
+    }
+
+    /// A list over 64 kB stays valid JSON: an entry that does not fit is left out whole and counted in `omitted`.
+    @Test
+    void resultListLeavesOutWholeEntriesPastTheBudget() throws Exception {
+        final List<String> names = new ArrayList<>();
+        final List<ColumnKind> kinds = new ArrayList<>();
+        for (int c = 0; c < 700; c++) {
+            names.add("column_with_a_long_name_" + c);
+            kinds.add(ColumnKind.LONG);
+        }
+        final ResultRegistry registry = new ResultRegistry();
+        registry.put(new FakeResult(42L, names, kinds, List.of()));
+        registry.put(new FakeResult(43L, names, kinds, List.of()));
+        state.set(state.get().withRun(run42())
+                .withRun(SqlRun.queued(43L, States.P2, "local", "select * from wide").started(0L)));
+        tools.results(registry);
+        final String answer = text(tool("result_list", "{}"));
+        assertThat(answer.length()).isLessThanOrEqualTo(McpTools.MAX_RESULT_CHARS);
+        final JsonNode root = json.readTree(answer);
+        assertThat(root.path("results")).hasSize(1);
+        assertThat(root.path("omitted").asInt()).isEqualTo(1);
+    }
+
+    /// `result_read` returns a page from an offset as COPY text, NULL as `\N`, with the rows shown, the total and
+    /// the next offset; a column subset comes in the order asked; the last page names no next offset.
+    @Test
+    void resultReadPagesTheHeldRows() throws Exception {
+        holdResult(10, RunStatus.DONE);
+        assertThat(text(tool("result_read", "{\"result\":\"r42\",\"offset\":2,\"limit\":3}")))
+                .isEqualTo("id\tname\n2\t\\N\n3\tn3\n4\tn4\n(rows 2-4 of 10; next offset 5)");
+        assertThat(text(tool("result_read", "{\"result\":\"42\",\"offset\":8,\"columns\":[\"name\",\"id\"]}")))
+                .isEqualTo("name\tid\n\\N\t8\nn9\t9\n(rows 8-9 of 10)");
+        assertThat(text(tool("result_read", "{\"result\":\"r42\",\"offset\":10}")))
+                .endsWith("(no rows from offset 10 of 10)");
+    }
+
+    /// A result still fetching is read from the rows that have arrived, and says so; one whose fetch stopped at
+    /// its row limit says that.
+    @Test
+    void resultReadSaysWhenTheResultIsStillFetchingOrWasCut() throws Exception {
+        holdResult(3, RunStatus.RUNNING);
+        assertThat(text(tool("result_read", "{\"result\":\"r42\"}"))).endsWith("(rows 0-2 of 3, still fetching)");
+        final List<List<Object>> one = List.of(List.of(1L, "a"));
+        holdRows(one, run42().completed(1, -1L, true, 0L, 0L, 0L));
+        assertThat(text(tool("result_read", "{\"result\":\"r42\"}")))
+                .endsWith("(rows 0-0 of 1, the fetch stopped at its row limit)");
+    }
+
+    /// A row cut at the 64 kB budget is not counted as read, so the next offset starts with it; a first row that can
+    /// never fit is passed, so paging moves on.
+    @Test
+    void resultReadNextOffsetRereadsACutRowAndPassesOneThatCannotFit() throws Exception {
+        final String half = "x".repeat(40_000);
+        final List<List<Object>> data = List.of(List.of(0L, half), List.of(1L, half), List.of(2L, "c"));
+        holdRows(data, run42().completed(3, -1L, false, 0L, 0L, 0L));
+        final String first = text(tool("result_read", "{\"result\":\"r42\"}"));
+        assertThat(first.length()).isLessThan(McpTools.MAX_RESULT_CHARS + 200);
+        assertThat(first).endsWith("(rows 0-1 of 3, the last cut at 64 kB; next offset 1)");
+        final List<List<Object>> huge = List.of(List.of(0L, "y".repeat(70_000)), List.of(1L, "b"));
+        holdRows(huge, run42().completed(2, -1L, false, 0L, 0L, 0L));
+        assertThat(text(tool("result_read", "{\"result\":\"r42\"}")))
+                .endsWith("(rows 0-0 of 2, the last cut at 64 kB; next offset 1)");
+    }
+
+    /// An unknown column is an error naming the columns; a result the registry let go is an error that points to
+    /// `result_list`, which no longer lists it; a malformed id is an error too.
+    @Test
+    void resultReadRefusesUnknownColumnsAndResultsNotHeld() throws Exception {
+        final ResultRegistry registry = holdResult(3, RunStatus.DONE);
+        final JsonNode unknown = tool("result_read", "{\"result\":\"r42\",\"columns\":[\"price\"]}");
+        assertThat(unknown.path("isError").asBoolean()).isTrue();
+        assertThat(text(unknown)).isEqualTo("no column 'price'; columns: id, name");
+        registry.release(42L);
+        final JsonNode gone = tool("result_read", "{\"result\":\"r42\"}");
+        assertThat(gone.path("isError").asBoolean()).isTrue();
+        assertThat(text(gone)).startsWith("result r42 is not held").contains("result_list");
+        assertThat(json.readTree(text(tool("result_list", "{}"))).path("results")).isEmpty();
+        assertThat(tool("result_stats", "{\"result\":\"rx\"}").path("isError").asBoolean()).isTrue();
+    }
+
+    /// `result_stats` answers per column its type, NULLs, smallest and largest value and distinct values, and how
+    /// many rows it scanned.
+    @Test
+    void resultStatsSummarisesEachColumn() throws Exception {
+        holdResult(6, RunStatus.DONE);
+        assertThat(text(tool("result_stats", "{\"result\":\"r42\"}"))).isEqualTo("""
+                column\ttype\tnulls\tmin\tmax\tdistinct
+                id\tLONG\t0\t0\t5\t6
+                name\tTEXT\t2\tn0\tn4\t4
+                (6 of 6 rows scanned)""");
+    }
+
+    /// The stats text says when the scan stopped at its limit, when a distinct count reached its cap, and when
+    /// columns did not fit the 64 kB budget.
+    @Test
+    void statsTextSaysWhatTheScanDidNotCover() {
+        final ResultStats.Column capped = new ResultStats.Column("id", "LONG", 0, "0", "9", ResultStats.DISTINCT_CAP);
+        assertThat(McpTools.statsText(new ResultStats(100_000, 65_536, List.of(capped)), true))
+                .endsWith("id\tLONG\t0\t0\t9\tat least 10000\n"
+                        + "(65536 of 100000 rows scanned, stopped at 20 s, still fetching)");
+        final String wide = "z".repeat(40_000);
+        final ResultStats.Column big = new ResultStats.Column("a", "TEXT", 0, wide, wide, 1);
+        assertThat(McpTools.statsText(new ResultStats(1, 1, List.of(big, big, big)), false))
+                .endsWith("(1 of 1 rows scanned; 3 columns cut or left out at 64 kB: pass columns)");
     }
 }

@@ -182,7 +182,7 @@ the table below. Rules 12 to 16 cover what a desktop application meets and the s
 | 6. Project packages | `^dev\.marregui\.comando\.` |
 | 7. Preview features | None |
 | 8. Doc comments in main code | `/** */` |
-| 9. Nullability annotations | None (`org.jetbrains:annotations` is declared `compileOnly` and not used) |
+| 9. Nullability annotations | None; from `org.jetbrains:annotations`, declared `compileOnly`, only `@TestOnly` is used (G-13.5) |
 | 10. Licence header | None; G-10.8's header clause is not checked |
 | 11. Logging | `System.Logger` (G-6.5), JUL behind it; no hot-path logger |
 | 12. Test framework | JUnit Jupiter 6.1.3, AssertJ, Awaitility. Lifecycle: `@BeforeEach`/`@AfterEach`; `@BeforeAll`/`@AfterAll` for a fixture shared by a class (the embedded QuestDB, a Postgres container), closed in `@AfterAll`; `@TempDir` for scratch folders; `@ExtendWith(OnEdt.class)` runs a test on the EDT; `@ParameterizedTest` for tables of cases |
@@ -212,7 +212,7 @@ on. Counts are of 2026-10-31, after the tool commit that added `final` and order
 | G-5.3, G-6.5 | rule | log messages not shaped `[key=value]`; `Pty` has no logger of its own | Predates the standard | a change to the file |
 | G-10.1, G-10.5 | rule | member order in `PlotGate`; `tl` prefix and `length()` names | Predates the standard | a change to the file |
 | G-11.5 | rule | 34 `Thread.sleep` calls in `*Test.java` files (16 inside a loop, 14 fixed waits, among them waits that check nothing happens, 4 in helpers) and 5 unbounded joins (3 `Thread.join()`, 2 `CompletableFuture.join()`), counted 2026-11-01 with `grep`; the hand-run mains `ProbeNewSession`, `Snapshot` and the three gates hold 24 more and are not tests | Predates the standard | a change to the test |
-| G-13.5 | rule | `StateLoop.failure()`, `McpTools.pending()`: surface for tests only, not marked | Found 2026-10-31 | a change to the file |
+| G-13.5 | rule | `StateLoop.failure()`: surface for tests only, not marked (`McpTools.pending()` is marked `@TestOnly` since 2026-11-09) | Found 2026-10-31 | a change to the file |
 | G-13.8 | rule | `Watchdog`'s `finally` untested; `Transcript`'s growth limit untested (2^31 blocks cannot be built in a test) | The first needs a fault-injecting look | a change to `Watchdog` |
 | G-14.1, G-14.4 | rule | peer answers and kit backups log failures only; `context` and `window` metrics without unit | Found 2026-10-31 | a change to the file |
 | G-15.14 | rule | `subscribe` states no delivery semantics | Found 2026-10-31 | a change to `Peers` |
