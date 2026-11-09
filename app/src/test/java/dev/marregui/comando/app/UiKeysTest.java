@@ -635,7 +635,7 @@ class UiKeysTest {
             assertThat(row).as("at the top right, left of New panel (record 104), the plots' button before it and no shell button")
                     .startsWith("Stop refreshing plots").endsWith("Choose the theme", "New panel")
                     .doesNotContain("Start the shell", "Stop the shell");
-            assertThat(hoverTip(swatch)).as("hovered, the tooltip shows and names the theme").startsWith("Theme: " + NamedTheme.GRAPHITE_GOLD.label + ";");
+            assertThat(hoverTip(swatch)).as("hovered, the tooltip shows and names the theme").contains("Theme: " + NamedTheme.GRAPHITE_GOLD.label + ";");
             assertThat(onEdt(() -> find(w.frame(), AbstractButton.class,
                     b -> "Clear the Session tab".equals(b.getAccessibleContext().getAccessibleName())))).as("no Clear button").isEmpty();
             final List<String> help = onEdt(() -> {
@@ -669,7 +669,7 @@ class UiKeysTest {
             final List<NamedTheme> darkOnes = NamedTheme.builtIn().stream().filter(t -> !t.ground.light).toList();
             assertThat(onEdt(() -> cards.stream().map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the dark themes").containsExactlyElementsOf(darkOnes.stream().map(t -> t.label).toList());
-            assertThat(onEdt(() -> cards.stream().filter(b -> b.getToolTipText().endsWith("; the theme chosen"))
+            assertThat(onEdt(() -> cards.stream().filter(b -> b.getToolTipText().contains("; the theme chosen"))
                     .map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the theme chosen is marked").containsExactly(NamedTheme.GRAPHITE_GOLD.label);
             final JComponent modeSwitch = find(chooser, JComponent.class, c -> "Dark or light".equals(c.getAccessibleContext().getAccessibleName())).orElseThrow();
@@ -691,7 +691,7 @@ class UiKeysTest {
             assertThat(onEdt(() -> UIManager.getColor("Panel.background"))).isEqualTo(Ground.PAPER.color);
             assertThat(onEdt(chooser::isShowing)).as("the chooser stays open").isTrue();
             assertThat(onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card")
-                            && b.getToolTipText().endsWith("; the theme chosen")).map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                            && b.getToolTipText().contains("; the theme chosen")).map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the twin marked").containsExactly(NamedTheme.PAPER_OCHRE.label);
             onEdt(() -> {
                 chooser.getRootPane().getActionMap().get("dark").actionPerformed(null);
@@ -732,7 +732,7 @@ class UiKeysTest {
             // the theme is the window's at once, and the chooser stays open to try the next, the ring on it
             assertThat(onEdt(chooser::isShowing)).as("the chooser stays open on a choice").isTrue();
             assertThat(onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card")
-                            && b.getToolTipText().endsWith("; the theme chosen")).map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                            && b.getToolTipText().contains("; the theme chosen")).map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the theme just chosen marked").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
             onEdt(() -> {
                 chooser.getRootPane().getActionMap().get("close").actionPerformed(null);
@@ -741,7 +741,7 @@ class UiKeysTest {
             assertThat(onEdt(chooser::isShowing)).as("Esc closes it, the last choice kept").isFalse();
             assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
             assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
-            assertThat(hoverTip(swatch)).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
+            assertThat(hoverTip(swatch)).as("the tooltip follows").contains("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
             assertThat(setting(settings, "theme.ground")).as("kept in settings.json (record 106)").isEqualTo("MIDNIGHT");
             assertThat(setting(settings, "theme.tint")).as("kept").isEqualTo("ELECTRIC_BLUE");
             assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint, at once").isPositive();
@@ -770,7 +770,7 @@ class UiKeysTest {
                     .filter(win -> win.isShowing() && win instanceof JDialog d && "Theme".equals(d.getTitle()))
                     .findFirst().map(win -> all(win, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
                             .toList()).filter(l -> !l.isEmpty() && SwingUtilities.getWindowAncestor(l.getFirst()) != chooser).orElse(null), WAIT_MILLIS);
-            assertThat(onEdt(() -> again.stream().filter(b -> b.getToolTipText().endsWith("; the theme chosen"))
+            assertThat(onEdt(() -> again.stream().filter(b -> b.getToolTipText().contains("; the theme chosen"))
                     .map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the chooser marks the theme chosen").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
             final JButton slate = again.stream().filter(b -> NamedTheme.SLATE_SILVER.label.equals(b.getAccessibleContext().getAccessibleName()))

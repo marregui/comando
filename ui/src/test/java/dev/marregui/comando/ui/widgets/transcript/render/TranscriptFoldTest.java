@@ -41,6 +41,11 @@ class TranscriptFoldTest {
 
     private static final int W = 1000;
     private static final int H = 700;
+    /**
+     * Edits in a turn whose middle one slice of layout (8 ms) cannot reach. Set by hand: the row of 300 edits already
+     * ran out of its first slice on an M2 Max (2026-11-09), so a row of 4 000 runs out on any runner.
+     */
+    private static final int PAST_A_SLICE = 4_000;
     private static final String LAUNCHED = "Async agent launched successfully.\nagentId: a58 (internal ID)\n"
             + "The agent is working in the background.";
 
@@ -797,15 +802,27 @@ class TranscriptFoldTest {
     /// stays on screen where it was.
     @Test
     void aStepInViewDoesNotMoveWhenItsRowFormsOverEstimates() {
+        stepInViewStaysAsItsRowForms(300);
+    }
+
+    /// A turn too long for one slice of layout to reach the step in view: the slices after it make the steps above
+    /// exact, and the step stays where it was all along.
+    @Test
+    void aStepInViewDoesNotMoveWhileTheSlicesAboveItCatchUp() {
+        stepInViewStaysAsItsRowForms(PAST_A_SLICE);
+    }
+
+    /** A turn of {@code calls} edits read at its middle after a window change; its row forms when it ends. */
+    private void stepInViewStaysAsItsRowForms(final int calls) {
         add(new Block.UserPrompt("go", "", ""));
-        for (int k = 0; k < 300; k++) {
+        for (int k = 0; k < calls; k++) {
             add(new Block.ToolCall("e" + k, "Edit",
                     "{\"file_path\":\"/w/F.java\",\"old_string\":\"" + "a line\\n".repeat(20)
                     + "\",\"new_string\":\"b\"}", "ok", Block.ToolStatus.DONE, ""));
         }
         add(text("The report."));
         lay();
-        final Item step = canvas.topLevel().get(150);
+        final Item step = canvas.topLevel().get(calls / 2);
         readAt(canvas.topOf(step));
         canvas.ensureLayout(W - 200);
         final int before = canvas.topOf(step) - viewport.getViewPosition().y;
@@ -817,6 +834,10 @@ class TranscriptFoldTest {
         assertThat(row().isOpen()).isTrue();
         assertThat(canvas.topOf(row()) + row().topOf(step) - viewport.getViewPosition().y)
                 .isCloseTo(before, within(1));
+        readAt(viewport.getViewPosition().y);
+        canvas.refineAll();
+        assertThat(canvas.topOf(row()) + row().topOf(step) - viewport.getViewPosition().y)
+                .as("after the idle pass").isCloseTo(before, within(1));
     }
 
     /// A selection from the prompt to the report across an open row whose steps below the view are not laid out yet

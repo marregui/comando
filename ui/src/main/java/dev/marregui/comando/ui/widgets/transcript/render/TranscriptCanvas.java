@@ -64,7 +64,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      */
     private static final int END_SLACK_PX = 40;
     /** The view shows the end, which follows new blocks, or nothing yet: no block to keep in place. */
-    private static final Anchor NO_ANCHOR = new Anchor(null, -1, 0, 0);
+    private static final Anchor NO_ANCHOR = new Anchor(null, -1, 0, -1, 0, 0);
     /**
      * The window laid out around the view, in pixels: the idle pass lays out the items within this distance above and
      * below it, at least this many view heights; items farther than twice that let their layout go. The conversation
@@ -859,9 +859,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /**
      * The block at the top of the view and its top, taken before a layout changes heights; {@link #NO_ANCHOR} when the
-     * view shows the end, which follows new blocks, or nothing is shown yet.
+     * view shows the end, which follows new blocks, or nothing is shown yet. In an open row, also the step at the top
+     * of the view and its top within the row, -1 when the view shows the row's heading: the steps above it may hold
+     * estimates that a later slice makes exact.
      */
-    private record Anchor(Item item, int index, int top, int viewY) {
+    private record Anchor(Item item, int index, int top, int step, int stepTop, int viewY) {
     }
 
     private Anchor anchor() {
@@ -874,7 +876,30 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             return NO_ANCHOR;
         }
         final int i = indexAt(vis.y, n);
-        return i >= n ? NO_ANCHOR : new Anchor(items.get(i), i, tops[i], vis.y);
+        if (i >= n) {
+            return NO_ANCHOR;
+        }
+        final int step = stepAt(i, vis.y);
+        return new Anchor(items.get(i), i, tops[i], step, stepTop(i, step), vis.y);
+    }
+
+    /** The step of the open row at {@code i} shown at {@code y}; -1 when it is no row with its steps placed there. */
+    private int stepAt(final int i, final int y) {
+        return items.get(i) instanceof Items.StepsItem fold ? fold.stepPlacedAt(y - tops[i]) : -1;
+    }
+
+    /** The top within the row at {@code i} of its step at {@code step}; -1 when there is no such step placed. */
+    private int stepTop(final int i, final int step) {
+        return step >= 0 && items.get(i) instanceof Items.StepsItem fold ? fold.topAt(step) : -1;
+    }
+
+    /**
+     * How far the step at {@code step} of the row at {@code i} moved within it from {@code was}; 0 when no step was
+     * taken or it is no longer placed.
+     */
+    private int stepMoved(final int i, final int step, final int was) {
+        final int now = stepTop(i, step);
+        return was < 0 || now < 0 ? 0 : now - was;
     }
 
     /** True when {@code vis} shows the end of the content, or did when the idle pass last grew it. */
@@ -891,7 +916,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (anchor.index() < 0 || anchor.index() >= items.size() || items.get(anchor.index()) != anchor.item()) {
             return;
         }
-        final int delta = tops[anchor.index()] - anchor.top();
+        final int delta = tops[anchor.index()] - anchor.top()
+                + stepMoved(anchor.index(), anchor.step(), anchor.stepTop());
         if (delta != 0 && getParent() instanceof JViewport v && v.getViewPosition().y == anchor.viewY()) {
             v.setViewSize(new Dimension(Math.max(getWidth(), 1), total));
             v.setViewPosition(new Point(0, Math.max(0, anchor.viewY() + delta)));
@@ -977,6 +1003,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (moved) {
             if (before.atEnd()) {
                 endKeptAt = getVisibleRect().y;
+            } else if (stepMoved(before.item(), before.step(), before.stepTop()) != 0) {
+                restore(before); // the row at the view's top made steps above it exact: the step in view stays
             }
             revalidate();
         }
@@ -1089,10 +1117,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /**
-     * What the view shows: the end, or the item at its top and how far into it. Taken before a layout changes heights,
-     * so {@link #restore} can show the same content after it.
+     * What the view shows: the end, or the item at its top and how far into it, and in an open row the step at its top
+     * and that step's top within the row ({@link Anchor}). Taken before a layout changes heights, so {@link #restore}
+     * can show the same content after it.
      */
-    private record View(boolean atEnd, int item, int offset, int height) {
+    private record View(boolean atEnd, int item, int offset, int step, int stepTop, int height) {
     }
 
     private View view() {
@@ -1102,11 +1131,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         final Rectangle vis = getVisibleRect();
         final boolean atEnd = showsEnd(vis);
         if (items.isEmpty() || tops.length != items.size()) {
-            return new View(atEnd, 0, 0, vis.height); // never laid out: nothing shown yet
+            return new View(atEnd, 0, 0, -1, -1, vis.height); // never laid out: nothing shown yet
         }
         // the item the view shows at its top, not one that ends there: that one may change height above the view
         final int first = Math.min(indexAt(vis.y, items.size()), items.size() - 1);
-        return new View(atEnd, first, vis.y - tops[first], vis.height);
+        final int step = stepAt(first, vis.y);
+        return new View(atEnd, first, vis.y - tops[first], step, stepTop(first, step), vis.height);
     }
 
     /** Sizes the canvas to its content and shows what {@code before} showed; the end when it showed the end. */
@@ -1115,7 +1145,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (getParent() instanceof JViewport v) {
             v.setViewSize(new Dimension(getWidth(), total));
             final int y = before.atEnd() || before.item() >= items.size() ? Math.max(0, total - before.height())
-                    : Math.max(0, tops[before.item()] + before.offset());
+                    : Math.max(0, tops[before.item()] + before.offset()
+                            + stepMoved(before.item(), before.step(), before.stepTop()));
             v.setViewPosition(new Point(0, y));
         }
         revalidate();

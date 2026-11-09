@@ -106,7 +106,7 @@ public final class ChangeEditor implements Unmountable {
      * How many times gaps are moved in one levelling: the first opens every gap, the next take up what a gap's height
      * missed. A page of 50 blocks, rows and items came level within three.
      */
-    private static final int LEVEL_PASSES = 3;
+    static final int LEVEL_PASSES = 3;
     private static final String SAVE_TIP = "Saved every second, and when this window or comando closes";
 
     private final IntentSink intents;

@@ -65,6 +65,9 @@ class ChangeEditorTest {
 
     /// How far apart the same block may sit on the two sides, in pixels.
     private static final int LEVEL = 2;
+    /// The events one levelling takes at most: [ChangeEditor] moves gaps in up to three passes, one event each, and
+    /// puts the view back in the next, the pass that finds the sides level.
+    private static final int LEVELLING_EVENTS = ChangeEditor.LEVEL_PASSES + 1;
 
     private ChangeEditor editor() throws Exception {
         return on(null, x -> {
@@ -319,10 +322,12 @@ class ChangeEditorTest {
         final String tail = paragraphs(30);
         final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
         assertLevel(e, "Paragraph 0.");
+        levelled(e);
         scroll(e, 0, 200);
         final String after = "One.\n\nAdded.\n\n" + tail + "Tail.\n";
         run(e, x -> x.show(new ChangeTexts(x.root(), x.change(), x.shown().before(), after, ""), true));
         await().atMost(Duration.ofSeconds(10)).until(() -> on(e, x -> x.diff().right().getText().equals(after)));
+        levelled(e);
         assertLevel(e, "Paragraph 20.");
         final int place = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
         assertThat(place).isCloseTo(200, within(40));
@@ -334,11 +339,12 @@ class ChangeEditorTest {
         final String tail = paragraphs(30);
         final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
         assertLevel(e, "Paragraph 0.");
+        levelled(e);
         scroll(e, 0, 200);
         run(e, ChangeEditor::toggleRendered);
         run(e, ChangeEditor::toggleRendered);
         run(e, x -> layOut(x.component()));
-        run(e, x -> { });
+        levelled(e);
         final int head = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
         final int tree = on(e, x -> x.sides().get(1).scroll().getVerticalScrollBar().getValue());
         assertThat(head).isZero();
@@ -455,6 +461,14 @@ class ChangeEditorTest {
         run(e, x -> layOut(x.component()));
         run(e, x -> x.sides().get(side).scroll().getVerticalScrollBar().setValue(y));
         run(e, x -> { });
+    }
+
+    /// Waits out the levelling under way, the view put back where it wants: each event queued here runs after the pass
+    /// queued before it, so every queued event moves the levelling on by a pass at least, whatever the machine's speed.
+    private static void levelled(final ChangeEditor e) throws Exception {
+        for (int i = 0; i < LEVELLING_EVENTS; i++) {
+            run(e, x -> { });
+        }
     }
 
     /// Asserts {@code text} sits at the same height on the screen on both sides, in at most 3 seconds.

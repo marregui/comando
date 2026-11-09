@@ -923,6 +923,33 @@ final class Items {
             return 0;
         }
 
+        /** The top within this item of the step at {@code k}, as laid out; -1 when the steps are not placed. */
+        int topAt(final int k) {
+            return k < tops.length ? tops[k] : -1;
+        }
+
+        /**
+         * The step placed at {@code y} within this item, laid out or still estimated, the last that starts at or
+         * above it; -1 when {@code y} is in the row above the steps, below them, or the steps are not placed. Unlike a
+         * click's {@code stepAt}, an estimated step counts: the view keeps its place by it.
+         */
+        int stepPlacedAt(final int y) {
+            if (tops.length == 0 || y < tops[0] || y >= height) {
+                return -1;
+            }
+            int lo = 0;
+            int hi = tops.length - 1;
+            while (lo < hi) {
+                final int mid = (lo + hi + 1) >>> 1;
+                if (tops[mid] <= y) {
+                    lo = mid;
+                } else {
+                    hi = mid - 1;
+                }
+            }
+            return lo;
+        }
+
         /** {@code 44 tools · 6 min}: the calls at any depth, and the turn's time when it is known. */
         String title() {
             final int n = calls(steps, false);

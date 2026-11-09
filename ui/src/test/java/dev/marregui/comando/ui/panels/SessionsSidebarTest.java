@@ -8,6 +8,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -72,6 +73,7 @@ import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// [SessionsSidebar] and its rows ([SessionRow], [ConnectionRow]): three tabs of sessions, connections and files.
 /// - the column is three icon tabs in one row and hides to a rail whose buttons show it again
@@ -1609,7 +1611,8 @@ class SessionsSidebarTest {
         assertThat(own).containsExactly("Set the role…", "—", "Copy the instance id (main)");
         assertThat(left).containsExactly("Forget comando · b", "—", "Copy the instance id (b)");
         assertThat(sessionItems).as("a session's row has no menu").isEmpty();
-        assertThat(acts).containsExactly("deny comando-expert true", "forget b");
+        await("the refusal and the forgetting, each written on its own errand").atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(acts).containsExactlyInAnyOrder("deny comando-expert true", "forget b"));
 
         @SuppressWarnings("unchecked")
         final JList<InstancesState.Consult> list = find(tab.component(), JList.class, x -> true);
