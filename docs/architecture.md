@@ -48,7 +48,7 @@ comando is built with and runs on JDK 25.
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core`, Jackson |
 | `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and `ui.kit`, which they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
-| `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`), `main` | every module, Jackson, QuestDB, the HiveMQ MQTT client |
+| `app` | wiring, the store files, the keychain, the intent log, the machine's QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`), `main` | every module, Jackson, QuestDB, the HiveMQ MQTT client |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
@@ -228,7 +228,7 @@ returns; outcomes come back as intents.
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage` | `ui` `ComandoUi` | `EffectRouter` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `saveDecisions`, `savePanels` | `app` `Store` | `EffectRouter` |
 | `InstancesPort` | `ask`, `deny`, `forget`, `role` (the Instances tab's acts, off the caller's thread; record 124) | `mcp` `Peers` | `ui` (the Instances tab; the outcome comes back as a notice and in `AppState.instances`) |
-| `ServerSwitch` | `name`, `isRunning`, `want(up)`, `status` (a local server an agent starts or stops, record 121) | `app` `EmbeddedEdge`, `EmbeddedQuestDb` | `mcp` (`ActionTools`: `server_start`, `server_stop`) |
+| `ServerSwitch` | `name`, `isRunning`, `want(up)`, `status` (a local server an agent starts or stops, record 121) | `app` `EmbeddedEdge`, `MachineQuestDb` | `mcp` (`ActionTools`: `server_start`, `server_stop`) |
 
 Tests replace each effect port with a fake from `testkit`; `McpGateway.NONE`, `TopicPort.NONE` and a test's own
 `QueryPort` stand in for the others.
@@ -250,7 +250,7 @@ an executor.
 | K2 | Watchdog | must run while what it watches is held | one `watchdog` (platform) for the EDT and the reducer, from `Watchdog.shared()`; started with the first look, ended after the last |
 | K3 | Session reader | reads a pipe live: a pipe read holds its operating-system thread even on a virtual thread (measured on JDK 25: 100 blocked readers, 101 carriers) | `claude-out-<session>` (platform), one per running session |
 | K4 | Strand | sequential work on one resource; its waits hold no operating-system thread | one virtual thread each, from `Threads.strand` or, with timers, `Threads.timedStrand` (the JDK's one delay thread keeps the timers) |
-| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, `EmbeddedEdge`, `Peers`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
+| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `MachineQuestDb`, `EmbeddedEdge`, `Peers`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
 | K6 | Fork | a thread its caller collects in the same call, with a bound | a virtual thread from `Threads.fork` |
 
 The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
@@ -323,8 +323,8 @@ Bounded waits:
 `App` creates every long-lived part in dependency order on a stack; `close()` first has the window save the comparison
 window's edits (`ComandoUi.saveEdits`), since on the shutdown hook's path no quit flow ran and the window closes last,
 then pops the stack, so parts close in reverse order, each once. Three are moved to the end: the comando Edge, which
-stops after this instance has cleared its presence there and left it, the embedded QuestDB, which the lanes may still
-use, and the window, titled with the instance's name and "— closing…" and greyed under a cover until everything behind
+stops after this instance has cleared its presence there and left it, the machine's QuestDB's errands (the server
+keeps running, record 146), and the window, titled with the instance's name and "— closing…" and greyed under a cover until everything behind
 it has closed. Every `close()` is idempotent, never throws (failures are logged with the part's name), and is safe on a
 half-built part; a failed constructor step closes what was built and rethrows its cause: a start that fails before the
 window exists rolls back through the same `close()`, without the save, as there are no edits to save. A part that takes
@@ -350,7 +350,7 @@ window exists rolls back through the same `close()`, without the save, as there 
 | 16 | `MqttPeerBroker` (unless `-Dcomando.peers=false`) | 2 | stops following the Edge, disconnects (so the broker drops the last will), at most 2 s |
 | 17 | `Peers` | 1 | clears this instance's presence on the comando Edge (at most 2 s), interrupts the answers under way, which reply `error`, and fails this instance's questions still waiting |
 | 18 | `EmbeddedEdge` | 18 | stops the Edge this instance started (SIGTERM to its recorded pid, bounded wait) and clears `~/.comando-edge.json` |
-| 19 | `EmbeddedQuestDb` | 19 | closes after the lanes |
+| 19 | `MachineQuestDb` | 19 | its errands close after the lanes; the server keeps running |
 | 20 | `ComandoUi` | 20 | closes last: terminals (a shell or a job it started still alive 2 s after the hangup and SIGTERM is killed), live plots, the EDT's watchdog look, the window, the window's errands; each step is guarded, so one that throws is logged and the next still runs, the errands always close and the quit always reaches the application |
 
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
@@ -555,7 +555,7 @@ overtakes it: its remaining queries do not run and its tables are not kept.
 | `QueryPort` | `query(spec, sql, maxRows)`, `describe(spec, table)`: futures of text rows, run on the same lane as the user's statements, each with a 60 s statement timeout and a 65 s network timeout, so a server that stops answering breaks the connection and the lane takes the next run; `describe` caps `SHOW COLUMNS` at 10 000 rows | `mcp` (`db_run_sql`, `db_describe`) |
 
 **Needs.** `app` constructs it with the `IntentSink`, `ResultRegistry`, `SchemaRegistry` and `DbSettings.DEFAULTS`, and
-closes it after the MCP server and before the embedded QuestDB.
+closes it after the MCP server and before the machine's QuestDB's errands.
 
 **Sends back.** `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested`,
 `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled`, `SqlWarning`, `ShowView` (the schema as a tree,
@@ -609,7 +609,7 @@ One package, `dev.marregui.comando.claude`.
 | `ClaudeProcess` | one child process and its threads: stdout lines to the strand, stdin from a queue, stderr to a file in the temp folder whose last 40 lines are read at the exit |
 | `StreamMapper` | stream-JSON events, or a stored conversation's lines, into `Block`s and intents; streaming blocks grow in place and the complete `assistant` event replaces them |
 | `RunSettings` | the model and effort a message ran at, from the assistant line of the conversation's transcript (`message.model`, `perTurnEffort`, else `effort`), read from the file's last 256 KiB on the session's strand; the stream names the model but not the effort |
-| `MetricsLog` | what the sessions spend and how their work ends, one JSON line per turn, sub-agent, plan-usage read or changed queue reading (`queues`: each unbounded queue's depth and peak), in `metrics/metrics-<UTC date>.jsonl` of the data root ([record 110](adr/0110-metrics-for-calibration.md)), and read back once: the context the last turn of a stored conversation ended with, from the last 14 days of files, when the conversation loads (record 120); `MetricsLog.NONE` keeps nothing |
+| `MetricsLog` | what the sessions spend and how their work ends, one JSON line per turn, sub-agent, plan-usage read or changed queue reading (`queues`: each unbounded queue's depth and peak), in `metrics/metrics-<UTC date>.jsonl` of the data root ([record 110](adr/0110-metrics-for-calibration.md)) and, through `MetricsSink` (a bounded queue, one thread, ILP over HTTP, rows mapped by `MetricsLines`), in the machine's QuestDB reached through `QuestDbEndpoint` (record 146), and read back once: the context the last turn of a stored conversation ended with, from `comando_turn`, else the last 14 days of files, when the conversation loads (record 120); `MetricsLog.NONE` keeps nothing |
 | `BaseEffort` | the effort a model's turns start at, from the root's `settings.json` (`modelSettings.<model>.effortLevel`, else `effortLevel`); the stream does not report it |
 | `SubagentFiles` | finds and reads a subagent's stored conversation (`<session-id>/subagents/agent-<id>.jsonl`), reading only what the file gained since the last read |
 | `SessionCatalogue` | Claude Code's stored conversations for the import dialog and the session dialog's conversation picker, from a bounded read of each file's head (64 KiB) and tail (256 KiB) |
@@ -1089,7 +1089,7 @@ palette (⌘⇧P) come from the `ActionRegistry`.
 macOS expects in a menu: after the application menu macOS draws, Edit, Find (the view's finds and Find in files,
 record 139), then Help, which holds the palette, a separator
 and the help ([record 114](adr/0114-help-menu-and-corner-buttons.md), replacing
-[record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). The refreshing plots, the embedded QuestDB and the
+[record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). The refreshing plots, the machine's QuestDB and the
 comando Edge (each of the last two when comando has one) are buttons at the tab row's right end, left of the theme's
 swatch and New panel (`Menus.corner`, `CommandButton`: each shows the first of its commands that can run now); the
 shell has no button (record 114, amended 2026-11-01).
@@ -1362,7 +1362,7 @@ the synthetic session at a scroll offset to a PNG.
 | `transcripts`, `results`, `consoles`, `schemas` | `core`'s registries, read here |
 | `texts` | `PanelTexts`: each panel's file and text (`app`'s `Store`) |
 | `catalogue` | the stored conversations for the import dialog and the session dialog's conversation picker (record 125), as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
-| `server` | `ServerToggle`: the embedded QuestDB (`app`'s `EmbeddedQuestDb`) |
+| `server` | `ServerToggle`: the machine's QuestDB (`app`'s `MachineQuestDb`) |
 | `edge` | `ServerToggle`: the comando Edge (`app`'s `EmbeddedEdge`), its button right of QuestDB's; null, no button |
 | `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups, the kit's jobs (`app`'s `RootSetup`). `KitActions` shows the kit on the KIT row, repairs `comando-kit.json` on Kit ▸ Repair comando-kit.json… after a confirm, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; `JobActions` reads the kit's jobs at start, after each change comando makes, and, while the Files tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (looked at every 10 s; logs left out), puts them on the Jobs row, and opens the Kit jobs window ([record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
 | `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` (the data root) holds `settings.json` (the window's layout and settings, record 106), `themes/` (the user's theme files, record 126) and `opened-files`, the files opened once, which the Files tab no longer marks new; a null `home` keeps the settings in memory, offers no user themes and turns Tutorial and Reveal off; what quitting runs once the window has asked |
@@ -1444,7 +1444,7 @@ The real window is tested from `app` (`./gradlew :app:uiTest`).
 ## 15. The `app` module
 
 The composition root: `main`, the configuration, the wiring of every module, the files comando keeps, the keychain, the
-intent log, logging, the embedded QuestDB, the comando Edge and this instance's link to it. It depends on every other
+intent log, logging, the machine's QuestDB, the comando Edge and this instance's link to it. It depends on every other
 module, QuestDB and the HiveMQ MQTT client; no module depends on it. It also holds the Gradle tasks that run, paint,
 replay and package the application.
 
@@ -1463,7 +1463,7 @@ One package, `dev.marregui.comando.app`.
 | `Secrets` | connection passwords in the macOS login keychain through `/usr/bin/security`, under service `comando` and an account naming the connection and the target the password was given for (`Store.account`: `name user@host:port/database`, each part URL-encoded), so a connection pointed elsewhere never reads its old target's item; each call through `core`'s `Processes`, bounded at 10 s; with the keychain switch off (the default on any data root but `~/.comando`) and on other systems `Secrets.NONE`, and the store keeps the password in `connections.json` |
 | `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, every `password` field blanked |
 | `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
-| `EmbeddedQuestDb` | `ui`'s `ServerToggle` and `core`'s `ServerSwitch` (an agent's `server_start` and `server_stop`, record 121): a QuestDB server in `questdb/`, every listener on `127.0.0.1` (PostgreSQL wire on 8812, the web console on 9000, its minimal HTTP on 9003, ILP on 9009; UDP off) |
+| `MachineQuestDb` | `ui`'s `ServerToggle`, `core`'s `ServerSwitch` (an agent's `server_start` and `server_stop`, record 121) and `claude`'s `QuestDbEndpoint` (the metrics sink's): the machine's one QuestDB, its own process in `~/.comando-questdb/` (record 146). Writes `bin/start.sh` and copies the jar to `lib/` at each start, runs the launcher under `Processes`, waits for `/exec`, writes the token to `qdb_server` and the registry `server.json`, all under `start.lock`, which the kit's `qdb` takes too. Live = the registry's pid alive and its token answered. Every listener on `127.0.0.1` (PostgreSQL wire on 8812, the web console on 9000, its minimal HTTP on 9003, ILP on 9009; UDP and telemetry off; tables by DDL only). Only the instance that started it stops it; `close()` leaves it running |
 | `EmbeddedEdge` | `ui`'s `ServerToggle` and `core`'s `ServerSwitch`: the one comando Edge on the machine, from the zip `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP` names, else the pinned release downloaded into `edge/dist`; a child process from a distribution zip installed in `edge/`, every listener on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010); `~/.comando-edge.json` names its pid and the instance that started it, which alone stops it; no other process is signalled ([Workbench §4.1](workbench.md#41-the-comando-edge)) |
 | `MqttPeerBroker` | `mcp`'s `PeerBroker` on the HiveMQ MQTT client (MQTT 5, async): client `comando-<instance>` to `127.0.0.1:18883` while `~/.comando-edge.json` names a live Edge, read every 5 s; reconnects 1 s after a drop, then at most every 5 s, while the Edge runs, and stops trying once it does not; the subscriptions renewed after every connect; the last will set at connect; messages to their handlers on one strand ([record 123](adr/0123-instances-consult-each-other.md)) |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and the brain's backup through `tools`' `KitGit`, its scheduled jobs through `claude`'s `KitJobsCli`, the manifest's repair through `KitJson.repair` |
@@ -1498,7 +1498,7 @@ What `app` connects, and nothing else does:
 | `mcp` editor tools | `Store` | `McpTools.readOnly`: panels showing a log take no text |
 | `Store` | `StateLoop` | `Notify` for a store warning, `FoldersRead` when `folders.json` changed outside |
 | `mcp` `Peers` | the comando Edge | `PeerBroker`, implemented by `MqttPeerBroker`, which follows `EmbeddedEdge.running()` |
-| `mcp` `McpTools` | `EmbeddedEdge`, `EmbeddedQuestDb` | `ServerSwitch`: an agent starts or stops them (record 121) |
+| `mcp` `McpTools` | `EmbeddedEdge`, `MachineQuestDb` | `ServerSwitch`: an agent starts or stops them (record 121) |
 | `mcp` `McpTools` | the data root's `agents.json` | `McpTools.agentsFile`: the callers' grants |
 | `mcp` `Peers` | `McpTools` | the instance tools |
 | `ui` (the Instances tab) | `mcp` `Peers` | `InstancesPort`, set with `ComandoUi.instances` |
@@ -1523,7 +1523,7 @@ root (`KitRoot.use`) and gives the Files tab the kit's folders at the first star
 | `store-secrets` | strand | keychain calls apart, so an unlock prompt never holds back panel text | `Store.close()`, which waits up to 11 s (one keychain call) |
 | `claude-version` | errand of `App` | the start-up check | the errands' close |
 | `kit-check` | timed strand of `App` | the kit's version at start and every 6 hours, through `git`; the queues' readings every minute, written to the metrics log when they changed | `App.close()` |
-| `questdb-toggle`, `questdb-start`, `questdb-stop` | errands of `EmbeddedQuestDb` | one start or stop from the user's toggle, or from an agent's `ServerSwitch.want`; a toggle meanwhile only says so | `EmbeddedQuestDb.close()` |
+| `questdb-toggle`, `questdb-start`, `questdb-stop` | errands of `MachineQuestDb` | one start or stop from the user's toggle, or from an agent's `ServerSwitch.want`; a toggle meanwhile only says so | `MachineQuestDb.close()` |
 | `edge-toggle`, `edge-start`, `edge-stop`, `edge-check` | errands of `EmbeddedEdge` | one start or stop from the toggle or an agent's `ServerSwitch.want`, up to 60 s for the admin API to answer; a read of the registry at most once a second for the button | `EmbeddedEdge.close()` |
 | `peer-broker` | timed strand of `MqttPeerBroker` | whether the registry names a live Edge, at start and every 5 s; connects or leaves | `MqttPeerBroker.close()` |
 | `peer-messages` | strand of `MqttPeerBroker` | the MQTT client's callbacks (its RxJava scheduler) and every message to its handlers, in order | `MqttPeerBroker.close()`, after the disconnect |
@@ -1540,7 +1540,7 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 
 | Test | Covers | Runs in |
 |---|---|---|
-| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `EmbeddedQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the embedded QuestDB, the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
+| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `MachineQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the machine's QuestDB (a real process on free ports), the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
 | `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run, audit and metrics folders owner-only and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
 | `MqttPeerBrokerTest` | without a broker or a port: a question's response topic and correlation data through the client's types, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays | `./gradlew :app:test` |
 | `SearcherTest` | sources in turn, the end after every hit; a new search or a cancel silences the last one; the limit and the cut; hits in batches while a source reads; a source that fails counts as one and the next runs; a close ends a running search and leaves no thread | `./gradlew :app:test` |

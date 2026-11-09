@@ -1,12 +1,15 @@
 package dev.marregui.comando.claude;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
@@ -20,6 +23,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /// [MetricsLog] keeps live turn and sub-agent measurements and none from replayed history.
 ///
@@ -29,6 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Leaves storage untouched when metrics are disabled.
 /// - Writes the queues' depths and peaks as a `queues` event.
 /// - Makes its folder owner-only when it writes into one that is gone.
+/// - Writes the file as before when the QuestDB sink fails, and sends each event to QuestDB as well.
+/// - Takes a conversation's last context from QuestDB, and from the files when QuestDB has no row or is down.
 class MetricsTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -37,6 +43,9 @@ class MetricsTest {
     Path dir;
     /** 2026-10-28T10:00:00Z, then as the test moves it. */
     private final AtomicLong now = new AtomicLong(1_793_181_600_000L);
+
+    /** A conversation id as Claude Code makes them. */
+    private static final String CONVERSATION = "0e7a3f52-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
 
     private List<JsonNode> lines() throws IOException {
         final List<JsonNode> out = new ArrayList<>();
@@ -213,5 +222,85 @@ class MetricsTest {
         log.queues(List.of(new Queues.Reading("intents", 0, 1)));
         assertThat(Files.getPosixFilePermissions(metrics)).isEqualTo(PosixFilePermissions.fromString("rwx------"));
         assertThat(Files.isRegularFile(metrics.resolve("metrics-2026-10-28.jsonl"))).isTrue();
+    }
+
+    /// A sink whose endpoint throws on every call leaves the day's file byte for byte as a log without one writes it.
+    @Test
+    void aFailingSinkLeavesTheFileAsBefore() throws Exception {
+        final Path plain = Files.createDirectories(dir.resolve("plain"));
+        final Path sunk = Files.createDirectories(dir.resolve("sunk"));
+        final QuestDbEndpoint failing = new QuestDbEndpoint() {
+            @Override
+            public Optional<URI> ensureUp() {
+                throw new IllegalStateException("no server");
+            }
+
+            @Override
+            public Optional<URI> live() {
+                throw new IllegalStateException("no server");
+            }
+        };
+        final List<Queues.Reading> readings = List.of(new Queues.Reading("intents", 0, 12));
+        final MetricsLog alone = new MetricsLog(plain, JSON, now::get);
+        alone.queues(readings);
+        alone.write(alone.event("turn").put("conversation", CONVERSATION).put("context", 5));
+        try (MetricsLog log = new MetricsLog(sunk, JSON, now::get, failing)) {
+            log.queues(readings);
+            log.write(log.event("turn").put("conversation", CONVERSATION).put("context", 5));
+        }
+        final String day = "metrics-2026-10-28.jsonl";
+        assertThat(Files.readString(sunk.resolve(day))).isEqualTo(Files.readString(plain.resolve(day)));
+    }
+
+    /// An event written also reaches QuestDB, as a row of the data root the metrics folder sits in.
+    @Test
+    void anEventWrittenAlsoReachesQuestDb() throws Exception {
+        final Path metrics = dir.resolve("data/metrics");
+        final String expected = "comando_queue,instance=" + dir.resolve("data").toAbsolutePath()
+                + ",name=intents depth=0i,peak=12i 1793181600000000000";
+        try (MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                MetricsLog log = new MetricsLog(metrics, JSON, now::get, MetricsSinkTest.Endpoint.at(server.uri()))) {
+            log.queues(List.of(new Queues.Reading("intents", 0, 12)));
+            await().atMost(Duration.ofSeconds(5)).until(() -> server.lines.contains(expected));
+            assertThat(server.lines).as("the live event, and today's file imported at the first connection")
+                    .containsOnly(expected);
+        }
+    }
+
+    /// [MetricsLog#lastContext] takes QuestDB's answer over the files'; with no row in QuestDB, with QuestDB down
+    /// and with none running, the files answer. An id that is not a conversation id never reaches a query.
+    @Test
+    void theLastContextComesFromQuestDbThenTheFiles() throws Exception {
+        final Path days = Files.createDirectories(dir.resolve("days"));
+        Files.writeString(days.resolve("metrics-2026-10-29.jsonl"), "{\"ts\":\"2026-10-29T06:00:00Z\",\"event\":\"turn\","
+                + "\"conversation\":\"" + CONVERSATION + "\",\"context\":100,\"window\":200000}\n");
+        try (MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb()) {
+            final MetricsSinkTest.Endpoint endpoint = MetricsSinkTest.Endpoint.at(server.uri());
+            try (MetricsLog log = new MetricsLog(days, JSON, () -> Instant.parse("2026-10-29T08:00:00Z").toEpochMilli(),
+                    endpoint)) {
+                server.selectAnswer.set("{\"query\":\"\",\"columns\":[{\"name\":\"context\",\"type\":\"LONG\"},"
+                        + "{\"name\":\"context_window\",\"type\":\"LONG\"}],\"dataset\":[[588979,1000000]],"
+                        + "\"count\":1}");
+                assertThat(log.lastContext(CONVERSATION))
+                        .hasValueSatisfying(c -> assertThat(c).containsExactly(588_979L, 1_000_000L));
+                assertThat(server.queries).containsExactly("SELECT context, context_window FROM comando_turn"
+                        + " WHERE conversation = '" + CONVERSATION + "' AND context > 0 ORDER BY ts DESC LIMIT 1");
+
+                assertThat(log.lastContext("c1' OR '1'='1")).isEmpty();
+                assertThat(server.queries).as("not a conversation id").hasSize(1);
+
+                server.selectAnswer.set("{\"query\":\"\",\"columns\":[],\"dataset\":[],\"count\":0}");
+                assertThat(log.lastContext(CONVERSATION)).as("no row")
+                        .hasValueSatisfying(c -> assertThat(c).containsExactly(100L, 200_000L));
+
+                server.down();
+                assertThat(log.lastContext(CONVERSATION)).as("down")
+                        .hasValueSatisfying(c -> assertThat(c).containsExactly(100L, 200_000L));
+
+                endpoint.live.set(null);
+                assertThat(log.lastContext(CONVERSATION)).as("none running")
+                        .hasValueSatisfying(c -> assertThat(c).containsExactly(100L, 200_000L));
+            }
+        }
     }
 }

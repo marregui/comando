@@ -55,7 +55,8 @@ class FileReadRulesTest {
                 .check(comando);
     }
 
-    /// No class hands a `File` to the JSON reader, or opens a channel on a file but the lock on the data root.
+    /// No class hands a `File` to the JSON reader, or opens a channel on a file but the lock on the data root and the
+    /// machine's QuestDB's start lock (record 146).
     @Test
     void noClassReadsAFileByAnotherRoute() {
         noClasses().should().callMethod(ObjectMapper.class, "readTree", File.class)
@@ -65,6 +66,7 @@ class FileReadRulesTest {
                 .check(comando);
         noClasses().that().doNotHaveFullyQualifiedName(Mapped.class.getName())
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
+                .and().doNotHaveFullyQualifiedName(MachineQuestDb.class.getName())
                 .should().callMethodWhere(target(name("open")).and(target(owner(assignableTo(FileChannel.class)))))
                 .check(comando);
     }

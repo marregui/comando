@@ -8,7 +8,7 @@ and no knowledge of comando.
 |---|---|---|
 | [0. Before you start](#0-before-you-start) | — | what to install |
 | [1. The window](#1-the-window) | 1 min | where everything is |
-| [2. A database](#2-a-database) | 1 min | the embedded QuestDB, a connection, binding it to a panel |
+| [2. A database](#2-a-database) | 1 min | the machine's QuestDB, a connection, binding it to a panel |
 | [3. SQL](#3-sql) | 2 min | running a block, the gutter, results, stopping a query |
 | [4. Looking at results](#4-looking-at-results) | 1 min | plots, the schema explorer, keeping a result |
 | [5. A Claude session](#5-a-claude-session) | 2 min | creating a session, prompts, the transcript |
@@ -46,7 +46,7 @@ its KIT row naming the kit's commit.
 | Part | What it is |
 |---|---|
 | **Menu bar** | **Edit**, **Find** (the finds of the view in front, and **Find in files…**), and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
-| **Tab row's right end** | stop refreshing plots, start or stop the embedded QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
+| **Tab row's right end** | stop refreshing plots, start or stop the machine's QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
 | **Sidebar**, left | four tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Outline** and **Preview** (Markdown), **Run**, **Stop**, **Locate**, **Clear**; rest the pointer on one for what a click does |
@@ -79,7 +79,7 @@ The tabs' right-click menus:
 | Tab | Menu |
 |---|---|
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
-| **Connections** | New connection…, starting or stopping the embedded QuestDB and the comando Edge |
+| **Connections** | New connection…, starting or stopping the machine's QuestDB and the comando Edge |
 | **Files** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
 | **Instances** | none of its own; an instance's row asks it, refuses its questions or forgets one that left |
 
@@ -187,10 +187,11 @@ are files of the same shape inside the app. [Workbench §1.3](workbench.md#13-th
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, and press **⏎** on **Start embedded QuestDB** (also the database button at the tab
-   row's right end). *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status
-   bar after a few seconds. **Stop embedded QuestDB**, in the same places, stops it. The server keeps its data in
-   `~/.comando/questdb` and listens on this machine only.
+1. Press **⌘⇧P**, type `machine's`, and press **⏎** on **Start the machine's QuestDB** (also the database button at
+   the tab row's right end). *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the
+   status bar after a few seconds; when another instance, or your own metrics, started it already, the button shows it
+   running. **Stop the machine's QuestDB**, in the same places, stops it, when this comando started it. The server is
+   one per machine, keeps its data in `~/.comando-questdb` and listens on this machine only.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. Make your own to learn the dialog:
    right-click the sidebar's **Connections** tab and choose **New connection…**. The dialog opens on a new connection
    with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard
@@ -388,14 +389,14 @@ your Claude Code permission settings, which comando leaves as they are; a databa
    click there reopens it. comando asks before closing a panel only when its shell runs a program. Right-click a tab
    for **Close others**, **Close to the right** and **Close to the left**; these leave open the tabs that wait for you
    and those whose shell runs a program.
-5. Press **⌘Q**. comando stops the session's process and the embedded QuestDB, and saves everything. If a query, a
+5. Press **⌘Q**. comando stops the session's process and saves everything; the machine's QuestDB keeps running. If a query, a
    turn, a session's background work, a Gradle run or a shell job is running, it asks first. While it closes, the
    window stays, greyed, its title followed by "— closing…".
 6. Start comando again, as in step 1.
    *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their
    transcripts, and the next prompt resumes the same conversation: type `What was the first question I asked you?` in
-   the **tutor** panel and press **⌘⇧⏎**. Connections come back closed, and the embedded QuestDB does not start by
-   itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the
+   the **tutor** panel and press **⌘⇧⏎**. Connections come back closed; the machine's QuestDB is still up, or the
+   first metric written starts it again. The window comes back where it was, with the
    sidebar shown or hidden as you left it. Panels you moved to the right side are there again, and so are the Search and
    Changes views; other views (plots, files, kept results) belong to one run.
 
@@ -410,7 +411,7 @@ Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 | `opened-files` | the files you opened: a new file loses its dot once opened |
 | `decisions.json` | the decisions automatic checkpoints held back for you, listed under Later in the Approvals tab |
 | `instances-seen.json` | the other comando instances seen, so the Instances tab lists those that left until you forget them |
-| `questdb/` | the embedded QuestDB's data |
+| `questdb/` | the tables of the QuestDB comando embedded before, copied into `~/.comando-questdb` at its first start |
 | `edge/` | the comando Edge: its download, its installation, its configuration, data and logs; `admin-password` holds the password of its web UI's user `admin` (on port 18080) |
 | `help/` | this tutorial |
 | `logs/` | comando's logs; **Help ▸ Show the log** opens them |

@@ -2,7 +2,7 @@ package dev.marregui.comando.ui.shell;
 
 import java.nio.file.Path;
 
-/** A local server comando starts and stops from the top of the workspace: the embedded QuestDB, or the comando Edge. */
+/** A local server comando starts and stops from the top of the workspace: the machine's QuestDB, or the comando Edge. */
 public interface ServerToggle {
 
     String name();

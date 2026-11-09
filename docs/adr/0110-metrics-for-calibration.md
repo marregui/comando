@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted on 2026-10-29; amended 2026-11-01 (see Amendments) | Miguel and Claude |
+| 2026-10-28 | accepted on 2026-10-29; amended 2026-11-01 and 2026-11-09 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -52,3 +52,7 @@ process's stdin, each with its `name`, its `depth` when read and its `peak` sinc
 `Queues`). `App` reads them every minute on its `kit-check` strand and writes the event only when the reading changed.
 One gauge is kept per queue: when a queue is made again under a name in use, the newest gauge of that name is read. A
 bound for each queue is set later from how it is used. Tested in `QueuesTest` and `MetricsTest`.
+
+2026-11-09, [record 146](0146-every-metric-goes-to-the-machine-questdb.md): every event is also written to the machine's QuestDB, one table per event (`comando_turn`,
+`comando_turn_model`, `comando_agent`, `comando_usage`, `comando_queue`), each row naming its data root; the files stay
+as they are and stay the record until the switch that record names, after which they stop.

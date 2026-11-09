@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the broker of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5; amended 2026-11-01 (see Amendments) | Miguel and Claude |
+| 2026-10-29 | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the broker of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5; amended 2026-11-01 and 2026-11-09 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -85,3 +85,7 @@ connects instances. Every process comando starts gets its homes from its instanc
 brain's folder (decision D10) (`RootLaunch`). A hook therefore reads
 the files of its own instance. The data root does not choose the kit: §2.2's starting line names both. Tested in
 `RootLaunchTest`.
+
+2026-11-09, [record 146](0146-every-metric-goes-to-the-machine-questdb.md): a second machine-level resource beside the Edge: the machine's QuestDB in `~/.comando-questdb/`, one
+per machine, with a registry of its own, started by any instance or kit and stopped only by its starter; unlike the
+Edge it keeps running when its starter quits.

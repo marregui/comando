@@ -158,7 +158,9 @@ the table below. Rules 12 to 16 cover what a desktop application meets and the s
 12. A child process has one owner. A short command runs through `Processes` (output to temporary files, a time limit,
     the program and every process it started ended forcibly past it); a long-lived one (the `claude -p` process, the
     terminal's shell, the embedded Edge) is started, drained and ended with its descendants by the adapter that owns
-    it, and its close waits a bounded time. Descendants are read for a signal only while the parent lives: the JDK
+    it, and its close waits a bounded time. The one exception is the machine's QuestDB
+    (record 146): its launcher is a short command under `Processes`, and the server it leaves belongs to the machine's
+    registry, not to the instance, so no instance's close ends it. Descendants are read for a signal only while the parent lives: the JDK
     finds them by pid, and an ended process's pid may already be another's. What a child did is read from its exit code, never from its text, which
     a locale changes (G-5.7).
 13. A file comando owns is written whole through `AtomicFiles`: a temporary file beside it, then a move over it.
@@ -169,7 +171,8 @@ the table below. Rules 12 to 16 cover what a desktop application meets and the s
     file or folder is made through `core`'s `OwnerOnly`, the one helper every module uses.
 16. A file is read through `core`'s `Mapped`: mapped read-only, scanned in place, and only the slice needed decoded.
     Bytes leave a mapping one by one, never by a bulk copy: a bulk copy off a file cut in place kills the JVM. Outside it
-    stay the libraries that take only a path, process pipes, the instance lock and writes. `FileReadRulesTest`
+    stay the libraries that take only a path, process pipes, the instance lock, the machine's QuestDB's start lock
+    and writes. `FileReadRulesTest`
     fails the build otherwise ([record 140](adr/0140-every-file-is-read-mapped.md)).
 
 | Part | comando |

@@ -1,10 +1,12 @@
 package dev.marregui.comando.claude;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.LongSupplier;
+import java.util.regex.Pattern;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -30,26 +33,50 @@ import dev.marregui.comando.core.loop.Queues;
  * event's fields.
  * Written from the sessions' strands and the plan-usage strand; one line a write, under a lock, so lines never
  * interleave. Money fields are kept as they arrive and shown nowhere.
+ * <p>
+ * Built with a {@link QuestDbEndpoint}, each event written also goes to the machine's QuestDB (record 146) through a
+ * {@link MetricsSink}, which never holds up a write; the file stays the record. {@link #close} ends the sink.
  */
-public final class MetricsLog {
+public final class MetricsLog implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(MetricsLog.class.getName());
 
     /** Keeps nothing: tests, and a window without a data root. */
     public static final MetricsLog NONE = new MetricsLog(null, new ObjectMapper(), System::currentTimeMillis);
 
+    /** How long {@link #lastContext} waits for QuestDB before it reads the files: the contract's bound (record 146). */
+    static final Duration CONTEXT_QUERY_WITHIN = Duration.ofSeconds(2);
+
+    /** A conversation id as Claude Code makes them; nothing else is put into a query. */
+    private static final Pattern CONVERSATION = Pattern.compile("[0-9a-f-]{8,64}");
+
     private final Path dir;
     private final ObjectMapper json;
     private final LongSupplier clock;
+    private final QuestDbEndpoint qdb;
+    private final MetricsSink sink;
 
+    /** Files only. */
     public MetricsLog(final Path dir) {
-        this(dir, new ObjectMapper(), System::currentTimeMillis);
+        this(dir, new ObjectMapper(), System::currentTimeMillis, null);
+    }
+
+    /** Files, and the machine's QuestDB at {@code qdb}; starts the sink's errand, which {@link #close} ends. */
+    public MetricsLog(final Path dir, final QuestDbEndpoint qdb) {
+        this(dir, new ObjectMapper(), System::currentTimeMillis, qdb);
     }
 
     MetricsLog(final Path dir, final ObjectMapper json, final LongSupplier clock) {
+        this(dir, json, clock, null);
+    }
+
+    MetricsLog(final Path dir, final ObjectMapper json, final LongSupplier clock, final QuestDbEndpoint qdb) {
         this.dir = dir;
         this.json = json;
         this.clock = clock;
+        this.qdb = dir == null ? null : qdb;
+        this.sink = this.qdb == null ? null : new MetricsSink(dir, this.qdb, new MetricsLines(json, instance(dir)), json,
+                clock, System::nanoTime);
     }
 
     /** A new event of {@code type}, stamped now; {@link #write} keeps it. */
@@ -69,12 +96,17 @@ public final class MetricsLog {
     static final int CONTEXT_DAYS = 14;
 
     /**
-     * The context and its window the last {@code turn} of conversation {@code id} ended with, newest file first, within
-     * {@link #CONTEXT_DAYS}; empty when none is kept (record 120). Reads files: off the EDT.
+     * The context and its window the last {@code turn} of conversation {@code id} ended with (record 120): QuestDB's
+     * answer when it has one, else the files', newest first, within {@link #CONTEXT_DAYS}; empty when none is kept.
+     * Waits up to {@link #CONTEXT_QUERY_WITHIN} on QuestDB, then reads files: off the EDT.
      */
     Optional<long[]> lastContext(final String id) {
-        if (dir == null || id == null || id.isEmpty() || !Files.isDirectory(dir)) {
+        if (dir == null || id == null || id.isEmpty()) {
             return Optional.empty();
+        }
+        final Optional<long[]> kept = lastContextKept(id);
+        if (kept.isPresent() || !Files.isDirectory(dir)) {
+            return kept;
         }
         LocalDate day = LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC);
         for (int i = 0; i < CONTEXT_DAYS; i++, day = day.minusDays(1)) {
@@ -115,7 +147,10 @@ public final class MetricsLog {
         write(e);
     }
 
-    /** Appends {@code event} as one line to today's file; a failure is logged, never thrown. */
+    /**
+     * Appends {@code event} as one line to today's file, then hands it to the sink; a failure is logged, never thrown,
+     * and the sink never blocks. {@code event} must not change after.
+     */
     synchronized void write(final ObjectNode event) {
         if (dir == null) {
             return;
@@ -131,5 +166,50 @@ public final class MetricsLog {
         } catch (final IOException | JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write metrics [file=" + file + ']', e);
         }
+        if (sink != null) {
+            sink.offer(event);
+        }
+    }
+
+    /** Ends the sink, letting it send what is queued for a moment; idempotent. The files need no closing. */
+    @Override
+    public void close() {
+        if (sink != null) {
+            sink.close();
+        }
+    }
+
+    /** The data root the metrics folder sits in, as the rows name their instance (record 146). */
+    private static String instance(final Path dir) {
+        final Path absolute = dir.toAbsolutePath();
+        final Path root = absolute.getParent();
+        return (root == null ? absolute : root).toString();
+    }
+
+    /** QuestDB's answer to {@link #lastContext}, empty when it has none or cannot be asked now. */
+    private Optional<long[]> lastContextKept(final String id) {
+        if (sink == null || !CONVERSATION.matcher(id).matches()) {
+            return Optional.empty();
+        }
+        final Optional<URI> base = qdb.live();
+        if (base.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            final JsonNode row = sink.exec(base.get(), "SELECT context, context_window FROM comando_turn"
+                    + " WHERE conversation = '" + id + "' AND context > 0 ORDER BY ts DESC LIMIT 1",
+                    CONTEXT_QUERY_WITHIN).path("dataset").path(0);
+            final long context = row.path(0).asLong(-1);
+            if (context > 0) {
+                return Optional.of(new long[]{context, row.path(1).asLong(0)});
+            }
+        } catch (final IOException | RuntimeException e) {
+            // handled: the files answer instead
+            LOG.log(System.Logger.Level.DEBUG, "QuestDB did not answer, the files do [conversation=" + id + ", cause="
+                    + e + ']');
+        } catch (final InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+        return Optional.empty();
     }
 }

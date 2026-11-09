@@ -260,8 +260,8 @@ final class Commands {
         cmd("connection.remove", "Remove the connection…", null, () -> focusedConnection().ifPresent(parts.sidebar()::removeConnection),
                 () -> focusedConnection().isPresent());
         if (deps.server() != null) {
-            cmd("server.start", "Start embedded QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning() && !deps.server().busy());
-            cmd("server.stop", "Stop embedded QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning() && !deps.server().busy());
+            cmd("server.start", "Start the machine's QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning() && !deps.server().busy());
+            cmd("server.stop", "Stop the machine's QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning() && !deps.server().busy());
         }
         if (deps.edge() != null) {
             // disabled while a start or stop is under way: the button greys out and its tooltip says which

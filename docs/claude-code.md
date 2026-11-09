@@ -372,7 +372,12 @@ sends for the same gesture:
   plan-usage read (provider, window, percent, reset). Money fields are kept as they arrive and shown nowhere. Read by
   the kit's calibration; comando reads back only a stored conversation's last context size, from the last `turn` of
   the past 14 days of files, when the conversation loads (`MetricsLog.lastContext`,
-  [record 120](adr/0120-the-context-follows-each-model-call.md)).
+  [record 120](adr/0120-the-context-follows-each-model-call.md)). Each event is also written to the machine's QuestDB
+  ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md)): tables `comando_turn` (a row per turn, its `usage` flattened), `comando_turn_model` (a row per model of
+  `modelUsage`, running totals per conversation), `comando_agent`, `comando_usage` and `comando_queue`, each row with
+  the data root as `instance`. A bounded queue and one thread write them in batches over ILP, starting the server when
+  none runs; a failed batch is dropped, the file keeps it. `lastContext` asks `comando_turn` first. At its first
+  connection in a process an instance imports its past files, once each (`metrics/qdb-imported.txt`).
 
 ## 4. Approvals and safety
 

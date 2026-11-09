@@ -94,6 +94,11 @@ public final class App implements AutoCloseable {
     static final Duration QUEUES_EVERY = Duration.ofMinutes(1);
     /** {@code -Dcomando.peers=false}, set by window tests and picture tools, keeps this instance off the Edge. */
     static final String PEERS_PROPERTY = "comando.peers";
+    /**
+     * {@code -Dcomando.questdb=false}, set by every test and picture tool, keeps this instance off the machine's QuestDB:
+     * metrics go to their files only, and the toggle works on a folder in the data root, never on the machine's.
+     */
+    static final String QUESTDB_PROPERTY = "comando.questdb";
     private final StateLoop loop;
     private final TranscriptRegistry transcripts;
     private final ClaudeAdapter claude;
@@ -201,12 +206,15 @@ public final class App implements AutoCloseable {
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
-            metrics = new MetricsLog(config.metricsDir());
+            // the machine's one QuestDB, shared by every instance and the kit, outliving comando (record 146)
+            final boolean machineQuestDb = Boolean.parseBoolean(System.getProperty(QUESTDB_PROPERTY, "true"));
+            final MachineQuestDb questDb = new MachineQuestDb(machineQuestDb ? Path.of(System.getProperty("user.home"), ".comando-questdb")
+                    : config.home().resolve("machine-questdb"), config.home(), InstanceName.current(), loop);
+            metrics = own(machineQuestDb ? new MetricsLog(config.metricsDir(), questDb) : new MetricsLog(config.metricsDir()));
             claude.metrics(metrics);
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
-            final EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
             final EmbeddedEdge edge = new EmbeddedEdge(config.edgeRoot(), config.home(), InstanceName.current(), loop);
             // agents start and stop them as the toggles do (record 121)
             mcpTools.servers(List.of(edge, questDb));
@@ -244,7 +252,7 @@ public final class App implements AutoCloseable {
             own(() -> ExecutorStop.now("app", kitCheck));
             // the Edge this instance started stops before QuestDB; one another instance started keeps running
             owned.addLast(edge);
-            // the embedded QuestDB stops last: it may still serve the connections closed above
+            // the machine's QuestDB is left running: its errands stop last, after the metrics log that writes to it
             owned.addLast(questDb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
             owned.addLast(ui);
