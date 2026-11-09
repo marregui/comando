@@ -1,6 +1,7 @@
 {
   "id": "fog_slate",
   "label": "Fog and slate",
+  "description": "Slate on fog: the most neutral light theme, cool and quiet.",
   "mode": "light",
   "twin": "slate_silver",
   "ground": {

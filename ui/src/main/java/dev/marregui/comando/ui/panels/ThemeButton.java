@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.event.MouseEvent;
+import java.util.Optional;
 import java.util.function.Consumer;
 import javax.swing.JButton;
 
@@ -9,8 +10,8 @@ import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
 /**
  * The theme button at the top right beside New panel (record 104), its icon a gilded square split between the ground
- * chosen and its twin's (record 128): its tooltip names the theme, read when it shows; a click opens the theme chooser
- * under it, and closes it when open; the palette lists the themes too.
+ * chosen and its twin's (record 128): its tooltip names the theme over its description (record 147), read when it
+ * shows; a click opens the theme chooser under it, and closes it when open; the palette lists the themes too.
  */
 public final class ThemeButton extends JButton {
 
@@ -39,7 +40,9 @@ public final class ThemeButton extends JButton {
 
     @Override
     public String getToolTipText(final MouseEvent event) {
-        return "Theme: " + NamedTheme.chosen().map(t -> t.label).orElse("none") + "; click for another";
+        final Optional<NamedTheme> theme = NamedTheme.chosen();
+        return theme.map(t -> ThemeChooser.tip("Theme: " + t.label + "; click for another", t))
+                .orElse("Theme: none; click for another");
     }
 
     /** {@code chosen} hears the theme picked in the chooser. */

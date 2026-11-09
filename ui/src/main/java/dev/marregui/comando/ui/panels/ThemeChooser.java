@@ -42,6 +42,8 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.ThemePreview;
@@ -52,7 +54,8 @@ import dev.marregui.comando.ui.kit.theme.ThemePreview;
  * the slot of the dark one it is the twin of, so flipping the toggle turns each card into its twin in place; the
  * themes no twin pairs, the user's files among them, follow. The toggle is a switch of polished metal, a moon on its
  * knob in dark and a sun in light ({@link ModeSwitch}). Each card draws its theme small in its own colours
- * ({@link ThemePreview}) over its name; the theme chosen has a ring in its tint. The toggle starts at the mode of the
+ * ({@link ThemePreview}) over its name, its tooltip the name over the theme's description (record 147); the theme
+ * chosen has a ring in its tint. The toggle starts at the mode of the
  * theme chosen; flipping it turns the whole window to the other mode, the twin of the theme chosen, and the chooser
  * stays open on that mode's cards. A click, or ⏎ on a card, chooses its theme for the whole window and leaves the
  * chooser open to try the next; the theme last chosen is the one kept. The arrows move between cards, D and L flip the
@@ -313,6 +316,17 @@ public final class ThemeChooser {
         }
     }
 
+    /**
+     * A theme's tooltip: {@code head} over {@code theme}'s description, when it has one (record 147). A user's file
+     * gives both the label in the head and the description, so they show as text, never as HTML: escaped inside the
+     * two-line tooltip, guarded when the head stands alone.
+     */
+    static String tip(final String head, final NamedTheme theme) {
+        return theme.description
+                .map(d -> "<html>" + MarkdownHtml.escape(head) + "<br>" + MarkdownHtml.escape(d) + "</html>")
+                .orElseGet(() -> Plain.text(head));
+    }
+
     /** One theme's card: its preview over its name, a ring in its tint when it is the theme chosen. */
     static final class Card extends JButton {
 
@@ -329,8 +343,8 @@ public final class ThemeChooser {
             setFocusPainted(false);
             setRolloverEnabled(true);
             getAccessibleContext().setAccessibleName(theme.label);
-            setToolTipText(theme.file.map(f -> theme.label + ", from " + f.getFileName()).orElse(theme.label)
-                    + (chosen ? "; the theme chosen" : "; click to choose it"));
+            setToolTipText(tip(theme.file.map(f -> theme.label + ", from " + f.getFileName()).orElse(theme.label)
+                    + (chosen ? "; the theme chosen" : "; click to choose it"), theme));
             final FontMetrics m = getFontMetrics(getFont());
             setPreferredSize(new Dimension(PREVIEW_W + 2 * RING, PREVIEW_H + 2 * RING + Theme.SPACE_XS + m.getHeight()));
         }

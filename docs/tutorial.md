@@ -161,6 +161,7 @@ To add a theme of your own, put a JSON file in the `themes` folder of comando's 
 {
   "id": "ink_rose",
   "label": "Ink and rose",
+  "description": "Pale rose on violet ink: soft and warm, medium arousal.",
   "mode": "dark",
   "ground": {"label": "Ink", "color": "#14101A"},
   "tint": {"label": "Rose", "highlight": "#FFE3EC", "body": "#F2A7C0", "shade": "#B5627F"}
@@ -171,6 +172,7 @@ To add a theme of your own, put a JSON file in the `themes` folder of comando's 
 |---|---|
 | `id` | lower case letters, digits and underscores; it names the theme's command (`theme.ink_rose`) and keeps your choice across restarts |
 | `label` | the name in the chooser and the palette |
+| `description` | optional: what the theme's colours do to the mind, in short, plain text of at most 140 characters; shown under the name in the card's tooltip and in the theme button's ([record 147](adr/0147-a-theme-says-what-it-does-to-the-mind.md)) |
 | `mode` | `dark`, or `light` for a pale ground under dark text: the window takes the light look, and its syntax, terminal and plot colours are drawn dark enough to read |
 | `twin` | optional: the id of the theme of the other mode it pairs with; the chooser puts the two in the same place |
 | `ground` | the background of every panel; its `label` may be left out |

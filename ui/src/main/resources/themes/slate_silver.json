@@ -1,6 +1,7 @@
 {
   "id": "slate_silver",
   "label": "Slate and silver",
+  "description": "Silver on slate, nearly colourless: the lowest arousal, neutral, least distracting.",
   "mode": "dark",
   "ground": {
     "label": "Slate",

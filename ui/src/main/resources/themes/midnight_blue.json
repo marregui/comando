@@ -1,6 +1,7 @@
 {
   "id": "midnight_blue",
   "label": "Midnight and electric blue",
+  "description": "Saturated blue on navy: the most stimulating of the twelve. Least suited to late nights.",
   "mode": "dark",
   "ground": {
     "label": "Midnight ink",

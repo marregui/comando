@@ -8,7 +8,7 @@ import java.util.Optional;
 
 /**
  * A curated theme (record 103): a ground and the tint that sits on it, chosen together from the swatch beside New
- * panel or the palette. The ground and the tint are not chosen apart. Each is a JSON file (record 126): the seven
+ * panel or the palette. The ground and the tint are not chosen apart. Each is a JSON file (record 126): the twelve
  * built in (six dark and their six light twins, records 127 and 128), then those read from the data root's {@code themes} folder at start,
  * which {@link #offer} adds after them.
  */
@@ -40,11 +40,20 @@ public final class NamedTheme {
     public final Optional<Path> file;
     /** The id of the theme of the other mode this one pairs with, as its file names it (record 128). */
     public final Optional<String> twin;
+    /** What the theme's colours do to the mind, in short, as its file gives it (record 147): shown in its tooltips. */
+    public final Optional<String> description;
 
-    private NamedTheme(final String id, final String label, final Ground ground, final Tint tint, final Optional<Path> file, final Optional<String> twin) {
+    private NamedTheme(final String id,
+                       final String label,
+                       final Optional<String> description,
+                       final Ground ground,
+                       final Tint tint,
+                       final Optional<Path> file,
+                       final Optional<String> twin) {
         this.id = id;
         this.twin = twin;
         this.label = label;
+        this.description = description;
         this.ground = ground;
         this.tint = tint;
         this.file = file;
@@ -52,13 +61,14 @@ public final class NamedTheme {
 
     private static NamedTheme builtIn(final String id, final Ground ground, final Tint tint) {
         final ThemeSpec s = BuiltInThemes.spec(id);
-        return new NamedTheme(id, s.label(), ground, tint, Optional.empty(), s.twin());
+        return new NamedTheme(id, s.label(), s.description(), ground, tint, Optional.empty(), s.twin());
     }
 
     /** The theme {@code spec} describes, read from {@code file}, with a ground and a tint of its own. */
     static NamedTheme fromFile(final ThemeSpec spec, final Path file) {
         final String name = spec.id().toUpperCase(Locale.ROOT);
-        return new NamedTheme(spec.id(), spec.label(), new Ground(name, spec.groundLabel(), spec.ground(), spec.light()),
+        return new NamedTheme(spec.id(), spec.label(), spec.description(),
+                new Ground(name, spec.groundLabel(), spec.ground(), spec.light()),
                 new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade(), spec.light()), Optional.of(file),
                 spec.twin());
     }

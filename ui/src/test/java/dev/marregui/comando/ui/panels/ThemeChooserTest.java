@@ -4,17 +4,23 @@ import java.awt.Dimension;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.ThemeFiles;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The six dark themes and their six light twins share slots, in the dark themes' order.
 /// - A theme no twin pairs follows the pairs, in its mode.
 /// - A twin named on either side pairs the two themes.
+/// - A theme's tooltip is its head line over its description, escaped; a card's tooltip carries it (record 147).
 /// - The toggle chooses the twin of the theme chosen, or the mode's first theme.
 /// - The popover lies under the anchor, right-aligned with it, kept on the anchor's screen, above it when there is no
 ///   room below; on no screen it is left where it falls.
@@ -97,6 +104,42 @@ class ThemeChooserTest {
         assertThat(dark.indexOf(pine)).as("pine and its twin in one slot").isEqualTo(light.indexOf(parchment)).isEqualTo(6);
         assertThat(ThemeChooser.flipped(all, Optional.of(pine), true)).contains(parchment);
         assertThat(ThemeChooser.flipped(all, Optional.of(parchment), false)).contains(pine);
+    }
+
+    /// The tooltip is the head over the description, both escaped so a user's markup shows as text; a theme with no
+    /// description keeps the head alone, as plain text; a card's tooltip, and the theme button's for the theme chosen,
+    /// built on the EDT, carry the description.
+    @Test
+    void aThemesTooltipIsItsHeadOverItsDescription(@TempDir final Path folder) throws IOException, InterruptedException,
+            InvocationTargetException {
+        assertThat(ThemeChooser.tip("Fog & slate", NamedTheme.FOG_SLATE))
+                .isEqualTo("<html>Fog &amp; slate<br>Slate on fog: the most neutral light theme, cool and quiet."
+                        + "</html>");
+        Files.writeString(folder.resolve("a.json"), theme("ink", "dark", "#14101A", "")
+                .replace("\"mode\"", "\"description\": \"<img src=x> & calm\", \"mode\""));
+        Files.writeString(folder.resolve("b.json"), theme("pine", "dark", "#0C1511", ""));
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
+        assertThat(read.problems()).isEmpty();
+        assertThat(ThemeChooser.tip("Ink", read.themes().get(0)))
+                .isEqualTo("<html>Ink<br>&lt;img src=x&gt; &amp; calm</html>");
+        assertThat(ThemeChooser.tip("<html>Pine", read.themes().get(1))).as("no description: the head alone, as text")
+                .isEqualTo("\u200B<html>Pine");
+        final AtomicReference<String> card = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(
+                () -> card.set(new ThemeChooser.Card(NamedTheme.ICE_NAVY, false).getToolTipText()));
+        assertThat(card.get()).isEqualTo("<html>Ice and navy; click to choose it<br>"
+                + "Navy on ice: formal and orderly, crisp in good light.</html>");
+        final AtomicReference<String> button = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                Theme.choose(Ground.MINT, Tint.FOREST);
+                button.set(new ThemeButton().getToolTipText(null));
+            });
+        } finally {
+            SwingUtilities.invokeAndWait(() -> Theme.choose(Ground.GRAPHITE, Tint.TREASURE));
+        }
+        assertThat(button.get()).as("the button, for the theme chosen")
+                .isEqualTo("<html>Theme: Mint and forest; click for another<br>Forest on mint: fresh and calm.</html>");
     }
 
     private static String theme(final String id, final String mode, final String ground, final String twin) {

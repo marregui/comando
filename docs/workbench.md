@@ -276,8 +276,9 @@ Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and
   bubble are laid over the ground and follow it. Text sizes are steps of one scale and spacing a 4-point grid
   ([record 102](adr/0102-one-type-scale-and-a-grid.md)).
 - **The chooser.** The theme button sits at the top right, left of New panel: a gilded square split between the ground
-  chosen and its twin's, its tooltip naming the theme. A click opens the chooser under it: a Dark | Light switch over a
-  grid of that mode's cards, three to a row, each theme drawn small in its own colours, each light theme in its dark
+  chosen and its twin's, its tooltip naming the theme and what its colours do to the mind. A click opens the chooser under it: a Dark | Light switch over a
+  grid of that mode's cards, three to a row, each theme drawn small in its own colours, its tooltip saying what its
+  colours do to the mind, each light theme in its dark
   twin's place, your own after. The switch (or D and L) turns the window to the twin of the theme chosen and leaves the
   chooser open on the other mode; a click or ⏎ gives the window that theme and leaves the chooser open to try the next,
   the last kept; the arrows move; Esc, a click elsewhere, the ✕ at its top right or the button again closes it
@@ -294,6 +295,7 @@ Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and
 {
   "id": "ink_rose",
   "label": "Ink and rose",
+  "description": "Pale rose on violet ink: soft and warm, medium arousal.",
   "mode": "dark",
   "ground": {"label": "Ink", "color": "#14101A"},
   "tint": {"label": "Rose", "highlight": "#FFE3EC", "body": "#F2A7C0", "shade": "#B5627F"}
@@ -304,6 +306,7 @@ Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and
 |---|---|
 | `id` | lower case letters, digits and underscores; it names the theme's command (`theme.ink_rose`) and keeps the choice across restarts |
 | `label` | the name in the chooser and the palette |
+| `description` | optional: what the theme's colours do to the mind, in short, plain text of at most 140 characters; shown under the name in the card's tooltip and in the theme button's ([record 147](adr/0147-a-theme-says-what-it-does-to-the-mind.md)) |
 | `mode` | `dark`, or `light` for a pale ground under dark text: the window takes the light look, and its syntax, terminal and plot colours are drawn dark enough to read |
 | `twin` | optional: the id of the theme of the other mode it pairs with; the chooser puts the two in the same place |
 | `ground` | the background of every panel; its `label` may be left out |

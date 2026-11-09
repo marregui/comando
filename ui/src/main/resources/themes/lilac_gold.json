@@ -1,6 +1,7 @@
 {
   "id": "lilac_gold",
   "label": "Lilac and deep gold",
+  "description": "Deep gold on lilac: quiet and slightly cool. The gold reads dense.",
   "mode": "light",
   "twin": "aubergine_gold",
   "ground": {

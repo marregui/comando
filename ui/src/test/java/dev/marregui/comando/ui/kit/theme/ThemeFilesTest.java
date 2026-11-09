@@ -16,6 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A user's file is offered after the built-in ones, with a ground and tint of its own, in the order of the names.
 /// - A file that does not parse, names a bad id, mode or colour, repeats an id, or reads below a floor, dark or light,
 ///   is left out, with one line naming the file and why; one left out for its colours leaves its id to the next.
+/// - Every built-in theme has a description; a user's file may leave it out, and one blank or too long is left out
+///   (record 147).
 class ThemeFilesTest {
 
     @TempDir
@@ -113,6 +115,30 @@ class ThemeFilesTest {
         assertThat(read.problems().get(7)).isEqualTo("9-field.json: \"tint\" must be an object");
     }
 
+    /// Every built-in theme has a description within [ThemeSpec#DESCRIPTION_MAX]; a user's description is read as
+    /// written, markup and all, and one left out is empty; a blank one, or one a character too long, leaves its file
+    /// out with the reason.
+    @Test
+    void aDescriptionIsReadAndMayBeLeftOut() throws IOException {
+        for (final NamedTheme t : NamedTheme.builtIn()) {
+            assertThat(t.description).as(t.id).hasValueSatisfying(
+                    d -> assertThat(d).isNotBlank().hasSizeLessThanOrEqualTo(ThemeSpec.DESCRIPTION_MAX));
+        }
+        assertThat(NamedTheme.MIDNIGHT_BLUE.description).contains(
+                "Saturated blue on navy: the most stimulating of the twelve. Least suited to late nights.");
+        write("1-said.json", described("ink", "<b>Calm</b> & dim"));
+        write("2-none.json", theme("plain", "Plain", "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F"));
+        write("3-blank.json", described("blank", "  "));
+        write("4-long.json", described("long", "x".repeat(ThemeSpec.DESCRIPTION_MAX + 1)));
+        write("5-edge.json", described("edge", "x".repeat(ThemeSpec.DESCRIPTION_MAX)));
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
+        assertThat(read.themes()).extracting(t -> t.id).containsExactly("ink", "plain", "edge");
+        assertThat(read.themes().get(0).description).as("read as written").contains("<b>Calm</b> & dim");
+        assertThat(read.themes().get(1).description).as("left out").isEmpty();
+        assertThat(read.problems()).containsExactly("3-blank.json: \"description\" must be a text",
+                "4-long.json: \"description\" must be at most 140 characters: 141");
+    }
+
     /// No folder, or a folder that is not there, offers nothing and reports nothing.
     @Test
     void noFolderOffersNothing() {
@@ -133,6 +159,12 @@ class ThemeFilesTest {
 
     private void write(final String name, final String json) throws IOException {
         Files.writeString(folder.resolve(name), json);
+    }
+
+    /// A good dark theme `id` whose description is `description`, written into the JSON as it is.
+    private static String described(final String id, final String description) {
+        return theme(id, id, "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F")
+                .replace("\"mode\"", "\"description\": \"" + description + "\", \"mode\"");
     }
 
     private static String theme(final String id, final String label, final String ground, final String highlight, final String body, final String shade) {

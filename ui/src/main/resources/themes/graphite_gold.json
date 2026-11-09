@@ -1,6 +1,7 @@
 {
   "id": "graphite_gold",
   "label": "Graphite and gold",
+  "description": "Vivid gold on neutral black: alert and commanding. Easiest on the eyes in a dim room.",
   "mode": "dark",
   "ground": {
     "label": "Graphite",

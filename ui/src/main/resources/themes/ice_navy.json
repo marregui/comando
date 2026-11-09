@@ -1,6 +1,7 @@
 {
   "id": "ice_navy",
   "label": "Ice and navy",
+  "description": "Navy on ice: formal and orderly, crisp in good light.",
   "mode": "light",
   "twin": "midnight_blue",
   "ground": {

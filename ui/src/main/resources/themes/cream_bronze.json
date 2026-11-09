@@ -1,6 +1,7 @@
 {
   "id": "cream_bronze",
   "label": "Cream and champagne bronze",
+  "description": "Bronze on cream: the softest of the twelve, warm and low in contrast, like old paper.",
   "mode": "light",
   "twin": "espresso_champagne",
   "ground": {

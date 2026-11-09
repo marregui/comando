@@ -1,6 +1,7 @@
 {
   "id": "paper_ochre",
   "label": "Paper and ochre",
+  "description": "Ochre on warm paper: calm, like print. Dark on light reads most accurately in good light.",
   "mode": "light",
   "twin": "graphite_gold",
   "ground": {

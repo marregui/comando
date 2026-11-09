@@ -1,6 +1,7 @@
 {
   "id": "mint_forest",
   "label": "Mint and forest",
+  "description": "Forest on mint: fresh and calm.",
   "mode": "light",
   "twin": "evergreen_forest",
   "ground": {

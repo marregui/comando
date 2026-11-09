@@ -9,14 +9,16 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, the mode (dark, the
- * default, or light: a pale ground under dark text, record 127), the ground and the tint's three steps. The six built in and every file in the data root's {@code themes} folder have
- * this shape:
+ * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, a short
+ * description of the theme's effect (record 147), the mode (dark, the default, or light: a pale ground under dark text,
+ * record 127), the ground and the tint's three steps. The twelve built in and every file in the data root's
+ * {@code themes} folder have this shape:
  *
  * <pre>{@code
  * {
  *   "id": "graphite_gold",
  *   "label": "Graphite and gold",
+ *   "description": "Vivid gold on neutral black: alert and commanding. Easiest on the eyes in a dim room.",
  *   "mode": "dark",
  *   "ground": {"label": "Graphite", "color": "#121212"},
  *   "tint": {"label": "Treasure gold", "highlight": "#FFEDAA", "body": "#E7C55A", "shade": "#9E8230"}
@@ -25,13 +27,25 @@ import tools.jackson.databind.ObjectMapper;
  *
  * The id is lower case letters, digits and underscores, and names the theme's command ({@code theme.graphite_gold});
  * the ground's and the tint's labels may be left out, and are then the theme's. {@code twin}, which may be left out,
- * names the theme of the other mode it pairs with, which the chooser shows beside it (record 128). The tint's steps run from the one
- * that stands out most from the ground, the highlight, to the one that stands out least, the shade: pale to deep on a
- * dark ground, deep to pale on a light one.
+ * names the theme of the other mode it pairs with, which the chooser shows beside it (record 128). {@code description},
+ * which may be left out, is at most {@value #DESCRIPTION_MAX} characters of plain text, shown in the theme's tooltips.
+ * The tint's steps run from the one that stands out most from the ground, the highlight, to the one that stands out
+ * least, the shade: pale to deep on a dark ground, deep to pale on a light one.
  */
-record ThemeSpec(String id, String label, boolean light, Optional<String> twin, String groundLabel, Color ground,
-                 String tintLabel, Color highlight, Color body, Color shade) {
+record ThemeSpec(String id,
+                 String label,
+                 Optional<String> description,
+                 boolean light,
+                 Optional<String> twin,
+                 String groundLabel,
+                 Color ground,
+                 String tintLabel,
+                 Color highlight,
+                 Color body,
+                 Color shade) {
 
+    /** The longest description: two short sentences on the tooltip's second line; the longest built-in is 89. */
+    static final int DESCRIPTION_MAX = 140;
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern ID = Pattern.compile("[a-z0-9_]{1,40}");
     private static final Pattern HEX = Pattern.compile("#[0-9A-Fa-f]{6}");
@@ -52,6 +66,12 @@ record ThemeSpec(String id, String label, boolean light, Optional<String> twin, 
             throw new IllegalArgumentException("\"id\" must be lower case letters, digits and underscores: " + id);
         }
         final String label = text(root, "label", null);
+        final Optional<String> description = Optional.ofNullable(root.get("description"))
+                .map(v -> text(root, "description", null));
+        if (description.isPresent() && description.get().length() > DESCRIPTION_MAX) {
+            throw new IllegalArgumentException("\"description\" must be at most " + DESCRIPTION_MAX + " characters: "
+                    + description.get().length());
+        }
         final String mode = text(root, "mode", "dark");
         if (!mode.equals("dark") && !mode.equals("light")) {
             throw new IllegalArgumentException("\"mode\" must be \"dark\" or \"light\": " + mode);
@@ -62,8 +82,9 @@ record ThemeSpec(String id, String label, boolean light, Optional<String> twin, 
         }
         final JsonNode ground = object(root, "ground");
         final JsonNode tint = object(root, "tint");
-        return new ThemeSpec(id, label, mode.equals("light"), twin, text(ground, "label", label), colour(ground, "ground.color"),
-                text(tint, "label", label), colour(tint, "tint.highlight"), colour(tint, "tint.body"), colour(tint, "tint.shade"));
+        return new ThemeSpec(id, label, description, mode.equals("light"), twin, text(ground, "label", label),
+                colour(ground, "ground.color"), text(tint, "label", label), colour(tint, "tint.highlight"),
+                colour(tint, "tint.body"), colour(tint, "tint.shade"));
     }
 
     /** Field {@code name} of {@code node} as text: {@code otherwise} when it is missing, which null forbids. */

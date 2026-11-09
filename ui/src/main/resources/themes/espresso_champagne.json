@@ -1,6 +1,7 @@
 {
   "id": "espresso_champagne",
   "label": "Espresso and champagne",
+  "description": "Muted champagne on brown: warm and calm. Comfortable for long sessions.",
   "mode": "dark",
   "ground": {
     "label": "Espresso",

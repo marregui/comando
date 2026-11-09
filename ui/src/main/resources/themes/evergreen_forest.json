@@ -1,6 +1,7 @@
 {
   "id": "evergreen_forest",
   "label": "Evergreen and tropical forest",
+  "description": "Green on deep green: medium arousal, calm, suggests nature.",
   "mode": "dark",
   "ground": {
     "label": "Evergreen",

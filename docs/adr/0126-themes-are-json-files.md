@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built; `mode: light` built by [record 127](0127-light-themes.md) | Miguel and Claude |
+| 2026-10-30 | accepted; built; `mode: light` built by [record 127](0127-light-themes.md); `description` added by [record 147](0147-a-theme-says-what-it-does-to-the-mind.md) | Miguel and Claude |
 
 ## 1. Context
 

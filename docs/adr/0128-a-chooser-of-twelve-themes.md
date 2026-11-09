@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built; amended 2026-10-30 (see Amendments) | Miguel and Claude |
+| 2026-10-30 | accepted; built; amended 2026-10-30 (see Amendments); card tooltips amended by [record 147](0147-a-theme-says-what-it-does-to-the-mind.md) | Miguel and Claude |
 
 ## 1. Context
 
