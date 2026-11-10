@@ -7,6 +7,8 @@ import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.JViewport;
@@ -46,6 +48,14 @@ class TranscriptFoldTest {
      * ran out of its first slice on an M2 Max (2026-11-09), so a row of 4 000 runs out on any runner.
      */
     private static final int PAST_A_SLICE = 4_000;
+    /**
+     * Calls in a turn, each followed by a long interim text, read at its middle. Set by hand: one 8 ms slice laid out
+     * about one such text on an M2 Max (2026-11-10), so the 24 texts above the view took 24 slices over 8 frames; a
+     * machine 20 times as fast still runs out of the first slice.
+     */
+    private static final int SLOW_CALLS = 50;
+    /** Frames painted while a row forms before its view must have settled: that turn settled in 9 (2026-11-10). */
+    private static final int MAX_FRAMES = 200;
     private static final String LAUNCHED = "Async agent launched successfully.\nagentId: a58 (internal ID)\n"
             + "The agent is working in the background.";
 
@@ -140,6 +150,11 @@ class TranscriptFoldTest {
     }
 
     private void paintView() {
+        frame();
+    }
+
+    /** One frame of the view as Swing paints it: translated to where the view is when the paint starts. */
+    private BufferedImage frame() {
         final Rectangle r = viewport.getViewRect();
         final BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB);
         final Graphics2D g = img.createGraphics();
@@ -147,6 +162,7 @@ class TranscriptFoldTest {
         g.setClip(0, r.y, W, H);
         canvas.paint(g);
         g.dispose();
+        return img;
     }
 
     private void readAt(final int y) {
@@ -838,6 +854,72 @@ class TranscriptFoldTest {
         canvas.refineAll();
         assertThat(canvas.topOf(row()) + row().topOf(step) - viewport.getViewPosition().y)
                 .as("after the idle pass").isCloseTo(before, within(1));
+    }
+
+    /// A row forms open under a reader in a transcript never laid out whole, so one slice of layout reaches only the
+    /// first of the steps above the view: every frame painted while the row forms, the frames in which the view moves to
+    /// keep the step in view in place included, draws that step where it was.
+    @Test
+    void everyFrameDrawsTheStepInViewInItsPlaceWhileItsRowForms() {
+        add(new Block.UserPrompt("go", "", ""));
+        for (int k = 0; k < SLOW_CALLS; k++) {
+            add(new Block.ToolCall("e" + k, "Edit", "{\"file_path\":\"/w/F" + k + ".java\",\"old_string\":\"a\","
+                    + "\"new_string\":\"b\"}", "ok", Block.ToolStatus.DONE, ""));
+            add(text(("Interim text " + k + " wraps" + " over the width of the view".repeat(30) + ".\n\n").repeat(8)));
+        }
+        add(text("The report."));
+        viewport.setView(canvas);
+        viewport.setSize(W, H);
+        canvas.ensureLayout(W);
+        viewport.doLayout();
+        final Item step = canvas.topLevel().get(SLOW_CALLS);
+        readAt(canvas.topOf(step));
+        final int before = canvas.topOf(step) - viewport.getViewPosition().y;
+
+        add(end(1_000));
+        canvas.ensureLayout(W);
+        viewport.doLayout();
+        final List<Integer> bands = new ArrayList<>();
+        final List<Integer> moves = new ArrayList<>();
+        final int from = Math.max(0, before);
+        final int to = Math.min(H, before + step.height);
+        for (int f = 0; f < MAX_FRAMES && (f == 0 || moves.getLast() != 0); f++) {
+            final int y = viewport.getViewPosition().y;
+            bands.add(band(frame(), from, to));
+            viewport.doLayout();
+            moves.add(viewport.getViewPosition().y - y);
+        }
+        assertThat(moves).as("the view settles, frame by frame").endsWith(0);
+        assertThat(moves).as("a frame in which the view moved").hasSizeGreaterThan(1);
+        canvas.refineAll();
+        assertThat(canvas.topOf(row()) + row().topOf(step) - viewport.getViewPosition().y)
+                .as("after the idle pass").isCloseTo(before, within(1));
+        final BufferedImage settled = frame();
+        assertThat(painted(settled, from, to)).as("the step in view is painted").isTrue();
+
+        final int expected = band(settled, from, to);
+        final List<String> displaced = new ArrayList<>();
+        for (int f = 0; f < bands.size(); f++) {
+            if (bands.get(f) != expected) {
+                displaced.add("frame " + f + ", the view moved " + moves.get(f) + " px");
+            }
+        }
+        assertThat(displaced).as("frames that drew the step in view away from its place").isEmpty();
+    }
+
+    /** The rows {@code from} to {@code to} of {@code img}, pixel for pixel, as one hash: frames compare by it. */
+    private static int band(final BufferedImage img, final int from, final int to) {
+        return Arrays.hashCode(img.getRGB(0, from, W, to - from, null, 0, W));
+    }
+
+    /** True when a pixel in rows {@code from} to {@code to} of {@code img} is painted. */
+    private static boolean painted(final BufferedImage img, final int from, final int to) {
+        for (final int argb : img.getRGB(0, from, W, to - from, null, 0, W)) {
+            if (argb != 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// A selection from the prompt to the report across an open row whose steps below the view are not laid out yet

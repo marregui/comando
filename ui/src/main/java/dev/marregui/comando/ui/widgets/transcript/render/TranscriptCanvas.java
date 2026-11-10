@@ -1191,6 +1191,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     @Override
     protected void paintComponent(final Graphics g0) {
+        // in a viewport the canvas sits at minus the view's y, and g0 was translated by it before this paint began
+        final int paintedAt = getY();
         ensureLayout(getWidth());
         final Graphics2D g = (Graphics2D) g0.create();
         try {
@@ -1200,6 +1202,13 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             // the whole canvas when no clip is set
             final Rectangle clip = g.getClipBounds(new Rectangle(0, 0, getWidth(), getHeight()));
             layoutVisible(clip);
+            final int moved = getY() - paintedAt;
+            if (moved != 0) {
+                // a layout moved the view to keep the step in view in place, and g still draws where the view was:
+                // the frame draws where the view is now, as the repaint the move asked for will
+                g.translate(0, moved);
+                clip.translate(0, -moved);
+            }
             ensurePlaced();
             for (int i = firstAt(clip.y); i < items.size(); i++) {
                 final int top = tops[i];
