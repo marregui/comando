@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
+import java.awt.AWTEvent;
+import java.awt.Adjustable;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Insets;
@@ -8,6 +10,7 @@ import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.InputEvent;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
@@ -28,6 +31,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JEditorPane;
 import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -169,6 +173,11 @@ public final class HtmlPane extends JEditorPane {
             }
             anchored = fragment;
             anchoredY = getParent() instanceof JViewport vp ? vp.getViewPosition().y : -1;
+            if (getParent() == heard && EventQueue.getCurrentEvent() instanceof InputEvent) {
+                // the reader's link: a place of their choosing, though the view may be there already
+                readerMoves++;
+                readerJumpedDown(anchoredY);
+            }
         } catch (final BadLocationException e) {
             return false;
         } finally {
@@ -350,43 +359,81 @@ public final class HtmlPane extends JEditorPane {
     private Point seenAt;
     /** How many times the reader moved that viewport, by wheel, bar, keys or a heading's link. */
     private int readerMoves;
-    /** How many of those moves took the view to a place of the reader's choosing: a thumb dragged, a heading's link. */
-    private int readerJumps;
-    /** Where the last of those took the view. */
-    private Point jumpedTo = new Point();
     /**
-     * How far the reader's moves by a step (wheel, track, keys) took that viewport, summed since their last jump; the
-     * page's own moves are not in it.
+     * How many of those moves took the view, across and down, to a place of the reader's choosing: a thumb dragged,
+     * a heading's link. A thumb places the view along its own bar only.
+     */
+    private int readerJumpsX;
+    private int readerJumpsY;
+    /** Where the last of those took the view, along each axis. */
+    private final Point jumpedTo = new Point();
+    /**
+     * How far the reader's moves by a step (wheel, track, keys) took that viewport, summed along each axis since the
+     * reader's last jump along it; the page's own moves are not in it.
      */
     private final Point readerMoved = new Point();
     /** True while the pane scrolls to a heading: a heading's link the reader follows takes the view to that place. */
     private boolean jumping;
     /**
-     * Counts the reader's moves of the view: a move made while the reader's input is dispatched. The page's own moves,
-     * the caret's scroll and the view put back, run from the queue afterwards.
+     * Above zero while the pane moves the view itself: the caret's scroll, the view put back. Those moves are not the
+     * reader's, even while the reader holds a bar.
+     */
+    private int ownMoves;
+    /** The bars of the scroll pane around {@link #heard}, whose presses the pane hears; empty before the first. */
+    private List<JScrollBar> heardBars = List.of();
+    /**
+     * True while the reader holds a mouse button on one of those bars: the steps the bar repeats then, from a timer,
+     * are the reader's.
+     */
+    private boolean barHeld;
+    private final MouseAdapter barPressed = new MouseAdapter() {
+        @Override
+        public void mousePressed(final MouseEvent e) {
+            barHeld = true;
+        }
+
+        @Override
+        public void mouseReleased(final MouseEvent e) {
+            barHeld = false;
+        }
+    };
+    /**
+     * Counts the reader's moves of the view: a move made while the reader's input is dispatched, or while the reader
+     * holds a bar and the pane is not moving the view itself. The page's own moves, the caret's scroll and the view put
+     * back, run from the queue afterwards.
      */
     private final ChangeListener viewMoved = e -> {
         if (e.getSource() instanceof JViewport vp) {
             final Point p = vp.getViewPosition();
-            if (!p.equals(seenAt) && EventQueue.getCurrentEvent() instanceof InputEvent input) {
+            final AWTEvent current = EventQueue.getCurrentEvent();
+            if (!p.equals(seenAt) && (current instanceof InputEvent || barHeld && ownMoves == 0)) {
                 readerMoves++;
-                if (jumping || placesTheThumb(input)) {
-                    readerJumps++;
-                    jumpedTo = p;
-                    readerMoved.setLocation(0, 0);
-                } else {
-                    readerMoved.translate(p.x - seenAt.x, p.y - seenAt.y);
+                final int along = jumping ? Adjustable.VERTICAL : placesTheThumbAlong(current);
+                readerMoved.translate(p.x - seenAt.x, p.y - seenAt.y);
+                if (along == Adjustable.VERTICAL) {
+                    readerJumpedDown(p.y);
+                } else if (along == Adjustable.HORIZONTAL) {
+                    readerJumpsX++;
+                    jumpedTo.x = p.x;
+                    readerMoved.x = 0;
                 }
             }
             seenAt = p;
         }
     };
 
+    /** Records that the reader took the view down the page to {@code y}, a place of their choosing. */
+    private void readerJumpedDown(final int y) {
+        readerJumpsY++;
+        jumpedTo.y = y;
+        readerMoved.y = 0;
+    }
+
     /**
      * What a change to the page keeps until the view is put back: where the view was, the reader's moves then, and the
      * heading the reader was taken to and has not scrolled from, else null.
      */
-    private record Kept(Point at, int moves, int jumps, Point moved, String heading) {
+    private record Kept(Point at, int moves, int jumpsX, int jumpsY, Point moved, String heading) {
     }
 
     /** The place the changes to the page keep while a put-back is queued; null when none is. */
@@ -416,6 +463,10 @@ public final class HtmlPane extends JEditorPane {
      * Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them.
      */
     public void setMarkdown(final String markdown) {
+        if (getParent() instanceof JViewport vp) {
+            // the reader's moves and presses are heard from the first page shown, not from the first one drawn again
+            hear(vp);
+        }
         this.markdown = markdown;
         sizedFor = -1;
         waitingFor.clear();
@@ -632,7 +683,7 @@ public final class HtmlPane extends JEditorPane {
         } else if (getParent() instanceof JViewport vp) {
             final Point at = hear(vp);
             // taken to a heading and not scrolled since: the heading, wherever the new pictures put it
-            kept = new Kept(at, readerMoves, readerJumps, new Point(readerMoved),
+            kept = new Kept(at, readerMoves, readerJumpsX, readerJumpsY, new Point(readerMoved),
                     anchored != null && at.y == anchoredY ? anchored : null);
         } else {
             change.run();
@@ -659,16 +710,40 @@ public final class HtmlPane extends JEditorPane {
             // before or between those moves: the place the reader last chose, else the place kept, plus how far the
             // reader's steps moved it since, unless the pane has left the viewport it was moved in
             if (getParent() == heard) {
-                final Point from = readerJumps != kept.jumps() ? jumpedTo : kept.at();
-                final Point since = readerJumps != kept.jumps() ? new Point() : kept.moved();
-                heard.setViewPosition(new Point(from.x + readerMoved.x - since.x, from.y + readerMoved.y - since.y));
+                final boolean acrossChosen = readerJumpsX != kept.jumpsX();
+                final boolean downChosen = readerJumpsY != kept.jumpsY();
+                final int x = (acrossChosen ? jumpedTo.x : kept.at().x) + readerMoved.x
+                        - (acrossChosen ? 0 : kept.moved().x);
+                final int y = (downChosen ? jumpedTo.y : kept.at().y) + readerMoved.y
+                        - (downChosen ? 0 : kept.moved().y);
+                movingTheView(() -> heard.setViewPosition(new Point(x, y)));
             }
         } else if (kept.heading() != null) {
-            scrollToHeading(kept.heading());
+            movingTheView(() -> scrollToHeading(kept.heading()));
         } else if (getParent() instanceof JViewport vp) {
             // drawn again as it joined a window, it may have left it since
-            vp.setViewPosition(kept.at());
+            movingTheView(() -> vp.setViewPosition(kept.at()));
         }
+    }
+
+    /** Runs {@code move}, a move of the view the pane makes itself. */
+    private void movingTheView(final Runnable move) {
+        ownMoves++;
+        try {
+            move.run();
+        } finally {
+            ownMoves--;
+        }
+    }
+
+    /**
+     * As the editor's, the move marked as the pane's own, which matters only while the reader holds a bar outside any
+     * input: the caret's deferred scroll comes here. A move made here while the reader's input is dispatched, as Page
+     * Down's, is the reader's all the same.
+     */
+    @Override
+    public void scrollRectToVisible(final Rectangle r) {
+        movingTheView(() -> super.scrollRectToVisible(r));
     }
 
     /**
@@ -677,9 +752,20 @@ public final class HtmlPane extends JEditorPane {
      * of the left button on the track steps a page. Only a move says so: a press that moves nothing is not one.
      */
     public static boolean placesTheThumb(final InputEvent input) {
-        return input instanceof MouseEvent m && m.getSource() instanceof JScrollBar
+        return placesTheThumbAlong(input) >= 0;
+    }
+
+    /**
+     * As {@link #placesTheThumb}, along which axis of the page, {@link Adjustable#HORIZONTAL} or
+     * {@link Adjustable#VERTICAL}, the bar's thumb is placed; -1 when it is not.
+     */
+    private static int placesTheThumbAlong(final AWTEvent event) {
+        if (event instanceof MouseEvent m && m.getSource() instanceof JScrollBar bar
                 && (m.getID() == MouseEvent.MOUSE_DRAGGED
-                || m.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isMiddleMouseButton(m));
+                || m.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isMiddleMouseButton(m))) {
+            return bar.getOrientation();
+        }
+        return -1;
     }
 
     /** Hears the reader's moves of {@code vp}, the pane's viewport, from now on; where its view is. */
@@ -688,8 +774,17 @@ public final class HtmlPane extends JEditorPane {
             if (heard != null) {
                 heard.removeChangeListener(viewMoved);
             }
+            for (final JScrollBar bar : heardBars) {
+                bar.removeMouseListener(barPressed);
+            }
             vp.addChangeListener(viewMoved);
             heard = vp;
+            heardBars = vp.getParent() instanceof JScrollPane sp
+                    ? List.of(sp.getVerticalScrollBar(), sp.getHorizontalScrollBar()) : List.of();
+            for (final JScrollBar bar : heardBars) {
+                bar.addMouseListener(barPressed);
+            }
+            barHeld = false;
         }
         seenAt = vp.getViewPosition();
         return seenAt;

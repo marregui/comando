@@ -33,6 +33,7 @@ import java.util.function.IntUnaryOperator;
 import javax.imageio.ImageIO;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.plaf.basic.BasicScrollBarUI;
@@ -375,7 +376,7 @@ class HtmlPaneTest {
     void aHeadingLinkTheReaderFollowsOnceTheRedrawMovedTheViewKeepsTheHeadingInView() throws Exception {
         final String md = "# Report\n\nSee [the notes](#notes).\n\n" + page(120) + "## Notes\n\nLast.\n";
         final Moved w = movedInTheRedraw(md, _ -> 200, _ -> {
-        }, HtmlPaneTest::followTheNotes);
+        }, scroll -> followTheLink(scroll, "the notes"));
         assertThat(w.by()).as("the link moved the view down the page").isGreaterThan(400);
         assertThat(w.top()).as("the heading").isEqualTo(w.from() + w.by());
     }
@@ -390,9 +391,99 @@ class HtmlPaneTest {
         assertThat(w.top()).as("the reader's place").isEqualTo(200);
     }
 
-    /// Where the view was when the reader moved it in the redraw, how far the move took it, where it ended, and the
-    /// last place on the page drawn again.
-    private record Moved(int from, int by, int top, int last) {
+    /// A thumb dragged across the page in the same window places the view across the page only: down the page the
+    /// view stays at the reader's place.
+    @Test
+    void aThumbDraggedAcrossOnceTheRedrawMovedTheViewKeepsThePlaceDownThePage() throws Exception {
+        final String md = page(120) + "```\n" + "x".repeat(400) + "\n```\n";
+        final Moved w = movedInTheRedraw(md, _ -> 200,
+                scroll -> scroll.getHorizontalScrollBar().setUI(new Thumbed()), HtmlPaneTest::dragThumbAcross);
+        assertThat(w.from()).as("where the redraw took the view, and the thumb was dragged").isBetween(0, 199);
+        assertThat(w.left()).as("the drag moved the view across the page").isGreaterThan(50);
+        assertThat(w.top()).as("the reader's place down the page").isEqualTo(200);
+    }
+
+    /// A step the bar repeats while the reader holds it, which comes from a timer and not from the reader's input,
+    /// is the reader's: made in the same window, it moves the view on from the reader's place. The reader holds the
+    /// thumb from before the page is drawn again, and the step is made as the bar's timer makes it, between events.
+    @Test
+    void aStepTheBarRepeatsWhileTheReaderHoldsItMovesOnFromTheirPlace() throws Exception {
+        final JScrollBar[] bar = new JScrollBar[1];
+        final Moved w = movedInTheRedraw(page(120), _ -> 200, scroll -> {
+            bar[0] = scroll.getVerticalScrollBar();
+            bar[0].setUI(new Thumbed());
+        }, scroll -> scroll.getVerticalScrollBar().setValue(scroll.getVerticalScrollBar().getValue() + 100),
+                () -> press(bar[0], MouseEvent.MOUSE_PRESSED), () -> press(bar[0], MouseEvent.MOUSE_RELEASED));
+        assertThat(w.from()).as("where the redraw took the view, and the bar stepped").isBetween(0, 199);
+        assertThat(w.by()).as("the step").isEqualTo(100);
+        assertThat(w.top()).as("the reader's place plus the step").isEqualTo(300);
+    }
+
+    /// A second change to the page made in the same window while the reader holds the bar, as a picture put in place
+    /// in a redraw's wake, keeps the reader's place: the views put back are the pane's own moves, not the reader's,
+    /// though the bar is held.
+    @Test
+    void aChangeMadeWhileTheReaderHoldsTheBarKeepsTheirPlace() throws Exception {
+        final JScrollBar[] bar = new JScrollBar[1];
+        final Moved w = movedInTheRedraw(page(120), _ -> 200, scroll -> {
+            bar[0] = scroll.getVerticalScrollBar();
+            bar[0].setUI(new Thumbed());
+        }, scroll -> ((HtmlPane) scroll.getViewport().getView()).anchors(MarkdownHtml.Anchors.gaps(Map.of(1, 80))),
+                () -> press(bar[0], MouseEvent.MOUSE_PRESSED), () -> press(bar[0], MouseEvent.MOUSE_RELEASED));
+        assertThat(w.from()).as("where the redraw took the view, and the page changed again").isBetween(0, 199);
+        assertThat(w.top()).as("the reader's place").isEqualTo(200);
+    }
+
+    /// A link to the heading the view is at already, followed in the same window, takes the view nowhere and is still
+    /// the reader's choice: the view stays at the heading, and is not put back below it for a frame until the caret's
+    /// scroll brings it back. The reader followed the link once and scrolled on below the heading, where the caret
+    /// stayed; the redraw's caret scroll takes the view back up to the heading, and the reader follows the link again.
+    @Test
+    void aLinkToTheHeadingInViewFollowedOnceTheRedrawMovedTheViewStaysThere() throws Exception {
+        final String md = page(20) + "## Notes\n\nSee [the notes](#notes).\n\n" + page(100);
+        final JScrollPane[] pane = new JScrollPane[1];
+        final List<Integer> since = new CopyOnWriteArrayList<>();
+        final Moved w = movedInTheRedraw(md, _ -> 0, scroll -> pane[0] = scroll, scroll -> {
+            followTheLink(scroll, "the notes");
+            scroll.getViewport().addChangeListener(_ -> since.add(scroll.getViewport().getViewPosition().y));
+        }, () -> {
+                    final JViewport vp = pane[0].getViewport();
+                    ((HtmlPane) vp.getView()).scrollToHeading("notes");
+                    final int heading = vp.getViewPosition().y;
+                    SwingUtilities.invokeLater(() -> vp.setViewPosition(new Point(0, heading + 300)));
+                }, () -> {
+                });
+        assertThat(w.from()).as("where the redraw took the view: the heading").isGreaterThan(300);
+        assertThat(w.by()).as("the view is at the heading already").isZero();
+        assertThat(w.top()).as("the heading").isEqualTo(w.from());
+        assertThat(since).as("where the view went once the link was followed: nowhere but the heading")
+                .allMatch(y -> y == w.from());
+    }
+
+    /// Presses or releases, by `id`, the left button on the thumb of `bar`, whose look is [Thumbed].
+    private static void press(final JScrollBar bar, final int id) {
+        final Rectangle thumb = ((Thumbed) bar.getUI()).thumb();
+        bar.dispatchEvent(new MouseEvent(bar, id, 0L, id == MouseEvent.MOUSE_PRESSED ? InputEvent.BUTTON1_DOWN_MASK : 0,
+                thumb.x + thumb.width / 2, thumb.y + thumb.height / 2, 1, false, MouseEvent.BUTTON1));
+    }
+
+    /// Drags the thumb of the horizontal bar of `scroll`, whose look is [Thumbed], 60 px across.
+    private static void dragThumbAcross(final JScrollPane scroll) {
+        final JScrollBar bar = scroll.getHorizontalScrollBar();
+        final Rectangle thumb = ((Thumbed) bar.getUI()).thumb();
+        final int x = thumb.x + thumb.width / 2;
+        final int y = thumb.y + thumb.height / 2;
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, x, y, 1,
+                false, MouseEvent.BUTTON1));
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_DRAGGED, 0L, InputEvent.BUTTON1_DOWN_MASK, x + 60, y, 1,
+                false, MouseEvent.BUTTON1));
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_RELEASED, 0L, 0, x + 60, y, 1, false,
+                MouseEvent.BUTTON1));
+    }
+
+    /// Where the view was when the reader moved it in the redraw, how far the move took it down the page, where it
+    /// ended, the last place on the page drawn again, and where the view ended across the page.
+    private record Moved(int from, int by, int top, int last, int left) {
     }
 
     /// A page of `lines` lines under one heading.
@@ -408,6 +499,18 @@ class HtmlPaneTest {
     /// opens a gap at the top, and runs `reader` once the redraw's events have moved the view off that place.
     private static Moved movedInTheRedraw(final String md, final IntUnaryOperator place,
                                           final Consumer<JScrollPane> prepare, final Consumer<JScrollPane> reader)
+            throws Exception {
+        return movedInTheRedraw(md, place, prepare, reader, () -> {
+        }, () -> {
+        });
+    }
+
+    /// As [#movedInTheRedraw(String, IntUnaryOperator, Consumer, Consumer)], `before` run on the event thread once the
+    /// view is at the place and before the page is drawn again, the place being where the view is once it has run,
+    /// and `after` once the view is put back.
+    private static Moved movedInTheRedraw(final String md, final IntUnaryOperator place,
+                                          final Consumer<JScrollPane> prepare, final Consumer<JScrollPane> reader,
+                                          final Runnable before, final Runnable after)
             throws Exception {
         final HtmlPane[] pane = new HtmlPane[1];
         final JScrollPane[] scroll = new JScrollPane[1];
@@ -425,7 +528,9 @@ class HtmlPaneTest {
         SwingUtilities.invokeAndWait(() -> scroll[0].getViewport().setViewPosition(new Point(0, at)));
         settle();
         assertThat(top(scroll[0])).as("the reader's place").isEqualTo(at);
-        final ReaderInTheRedraw queue = new ReaderInTheRedraw(scroll[0], at, reader);
+        SwingUtilities.invokeAndWait(before);
+        settle();
+        final ReaderInTheRedraw queue = new ReaderInTheRedraw(scroll[0], top(scroll[0]), reader);
         Toolkit.getDefaultToolkit().getSystemEventQueue().push(queue);
         try {
             SwingUtilities.invokeAndWait(() -> {
@@ -436,7 +541,10 @@ class HtmlPaneTest {
         } finally {
             queue.done();
         }
-        return new Moved(queue.from, queue.by, top(scroll[0]), last(scroll[0]));
+        SwingUtilities.invokeAndWait(after);
+        final int[] left = new int[1];
+        SwingUtilities.invokeAndWait(() -> left[0] = scroll[0].getViewport().getViewPosition().x);
+        return new Moved(queue.from, queue.by, top(scroll[0]), last(scroll[0]), left[0]);
     }
 
     /// Turns the wheel on `scroll` three units down.
@@ -459,13 +567,13 @@ class HtmlPaneTest {
                 MouseEvent.BUTTON1));
     }
 
-    /// Double-clicks the link to the notes on the page `scroll` shows.
-    private static void followTheNotes(final JScrollPane scroll) {
+    /// Double-clicks the link whose text is `text` on the page `scroll` shows.
+    private static void followTheLink(final JScrollPane scroll, final String text) {
         final HtmlPane pane = (HtmlPane) scroll.getViewport().getView();
         final Rectangle2D r;
         try {
             final String shown = pane.getDocument().getText(0, pane.getDocument().getLength());
-            r = pane.modelToView2D(shown.indexOf("the notes") + 3);
+            r = pane.modelToView2D(shown.indexOf(text) + 3);
         } catch (final BadLocationException e) {
             throw new IllegalStateException(e);
         }
