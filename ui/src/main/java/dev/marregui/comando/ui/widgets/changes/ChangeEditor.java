@@ -2,12 +2,14 @@ package dev.marregui.comando.ui.widgets.changes;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
+import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -163,6 +165,22 @@ public final class ChangeEditor implements Unmountable {
     private boolean following;
     /** Whether the reader scrolled a rendered side, by wheel, bar or keys, since the sides were last rendered. */
     private boolean readerScrolled;
+    /**
+     * How far the reader's own scrolls moved {@code HEAD}'s and the working tree's rendered sides since they were last
+     * rendered: moves made while the reader's input is dispatched, the other side's following included. The page's
+     * own moves, the caret's scroll among them, are not in it.
+     */
+    private int headReaderMoved;
+    private int treeReaderMoved;
+    /**
+     * Where a thumb the reader placed put each side since they were last rendered, the reader's movement counted from
+     * there; -1 when none did.
+     */
+    private int headPlaced = -1;
+    private int treePlaced = -1;
+    /** Where each side's bar was last seen, so a move is measured from there. */
+    private int headSeen;
+    private int treeSeen;
     /** The gaps open on {@code HEAD}'s rendered side, in points, by the line of the block below each. */
     private final Map<Integer, Integer> headGaps = new HashMap<>();
     /** The gaps open on the working tree's rendered side. */
@@ -658,6 +676,10 @@ public final class ChangeEditor implements Unmountable {
         // a new page shows its top, and opening a gap keeps the view where it is: the view goes back once they are
         // open, unless the reader scrolled meanwhile, whose place wins
         readerScrolled = false;
+        headReaderMoved = 0;
+        treeReaderMoved = 0;
+        headPlaced = -1;
+        treePlaced = -1;
         afterLevel = () -> {
             if (!readerScrolled) {
                 headBar.setValue(headAt);
@@ -669,7 +691,10 @@ public final class ChangeEditor implements Unmountable {
         // kept is shown again before then, so a scroll made while the sides level starts from it
         Edt.later(() -> {
             if (keepPlace) {
-                keep(headBar, headAt, treeBar, treeAt);
+                // a side the reader scrolled before the place is shown again, before or after the caret's scroll moved
+                // it: the place, or where the reader placed the thumb, plus how far the reader moved it
+                keep(headBar, (headPlaced >= 0 ? headPlaced : headAt) + headReaderMoved, treeBar,
+                        (treePlaced >= 0 ? treePlaced : treeAt) + treeReaderMoved);
             }
             Edt.later(this::level);
         });
@@ -902,8 +927,36 @@ public final class ChangeEditor implements Unmountable {
         sides.add(titled("Working tree", treeRendered.component()));
         final BoundedRangeModel a = headRendered.scroll().getVerticalScrollBar().getModel();
         final BoundedRangeModel b = treeRendered.scroll().getVerticalScrollBar().getModel();
-        a.addChangeListener(e -> follow(a, b));
-        b.addChangeListener(e -> follow(b, a));
+        headSeen = a.getValue();
+        treeSeen = b.getValue();
+        a.addChangeListener(e -> {
+            final int now = a.getValue();
+            // a press that only sets the bar adjusting moves nothing
+            if (now != headSeen && EventQueue.getCurrentEvent() instanceof InputEvent input) {
+                if (HtmlPane.placesTheThumb(input)) {
+                    headPlaced = now;
+                    headReaderMoved = 0;
+                } else {
+                    headReaderMoved += now - headSeen;
+                }
+            }
+            headSeen = now;
+            follow(a, b);
+        });
+        b.addChangeListener(e -> {
+            final int now = b.getValue();
+            // a press that only sets the bar adjusting moves nothing
+            if (now != treeSeen && EventQueue.getCurrentEvent() instanceof InputEvent input) {
+                if (HtmlPane.placesTheThumb(input)) {
+                    treePlaced = now;
+                    treeReaderMoved = 0;
+                } else {
+                    treeReaderMoved += now - treeSeen;
+                }
+            }
+            treeSeen = now;
+            follow(b, a);
+        });
         // the reader's own scrolls, told from the moves levelling makes: a scroll by wheel or trackpad, on the bar, or
         // by the keys that move the page up or down, which holds the keyboard; a copy or any other key moves nothing
         final MouseAdapter onBar = new MouseAdapter() {

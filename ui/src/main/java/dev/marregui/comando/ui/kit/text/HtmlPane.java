@@ -672,11 +672,11 @@ public final class HtmlPane extends JEditorPane {
     }
 
     /**
-     * Whether {@code input} puts the thumb of a scroll bar where the reader points: a drag of the thumb, or a press
-     * on the track where the look and feel moves the thumb to the press (the middle button). A press of the left
-     * button on the track steps a page.
+     * Whether a move of a scroll bar made while {@code input} is dispatched puts its thumb where the reader points: a
+     * drag of the thumb, or a press where the look and feel moves the thumb to the press (the middle button). A press
+     * of the left button on the track steps a page. Only a move says so: a press that moves nothing is not one.
      */
-    private static boolean placesTheThumb(final InputEvent input) {
+    public static boolean placesTheThumb(final InputEvent input) {
         return input instanceof MouseEvent m && m.getSource() instanceof JScrollBar
                 && (m.getID() == MouseEvent.MOUSE_DRAGGED
                 || m.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isMiddleMouseButton(m));

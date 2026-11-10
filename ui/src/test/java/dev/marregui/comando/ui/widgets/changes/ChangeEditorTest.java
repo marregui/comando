@@ -1,10 +1,15 @@
 package dev.marregui.comando.ui.widgets.changes;
 
+import java.awt.AWTEvent;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.EventQueue;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.nio.file.Path;
@@ -19,11 +24,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import javax.swing.JLabel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Document;
@@ -417,6 +425,162 @@ class ChangeEditorTest {
         }
     }
 
+    /// A wheel scroll that lands between the event that shows the sides read again and the one that shows their place
+    /// again, before the caret's scroll to the top, moves the reader from their place: the view ends at the place plus
+    /// the scroll, though the caret's scroll moved it since. The queue turns the wheel right after the event in which
+    /// the new texts are shown, where the reader's input lands when the comparison is worked out before it arrives.
+    @Test
+    void aScrollMadeBeforeThePlaceIsShownAgainStartsFromIt() throws Exception {
+        final WheelOnceShown w = wheeledOnceShown(false, ChangeEditorTest::wheeled);
+        assertThat(w.from).as("the place, as the texts were shown").isEqualTo(200);
+        assertThat(w.to - w.from).as("the wheel scrolled down the page").isGreaterThan(100);
+        assertThat(w.head).as("the place plus the scroll").isEqualTo(200 + w.to - w.from);
+    }
+
+    /// The same scroll, made once the caret's scroll has taken the view to the top: the view ends at the place plus
+    /// the scroll, not where the wheel took it from the top.
+    @Test
+    void aScrollMadeAfterTheCaretsScrollStartsFromThePlace() throws Exception {
+        final WheelOnceShown w = wheeledOnceShown(true, ChangeEditorTest::wheeled);
+        assertThat(w.from).as("where the caret's scroll took the view").isLessThan(100);
+        assertThat(w.to - w.from).as("the wheel scrolled down the page").isGreaterThan(100);
+        assertThat(w.head).as("the place plus the scroll").isEqualTo(200 + w.to - w.from);
+    }
+
+    /// A thumb dragged once the caret's scroll has taken the view to the top puts the view where it was dragged: a
+    /// drag places the view, so it is not a step taken from the place.
+    @Test
+    void aThumbDraggedAfterTheCaretsScrollStaysWhereItWasDragged() throws Exception {
+        final WheelOnceShown w = wheeledOnceShown(true, ChangeEditorTest::dragged);
+        assertThat(w.from).as("where the caret's scroll took the view").isLessThan(100);
+        assertThat(w.to - w.from).as("the drag moved the view down the page").isGreaterThan(100);
+        assertThat(w.head).as("where the thumb was dragged").isEqualTo(w.to);
+    }
+
+    /// A middle press on the thumb once the caret's scroll has taken the view to the top moves nothing, and the place
+    /// is kept: the press sets the bar adjusting, which is not a move.
+    @Test
+    void aMiddlePressThatMovesNothingAfterTheCaretsScrollKeepsThePlace() throws Exception {
+        final WheelOnceShown w = wheeledOnceShown(true, ChangeEditorTest::middlePressed);
+        assertThat(w.from).as("where the caret's scroll took the view").isLessThan(100);
+        assertThat(w.to).as("the press moved nothing").isEqualTo(w.from);
+        assertThat(w.head).as("the place").isEqualTo(200);
+    }
+
+    /// Presses and releases the middle button on the thumb of the vertical bar of {@code scroll}, whose look is
+    /// [Thumbed]; where its view is then.
+    private static int middlePressed(final JScrollPane scroll) {
+        final JScrollBar bar = scroll.getVerticalScrollBar();
+        final Rectangle thumb = ((Thumbed) bar.getUI()).thumb();
+        final int x = thumb.x + thumb.width / 2;
+        final int y = thumb.y + thumb.height / 2;
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON2_DOWN_MASK, x, y, 1,
+                false, MouseEvent.BUTTON2));
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_RELEASED, 0L, 0, x, y, 1, false, MouseEvent.BUTTON2));
+        return bar.getValue();
+    }
+
+    /// Drags the thumb of the vertical bar of {@code scroll}, whose look is [Thumbed], 60 px down; where its view is
+    /// then.
+    private static int dragged(final JScrollPane scroll) {
+        final JScrollBar bar = scroll.getVerticalScrollBar();
+        final Rectangle thumb = ((Thumbed) bar.getUI()).thumb();
+        final int x = thumb.x + thumb.width / 2;
+        final int y = thumb.y + thumb.height / 2;
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, x, y, 1,
+                false, MouseEvent.BUTTON1));
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_DRAGGED, 0L, InputEvent.BUTTON1_DOWN_MASK, x, y + 60, 1,
+                false, MouseEvent.BUTTON1));
+        bar.dispatchEvent(new MouseEvent(bar, MouseEvent.MOUSE_RELEASED, 0L, 0, x, y + 60, 1, false,
+                MouseEvent.BUTTON1));
+        return bar.getValue();
+    }
+
+    /// A scroll bar's look that tells where its thumb is, and moves the thumb to a middle press, as comando's look
+    /// does.
+    private static final class Thumbed extends BasicScrollBarUI {
+        Rectangle thumb() {
+            return getThumbBounds();
+        }
+
+        @Override
+        public boolean getSupportsAbsolutePositioning() {
+            return true;
+        }
+    }
+
+    /// Reads the sides of a long page again with the view at 200, HEAD's bar in the look [Thumbed], and moves HEAD's
+    /// view by {@code reader} once the new texts are shown, and once the caret's scroll has moved the view off the
+    /// place too when {@code afterTheCaret}; the queue, with where HEAD's view ended once levelled.
+    private WheelOnceShown wheeledOnceShown(final boolean afterTheCaret, final ToIntFunction<JScrollPane> reader)
+            throws Exception {
+        final String tail = paragraphs(80);
+        final String after = "One.\n\nAdded.\n\n" + tail + "Tail.\n";
+        final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        levelled(e);
+        run(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().setUI(new Thumbed()));
+        scroll(e, 0, 200);
+        final WheelOnceShown queue = new WheelOnceShown(e, after, afterTheCaret ? 200 : -1, reader);
+        Toolkit.getDefaultToolkit().getSystemEventQueue().push(queue);
+        try {
+            run(e, x -> {
+                queue.armed = true;
+                x.show(new ChangeTexts(x.root(), x.change(), x.shown().before(), after, ""), true);
+            });
+            await().atMost(Duration.ofSeconds(10)).until(() -> on(e, x -> x.diff().right().getText().equals(after)));
+            levelled(e);
+        } finally {
+            queue.done();
+        }
+        queue.head = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
+        assertLevel(e, "Paragraph 20.");
+        return queue;
+    }
+
+    /// The event queue of [#wheeledOnceShown]: once armed, it moves HEAD's view by its reader right after the first
+    /// event that leaves `after` shown and, when `place` is not negative, HEAD's view off `place`; it records where
+    /// the view was then and where the reader took it. Its fields are written on the event thread, and read by the
+    /// test thread once `invokeAndWait` has returned behind the queue's events, which orders those reads after the
+    /// writes.
+    private static final class WheelOnceShown extends EventQueue {
+        private final ChangeEditor editor;
+        private final String after;
+        private final int place;
+        private final ToIntFunction<JScrollPane> reader;
+        private boolean armed;
+        private int from = -1;
+        private int to = -1;
+        private int head = -1;
+
+        WheelOnceShown(final ChangeEditor editor, final String after, final int place,
+                       final ToIntFunction<JScrollPane> reader) {
+            this.editor = editor;
+            this.after = after;
+            this.place = place;
+            this.reader = reader;
+        }
+
+        @Override
+        protected void dispatchEvent(final AWTEvent event) {
+            super.dispatchEvent(event);
+            if (!armed || !editor.diff().right().getText().equals(after)) {
+                return;
+            }
+            final JScrollPane scroll = editor.sides().get(0).scroll();
+            if (place < 0 || scroll.getVerticalScrollBar().getValue() != place) {
+                armed = false;
+                from = scroll.getVerticalScrollBar().getValue();
+                to = reader.applyAsInt(scroll);
+            }
+        }
+
+        /// Gives the queue's events back to the queue it was pushed on.
+        void done() {
+            pop();
+        }
+    }
+
     /// Runs {@code task} on the event thread behind {@code events} events posted one after another, each when the one
     /// before it runs.
     private static void later(final int events, final Runnable task) {
@@ -476,20 +640,35 @@ class ChangeEditorTest {
     }
 
     /// Renders the sides again, does {@code input} on the head side in the event after and moves its view to 300
-    /// there, as the reader's scroll does; the head side's place once levelled.
+    /// there, inside a dispatched input event as the reader's scroll is, so the page tells it from its own moves
+    /// whatever the levelling has queued by then; the head side's place once levelled.
     private static int movedWhileLevelling(final ChangeEditor e, final Consumer<RenderedMarkdown> input)
             throws Exception {
         run(e, x -> {
             x.toggleRendered();
             x.toggleRendered();
         });
-        run(e, x -> {
+        run(e, x -> asInput(() -> {
             final RenderedMarkdown head = x.sides().get(0);
             input.accept(head);
             head.scroll().getVerticalScrollBar().setValue(300);
-        });
+        }));
         levelled(e);
         return on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
+    }
+
+    /// Runs {@code move} while a mouse click is dispatched, as the reader's input runs: the click's component is
+    /// nowhere on the screen and does nothing else.
+    private static void asInput(final Runnable move) {
+        final JLabel hand = new JLabel();
+        hand.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(final MouseEvent click) {
+                move.run();
+            }
+        });
+        hand.dispatchEvent(new MouseEvent(hand, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 0, 0, 1,
+                false, MouseEvent.BUTTON1));
     }
 
     /// A scroll lands on the other side where the blocks both keep say: at a block, on that block; between two, the
