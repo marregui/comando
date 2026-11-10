@@ -57,6 +57,20 @@ data; a window test without a data root keeps its settings in memory, and the ea
 under a node of its own. The modules test side by side (`gradle.properties`), each in up to three JVMs; `:app:uiTest`
 runs one JVM per test class, one at a time, as its windows share one desktop.
 
+One `:app:uiTest` JVM runs at a time on the machine, across checkouts, users and direct `./gradlew` runs. Each of its
+JVMs takes an exclusive lock on `/tmp/comando/uiTest.lock` (on Windows, `comando\uiTest.lock` under `java.io.tmpdir`,
+which may be per user: unchecked) when JUnit opens its launcher session; folder and file are writable by everyone, so
+another user's run can open them, and neither is ever reached through a symbolic link. A JVM that has to wait writes
+`waiting for another uiTest JVM to end [lock=…]` to its standard error every 30 s, which is in the HTML report, and
+fails after 30 min with the lock's path in the message. No code releases the lock: the kernel frees it when the JVM
+ends, however it ends, so a killed run never leaves it held. Plain `test` takes no lock; the `comando.uiTests` property that `uiTest` sets switches it on
+(`app/uilock/UiTestLock`, proved by `UiTestLockTest`).
+
+The build cache is on (`org.gradle.caching=true`): task outputs are kept in `~/.gradle/caches/build-cache-1` and reused
+by any checkout whose inputs match, so a second clone at the same commit compiles from the cache. `uiTest` is never
+taken from the cache and never up to date: what it checks is the desktop, which is no input. The wrapper pins Gradle
+9.9.1 and the distribution's SHA-256.
+
 ### 2.1 The window tests
 
 `:app:uiTest` runs the test classes that open the real window. Each is skipped outside that task
@@ -82,7 +96,7 @@ runs one JVM per test class, one at a time, as its windows share one desktop.
 | `LowerDividerUiTest` | the divider above the lower panel is each panel's own ([record 115](adr/0115-the-lower-divider-per-panel.md)) |
 | `LocateUiTest` | a panel's Locate button selects its file in the Files tab or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
 | `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |
-| `LayoutKeeperUiTest` | the sidebar's width kept in `settings.json` comes back at the start (a value that is no number gives the default); a session's arrangement hides the sidebar to its rail and shows it again at its kept width; the width left is saved a second after the window last changed size and the next window opens with it |
+| `LayoutKeeperUiTest` | the sidebar's width kept in `settings.json` comes back at the start (a value that is no number gives the default); a session's arrangement hides the sidebar to its rail and shows it again at its kept width; the width left is saved a second after the window last changed size and the next window opens with it; a close without the quit flow, as on the shutdown hook's path, keeps a width moved just before |
 | `QuitTeardownUiTest` | a step of the window's teardown or close that throws stops neither the quit nor the closing of the window's errands |
 | `AttentionUiTest` | a turn that ends behind another panel puts its session under To read in the Sessions tab and the work list; a click on the line focuses its panel and the mark goes ([record 136](adr/0136-finished-work-waits-to-be-read.md)) |
 | `ReportFirstUiTest` | a turn of tools and a report folds to one row; a click opens it and a second closes it; a find opens a closed row and closes it when it moves on; asking for the report puts it at the view's top ([record 137](adr/0137-a-turn-reads-as-its-report.md)) |
@@ -90,6 +104,7 @@ runs one JVM per test class, one at a time, as its windows share one desktop.
 | `SearchUiTest` | ⌘⇧F opens the Search view in the side pane with the keyboard in its field, and typing lists a hit under its folder, file and heading; ↓ shows the hit in the preview tab, every hit marked, the keyboard kept in the rows, and F7 walks the hits; ⏎ keeps the preview tab; the selection fills the field; the toggles decide what is searched; the Find menu and the palette hold the command; a conversation a session holds opens there with the transcript's Find on the query, another offers Import ([record 139](adr/0139-one-window-finds-in-files-and-conversations.md), [record 141](adr/0141-the-right-side-is-a-partition-of-the-workspace.md)) |
 | `DeliverablesUiTest` | the Files written view lists a session's two written files in order, the first gold; Enter opens it in the preview tab and the row turns plain ([record 143](adr/0143-a-session-lists-the-files-it-wrote.md)) |
 | `TranscriptAboveUiTest` | a session's panel in front puts the lower area above it and a file puts it back below, at the same height; turned off in `settings.json`, or by an arrangement as `ui_set_layout` sends, it stays below ([record 144](adr/0144-the-transcript-sits-above-the-prompt.md)) |
+| `TranscriptFollowUiTest` | a prompt run from a session's panel while the Session tab is scrolled up lands in view, though the session's next block follows it at once, and the answer streaming under it stays in view; sent while the tab is hidden, the end shows when the tab is shown again |
 | `PartitionUiTest` | a panel and the Changes view go to the right side by their tab's menu and back; a file moved there leaves the lower panel shown, at a side view's width; ⌘1 to ⌘3 go to the main tabs' panels, then the right side's; ⌘W and ⌘⇧T close and bring back a side panel; the partition follows a theme chosen while it was hidden; a side panel and the side views come back after a restart, the layout saved by the close ([record 141](adr/0141-the-right-side-is-a-partition-of-the-workspace.md)) |
 | `CompareKeysUiTest` | F7 and ⇧F7 walk the differences of the comparison window a changed file opens in |
 | `FocusRouterUiTest` | a view opened in the lower area while the keyboard is in a panel's text takes nothing from it, and closing it in the background moves nothing ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |

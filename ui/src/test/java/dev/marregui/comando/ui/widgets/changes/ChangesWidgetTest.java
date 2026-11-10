@@ -1,14 +1,20 @@
 package dev.marregui.comando.ui.widgets.changes;
 
 import java.awt.Component;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.swing.Action;
+import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JTree;
+import javax.swing.KeyStroke;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
 
@@ -31,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - repositories of one name are told apart by path; an unreadable one says why
 /// - one path deleted from the index and untracked is two rows
 /// - everything comes open; selecting a file follows its comparison and activating it opens it
+/// - F7 and ⇧F7 select the next and the previous file, past the rows of folders and groups, and stop at the ends
 /// - a new read keeps what the user closed and selected, sends nothing, and an unmounted widget follows no more
 /// - the selection's menu rolls back or removes every file in it after one question
 @ExtendWith(OnEdt.class)
@@ -148,6 +155,31 @@ class ChangesWidgetTest {
         assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().getFirst(), ChangeAsk.OPEN));
     }
 
+    /// With nothing selected F7 selects the first file; then F7 selects the next file, past the Untracked group's
+    /// and its folder's rows, each move following its comparison; F7 on the last file keeps it, and ⇧F7 goes back.
+    @Test
+    void f7AndShiftF7SelectTheNextAndThePreviousFile() {
+        final ChangesWidget w = widget();
+        changes.set(List.of(REPO));
+        final JTree tree = w.tree().tree();
+        final KeyStroke next = KeyStroke.getKeyStroke(KeyEvent.VK_F7, 0);
+        final KeyStroke previous = KeyStroke.getKeyStroke(KeyEvent.VK_F7, InputEvent.SHIFT_DOWN_MASK);
+
+        assertThat(press(tree, next)).as("F7 is the view's own key").isTrue();
+        assertThat(selectedLabel(tree)).isEqualTo("A.java");
+        press(tree, next);
+        assertThat(selectedLabel(tree)).isEqualTo("B.java");
+        sent.clear();
+        press(tree, next);
+        assertThat(selectedLabel(tree)).as("past the group's and the folder's rows").isEqualTo("x.md");
+        assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().get(3), ChangeAsk.FOLLOW));
+        press(tree, next);
+        press(tree, next);
+        assertThat(selectedLabel(tree)).as("the last file stays").isEqualTo("README.md");
+        assertThat(press(tree, previous)).as("⇧F7 is the view's own key").isTrue();
+        assertThat(selectedLabel(tree)).isEqualTo("x.md");
+    }
+
     /// A new read keeps a closed group closed and the selection selected without sending an intent; after unmount,
     /// reads no longer change the tree.
     @Test
@@ -218,6 +250,21 @@ class ChangesWidgetTest {
         assertThat(items(one)).containsExactly("Compare with HEAD", "Roll back README.md to HEAD…", "Move to the Trash…");
         assertThat(one.getComponents()).filteredOn(c -> c instanceof JMenuItem m && m.getText().equals("Move to the Trash…"))
                 .as("a removed file is not removed again").allMatch(c -> !c.isEnabled());
+    }
+
+    /// Runs `tree`'s own binding for `key`, as a key typed in it would; false when it has none.
+    private static boolean press(final JTree tree, final KeyStroke key) {
+        final Object name = tree.getInputMap(JComponent.WHEN_FOCUSED).get(key);
+        final Action a = name == null ? null : tree.getActionMap().get(name);
+        if (a == null) {
+            return false;
+        }
+        a.actionPerformed(new ActionEvent(tree, ActionEvent.ACTION_PERFORMED, String.valueOf(name)));
+        return true;
+    }
+
+    private static String selectedLabel(final JTree tree) {
+        return tree.getSelectionPath() == null ? "" : node(tree.getSelectionPath()).label();
     }
 
     private static ViewSpec.TreeNode node(final TreePath p) {

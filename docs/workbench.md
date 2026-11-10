@@ -816,7 +816,9 @@ changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-dou
   open; what the user closed and selected stays.
 - **Comparing.** A double click or Enter on a file, or Compare with HEAD in its menu, opens it side by side with its
   `HEAD` version in one window floating over comando's, reused for every file; moving the selection moves an open
-  window along without taking the keyboard. Lost lines are red, gained lines green, and the words that changed inside
+  window along without taking the keyboard. F7 and ⇧F7 in the view select the next and the previous file, past the
+  rows of repositories, groups and folders, and stop at the last and the first; an open comparison follows. Lost lines
+  are red, gained lines green, and the words that changed inside
   a changed stretch are marked; a band joins each difference across; scrolling one side scrolls the other to the
   matching line. F7 and ⇧F7 go from difference to difference, Esc closes. While it shows, the file is read again every
   3 s, so a session's edits show where the user scrolled to. The line match stops after 2 s and the texts are then

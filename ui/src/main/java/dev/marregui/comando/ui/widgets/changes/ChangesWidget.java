@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.widgets.changes;
 
 import java.awt.Color;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,6 +19,8 @@ import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
+import javax.swing.JTree;
+import javax.swing.KeyStroke;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -122,6 +126,11 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         tree.colors(this::color);
         tree.onActivate(n -> compare(n, ChangeAsk.OPEN));
         tree.onMenu(this::menu);
+        // as the comparison window's F7 walks one file's differences, the view's walks the files; the comparison shown
+        // follows the selection
+        ChangeEditor.bind(tree.tree(), KeyStroke.getKeyStroke(KeyEvent.VK_F7, 0), "nextChange", () -> stepFile(1));
+        ChangeEditor.bind(tree.tree(), KeyStroke.getKeyStroke(KeyEvent.VK_F7, InputEvent.SHIFT_DOWN_MASK), "previousChange",
+                () -> stepFile(-1));
         tree.tree().addTreeSelectionListener(e -> {
             if (!rendering && tree.tree().getSelectionCount() == 1) {
                 compare(tree.selected(), ChangeAsk.FOLLOW);
@@ -196,6 +205,26 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
             }
         } finally {
             rendering = false;
+        }
+    }
+
+    /**
+     * Selects the first file's row shown after the selection, {@code by} 1, or before it, -1, past the rows of
+     * repositories, groups and folders; with nothing selected, the first file or the last. Past the last file or the
+     * first the selection stays, as the comparison window's F7 stays on the last difference.
+     */
+    private void stepFile(final int by) {
+        final JTree t = tree.tree();
+        // -1 with nothing selected
+        final int from = by > 0 ? t.getMaxSelectionRow() : t.getMinSelectionRow();
+        int row = from >= 0 || by > 0 ? from : t.getRowCount();
+        for (row += by; row >= 0 && row < t.getRowCount(); row += by) {
+            final Object shown = ((DefaultMutableTreeNode) t.getPathForRow(row).getLastPathComponent()).getUserObject();
+            if (shown instanceof ViewSpec.TreeNode n && targets.containsKey(n.link())) {
+                t.setSelectionRow(row);
+                t.scrollRowToVisible(row);
+                return;
+            }
         }
     }
 

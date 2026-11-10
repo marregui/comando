@@ -876,8 +876,8 @@ class TranscriptFoldTest {
     }
 
     /// A row forms open under a reader in a transcript never laid out whole, so one slice of layout reaches only the
-    /// first of the steps above the view: every frame painted while the row forms, the frames in which the view moves to
-    /// keep the step in view in place included, draws that step where it was.
+    /// first of the steps above the view: every frame painted while the row forms, the frames in which the view moves
+    /// to keep the step in view in place included, draws that step where it was.
     @Test
     void everyFrameDrawsTheStepInViewInItsPlaceWhileItsRowForms() {
         slowTurn();

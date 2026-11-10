@@ -84,6 +84,26 @@ class LayoutKeeperUiTest {
         }
     }
 
+    /// The application closed with no quit flow, as on the shutdown hook's path, keeps a width moved the moment before,
+    /// with no change of the window's size to start the save's timer: `settings.json` holds it once the close returns.
+    @Test
+    void aCloseWithoutTheQuitFlowKeepsTheWidthMovedJustBefore() throws Exception {
+        final Path data = Files.createDirectories(home.resolve("data"));
+        Files.writeString(data.resolve("settings.json"), "{\"version\": 1, \"divider.sidebar\": 333}");
+        try (final App _ = start("layout-close")) {
+            final JSplitPane outer = outer();
+            Awaitility.await("restored at its kept width").atMost(WAIT)
+                    .until(() -> onEdt(outer::getDividerLocation) == 333);
+            onEdt(() -> {
+                outer.setDividerLocation(310);
+                return null;
+            });
+            Awaitility.await("the move heard").atMost(WAIT).until(() -> onEdt(outer::getDividerLocation) == 310);
+        }
+        assertThat(Files.readString(data.resolve("settings.json"))).as("written by the close")
+                .matches("(?s).*\"divider\\.sidebar\"\\s*:\\s*310\\b.*");
+    }
+
     private App start(final String name) {
         final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 name, () -> {

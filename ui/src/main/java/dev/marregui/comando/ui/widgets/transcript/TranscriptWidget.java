@@ -99,6 +99,11 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private boolean following = true;
     /** {@link #showReport} was asked while the pane was not on screen: the report shows when the pane does. */
     private boolean reportAsked;
+    /**
+     * A scroll to the end is queued and has not run: until it runs the bar still shows the old place, which says
+     * nothing about where the reader wants to be, so a change meanwhile does not read {@link #following} off it.
+     */
+    private boolean endQueued;
     private int barMaximum = -1;
     private int barExtent = -1;
     private List<Approval> waiting = List.of();
@@ -129,7 +134,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
                 if (reportAsked) {
                     SwingUtilities.invokeLater(this::scrollToReport);
                 } else if (following) {
-                    SwingUtilities.invokeLater(this::scrollToEndIfFollowing);
+                    queueEnd();
                 }
             }
         });
@@ -198,7 +203,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         strip.show(transcript == null ? List.of() : canvas.runningAgents(), tasks);
         if (shown != strip.isVisible() && following) {
             // the strip took or gave back a line of the view: a transcript that followed its end still shows it
-            SwingUtilities.invokeLater(this::scrollToEndIfFollowing); // after the layout the change asked for
+            queueEnd(); // after the layout the change asked for
         }
     }
 
@@ -246,13 +251,14 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         canvas.setBackgroundTasks(tasks);
         following = true;
         reportAsked = false;
+        endQueued = false;
         built = 0;
         updateLatest();
         updateStrip();
     }
 
     private void sync() {
-        if (scroll.isShowing()) {
+        if (scroll.isShowing() && !endQueued) {
             following = atEnd();
         }
         boolean follow = following;
@@ -278,24 +284,40 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         updateLatest();
         updateStrip();
         if (follow) {
+            queueEnd();
+        }
+    }
+
+    /** Queues one scroll to the end, after the layout the changes so far asked for; one already queued serves. */
+    private void queueEnd() {
+        if (!endQueued) {
+            endQueued = true;
             SwingUtilities.invokeLater(this::scrollToEndIfFollowing);
         }
     }
 
-    /** A scroll queued while following; a report asked for since then stopped the following, and stays in view. */
+    /**
+     * A scroll queued while following; the reader scrolling away, or a report asked for, since then stopped the
+     * following, and the view stays where it is.
+     */
     private void scrollToEndIfFollowing() {
+        endQueued = false;
         if (following) {
             scrollToEnd();
         }
     }
 
-    /** A change of the bar's value alone is the user scrolling; a change of its range is content or the viewport. */
+    /**
+     * A change of the bar's value alone is the user scrolling; a change of its range is content or the viewport. While
+     * a scroll to the end is queued, a move says nothing either: the canvas keeps the block in view in its place as rows
+     * become exact, and the queued scroll runs at the next event.
+     */
     private void barChanged() {
         final JScrollBar bar = scroll.getVerticalScrollBar();
         final boolean ranged = bar.getMaximum() != barMaximum || bar.getVisibleAmount() != barExtent;
         barMaximum = bar.getMaximum();
         barExtent = bar.getVisibleAmount();
-        if (ranged || !scroll.isShowing()) {
+        if (ranged || !scroll.isShowing() || endQueued) {
             return;
         }
         following = atEnd();

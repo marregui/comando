@@ -26,6 +26,8 @@ dependencies {
     testImplementation(libs.jediterm.ui)
     testImplementation(libs.awaitility)
     testImplementation(libs.archunit)
+    // the uiTest lock is a launcher session listener in the test sources
+    testImplementation(libs.junit.launcher)
 }
 
 // no test of this module joins the comando Edge or the machine's QuestDB: a developer's own comando may be running them
@@ -134,11 +136,14 @@ val uiTest = tasks.register<Test>("uiTest") {
         "**/QuestionLaterUiTest.class",
         "**/DeliverablesUiTest.class",
         "**/TranscriptAboveUiTest.class",
+        "**/TranscriptFollowUiTest.class",
         "**/TerminalToolsUiTest.class",
     )
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1
     systemProperty("java.awt.headless", "false")
+    // also switches on the machine-wide lock (uilock.UiTestLock): each JVM of this task waits for any other uiTest JVM on
+    // the machine, of any checkout or user, to end
     systemProperty("comando.uiTests", "true")
     // ThemeFadeUiTest writes the window in the light theme to this PNG when it is given: -Pcomando.lightShot=<file>
     providers.gradleProperty("comando.lightShot").orNull?.let { systemProperty("comando.lightShot", it) }
@@ -147,6 +152,10 @@ val uiTest = tasks.register<Test>("uiTest") {
     systemProperty("apple.awt.UIElement", "true")
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
+    // never from the build cache: what it checks is the desktop and the windows it opens, which are no input
+    outputs.cacheIf { false }
+    // and never up to date: a second run without changes still opens the windows and checks them
+    outputs.upToDateWhen { false }
 }
 
 

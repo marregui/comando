@@ -147,11 +147,14 @@ final class Commands {
         cmd("view.findNext", "Find next", key(KeyEvent.VK_G, shortcut), () -> findBar.next(true), () -> findBar.isOpen());
         cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, shortcut | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
         cmd("view.findInFiles", "Find in files…", key(KeyEvent.VK_F, shortcut | SHIFT), this::toggleSearch);
-        // the search's hits, while the preview tab or the Search view has the keyboard; a changed file's differences
-        // are walked in the comparison window, a window of its own, which keeps its own F7
-        cmd("view.nextHit", "Next hit", key(KeyEvent.VK_F7, 0), () -> parts.searchHub().step(1), this::onHits);
-        cmd("view.previousHit", "Previous hit", key(KeyEvent.VK_F7, SHIFT), () -> parts.searchHub().step(-1),
-                this::onHits);
+        // the search's hits, while the preview tab or the Search view has the keyboard; elsewhere the focused view's
+        // own F7, as the Changes view's files; a changed file's differences are walked in the comparison window, a
+        // window of its own, which keeps its own F7
+        final KeyStroke nextHit = key(KeyEvent.VK_F7, 0);
+        final KeyStroke previousHit = key(KeyEvent.VK_F7, SHIFT);
+        cmd("view.nextHit", "Next hit", nextHit, () -> hitOrOwn(1, nextHit, true), () -> hitOrOwn(1, nextHit, false));
+        cmd("view.previousHit", "Previous hit", previousHit, () -> hitOrOwn(-1, previousHit, true),
+                () -> hitOrOwn(-1, previousHit, false));
         final KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
         cmd("edit.complete", "Complete SQL", complete, () -> Keys.forward(focus.editorArea(), complete, true),
                 () -> focus.editorFocused() && Keys.forward(focus.editorArea(), complete, false));
@@ -451,6 +454,21 @@ final class Commands {
         final Component c = focus.focusOwnerInFrame();
         return c != null && SwingUtilities.getAncestorOfClass(EditorPanel.class, c) instanceof EditorPanel p
                 && s.panel(p.panel().id()).map(PanelState::preview).orElse(false);
+    }
+
+    /**
+     * F7 or ⇧F7, {@code by} 1 or -1: the search's next or previous hit where there are hits, else the focused
+     * component's own binding for {@code key}, as the Changes view's next or previous file; run only when
+     * {@code run}. False when neither has it, so the key reaches the comparison window, whose F7 is its root's.
+     */
+    private boolean hitOrOwn(final int by, final KeyStroke key, final boolean run) {
+        if (onHits()) {
+            if (run) {
+                parts.searchHub().step(by);
+            }
+            return true;
+        }
+        return Keys.forward(editTarget(), key, run);
     }
 
     private Optional<SessionState> focusedSession() {

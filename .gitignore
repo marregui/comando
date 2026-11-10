@@ -10,3 +10,5 @@ logs/
 logs
 test-report.xml
 __pycache__/
+# JVM crash dumps
+hs_err_pid*.log

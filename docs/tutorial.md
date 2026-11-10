@@ -450,7 +450,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘K | show or hide Uncommitted changes in the side pane |
 | ⌘F, ⌘G ⌘⇧G | find in the view, next, previous |
 | ⌘⇧F | find in files and conversations |
-| F7 / ⇧F7 | the next / previous hit of the search, from the Search view or the preview tab |
+| F7 / ⇧F7 | the next / previous hit of the search, from the Search view or the preview tab; the next / previous file in Uncommitted changes; the next / previous difference in the comparison window |
 | Home / End | the Session tab's first block / its latest, following it |
 | ⌥↑ / ⌥↓ | the Session tab's previous / next prompt |
 | PgUp / PgDn | a page up / down in the Session tab |

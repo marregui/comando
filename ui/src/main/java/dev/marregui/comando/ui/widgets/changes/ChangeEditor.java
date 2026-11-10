@@ -1064,7 +1064,8 @@ public final class ChangeEditor implements Unmountable {
         return p;
     }
 
-    private static void bind(final JComponent c, final KeyStroke key, final String name, final Runnable r) {
+    /** Runs {@code r} on {@code key} while {@code c} has the keyboard; the Changes view's tree binds its keys so too. */
+    static void bind(final JComponent c, final KeyStroke key, final String name, final Runnable r) {
         c.getInputMap(JComponent.WHEN_FOCUSED).put(key, name);
         c.getActionMap().put(name, new AbstractAction() {
             @Override

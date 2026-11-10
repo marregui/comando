@@ -283,8 +283,8 @@ class PartitionUiTest {
         });
         try {
             app.start();
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> app.loop().state().focused() != null
-                    && onEdt(() -> frame() != null));
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20))
+                    .until(() -> app.loop().state().focused() != null && onEdt(() -> frame() != null));
         } catch (final Exception | AssertionError e) {
             // the caller's try-with-resources holds the window only once it is returned
             app.close();
