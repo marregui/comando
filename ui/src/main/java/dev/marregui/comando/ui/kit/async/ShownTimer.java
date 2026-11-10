@@ -66,6 +66,11 @@ public final class ShownTimer {
         return running;
     }
 
+    /** The component whose window tells the shared clock how often to tick this timer. */
+    Component owner() {
+        return owner;
+    }
+
     /** One tick from the shared clock: run unless a timer that ticked before it in the same beat stopped this one. */
     void beat() {
         if (running) {

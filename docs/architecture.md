@@ -1021,7 +1021,7 @@ runs) moves to an errand of `UiErrands`.
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT, which reads the latest data |
 | `Debouncer` | runs once requests stop for a delay (the editor's gutter: 250 ms) |
 | `ShownTimer` | repeats while its owner wants it and the owner component is showing (the working spinners, the approval ages, running cards' elapsed time) |
-| `SharedClock` | one Swing timer many `ShownTimer`s tick on, all in the same event, so what they repaint is painted in one pass: the sidebar's, the tabs' and the agent strip's spinners share one (three 80 ms timers caused up to three paint passes per step, 2026-11-02) |
+| `SharedClock` | one Swing timer many `ShownTimer`s tick on, all in the same event, so what they repaint is painted in one pass: the sidebar's, the tabs' and the agent strip's spinners share one (three 80 ms timers caused up to three paint passes per step, 2026-11-02); a timer ticks every beat while comando is in front (any of its windows active), one beat in six while another application is in front, and not while its window is minimised (on macOS each pass waits for the window's last present; 2026-11-10) |
 | `EdtWatchdog` | posts a probe to the EDT every 100 ms. A probe waiting 200 ms is a stall, classified once as `startup`, `drawing` (in Java2D's render queue), `comando` or `jdk`, with where it was; one INFO line when it ends. A stall of 1 s, or 2 s for `drawing`, is a hang, logged with the EDT's stack |
 
 #### 14.2.2 Text
