@@ -44,14 +44,10 @@ class TranscriptFoldTest {
     private static final int W = 1000;
     private static final int H = 700;
     /**
-     * Edits in a turn whose middle one slice of layout (8 ms) cannot reach. Set by hand: the row of 300 edits already
-     * ran out of its first slice on an M2 Max (2026-11-09), so a row of 4 000 runs out on any runner.
-     */
-    private static final int PAST_A_SLICE = 4_000;
-    /**
-     * Calls in a turn, each followed by a long interim text, read at its middle. Set by hand: one 8 ms slice laid out
-     * about one such text on an M2 Max (2026-11-10), so the 24 texts above the view took 24 slices over 8 frames; a
-     * machine 20 times as fast still runs out of the first slice.
+     * Calls in a turn never laid out whole, each followed by a long interim text, read at its middle. Set by hand: one
+     * 8 ms slice laid out about one such text on an M2 Max (2026-11-10), so the 24 texts above the view took 24 slices
+     * over 8 frames; a machine 20 times as fast still runs out of the first slice. Laid out whole once, at another
+     * width, neither this turn nor one of 4 000 plain edits ran out of it in every run (2026-11-10).
      */
     private static final int SLOW_CALLS = 50;
     /** Frames painted while a row forms before its view must have settled: that turn settled in 9 (2026-11-10). */
@@ -146,6 +142,14 @@ class TranscriptFoldTest {
         viewport.setView(canvas);
         viewport.setSize(W, H);
         canvas.layoutFully(W);
+        viewport.doLayout();
+    }
+
+    /** Lays out only what the view shows, as in a transcript never laid out whole. */
+    private void layTheView() {
+        viewport.setView(canvas);
+        viewport.setSize(W, H);
+        canvas.ensureLayout(W);
         viewport.doLayout();
     }
 
@@ -818,18 +822,7 @@ class TranscriptFoldTest {
     /// stays on screen where it was.
     @Test
     void aStepInViewDoesNotMoveWhenItsRowFormsOverEstimates() {
-        stepInViewStaysAsItsRowForms(300);
-    }
-
-    /// A turn too long for one slice of layout to reach the step in view: the slices after it make the steps above
-    /// exact, and the step stays where it was all along.
-    @Test
-    void aStepInViewDoesNotMoveWhileTheSlicesAboveItCatchUp() {
-        stepInViewStaysAsItsRowForms(PAST_A_SLICE);
-    }
-
-    /** A turn of {@code calls} edits read at its middle after a window change; its row forms when it ends. */
-    private void stepInViewStaysAsItsRowForms(final int calls) {
+        final int calls = 300;
         add(new Block.UserPrompt("go", "", ""));
         for (int k = 0; k < calls; k++) {
             add(new Block.ToolCall("e" + k, "Edit",
@@ -839,12 +832,38 @@ class TranscriptFoldTest {
         add(text("The report."));
         lay();
         final Item step = canvas.topLevel().get(calls / 2);
+
+        stepStaysAt(step, rowFormsOver(step));
+    }
+
+    /// A turn never laid out whole and too long for one slice of layout to reach the step in view: the first slice runs
+    /// out above it, the slices after it make the steps above exact, and the step stays where it was all along.
+    @Test
+    void aStepInViewDoesNotMoveWhileTheSlicesAboveItCatchUp() {
+        slowTurn();
+        layTheView();
+        final Item step = canvas.topLevel().get(SLOW_CALLS);
+
+        final int before = rowFormsOver(step);
+        assertThat(row().outOfTime()).as("the row's first slice ran out above the step in view").isTrue();
+        stepStaysAt(step, before);
+    }
+
+    /**
+     * Reads at {@code step} after a window change, then ends the turn, so its row forms open over heights only
+     * estimated at the new width; returns where the step was in the view before.
+     */
+    private int rowFormsOver(final Item step) {
         readAt(canvas.topOf(step));
         canvas.ensureLayout(W - 200);
         final int before = canvas.topOf(step) - viewport.getViewPosition().y;
-
         add(end(1_000));
         canvas.ensureLayout(W - 200);
+        return before;
+    }
+
+    /** The view settles after the row formed: {@code step} is {@code before} below its top, and stays after idle. */
+    private void stepStaysAt(final Item step, final int before) {
         viewport.doLayout();
 
         assertThat(row().isOpen()).isTrue();
@@ -861,17 +880,8 @@ class TranscriptFoldTest {
     /// keep the step in view in place included, draws that step where it was.
     @Test
     void everyFrameDrawsTheStepInViewInItsPlaceWhileItsRowForms() {
-        add(new Block.UserPrompt("go", "", ""));
-        for (int k = 0; k < SLOW_CALLS; k++) {
-            add(new Block.ToolCall("e" + k, "Edit", "{\"file_path\":\"/w/F" + k + ".java\",\"old_string\":\"a\","
-                    + "\"new_string\":\"b\"}", "ok", Block.ToolStatus.DONE, ""));
-            add(text(("Interim text " + k + " wraps" + " over the width of the view".repeat(30) + ".\n\n").repeat(8)));
-        }
-        add(text("The report."));
-        viewport.setView(canvas);
-        viewport.setSize(W, H);
-        canvas.ensureLayout(W);
-        viewport.doLayout();
+        slowTurn();
+        layTheView();
         final Item step = canvas.topLevel().get(SLOW_CALLS);
         readAt(canvas.topOf(step));
         final int before = canvas.topOf(step) - viewport.getViewPosition().y;
@@ -905,6 +915,17 @@ class TranscriptFoldTest {
             }
         }
         assertThat(displaced).as("frames that drew the step in view away from its place").isEmpty();
+    }
+
+    /** A turn not yet ended of {@link #SLOW_CALLS} edits, each followed by a long interim text, and its report. */
+    private void slowTurn() {
+        add(new Block.UserPrompt("go", "", ""));
+        for (int k = 0; k < SLOW_CALLS; k++) {
+            add(new Block.ToolCall("e" + k, "Edit", "{\"file_path\":\"/w/F" + k + ".java\",\"old_string\":\"a\","
+                    + "\"new_string\":\"b\"}", "ok", Block.ToolStatus.DONE, ""));
+            add(text(("Interim text " + k + " wraps" + " over the width of the view".repeat(30) + ".\n\n").repeat(8)));
+        }
+        add(text("The report."));
     }
 
     /** The rows {@code from} to {@code to} of {@code img}, pixel for pixel, as one hash: frames compare by it. */

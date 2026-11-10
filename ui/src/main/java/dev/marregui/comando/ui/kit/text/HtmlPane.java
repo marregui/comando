@@ -1,11 +1,13 @@
 package dev.marregui.comando.ui.kit.text;
 
+import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
@@ -25,9 +27,11 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JEditorPane;
+import javax.swing.JScrollBar;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
@@ -152,11 +156,12 @@ public final class HtmlPane extends JEditorPane {
         }
         // the page's height follows its width: a pane laid out once, as a panel just made is, is too short to scroll
         // to its heading until laid out again at that width
-        if (getParent() instanceof JViewport vp) {
-            vp.doLayout();
-        }
-        setCaretPosition(at);
+        jumping = true;
         try {
+            if (getParent() instanceof JViewport vp) {
+                vp.doLayout();
+            }
+            setCaretPosition(at);
             final Rectangle2D r = modelToView2D(at);
             if (r != null) {
                 final Rectangle visible = getVisibleRect();
@@ -166,6 +171,8 @@ public final class HtmlPane extends JEditorPane {
             anchoredY = getParent() instanceof JViewport vp ? vp.getViewPosition().y : -1;
         } catch (final BadLocationException e) {
             return false;
+        } finally {
+            jumping = false;
         }
         return true;
     }
@@ -336,6 +343,56 @@ public final class HtmlPane extends JEditorPane {
      */
     private String anchored;
     private int anchoredY = -1;
+
+    /** The viewport the pane last kept its view in, whose moves it hears; null before the first. */
+    private JViewport heard;
+    /** Where that viewport was last seen, so a change of its size alone is not taken for a move. */
+    private Point seenAt;
+    /** How many times the reader moved that viewport, by wheel, bar, keys or a heading's link. */
+    private int readerMoves;
+    /** How many of those moves took the view to a place of the reader's choosing: a thumb dragged, a heading's link. */
+    private int readerJumps;
+    /** Where the last of those took the view. */
+    private Point jumpedTo = new Point();
+    /**
+     * How far the reader's moves by a step (wheel, track, keys) took that viewport, summed since their last jump; the
+     * page's own moves are not in it.
+     */
+    private final Point readerMoved = new Point();
+    /** True while the pane scrolls to a heading: a heading's link the reader follows takes the view to that place. */
+    private boolean jumping;
+    /**
+     * Counts the reader's moves of the view: a move made while the reader's input is dispatched. The page's own moves,
+     * the caret's scroll and the view put back, run from the queue afterwards.
+     */
+    private final ChangeListener viewMoved = e -> {
+        if (e.getSource() instanceof JViewport vp) {
+            final Point p = vp.getViewPosition();
+            if (!p.equals(seenAt) && EventQueue.getCurrentEvent() instanceof InputEvent input) {
+                readerMoves++;
+                if (jumping || placesTheThumb(input)) {
+                    readerJumps++;
+                    jumpedTo = p;
+                    readerMoved.setLocation(0, 0);
+                } else {
+                    readerMoved.translate(p.x - seenAt.x, p.y - seenAt.y);
+                }
+            }
+            seenAt = p;
+        }
+    };
+
+    /**
+     * What a change to the page keeps until the view is put back: where the view was, the reader's moves then, and the
+     * heading the reader was taken to and has not scrolled from, else null.
+     */
+    private record Kept(Point at, int moves, int jumps, Point moved, String heading) {
+    }
+
+    /** The place the changes to the page keep while a put-back is queued; null when none is. */
+    private Kept keeping;
+    /** How many put-backs are queued. */
+    private int putBacks;
 
     /**
      * The diagrams and pictures of the page shown that were not ready when it was rendered: the id of the element
@@ -562,22 +619,80 @@ public final class HtmlPane extends JEditorPane {
         });
     }
 
-    /** Runs {@code change} to the page, then puts the view back where the reader left it. */
+    /**
+     * Runs {@code change} to the page, then puts the view back where the reader left it, moved as far as the reader
+     * moved it since if they did before it is put back.
+     */
     private void keepingView(final Runnable change) {
-        final Point at = getParent() instanceof JViewport vp ? vp.getViewPosition() : null;
-        // taken to a heading and not scrolled since: the heading, wherever the new pictures put it
-        final String heading = at != null && anchored != null && at.y == anchoredY ? anchored : null;
-        change.run();
-        if (heading != null) {
-            SwingUtilities.invokeLater(() -> scrollToHeading(heading));
-        } else if (at != null) {
+        final Kept kept;
+        if (keeping != null) {
+            // a change made while an earlier one's put-back waits, as a picture put in place in a redraw's wake: the
+            // view is where the earlier change's caret scrolled it, and the reader's place is the one it kept
+            kept = keeping;
+        } else if (getParent() instanceof JViewport vp) {
+            final Point at = hear(vp);
+            // taken to a heading and not scrolled since: the heading, wherever the new pictures put it
+            kept = new Kept(at, readerMoves, readerJumps, new Point(readerMoved),
+                    anchored != null && at.y == anchoredY ? anchored : null);
+        } else {
+            change.run();
+            return;
+        }
+        keeping = kept;
+        putBacks++;
+        try {
+            change.run();
+        } finally {
             SwingUtilities.invokeLater(() -> {
-                // drawn again as it joined a window, it may have left it since
-                if (getParent() instanceof JViewport vp) {
-                    vp.setViewPosition(at);
+                if (--putBacks == 0) {
+                    keeping = null;
                 }
+                putBack(kept);
             });
         }
+    }
+
+    /** Puts the view back at the place {@code kept}, moved as the reader moved it since. */
+    private void putBack(final Kept kept) {
+        if (readerMoves != kept.moves()) {
+            // the reader moved the view since, and the caret's scroll, queued by the change, took it to the caret,
+            // before or between those moves: the place the reader last chose, else the place kept, plus how far the
+            // reader's steps moved it since, unless the pane has left the viewport it was moved in
+            if (getParent() == heard) {
+                final Point from = readerJumps != kept.jumps() ? jumpedTo : kept.at();
+                final Point since = readerJumps != kept.jumps() ? new Point() : kept.moved();
+                heard.setViewPosition(new Point(from.x + readerMoved.x - since.x, from.y + readerMoved.y - since.y));
+            }
+        } else if (kept.heading() != null) {
+            scrollToHeading(kept.heading());
+        } else if (getParent() instanceof JViewport vp) {
+            // drawn again as it joined a window, it may have left it since
+            vp.setViewPosition(kept.at());
+        }
+    }
+
+    /**
+     * Whether {@code input} puts the thumb of a scroll bar where the reader points: a drag of the thumb, or a press
+     * on the track where the look and feel moves the thumb to the press (the middle button). A press of the left
+     * button on the track steps a page.
+     */
+    private static boolean placesTheThumb(final InputEvent input) {
+        return input instanceof MouseEvent m && m.getSource() instanceof JScrollBar
+                && (m.getID() == MouseEvent.MOUSE_DRAGGED
+                || m.getID() == MouseEvent.MOUSE_PRESSED && SwingUtilities.isMiddleMouseButton(m));
+    }
+
+    /** Hears the reader's moves of {@code vp}, the pane's viewport, from now on; where its view is. */
+    private Point hear(final JViewport vp) {
+        if (vp != heard) {
+            if (heard != null) {
+                heard.removeChangeListener(viewMoved);
+            }
+            vp.addChangeListener(viewMoved);
+            heard = vp;
+        }
+        seenAt = vp.getViewPosition();
+        return seenAt;
     }
 
     /**

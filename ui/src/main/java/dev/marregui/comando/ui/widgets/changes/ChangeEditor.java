@@ -8,7 +8,10 @@ import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -158,6 +161,8 @@ public final class ChangeEditor implements Unmountable {
     private boolean loading;
     /** True while one rendered side follows the other's scroll. */
     private boolean following;
+    /** Whether the reader scrolled a rendered side, by wheel, bar or keys, since the sides were last rendered. */
+    private boolean readerScrolled;
     /** The gaps open on {@code HEAD}'s rendered side, in points, by the line of the block below each. */
     private final Map<Integer, Integer> headGaps = new HashMap<>();
     /** The gaps open on the working tree's rendered side. */
@@ -650,12 +655,35 @@ public final class ChangeEditor implements Unmountable {
         treeAnchors = new int[0];
         headRendered.show(before, folder, current ? marks(m, false) : MarkdownHtml.Marks.NONE, anchors);
         treeRendered.show(after, folder, current ? marks(m, true) : MarkdownHtml.Marks.NONE, anchors);
-        // a new page shows its top, and opening a gap keeps the view where it is: the view goes back once they are open
+        // a new page shows its top, and opening a gap keeps the view where it is: the view goes back once they are
+        // open, unless the reader scrolled meanwhile, whose place wins
+        readerScrolled = false;
         afterLevel = () -> {
+            if (!readerScrolled) {
+                headBar.setValue(headAt);
+                treeBar.setValue(treeAt);
+            }
+        };
+        // levelling starts behind the events the render queued, the new page's first layout and paint among them: a
+        // scroll queued while they ran comes before the first gap opens, which keeps the place it scrolled to. A place
+        // kept is shown again before then, so a scroll made while the sides level starts from it
+        Edt.later(() -> {
+            if (keepPlace) {
+                keep(headBar, headAt, treeBar, treeAt);
+            }
+            Edt.later(this::level);
+        });
+    }
+
+    /** Puts each side's view at its place, neither following the other: until the sides level, no block lies level. */
+    private void keep(final JScrollBar headBar, final int headAt, final JScrollBar treeBar, final int treeAt) {
+        following = true;
+        try {
             headBar.setValue(headAt);
             treeBar.setValue(treeAt);
-        };
-        Edt.later(this::level);
+        } finally {
+            following = false;
+        }
     }
 
     /** Whether the comparison worked out is of the texts shown. */
@@ -876,6 +904,29 @@ public final class ChangeEditor implements Unmountable {
         final BoundedRangeModel b = treeRendered.scroll().getVerticalScrollBar().getModel();
         a.addChangeListener(e -> follow(a, b));
         b.addChangeListener(e -> follow(b, a));
+        // the reader's own scrolls, told from the moves levelling makes: a scroll by wheel or trackpad, on the bar, or
+        // by the keys that move the page up or down, which holds the keyboard; a copy or any other key moves nothing
+        final MouseAdapter onBar = new MouseAdapter() {
+            @Override
+            public void mousePressed(final MouseEvent e) {
+                readerScrolled = true;
+            }
+        };
+        final KeyAdapter onKeys = new KeyAdapter() {
+            @Override
+            public void keyPressed(final KeyEvent e) {
+                readerScrolled |= switch (e.getKeyCode()) {
+                    case KeyEvent.VK_UP, KeyEvent.VK_DOWN, KeyEvent.VK_PAGE_UP, KeyEvent.VK_PAGE_DOWN, KeyEvent.VK_HOME,
+                         KeyEvent.VK_END -> true;
+                    default -> false;
+                };
+            }
+        };
+        for (final RenderedMarkdown side : List.of(headRendered, treeRendered)) {
+            side.scroll().addMouseWheelListener(_ -> readerScrolled = true);
+            side.scroll().getVerticalScrollBar().addMouseListener(onBar);
+            side.pane().addKeyListener(onKeys);
+        }
         // first shown, at another width, or grown by the pictures that arrived: the blocks have moved
         final ComponentAdapter resized = new ComponentAdapter() {
             @Override

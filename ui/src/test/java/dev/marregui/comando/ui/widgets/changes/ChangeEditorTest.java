@@ -2,6 +2,11 @@ package dev.marregui.comando.ui.widgets.changes;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
@@ -16,6 +21,8 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
@@ -30,6 +37,7 @@ import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -48,7 +56,7 @@ import static org.awaitility.Awaitility.await;
 /// - Markdown offers both sides rendered; a file not compared is not editable
 /// - a failed write says so and is tried again
 /// - the rendered sides stay level on what did not change, a block one side lacks leaving a gap there, and scroll
-///   together on those blocks
+///   together on those blocks; a scroll the reader makes while they level stays where the reader put it
 /// - the header says what the window's title lacks; a theme chosen shades the comparison on screen again
 class ChangeEditorTest {
 
@@ -65,9 +73,9 @@ class ChangeEditorTest {
 
     /// How far apart the same block may sit on the two sides, in pixels.
     private static final int LEVEL = 2;
-    /// The events one levelling takes at most: [ChangeEditor] moves gaps in up to three passes, one event each, and
-    /// puts the view back in the next, the pass that finds the sides level.
-    private static final int LEVELLING_EVENTS = ChangeEditor.LEVEL_PASSES + 1;
+    /// The events one levelling takes at most: [ChangeEditor] starts it an event behind the render's, moves gaps in up
+    /// to three passes, one event each, and puts the view back in the next, the pass that finds the sides level.
+    private static final int LEVELLING_EVENTS = 1 + ChangeEditor.LEVEL_PASSES + 1;
 
     private ChangeEditor editor() throws Exception {
         return on(null, x -> {
@@ -349,6 +357,139 @@ class ChangeEditorTest {
         final int tree = on(e, x -> x.sides().get(1).scroll().getVerticalScrollBar().getValue());
         assertThat(head).isZero();
         assertThat(tree).isZero();
+    }
+
+    /// A wheel scroll the reader makes while the sides rendered again still level is the reader's place: the levelling
+    /// does not take the view back to the top, and the other side follows to the blocks both keep. The scroll is queued
+    /// behind the render, as a reader's input is, so it comes after the caret's scroll to the top and before the first
+    /// pass, which opens the added block's gap and leaves at least one more pass, and the view put back, to come.
+    @Test
+    void aScrollMadeWhileTheSidesLevelKeepsItsPlace() throws Exception {
+        final String tail = paragraphs(30);
+        final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        levelled(e);
+        final int[] scrolled = new int[1];
+        run(e, x -> {
+            x.toggleRendered();
+            x.toggleRendered();
+            SwingUtilities.invokeLater(() -> scrolled[0] = wheeled(x.sides().get(0).scroll()));
+        });
+        levelled(e);
+        assertThat(scrolled[0]).as("the wheel scrolled down the page").isGreaterThan(100);
+        final int head = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
+        assertThat(head).as("the reader's scroll, not the top the render put back").isEqualTo(scrolled[0]);
+        assertLevel(e, "Paragraph 10.");
+    }
+
+    /// Sides read again keep the reader's place, and a wheel scroll made in any event while they level starts from
+    /// it: the place is shown again before the caret's scroll to the top can be seen, and the view ends where the
+    /// wheel took it from there.
+    @Test
+    void aScrollMadeWhileTheSidesReadAgainLevelStartsFromTheirPlace() throws Exception {
+        final String tail = paragraphs(30);
+        final String after = "One.\n\nAdded.\n\n" + tail + "Tail.\n";
+        for (int events = 0; events < LEVELLING_EVENTS; events++) {
+            final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+            assertLevel(e, "Paragraph 0.");
+            levelled(e);
+            scroll(e, 0, 200);
+            final int[] from = new int[1];
+            final int[] scrolled = new int[1];
+            final int behind = events;
+            run(e, x -> {
+                x.show(new ChangeTexts(x.root(), x.change(), x.shown().before(), after, ""), true);
+                later(behind, () -> {
+                    final JScrollPane scroll = x.sides().get(0).scroll();
+                    from[0] = scroll.getVerticalScrollBar().getValue();
+                    scrolled[0] = wheeled(scroll);
+                });
+            });
+            await().atMost(Duration.ofSeconds(10)).until(() -> on(e, x -> x.diff().right().getText().equals(after)));
+            levelled(e);
+            final String when = "the wheel " + events + " events after the render";
+            final int moved = scrolled[0] - from[0];
+            assertThat(moved).as(when + ": the wheel scrolled down the page").isGreaterThan(100);
+            final int head = on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
+            assertThat(head).as(when + ": the place kept and the reader's scroll from it").isEqualTo(200 + moved);
+            assertThat(from[0]).as(when + ": the place kept, shown again").isEqualTo(200);
+            assertLevel(e, "Paragraph 20.");
+        }
+    }
+
+    /// Runs {@code task} on the event thread behind {@code events} events posted one after another, each when the one
+    /// before it runs.
+    private static void later(final int events, final Runnable task) {
+        SwingUtilities.invokeLater(events == 0 ? task : () -> later(events - 1, task));
+    }
+
+    /// Turns the wheel down on {@code scroll}; where its view is then.
+    private static int wheeled(final JScrollPane scroll) {
+        scroll.dispatchEvent(new MouseWheelEvent(scroll, MouseEvent.MOUSE_WHEEL, System.currentTimeMillis(), 0, 10, 10,
+                0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 3, 5));
+        return scroll.getVerticalScrollBar().getValue();
+    }
+
+    /// A key that moves the page up or down, pressed while the sides rendered again still level, is the reader's
+    /// scroll and keeps the place the view is at; a copy or a space moves nothing, and the view goes back to the top.
+    @Test
+    void onlyAKeyThatMovesThePageKeepsItsPlaceWhileTheSidesLevel() throws Exception {
+        final String tail = paragraphs(30);
+        final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        levelled(e);
+        assertThat(movedWhileLevelling(e, pressed(KeyEvent.VK_C, InputEvent.META_DOWN_MASK)))
+                .as("a copy: the view put back").isZero();
+        assertThat(movedWhileLevelling(e, pressed(KeyEvent.VK_SPACE, 0))).as("a space: the view put back").isZero();
+        assertThat(movedWhileLevelling(e, pressed(KeyEvent.VK_PAGE_DOWN, 0))).as("a page down: where the view was")
+                .isEqualTo(300);
+    }
+
+    /// A press on the bar while the sides rendered again still level is the reader's scroll and keeps its place.
+    @Test
+    void aPressOnTheBarWhileTheSidesLevelKeepsItsPlace() throws Exception {
+        final String tail = paragraphs(30);
+        final ChangeEditor e = rendered("One.\n\n" + tail, "One.\n\nAdded.\n\n" + tail);
+        assertLevel(e, "Paragraph 0.");
+        levelled(e);
+        final Consumer<RenderedMarkdown> pressOnBar = side -> {
+            final JScrollBar bar = side.scroll().getVerticalScrollBar();
+            for (final int id : new int[] {MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED}) {
+                bar.dispatchEvent(new MouseEvent(bar, id, System.currentTimeMillis(), InputEvent.BUTTON1_DOWN_MASK,
+                        bar.getWidth() / 2, bar.getHeight() - 4, 1, false, MouseEvent.BUTTON1));
+            }
+        };
+        assertThat(movedWhileLevelling(e, pressOnBar)).as("where the bar and the view were left").isEqualTo(300);
+    }
+
+    /// The key pressed on a side's page, heard by its key listeners straight away: with no window there is no focus
+    /// owner, and a key dispatched to the page reaches none of them.
+    private static Consumer<RenderedMarkdown> pressed(final int key, final int modifiers) {
+        return side -> {
+            final HtmlPane page = side.pane();
+            final KeyEvent pressed = new KeyEvent(page, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), modifiers,
+                    key, KeyEvent.CHAR_UNDEFINED);
+            for (final KeyListener l : page.getKeyListeners()) {
+                l.keyPressed(pressed);
+            }
+        };
+    }
+
+    /// Renders the sides again, does {@code input} on the head side in the event after and moves its view to 300
+    /// there, as the reader's scroll does; the head side's place once levelled.
+    private static int movedWhileLevelling(final ChangeEditor e, final Consumer<RenderedMarkdown> input)
+            throws Exception {
+        run(e, x -> {
+            x.toggleRendered();
+            x.toggleRendered();
+        });
+        run(e, x -> {
+            final RenderedMarkdown head = x.sides().get(0);
+            input.accept(head);
+            head.scroll().getVerticalScrollBar().setValue(300);
+        });
+        levelled(e);
+        return on(e, x -> x.sides().get(0).scroll().getVerticalScrollBar().getValue());
     }
 
     /// A scroll lands on the other side where the blocks both keep say: at a block, on that block; between two, the
