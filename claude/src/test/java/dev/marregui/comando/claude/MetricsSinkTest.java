@@ -214,11 +214,9 @@ class MetricsSinkTest {
                 sink.offer(usage("warm"));
                 assertThat(server.arrived.tryAcquire(5, TimeUnit.SECONDS)).as("the first write held").isTrue();
                 server.hold.set(second);
-                // queued behind the held write: one batch of BATCH_LINES + 2 lines, the queues event's three last
-                for (int i = 0; i < MetricsSink.BATCH_LINES - 1; i++) {
-                    sink.offer(usage("w" + i));
-                }
-                sink.offer(queues(3));
+                // queued behind the held write: one event of BATCH_LINES + 2 lines, so the batch is full at its first
+                // event; a thousand one-line events race BATCH_WAIT (a CI runner mapped 785 of them within it)
+                sink.offer(queues(MetricsSink.BATCH_LINES + 2));
                 first.countDown();
                 assertThat(server.arrived.tryAcquire(5, TimeUnit.SECONDS)).as("the batch's first write held").isTrue();
                 for (int i = 0; i < 5; i++) {
@@ -380,9 +378,10 @@ class MetricsSinkTest {
             try (final InputStream in = exchange.getRequestBody()) {
                 body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
             }
+            // the latch is read before the arrival is told: a test that swaps it on the arrival sets the next write's
+            final CountDownLatch held = hold.get();
             posts.incrementAndGet();
             arrived.release();
-            final CountDownLatch held = hold.get();
             if (held != null) {
                 try {
                     held.await(30, TimeUnit.SECONDS);
