@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted on 2026-10-29; amended 2026-11-01 and 2026-11-09 (see Amendments) | Miguel and Claude |
+| 2026-10-28 | accepted on 2026-10-29; amended 2026-11-01 and 2026-11-09 (see Amendments); amended by [record 149](0149-questdb-is-the-only-metrics-store.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -56,3 +56,7 @@ bound for each queue is set later from how it is used. Tested in `QueuesTest` an
 2026-11-09, [record 146](0146-every-metric-goes-to-the-machine-questdb.md): every event is also written to the machine's QuestDB, one table per event (`comando_turn`,
 `comando_turn_model`, `comando_agent`, `comando_usage`, `comando_queue`), each row naming its data root; the files stay
 as they are and stay the record until the switch that record names, after which they stop.
+
+2026-11-10, [record 149](0149-questdb-is-the-only-metrics-store.md): the files are dropped with no switch. Every event goes to
+the machine's QuestDB alone; no file is written or read, the last context of a loaded conversation comes from
+`comando_turn` alone, and a write QuestDB does not take is lost and told in a notice, once an outage.

@@ -365,21 +365,22 @@ sends for the same gesture:
   folder (`docs/README.md`). A pinned view is never replaced.
 - **Audit.** Every tool call and approval decision is appended to `audit/audit-<UTC date>.jsonl` in the data root:
   time, session, event, tool, the arguments (clipped to 2 000 characters), the outcome. Never read back.
-- **Metrics.** What the sessions spend and how their work ends is appended to `metrics/metrics-<UTC date>.jsonl` in the
-  data root, one JSON object a line with `ts` and `event` ([record 110](adr/0110-metrics-for-calibration.md)): `turn`
+- **Metrics.** What the sessions spend and how their work ends goes to the machine's QuestDB alone
+  ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md), [record 149](adr/0149-questdb-is-the-only-metrics-store.md));
+  no file keeps it. The events ([record 110](adr/0110-metrics-for-calibration.md)): `turn`
   at each `result` (model, base effort, duration and API time, model calls, the turn's `usage` and `modelUsage` as
   Claude Code sends them, context and window, how it ended); `agent` at each sub-agent's end, live only (the Agent
   call's type, description and model asked, the parent's model, background, status, start and duration, the tool calls
   inside it at any depth, and its `spend` read from its own file: model calls, tokens by kind, models); `usage` at each
   plan-usage read (provider, window, percent, reset). Money fields are kept as they arrive and shown nowhere. Read by
-  the kit's calibration; comando reads back only a stored conversation's last context size, from the last `turn` of
-  the past 14 days of files, when the conversation loads (`MetricsLog.lastContext`,
-  [record 120](adr/0120-the-context-follows-each-model-call.md)). Each event is also written to the machine's QuestDB
-  ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md)): tables `comando_turn` (a row per turn, its `usage` flattened), `comando_turn_model` (a row per model of
+  the kit's calibration; comando reads back only a stored conversation's last context size, from its last row in
+  `comando_turn`, when the conversation loads (`MetricsLog.lastContext`,
+  [record 120](adr/0120-the-context-follows-each-model-call.md)); with no server or no row, none. The tables:
+  `comando_turn` (a row per turn, its `usage` flattened), `comando_turn_model` (a row per model of
   `modelUsage`, running totals per conversation), `comando_agent`, `comando_usage` and `comando_queue`, each row with
   the data root as `instance`. A bounded queue and one thread write them in batches over ILP, starting the server when
-  none runs; a failed batch is dropped, the file keeps it. `lastContext` asks `comando_turn` first. At its first
-  connection in a process an instance imports its past files, once each (`metrics/qdb-imported.txt`).
+  none runs; a batch QuestDB does not take is lost, and the first of an outage is a warning notice. comando run with
+  `-Dcomando.questdb=false`, as the tests are, keeps no metrics.
 
 ## 4. Approvals and safety
 

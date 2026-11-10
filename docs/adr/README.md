@@ -130,7 +130,7 @@ row and its record differ, or when a record has no row.
 | [107](0107-a-rows-card-opens-at-a-click.md) | A sidebar row's card opens at a click, beside the rows, and follows the pointer | 2026-10-28 | Miguel and Claude | accepted; amended on 2026-10-29 (see Amendments) |
 | [108](0108-links-in-every-card.md) | Links in every card of the transcript, and file paths as links | 2026-10-28 | Miguel and Claude | accepted; where a file path opens amended by [record 111](0111-a-file-link-opens-as-the-files-tab-does.md) |
 | [109](0109-a-sub-agent-is-a-session-tab.md) | A sub-agent is a session tab, and the session card outlines its sub-agents | 2026-10-28 | Miguel and Claude | accepted |
-| [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Miguel and Claude | accepted on 2026-10-29; amended 2026-11-01 and 2026-11-09 (see Amendments) |
+| [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Miguel and Claude | accepted on 2026-10-29; amended 2026-11-01 and 2026-11-09 (see Amendments); amended by [record 149](0149-questdb-is-the-only-metrics-store.md) |
 | [111](0111-a-file-link-opens-as-the-files-tab-does.md) | A file link opens as the Files tab opens a file, and is found where it was written from | 2026-10-28 | Miguel and Claude | accepted; the search amended the same day (see Amendments) |
 | [112](0112-closing-gives-the-keyboard-back.md) | Closing a panel or view gives the keyboard back to what opened it | 2026-10-28 | Miguel and Claude | accepted; what is remembered amended the same day (see Amendments) |
 | [113](0113-a-documents-outline-at-the-panels-right.md) | A document's outline at the panel's right, from a button in its tools | 2026-10-28 | Miguel and Claude | accepted; amended by [record 134](0134-the-window-says-who-works-and-gives-room-to-what-is-read.md) |
@@ -166,6 +166,7 @@ row and its record differ, or when a record has no row.
 | [143](0143-a-session-lists-the-files-it-wrote.md) | A session lists the files it wrote | 2026-11-08 | Miguel and Claude | accepted; built |
 | [144](0144-the-transcript-sits-above-the-prompt.md) | The transcript sits above the prompt | 2026-11-08 | Miguel and Claude | accepted; built; trial ended 2026-11-09, off by default |
 | [145](0145-agents-read-held-results-a-page-at-a-time.md) | Agents read held results a page at a time | 2026-11-09 | Miguel and Claude | accepted; built |
-| [146](0146-every-metric-goes-to-the-machine-questdb.md) | Every metric goes to the machine's QuestDB | 2026-11-09 | Miguel and Claude | accepted; dual write built, cutover after the check |
+| [146](0146-every-metric-goes-to-the-machine-questdb.md) | Every metric goes to the machine's QuestDB | 2026-11-09 | Miguel and Claude | accepted; dual write built; amended by [record 149](0149-questdb-is-the-only-metrics-store.md) |
 | [147](0147-a-theme-says-what-it-does-to-the-mind.md) | A theme says what it does to the mind | 2026-11-09 | Miguel and Claude | accepted; built |
 | [148](0148-agents-drive-a-panel-terminal.md) | Agents drive a panel's Terminal | 2026-11-09 | Miguel and Claude | accepted; built |
+| [149](0149-questdb-is-the-only-metrics-store.md) | QuestDB is the only metrics store | 2026-11-10 | Miguel and Claude | accepted; built |

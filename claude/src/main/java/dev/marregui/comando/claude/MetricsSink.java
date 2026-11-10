@@ -8,17 +8,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -33,22 +25,23 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
-import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
-import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.state.Notice;
 
 /**
- * The metrics events on their way to the machine's QuestDB (record 146), beside the day's file, which stays the record.
+ * The metrics events on their way to the machine's QuestDB, their only store (records 146, 149).
  * {@link #offer} never blocks: an event joins a queue of {@link #CAPACITY}, or, the queue full or the sink closed, is
  * dropped and counted. One errand drains the queue in batches of at most {@link #BATCH_LINES} lines, sent
  * {@link #BATCH_WAIT} after a batch's first event at the latest, to the server {@link QuestDbEndpoint#live} names; when
  * none answers, {@link QuestDbEndpoint#ensureUp} is asked at most once a minute. The tables are created the first time
  * a process writes to a server, and again after a write is refused for a missing table.
  * <p>
- * Delivery is at most once per event offered: a batch that fails is dropped, counted, and logged at most once a minute.
- * The files hold it: on its first connection a process imports every day's file not yet listed in {@link #IMPORTED},
- * and today's always, through the same mapping, and the tables' dedup keys keep one row per event however often it is
- * sent.
+ * Delivery is at most once per event offered: a batch that fails is lost, counted, and logged at most once a minute;
+ * nothing is kept on disk to send later. The first failure after a write the server took, or after the start, is also a
+ * notice to the user, once for that outage; the next outage, after a batch was taken again, is told again. What the
+ * close cuts off, the events still queued and the lines of a batch not sent, is counted and logged once at the close.
  */
 final class MetricsSink implements AutoCloseable {
 
@@ -63,8 +56,6 @@ final class MetricsSink implements AutoCloseable {
     static final int CAPACITY = 10_000;
     /** How long {@link #close} lets the queue drain before it interrupts the errand: the contract's bound. */
     static final Duration CLOSE_WAIT = Duration.ofSeconds(2);
-    /** The file in the metrics folder that lists the day files already imported, one name a line. */
-    static final String IMPORTED = "qdb-imported.txt";
     /**
      * How often, at most, {@link QuestDbEndpoint#ensureUp} is asked and a recurring failure logged: the contract's
      * bound (record 146), as the start it may cause takes up to a minute.
@@ -80,7 +71,6 @@ final class MetricsSink implements AutoCloseable {
     /** Put on the queue by {@link #close} to wake the errand; carries no event. */
     private static final ObjectNode WAKE = JsonNodeFactory.instance.objectNode();
 
-    private final Path dir;
     private final AtomicLong dropped = new AtomicLong();
     private final Errands errands = new Errands("metrics-sink");
     private final AtomicLong failed = new AtomicLong();
@@ -90,6 +80,7 @@ final class MetricsSink implements AutoCloseable {
     private final ObjectMapper json;
     private final MetricsLines lines;
     private final LongSupplier nanos;
+    private final IntentSink notices;
     private final QuestDbEndpoint qdb;
     private final ArrayBlockingQueue<ObjectNode> queue = new ArrayBlockingQueue<>(CAPACITY);
     private final AtomicLong sent = new AtomicLong();
@@ -97,7 +88,8 @@ final class MetricsSink implements AutoCloseable {
     private final Thread thread;
     /** Event types with no table already logged; the errand's only. */
     private final Set<String> unknownLogged = new HashSet<>();
-    private final LongSupplier wallMillis;
+    /** Lines the close cut off before they were sent: written by the errand, read by {@link #close} once it stopped. */
+    private final AtomicLong unsent = new AtomicLong();
     // the errand's only, from here on
     private long dropsLoggedAtNanos;
     private boolean dropsLoggedOnce;
@@ -105,23 +97,28 @@ final class MetricsSink implements AutoCloseable {
     private boolean ensuredOnce;
     private long failureLoggedAtNanos;
     private boolean failureLoggedOnce;
-    private boolean imported;
+    /** A batch failed and none was taken since: the outage told in a notice. */
+    private boolean outage;
     private long reportedDrops;
     private URI server;
     private URI tablesOn;
 
     /**
-     * Starts the errand that sends the events of metrics folder {@code dir} to {@code qdb}; {@code wallMillis} dates
-     * today's file, {@code nanos} times the once-a-minute bounds.
+     * Starts the errand that sends the events, as {@code lines} maps them, to {@code qdb}; {@code nanos} times the
+     * once-a-minute bounds, and an outage is told to {@code notices}.
      */
-    MetricsSink(final Path dir, final QuestDbEndpoint qdb, final MetricsLines lines, final ObjectMapper json,
-            final LongSupplier wallMillis, final LongSupplier nanos) {
-        this.dir = dir;
+    MetricsSink(
+            final QuestDbEndpoint qdb,
+            final MetricsLines lines,
+            final ObjectMapper json,
+            final LongSupplier nanos,
+            final IntentSink notices
+    ) {
         this.qdb = qdb;
         this.lines = lines;
         this.json = json;
-        this.wallMillis = wallMillis;
         this.nanos = nanos;
+        this.notices = notices;
         this.http = HttpClient.newBuilder().connectTimeout(CONNECT_WITHIN).build();
         try {
             this.thread = errands.start("metrics-sink", this::drain);
@@ -132,8 +129,8 @@ final class MetricsSink implements AutoCloseable {
     }
 
     /**
-     * Stops taking events, lets the errand send what is queued for at most {@link #CLOSE_WAIT}, then interrupts it and
-     * ends the HTTP client. Idempotent; never stops the server.
+     * Stops taking events, lets the errand send what is queued for at most {@link #CLOSE_WAIT}, then interrupts it,
+     * counts and logs what it did not send, and ends the HTTP client. Idempotent; never stops the server.
      */
     @Override
     public void close() {
@@ -150,6 +147,7 @@ final class MetricsSink implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
         errands.close();
+        reportLostAtClose();
         http.shutdownNow();
         try {
             if (!http.awaitTermination(CLOSE_WAIT)) {
@@ -214,8 +212,15 @@ final class MetricsSink implements AutoCloseable {
         while (more) {
             batch.clear();
             more = collect(batch);
-            for (int from = 0; from < batch.size(); from += BATCH_LINES) {
+            int from = 0;
+            while (from < batch.size() && !Thread.currentThread().isInterrupted()) {
                 deliver(batch.subList(from, Math.min(batch.size(), from + BATCH_LINES)));
+                from += BATCH_LINES;
+            }
+            if (Thread.currentThread().isInterrupted()) {
+                // the close cut the errand: the batch's lines not tried are counted, the queue's rest by the close
+                unsent.addAndGet(Math.max(0, batch.size() - from));
+                more = false;
             }
             reportDrops();
         }
@@ -283,25 +288,25 @@ final class MetricsSink implements AutoCloseable {
      * Sends {@code chunk}, at most {@link #BATCH_LINES} lines, counting its lines as sent or failed; a refused connection
      * is tried once more, on the server found again.
      */
-    private boolean deliver(final List<String> chunk) {
+    private void deliver(final List<String> chunk) {
         try {
             try {
-                return took(attempt(chunk, null), chunk);
+                took(attempt(chunk, null), chunk);
             } catch (final ConnectException _) {
                 final URI refused = server;
                 server = null;
                 tablesOn = null;
-                return took(attempt(chunk, refused), chunk);
+                took(attempt(chunk, refused), chunk);
             }
         } catch (final ConnectException _) {
             server = null;
             tablesOn = null;
-            return failure(chunk, "cannot reach QuestDB", "server=refused", null);
+            failure(chunk, "cannot reach QuestDB", "server=refused", null);
         } catch (final IOException | RuntimeException e) {
-            return failure(chunk, "cannot write metrics to QuestDB", "lines=" + chunk.size(), e);
+            failure(chunk, "cannot write metrics to QuestDB", "lines=" + chunk.size(), e);
         } catch (final InterruptedException _) {
             Thread.currentThread().interrupt();
-            return failure(chunk, "metrics write interrupted", "lines=" + chunk.size(), null);
+            unsent.addAndGet(chunk.size());
         }
     }
 
@@ -326,19 +331,24 @@ final class MetricsSink implements AutoCloseable {
         return answer.statusCode();
     }
 
-    private boolean took(final int status, final List<String> chunk) {
+    private void took(final int status, final List<String> chunk) {
         if (status == 204) {
             sent.addAndGet(chunk.size());
-            return true;
+            if (outage) {
+                outage = false;
+                LOG.log(System.Logger.Level.INFO, "metrics reach QuestDB again [server=" + server + ", failedLines="
+                        + failed.get() + ']');
+            }
+        } else if (status < 0) {
+            failure(chunk, "cannot reach QuestDB", "server=none", null);
+        } else {
+            failure(chunk, "QuestDB refused a write", "status=" + status, null);
         }
-        return status < 0 ? failure(chunk, "cannot reach QuestDB", "server=none", null)
-                : failure(chunk, "QuestDB refused a write", "status=" + status, null);
     }
 
     /**
-     * The server to write to, its tables made and, the first time in the process, the files imported; null when no
-     * server answers. When none runs, or the one found is {@code refused}, the endpoint is asked to start one, at most
-     * once a minute.
+     * The server to write to, its tables made; null when no server answers. When none runs, or the one found is
+     * {@code refused}, the endpoint is asked to start one, at most once a minute.
      */
     private URI connect(final URI refused) throws IOException, InterruptedException {
         if (server == null) {
@@ -355,11 +365,7 @@ final class MetricsSink implements AutoCloseable {
         if (!base.equals(tablesOn)) {
             createTables(base);
             tablesOn = base;
-            LOG.log(System.Logger.Level.INFO, "metrics go to QuestDB [server=" + base + ", dir=" + dir + ']');
-            if (!imported) {
-                imported = true;
-                importFiles();
-            }
+            LOG.log(System.Logger.Level.INFO, "metrics go to QuestDB [server=" + base + ']');
         }
         return base;
     }
@@ -400,22 +406,56 @@ final class MetricsSink implements AutoCloseable {
         }
     }
 
-    /** Counts {@code chunk} failed and logs why, at most once a minute; false. */
-    private boolean failure(final List<String> chunk, final String what, final String values, final Throwable cause) {
+    /**
+     * Counts {@code chunk} failed and logs why, at most once a minute; the first failure of an outage is a notice as
+     * well, logged with it. A failure the close caused, the errand interrupted, is counted for the close to log.
+     */
+    private void failure(final List<String> chunk, final String what, final String values, final Throwable cause) {
+        if (Thread.currentThread().isInterrupted()) {
+            unsent.addAndGet(chunk.size());
+            return;
+        }
         final long total = failed.addAndGet(chunk.size());
         final long nowNanos = nanos.getAsLong();
+        final String message = what + ", the metrics rows are lost [" + values + ", failedLines=" + total + ']';
+        if (!outage) {
+            outage = true;
+            failureLoggedOnce = true;
+            failureLoggedAtNanos = nowNanos;
+            notices.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
+                    Character.toUpperCase(message.charAt(0)) + message.substring(1), cause));
+            return;
+        }
         if (failureLoggedOnce && nowNanos - failureLoggedAtNanos < MINUTE_NANOS) {
-            return false;
+            return;
         }
         failureLoggedOnce = true;
         failureLoggedAtNanos = nowNanos;
-        final String message = what + ", the day's file keeps it [" + values + ", failedLines=" + total + ']';
         if (cause == null) {
             LOG.log(System.Logger.Level.WARNING, message);
         } else {
             LOG.log(System.Logger.Level.WARNING, message, cause);
         }
-        return false;
+    }
+
+    /**
+     * Counts the events left in the queue as dropped and the lines the errand did not send as failed, and logs them
+     * once; no notice, as the state loop is closing too.
+     */
+    private void reportLostAtClose() {
+        long queued = 0L;
+        for (ObjectNode e = queue.poll(); e != null; e = queue.poll()) {
+            if (e != WAKE) {
+                queued++;
+            }
+        }
+        dropped.addAndGet(queued);
+        final long lines = unsent.get();
+        failed.addAndGet(lines);
+        if (queued + lines > 0L) {
+            LOG.log(System.Logger.Level.WARNING, "metric events lost at close [queuedEvents=" + queued
+                    + ", unsentLines=" + lines + ", wait=" + CLOSE_WAIT + ']');
+        }
     }
 
     private void reportDrops() {
@@ -430,127 +470,7 @@ final class MetricsSink implements AutoCloseable {
         dropsLoggedOnce = true;
         dropsLoggedAtNanos = nowNanos;
         reportedDrops = drops;
-        LOG.log(System.Logger.Level.WARNING, "metrics events dropped, the queue full, the day's file keeps them"
+        LOG.log(System.Logger.Level.WARNING, "metrics events dropped, the queue full, they are lost"
                 + " [droppedEvents=" + drops + ", capacity=" + CAPACITY + ']');
-    }
-
-    /**
-     * Sends every day file not listed in {@link #IMPORTED}, oldest first, and today's, and lists each past day's file
-     * the server took whole. Stops at the first file the server did not take, and at the close.
-     */
-    private void importFiles() {
-        if (!Files.isDirectory(dir)) {
-            return;
-        }
-        final Path list = dir.resolve(IMPORTED);
-        final Set<String> done = new LinkedHashSet<>();
-        final List<Path> files = new ArrayList<>();
-        try {
-            if (Files.isRegularFile(list)) {
-                for (final String name : Mapped.lines(list)) {
-                    if (!name.isBlank()) {
-                        done.add(name.strip());
-                    }
-                }
-            }
-            try (final DirectoryStream<Path> found = Files.newDirectoryStream(dir, "metrics-*.jsonl")) {
-                for (final Path f : found) {
-                    files.add(f);
-                }
-            }
-        } catch (final IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot list the metrics files to import [dir=" + dir + ']', e);
-            return;
-        }
-        files.sort(Comparator.comparing(f -> f.getFileName().toString()));
-        final String today = "metrics-" + LocalDate.ofInstant(Instant.ofEpochMilli(wallMillis.getAsLong()),
-                ZoneOffset.UTC) + ".jsonl";
-        for (final Path file : files) {
-            final String name = file.getFileName().toString();
-            final boolean past = name.compareTo(today) < 0;
-            if (past && done.contains(name)) {
-                continue;
-            }
-            final Imported result = importFile(file);
-            if (result == Imported.CUT) {
-                LOG.log(System.Logger.Level.INFO, "metrics import stopped, the next start goes on [file=" + name + ']');
-                return;
-            }
-            if (result == Imported.WHOLE && past) {
-                done.add(name);
-                try {
-                    AtomicFiles.writeString(list, String.join("\n", done) + "\n");
-                } catch (final IOException e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot list an imported metrics file [list=" + list
-                            + ", file=" + name + ']', e);
-                }
-            }
-        }
-    }
-
-    /** Sends the events of one day file, a batch at a time. */
-    private Imported importFile(final Path file) {
-        final List<String> texts;
-        try {
-            texts = Mapped.read(file, m -> {
-                final List<String> out = new ArrayList<>();
-                m.lines(line -> {
-                    out.add(Mapped.decode(line));
-                    return true;
-                });
-                return out;
-            });
-        } catch (final IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read a metrics file to import [file=" + file + ']', e);
-            return Imported.UNREADABLE;
-        }
-        final List<String> batch = new ArrayList<>();
-        int events = 0;
-        int malformed = 0;
-        long taken = 0L;
-        for (final String text : texts) {
-            if (text.isBlank()) {
-                continue;
-            }
-            final JsonNode node;
-            try {
-                node = json.readTree(text);
-            } catch (final RuntimeException _) {
-                malformed++;
-                continue;
-            }
-            if (!(node instanceof ObjectNode event)) {
-                malformed++;
-                continue;
-            }
-            events++;
-            map(event, batch);
-            if (batch.size() >= BATCH_LINES) {
-                if (halt.get() || !deliver(batch)) {
-                    return Imported.CUT;
-                }
-                taken += batch.size();
-                batch.clear();
-            }
-        }
-        if (!batch.isEmpty()) {
-            if (halt.get() || !deliver(batch)) {
-                return Imported.CUT;
-            }
-            taken += batch.size();
-        }
-        LOG.log(System.Logger.Level.INFO, "imported a metrics file into QuestDB [file=" + file.getFileName()
-                + ", events=" + events + ", lines=" + taken + ", malformed=" + malformed + ']');
-        return Imported.WHOLE;
-    }
-
-    /** How the import of one file ended. */
-    private enum Imported {
-        /** The server took every line. */
-        WHOLE,
-        /** The file could not be read; the others are imported. */
-        UNREADABLE,
-        /** The server did not take a batch, or the sink closes: the import stops. */
-        CUT
     }
 }

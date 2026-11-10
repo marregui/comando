@@ -10,26 +10,27 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// The data root's logs, run, audit and metrics folders are the user's alone (rule 15), whatever the umask or the
-/// program that made them; the files in them are narrowed by `core`'s `OwnerOnly`, tested there.
+/// The data root's logs, run and audit folders are the user's alone (rule 15), whatever the umask or the program that
+/// made them; the files in them are narrowed by `core`'s `OwnerOnly`, tested there.
 ///
-/// - the start creates the four folders owner-only, and narrows one that exists wider
+/// - the start creates the three folders owner-only, narrows one that exists wider, and makes no metrics folder
 /// - the logging setup makes its folder the user's
 class DataRootFoldersTest {
 
-    /// The start creates the logs, run, audit and metrics folders `rwx------` and narrows one a wider umask made
-    /// `rwxrwxrwx`, as the audit folder of a live data root was found.
+    /// The start creates the logs, run and audit folders `rwx------` and narrows one a wider umask made `rwxrwxrwx`, as
+    /// the audit folder of a live data root was found; metrics live in QuestDB alone, so no `metrics` folder is made.
     @Test
-    void theDataRootsLogRunAuditAndMetricsFoldersAreTheUsersAlone(@TempDir final Path home) throws Exception {
+    void theDataRootsLogRunAndAuditFoldersAreTheUsersAlone(@TempDir final Path home) throws Exception {
         final AppConfig config = new AppConfig(home, "claude", home.resolve("projects"), false);
         Files.createDirectories(config.auditDir());
         Files.setPosixFilePermissions(config.auditDir(), PosixFilePermissions.fromString("rwxrwxrwx"));
 
         App.ownerOnlyFolders(config);
 
-        for (final Path dir : List.of(config.logDir(), config.runDir(), config.auditDir(), config.metricsDir())) {
+        for (final Path dir : List.of(config.logDir(), config.runDir(), config.auditDir())) {
             assertThat(Files.getPosixFilePermissions(dir)).as(dir.toString()).isEqualTo(PosixFilePermissions.fromString("rwx------"));
         }
+        assertThat(home.resolve("metrics")).doesNotExist();
     }
 
     /// The logging setup creates its folder `rwx------`.

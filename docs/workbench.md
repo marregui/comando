@@ -872,7 +872,6 @@ the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry; the folder is the user's alone (`rwx------`), set at each start |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
-| `metrics/` | a file a day of the sessions' turns, sub-agents and plan usage, and the queues' depths when they change, for the kit's calibration ([record 110](adr/0110-metrics-for-calibration.md)); the folder is the user's alone (`rwx------`), set at each start |
 | `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)), the checkpoint threshold as a percentage, `sessions.checkpointThresholdPercent` ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `themes/` | your own themes, one JSON file each, read at start ([§1.3](#13-themes)) |
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |

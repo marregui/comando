@@ -569,7 +569,7 @@ How comando starts, drives and stops the process: [Claude Code §1](claude-code.
 |---|---|---|---|---|
 | the conversation | `<root>/projects/<dir>/<id>.jsonl`, sub-agents beside it | `claude` | `--resume`; comando, to draw history; the kit's measuring jobs | as long as the kit keeps transcripts ([§2.5](#25-settings)) |
 | comando's desk | `$COMANDO_HOME/sessions.json`, panels, folders, connections | comando | comando; a kit hook that reports on other sessions | permanent |
-| metrics | `$COMANDO_HOME/metrics/` | comando | meant for the kit ([record 110](adr/0110-metrics-for-calibration.md)) | permanent |
+| metrics | the machine's QuestDB, tables `comando_*` ([record 149](adr/0149-questdb-is-the-only-metrics-store.md)) | comando | meant for the kit ([record 110](adr/0110-metrics-for-calibration.md)) | permanent |
 | audit | `$COMANDO_HOME/audit/` | comando's MCP server | the user | permanent |
 | live tokens | `$COMANDO_HOME/run/*.mcp.json` | comando | `claude` | deleted at exit |
 | the kit | `<root>` | the user | every `claude` | versioned |
@@ -693,7 +693,8 @@ week, judged by a small model. The answer key is the slower, exact check; the re
 
 ### 7.4 comando's metrics
 
-comando records every turn, sub-agent and plan-usage read ([record 110](adr/0110-metrics-for-calibration.md)). The
+comando records every turn, sub-agent and plan-usage read ([record 110](adr/0110-metrics-for-calibration.md)) in the
+machine's QuestDB, its only store ([record 149](adr/0149-questdb-is-the-only-metrics-store.md)). The
 record names the kit as their reader: which model and effort for which work, pacing against plan limits, the records of
 agent runs. What comando reads back itself is in [Claude Code §3.2](claude-code.md#32-the-tools).
 

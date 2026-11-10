@@ -21,6 +21,7 @@ import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
 import dev.marregui.comando.claude.MetricsLog;
+import dev.marregui.comando.claude.QuestDbEndpoint;
 import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.SessionCatalogue;
 import dev.marregui.comando.claude.TranscriptSearch;
@@ -41,6 +42,7 @@ import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
+import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -96,7 +98,7 @@ public final class App implements AutoCloseable {
     static final String PEERS_PROPERTY = "comando.peers";
     /**
      * {@code -Dcomando.questdb=false}, set by every test and picture tool, keeps this instance off the machine's QuestDB:
-     * metrics go to their files only, and the toggle works on a folder in the data root, never on the machine's.
+     * no metrics are kept, and the toggle works on a folder in the data root, never on the machine's.
      */
     static final String QUESTDB_PROPERTY = "comando.questdb";
     private final StateLoop loop;
@@ -207,10 +209,10 @@ public final class App implements AutoCloseable {
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
             // the machine's one QuestDB, shared by every instance and the kit, outliving comando (record 146)
-            final boolean machineQuestDb = Boolean.parseBoolean(System.getProperty(QUESTDB_PROPERTY, "true"));
+            final boolean machineQuestDb = machineQuestDb();
             final MachineQuestDb questDb = new MachineQuestDb(machineQuestDb ? Path.of(System.getProperty("user.home"), ".comando-questdb")
                     : config.home().resolve("machine-questdb"), config.home(), InstanceName.current(), loop);
-            metrics = own(machineQuestDb ? new MetricsLog(config.metricsDir(), questDb) : new MetricsLog(config.metricsDir()));
+            metrics = own(metricsLog(machineQuestDb, config.home(), questDb, loop));
             claude.metrics(metrics);
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
@@ -384,14 +386,33 @@ public final class App implements AutoCloseable {
         return ui;
     }
 
+    /** Whether this instance uses the machine's QuestDB: unless {@link #QUESTDB_PROPERTY} is false. */
+    static boolean machineQuestDb() {
+        return Boolean.parseBoolean(System.getProperty(QUESTDB_PROPERTY, "true"));
+    }
+
     /**
-     * Creates the data root's logs, run, audit and metrics folders readable by the user alone, and narrows them when
-     * they exist (rule 15): the audit log records every tool call with its arguments, the run folder holds the MCP
-     * configurations with their bearer tokens, the logs and metrics name files and sessions. A folder that cannot be
-     * made so is logged; comando still runs.
+     * The sessions' metrics log: with the machine's QuestDB, its only store, at {@code qdb}, each row naming
+     * {@code home}, an outage told to {@code notices}; without it, as the tests run, {@link MetricsLog#NONE}, which
+     * keeps nothing (record 149).
+     */
+    static MetricsLog metricsLog(
+            final boolean machineQuestDb,
+            final Path home,
+            final QuestDbEndpoint qdb,
+            final IntentSink notices
+    ) {
+        return machineQuestDb ? new MetricsLog(home.toAbsolutePath().toString(), qdb, notices) : MetricsLog.NONE;
+    }
+
+    /**
+     * Creates the data root's logs, run and audit folders readable by the user alone, and narrows them when they exist
+     * (rule 15): the audit log records every tool call with its arguments, the run folder holds the MCP configurations
+     * with their bearer tokens, the logs name files and sessions. A folder that cannot be made so is logged; comando
+     * still runs.
      */
     static void ownerOnlyFolders(final AppConfig config) {
-        for (final Path dir : List.of(config.logDir(), config.runDir(), config.auditDir(), config.metricsDir())) {
+        for (final Path dir : List.of(config.logDir(), config.runDir(), config.auditDir())) {
             try {
                 OwnerOnly.folder(dir);
             } catch (final IOException e) {

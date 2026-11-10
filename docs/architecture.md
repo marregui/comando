@@ -386,7 +386,7 @@ registries for data too large to copy with every state in [§4.5](#45-stores-out
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |
-| `files` | `OwnerOnly`: the one way any module makes a data-root file `rw-------` or folder `rwx------`, at creation and narrowed again at each start whatever the umask (rule 15); `App` narrows `logs`, `run`, `audit` and `metrics`; `Logging`, `IntentLog`, `MetricsLog` and `mcp`'s `AuditLog` (which recreates its folder and narrows its files) make theirs through it, `ClaudeAdapter` the `run` folder and each `.mcp.json`, `ClaudeProcess` its stderr temporary file, `EmbeddedEdge` the Edge's `conf/`, `config.xml` and `admin-password`. `Mapped`: every file read, mapped read-only and scanned in place, decoding only the slice asked for, malformed UTF-8 as the replacement character (rule 16, record 140): `read` for a mapping that ends with its body, `open` for one a single thread holds, `text`, `bytes`, `lines`, `head`, `linesWith`, and on a mapping `text(from, to)`, `lines`, `stream()`, `stream(from, to)`; a file cut while mapped fails as an `IOException`. `ByteScan`: finds a needle in mapped bytes, ASCII letters in either case, every other byte as itself |
+| `files` | `OwnerOnly`: the one way any module makes a data-root file `rw-------` or folder `rwx------`, at creation and narrowed again at each start whatever the umask (rule 15); `App` narrows `logs`, `run` and `audit`; `Logging`, `IntentLog` and `mcp`'s `AuditLog` (which recreates its folder and narrows its files) make theirs through it, `ClaudeAdapter` the `run` folder and each `.mcp.json`, `ClaudeProcess` its stderr temporary file, `EmbeddedEdge` the Edge's `conf/`, `config.xml` and `admin-password`. `Mapped`: every file read, mapped read-only and scanned in place, decoding only the slice asked for, malformed UTF-8 as the replacement character (rule 16, record 140): `read` for a mapping that ends with its body, `open` for one a single thread holds, `text`, `bytes`, `lines`, `head`, `linesWith`, and on a mapping `text(from, to)`, `lines`, `stream()`, `stream(from, to)`; a file cut while mapped fails as an `IOException`. `ByteScan`: finds a needle in mapped bytes, ASCII letters in either case, every other byte as itself |
 | `result` | `ResultView` (read access to a run's rows), `ResultRegistry`, `ColumnKind`, `Formats`, `ResultText` (a result as column names and text rows, SQL NULL as a null cell) |
 | `transcript` | `Block`, `Transcript` (one writer, many readers), `TranscriptRegistry`, `TopicSource` (what a tab's topic is read from) |
 | `console` | `Console` (a command run's output), `ConsoleRegistry` |
@@ -609,7 +609,7 @@ One package, `dev.marregui.comando.claude`.
 | `ClaudeProcess` | one child process and its threads: stdout lines to the strand, stdin from a queue, stderr to a file in the temp folder whose last 40 lines are read at the exit |
 | `StreamMapper` | stream-JSON events, or a stored conversation's lines, into `Block`s and intents; streaming blocks grow in place and the complete `assistant` event replaces them |
 | `RunSettings` | the model and effort a message ran at, from the assistant line of the conversation's transcript (`message.model`, `perTurnEffort`, else `effort`), read from the file's last 256 KiB on the session's strand; the stream names the model but not the effort |
-| `MetricsLog` | what the sessions spend and how their work ends, one JSON line per turn, sub-agent, plan-usage read or changed queue reading (`queues`: each unbounded queue's depth and peak), in `metrics/metrics-<UTC date>.jsonl` of the data root ([record 110](adr/0110-metrics-for-calibration.md)) and, through `MetricsSink` (a bounded queue, one thread, ILP over HTTP, rows mapped by `MetricsLines`), in the machine's QuestDB reached through `QuestDbEndpoint` (record 146), and read back once: the context the last turn of a stored conversation ended with, from `comando_turn`, else the last 14 days of files, when the conversation loads (record 120); `MetricsLog.NONE` keeps nothing |
+| `MetricsLog` | what the sessions spend and how their work ends, an event per turn, sub-agent, plan-usage read or changed queue reading (`queues`: each unbounded queue's depth and peak) ([record 110](adr/0110-metrics-for-calibration.md)), kept only in the machine's QuestDB reached through `QuestDbEndpoint` (records 146 and 149), through `MetricsSink` (a bounded queue, one thread, ILP over HTTP, rows mapped by `MetricsLines`; a batch not taken is lost, the first of an outage a warning notice), and read back once: the context the last turn of a stored conversation ended with, from `comando_turn` alone, when the conversation loads (record 120); `MetricsLog.NONE` keeps nothing |
 | `BaseEffort` | the effort a model's turns start at, from the root's `settings.json` (`modelSettings.<model>.effortLevel`, else `effortLevel`); the stream does not report it |
 | `SubagentFiles` | finds and reads a subagent's stored conversation (`<session-id>/subagents/agent-<id>.jsonl`), reading only what the file gained since the last read |
 | `SessionCatalogue` | Claude Code's stored conversations for the import dialog and the session dialog's conversation picker, from a bounded read of each file's head (64 KiB) and tail (256 KiB) |
@@ -667,8 +667,8 @@ message ran at),
 subagent's conversation as a lower view, followed while it grows), `Notify`.
 
 **Reads, never writes:** the root's `projects/`, its `settings.json` and its `comando-kit.json` (the kit's jobs are
-written by its `kit.py`, which `KitJobsCli` runs). **Writes in the data root:** `run/` (the MCP configurations) and
-`metrics/`, which it reads back for a loaded conversation's last context. **Writes outside it:** only temporary files in the system temp
+written by its `kit.py`, which `KitJobsCli` runs). **Writes in the data root:** `run/` (the MCP configurations); the
+metrics go to the machine's QuestDB (record 149). **Writes outside it:** only temporary files in the system temp
 folder, for each short command's output and each process's stderr, deleted after use.
 
 ### 11.3 Threads
@@ -695,7 +695,7 @@ revokes its token. `ClaudeVersion.check` runs on its caller's thread, bounded at
 | `ClaudeCommandTest` | the argument list for a new, resumed and forked session |
 | `StreamMapperTest` | `testkit`'s recorded streams (4 of its 16 tests) and stream lines written in the test |
 | `RunSettingsTest` | a message's model and effort from a transcript written in a temporary folder; a line not written yet; a file larger than the tail |
-| `MetricsTest` | the turn, sub-agent and queues lines `MetricsLog` writes, none from replayed history, nothing when metrics are off |
+| `MetricsTest` | the turn, sub-agent and queues rows a loopback QuestDB receives from `MetricsLog`, none from replayed history, nothing when metrics are off; an event QuestDB does not take lost, with a notice and no file; the last context from QuestDB alone |
 | `SubagentFilesTest`, `SubagentFilesProbeTest` | the fixtures in `src/test/resources/subagents/`; generated inputs |
 | `PlanUsageReaderTest`, `CodexUsageReaderTest`, `ClaudeTopicsTest` | reads against fake scripts written in a temporary folder; `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close |
 | `ClaudeVersionTest` | the version parse, the half-open tested range, a missing executable |
@@ -1456,7 +1456,7 @@ One package, `dev.marregui.comando.app`.
 |---|---|
 | `Main` | sets the dark appearance before AWT starts, reads `AppConfig`, names the instance (`InstanceName`) for the Dock, the menu bar, the window's title and its preferences node, configures logging, takes the data root's lock (`comando.lock`; a second instance on the same root says so and exits), builds and starts `App`, and adds a shutdown hook that closes it |
 | `App` | builds and closes every part ([§7](#7-ownership-and-exit)); `App.DeferredEffects` stands in for `EffectRouter` until the adapters it needs exist |
-| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `metrics`, `questdb`, `edge`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
+| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `questdb`, `edge`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
 | `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json` (with a kit's folders first, once per root, recorded in `kit-folders`), `panels.json`, and the panels' text: a Markdown file in `panels/` for a panel of comando's own, the file itself for a document; each file with its schema's version ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)); writes from immutable snapshots on its own threads |
 | `PanelFiles` | each panel's text as a file: a panel of comando's own is named after its title and follows renames; a document is bound to its path and never renamed or deleted; no file is overwritten after an edit made outside comando |
 | `JsonFile` | one store file, `{"version": n, <key>: [...]}` ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)), written through `core`'s `AtomicFiles`, and not at all when the bytes are this run's last write and the file's modification time and size are those it left; a bare list or no `version` reads as version 1; a later version is refused, kept as it is and never written, and the user told; an unreadable file is renamed aside (`.corrupt-<time>`), not overwritten |
@@ -1506,7 +1506,7 @@ What `app` connects, and nothing else does:
 | `ui` (the settings) | the reducer and `claude` | the checkpoint threshold (record 129) |
 | the kit's `settings.json` | `SessionKind`'s defaults | the model the CLI observes (record 125) |
 | `EmbeddedEdge.startedHere`, the kit's commit | `Peers` | this instance's presence |
-| `claude` | `metrics/` | `MetricsLog` |
+| `claude` `MetricsSink` | `StateLoop` | `IntentSink`: `Notify` for a metrics outage, once an outage (record 149) |
 
 **At start** (`App.start`): the reducer starts, the window is built, every folder's git repository is watched for the
 Files tab's marks, the Files tab's open folders are read every 5 s while the tab shows in an active window, the plans' usage every 20 minutes, every session with
@@ -1541,7 +1541,7 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 | Test | Covers | Runs in |
 |---|---|---|
 | `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `MachineQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the machine's QuestDB (a real process on free ports), the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
-| `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run, audit and metrics folders owner-only and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
+| `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run and audit folders owner-only, and no metrics folder, and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
 | `MqttPeerBrokerTest` | without a broker or a port: a question's response topic and correlation data through the client's types, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays | `./gradlew :app:test` |
 | `SearcherTest` | sources in turn, the end after every hit; a new search or a cancel silences the last one; the limit and the cut; hits in batches while a source reads; a source that fails counts as one and the next runs; a close ends a running search and leaves no thread | `./gradlew :app:test` |
 | `StoreTest`'s keychain round trip | writes and deletes one login keychain item | `./gradlew :app:test -PkeychainTest=true` |
