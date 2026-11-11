@@ -34,6 +34,7 @@ import static org.awaitility.Awaitility.await;
 /// - Counts each stored message once in a sub-agent's spend.
 /// - Keeps nothing when metrics are disabled.
 /// - Sends the queues' depths and peaks as `comando_queue` rows.
+/// - Leaves out a queue whose reading repeats its last entry, idle or busy, and an event left with no queue.
 /// - Loses an event QuestDB does not take, tells the user, and makes no file.
 /// - Sends each event as a row of the instance it is built for.
 /// - Takes a conversation's last context from QuestDB, and none when QuestDB has no row or is down.
@@ -172,6 +173,75 @@ class MetricsTest {
             assertThat(server.lines).containsExactly(
                     "comando_queue,instance=/data,name=intents depth=0i,peak=12i 1793181600000000000",
                     "comando_queue,instance=/data,name=claude-stdin-work depth=1i,peak=3i 1793181600000000000");
+        }
+    }
+
+    /// A queue read idle (depth 0) with the peak last written for it is left out of the event, however often it is
+    /// read; one never written is entered once, and an event left with no queue is not sent at all.
+    @Test
+    void anIdleQueueWithAWrittenPeakIsNotWritten() throws Exception {
+        try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                final MetricsLog log = log(server)) {
+            log.queues(List.of(new Queues.Reading("intents", 0, 1)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 1)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 1), new Queues.Reading("strand", 0, 0)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 1), new Queues.Reading("strand", 0, 0)));
+            marked(server, log);
+            assertThat(server.lines).containsExactly(
+                    "comando_queue,instance=/data,name=intents depth=0i,peak=1i 1793181600000000000",
+                    "comando_queue,instance=/data,name=strand depth=0i,peak=0i 1793181600000000000",
+                    MARK + "1793181600000000000");
+        }
+    }
+
+    /// A busy queue whose reading repeats (a timed strand holds its next run: depth 1 for ever) is written once, and
+    /// again when its depth moves.
+    @Test
+    void aBusyQueueIsWrittenWhenItsReadingMoves() throws Exception {
+        try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                final MetricsLog log = log(server)) {
+            log.queues(List.of(new Queues.Reading("kit-check", 1, 1)));
+            log.queues(List.of(new Queues.Reading("kit-check", 1, 1)));
+            log.queues(List.of(new Queues.Reading("kit-check", 2, 2)));
+            marked(server, log);
+            assertThat(server.lines).filteredOn(l -> l.contains("name=kit-check")).containsExactly(
+                    "comando_queue,instance=/data,name=kit-check depth=1i,peak=1i 1793181600000000000",
+                    "comando_queue,instance=/data,name=kit-check depth=2i,peak=2i 1793181600000000000");
+        }
+    }
+
+    /// The first idle reading of a queue that was busy in its last entry is written, then the reading whose peak falls
+    /// to 0 (as `Queues` resets it), and the idle readings after them are not.
+    @Test
+    void aReturnToIdleIsWrittenThenItsPeakFallingToZero() throws Exception {
+        try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                final MetricsLog log = log(server)) {
+            log.queues(List.of(new Queues.Reading("intents", 3, 3)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 3)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 0)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 0)));
+            marked(server, log);
+            assertThat(server.lines).filteredOn(l -> l.contains("name=intents")).containsExactly(
+                    "comando_queue,instance=/data,name=intents depth=3i,peak=3i 1793181600000000000",
+                    "comando_queue,instance=/data,name=intents depth=0i,peak=3i 1793181600000000000",
+                    "comando_queue,instance=/data,name=intents depth=0i,peak=0i 1793181600000000000");
+        }
+    }
+
+    /// An idle queue whose peak differs from the one last written for it is written, in an event that leaves out the
+    /// idle queues whose peak did not change.
+    @Test
+    void aPeakChangeIsWritten() throws Exception {
+        try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                final MetricsLog log = log(server)) {
+            log.queues(List.of(new Queues.Reading("intents", 0, 1), new Queues.Reading("strand", 0, 0)));
+            log.queues(List.of(new Queues.Reading("intents", 0, 4), new Queues.Reading("strand", 0, 0)));
+            marked(server, log);
+            assertThat(server.lines).containsExactly(
+                    "comando_queue,instance=/data,name=intents depth=0i,peak=1i 1793181600000000000",
+                    "comando_queue,instance=/data,name=strand depth=0i,peak=0i 1793181600000000000",
+                    "comando_queue,instance=/data,name=intents depth=0i,peak=4i 1793181600000000000",
+                    MARK + "1793181600000000000");
         }
     }
 

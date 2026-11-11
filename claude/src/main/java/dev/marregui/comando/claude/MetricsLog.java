@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
@@ -43,6 +45,12 @@ public final class MetricsLog implements AutoCloseable {
     private final LongSupplier clock;
     private final QuestDbEndpoint qdb;
     private final MetricsSink sink;
+    /**
+     * What {@link #queues} last wrote for each queue name. Touched only by the {@code kit-check} strand of the one
+     * {@code App} that owns this log, the one caller of {@link #queues}, so it needs no lock; {@link #NONE}, shared,
+     * never touches it.
+     */
+    private final Map<String, Queues.Reading> queuesWritten = new HashMap<>();
 
     /**
      * Events of the comando instance whose data root is {@code instance}, an absolute path, sent to the machine's
@@ -114,15 +122,31 @@ public final class MetricsLog implements AutoCloseable {
 
     /**
      * A {@code queues} event: each unbounded queue's depth when read and its peak since the reading before
-     * ({@link Queues}), so each can be bounded later from how it is used.
+     * ({@link Queues}), so each can be bounded later from how it is used. A queue is entered only when its depth or
+     * peak differs from its entry last written (a queue not written before has none): its last row holds until the
+     * next, so a reading that repeats adds nothing, idle or busy (a timed strand always holds its next run, depth 1 or
+     * more); a return to idle is written, and its peak falling to 0 after it. With no queue entered, nothing is
+     * written. Called from one strand, the
+     * {@code kit-check} strand of {@code App}. The state moves before the sink takes the event, so an entry the sink
+     * drops (counted there) is not written again. {@link #NONE} keeps nothing and holds no state.
      */
     public void queues(final List<Queues.Reading> readings) {
+        if (sink == null) {
+            return;
+        }
         final ObjectNode e = event("queues");
         final ArrayNode list = e.putArray("queues");
+        final Map<String, Queues.Reading> before = new HashMap<>(queuesWritten);
+        queuesWritten.clear();
         for (final Queues.Reading r : readings) {
-            list.addObject().put("name", r.name()).put("depth", r.depth()).put("peak", r.peak());
+            if (!r.equals(before.get(r.name()))) {
+                list.addObject().put("name", r.name()).put("depth", r.depth()).put("peak", r.peak());
+            }
+            queuesWritten.put(r.name(), r);
         }
-        write(e);
+        if (!list.isEmpty()) {
+            write(e);
+        }
     }
 
     /** Hands {@code event} to the sink, which never blocks; {@code event} must not change after. */
