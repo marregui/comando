@@ -24,7 +24,7 @@
 <text x="700.0" y="228.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >ApprovalRequested (an id above 1 000 000, a future)</text>
 <line x1="886" y1="286" x2="1194" y2="286" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <text x="1040.0" y="278.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >a card; the Approvals tab comes forward</text>
-<text x="520" y="340" text-anchor="middle" font-size="13" font-weight="300" fill="#9C9C9C" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" font-style="italic">the request's virtual thread waits on the future, at most 55 minutes</text>
+<text x="520" y="340" text-anchor="middle" font-size="13" font-weight="300" fill="#9C9C9C" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" font-style="italic">the request's virtual thread waits on the future until the user answers, at most 24 hours</text>
 <line x1="1194" y1="386" x2="886" y2="386" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <text x="1040.0" y="378.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >Allow once ⏎ · For session S · Always L L · Deny D · an answer</text>
 <line x1="874" y1="436" x2="526" y2="436" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
@@ -33,6 +33,6 @@
 <text x="340.0" y="478.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >allow or deny, updatedInput, updatedPermissions (addRules)</text>
 <line x1="526" y1="536" x2="1454" y2="536" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <text x="990.0" y="528.0" text-anchor="middle" font-size="13" font-weight="300" fill="#BDBDBD" stroke="#171717" stroke-width="5" paint-order="stroke" stroke-linejoin="round" >the call and the decision → audit/audit-&lt;UTC date&gt;.jsonl</text>
-<text x="60" y="650" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Solid: a call. Dashed: what comes back. A card is withdrawn and its call denied when the CLI cancels it, the process exits, the session is removed, or 55 minutes pass.</text>
+<text x="60" y="650" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >Solid: a call. Dashed: what comes back. A card is withdrawn and its call denied when the CLI cancels it, the process exits, the session is removed, or 24 hours pass.</text>
 <text x="1540" y="650" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/claude-code</text>
 </svg>

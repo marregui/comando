@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-08 | accepted; built | Miguel and Claude |
+| 2026-11-08 | replaced by [record 150](0150-a-card-only-when-a-session-cannot-go-on.md) | Miguel and Claude |
 
 ## 1. Context
 

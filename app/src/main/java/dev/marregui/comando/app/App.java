@@ -81,7 +81,11 @@ import dev.marregui.comando.ui.shell.Setup;
 public final class App implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(App.class.getName());
-    static final Duration APPROVAL_TIMEOUT = Duration.ofMinutes(55);
+    /**
+     * How long a card waits for the user before it is denied, nothing of it kept: under the MCP server timeout Claude
+     * Code is given (24 h 5 min), so comando answers first (Miguel, 2026-11-10: a card waits while its session waits).
+     */
+    static final Duration APPROVAL_TIMEOUT = Duration.ofHours(24);
 
     private final Deque<AutoCloseable> owned = new ArrayDeque<>();
     /** How often the Files tab's open folders are read for changes: often enough to follow a session writing. */
@@ -169,12 +173,6 @@ public final class App implements AutoCloseable {
             for (final String problem : root.kit().map(KitRoot.Manifest::problems).orElse(List.of())) {
                 loop.dispatch(new Intent.Notify(Notice.Level.WARN, KitRoot.FILE + ": " + problem + "; left out. Kit ▸ Repair "
                         + KitRoot.FILE + "… rewrites the file without it", false));
-            }
-            // the decisions automatic checkpoints held back in earlier runs wait in the Later group again (record 131),
-            // and no id given before is given again
-            final Store.Decisions held = store.loadDecisions();
-            if (!held.held().isEmpty() || held.lastId() > 0) {
-                loop.dispatch(new Intent.DecisionsRead(held.held(), held.lastId()));
             }
             if (log != null) {
                 loop.addObserver(log);
@@ -286,6 +284,10 @@ public final class App implements AutoCloseable {
         tools.watchRepos(loop.state().folders(), false);
         // the Files tab's open folders stay in sync whether the tab shows or not; closed ones are not read
         tools.pollFolders(FOLDERS_EVERY);
+        // the Logbook tab: the open tasks of the brain's newest scratchpad day folder, read on the folder poll
+        // (record 150)
+        root.brain().ifPresent(brain -> tools.watchLogbook(brain.resolve("SCRATCHPAD"),
+                logbook -> loop.dispatch(new Intent.LogbookRead(logbook))));
         claude.watchPlanUsage(PLAN_USAGE_EVERY);
         final List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
                 .filter(s -> !s.claudeSessionId().isEmpty()).toList();

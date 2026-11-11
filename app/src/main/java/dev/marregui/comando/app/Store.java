@@ -34,7 +34,6 @@ import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.KitFolders;
@@ -51,9 +50,8 @@ import dev.marregui.comando.ui.PanelTexts.Outside;
 
 /**
  * The store files: {@code connections.json}, {@code sessions.json}, {@code folders.json} (the Files tab's folders),
- * {@code decisions.json} (the decisions sessions held back), {@code panels.json} (each panel's title,
- * bindings and file name, and whether it is closed) and one Markdown file per panel under {@code panels/} with its
- * text ({@link PanelFiles}). A panel of comando's own is kept, closed or open,
+ * {@code panels.json} (each panel's title, bindings and file name, and whether it is closed) and one Markdown file per
+ * panel under {@code panels/} with its text ({@link PanelFiles}). A panel of comando's own is kept, closed or open,
  * until it is removed or its file is deleted outside comando; its text stays in memory while it is closed, so it
  * reopens at once. Every write runs on the {@code store} strand from an immutable snapshot, so a save never races an
  * edit; connections go through the {@code store-secrets} strand, for the keychain. Panel text is saved 800 ms after the
@@ -98,7 +96,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final JsonFile<List<ConnectionSpec>> connections;
     private final JsonFile<List<SessionSpec>> sessions;
     private final JsonFile<List<FolderRoot>> folders;
-    private final JsonFile<List<Decision>> decisions;
     private final JsonFile<List<StoredPanel>> panels;
     /** The kit roots whose folders the Files tab gained at a start, one path a line: each root's are added once. */
     private final Path kitFolders;
@@ -200,8 +197,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         sessions = new JsonFile<>(home.resolve("sessions.json"), "sessions", 1, new TypeReference<>() {
         });
         folders = new JsonFile<>(home.resolve("folders.json"), "folders", 1, new TypeReference<>() {
-        });
-        decisions = new JsonFile<>(home.resolve("decisions.json"), "decisions", 1, new TypeReference<>() {
         });
         panels = new JsonFile<>(home.resolve("panels.json"), "panels", 1, new TypeReference<>() {
         });
@@ -759,43 +754,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             write(folders, List.copyOf(specs));
             foldersSeen = Stamp.of(folders.path());
             createIndexes(specs, indexRoots(KitRoot.current())).forEach(f -> LOG.log(System.Logger.Level.INFO, "created the index [file=" + f + ']'));
-        });
-    }
-
-    /**
-     * The decisions sessions held back (records 131, 142); none without a readable {@code decisions.json} (an
-     * unreadable one is moved aside).
-     */
-    Decisions loadDecisions() {
-        final List<Decision> held = orEmpty(decisions.read()).stream().filter(d -> d != null).toList();
-        tellRefused(decisions);
-        return new Decisions(held, decisions.number(LAST_ID));
-    }
-
-    /**
-     * The decisions held back as {@code decisions.json} keeps them, and the highest id comando gave one, so none is
-     * given again after a restart.
-     */
-    record Decisions(List<Decision> held, long lastId) {
-        Decisions {
-            held = List.copyOf(held);
-        }
-    }
-
-    /** The field of {@code decisions.json} that keeps the highest id given. */
-    static final String LAST_ID = "lastId";
-
-    @Override
-    public void saveDecisions(final List<Decision> held, final long lastId) {
-        submit(() -> {
-            try {
-                if (decisions.refused().isEmpty()) {
-                    decisions.write(List.copyOf(held), Map.of(LAST_ID, lastId));
-                }
-            } catch (final IOException e) {
-                LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + decisions.path() + ']', e);
-                notices.accept("Cannot write " + decisions.path().getFileName() + ": " + reason(e) + "; it is written again with the next change");
-            }
         });
     }
 

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-01 | accepted; built; amended 2026-11-01 (see Amendments) | Miguel and Claude |
+| 2026-11-01 | accepted; built; amended 2026-11-01 (see Amendments); the Later group, `decision_hold` and the decision tools replaced by [record 150](0150-a-card-only-when-a-session-cannot-go-on.md) | Miguel and Claude |
 
 ## 1. Context
 

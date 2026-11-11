@@ -213,7 +213,7 @@ class ApprovalInboxWordsTest {
 
     private Component card(final Approval a, final ApprovalInbox inbox) {
         opened.add(inbox);
-        inbox.render(List.of(a));
+        inbox.render(new ApprovalInbox.Queue(List.of(a), ""));
         return find(inbox.component(), c -> "rule".equals(c.getName())).getParent().getParent();
     }
 

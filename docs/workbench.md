@@ -16,11 +16,11 @@ are under Running text.
 
 ## 1. The window
 
-![The window's regions: the sidebar on the left with its four tabs; the panel tabs across the top with the corner's buttons, the theme button and New panel at their right; the focused panel's header and editor; the side pane on the right; the lower panel with the Session, Approvals, Terminal and Results tabs; the session bar and the status bar at the bottom](images/window.svg)
+![The window's regions: the sidebar on the left with its five tabs; the panel tabs across the top with the corner's buttons, the theme button and New panel at their right; the focused panel's header and editor; the side pane on the right; the lower panel with the Session, Approvals, Terminal and Results tabs; the session bar and the status bar at the bottom](images/window.svg)
 
 A panel is an editor bound to at most one database connection and one Claude Code session, and that one idea runs the
 whole window: SQL you run in a panel goes to its connection, anything else goes to its session. Around the panels sit
-the sidebar (sessions, connections, files, instances), the side pane (views placed beside the editor, the schema, the
+the sidebar (sessions, connections, files, logbook, instances), the side pane (views placed beside the editor, the schema, the
 uncommitted changes), the lower panel, which follows the focused panel (its transcript, the approvals, its terminal, its
 results), the session bar under it, and the status bar under everything.
 
@@ -318,10 +318,10 @@ their twin's place or after the built-in ones.
 
 ### 1.4 The sidebar
 
-Four tabs in one row, each an icon named by its tooltip: Sessions, Connections, Files, Instances; the tab in front is
-kept across restarts ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
+Five tabs in one row, each an icon named by its tooltip: Sessions, Connections, Files, Logbook, Instances; the tab in front is
+kept across restarts, by its name (an index kept by an earlier version is read in that version's order) ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
 [record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md),
-[record 124](adr/0124-the-sidebar-shows-the-instances.md)). A right click on a tab selects it and opens its
+[record 124](adr/0124-the-sidebar-shows-the-instances.md), [record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). A right click on a tab selects it and opens its
 menu: the tab's own actions, then the window's commands for it with their keys. Every panel of the window, the sidebar
 included, lies on one ground set once (`Theme.ground()`, the theme's); names are in the transcript's ivory; the folders'
 icons are outlines in one grey ink, told apart by their shape; the tint chosen draws the hairline between groups, the
@@ -333,6 +333,7 @@ left edge ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-t
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start the machine's QuestDB, Stop the machine's QuestDB; Start the comando Edge, Stop the comando Edge |
 | Files | Configure Files tab folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([Kit and brain §3.5](kit-and-brain.md#35-scheduled-jobs)) |
+| Logbook | none of its own; a task's own menu (below) |
 | Instances | none of its own; another instance's own menu asks it, refuses its questions, copies its id; one that left, forgets it; this instance's, sets its role; a session's row has none |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
@@ -344,6 +345,36 @@ tab: the sessions, the panels without a session, the connections and the Files t
 a row is wider than the tab, and none while every row fits. A tree's row gives up its detail (a size, a count, a path)
 before its name: the detail moves to the row's tooltip and comes back when the tab is wide enough
 ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)).
+
+**The Logbook tab** ("the scratchpad's open tasks; N need you", N the tasks that wait on the user; also an icon on the
+rail) lists the open tasks of the newest day folder of the scratchpad, read from its `INDEX.md` ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)),
+in the tree the Files tab draws, with its group headers, row icons and menus. A group **Needs you (N)** comes first,
+hidden at 0: the tasks that hold a decision for the user (a `**Needs you:**` line in their entry) or whose State begins
+"waiting on Miguel". Then one group per topic, in the index's order. Within a group the newest task comes first, by its
+number. A row is the task's name, its title without the attribution, then, muted, its number and the day it started
+(`97 · 10 Nov`; the number alone without a date) and who asked for it when that is not the logbook's owner, the name
+most of its tasks give; its icon is the question mark on a task that waits on the user, the Logbook's mark otherwise.
+The attribution is the heading's last parenthetical when it closes the heading and gives a start date (a part that
+begins with `YYYY-MM-DD`) or a name (a capitalised word, or `Name's …`): `(Dominic's question, Miguel, 2026-11-02)` is
+Dominic's, started on 2 November; `(from task 2, closed 2026-11-03)` is no attribution and stays in the name. An index
+that could not be read shows its problem as one row.
+
+Resting the pointer on a task shows the sidebar's card, as a session's row does, with the same delay and the same exit:
+titled `Task N`, headed by the task's name, its facts Started, By, From, Topic, Ticket, State and Next (their first
+sentences) and Needs you (the number of decisions it holds), each only when the task has it, and the task's Ask under
+them. A double click, or ⏎, opens the task as a Markdown view titled `Task N`: its section of the index, in which each
+Linear ticket id, of a team the window learnt from Linear's links or named by the task, links to the ticket once the
+window knows Linear's workspace, and each document of its Documents line links to the file in the day folder; ids
+and paths inside code blocks and existing links stay as written. A double click on a ticket's link opens it in the
+browser, on a document's opens the file in a panel ([record 94](adr/0094-links-in-both-styles-everywhere.md)).
+A right click on a task opens, each item with its icon: **Show the task**, the same page; **Open ID in Linear**, one
+per ticket of the task (its `**Ticket:**` line, then the ids that begin its heading), while the window knows Linear's
+workspace; **Resume in ▸** each running session, which prompts it "Resume task N from the scratchpad."; **Ask me its
+decisions in ▸** each running session, on a task that waits on the user, which prompts it to ask the task's decisions
+as question cards, recommended option first, and write the answers into the task; and **Open document ▸** each file
+of the task's Documents, opened as the Files tab opens one. The tab reads the index and never writes it: sessions edit
+it, as before. It shows the list again when the index changes, keeping the selected task by its number and each group
+open or closed as the user left it.
 
 **A session row** is one line: the state icon and the name
 ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops (its tooltip
@@ -881,7 +912,6 @@ the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
 | `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out; and, since version 2, where the kit put each folder last, so a kit folder still there follows the kit and the brain at every start while one the user pointed elsewhere stays ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
 | `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
-| `decisions.json` | the decisions sessions held back, with their options, until answered, settled or dismissed ([Claude Code §4.1](claude-code.md#41-approval-cards)) |
 | `instances-seen.json` | the other instances seen, so the Instances tab lists those that left until **Forget** ([§4.3](#43-the-instances-tab)) |
 | `questdb/` | the tables of the QuestDB comando embedded before record 146, copied into `~/.comando-questdb/` at the machine's QuestDB's first start; delete it once the copy is checked |
 | `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)): `dist/` (the downloaded distribution), its home unzipped from it, `installed` (the zip and its time), `conf/` (owner-only), `data/` and `log/`, kept across reinstalls, `admin-password` (the admin account's, owner-only) and `stdout.log` |

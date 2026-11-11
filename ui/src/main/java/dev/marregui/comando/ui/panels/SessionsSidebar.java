@@ -53,8 +53,10 @@ import javax.swing.event.ListDataListener;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.logbook.Logbook;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.KitJobs;
+import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -85,9 +87,10 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 
 /**
- * The left column, three tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
+ * The left column, five tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
  * the rest in its card and its menu; under them, the panels of comando's own that belong to no session:
- * {@link PanelsWithoutSession}), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). No
+ * {@link PanelsWithoutSession}), Connections, Files (the folders the user chose, as trees: {@link FilesTab}), Logbook
+ * (the scratchpad's open tasks: {@link LogbookTab}) and Instances ({@link InstancesTab}). No
  * tab has a bar of buttons: a tab's menu adds (and, for sessions, imports and sorts), and a row's menu edits, clones
  * and removes, through the same {@link ResourceActions}. Double-click on a session opens it in a panel
  * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session row and a connection row are
@@ -146,6 +149,11 @@ public final class SessionsSidebar {
         };
 
         void show(String session, JComponent over, Rectangle row);
+
+        /** The Linear site ticket ids link to, as the window learnt it; {@link LinearTickets.Site#NONE} until then. */
+        default LinearTickets.Site linearSite() {
+            return LinearTickets.Site.NONE;
+        }
 
         /** As {@link #show(String, JComponent, Rectangle)}, beside the rows from {@code beside} when there is room. */
         default void show(final String session, final JComponent over, final Rectangle row, final int beside) {
@@ -235,12 +243,15 @@ public final class SessionsSidebar {
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
     public static final int FILES = 2;
-    public static final int INSTANCES = 3;
+    public static final int LOGBOOK = 3;
+    public static final int INSTANCES = 4;
 
     private final ResourceActions<SessionState> sessionActions;
     /** The Instances tab (record 124) and what it acts through, set by the window once it has it. */
     private final InstancesTab instances;
     private volatile InstancesPort instancesPort = InstancesPort.NONE;
+    /** The Logbook tab: the scratchpad's open tasks, which it only reads. */
+    private final LogbookTab logbook;
     private final ResourceActions<ConnectionState> connectionActions;
     private final PanelsWithoutSession loosePanels;
     /** The panels' texts, which a session's menu has the session rewrite. */
@@ -482,6 +493,7 @@ public final class SessionsSidebar {
         });
         files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
         instances = new InstancesTab(intents, () -> instancesPort, () -> cards);
+        logbook = new LogbookTab(intents, dialogs::openFile, () -> cards);
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions);
@@ -501,7 +513,9 @@ public final class SessionsSidebar {
         SidebarLook.list(connections);
         tabs.add("Files", "files", "your folders and their git changes; double-click a file to open it",
                 section(files.component()));
-        tabs.add("Instances", "instances", "the comando instances on the Edge and the questions between them", instances.component());
+        tabs.add("Logbook", "logbook", LogbookTab.tip(Logbook.NONE), logbook.component());
+        tabs.add("Instances", "instances", "the comando instances on the Edge and the questions between them",
+                instances.component());
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
         tabs.onMenu((tab, e) -> tabMenu(tab).show(e.getComponent(), e.getX(), e.getY()));
         rail = new JPanel(new BorderLayout());
@@ -512,7 +526,8 @@ public final class SessionsSidebar {
         railButtons.setLayout(new BoxLayout(railButtons, BoxLayout.Y_AXIS));
         railButtons.setOpaque(false);
         railButtons.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle));
-        final String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"}, {"Instances", "instances"}};
+        final String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"},
+            {"Logbook", "logbook"}, {"Instances", "instances"}};
         for (int i = 0; i < railTabs.length; i++) {
             final int tab = i;
             railButtons.add(Box.createVerticalStrut(Theme.SPACE_XS));
@@ -544,7 +559,10 @@ public final class SessionsSidebar {
         root.repaint();
     }
 
-    /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS}, {@link #FILES} or {@link #INSTANCES}. */
+    /**
+     * The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS}, {@link #FILES}, {@link #LOGBOOK} or
+     * {@link #INSTANCES}.
+     */
     public int selectedTab() {
         return tabs.selectedIndex();
     }
@@ -685,6 +703,8 @@ public final class SessionsSidebar {
         followFocus(s);
         files.render(s);
         instances.render(s);
+        logbook.render(s);
+        tabs.header(LOGBOOK).setToolTipText("Logbook: " + LogbookTab.tip(s.logbook()));
     }
 
     /** Once a second: a session whose reading turn never came moves to To read with no state change to say so. */
@@ -725,7 +745,7 @@ public final class SessionsSidebar {
 
     private static final String SORT_TIP = "Sort: running first, then by name";
 /** A row's own border, as {@link IconRow} sets it; the renderer puts it back on a row that stops opening a group. */
-    private static final Border ROW_BORDER = BorderFactory.createEmptyBorder(3, 4, 3, 4);
+    static final Border ROW_BORDER = BorderFactory.createEmptyBorder(3, 4, 3, 4);
 
     /** Whether the order a drag set stands, not running first, then by name; the owner keeps it across restarts. */
     public boolean manualOrder() {
@@ -809,7 +829,7 @@ public final class SessionsSidebar {
      * The first row of a group wears its heading as a border above its own: the list keeps one row per session, so its
      * indexes, the hit tests and the drag know nothing of headings. Painted as the sidebar's other group headers.
      */
-    private static final class GroupHeading extends AbstractBorder {
+    static final class GroupHeading extends AbstractBorder {
         private final JLabel label;
 
         GroupHeading(final String text) {

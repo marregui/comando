@@ -70,7 +70,6 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.ReadChange e -> tools.readChange(e.root(), e.change(), e.ask());
             case Effect.SaveConnections e -> persistence.saveConnections(e.specs());
             case Effect.SaveFolders e -> persistence.saveFolders(e.folders());
-            case Effect.SaveDecisions e -> persistence.saveDecisions(e.decisions(), e.lastId());
             case Effect.SaveSessions e -> persistence.saveSessions(e.specs());
             case Effect.SavePanels e -> persistence.savePanels(e.panels(), e.closed());
         }

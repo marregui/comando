@@ -73,7 +73,8 @@ import static org.awaitility.Awaitility.await;
 /// - A missing or unknown token is refused, a foreign origin forbidden; a revoked token stops while a newer one works.
 /// - Initialize, tool listing and unknown methods answer as the protocol says.
 /// - A permission call raises an approval card and answers with the user's decision and the rule it saves.
-/// - A cancelled, unanswered or closing-time approval is denied and its card withdrawn.
+/// - A cancelled, unanswered or closing-time approval is denied and its card withdrawn; an unanswered question is
+///   denied too, and nothing of it is kept.
 /// - The view tools turn their input into view intents.
 /// - At most a bound of requests run at once, and a smaller bound of one session's; one past either is refused at once.
 /// - A request whose body does not arrive in time has its connection closed, and its place comes back; one whose
@@ -447,6 +448,35 @@ class McpServerTest {
         sink.await(Intent.ApprovalWithdrawn.class, WAIT);
     }
 
+    /// A question card (AskUserQuestion) nobody answers is denied at its deadline, the denial saying no answer came
+    /// within it, and its card withdrawn; nothing else is sent, so no question is kept to be asked later.
+    @Test
+    void unansweredQuestionIsDeniedAtTheDeadlineAndNothingIsKept() throws Exception {
+        server.close();
+        server = start(Duration.ofMillis(300));
+        sink.clear();
+        final String questions = "{\"questions\":[{\"question\":\"Which store?\",\"header\":\"Store\","
+                + "\"multiSelect\":false,\"options\":[{\"label\":\"Mapped\",\"description\":\"read in place\"},"
+                + "{\"label\":\"Heap\"}]}]}";
+        final JsonNode result = json.readTree(text(tool("approve",
+                "{\"tool_name\":\"AskUserQuestion\",\"input\":" + questions + "}")));
+        assertThat(result.path("behavior").asString()).isEqualTo("deny");
+        assertThat(result.path("message").asString()).isEqualTo("No answer from the user within 300 ms.");
+        sink.await(Intent.ApprovalWithdrawn.class, WAIT);
+        assertThat(sink.intents()).extracting(Object::getClass)
+                .containsExactly(Intent.ApprovalRequested.class, Intent.ApprovalWithdrawn.class);
+    }
+
+    /// The deadline as a denial says it: whole hours in h, so comando's own 24 h reads "24 h"; whole minutes in min;
+    /// anything else in ms.
+    @Test
+    void theDeadlineIsSaidInItsLargestWholeUnit() {
+        assertThat(McpTools.waited(Duration.ofHours(24))).isEqualTo("24 h");
+        assertThat(McpTools.waited(Duration.ofMinutes(55))).isEqualTo("55 min");
+        assertThat(McpTools.waited(Duration.ofMillis(90_500))).isEqualTo("90500 ms");
+        assertThat(McpTools.waited(Duration.ofMillis(300))).isEqualTo("300 ms");
+    }
+
     /// Closing the server answers every waiting permission call deny.
     @Test
     void closingTheServerDeniesWaitingApprovals() throws Exception {
@@ -589,13 +619,15 @@ class McpServerTest {
         assertThat(sink.of(Intent.SessionLayout.class)).isEmpty();
     }
 
-    /// `ui_get_state` lists the two panels, the connection and the session by name.
+    /// `ui_get_state` lists the two panels, the connection and the session by name, and no decisions kept for later:
+    /// a card waits only while its session waits.
     @Test
     void stateDescribesPanelsConnectionsAndSessions() throws Exception {
         final JsonNode s = json.readTree(text(tool("ui_get_state", "{}")));
         assertThat(s.path("panels")).hasSize(2);
         assertThat(s.path("connections").path(0).path("name").asString()).isEqualTo("local");
         assertThat(s.path("sessions").path(0).path("name").asString()).isEqualTo("work");
+        assertThat(s.has("later")).as("no Later group").isFalse();
     }
 
     /// `ui_set_layout` sends one SessionLayout naming the session, panel, lower tab and share; it says when focus waits

@@ -9,7 +9,6 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
@@ -68,7 +67,6 @@ import dev.marregui.comando.core.state.InstancesState.Instance;
 import dev.marregui.comando.core.state.InstancesState.Member;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -120,16 +118,11 @@ final class InstancesTab {
     private final IntentSink intents;
     private final Supplier<InstancesPort> port;
     private final Supplier<SessionsSidebar.Cards> cards;
-    /** The row whose card shows, or null. */
-    private Row carded;
     /**
-     * After a click, as in the Sessions tab: the card follows the pointer onto the other rows, each row's card after a
-     * rest of {@link SessionsSidebar#FOLLOW_MILLIS}, until it closes otherwise.
+     * A row's card: after a click, as in the Sessions tab, it follows the pointer onto the other rows, each row's card
+     * after a rest of {@link SessionsSidebar#FOLLOW_MILLIS}, until it closes otherwise.
      */
-    private boolean following;
-    /** The row the pointer rests on, whose card waits. */
-    private Row resting;
-    private final Debouncer cardWait = new Debouncer(SessionsSidebar.FOLLOW_MILLIS, this::showResting);
+    private final CardFollower<Row> follower;
     private volatile Edge edge = Edge.NONE;
     private final JPanel root = new JPanel(new BorderLayout());
     /**
@@ -177,6 +170,8 @@ final class InstancesTab {
         tree.setCellRenderer(new RowRenderer());
         tree.setToggleClickCount(0);
         SidebarLook.tree(tree);
+        follower = new CardFollower<>(tree, cards, InstancesTab::rowOf, InstancesTab::key, InstancesTab::same,
+                this::cardOf);
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(final MouseEvent e) {
@@ -194,27 +189,9 @@ final class InstancesTab {
                 if (e.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(e)) {
                     final Row r = rowAt(e);
                     if (r != null) {
-                        following = true;
-                        cardWait.stop();
-                        card(r);
+                        follower.clicked(r);
                     }
                 }
-            }
-
-            @Override
-            public void mouseExited(final MouseEvent e) {
-                // off the rows the card closes, unless the pointer goes on into it
-                cardWait.stop();
-                resting = null;
-                if (carded != null && cards.get().showing(key(carded))) {
-                    cards.get().left();
-                }
-            }
-        });
-        tree.addMouseMotionListener(new MouseAdapter() {
-            @Override
-            public void mouseMoved(final MouseEvent e) {
-                restOn(rowUnder(e.getX(), e.getY()));
             }
         });
 
@@ -293,7 +270,7 @@ final class InstancesTab {
             newest.forEach(consultModel::addElement);
         }
         header();
-        refreshCard();
+        follower.refresh(this::now);
     }
 
     /** The tree again, keeping the instances the user opened open and the selected one selected. */
@@ -461,47 +438,10 @@ final class InstancesTab {
         UiErrands.start("instances-role", () -> p.role(role));
     }
 
-    /** The row under {@code (x, y)}, its icon or text, or null; the selection stays. */
-    private Row rowUnder(final int x, final int y) {
-        final TreePath path = tree.getPathForLocation(x, y);
-        return path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row r ? r : null;
-    }
-
-    /**
-     * The pointer is over {@code over}, or over no row. Back on the card's row, the card stays; on another row while the
-     * card follows, that row's card shows after the rest; off every row, the card closes unless the pointer goes on into
-     * it.
-     */
-    private void restOn(final Row over) {
-        if (carded != null && !cards.get().showing(key(carded))) {
-            // closed otherwise: its ✕, a click on it, the pointer leaving it for elsewhere
-            carded = null;
-            following = false;
-        }
-        if (over == null) {
-            cardWait.stop();
-            resting = null;
-            if (carded != null) {
-                cards.get().left();
-            }
-            return;
-        }
-        if (carded != null && same(carded, over)) {
-            cardWait.stop();
-            resting = null;
-            cards.get().stay();
-            return;
-        }
-        if (following && (resting == null || !same(resting, over))) {
-            resting = over;
-            cardWait.request();
-        }
-    }
-
-    private void showResting() {
-        if (resting != null && following) {
-            card(resting);
-        }
+    /** The row at {@code path}, or null; the selection stays. */
+    private static Row rowOf(final TreePath path) {
+        return path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode n
+                && n.getUserObject() instanceof Row r ? r : null;
     }
 
     private static String key(final Row r) {
@@ -513,67 +453,26 @@ final class InstancesTab {
                 && Objects.equals(a.member() == null ? null : a.member().name(), b.member() == null ? null : b.member().name());
     }
 
-    /** {@code r}'s card, beside the rows at its row's height, as the Sessions tab shows its rows' cards. */
-    private void card(final Row r) {
-        final Rectangle bounds = boundsOf(r);
-        if (bounds == null) {
-            return;
-        }
-        carded = r;
-        resting = null;
-        final Card c = cardOf(r);
-        cards.get().showFacts(key(r), c.title(), c.facts(), c.heading(), c.text(), tree, bounds, beside());
-    }
-
     private Card cardOf(final Row r) {
         return cardOf(r, shown == null ? "" : shown.self().version(), shown != null && shown.denied().contains(r.instance().slug()),
                 System.currentTimeMillis(), ZoneId.systemDefault());
     }
 
-    /** {@code r}'s row in the tree as it is now, or null when it is gone. */
-    private Rectangle boundsOf(final Row r) {
-        for (int i = 0; i < tree.getRowCount(); i++) {
-            final TreePath path = tree.getPathForRow(i);
-            if (path.getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row x && same(r, x)) {
-                return tree.getPathBounds(path);
-            }
-        }
-        return null;
-    }
-
-    /** Where a card beside the rows starts: after the widest row shown, reaching {@link SessionsSidebar#OVERLAP} back. */
-    int beside() {
-        int widest = 0;
-        for (int i = 0; i < tree.getRowCount(); i++) {
-            final Rectangle b = tree.getRowBounds(i);
-            widest = Math.max(widest, b.x + b.width);
-        }
-        final Rectangle seen = tree.getVisibleRect();
-        final int right = seen.isEmpty() ? tree.getWidth() : seen.x + seen.width;
-        return Math.max(0, Math.min(widest, right) - SessionsSidebar.OVERLAP);
-    }
-
-    /** The card shown, with what the presences say now; its row gone, it stays as it was until it closes. */
-    private void refreshCard() {
-        if (carded == null || !cards.get().showing(key(carded))) {
-            return;
-        }
+    /** The row shown now as {@code r}, the last of them, or null when it is gone. */
+    private Row now(final Row r) {
         Row now = null;
         for (int i = 0; i < tree.getRowCount(); i++) {
-            if (tree.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row x
-                    && same(carded, x)) {
+            final Row x = rowOf(tree.getPathForRow(i));
+            if (x != null && same(r, x)) {
                 now = x;
             }
         }
-        if (now != null) {
-            carded = now;
-            final Card c = cardOf(now);
-            cards.get().updateFacts(key(now), c.title(), c.facts(), c.heading(), c.text());
-        }
+        return now;
     }
 
     /** What a row's card says: its title, its facts, and under a heading the last exchange of a session. */
-    record Card(String title, List<Map.Entry<String, String>> facts, String heading, String text) {
+    record Card(String title, List<Map.Entry<String, String>> facts, String heading, String text)
+            implements CardFollower.Card {
     }
 
     static Card cardOf(final Row r, final String myVersion, final boolean denied, final long now, final ZoneId zone) {

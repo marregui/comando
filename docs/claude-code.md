@@ -49,8 +49,8 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)).
 - **MCP configuration.** One file per running process under `run/` in the data root, mode `0600` from creation, named
   after the session and a random UUID. At each start the adapter asks `McpGateway.register` for a ticket (the server's
-  URL and a bearer token); the file names comando's server, that token, and `"timeout": 3600000`, which lets an approval
-  card wait up to 55 minutes. Deleted when the process exits, and its token revoked, also when a newer run has already
+  URL and a bearer token); the file names comando's server, that token, and `"timeout": 86700000`, 24 hours and 5 minutes, which
+  lets an approval card wait its 24 hours ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). Deleted when the process exits, and its token revoked, also when a newer run has already
   replaced the process (the newer run keeps its own token); files a killed comando left are deleted at the next start.
 - **Working directory.** The session's; its git branch is read from `.git/HEAD` after each turn, and is none while the
   folder is in Claude Code's folder, where a kit lives. What the session writes to may be elsewhere:
@@ -240,10 +240,10 @@ turn has handed work to the background and no turn runs, the session is not lock
 state, never stored: comando started again shows none. Other sessions and their panels are not touched.
 
 An automatic checkpoint asks the user nothing ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): its command carries `--auto` (`/reflect --auto`), so a
-command that knows it holds each decision it would have asked back with `decision_hold` instead of raising a card, and
-the session never waits on the user. A decision held back waits in the Approvals tab's Later group
-([§4.1](#41-approval-cards)), kept in `decisions.json` across restarts, until a checkpoint the user starts (the Checkpoint
-button, a typed `/reflect`, or **Settle**) asks it and settles it with `decisions_settled`. The Checkpoint button and a
+command that knows it writes each decision it would have asked into its task's entry in the scratchpad's `INDEX.md`, as
+a `**Needs you:**` line, instead of raising a card, and the session never waits on the user. The Logbook tab lists those
+tasks ([Workbench §1.4](workbench.md#14-the-sidebar)); its **Ask me its decisions in** prompts a session, which asks them as
+ordinary question cards ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). The Checkpoint button and a
 typed command carry no argument and ask as before; answering their cards is what lets the checkpoint finish.
 
 ## 3. MCP tools
@@ -295,7 +295,6 @@ sends for the same gesture:
 | sessions | `session_new` (name, work dir, model, effort, checkpoint, and an optional first `prompt` that starts it; no permission mode and no extra directories: the kit's and the working folder's settings hold them, [§1.1](#11-the-process)), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
 | panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_place`, `panel_pin`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
-| decisions held back | `decision_hold` (title, detail, optional `options`, the card's choices; a report or the calling session's automatic checkpoint holds a decision back, [record 142](adr/0142-one-decision-queue.md)), `decisions_settled` (ids), `decision_settle`, `decision_dismiss` (id; the Later group's buttons); `ui_get_state` lists `later` with ids and options ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
 | views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
 | servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
@@ -324,12 +323,11 @@ sends for the same gesture:
   also run for the session's creator, directly or through others, so a caller cleans up the sessions it made. A grant
   `"terminal"` lets its caller type into a Terminal without a card ([record 148](adr/0148-agents-drive-a-panel-terminal.md)).
 - **Start rule.** A stopped session starts again only for the user or one of its creators, by whichever action reaches
-  it: `session_start`, `session_fresh`, and `panel_run` into its panel, `session_command`, `session_checkpoint` and
-  `decision_settle`, which would start it; the reducer refuses the start and the tool answers the refusal. Stopping and
+  it: `session_start`, `session_fresh`, and `panel_run` into its panel, `session_command` and `session_checkpoint`,
+  which would start it; the reducer refuses the start and the tool answers the refusal. Stopping and
   interrupting are open to every caller ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)'s breaker,
   amended).
-- **Notice.** Every act but a read, a refusal and `decision_hold` names its caller in the status bar
-  (`foreman: session new — …`); a decision held back brings nothing forward ([§4.1](#41-approval-cards)).
+- **Notice.** Every act but a read and a refusal names its caller in the status bar (`foreman: session new — …`).
 - **Not yet.** The Files tab's git changes and entries (open a change, delete, roll back, remove, unstage) and the
   folders window; `Actions.NOT_YET` names each with the reason, and `ActionParityTest` fails for any other intent the
   window sends without an action.
@@ -390,7 +388,7 @@ sends for the same gesture:
 rules do not settle. Each request is a card in the Approvals tab; the MCP call waits on a future until the user
 answers.
 
-![An approval: claude -p calls the approve tool on comando's MCP server with the tool's name, input and id; the server puts a card in the Approvals tab and waits on a future, at most 55 minutes; the answer goes back as allow or deny with the rules to add; the call and the decision go to the audit log](images/approval.svg)
+![An approval: claude -p calls the approve tool on comando's MCP server with the tool's name, input and id; the server puts a card in the Approvals tab and waits on a future until the user answers, at most 24 hours; the answer goes back as allow or deny with the rules to add; the call and the decision go to the audit log](images/approval.svg)
 
 | Kind | Raised by | Answers |
 |---|---|---|
@@ -419,24 +417,12 @@ how Claude Code matches them and never allow more than the command could do (`Pe
   card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
 - The Approvals tab is one queue for the window, in groups
   ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)): the focused panel's session's cards first, under its
-  name; then each other session's cards under its name, the group holding the oldest card first; then **Later**, the
-  decisions sessions held back, under each session's name, each with its title, detail and age, **Settle**
-  (sends that session its checkpoint command without `--auto`, so it asks; the focused panel's session when the
-  decision's own is gone or has no checkpoint command; its tooltip names the session it sends to ("Runs the checkpoint
-  of work"; "Runs main's checkpoint; c has no checkpoint command"; "Runs main's checkpoint; session c was removed");
-  off while that session's checkpoint runs, its tooltip saying to Settle once it has ended, and off with the reducer's
-  reason as its tooltip when no session can take it) and **Dismiss** (drops it unasked). The title counts both, "Approvals
-  (2 · 3 later)"; a decision held back brings nothing forward and posts no notice.
-- A Later decision is answered on its card ([record 142](adr/0142-one-decision-queue.md)): one toggle per option and
-  an Other answer line when it has options, as a question card has, else a one-line field. **Send answers** under the
-  group sends every answered card at once: each session gets one prompt, "Answers to the decisions you held for me:"
-  and a line per decision; a decision whose session is gone goes to the focused panel's session. The answered
-  decisions leave the group and the unanswered stay; a session running its checkpoint or stopping keeps its answers on
-  the cards, and a notice says to send them again once it can.
-- A question card that no one answers within the approval timeout is withdrawn and its call denied, as before, and each
-  of its questions waits in Later, its options the question's labels (one that took several says so in its detail);
-  the denial says so. A permission card that times
-  out is only denied.
+  name; then each other session's cards under its name, the group holding the oldest card first. A card appears only when
+  a session cannot go on without the user; a decision that blocks nothing is a `**Needs you:**` line in its task, listed
+  by the Logbook tab ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). The title counts the cards,
+  "Approvals (2)".
+- A card that no one answers within the approval timeout is withdrawn and its call denied, the denial saying the user did
+  not answer in 24 hours; nothing is held, a question included.
 - The Approvals tab comes forward at its top, the focused session's oldest card first, however it is brought forward (a new card, a
   click, ⌃2); a card arriving while it is in front, or while the keyboard is in a card, moves nothing.
 - Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the
@@ -445,7 +431,7 @@ how Claude Code matches them and never allow more than the command could do (`Pe
 - A card is withdrawn and its call denied when Claude Code cancels the call, the process exits, or the session is
   removed. A SQL card is also withdrawn at a turn end with nothing queued and no background work; while background work
   runs every card stays ([record 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)).
-- A card unanswered for 55 minutes is withdrawn and denied; at exit every waiting card is denied.
+- A card unanswered for 24 hours is withdrawn and denied; at exit every waiting card is denied.
 
 ### 4.2 SQL from Claude
 

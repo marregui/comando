@@ -37,7 +37,6 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PermissionRules;
@@ -79,8 +78,6 @@ public final class McpTools {
     static final String APPROVE = "approve";
     private static final String BYPASS = "bypassPermissions";
     private static final String PLAN_MODE = "plan";
-    /** The detail line of a held-back question that took several options (record 142). */
-    private static final String SEVERAL = "Several may apply: choose one, or name them all in Other answer.";
     static final int MAX_SQL_ROWS = 200;
     /**
      * The most rows one call returns, {@code db_run_sql}'s {@code max_rows} and {@code result_read}'s {@code limit}:
@@ -318,12 +315,10 @@ public final class McpTools {
             }
             return d;
         } catch (final TimeoutException e) {
-            sink.dispatch(new Intent.ApprovalWithdrawn(id, "no answer within " + approvalTimeout.toMinutes() + " minutes"));
-            final String unanswered = "No answer from the user within " + approvalTimeout.toMinutes() + " minutes.";
-            final int held = kind == ApprovalKind.QUESTION ? heldBack(session, inputJson) : 0;
-            final String waits = (held == 1 ? " The question waits" : " The questions wait")
-                    + " in the Approvals tab's Later group; the user's answers come to this session as a prompt.";
-            return new ApprovalDecision.Deny(held == 0 ? unanswered : unanswered + waits);
+            // nothing is kept for later: a question the session still needs is asked again as a new card
+            final String waited = waited(approvalTimeout);
+            sink.dispatch(new Intent.ApprovalWithdrawn(id, "no answer within " + waited));
+            return new ApprovalDecision.Deny("No answer from the user within " + waited + ".");
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "comando is shutting down"));
@@ -339,51 +334,11 @@ public final class McpTools {
         }
     }
 
-    /**
-     * A question card no one answered in time moves to the Later group (record 142): one decision per question, its
-     * header and the options' descriptions as the detail, the option labels as its options; a question that took
-     * several options says so in its detail, as the Later card offers one choice and an Other answer. Answers how many
-     * it held; none for input that is not a list of questions.
-     */
-    private int heldBack(final String session, final String inputJson) {
-        final JsonNode questions;
-        try {
-            questions = json.readTree(inputJson).path("questions");
-        } catch (final JacksonException e) {
-            LOG.log(System.Logger.Level.WARNING,
-                    "question card input unreadable, not held back [session=" + session + ", error=" + e.getMessage()
-                            + ']');
-            return 0;
-        }
-        int held = 0;
-        for (final JsonNode q : questions) {
-            final String question = q.path("question").asString("").strip();
-            if (question.isEmpty()) {
-                continue;
-            }
-            final List<String> detail = new ArrayList<>();
-            final String header = q.path("header").asString("").strip();
-            if (!header.isEmpty()) {
-                detail.add(header);
-            }
-            final List<String> options = new ArrayList<>();
-            for (final JsonNode o : q.path("options")) {
-                final String label = o.path("label").asString("").strip();
-                final String description = o.path("description").asString("").strip();
-                if (!label.isEmpty()) {
-                    options.add(label);
-                    if (!description.isEmpty()) {
-                        detail.add(label + ": " + description);
-                    }
-                }
-            }
-            if (q.path("multiSelect").asBoolean(false) && options.size() > 1) {
-                detail.add(SEVERAL);
-            }
-            sink.dispatch(new Intent.DecisionHeldBack(session, question, String.join("\n", detail), options));
-            held++;
-        }
-        return held;
+    /** How long a card waited, as its denial says it: whole hours in h, else whole minutes in min, else in ms. */
+    static String waited(final Duration d) {
+        final long ms = d.toMillis();
+        return ms >= 3_600_000 && ms % 3_600_000 == 0 ? ms / 3_600_000 + " h"
+                : ms >= 60_000 && ms % 60_000 == 0 ? ms / 60_000 + " min" : ms + " ms";
     }
 
     /** Tells the tools which panels take no text (a log); the application calls it once, with the store's view. */
@@ -721,14 +676,6 @@ public final class McpTools {
             n.put("kind", a.kind().name().toLowerCase(Locale.ROOT));
             n.put("tool", a.toolName());
             n.put("summary", clip(a.summary(), 300));
-        }
-        // the decisions sessions held back, oldest first: the Approvals tab's Later group (records 131, 142)
-        final ArrayNode later = root.putArray("later");
-        for (final Decision d : s.later()) {
-            final ObjectNode n = later.addObject().put("id", d.id()).put("session", d.session()).put("title", d.title())
-                    .put("detail", d.detail()).put("created", d.createdMillis());
-            final ArrayNode options = n.putArray("options");
-            d.options().forEach(options::add);
         }
         final ArrayNode folders = root.putArray("folders");
         s.folders().forEach(f -> folders.addObject().put("name", f.name()).put("path", f.path()));

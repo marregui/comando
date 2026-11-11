@@ -12,8 +12,9 @@ import dev.marregui.comando.ui.panels.SessionsSidebar;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [WindowLayout] reads and writes the window's layout settings, including keys from older layouts.
-/// - The sidebar tab in front is kept across the older layouts' indexes, the newest key winning.
-/// - A tab that is gone reads as Sessions.
+/// - The sidebar tab in front is kept by its name, and read from the older layouts' indexes until it is, the newest
+///   key winning.
+/// - A tab that is gone, or a name no tab has, reads as Sessions.
 /// - Each panel's lower divider is kept, and a save replaces the ones before.
 /// - The Search and Changes views on the right side are kept in their order; other types are left out.
 class WindowLayoutTest {
@@ -36,7 +37,7 @@ class WindowLayoutTest {
     }
 
     /// The middle key, from the layout with a Panels tab (record 70), wins over the oldest and maps Panels to Sessions;
-    /// the newest key wins over both, and an index that no longer exists reads as Sessions.
+    /// the index key wins over both.
     @Test
     void theTabInFrontWithAPanelsTabStaysInFront() {
         final WindowLayout layout = new WindowLayout(prefs);
@@ -48,10 +49,44 @@ class WindowLayoutTest {
             prefs.putInt("sidebar.front", pair[0]);
             assertThat(layout.sidebarTab()).as("index " + pair[0] + " with a Panels tab").isEqualTo(pair[1]);
         }
-        prefs.putInt("sidebar.selected", SessionsSidebar.FILES);
-        assertThat(layout.sidebarTab()).as("the newest key wins").isEqualTo(SessionsSidebar.FILES);
-        prefs.putInt("sidebar.selected", 7);
-        assertThat(layout.sidebarTab()).as("a tab that is gone reads as Sessions").isEqualTo(SessionsSidebar.SESSIONS);
+        prefs.putInt("sidebar.selected", 2);
+        assertThat(layout.sidebarTab()).as("the index key wins").isEqualTo(SessionsSidebar.FILES);
+    }
+
+    /// Without a name kept, the index key is read in the order before the Logbook moved ahead of Instances (Sessions,
+    /// Connections, Files, Instances, Logbook), each index to the same tab in today's order; an index no tab had reads
+    /// as Sessions.
+    @Test
+    void theIndexKeptBeforeTheLogbookMovedReadsAsTheSameTab() {
+        final WindowLayout layout = new WindowLayout(prefs);
+        final int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.CONNECTIONS},
+                {2, SessionsSidebar.FILES}, {3, SessionsSidebar.INSTANCES}, {4, SessionsSidebar.LOGBOOK},
+                {7, SessionsSidebar.SESSIONS}};
+        for (final int[] pair : oldToNew) {
+            prefs.putInt("sidebar.selected", pair[0]);
+            assertThat(layout.sidebarTab()).as("index " + pair[0]).isEqualTo(pair[1]);
+        }
+    }
+
+    /// Each tab's name, as a save writes it, reads back as that tab over every older key; a name no tab has reads as
+    /// Sessions rather than falling back to an index.
+    @Test
+    void theTabInFrontIsKeptByItsNameOverTheOlderKeys() {
+        final WindowLayout layout = new WindowLayout(prefs);
+        prefs.putInt("sidebar.tab", 3);
+        prefs.putInt("sidebar.front", 3);
+        prefs.putInt("sidebar.selected", 2);
+        final Map<Integer, String> names = Map.of(SessionsSidebar.SESSIONS, "sessions",
+                SessionsSidebar.CONNECTIONS, "connections", SessionsSidebar.FILES, "files",
+                SessionsSidebar.LOGBOOK, "logbook", SessionsSidebar.INSTANCES, "instances");
+        names.forEach((tab, name) -> {
+            assertThat(WindowLayout.tabName(tab)).isEqualTo(name);
+            prefs.put("sidebar.shown", WindowLayout.tabName(tab));
+            assertThat(layout.sidebarTab()).as(name).isEqualTo(tab);
+        });
+        prefs.put("sidebar.shown", "panels");
+        assertThat(layout.sidebarTab()).as("a name no tab has, not the index kept beside it")
+                .isEqualTo(SessionsSidebar.SESSIONS);
     }
 
     /// Dividers saved per panel are read back by a new layout, a later save without a panel drops its divider, and the

@@ -650,7 +650,7 @@ public final class Workspace {
      * The sidebar's session rows show the same card as the tabs: the card of the session's panel (the focused one when
      * it is the session's, else its first), or, for a headless session, a card of its own, read from the end of its
      * conversation. A connection's row shows a card of its facts, without a summary. Shown under {@code row}, a
-     * rectangle of {@code over}.
+     * rectangle of {@code over}. Its Linear site is the one the tabs' cards learnt so far, read on the EDT.
      */
     public SessionsSidebar.Cards rowCards() {
         return new SessionsSidebar.Cards() {
@@ -703,6 +703,11 @@ public final class Workspace {
                 if (card.shown() != null) {
                     card.left();
                 }
+            }
+
+            @Override
+            public LinearTickets.Site linearSite() {
+                return site;
             }
 
             @Override

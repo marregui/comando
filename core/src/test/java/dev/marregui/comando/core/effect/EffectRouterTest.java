@@ -17,7 +17,6 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -88,7 +87,6 @@ class EffectRouterTest {
                 row(new Effect.ReadChange("/r", CHANGE, ChangeAsk.FOLLOW), "tools.readChange /r a.txt FOLLOW"),
                 row(new Effect.SaveConnections(List.of(LOCAL)), "save.connections 1"),
                 row(new Effect.SaveFolders(List.of(NOTES, NOTES)), "save.folders 2"),
-                row(new Effect.SaveDecisions(List.of(new Decision(1, "work", "t", "d", 0L)), 1), "save.decisions 1"),
                 row(new Effect.SaveSessions(List.of(WORK)), "save.sessions 1"),
                 row(new Effect.SavePanels(List.of(new PanelState(PANEL, "SQL", "local", "")), List.of()), "save.panels 1"));
     }

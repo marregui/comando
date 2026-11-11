@@ -854,8 +854,8 @@ class WorkspaceTest {
 
     /// The card links at most [Workspace#MAX_TICKETS] ticket ids of known teams from the panel's text: the last
     /// paragraph's in the order written, then earlier ones from the newest back, so `ENG-7` is cut and `UTF-8` is no
-    /// team; a team prefix is learnt from a ticket URL in the conversation; a double click opens the ticket and keeps
-    /// the card.
+    /// team; a team prefix is learnt from a ticket URL in the conversation, and the sidebar's row cards link to the
+    /// site learnt; a double click opens the ticket and keeps the card.
     @Test
     void aCardLinksTheLinearTicketsThePanelNamesNewestFirstLearningTheirAddressFromLinearsLinks() throws Exception {
         final TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -881,6 +881,10 @@ class WorkspaceTest {
         assertThat(card.ticketLinks()).extracting(JLabel::getText).containsExactly("ENG-1125", "ENG-8", "OPS-3");
         assertThat(kept).as("OPS learnt from the session's conversation, and kept")
                 .containsExactly(new LinearTickets.Site("acme", Set.of("ENG", "OPS")));
+        final LinearTickets.Site[] rowSite = new LinearTickets.Site[1];
+        SwingUtilities.invokeAndWait(() -> rowSite[0] = w[0].rowCards().linearSite());
+        assertThat(rowSite[0]).as("the site learnt, for the sidebar's rows")
+                .isEqualTo(new LinearTickets.Site("acme", Set.of("ENG", "OPS")));
         final JLabel first = card.ticketLinks().getFirst();
         SwingUtilities.invokeAndWait(() -> first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 1, false, MouseEvent.BUTTON1)));
         assertThat(opened).as("one click opens nothing").isEmpty();

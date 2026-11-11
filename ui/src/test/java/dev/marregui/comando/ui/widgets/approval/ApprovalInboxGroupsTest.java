@@ -7,38 +7,28 @@ import java.awt.event.ContainerEvent;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
-import javax.swing.AbstractButton;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
-import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [ApprovalInbox] as one queue in three groups (record 131).
-/// - this session's cards first under its name, then the other sessions' under each name, the oldest group first, then
-///   Later, the decisions held back, under each session's name
+/// [ApprovalInbox] as one queue in two groups (record 131).
+/// - this session's cards first under its name, then the other sessions' under each name, the oldest group first
 /// - Up and Down and the first card follow that order; a card in its place stays while other groups change, and is
 ///   never taken out of the list while a card above it leaves
-/// - a decision shows its title as text, its detail muted and its age; Settle and Dismiss dispatch their intents
-/// - Settle's tooltip names the session it sends to, and why another when the decision's own has no checkpoint command
-///   or was removed
-/// - decisions alone show the list, not the empty text, and take no keyboard
 class ApprovalInboxGroupsTest {
 
     private static final long T0 = 1_000_000_000L;
@@ -46,11 +36,20 @@ class ApprovalInboxGroupsTest {
     private final List<Intent> sent = new ArrayList<>();
     private final AtomicLong now = new AtomicLong(T0 + 120_000);
     private final FakeFocus focus = new FakeFocus();
-    private final ApprovalInbox inbox = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus);
+    private ApprovalInbox inbox;
+
+    @BeforeEach
+    void mount() throws Exception {
+        SwingUtilities.invokeAndWait(() -> inbox = inboxOf());
+    }
 
     @AfterEach
-    void unmount() {
-        inbox.unmount();
+    void unmount() throws Exception {
+        SwingUtilities.invokeAndWait(inbox::unmount);
+    }
+
+    private ApprovalInbox inboxOf() {
+        return new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus);
     }
 
     /** The focus owner a test sets, and every component the inbox asked to focus. */
@@ -73,44 +72,39 @@ class ApprovalInboxGroupsTest {
         return new Approval(id, session, ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", created);
     }
 
-    private static Decision decision(final long id, final String session, final long created) {
-        return new Decision(id, session, "Keep the KB doc " + id + "?", "It disagrees with the code.", created);
-    }
-
     /** Approvals of three sessions, out of session order, oldest first overall; `c`'s card is the oldest. */
     private static final List<Approval> MIXED = List.of(
             bash(3, "c", T0 + 5), bash(1, "b", T0 + 10), bash(2, "work", T0 + 20), bash(4, "b", T0 + 30), bash(5, "work", T0 + 40));
 
-    /** Decisions of two sessions; `c`'s first is the oldest. */
-    private static final List<Decision> HELD = List.of(decision(7, "c", T0 + 1), decision(8, "work", T0 + 2), decision(9, "c", T0 + 3));
-
     /// This session's cards come first under its name, then the other sessions' under each name with the session of
-    /// the oldest card first, then Later with the decisions under each session's name, the oldest session first; within
-    /// a group the oldest comes first.
+    /// the oldest card first; within a group the oldest comes first.
     @Test
-    void theGroupsComeInOrderThisSessionOthersThenLater() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(MIXED, "work", HELD)));
+    void theGroupsComeInOrderThisSessionThenOthers() throws Exception {
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(MIXED, "work")));
         assertThat(sequence()).containsExactly(
                 "§THIS SESSION", "@work", "#2", "#5",
-                "§OTHER SESSIONS", "@c", "#3", "@b", "#1", "#4",
-                "§LATER", "@c", "D7", "D9", "@work", "D8");
+                "§OTHER SESSIONS", "@c", "#3", "@b", "#1", "#4");
     }
 
     /// With no session in the focused panel every card is in one group of sessions; with no card of the focused session
-    /// there is no This session group; with no decision there is no Later group.
+    /// there is no This session group; with no card at all the list is empty and no age ticks.
     @Test
     void anEmptyGroupIsNotShown() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(MIXED, "", List.of())));
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(MIXED, "")));
         assertThat(sequence()).containsExactly("§SESSIONS", "@c", "#3", "@b", "#1", "#4", "@work", "#2", "#5");
 
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(bash(1, "b", T0)), "work", List.of())));
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(bash(1, "b", T0)), "work")));
         assertThat(sequence()).containsExactly("§OTHER SESSIONS", "@b", "#1");
+
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work")));
+        assertThat(sequence()).isEmpty();
+        assertThat(inbox.ageWanted()).isFalse();
     }
 
     /// Up and Down move in view order, across groups; the first card is this session's oldest.
     @Test
     void theKeysAndTheFirstCardFollowTheViewOrder() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(MIXED, "work", HELD)));
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(MIXED, "work")));
         SwingUtilities.invokeAndWait(inbox::focusFirst);
         assertThat(focus.requested.getLast().getName()).isEqualTo("approval-2");
 
@@ -126,106 +120,21 @@ class ApprovalInboxGroupsTest {
     /// what the user typed in it stays.
     @Test
     void aCardStaysTheSameWhileTheGroupsChange() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(bash(2, "work", T0)), "work", List.of())));
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(bash(2, "work", T0)), "work")));
         final Component card = item("approval-2");
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(bash(2, "work", T0), bash(6, "b", T0 + 1)), "work",
-                List.of(decision(7, "c", T0)))));
+        final List<Approval> two = List.of(bash(2, "work", T0), bash(6, "b", T0 + 1));
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(two, "work")));
         assertThat(item("approval-2")).isSameAs(card);
-        assertThat(sequence()).containsExactly("§THIS SESSION", "@work", "#2", "§OTHER SESSIONS", "@b", "#6", "§LATER", "@c", "D7");
+        assertThat(sequence()).containsExactly("§THIS SESSION", "@work", "#2", "§OTHER SESSIONS", "@b", "#6");
 
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(bash(2, "work", T0), bash(6, "b", T0 + 1)), "b",
-                List.of())));
+        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(two, "b")));
         assertThat(item("approval-2")).isSameAs(card);
         assertThat(sequence()).containsExactly("§THIS SESSION", "@b", "#6", "§OTHER SESSIONS", "@work", "#2");
     }
 
-    /// Settle dispatches SettleDecision and Dismiss dispatches DismissDecision, each with the decision's id; neither
-    /// button takes the keyboard.
-    @Test
-    void settleAndDismissDispatchTheirIntents() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD)));
-        final AbstractButton settle = (AbstractButton) named(item("decision-9"), "settle");
-        final AbstractButton dismiss = (AbstractButton) named(item("decision-8"), "dismiss");
-        assertThat(settle.isFocusable()).isFalse();
-        assertThat(dismiss.isFocusable()).isFalse();
-
-        SwingUtilities.invokeAndWait(settle::doClick);
-        SwingUtilities.invokeAndWait(dismiss::doClick);
-        assertThat(sent).containsExactly(new Intent.SettleDecision(9), new Intent.DismissDecision(8));
-    }
-
-    /// Settle is off on a decision whose session runs its checkpoint (the reducer would refuse it, record 130), and on
-    /// again once the checkpoint has ended; Dismiss stays on.
-    @Test
-    void settleIsOffWhileTheDecisionsSessionRunsItsCheckpoint() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD, Set.of(9L))));
-        final AbstractButton settle = (AbstractButton) named(item("decision-9"), "settle");
-        assertThat(settle.isEnabled()).isFalse();
-        assertThat(named(item("decision-9"), "dismiss").isEnabled()).isTrue();
-        assertThat(named(item("decision-8"), "settle").isEnabled()).isTrue();
-
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD)));
-        assertThat(settle.isEnabled()).isTrue();
-    }
-
-    /// Settle's tooltip names the session it sends to, as the reducer chooses it (record 131): the decision's own, or
-    /// the focused panel's when its own has no checkpoint command; a decision the reducer refuses for no session to
-    /// settle it in has Settle off with that reason.
-    @Test
-    void settleSaysWhereItSendsAndWhyItIsOff() throws Exception {
-        final String nowhere = "No session to settle it in: open a session with a checkpoint command";
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD, Set.of(),
-                Map.of(9L, nowhere), Map.of(8L, "work", 7L, "main"))));
-        final AbstractButton refused = (AbstractButton) named(item("decision-9"), "settle");
-        final AbstractButton open = (AbstractButton) named(item("decision-8"), "settle");
-        assertThat(refused.isEnabled()).isFalse();
-        assertThat(refused.getToolTipText()).isEqualTo(nowhere);
-        assertThat(open.isEnabled()).isTrue();
-        assertThat(open.getToolTipText()).isEqualTo("Runs the checkpoint of work");
-        assertThat(((AbstractButton) named(item("decision-7"), "settle")).getToolTipText()).as("its own session has none")
-                .isEqualTo("Runs main's checkpoint; c has no checkpoint command");
-    }
-
-    /// When the decision's own session was removed, Settle's tooltip names the session it sends to and says the own one
-    /// was removed, not that it lacks a checkpoint command.
-    @Test
-    void settleSaysTheDecisionsOwnSessionWasRemoved() throws Exception {
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "work", HELD, Set.of(),
-                Map.of(), Map.of(7L, "main"), Set.of(7L))));
-        assertThat(((AbstractButton) named(item("decision-7"), "settle")).getToolTipText())
-                .isEqualTo("Runs main's checkpoint; session c was removed");
-    }
-
-    /// A decision shows its title as text even when it starts like HTML, its detail muted, and its age, which ticks;
-    /// decisions alone show the list, not the empty text.
-    @Test
-    void aDecisionShowsItsTitleDetailAndAge() throws Exception {
-        final Decision html = new Decision(1, "work", "<html><b>bold</b>", "Why it waits", T0);
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "", List.of(html))));
-        final Component row = item("decision-1");
-        final JLabel title = (JLabel) named(row, "title");
-        assertThat(title.getText()).startsWith("<html><b>bold</b>");
-        assertThat(title.getClientProperty("html.disable")).isEqualTo(Boolean.TRUE);
-        final JTextArea detail = (JTextArea) named(row, "detail");
-        assertThat(detail.getText()).isEqualTo("Why it waits");
-        assertThat(detail.getForeground()).isEqualTo(Theme.MUTED);
-        final JLabel age = (JLabel) named(row, "age");
-        assertThat(age.getText()).isEqualTo("2 min ago");
-        assertThat(row.isFocusable()).as("a decision takes no keyboard").isFalse();
-        assertThat(inbox.ageWanted()).as("decisions alone keep the list and its ages").isTrue();
-
-        now.addAndGet(120_000);
-        SwingUtilities.invokeAndWait(inbox::tick);
-        assertThat(age.getText()).isEqualTo("4 min ago");
-
-        SwingUtilities.invokeAndWait(() -> inbox.render(new ApprovalInbox.Queue(List.of(), "", List.of())));
-        assertThat(sequence()).isEmpty();
-        assertThat(inbox.ageWanted()).isFalse();
-    }
-
     // ---- reading the list
 
-    /** The list's rows in order: `§` a group's header, `@` a session's name, `#` a card's id, `D` a decision's id. */
+    /** The list's rows in order: `§` a group's header, `@` a session's name, `#` a card's id. */
     private List<String> sequence() {
         final List<String> out = new ArrayList<>();
         for (final Component c : list().getComponents()) {
@@ -239,8 +148,6 @@ class ApprovalInboxGroupsTest {
                 out.add("@" + ((JLabel) c).getText());
             } else if (name.startsWith("approval-")) {
                 out.add("#" + name.substring("approval-".length()));
-            } else if (name.startsWith("decision-")) {
-                out.add("D" + name.substring("decision-".length()));
             }
         }
         return out;
@@ -252,10 +159,12 @@ class ApprovalInboxGroupsTest {
     @Test
     void aStayingCardIsNotTakenOutWhenACardAboveLeaves() throws Exception {
         for (final String second : List.of("b", "work")) {
-            final ApprovalInbox box = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus);
+            final ApprovalInbox[] made = new ApprovalInbox[1];
+            SwingUtilities.invokeAndWait(() -> made[0] = inboxOf());
+            final ApprovalInbox box = made[0];
             try {
                 SwingUtilities.invokeAndWait(() -> box.render(new ApprovalInbox.Queue(List.of(bash(2, "work", T0), bash(5, second, T0 + 1)),
-                        "work", List.of())));
+                        "work")));
                 final List<String> removed = new ArrayList<>();
                 SwingUtilities.invokeAndWait(() -> listOf(box).addContainerListener(new ContainerAdapter() {
                     @Override
@@ -263,12 +172,13 @@ class ApprovalInboxGroupsTest {
                         removed.add(String.valueOf(e.getChild().getName()));
                     }
                 }));
-                SwingUtilities.invokeAndWait(() -> box.render(new ApprovalInbox.Queue(List.of(bash(5, second, T0 + 1)), "work", List.of())));
+                SwingUtilities.invokeAndWait(() -> box.render(new ApprovalInbox.Queue(List.of(bash(5, second, T0 + 1)),
+                        "work")));
                 assertThat(removed).as("taken out of the list, card 5 of session " + second).doesNotContain("approval-5")
                         .contains("approval-2");
                 assertThat(order(box)).as("the staying card in its place").contains("approval-5");
             } finally {
-                box.unmount();
+                SwingUtilities.invokeAndWait(box::unmount);
             }
         }
     }

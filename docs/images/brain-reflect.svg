@@ -35,9 +35,9 @@
   </g>
   <text x="1080" y="166" class="cap" fill="#E7C55A">DEPTHS</text>
   <g class="s">
-    <text x="1080" y="196">full, the user starts it: every step; asks held decisions</text>
+    <text x="1080" y="196">full, the user starts it: every step; asks its decisions</text>
     <text x="1080" y="216">--auto: Measure, Memory, liveness only; asks nothing,</text>
-    <text x="1080" y="236">holds each decision with decision_hold</text>
+    <text x="1080" y="236">writes each decision as a Needs you line</text>
     <text x="1080" y="256">headless: as --auto; decisions wait in INDEX.md</text>
   </g>
 

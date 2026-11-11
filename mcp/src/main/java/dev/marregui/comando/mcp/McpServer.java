@@ -57,7 +57,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     static final int MAX_REQUESTS = 256;
     /**
      * The requests one session's token runs at once. A {@code session_read} or {@code instance_ask} waits up to 600 s
-     * and an approval up to 55 minutes, each holding a request; this bound keeps one session's waits, or a client of it
+     * and an approval up to 24 hours, each holding a request; this bound keeps one session's waits, or a client of it
      * that stalls, from taking all of {@link #MAX_REQUESTS} (16 sessions at this bound fill it). Unmeasured: how many
      * calls Claude Code runs at once per session, sub-agents included, is not known; 16 is a guess well above the few a
      * session is seen to send.

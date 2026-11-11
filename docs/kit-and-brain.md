@@ -95,7 +95,7 @@ part runs without what that part carries.
 | a command failed | `PostToolUseFailure` | a tripwire may point the session at the memory file that documents that error string, without restating its fix |
 | a compaction | `SessionStart` (`compact`) | the rules that must survive go back in context |
 | the checkpoint | comando's | the `reflect` skill writes memory, corrects the KB and folds the scratchpad ([§6](#6-reflect-the-consolidation-step)), then comando sends `/compact` ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
-| the checkpoint, automatic | comando's | at a turn's end past comando's threshold, comando sends the checkpoint command with `--auto`: the skill asks the user nothing and holds each decision back with comando's MCP tool `decision_hold`; a checkpoint the user starts asks the held decisions and settles them with `decisions_settled` ([§6.2](#62-depths), [record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)) |
+| the checkpoint, automatic | comando's | at a turn's end past comando's threshold, comando sends the checkpoint command with `--auto`: the skill asks the user nothing and writes each decision it would have asked as a `**Needs you:**` line in its task's entry in the day's `INDEX.md`, which comando's Logbook tab lists ([§6.2](#62-depths), [record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md), [record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)) |
 
 A hook adds context or blocks a call; it never rewrites a prompt. The variables comando sets in a session's environment
 (`CLAUDE_CONFIG_DIR`, `COMANDO_BRAIN`, `COMANDO_HOME`, `COMANDO_CREATED_BY`, `CONTEXT_CHECKPOINT_BY`) are in
@@ -162,7 +162,6 @@ run does, or each call is a card and the locked session waits on the user:
 
 | Allow | Why |
 |---|---|
-| `mcp__comando__decision_hold`, `mcp__comando__decisions_settled`, `mcp__comando__ui_get_state` | the three MCP tools the checkpoint calls |
 | `Read(/<brain>/**)` | reads of memory, the scratchpad and the KB, which sit outside the session's working folder; `Read` rules also cover `Grep` and `Glob` |
 | `Edit(/<brain>/**)` | the checkpoint's writes to memory and the day's index; an `Edit` rule covers the `Write` tool too, as Claude Code checks file writes against `Edit` rules only (a `Write(…)` path rule never matches) |
 | `permissions.additionalDirectories`: `["<brain>"]` | the brain as a working directory, so reads there need no rule in any mode |
@@ -489,7 +488,7 @@ that fails unless its anchor is there exactly once), never a whole-file write ov
 |---|---|
 | the roll | at session start and before a job writes: when today's folder is missing, the newest day folder is renamed to today; any other day folder is merged into today's topic by topic, its `INDEX.md` parked in `work/` to be folded; anything else at the top moves to today's `inbox/` to be filed |
 | the index | `# Scratchpad`; a table of the topic folders; `## Waiting on <user>` (every open decision, each naming its task); `## Open`, one `### <topic>/` heading per topic folder, each task as `#### N. <title>`; last `## Scheduled reports`, where jobs file their reports until `/reflect` moves them |
-| a task | **Ticket** or **Repo**, **State** (done, waiting on whom, in progress, with the last verified fact), **Next** (who moves it, and how), **Resume from**, and its documents, each a list item of its own led by its path relative to the index (`` `topic/01-x.md` — what it holds ``), so comando's Trash takes the line out with the file ([§3.2](#32-the-files-tab)) |
+| a task | **Ticket** or **Repo**, **State** (done, waiting on whom, in progress, with the last verified fact), **Next** (who moves it, and how), **Resume from**, **Needs you** (when it holds a decision for the user: a `- **Needs you:**` line with one sub-item per decision; the Logbook tab lists it first, [Workbench §1.4](workbench.md#14-the-sidebar)), and its documents, each a list item of its own led by its path relative to the index (`` `topic/01-x.md` — what it holds ``), so comando's Trash takes the line out with the file ([§3.2](#32-the-files-tab)) |
 | task numbers | a new task takes the highest number in the index plus one, read just before writing; numbers never change |
 | names | sized for comando's Files tab, which does not scroll sideways: topics lower-case, at most 20 characters; documents `NN-<what>.md`, at most 25; `work/` files at most 22; no date in a name (the folder carries it); the name alone says what the file holds; a topic's living plan is `00-<topic>-plan.md` |
 | pointers | carry no date, as the folder's name changes daily: `topic/01-x.md`, task 3 |
@@ -620,9 +619,9 @@ the next session recalls more of what matters from fewer bytes, and the KB is tr
 
 | Run | Does |
 |---|---|
-| full: the user starts it (the button, a typed command, **Settle**) | every step; first reads the decisions held back earlier (`ui_get_state`, its `later` list: `id`, `session`, `title`, `detail`), asks them with its own, one form at a time, and after the answers calls `decisions_settled` with the ids it settled |
-| automatic: `--auto` | Measure, Memory and the scratchpad's liveness only, writing inside the brain alone (the day folder's roll is left to the start hook, kit changes to a run the user starts); asks the user nothing and never waits on them, which needs the kit's settings to allow its reads, writes and MCP calls ([§2.5](#25-settings)); each decision it would have asked (a memory change to confirm, a KB statement for the gate, a done task to clear, a report to apply) is held back twice: one row in the index's waiting table, and one call of comando's MCP tool `decision_hold` (`title`: the decision in one line; `detail`: what the user needs to decide it, a few lines), which puts it in the Approvals tab's Later group ([Claude Code §4.1](claude-code.md#41-approval-cards)); outside comando, the row alone |
-| cannot ask: headless (a scheduled job, a prompt another session sent) | as automatic; its decisions wait as one row in the index's waiting table |
+| full: the user starts it (the button, a typed command) | every step, asking its decisions one form at a time |
+| automatic: `--auto` | Measure, Memory and the scratchpad's liveness only, writing inside the brain alone (the day folder's roll is left to the start hook, kit changes to a run the user starts); asks the user nothing and never waits on them, which needs the kit's settings to allow its reads, writes and MCP calls ([§2.5](#25-settings)); each decision it would have asked (a memory change to confirm, a KB statement for the gate, a done task to clear, a report to apply) is written into its task's entry in the index as a `**Needs you:**` line with one sub-item per decision (the decision in one line, then what the user needs to decide it, a few lines), which comando's Logbook tab lists ([Workbench §1.4](workbench.md#14-the-sidebar), [record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)) |
+| cannot ask: headless (a scheduled job, a prompt another session sent) | as automatic; its decisions wait as `**Needs you:**` lines |
 
 A skill that ignores `--auto` may still ask; its cards then lock the session until the user answers
 ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)), which is what the automatic form exists to
@@ -726,7 +725,7 @@ user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windo
    `settings.json` without its `hooks` key: the skill rolls the day folder itself in a run the user starts, and no
    guard runs.
 3. **Show the plan and ask once.** One table: every folder and file below, the hooks and what each does, what the
-   settings allow (the three MCP tools, reads and edits inside the brain, the two tools the checkpoint runs,
+   settings allow (reads and edits inside the brain, the two tools the checkpoint runs,
    [§2.5](#25-settings)), that no job is
    scheduled, and that `~/.claude` is not touched. Change nothing before the user agrees.
 4. **The kit.** `mkdir -p ~/comando-kit && git -C ~/comando-kit init -b main`, then write the files of
@@ -861,7 +860,7 @@ __pycache__/
 ```
 
 `K/settings.json` ([§2.5](#25-settings)): transcripts kept, permissions that ask before each tool but allow what the
-automatic checkpoint does (the three MCP tools it calls, reads and edits inside the brain, the two tools it runs, the
+automatic checkpoint does (reads and edits inside the brain, the two tools it runs, the
 brain as a working directory), and the four hooks. `<brain>` is the brain's absolute path, written in at step 4.
 
 ```json
@@ -869,8 +868,7 @@ brain as a working directory), and the four hooks. `<brain>` is the brain's abso
   "cleanupPeriodDays": 36500,
   "permissions": {
     "defaultMode": "default",
-    "allow": ["mcp__comando__decision_hold", "mcp__comando__decisions_settled", "mcp__comando__ui_get_state",
-              "Read(/<brain>/**)", "Edit(/<brain>/**)", "Bash(index-check:*)", "Bash(ledger:*)"],
+    "allow": ["Read(/<brain>/**)", "Edit(/<brain>/**)", "Bash(index-check:*)", "Bash(ledger:*)"],
     "additionalDirectories": ["<brain>"],
     "deny": []
   },
@@ -903,7 +901,7 @@ The brain is the folder comando names in `$COMANDO_BRAIN` (outside comando: `bra
   State and Next. Rules: `SCRATCHPAD/README.md`.
 - **KB** (`KB/`) holds checked knowledge, found by title from `00_START_HERE.md`. Only `/reflect` writes it, each
   statement verified against its source, refuted by an independent reviewer and approved by the user.
-- **The checkpoint** is the `reflect` skill. Run with `--auto` it asks nothing and holds decisions back.
+- **The checkpoint** is the `reflect` skill. Run with `--auto` it asks nothing and writes each decision it would have asked as a `**Needs you:**` line in its task.
 - **Agents** are `writer` and `reviewer`, each from a spec in the topic's `work/` folder, copied from
   `templates/agent-spec.md`, with an executable acceptance; writers only on disjoint files; every finding is verified
   before it is acted on; every run is a row: `ledger add`.
@@ -928,11 +926,10 @@ comando-kit.json, `~/comando-brain`); the paths below are inside it.
 
 **Asking.** With `--auto`, or in a headless run (a scheduled job, a prompt another session sent), ask the user nothing
 and write nothing outside the brain: do steps 1, 2 and the liveness check of 4, then 5 and 6, in the newest day folder
-when today's is missing (the start hook rolls it). Hold back each decision you would have asked (a memory change to
-confirm, a KB statement, a done task to clear, a report to apply): one row in the day index's waiting table and, when
-comando's MCP tool `decision_hold` is there, one call of it (`title`: the decision in one line; `detail`: what the user
-needs to decide it, at most three lines). Otherwise, first call `ui_get_state` and ask the decisions in its `later` list
-with this run's own, one form at a time; after the answers, call `decisions_settled` with the ids you settled.
+when today's is missing (the start hook rolls it). Write each decision you would have asked (a memory change to
+confirm, a KB statement, a done task to clear, a report to apply) into its task's entry in the day index, as a
+`- **Needs you:**` line with one sub-item per decision (the decision in one line, then what the user needs to decide it,
+at most three lines). Otherwise ask the decisions with this run's own, one form at a time.
 
 0. **Roll.** When `SCRATCHPAD/<today>/` is missing, rename the newest day folder to today.
 1. **Measure.** Note `MEMORY.md`'s lines and bytes and the files this session touched.
@@ -2441,7 +2438,8 @@ the KB and working context into memory, and the scratchpad empties as tasks fini
   (every open decision, each naming its task), `## Open` with one `### <topic>/` heading per topic and each task as
   `#### N. <title>`, and last `## Scheduled reports`.
 - **A task.** Ticket or Repo, State (done, waiting on whom, in progress, with the last verified fact), Next (who moves
-  it, and how), Resume from, and its documents, each a list item led by its path relative to the index
+  it, and how), Resume from, Needs you (a `- **Needs you:**` line with one sub-item per decision it holds for the user),
+  and its documents, each a list item led by its path relative to the index
   (`` `topic/01-x.md` — what it holds ``), so comando's Trash takes the line out with the file. A new task takes the
   highest number in the index plus one, read just before writing; numbers never change.
 - **Pointers** to the scratchpad carry no date: `topic/01-x.md`, task 3.
@@ -2493,9 +2491,9 @@ fix, never fixed unasked:
 | the ignore list | the third command of [§8.1](#81-the-steps) step 6 prints `checked` alone; a brain inside the kit is ignored too |
 | retention | `cleanupPeriodDays` set high, or a sweep that spares comando's sessions |
 | compaction | `autoCompactWindow` unset or above comando's threshold |
-| permissions | the rules the user wants in `settings.json`, with what the automatic checkpoint does allowed ([§2.5](#25-settings)): the three MCP tools, `Read` and `Edit` of the brain by its absolute path, the brain in `additionalDirectories`; comando adds none |
+| permissions | the rules the user wants in `settings.json`, with what the automatic checkpoint does allowed ([§2.5](#25-settings)): `Read` and `Edit` of the brain by its absolute path, the brain in `additionalDirectories`; comando adds none |
 | protected paths | the brain is not under a `.claude` path, or the user accepts that every brain write asks ([§2.5](#25-settings)) |
-| the checkpoint | `skills/reflect/SKILL.md` exists and handles `--auto` with `decision_hold`, and a user-started run settles with `decisions_settled` |
+| the checkpoint | `skills/reflect/SKILL.md` exists and handles `--auto` by writing `**Needs you:**` lines |
 | jobs | no `jobs`, or an `install/kit.py` that answers the three calls of [§3.5](#35-scheduled-jobs) |
 | upgrade | not tagged on a remote, or an `INSTALL.md` with a section *Upgrade* ([§3.4](#34-version-and-upgrade)) |
 

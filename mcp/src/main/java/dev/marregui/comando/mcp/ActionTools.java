@@ -10,8 +10,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -29,7 +27,6 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -142,7 +139,6 @@ final class ActionTools {
                     case INTEGER -> p.put("type", "integer");
                     case BOOLEAN -> p.put("type", "boolean");
                     case STRINGS -> p.put("type", "array").putObject("items").put("type", "string");
-                    case INTEGERS -> p.put("type", "array").putObject("items").put("type", "integer");
                     case OBJECT -> p.put("type", "object");
                 }
                 if (!arg.description().isEmpty()) {
@@ -209,10 +205,6 @@ final class ActionTools {
             case "panel_cancel" -> send(new Intent.CancelRun(panel(s, args, false).id()));
             case "panel_refresh" -> send(new Intent.RefreshSql(panel(s, args, false).id(), text(args, "sql")));
             case "approval_answer" -> approvalAnswer(caller, s, args);
-            case "decision_hold" -> decisionHold(caller, s, args);
-            case "decisions_settled" -> send(new Intent.DecisionsSettled(ids(args)));
-            case "decision_settle" -> send(new Intent.SettleDecision(decision(s, args).id(), caller));
-            case "decision_dismiss" -> send(new Intent.DismissDecision(decision(s, args).id()));
             case "connection_save" -> connectionSave(caller, s, args);
             case "connection_test" -> send(new Intent.TestConnection(connection(s, args).spec()));
             case "connection_open" -> send(new Intent.OpenConnection(connection(s, args).name()));
@@ -237,8 +229,7 @@ final class ActionTools {
             case "terminal_stop" -> terminals.stop(s, args);
             default -> throw new IllegalArgumentException(tool + " has no runner yet");
         };
-        // a decision held back brings nothing forward (record 131): no notice
-        if (action.kind() != Action.Kind.READ && !done.startsWith("refused") && !"decision_hold".equals(tool)) {
+        if (action.kind() != Action.Kind.READ && !done.startsWith("refused")) {
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, caller + ": " + tool.replace('_', ' ') + " — " + done, false, ""));
         }
         // a page of a Terminal's text may itself begin with "refused": a read fails only for its own refusals
@@ -384,79 +375,6 @@ final class ActionTools {
             default -> throw new IllegalArgumentException("decision is allow, deny or answer");
         };
         return send(new Intent.ApprovalAnswered(id, decision));
-    }
-
-    /**
-     * Holds a decision back for the calling session (records 131 and 142), with the options its card offers, if any.
-     * Only a session holds a decision back: the Later group lists each under the session whose checkpoint or report
-     * held it. It answers no id: the checkpoint that settles it later reads the ids from {@code ui_get_state}.
-     */
-    private String decisionHold(final String caller, final AppState s, final JsonNode args) {
-        if (s.session(caller).isEmpty()) {
-            return "refused: " + caller + " is not a session; a decision is held back by the session whose automatic checkpoint runs";
-        }
-        final List<String> options = args.has("options") ? options(args) : List.of();
-        final String detail = args.path("detail").asString("").strip();
-        final String sent = send(new Intent.DecisionHeldBack(caller, text(args, "title"), detail, options));
-        return sent.startsWith("refused") ? sent
-                : "held back; it waits in the Approvals tab's Later group until the user answers it there or a "
-                        + "checkpoint the user starts settles it";
-    }
-
-    private static Decision decision(final AppState s, final JsonNode args) {
-        final long id = args.path("id").asLong(-1);
-        return s.decision(id).orElseThrow(() -> new IllegalArgumentException("no decision " + id + "; held back: "
-                + s.later().stream().map(d -> d.id() + " (" + d.session() + ", " + d.title() + ")").toList()));
-    }
-
-    /**
-     * {@code decision_hold}'s options: a JSON array of strings, or that array as JSON text, which Claude Code sends for
-     * an array argument at times.
-     */
-    private List<String> options(final JsonNode args) {
-        return list(args, "options", "a list of strings, the answers offered", JsonNode::isString, JsonNode::asString);
-    }
-
-    /**
-     * {@code decisions_settled}'s ids: a JSON array of integers, or that array as JSON text, which Claude Code sends for
-     * an array argument at times.
-     */
-    private List<Long> ids(final JsonNode args) {
-        return list(args, "ids", "a list of integers, the decisions' ids from ui_get_state",
-                x -> x.isIntegralNumber() && x.canConvertToLong(), JsonNode::asLong);
-    }
-
-    /**
-     * The array {@code args} holds under {@code field}, or that array as JSON text; every element must be one
-     * {@code fits} accepts, and {@code read} takes its value. {@code what} says what the field is, for the refusal.
-     */
-    private <T> List<T> list(
-            final JsonNode args,
-            final String field,
-            final String what,
-            final Predicate<JsonNode> fits,
-            final Function<JsonNode, T> read
-    ) {
-        JsonNode a = args.path(field);
-        if (a.isString()) {
-            try {
-                a = json.readTree(a.asString());
-            } catch (final RuntimeException e) {
-                throw new IllegalArgumentException(
-                        field + " is " + what + " [" + field + "=" + args.path(field) + ']', e);
-            }
-        }
-        if (!a.isArray()) {
-            throw new IllegalArgumentException(field + " is " + what + " [" + field + "=" + a + ']');
-        }
-        final List<T> out = new ArrayList<>();
-        for (final JsonNode x : a) {
-            if (!fits.test(x)) {
-                throw new IllegalArgumentException(field + " is " + what + " [element=" + x + ']');
-            }
-            out.add(read.apply(x));
-        }
-        return out;
     }
 
     /**

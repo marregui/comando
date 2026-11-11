@@ -32,8 +32,14 @@ public final class LinearTickets {
         }
     }
 
+    /**
+     * A word shaped like a ticket id, its team key in group 1 and its number in group 2; not inside a word, a path or
+     * an address. Whether it is a ticket is for the caller to say ({@link Site#teams()}).
+     */
+    public static final Pattern ID =
+            Pattern.compile("(?<![A-Za-z0-9/-])([A-Z][A-Z0-9]{1,9})-(\\d{1,6})(?![A-Za-z0-9])");
+
     private static final Pattern LINK = Pattern.compile("linear\\.app/([a-z0-9][a-z0-9-]*)/issue/([A-Z][A-Z0-9]{1,9})-\\d+");
-    private static final Pattern ID = Pattern.compile("(?<![A-Za-z0-9/-])([A-Z][A-Z0-9]{1,9})-(\\d{1,6})(?![A-Za-z0-9])");
     private static final Pattern BLANK_LINE = Pattern.compile("\\n[ \\t]*\\n");
 
     private LinearTickets() {
@@ -83,6 +89,11 @@ public final class LinearTickets {
         for (int i = earlier.size() - 1; i >= 0; i--) {
             ids.add(earlier.get(i));
         }
-        return ids.stream().limit(max).map(id -> new Ticket(id, "https://linear.app/" + site.workspace() + "/issue/" + id)).toList();
+        return ids.stream().limit(max).map(id -> new Ticket(id, url(site, id))).toList();
+    }
+
+    /** The address of ticket {@code id} in {@code site}'s workspace. */
+    public static String url(final Site site, final String id) {
+        return "https://linear.app/" + site.workspace() + "/issue/" + id;
     }
 }

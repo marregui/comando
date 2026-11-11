@@ -70,6 +70,13 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     /** The last Codex read's problem, so that the same one is logged once; touched only on {@link #planUsage}. */
     private String lastCodexProblem = "";
 
+    /**
+     * The per-server timeout written into a session's MCP configuration: it also raises Claude Code's idle window, so
+     * an approval card can wait for the user. It is five minutes past the approval timeout (24 h), so comando denies a
+     * card before Claude Code drops the call (Miguel, 2026-11-10: a card waits while its session waits).
+     */
+    public static final Duration MCP_TIMEOUT = Duration.ofHours(24).plusMinutes(5);
+
     /** The most sub-agent views that follow their file at once; opening another stops the oldest. */
     static final int TAILS = 4;
     static final long TAIL_EVERY_MILLIS = 2_000;
@@ -841,8 +848,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         server.put("type", "http");
         server.put("url", ticket.url());
         server.putObject("headers").put("Authorization", "Bearer " + ticket.token());
-        // a per-server timeout also raises the idle window, so an approval card can wait for the user
-        server.put("timeout", 3_600_000);
+        server.put("timeout", MCP_TIMEOUT.toMillis());
         // the run folder is owner-only (rule 15), also when it was deleted while comando runs
         if (!Files.isDirectory(settings.runDir())) {
             OwnerOnly.folder(settings.runDir());

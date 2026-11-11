@@ -2,18 +2,14 @@ package dev.marregui.comando.ui.panels;
 
 import java.awt.Component;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -32,10 +28,10 @@ import dev.marregui.comando.ui.widgets.transcript.TranscriptView;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
 /**
- * The lower panel: Session (the focused panel's transcript), Approvals (every session, the focused panel's first, and
- * the decisions held back for later), Terminal (the focused panel's shell), Results, then one tab per view placed
- * below. The selected tab follows the state, and selecting a tab updates the state. Results and Session carry a dot
- * when something new arrived while another tab was in front. The palette's Clear empties the Session tab (record 104);
+ * The lower panel: Session (the focused panel's transcript), Approvals (every session, the focused panel's first),
+ * Terminal (the focused panel's shell), Results, then one tab per view placed below. The selected tab follows the
+ * state, and selecting a tab updates the state. Results and Session carry a dot when something new arrived while
+ * another tab was in front. The palette's Clear empties the Session tab (record 104);
  * the conversation goes on, whole in Claude Code's files.
  */
 public final class LowerPanel {
@@ -186,26 +182,9 @@ public final class LowerPanel {
             // read-only already; greyed with the session's other views, except while one of its cards waits for the user
             final boolean checkpointing = s.session(shown).map(SessionState::isCheckpointing).orElse(false);
             veil.show(checkpointing && s.pendingApprovals(shown) == 0);
-            final Set<Long> locked = new HashSet<>();
-            final Map<Long, String> refused = new HashMap<>();
-            final Map<Long, String> targets = new HashMap<>();
-            final Set<Long> gone = new HashSet<>();
-            for (final Decision d : s.later()) {
-                Reducer.settleTarget(s, d.id()).ifPresent(t -> targets.put(d.id(), t));
-                if (s.session(d.session()).isEmpty()) {
-                    gone.add(d.id());
-                }
-                final Intent.SettleDecision settle = new Intent.SettleDecision(d.id());
-                if (Reducer.refusedWhileCheckpointing(s, settle)) {
-                    locked.add(d.id());
-                } else {
-                    Reducer.refusal(s, settle).ifPresent(why -> refused.put(d.id(), why));
-                }
-            }
-            inbox.render(new ApprovalInbox.Queue(s.approvals(), shown, s.later(), locked, refused, targets, gone));
+            inbox.render(new ApprovalInbox.Queue(s.approvals(), shown));
             final int pending = s.approvals().size();
-            tabs.setTitleAt(APPROVALS, approvalsTitle(pending, s.later().size()));
-            // a decision held back brings nothing forward: only a live card takes the attention colour
+            tabs.setTitleAt(APPROVALS, approvalsTitle(pending));
             tabs.setForegroundAt(APPROVALS, pending == 0 ? null : Theme.ATTENTION);
             views.render(s.views());
             final int want = switch (s.lowerTab().kind()) {
@@ -227,15 +206,9 @@ public final class LowerPanel {
         }
     }
 
-    /** The Approvals tab's title: the live cards, then the decisions held back, each only when there are some. */
-    static String approvalsTitle(final int pending, final int later) {
-        if (pending == 0 && later == 0) {
-            return "Approvals";
-        }
-        if (later == 0) {
-            return "Approvals (" + pending + ")";
-        }
-        return pending == 0 ? "Approvals (" + later + " later)" : "Approvals (" + pending + " · " + later + " later)";
+    /** The Approvals tab's title: the cards waiting, counted only when there are some. */
+    static String approvalsTitle(final int pending) {
+        return pending == 0 ? "Approvals" : "Approvals (" + pending + ")";
     }
 
     /** A run of the focused panel that ended while Results was not in front gets a dot until Results is shown. */

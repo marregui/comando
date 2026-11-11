@@ -142,15 +142,6 @@ public final class Reducer {
     }
 
     /**
-     * The session a Settle of decision {@code id} goes to, as the reducer will choose it: the decision's own while it
-     * has a checkpoint command, else the focused panel's session when it has one; empty when the decision is gone or
-     * neither has. For the window to name where Settle sends before it is pressed.
-     */
-    public static Optional<String> settleTarget(final AppState s, final long id) {
-        return DecisionRules.target(s, id);
-    }
-
-    /**
      * Whether {@code intent} acts on a session whose checkpoint runs and is therefore refused (record 130): the
      * reducer drops it, so a caller that is not the window, an agent's action tool, asks first and answers "locked". A
      * checkpoint can begin between the tool's question and the intent's turn in the queue: the reducer then posts a
@@ -164,8 +155,8 @@ public final class Reducer {
      * Why the reducer would refuse {@code intent} on {@code s}, in the words of its notice; empty when it would apply
      * it. An agent's action tool asks before it sends, so a refusal is the tool's answer and not only a notice the agent
      * never reads: the checkpoint lock (record 130), a session or panel name taken (record 88), a stopped session that
-     * another session would start (record 44), a command with nothing to send or no session to settle a decision in,
-     * the last panel of the main tabs sent to the side (record 141).
+     * another session would start (record 44), a command with nothing to send, the last panel of the main tabs
+     * sent to the side (record 141).
      * The answer holds for {@code s}; intents queued before this one may still change the outcome.
      */
     public static Optional<String> refusal(final AppState s, final Intent intent) {
@@ -177,10 +168,6 @@ public final class Reducer {
             case Intent.SaveSession i -> SessionRules.saveRefusal(s, i).map(SessionRules.Refusal::reason);
             case Intent.Checkpoint i -> TurnRules.commandRefusal(s, i.name(), s.session(i.name()).map(x -> x.spec().checkpoint()).orElse(""), i.from());
             case Intent.SessionCommand i -> TurnRules.commandRefusal(s, i.name(), i.command(), i.from());
-            case Intent.SettleDecision i -> DecisionRules.target(s, i.id())
-                    .map(n -> TurnRules.commandRefusal(s, n, s.session(n).map(x -> x.spec().checkpoint()).orElse(""), i.from()))
-                    .orElseGet(() -> Optional.of(s.decision(i.id()).isEmpty() ? "No decision " + i.id()
-                            : "No session to settle it in: open a session with a checkpoint command"));
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
             case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
             case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);
@@ -190,7 +177,7 @@ public final class Reducer {
                     Intent.CancelRun _, Intent.SqlStarted _, Intent.SqlRows _, Intent.SqlCompleted _,
                     Intent.SqlFailed _, Intent.SqlCancelled _, Intent.SqlWarning _, Intent.SaveConnection _,
                     Intent.RemoveConnection _, Intent.AddFolder _, Intent.SaveFolders _, Intent.FoldersRead _,
-                    Intent.OpenConnection _, Intent.CloseConnection _, Intent.TestConnection _,
+                    Intent.LogbookRead _, Intent.OpenConnection _, Intent.CloseConnection _, Intent.TestConnection _,
                     Intent.ConnectionOpened _, Intent.ConnectionClosed _, Intent.ConnectionFailed _,
                     Intent.ExploreSchema _, Intent.SchemaChanged _, Intent.ConnectionLost _, Intent.ConnectionTested _,
                     Intent.RemoveSession _, Intent.ImportSessions _, Intent.StartSession _, Intent.StopSession _,
@@ -200,8 +187,7 @@ public final class Reducer {
                     Intent.SessionTurnRunning _, Intent.SessionTurnEnded _, Intent.SessionExited _,
                     Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionContext _,
                     Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
-                    Intent.DecisionHeldBack _, Intent.DecisionsAnswered _, Intent.DecisionsSettled _,
-                    Intent.DecisionsRead _, Intent.DismissDecision _, Intent.ShowView _, Intent.CloseView _,
+                    Intent.ShowView _, Intent.CloseView _,
                     Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _, Intent.SessionLayout _,
                     Intent.SessionFocus _, Intent.PromptSession _, Intent.EditPanel _, Intent.OpenFile _,
                     Intent.OpenSubagent _, Intent.RunGradle _, Intent.CommandFinished _, Intent.CancelCommand _,
@@ -291,16 +277,11 @@ public final class Reducer {
             case Intent.ApprovalRequested i -> ApprovalRules.approvalRequested(clock, s, i.approval());
             case Intent.ApprovalAnswered i -> ApprovalRules.approvalAnswered(s, i);
             case Intent.ApprovalWithdrawn i -> ApprovalRules.approvalWithdrawn(clock, s, i);
-            case Intent.DecisionHeldBack i -> DecisionRules.heldBack(clock, s, i);
-            case Intent.DecisionsSettled i -> DecisionRules.settled(s, i);
-            case Intent.DecisionsRead i -> DecisionRules.read(s, i);
-            case Intent.SettleDecision i -> DecisionRules.settle(clock, s, i);
-            case Intent.DismissDecision i -> DecisionRules.dismissed(s, i);
-            case Intent.DecisionsAnswered i -> DecisionRules.answered(clock, s, i);
 
             case Intent.AddFolder i -> FolderRules.addFolder(clock, s, i.spec());
             case Intent.SaveFolders i -> FolderRules.saveFolders(clock, s, i);
             case Intent.FoldersRead i -> FolderRules.foldersRead(s, i);
+            case Intent.LogbookRead i -> Transition.of(s.withLogbook(i.logbook()));
             case Intent.BrowseFolders i -> FolderRules.browseFolders(s, i);
             case Intent.WatchFolders i -> FolderRules.watchFolders(s, i);
             case Intent.DeleteFiles i -> FolderRules.deleteFiles(clock, s, i);

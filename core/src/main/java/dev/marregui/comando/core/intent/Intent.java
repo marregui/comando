@@ -1,18 +1,17 @@
 package dev.marregui.comando.core.intent;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import dev.marregui.comando.core.dispatch.Target;
+import dev.marregui.comando.core.logbook.Logbook;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -221,6 +220,16 @@ public sealed interface Intent {
     record FoldersRead(List<FolderRoot> folders) implements Intent {
         public FoldersRead {
             folders = List.copyOf(folders);
+        }
+    }
+
+    /**
+     * The scratchpad's open tasks as the newest day folder's {@code INDEX.md} now lists them, read again after it
+     * changed.
+     */
+    record LogbookRead(Logbook logbook) implements Intent {
+        public LogbookRead {
+            Objects.requireNonNull(logbook, "logbook");
         }
     }
 
@@ -514,80 +523,6 @@ public sealed interface Intent {
 
     /** The waiting call ended without an answer (timeout, session gone). */
     record ApprovalWithdrawn(long id, String reason) implements Intent {
-    }
-
-    // ---- decisions held back (record 131)
-
-    /**
-     * A session held a decision back for the user (its automatic checkpoint, a report, a question card with no answer
-     * in time): it joins the Approvals tab's Later group.
-     *
-     * @param options the answers offered, in order; empty when the answer is a line the user types
-     */
-    record DecisionHeldBack(String session, String title, String detail, List<String> options) implements Intent {
-        public DecisionHeldBack {
-            options = options == null ? List.of() : List.copyOf(options);
-        }
-
-        /** A decision answered by a line the user types; for tests, the application builds the canonical form. */
-        public DecisionHeldBack(final String session, final String title, final String detail) {
-            this(session, title, detail, List.of());
-        }
-    }
-
-    /**
-     * The user answered a batch of the Later group's decisions (record 142): each decision's session gets one prompt
-     * with its answers, and the decisions answered leave the group.
-     *
-     * @param answers the answer to each decision, by its id, in the Later group's order; a blank answer is dropped
-     */
-    record DecisionsAnswered(Map<Long, String> answers) implements Intent {
-        public DecisionsAnswered {
-            answers = Collections.unmodifiableMap(new LinkedHashMap<>(answers));
-        }
-    }
-
-    /** A checkpoint the user started settled these decisions: they leave the Later group. */
-    record DecisionsSettled(List<Long> ids) implements Intent {
-        public DecisionsSettled {
-            ids = List.copyOf(ids);
-        }
-    }
-
-    /**
-     * The decisions {@code decisions.json} holds, read at start, and the highest id comando ever gave one, so no id is
-     * given twice across restarts.
-     */
-    record DecisionsRead(List<Decision> decisions, long lastId) implements Intent {
-        public DecisionsRead {
-            decisions = List.copyOf(decisions);
-        }
-
-        public DecisionsRead(final List<Decision> decisions) {
-            this(decisions, 0L);
-        }
-    }
-
-    /**
-     * Settle: sends the checkpoint command of the decision's session, without the automatic argument, so the session
-     * asks the user what was held back; the focused panel's session when the decision's session is gone.
-     *
-     * @param from the session or client that sent it through an action tool; empty for the user's own gesture. A session
-     *             the user stopped is started again only for the user or a creator of it (record 44)
-     */
-    record SettleDecision(long id, String from) implements Intent {
-        public SettleDecision {
-            from = from == null ? "" : from;
-        }
-
-        /** The user's own Settle. */
-        public SettleDecision(final long id) {
-            this(id, "");
-        }
-    }
-
-    /** Dismiss: the decision leaves the Later group unasked. */
-    record DismissDecision(long id) implements Intent {
     }
 
     // ---- views

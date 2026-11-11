@@ -10,7 +10,6 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -244,16 +243,6 @@ public sealed interface Effect {
     record SaveFolders(List<FolderRoot> folders) implements Effect {
         public SaveFolders {
             folders = List.copyOf(folders);
-        }
-    }
-
-    /**
-     * The decisions held back, to {@code decisions.json} (record 131), with an id at or above every id given so far, so
-     * the next run gives none of them again.
-     */
-    record SaveDecisions(List<Decision> decisions, long lastId) implements Effect {
-        public SaveDecisions {
-            decisions = List.copyOf(decisions);
         }
     }
 

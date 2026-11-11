@@ -106,17 +106,17 @@ class SessionsSidebarTest {
         UIManager.setLookAndFeel(previous);
     }
 
-    /// The Sessions, Connections, Files and Instances tabs sit in one row as icons named by tooltip, packed under
-    /// 200 px, with no Panels tab; the hide button is on every tab, hiding leaves a 16–40 px rail whose buttons show the sidebar, at a
-    /// given tab for the per-tab ones.
+    /// The Sessions, Connections, Files, Logbook and Instances tabs sit in one row as icons named by tooltip, packed
+    /// under 200 px, with no Panels tab; the hide button is on every tab, hiding leaves a 16–40 px rail whose buttons
+    /// show the sidebar, at a given tab for the per-tab ones.
     @Test
-    void theColumnIsFourTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
+    void theColumnIsFiveTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         final AtomicInteger toggles = new AtomicInteger();
         final SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
         }, NO_DIALOGS, toggles::incrementAndGet));
         final SessionsSidebar sidebar = s[0];
-        final List<String> order = List.of("Sessions", "Connections", "Files", "Instances");
+        final List<String> order = List.of("Sessions", "Connections", "Files", "Logbook", "Instances");
         final Map<String, Rectangle> at = new HashMap<>();
         final Map<String, String> text = new HashMap<>();
         SwingUtilities.invokeAndWait(() -> {
@@ -136,7 +136,9 @@ class SessionsSidebarTest {
         assertThat(header(sidebar, "Files").getClientProperty("JButton.buttonType")).as("drawn as a tab").isEqualTo("tab");
         assertThat(header(sidebar, "Files").getIcon()).as("the Files tab's own mark, not the tree's folder").isSameAs(Icons.get("files"));
         assertThat(header(sidebar, "Instances").getIcon()).as("the Instances tab's mark").isSameAs(Icons.get("instances"));
-        assertThat(at.get("Instances").x + at.get("Instances").width).as("packed: four icons in a narrow sidebar").isLessThan(200);
+        assertThat(header(sidebar, "Logbook").getIcon()).as("the Logbook tab's mark").isSameAs(Icons.get("logbook"));
+        assertThat(header(sidebar, "Logbook").getToolTipText()).isEqualTo("Logbook: the scratchpad's open tasks; 0 need you");
+        assertThat(at.get("Logbook").x + at.get("Logbook").width).as("packed: five icons in a narrow sidebar").isLessThan(200);
         for (final String t : order) {
             final JToggleButton h = header(sidebar, t);
             assertThat(h.getToolTipText()).as(t + " is named by its tooltip").startsWith(t + ": ").hasSizeLessThanOrEqualTo(80);
@@ -145,9 +147,12 @@ class SessionsSidebarTest {
 
         assertThat(search(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getAccessibleContext().getAccessibleName())))
                 .as("no Panels tab: a session and its panel are one row (record 91)").isNull();
-        for (final int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES, SessionsSidebar.INSTANCES}) {
+        for (final int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES,
+                SessionsSidebar.LOGBOOK, SessionsSidebar.INSTANCES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(sidebar.selectedTab()).isEqualTo(tab);
+            assertThat(header(sidebar, order.get(tab)).isSelected()).as("tab " + tab + " is " + order.get(tab))
+                    .isTrue();
         }
         SwingUtilities.invokeAndWait(() -> header(sidebar, "Connections").doClick());
         assertThat(sidebar.selectedTab()).as("a click selects").isEqualTo(SessionsSidebar.CONNECTIONS);
@@ -156,7 +161,8 @@ class SessionsSidebarTest {
         final AbstractButton show = button(sidebar.component(), KeyText.of("Show the sidebar (⌘B)"));
         assertThat(sidebar.isShown()).isTrue();
         assertThat(shows(show, sidebar.component())).as("no rail beside the tabs").isFalse();
-        for (final int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES, SessionsSidebar.INSTANCES}) {
+        for (final int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES,
+                SessionsSidebar.LOGBOOK, SessionsSidebar.INSTANCES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(shows(hide, sidebar.component())).as("the hide button on every tab").isTrue();
         }
@@ -173,7 +179,7 @@ class SessionsSidebarTest {
         show.doClick();
         assertThat(toggles).hasValue(2);
         // a tab's button on the rail shows the sidebar at that tab
-        for (final String t : List.of("Sessions", "Connections", "Files", "Instances")) {
+        for (final String t : order) {
             assertThat(shows(button(sidebar.component(), "Show the sidebar at " + t), sidebar.component())).as(t + " on the rail").isTrue();
         }
         final AbstractButton files = button(sidebar.component(), "Show the sidebar at Files");

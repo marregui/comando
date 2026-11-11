@@ -46,7 +46,8 @@ public record SessionSpec(
     public static final String DEFAULT_CHECKPOINT = "/reflect";
     /**
      * The argument the automatic checkpoint adds to the checkpoint command ({@code /reflect --auto}), so the command can
-     * tell it from one the user started: it asks the user nothing and holds its decisions back (record 131).
+     * tell it from one the user started: it asks the user nothing and leaves its decisions
+     * in its scratchpad task entry.
      */
     public static final String AUTO_ARGUMENT = "--auto";
     /** Claude Code's command that compacts a conversation, sent by the compact buttons and the palette. */

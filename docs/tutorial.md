@@ -47,7 +47,7 @@ its KIT row naming the kit's commit.
 |---|---|
 | **Menu bar** | **Edit**, **Find** (the finds of the view in front, and **Find in files…**), and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Tab row's right end** | stop refreshing plots, start or stop the machine's QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
-| **Sidebar**, left | four tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
+| **Sidebar**, left | five tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Logbook**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Outline** and **Preview** (Markdown), **Run**, **Stop**, **Locate**, **Clear**; rest the pointer on one for what a click does |
 | **Editor** | where you write SQL and prompts, mixed in one text |
@@ -72,6 +72,7 @@ does; the menus grey out what cannot run now.
 | **Sessions** | Claude Code sessions in four groups, each under its heading: **Needs you**, **Working**, **To read** (finished work you have not looked at) and **Idle**; inside a group, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel, and under **To read** opens it at the report; a right click opens its menu, which does the rest; drag a row to order its group yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the ⓘ shows a card of its facts, without a summary; a double click on the name binds the connection to the focused panel |
 | **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder, the kit's or the brain's; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a top-level row's right click shows the changes inside it |
+| **Logbook** | the open tasks of the scratchpad's newest day folder, read from its `INDEX.md`: first **Needs you**, the tasks that wait on you, then each topic, newest first; a row is the task's name, then its number, the day it started and who asked for it when that is not you | resting the pointer on a row shows its card (when it started, who asked, its ticket, state, next step and ask); a double click opens the task as a page, its tickets linked to Linear and its documents to their files; a right click shows it, opens its tickets in Linear, resumes it in a session, asks you its decisions there, or opens its documents |
 | **Instances** | the other comando instances on this machine and what their sessions are doing, while the comando Edge runs; then the questions they asked each other | a click on a row shows its card |
 
 The tabs' right-click menus:
@@ -81,6 +82,7 @@ The tabs' right-click menus:
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
 | **Connections** | New connection…, starting or stopping the machine's QuestDB and the comando Edge |
 | **Files** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
+| **Logbook** | none of its own; a task's row has its own menu |
 | **Instances** | none of its own; an instance's row asks it, refuses its questions or forgets one that left |
 
 ### 1.2 The panel tabs and their cards
@@ -409,7 +411,6 @@ Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 | `settings.json` | the window's kept state: the theme, the window's size and dividers, the sidebar, the last Gradle tasks |
 | `themes/` | your own themes ([§1.6](#16-themes-of-your-own)) |
 | `opened-files` | the files you opened: a new file loses its dot once opened |
-| `decisions.json` | the decisions automatic checkpoints held back for you, listed under Later in the Approvals tab |
 | `instances-seen.json` | the other comando instances seen, so the Instances tab lists those that left until you forget them |
 | `questdb/` | the tables of the QuestDB comando embedded before, copied into `~/.comando-questdb` at its first start |
 | `edge/` | the comando Edge: its download, its installation, its configuration, data and logs; `admin-password` holds the password of its web UI's user `admin` (on port 18080) |

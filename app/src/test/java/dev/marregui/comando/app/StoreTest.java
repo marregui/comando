@@ -22,7 +22,6 @@ import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.claude.KitJson;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
@@ -31,8 +30,8 @@ import dev.marregui.comando.core.state.PanelState;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// The data root's files: settings, panels and their text, the Files tab's folders, the decisions held back and the
-/// secret store behind the connections.
+/// The data root's files: settings, panels and their text, the Files tab's folders and the secret store behind the
+/// connections.
 class StoreTest {
 
     private static final Path CLAUDE_DIR = Path.of("/home/u/.claude");
@@ -223,56 +222,24 @@ class StoreTest {
         }
     }
 
-    /// The decisions automatic checkpoints held back come back from `decisions.json` as saved, in order, with the
-    /// highest id given, an emptied list stays empty and keeps that id, and with no file or an unreadable one there are
-    /// none; the unreadable file is kept aside.
+    /// `decisions.json`, which earlier releases wrote for the decisions sessions held back and this one no longer names,
+    /// is ignored: a start and a save neither read it, nor move it aside, nor delete it, readable or not.
     @Test
-    void theDecisionsHeldBackRoundTripAndAnUnreadableFileReadsAsNone() throws Exception {
-        final List<Decision> held = List.of(new Decision(3, "work", "Merge the two entries?", "both say SVG only", 1_000L),
-                new Decision(7, "edge", "Archive the old lane?", "", 2_000L));
-        try (final Store store = new Store(home)) {
-            assertThat(store.loadDecisions().held()).as("no decisions.json").isEmpty();
-            store.saveDecisions(held, 9L);
-        }
-        assertThat(home.resolve("decisions.json")).exists();
-        try (final Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("as saved").isEqualTo(new Store.Decisions(held, 9L));
-            store.saveDecisions(List.of(), 9L);
-        }
-        try (final Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("emptied, the last id kept").isEqualTo(new Store.Decisions(List.of(), 9L));
-        }
-        Files.writeString(home.resolve("decisions.json"), "[{\"id\": 1, \"session\": ");
-        try (final Store store = new Store(home)) {
-            assertThat(store.loadDecisions().held()).as("unreadable: none").isEmpty();
-        }
-        try (final Stream<Path> files = Files.list(home)) {
-            assertThat(files.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("decisions.json.corrupt-"));
-        }
-    }
-
-    /// A decision's options come back from `decisions.json` as saved, in order; a file written before decisions had
-    /// options reads each decision with none, its answer a typed line.
-    @Test
-    void theDecisionsOptionsRoundTripAndAFileWithoutThemReadsAsNone() throws Exception {
-        final List<Decision> held = List.of(
-                new Decision(3, "work", "Merge the two entries?", "", 1_000L, List.of("Yes", "No")),
-                new Decision(4, "work", "Why?", "", 2_000L));
-        try (final Store store = new Store(home)) {
-            store.saveDecisions(held, 4L);
-        }
-        try (final Store store = new Store(home)) {
-            assertThat(store.loadDecisions()).as("as saved").isEqualTo(new Store.Decisions(held, 4L));
-        }
-        Files.writeString(home.resolve("decisions.json"), """
-                {"version": 1, "lastId": 5, "decisions": [
-                  {"id": 5, "session": "work", "title": "Archive the old lane?", "detail": "", "createdMillis": 3000}
-                ]}
-                """);
-        try (final Store store = new Store(home)) {
-            final Decision before = new Decision(5, "work", "Archive the old lane?", "", 3_000L);
-            assertThat(store.loadDecisions()).as("written before options")
-                    .isEqualTo(new Store.Decisions(List.of(before), 5L));
+    void theDecisionsFileOfAnEarlierComandoIsNeitherReadNorDeleted() throws Exception {
+        final String readable = "{\"version\":1,\"lastId\":5,\"decisions\":[{\"id\":5,\"session\":\"work\",\"title\":\"Keep it?\","
+                + "\"detail\":\"\",\"createdMillis\":1,\"options\":[]}]}";
+        for (final String left : List.of(readable, "{\"version\": 1, \"lastId\": 5, \"decisions\": [{\"id\": 5, \"session\": ")) {
+            final Path older = home.resolve("decisions.json");
+            Files.writeString(older, left);
+            try (final Store store = new Store(home)) {
+                final Store.Loaded loaded = store.load();
+                store.saveSessions(loaded.sessions());
+            }
+            assertThat(Files.readString(older)).as("kept as it was").isEqualTo(left);
+            try (final Stream<Path> files = Files.list(home)) {
+                assertThat(files.map(p -> p.getFileName().toString())).as("nothing moved aside")
+                        .noneMatch(n -> n.startsWith("decisions.json.corrupt-"));
+            }
         }
     }
 

@@ -7,7 +7,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Map;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -59,8 +58,6 @@ final class JsonFile<T> {
     private final TypeReference<T> type;
     /** Why the file is neither read nor written: a later version; empty while it is this comando's. */
     private volatile String refused = "";
-    /** The object last read, for the numbers stored beside the list; empty until a read. */
-    private volatile JsonNode lastRead = JSON.createObjectNode();
     /**
      * The bytes this run last wrote and the file's stamp right after; null until a write. Written and read by the thread
      * that writes this file ({@code Store}'s writer, its secrets writer for {@code connections.json}); volatile so a write
@@ -140,18 +137,12 @@ final class JsonFile<T> {
         }
     }
 
-    /** The number stored as {@code field} beside the list in the file last read; 0 when it has none. */
-    long number(final String field) {
-        return lastRead.path(field).asLong(0L);
-    }
-
     /** The file's list, of version 1 when it is a bare array or names no version. */
     private T content(final JsonNode root) throws IOException {
         if (root == null || root.isMissingNode() || root.isNull()) {
             throw new IOException("empty");
         }
         if (root.isArray()) {
-            lastRead = JSON.createObjectNode();
             return JSON.treeToValue(root, JSON.constructType(type));
         }
         if (!root.isObject()) {
@@ -166,20 +157,15 @@ final class JsonFile<T> {
             throw new LaterVersion(path.getFileName() + " is of version " + read + ", written by a later comando; this one reads version " + version
                     + ". It is kept as it is and nothing is saved to it until a comando that reads it runs");
         }
-        lastRead = root;
         final JsonNode list = root.path(key);
         return list.isMissingNode() || list.isNull() ? null : JSON.treeToValue(list, JSON.constructType(type));
     }
 
-    void write(final T value) throws IOException {
-        write(value, Map.of());
-    }
-
     /**
-     * Writes {@code value} as the file's list, after its version and {@code numbers}; refused, the file left as it is,
-     * when the file is of a later version.
+     * Writes {@code value} as the file's list, after its version; refused, the file left as it is, when the file is of
+     * a later version.
      */
-    void write(final T value, final Map<String, Long> numbers) throws IOException {
+    void write(final T value) throws IOException {
         if (!refused.isEmpty()) {
             throw new IOException(refused);
         }
@@ -188,7 +174,6 @@ final class JsonFile<T> {
         }
         final ObjectNode root = JSON.createObjectNode();
         root.put(VERSION, version);
-        numbers.forEach(root::put);
         root.set(key, JSON.valueToTree(value));
         final byte[] bytes = JSON.writeValueAsBytes(root);
         final Written last = lastWritten;

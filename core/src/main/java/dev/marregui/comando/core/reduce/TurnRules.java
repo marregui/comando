@@ -124,8 +124,9 @@ final class TurnRules {
 
     /**
      * The checkpoint; {@code automatic} adds {@link SessionSpec#AUTO_ARGUMENT} to the command, so a command that knows it
-     * asks the user nothing and holds its decisions back (record 131), and, once the compaction that follows has ended
-     * normally, the session is prompted to carry on ({@link Reducer#CONTINUE_PROMPT}, record 129's amendment).
+     * asks the user nothing and leaves its decisions in its scratchpad task entry, and, once the compaction that
+     * follows has ended normally, the session is prompted to carry on ({@link Reducer#CONTINUE_PROMPT}, record 129's
+     * amendment).
      */
     static Transition checkpoint(final Clock clock, final AppState s, final String name, final boolean automatic, final String from) {
         final Optional<SessionState> found = s.session(name);
@@ -164,8 +165,6 @@ final class TurnRules {
             case Intent.RemovePanel r -> s.panel(r.panel()).or(() -> s.closedPanel(r.panel()))
                     .filter(p -> !p.document()).map(p -> locked(s, p.session())).orElse(false);
             case Intent.ClearTranscript c -> locked(s, c.name());
-            // Settle sends the checkpoint command to a session: refused while that session's checkpoint runs
-            case Intent.SettleDecision d -> DecisionRules.target(s, d.id()).map(n -> locked(s, n)).orElse(false);
             default -> false;
         };
     }
@@ -227,7 +226,6 @@ final class TurnRules {
             case Intent.RunText r -> r.from();
             case Intent.Checkpoint c -> c.from();
             case Intent.SessionCommand c -> c.from();
-            case Intent.SettleDecision d -> d.from();
             case Intent.StartFresh f -> f.from();
             case Intent.SaveSession v -> v.from();
             case Intent.SetSessionModel m -> m.from();

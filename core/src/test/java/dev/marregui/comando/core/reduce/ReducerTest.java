@@ -2081,7 +2081,7 @@ class ReducerTest {
     }
 
     /// A stopped session starts again only for the user or one of its creators (record 44), whichever intent reaches it:
-    /// a run from its panel, a command, the checkpoint or a Settle that another session sends is refused with a notice
+    /// a run from its panel, a command or the checkpoint that another session sends is refused with a notice
     /// naming it, and nothing starts; the same from the session's creator, or from the user, starts it.
     @Test
     void aStoppedSessionStartsOnlyForTheUserOrItsCreatorRecord44() {
@@ -2092,9 +2092,7 @@ class ReducerTest {
                 + "(record 44)");
         apply(new Intent.SessionCommand("work", "/compact", "rogue"));
         apply(new Intent.Checkpoint("work", "rogue"));
-        apply(new Intent.DecisionHeldBack("work", "One", ""));
-        apply(new Intent.SettleDecision(state.later().getFirst().id(), "rogue"));
-        assertThat(effects).as("a command, the checkpoint, a Settle").noneMatch(e -> e instanceof Effect.StartClaude);
+        assertThat(effects).as("a command, the checkpoint").noneMatch(e -> e instanceof Effect.StartClaude);
         assertThat(Reducer.refusal(state, new Intent.SessionCommand("work", "/compact", "rogue"))).as("asked first, as a tool does")
                 .contains("rogue did not create session work, which is not running; only the user or its creator starts it (record 44)");
 
@@ -2106,8 +2104,7 @@ class ReducerTest {
     }
 
     /// The reducer's refusal, asked before sending, names what it would refuse: a checkpoint with no command, a session
-    /// name another session's panel holds, a Settle of a decision that is gone; text that goes to the database is never refused
-    /// for a session.
+    /// name another session's panel holds; text that goes to the database is never refused for a session.
     @Test
     void aRefusalIsNamedBeforeTheIntentIsSent() {
         apply(new Intent.StartSession("work"));
@@ -2118,7 +2115,6 @@ class ReducerTest {
         final String panel = state.panel(P1).orElseThrow().title();
         assertThat(Reducer.refusal(state, new Intent.SaveSession("", SessionSpec.fresh(panel, "/tmp")))).get(InstanceOfAssertFactories.STRING)
                 .startsWith("A panel called " + panel + " exists");
-        assertThat(Reducer.refusal(state, new Intent.SettleDecision(42L))).contains("No decision 42");
         state = state.withSessions(List.of(SessionState.closed(States.WORK.withCreatedBy("foreman"))));
         assertThat(Reducer.refusal(state, new Intent.RunText(P1, "SELECT 1", Target.AUTO, "rogue"))).as("SQL").isEmpty();
     }

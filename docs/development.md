@@ -86,8 +86,6 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 | `CheckpointCompactUiTest` | the Checkpoint button against a stand-in for `claude -p`: the checkpoint, then `/compact` once its turn has finished, the conversation and the Session tab kept, nothing carried, the panel's text kept ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `CheckpointLockUiTest` | the session locked while its checkpoint runs ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)) |
 | `ThemeFadeUiTest` | a theme chosen fades in over the one before: ground and tint applied at once, the old picture over the new |
-| `LaterDecisionsUiTest` | a decision held back joins the Approvals tab's Later group and title without coming forward, is read back from `decisions.json` at the next start, and Dismiss removes it ([record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)); decisions of two sessions, one chosen and one typed, go out in one Send answers, in order ([record 142](adr/0142-one-decision-queue.md)) |
-| `QuestionLaterUiTest` | a decision held with options shows one toggle per option and no typed field ([record 142](adr/0142-one-decision-queue.md)) |
 | `SessionCardUiTest` | a session's row shows the tab's card, a connection's row a card of its facts; both painted to `app/build/snapshots/` |
 | `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
 | `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |

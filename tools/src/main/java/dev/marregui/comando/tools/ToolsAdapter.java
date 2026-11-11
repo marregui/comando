@@ -6,9 +6,11 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,14 +27,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.logbook.IndexParser;
+import dev.marregui.comando.core.logbook.Logbook;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -87,6 +94,11 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final Set<Long> active = ConcurrentHashMap.newKeySet();
     /** Set by {@link #close}: no process starts after it, so none outlives comando. */
     private volatile boolean closed;
+
+    /** A scratchpad's day folder: {@code scratchpad-roll} names it for its day; the newest by name is the live one. */
+    private static final Pattern DAY_FOLDER = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    /** The file of a day folder that lists the open tasks. */
+    private static final String LOGBOOK_INDEX = "INDEX.md";
 
     /** A stopped run's processes still alive this long after SIGTERM get SIGKILL. */
     static final long KILL_AFTER_MILLIS = 2_000;
@@ -406,7 +418,94 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 // a task that throws is never run again: log and keep polling
                 LOG.log(System.Logger.Level.WARNING, "cannot poll the folders [folders=" + watchedFolders.size() + ']', e);
             }
+            readLogbook();
         }, every.toMillis(), every.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /** The scratchpad the Logbook is read from, who gets it, and what was last sent; one per {@link #watchLogbook}. */
+    private static final class LogbookWatch {
+
+        private final Path scratchpad;
+        private final Consumer<Logbook> sink;
+        /** Written and read by the folder poll's thread only. */
+        private Logbook sent;
+
+        LogbookWatch(final Path scratchpad, final Consumer<Logbook> sink) {
+            this.scratchpad = scratchpad;
+            this.sink = sink;
+        }
+    }
+
+    /** Written by the caller of {@link #watchLogbook}, read by the folder poll's thread; null until the first call. */
+    private volatile LogbookWatch logbookWatch;
+
+    /**
+     * From now on the folder poll reads the index of the newest day folder of {@code scratchpad} and gives {@code sink}
+     * the Logbook it holds: at once, then whenever the Logbook differs from the one last given. No day folder gives
+     * {@link Logbook#NONE}. A later call replaces the sink and gives its sink the Logbook again; after {@link #close}
+     * nothing is given. The sink runs on the poll's thread and must not block.
+     */
+    public void watchLogbook(final Path scratchpad, final Consumer<Logbook> sink) {
+        logbookWatch = new LogbookWatch(scratchpad, sink);
+        try {
+            folderPoll.execute(this::readLogbook);
+        } catch (final RejectedExecutionException _) {
+            // closed: the poll is gone and nothing is read
+            LOG.log(System.Logger.Level.DEBUG,
+                    "logbook not read, the adapter is closed [scratchpad=" + scratchpad + ']');
+        }
+    }
+
+    /**
+     * Reads the Logbook of the watch now and gives it to its sink when it differs from the last one given. Poll thread
+     * only.
+     */
+    private void readLogbook() {
+        final LogbookWatch watch = logbookWatch;
+        if (watch == null || closed) {
+            return;
+        }
+        final Logbook read;
+        try {
+            read = logbookOf(watch.scratchpad);
+        } catch (final RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read the logbook [scratchpad=" + watch.scratchpad + ']', e);
+            return;
+        }
+        if (read.equals(watch.sent) || closed) {
+            return;
+        }
+        if (!read.problem().isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "cannot read the logbook [index=" + read.index() + ", reason=" + read.problem() + ']');
+        }
+        watch.sent = read;
+        watch.sink.accept(read);
+    }
+
+    /** The Logbook of the newest day folder of {@code scratchpad}; {@link Logbook#NONE} when it has none. */
+    private static Logbook logbookOf(final Path scratchpad) {
+        final Path day;
+        try (final Stream<Path> days = Files.list(scratchpad)) {
+            day = days.filter(d -> DAY_FOLDER.matcher(d.getFileName().toString()).matches() && Files.isDirectory(d))
+                    .max(Comparator.comparing(d -> d.getFileName().toString())).orElse(null);
+        } catch (final NoSuchFileException _) {
+            return Logbook.NONE;
+        } catch (final IOException e) {
+            return new Logbook("", List.of(), "cannot list the scratchpad [reason=" + e + ']');
+        }
+        if (day == null) {
+            return Logbook.NONE;
+        }
+        final Path index = day.resolve(LOGBOOK_INDEX).toAbsolutePath();
+        if (!Files.isRegularFile(index)) {
+            return new Logbook(index.toString(), List.of(), "the newest day folder has no " + LOGBOOK_INDEX);
+        }
+        try {
+            return IndexParser.parse(index.toString(), Mapped.text(index));
+        } catch (final IOException e) {
+            return new Logbook(index.toString(), List.of(), "cannot read the index [reason=" + e + ']');
+        }
     }
 
     /** Which subfolders of the watched {@code folder} are read: those open in the Files tab, or every one. */

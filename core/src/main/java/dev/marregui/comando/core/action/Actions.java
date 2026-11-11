@@ -132,32 +132,6 @@ public final class Actions {
                             Arg.optional("answers", Type.OBJECT, "for answer: question text to the chosen option label")),
                     Set.of(Intent.ApprovalAnswered.class)),
 
-            // ---- decisions held back: the Approvals tab's Later group (record 131)
-            new Action("decision_hold", Kind.ACT,
-                    "Holds a decision back for the user: called by this session's automatic checkpoint (its command "
-                            + "carries --auto), or by a report that files the decisions it leaves the user, which asks "
-                            + "the user nothing. The decision waits in the Approvals tab's Later group, kept across "
-                            + "restarts, until the user answers it there or a checkpoint the user starts settles it. "
-                            + "Options become the buttons of its card; without them the user types the answer.",
-                    List.of(Arg.required("title", Type.STRING, "one line: what is to be decided"),
-                            Arg.optional("detail", Type.STRING, "what the user needs to decide it, a few lines"),
-                            Arg.optional("options", Type.STRINGS,
-                                    "the answers offered, in order; each a button on the card")),
-                    Set.of(Intent.DecisionHeldBack.class)),
-            new Action("decisions_settled", Kind.ACT,
-                    "Removes decisions from the Later group once a checkpoint the user started has asked them and the user answered. "
-                            + "ui_get_state lists the decisions held back with their ids.",
-                    List.of(Arg.required("ids", Type.INTEGERS, "the decisions' ids, from ui_get_state")),
-                    Set.of(Intent.DecisionsSettled.class)),
-            new Action("decision_settle", Kind.ACT,
-                    "Settle, as the Later group's button does: sends the checkpoint command of the decision's session, without --auto, so it asks "
-                            + "the user; the focused panel's session when the decision's own is gone.",
-                    List.of(Arg.required("id", Type.INTEGER, "the decision's id, from ui_get_state")),
-                    Set.of(Intent.SettleDecision.class)),
-            new Action("decision_dismiss", Kind.ACT, "Dismiss, as the Later group's button does: the decision leaves unasked.",
-                    List.of(Arg.required("id", Type.INTEGER, "the decision's id, from ui_get_state")),
-                    Set.of(Intent.DismissDecision.class)),
-
             // ---- connections: the Connections tab and its dialog
             new Action("connection_save", Kind.ACT,
                     "Adds or changes a database connection, as its dialog does; previous_name renames one. A change keeps the fields it does not name.",
@@ -298,7 +272,7 @@ public final class Actions {
             Intent.SessionBranch.class, Intent.SessionSubjectRead.class, Intent.SessionContext.class,
                     Intent.CommandFinished.class, Intent.FolderLoaded.class,
             Intent.ReposLoaded.class, Intent.ChangeRead.class, Intent.PlanUsageRead.class,
-            Intent.InstancesChanged.class, Intent.DecisionsRead.class);
+            Intent.InstancesChanged.class, Intent.LogbookRead.class);
 
     /** Intents the window sends by itself, not on a gesture, with the reason. */
     public static final Map<Class<? extends Intent>, String> WINDOW = Map.of(
@@ -306,8 +280,7 @@ public final class Actions {
 
     /**
      * User intents not offered to agents, each with the reason (record 121 §3): most take a git change or a folder
-     * entry the window holds and comando's state does not, so the action needs the repository status read first; the
-     * answers to held decisions are the user's own (record 142).
+     * entry the window holds and comando's state does not, so the action needs the repository status read first.
      */
     public static final Map<Class<? extends Intent>, String> NOT_YET = notYet();
 
@@ -324,9 +297,6 @@ public final class Actions {
         m.put(Intent.DeleteFiles.class, "a Files-tab entry: needs the folder tree the window holds (record 121, increment 2)");
         m.put(Intent.AddFolder.class, "the folders window (record 121, increment 3, with the Setup actions)");
         m.put(Intent.SaveFolders.class, "the folders window (record 121, increment 3, with the Setup actions)");
-        m.put(Intent.DecisionsAnswered.class, "the user's answers to the decisions sessions held for them "
-                + "(record 142): a session holds a decision with decision_hold and gets the answers as a prompt; it "
-                + "does not answer its own");
         return Map.copyOf(m);
     }
 

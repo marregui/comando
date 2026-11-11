@@ -94,6 +94,11 @@ class ApprovalInboxTest {
         return new Approval(id, "work", ApprovalKind.PLAN, "ExitPlanMode", "{\"plan\":\"1. do it\"}", "plan", T0);
     }
 
+    /// Every card under no session in front.
+    private static void render(final ApprovalInbox box, final List<Approval> approvals) {
+        box.render(new ApprovalInbox.Queue(approvals, ""));
+    }
+
     /// Shown again, the inbox scrolls to the oldest request at the top, unless the focus is in a card, when nothing
     /// moves.
     @Test
@@ -103,7 +108,7 @@ class ApprovalInboxTest {
             many.add(id % 2 == 0 ? question(id) : bash(id, "ls " + id));
         }
         SwingUtilities.invokeAndWait(() -> {
-            inbox.render(many);
+            render(inbox, many);
             final JComponent c = inbox.component();
             c.setSize(600, 200);
             layout(c);
@@ -199,7 +204,7 @@ class ApprovalInboxTest {
     /// Letters typed in the note type and answer nothing; Enter then denies with the note, never allowing the call.
     @Test
     void enterInANoteWithTextDeniesWithItAndALetterThereTypes() {
-        inbox.render(List.of(bash(1, "rm -rf build")));
+        render(inbox, List.of(bash(1, "rm -rf build")));
         final JTextField note = (JTextField) named(cards().getFirst(), "note");
         assertThat(note.getClientProperty("JTextField.placeholderText")).isEqualTo("Note for Claude: ⏎ denies with it");
         for (final char c : "no, keep build/".toCharArray()) {
@@ -217,7 +222,7 @@ class ApprovalInboxTest {
     /// Enter in a note holding only blanks allows once.
     @Test
     void enterInAnEmptyNoteGivesThePrimaryAnswer() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final JTextField note = (JTextField) named(cards().getFirst(), "note");
         note.setText("   ");
         press(note, KeyEvent.VK_ENTER, 0);
@@ -227,7 +232,7 @@ class ApprovalInboxTest {
     /// The platform menu key with Enter in the note denies with the note.
     @Test
     void theMenuKeyWithEnterInTheNoteDeniesWithTheNote() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final JTextField note = (JTextField) named(cards().getFirst(), "note");
         note.setText("not now");
         // the menu key of the platform the test runs on: ⌘ on macOS, Ctrl on the Linux build
@@ -238,7 +243,7 @@ class ApprovalInboxTest {
     /// Escape in the note sends nothing and moves the focus to the card.
     @Test
     void escapeInTheNoteReturnsToTheCardWithoutAnswering() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final Component card = cards().getFirst();
         press(named(card, "note"), KeyEvent.VK_ESCAPE, 0);
         assertThat(sent).isEmpty();
@@ -248,7 +253,7 @@ class ApprovalInboxTest {
     /// A MultiEdit request shows a unified diff of every edit, not the raw JSON fields.
     @Test
     void aMultiEditShowsItsDiff() {
-        inbox.render(List.of(new Approval(1, "work", ApprovalKind.TOOL, "MultiEdit", """
+        render(inbox, List.of(new Approval(1, "work", ApprovalKind.TOOL, "MultiEdit", """
                 {"file_path":"/src/A.java","edits":[{"old_string":"int a = 1;","new_string":"int a = 2;"},
                   {"old_string":"int b = 1;","new_string":"long b = 1;"}]}""", "edit A.java", T0)));
         final JTextComponent viewer = (JTextComponent) find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
@@ -259,7 +264,7 @@ class ApprovalInboxTest {
     /// Enter in the card's read-only viewer allows once.
     @Test
     void theCardsLettersWorkFromItsViewer() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final Component viewer = find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
         press(viewer, KeyEvent.VK_ENTER, 0);
         assertThat(decision()).isEqualTo(ApprovalDecision.allowOnce());
@@ -268,7 +273,7 @@ class ApprovalInboxTest {
     /// D in the viewer denies with the text typed in the note.
     @Test
     void deniesFromTheViewerWithTheTypedNote() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final Component card = cards().getFirst();
         ((JTextField) named(card, "note")).setText("why");
         press(find(card, c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable()), KeyEvent.VK_D, 0);
@@ -278,7 +283,7 @@ class ApprovalInboxTest {
     /// Down moves to the next card and Up, also from a note, to the previous; Down on the last card goes nowhere.
     @Test
     void upAndDownMoveBetweenCards() {
-        inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
+        render(inbox, List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
         final List<Component> cards = cards();
         press(cards.get(1), KeyEvent.VK_DOWN, 0);
         press(named(cards.get(1), "note"), KeyEvent.VK_UP, 0);
@@ -289,7 +294,7 @@ class ApprovalInboxTest {
     /// A mouse press on a card's label focuses the card.
     @Test
     void aPressOnTheCardsTextFocusesTheCard() {
-        inbox.render(List.of(bash(1, "ls")));
+        render(inbox, List.of(bash(1, "ls")));
         final Component card = cards().getFirst();
         final Component age = named(card, "age");
         age.dispatchEvent(new MouseEvent(age, MouseEvent.MOUSE_PRESSED, 0, 0, 1, 1, 1, false, MouseEvent.BUTTON1));
@@ -302,21 +307,21 @@ class ApprovalInboxTest {
     /// last; the last card leaving takes no focus.
     @Test
     void theFocusMovesToTheCardThatTookThePlaceOfTheAnsweredOne() {
-        inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
+        render(inbox, List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
         final List<Component> cards = cards();
         focus.owner = named(cards.get(1), "note");
         press(focus.owner, KeyEvent.VK_ENTER, 0);
-        inbox.render(List.of(bash(1, "ls"), bash(3, "id")));
+        render(inbox, List.of(bash(1, "ls"), bash(3, "id")));
         assertThat(focus.requested).containsExactly(cards.get(2));
 
         focus.owner = cards.get(2);
         press(focus.owner, KeyEvent.VK_A, 0);
-        inbox.render(List.of(bash(1, "ls")));
+        render(inbox, List.of(bash(1, "ls")));
         assertThat(focus.requested).containsExactly(cards.get(2), cards.get(0));
 
         focus.owner = cards.get(0);
         press(focus.owner, KeyEvent.VK_D, 0);
-        inbox.render(List.of());
+        render(inbox, List.of());
         assertThat(focus.requested).hasSize(2);
         assertThat(sent).hasSize(3);
     }
@@ -325,7 +330,7 @@ class ApprovalInboxTest {
     /// rest of the typing, Enter included, answers no other card.
     @Test
     void aCardWithdrawnWhileTheUserTypesInItsNoteLeavesTheKeyboardWhereNoKeyAnswers() {
-        inbox.render(List.of(bash(1, "ls"), bash(2, "rm -rf build")));
+        render(inbox, List.of(bash(1, "ls"), bash(2, "rm -rf build")));
         final Component note = named(cards().getFirst(), "note");
         focus.owner = note;
         for (final char c : "add a te".toCharArray()) {
@@ -334,7 +339,7 @@ class ApprovalInboxTest {
         }
         assertThat(sent).isEmpty();
 
-        inbox.render(List.of(bash(2, "rm -rf build")));
+        render(inbox, List.of(bash(2, "rm -rf build")));
         assertThat(focus.requested).hasSize(1);
         final Component now = focus.requested.getLast();
         assertThat(now).isSameAs(named(inbox.component(), "inbox"));
@@ -348,9 +353,9 @@ class ApprovalInboxTest {
     /// A card leaving while the focus is outside the inbox requests no focus.
     @Test
     void aCardLeavingWhileTheFocusIsElsewhereTakesNoFocus() {
-        inbox.render(List.of(bash(1, "ls"), bash(2, "pwd")));
+        render(inbox, List.of(bash(1, "ls"), bash(2, "pwd")));
         focus.owner = new JTextField();
-        inbox.render(List.of(bash(2, "pwd")));
+        render(inbox, List.of(bash(2, "pwd")));
         assertThat(focus.requested).isEmpty();
     }
 
@@ -360,7 +365,7 @@ class ApprovalInboxTest {
     /// [ApprovalInbox#CONFIRM_MILLIS] allows always.
     @Test
     void alwaysShowsItsRuleAndNeedsASecondPress() {
-        inbox.render(List.of(bash(1, "git commit -m x")));
+        render(inbox, List.of(bash(1, "git commit -m x")));
         final Component card = cards().getFirst();
         assertThat(((JTextComponent) named(card, "rule")).getText())
                 .isEqualTo("Always: commands starting \"git commit\"");
@@ -379,7 +384,7 @@ class ApprovalInboxTest {
     /// A second L after the confirmation window asks again instead of answering; a third L then allows always.
     @Test
     void aSecondPressAfterTheWindowAsksAgain() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final Component card = cards().getFirst();
         press(card, KeyEvent.VK_L, 0);
         now.addAndGet(ApprovalInbox.CONFIRM_MILLIS + 500);
@@ -392,7 +397,7 @@ class ApprovalInboxTest {
     /// Clicking Always shows the confirmation in the card; its confirm button allows always.
     @Test
     void clickingAlwaysAsksInTheCardFirst() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final Component card = cards().getFirst();
         ((AbstractButton) named(card, "always")).doClick();
         assertThat(sent).isEmpty();
@@ -412,7 +417,7 @@ class ApprovalInboxTest {
                         new PermissionRules.Rule("Bash", command), new PermissionRules.Rule("Bash", "head:*")), true));
         try {
             SwingUtilities.invokeAndWait(() -> {
-                wide.render(List.of(bash(1, "cd /tmp && " + command + " | head -60")));
+                render(wide, List.of(bash(1, "cd /tmp && " + command + " | head -60")));
                 wide.component().setSize(700, 900);
                 layout(wide.component());
             });
@@ -441,7 +446,7 @@ class ApprovalInboxTest {
     /// Escape first cancels a pending Always and hides it; a second Escape denies.
     @Test
     void escapeCancelsAPendingAlwaysBeforeItDenies() {
-        inbox.render(List.of(bash(1, "ls -la")));
+        render(inbox, List.of(bash(1, "ls -la")));
         final Component card = cards().getFirst();
         press(card, KeyEvent.VK_L, 0);
         press(card, KeyEvent.VK_ESCAPE, 0);
@@ -457,7 +462,7 @@ class ApprovalInboxTest {
         final ApprovalInbox sessionOnly = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
                 (tool, field) -> new PermissionRules.Rules(List.of(new PermissionRules.Rule(tool, "")), false));
         try {
-            sessionOnly.render(List.of(new Approval(1, "work", ApprovalKind.TOOL, "mcp__x__delete_all", "{}", "delete all", T0)));
+            render(sessionOnly, List.of(new Approval(1, "work", ApprovalKind.TOOL, "mcp__x__delete_all", "{}", "delete all", T0)));
             final Component card = cardsOf(sessionOnly).getFirst();
             assertThat(named(card, "always")).isNull();
             assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("For session: mcp__x__delete_all");
@@ -480,7 +485,7 @@ class ApprovalInboxTest {
                 (tool, field) -> new PermissionRules.Rules(List.of(new PermissionRules.Rule("Bash", "git status"),
                         new PermissionRules.Rule("Bash", "npm test:*")), true));
         try {
-            compound.render(List.of(bash(1, "git status && npm test")));
+            render(compound, List.of(bash(1, "git status && npm test")));
             final Component card = cardsOf(compound).getFirst();
             assertThat(((JTextComponent) named(card, "rule")).getText())
                     .isEqualTo("Always: the command \"git status\", commands starting \"npm test\"");
@@ -501,7 +506,7 @@ class ApprovalInboxTest {
     /// asks for one, and with a choice sends the answer.
     @Test
     void aQuestionStartsWithNoChoiceAndShowsEachDescriptionAsText() {
-        inbox.render(List.of(question(1)));
+        render(inbox, List.of(question(1)));
         final Component card = cards().getFirst();
         final List<JRadioButton> options = new ArrayList<>();
         collect(card, JRadioButton.class, options);
@@ -526,7 +531,7 @@ class ApprovalInboxTest {
     /// In the free answer letters type, Enter starts a line and no key sends; only the Answer button sends the text.
     @Test
     void theOtherAnswerTakesParagraphsAndOnlyTheAnswerButtonSendsIt() throws Exception {
-        inbox.render(List.of(question(1)));
+        render(inbox, List.of(question(1)));
         final Component card = cards().getFirst();
         final JTextArea free = (JTextArea) named(card, "other");
         // on the event thread, where the caret follows what is typed
@@ -547,7 +552,7 @@ class ApprovalInboxTest {
     /// undo, redo, copy, paste, cut and select all.
     @Test
     void theOtherAnswerIs120CharactersWideInTheEditorsFontWithUndoRedoAndSelectAll() throws Exception {
-        inbox.render(List.of(question(1)));
+        render(inbox, List.of(question(1)));
         final JTextArea free = (JTextArea) named(cards().getFirst(), "other");
         final FontMetrics fm = free.getFontMetrics(free.getFont());
         final JScrollPane box = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, free);
@@ -576,7 +581,7 @@ class ApprovalInboxTest {
     /// Approving a plan with auto-accepted edits allows for the session.
     @Test
     void aPlanCanBeApprovedWithEditsAccepted() {
-        inbox.render(List.of(plan(1)));
+        render(inbox, List.of(plan(1)));
         final AbstractButton edits = (AbstractButton) find(cards().getFirst(), c -> c instanceof AbstractButton b && b.getText().startsWith("Approve, auto-accept"));
         edits.doClick();
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
@@ -588,7 +593,7 @@ class ApprovalInboxTest {
     /// itself waits until the inbox shows.
     @Test
     void theAgeTicksWhileCardsWait() {
-        inbox.render(List.of(bash(1, "ls")));
+        render(inbox, List.of(bash(1, "ls")));
         final JLabel age = (JLabel) named(cards().getFirst(), "age");
         assertThat(age.getText()).isEqualTo("now");
         assertThat(inbox.ageWanted()).as("waiting cards want their ages ticked").isTrue();
@@ -598,7 +603,7 @@ class ApprovalInboxTest {
         inbox.tick();
         assertThat(age.getText()).isEqualTo("2 min ago");
 
-        inbox.render(List.of());
+        render(inbox, List.of());
         assertThat(inbox.ageWanted()).isFalse();
     }
 

@@ -27,7 +27,6 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.Decision;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
@@ -236,7 +235,6 @@ class ActionToolsTest {
         final String p2 = s.panel(States.P2).orElseThrow().title();
         final ViewSpec spec = new ViewSpec.Markdown("x");
         state.set(s.withClosed(List.of(new PanelState(new PanelId("shut"), "shut", "", "")))
-                .withLater(List.of(new Decision(4, "work", "pick a name", "", 0L)))
                 .withViews(List.of(new ViewState(9L, "view", spec, Placement.LOWER, false, "foreman", 1L)))
                 .withApprovals(List.of(card(41, "users"))));
         // work, in panel one, is foreman's too: a checkpoint and a command go to a session with a panel
@@ -276,10 +274,6 @@ class ActionToolsTest {
         calls.put("panel_cancel", "{\"panel\":\"" + p2 + "\"}");
         calls.put("panel_refresh", "{\"panel\":\"" + p2 + "\",\"sql\":\"SELECT 1\"}");
         calls.put("approval_answer", "{\"id\":41,\"decision\":\"deny\"}");
-        calls.put("decision_hold", "{\"title\":\"later\"}");
-        calls.put("decisions_settled", "{\"ids\":[4]}");
-        calls.put("decision_settle", "{\"id\":4}");
-        calls.put("decision_dismiss", "{\"id\":4}");
         calls.put("connection_save", "{\"name\":\"lab\",\"host\":\"h\",\"database\":\"qdb\"}");
         calls.put("connection_test", "{\"name\":\"local\"}");
         calls.put("connection_open", "{\"name\":\"local\"}");
