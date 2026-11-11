@@ -10,6 +10,7 @@ import javax.swing.SwingUtilities;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.ui.kit.theme.BracketBorder;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
 
@@ -27,6 +28,8 @@ public final class SidePane {
 
     public SidePane(final WidgetContext context, final WidgetRegistry registry) {
         TabLook.apply(tabs);
+        // the region's frame under the console style; none, and no room, under the plain one (record 151)
+        tabs.setBorder(new BracketBorder());
         views = new ViewTabs(tabs, 0, Placement.SIDE, registry, context);
     }
 

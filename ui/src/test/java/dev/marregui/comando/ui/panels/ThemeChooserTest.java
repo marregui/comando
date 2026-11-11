@@ -26,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [ThemeChooser] shows one mode's themes in slots, a dark theme and its light twin in the same one, in a popover
 /// under the swatch (record 128).
-/// - The six dark themes and their six light twins share slots, in the dark themes' order.
+/// - The six dark themes and their six light twins share slots, in the dark themes' order; the two console themes
+///   follow them in the dark mode, each on a slot of its own (record 151).
 /// - A theme no twin pairs follows the pairs, in its mode.
 /// - A twin named on either side pairs the two themes.
 /// - A theme's tooltip is its head line over its description, escaped; a card's tooltip carries it (record 147).
@@ -35,16 +36,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   room below; on no screen it is left where it falls.
 class ThemeChooserTest {
 
-    /// Slot i of the light themes is the twin of slot i of the dark ones.
+    /// Slot i of the light themes is the twin of slot i of the dark ones; the two console themes take slots 6 and 7
+    /// of the dark mode, which the light mode leaves empty, and the toggle from either takes the light mode's first.
     @Test
     void aDarkThemeAndItsTwinShareASlot() {
         final List<NamedTheme> darkSlots = ThemeChooser.slots(NamedTheme.builtIn(), false);
         final List<NamedTheme> lightSlots = ThemeChooser.slots(NamedTheme.builtIn(), true);
         assertThat(darkSlots).extracting(t -> t.id).containsExactly("graphite_gold", "espresso_champagne", "aubergine_gold",
-                "midnight_blue", "evergreen_forest", "slate_silver");
+                "midnight_blue", "evergreen_forest", "slate_silver", "console_amber", "console_cyan");
         assertThat(lightSlots).extracting(t -> t.id).containsExactly("paper_ochre", "cream_bronze", "lilac_gold", "ice_navy",
                 "mint_forest", "fog_slate");
-        for (int i = 0; i < darkSlots.size(); i++) {
+        assertThat(ThemeChooser.flipped(NamedTheme.builtIn(), Optional.of(NamedTheme.CONSOLE_AMBER), true)).as("no twin")
+                .contains(NamedTheme.PAPER_OCHRE);
+        for (int i = 0; i < lightSlots.size(); i++) {
             assertThat(lightSlots.get(i).twin).as("slot " + i).contains(darkSlots.get(i).id);
         }
     }

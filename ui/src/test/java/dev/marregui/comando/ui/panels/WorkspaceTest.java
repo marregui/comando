@@ -13,6 +13,7 @@ import java.awt.geom.Rectangle2D;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,6 +32,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
+import javax.swing.border.Border;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.PlainDocument;
@@ -63,6 +65,10 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.text.TextLinks;
+import dev.marregui.comando.ui.kit.theme.BracketBorder;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Style;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 
@@ -1310,5 +1316,46 @@ class WorkspaceTest {
         final boolean button = id == MouseEvent.MOUSE_PRESSED || id == MouseEvent.MOUSE_RELEASED;
         return new MouseEvent(c, id, System.currentTimeMillis(), MouseEvent.BUTTON1_DOWN_MASK, x, y, button ? 1 : 0, false,
                 button ? MouseEvent.BUTTON1 : MouseEvent.NOBUTTON);
+    }
+
+    /// Under a plain theme the editors's frame, kept through a look and feel update, leaves every part of the
+    /// strip at the bounds it has with the strip's own border; under a console theme the tab shown lays out
+    /// inside the frame, 3 px in at the sides and the bottom.
+    @Test
+    void theEditorsFrameTakesRoomOnlyUnderAConsoleTheme() throws Exception {
+        final List<List<Rectangle>> bounds = new ArrayList<>();
+        final Rectangle[] shown = new Rectangle[2];
+        final Border[] kept = new Border[1];
+        final Style[] style = new Style[1];
+        SwingUtilities.invokeAndWait(() -> {
+            final JTabbedPane tabs = (JTabbedPane) new Workspace(_ -> { }, new Texts(), new SchemaRegistry())
+                    .component();
+            tabs.addTab("Body", new JLabel("body"));
+            tabs.setSelectedIndex(tabs.getTabCount() - 1);
+            SwingUtilities.updateComponentTreeUI(tabs);
+            kept[0] = tabs.getBorder();
+            style[0] = Theme.style();
+            bounds.add(ConsoleChecks.laidOut(tabs));
+            shown[0] = tabs.getSelectedComponent().getBounds();
+            tabs.setBorder(new JTabbedPane().getBorder());
+            bounds.add(ConsoleChecks.laidOut(tabs));
+            tabs.setBorder(kept[0]);
+            final Ground ground = Theme.groundChosen();
+            final Tint tint = Theme.tint();
+            Theme.choose(NamedTheme.CONSOLE_AMBER.ground, NamedTheme.CONSOLE_AMBER.tint);
+            try {
+                ConsoleChecks.laidOut(tabs);
+                shown[1] = tabs.getSelectedComponent().getBounds();
+            } finally {
+                Theme.choose(ground, tint);
+            }
+        });
+        assertThat(style[0]).isEqualTo(Style.PLAIN);
+        assertThat(kept[0]).isInstanceOf(BracketBorder.class);
+        assertThat(bounds.get(0)).as("plain: as with no frame").isEqualTo(bounds.get(1));
+        assertThat(shown[1].x).as("console: left").isEqualTo(shown[0].x + BracketBorder.INSET);
+        assertThat(shown[1].width).as("console: width").isEqualTo(shown[0].width - 2 * BracketBorder.INSET);
+        assertThat(shown[1].y + shown[1].height).as("console: bottom")
+                .isEqualTo(shown[0].y + shown[0].height - BracketBorder.INSET);
     }
 }

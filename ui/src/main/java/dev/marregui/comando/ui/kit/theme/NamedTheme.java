@@ -8,9 +8,10 @@ import java.util.Optional;
 
 /**
  * A curated theme (record 103): a ground and the tint that sits on it, chosen together from the swatch beside New
- * panel or the palette. The ground and the tint are not chosen apart. Each is a JSON file (record 126): the twelve
- * built in (six dark and their six light twins, records 127 and 128), then those read from the data root's {@code themes} folder at start,
- * which {@link #offer} adds after them.
+ * panel or the palette. The ground and the tint are not chosen apart. Each is a JSON file (record 126): the fourteen
+ * built in (six dark and their six light twins, records 127 and 128, then the two dark ones of the console style
+ * without a twin, record 151), then those read from the data root's {@code themes} folder at start, which
+ * {@link #offer} adds after them.
  */
 public final class NamedTheme {
 
@@ -26,8 +27,10 @@ public final class NamedTheme {
     public static final NamedTheme ICE_NAVY = builtIn("ice_navy", Ground.ICE, Tint.NAVY);
     public static final NamedTheme MINT_FOREST = builtIn("mint_forest", Ground.MINT, Tint.FOREST);
     public static final NamedTheme FOG_SLATE = builtIn("fog_slate", Ground.FOG, Tint.SLATE_INK);
+    public static final NamedTheme CONSOLE_AMBER = builtInOwn("console_amber");
+    public static final NamedTheme CONSOLE_CYAN = builtInOwn("console_cyan");
     private static final List<NamedTheme> BUILT_IN = List.of(GRAPHITE_GOLD, ESPRESSO_CHAMPAGNE, AUBERGINE_GOLD, MIDNIGHT_BLUE,
-            EVERGREEN_FOREST, SLATE_SILVER, PAPER_OCHRE, CREAM_BRONZE, LILAC_GOLD, ICE_NAVY, MINT_FOREST, FOG_SLATE);
+            EVERGREEN_FOREST, SLATE_SILVER, PAPER_OCHRE, CREAM_BRONZE, LILAC_GOLD, ICE_NAVY, MINT_FOREST, FOG_SLATE, CONSOLE_AMBER, CONSOLE_CYAN);
     /** The themes offered: the built-in ones, then the user's files read at start. */
     private static volatile List<NamedTheme> offered = BUILT_IN;
 
@@ -42,6 +45,8 @@ public final class NamedTheme {
     public final Optional<String> twin;
     /** What the theme's colours do to the mind, in short, as its file gives it (record 147): shown in its tooltips. */
     public final Optional<String> description;
+    /** How the theme draws the window around its colours, as its file gives it (record 151). */
+    public final Style style;
 
     private NamedTheme(final String id,
                        final String label,
@@ -49,8 +54,10 @@ public final class NamedTheme {
                        final Ground ground,
                        final Tint tint,
                        final Optional<Path> file,
-                       final Optional<String> twin) {
+                       final Optional<String> twin,
+                       final Style style) {
         this.id = id;
+        this.style = style;
         this.twin = twin;
         this.label = label;
         this.description = description;
@@ -61,16 +68,26 @@ public final class NamedTheme {
 
     private static NamedTheme builtIn(final String id, final Ground ground, final Tint tint) {
         final ThemeSpec s = BuiltInThemes.spec(id);
-        return new NamedTheme(id, s.label(), s.description(), ground, tint, Optional.empty(), s.twin());
+        return new NamedTheme(id, s.label(), s.description(), ground, tint, Optional.empty(), s.twin(), s.style());
+    }
+
+    /** The built-in theme {@code id} with a ground and a tint of its own, as a file's theme has. */
+    private static NamedTheme builtInOwn(final String id) {
+        return own(BuiltInThemes.spec(id), Optional.empty());
     }
 
     /** The theme {@code spec} describes, read from {@code file}, with a ground and a tint of its own. */
     static NamedTheme fromFile(final ThemeSpec spec, final Path file) {
+        return own(spec, Optional.of(file));
+    }
+
+    /** The theme {@code spec} describes, with a ground and a tint named by its id. */
+    private static NamedTheme own(final ThemeSpec spec, final Optional<Path> file) {
         final String name = spec.id().toUpperCase(Locale.ROOT);
         return new NamedTheme(spec.id(), spec.label(), spec.description(),
                 new Ground(name, spec.groundLabel(), spec.ground(), spec.light()),
-                new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade(), spec.light()), Optional.of(file),
-                spec.twin());
+                new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade(), spec.light()), file,
+                spec.twin(), spec.style());
     }
 
     /** The command that chooses this theme: {@code theme.graphite_gold}. */
@@ -88,7 +105,10 @@ public final class NamedTheme {
         return offered.toArray(NamedTheme[]::new);
     }
 
-    /** The built-in themes, in the swatch's order: the six dark ones, then their light twins in the same order. */
+    /**
+     * The built-in themes, in the swatch's order: the six dark ones, then their light twins in the same order, then the
+     * two of the console style.
+     */
     public static List<NamedTheme> builtIn() {
         return BUILT_IN;
     }

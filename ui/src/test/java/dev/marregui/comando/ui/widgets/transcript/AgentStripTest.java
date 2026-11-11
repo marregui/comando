@@ -2,6 +2,8 @@ package dev.marregui.comando.ui.widgets.transcript;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.List;
 import javax.swing.JLabel;
 
@@ -14,12 +16,18 @@ import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Style;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.widget.WidgetContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [AgentStrip] names every running sub-agent on one line; showing it keeps the transcript's end in view.
 /// - chips that do not fit on the line are counted in a last chip
+/// - a chip is square, in the regions' hairline, under a console theme, and round under a plain one
 @ExtendWith(OnEdt.class)
 class AgentStripTest {
 
@@ -77,6 +85,40 @@ class AgentStripTest {
         layoutTree(root);
         assertThat(strip.shownChips()).as("all fit when there is room").hasSize(6);
         assertThat(strip.moreText()).isEmpty();
+    }
+
+    /// A chip's corner pixel: left clear by the round fill under a plain theme; under a console theme the hairline of a
+    /// square chip, with the card's fill just inside it.
+    @Test
+    void aChipIsSquareUnderAConsoleThemeAndRoundUnderAPlainOne() {
+        final AgentStrip strip = new AgentStrip(_ -> { }, _ -> { }, () -> 0L);
+        strip.show(List.of(), List.of(new BackgroundTask("t1", AgentStrip.LOCAL_AGENT, "Watch the build", 1_000L)));
+        final JLabel chip = strip.chips().getFirst();
+        chip.setSize(120, 20);
+        assertThat(Theme.style()).isEqualTo(Style.PLAIN);
+        assertThat(painted(chip).getRGB(0, 0)).as("plain: the corner left clear").isZero();
+        final Ground ground = Theme.groundChosen();
+        final Tint tint = Theme.tint();
+        Theme.choose(NamedTheme.CONSOLE_AMBER.ground, NamedTheme.CONSOLE_AMBER.tint);
+        try {
+            final BufferedImage image = painted(chip);
+            assertThat(image.getRGB(0, 0)).as("console: the hairline's corner").isEqualTo(Theme.CARD_BORDER.getRGB());
+            assertThat(image.getRGB(119, 19)).as("console: the far corner").isEqualTo(Theme.CARD_BORDER.getRGB());
+            assertThat(image.getRGB(1, 1)).as("console: the fill").isEqualTo(Theme.CARD.getRGB());
+        } finally {
+            Theme.choose(ground, tint);
+        }
+    }
+
+    private static BufferedImage painted(final JLabel chip) {
+        final BufferedImage image = new BufferedImage(chip.getWidth(), chip.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        final Graphics2D g = image.createGraphics();
+        try {
+            chip.paint(g);
+        } finally {
+            g.dispose();
+        }
+        return image;
     }
 
 }

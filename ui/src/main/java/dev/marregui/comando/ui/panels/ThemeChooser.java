@@ -108,7 +108,10 @@ public final class ThemeChooser {
         top.add(toggle, BorderLayout.CENTER);
         top.add(close, BorderLayout.EAST);
         grid.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, Theme.SPACE_XS, Theme.SPACE_XS, Theme.SPACE_XS));
-        final JScrollPane scroll = new JScrollPane(grid, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+        // at the top of a holder: a mode with fewer rows than the other keeps its cards' size, not the viewport's
+        final JPanel holder = new JPanel(new BorderLayout());
+        holder.add(grid, BorderLayout.NORTH);
+        final JScrollPane scroll = new JScrollPane(holder, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(PREVIEW_H / 4);

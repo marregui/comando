@@ -16,6 +16,7 @@ import javax.swing.JPanel;
 import javax.swing.JToggleButton;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.BracketBorder;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -48,6 +49,8 @@ public final class TabStrip {
                 BorderFactory.createEmptyBorder(2, 2, 0, 0)));
         root.add(strip, BorderLayout.NORTH);
         root.add(content, BorderLayout.CENTER);
+        // the region's frame under the console style; none, and no room, under the plain one (record 151)
+        root.setBorder(new BracketBorder());
     }
 
     /** Adds a tab with the icon of that name, after the others; {@code title} is its name for tooltips and readers. */

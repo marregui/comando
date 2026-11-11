@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
@@ -49,6 +50,9 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.Tooltips;
+import dev.marregui.comando.ui.kit.theme.Gauge;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import dev.marregui.comando.ui.kit.theme.Style;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -70,13 +74,14 @@ public final class StatusBar {
     private final JPanel count = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
     private final JLabel work = new JLabel();
     private final JLabel approvals = new JLabel();
-    /** Claude's plan usage, then Codex's, each a label of its own. */
+    /** Claude's plan usage, then Codex's, each a label of its own, or under the console style its gauges. */
     private final Usage claudeUsage = new Usage(PlanUsage.CLAUDE, "Claude Code's /usage");
     private final Usage codexUsage = new Usage(PlanUsage.CODEX, "codex app-server");
 
-    /** One plan's usage label. */
+    /** One plan's usage: its label, and its gauges, one per window of its last read, which the console style shows. */
     private static final class Usage {
         final JLabel label = new JLabel();
+        final JPanel gauges = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.SPACE_S, 0));
         /** Where the numbers come from, for the tooltip. */
         final String source;
         /** The last read that had windows; a failed read after it keeps showing it, marked as old. */
@@ -86,6 +91,14 @@ public final class StatusBar {
             this.source = source;
             label.setVisible(false);
             label.getAccessibleContext().setAccessibleName(provider + " plan usage");
+            gauges.setOpaque(false);
+            gauges.setVisible(false);
+        }
+
+        /** The label under the plain style, the gauges under the console style; neither before a good read. */
+        void showStyle(final Style style) {
+            label.setVisible(last != null && style == Style.PLAIN);
+            gauges.setVisible(last != null && style == Style.CONSOLE);
         }
     }
 
@@ -129,7 +142,9 @@ public final class StatusBar {
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
         final JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
         right.add(claudeUsage.label);
+        right.add(claudeUsage.gauges);
         right.add(codexUsage.label);
+        right.add(codexUsage.gauges);
         count.add(work);
         count.add(approvals);
         right.add(count);
@@ -177,6 +192,8 @@ public final class StatusBar {
             part.getAccessibleContext().setAccessibleName("Work");
             part.addMouseListener(opensWork);
         }
+        // while the bar is in a window: its window's close stops it
+        SidebarLook.whileShown(root, this::followStyle);
     }
 
     public JComponent component() {
@@ -197,21 +214,22 @@ public final class StatusBar {
      * Shows a plan's usage limits, Claude's or Codex's, each on its own label: each window's share used, and when the
      * session window resets; the tooltip has every reset time, and says so when the plan's tool reports no session
      * window. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, shows nothing.
+     * Under the console style the plan shows a gauge per window instead, each coloured by its own share as the label
+     * is by the worst, with the label's tooltip (record 151).
      */
     public void planUsage(final PlanUsage read) {
         final Usage u = read.provider().equals(PlanUsage.CODEX) ? codexUsage : claudeUsage;
         if (!read.windows().isEmpty()) {
             u.last = read;
         }
+        u.showStyle(Theme.style());
         if (u.last == null) {
-            u.label.setVisible(false);
             return;
         }
         final boolean stale = read != u.last;
-        u.label.setVisible(true);
         u.label.setText(usageText(u.last));
         final int worst = u.last.windows().stream().mapToInt(PlanUsage.Window::percent).max().orElse(0);
-        u.label.setForeground(stale ? Theme.MUTED : worst >= USAGE_DANGER ? Theme.DANGER : worst >= USAGE_WARN ? Theme.ATTENTION : Theme.MUTED);
+        u.label.setForeground(usageColour(worst, stale));
         final StringBuilder tip = new StringBuilder();
         for (final PlanUsage.Window w : u.last.windows()) {
             tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? "" : ", resets " + w.resets())))
@@ -227,6 +245,51 @@ public final class StatusBar {
                     + " failed: " + read.problem()));
         }
         u.label.setToolTipText("<html>" + tip + "</html>");
+        showGauges(u, stale);
+    }
+
+    /** The colour of a share used: muted, attention from {@link #USAGE_WARN}, danger from {@link #USAGE_DANGER}. */
+    private static Color usageColour(final int percent, final boolean stale) {
+        return stale ? Theme.MUTED : percent >= USAGE_DANGER ? Theme.DANGER : percent >= USAGE_WARN ? Theme.ATTENTION : Theme.MUTED;
+    }
+
+    /** {@code u}'s last read on its gauges, one per window, made again only when its windows are others. */
+    private static void showGauges(final Usage u, final boolean stale) {
+        final List<PlanUsage.Window> windows = u.last.windows();
+        final List<String> captions = new ArrayList<>();
+        for (final PlanUsage.Window w : windows) {
+            captions.add(u.last.provider().substring(0, Math.min(2, u.last.provider().length())).toUpperCase(Locale.ROOT) + " " + w.name().toUpperCase(Locale.ROOT));
+        }
+        if (!captions.equals(gauges(u).stream().map(Gauge::caption).toList())) {
+            u.gauges.removeAll();
+            for (final String caption : captions) {
+                u.gauges.add(new Gauge(caption));
+            }
+            u.gauges.revalidate();
+        }
+        final List<Gauge> shown = gauges(u);
+        for (int i = 0; i < windows.size(); i++) {
+            final int percent = windows.get(i).percent();
+            shown.get(i).show(percent, usageColour(percent, stale));
+            shown.get(i).setToolTipText(u.label.getToolTipText());
+        }
+    }
+
+    private static List<Gauge> gauges(final Usage u) {
+        final List<Gauge> out = new ArrayList<>();
+        for (final Component c : u.gauges.getComponents()) {
+            out.add((Gauge) c);
+        }
+        return out;
+    }
+
+    /** Each plan's label or gauges, as the style chosen has it; a theme chosen keeps the reads shown. */
+    private void followStyle() {
+        final Style style = Theme.style();
+        claudeUsage.showStyle(style);
+        codexUsage.showStyle(style);
+        root.revalidate();
+        root.repaint();
     }
 
     /** Claude's usage label; for tests. */

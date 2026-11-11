@@ -10,9 +10,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Themes are JSON files (record 126): the six built in, and the user's, read from a folder at start.
-/// - The built-in files give the six dark themes their colours as before, paper and ochre its light ones, and each
-///   reads above every floor.
+/// Themes are JSON files (record 126): the fourteen built in, and the user's, read from a folder at start.
+/// - The built-in files give the six dark themes their colours as before, paper and ochre its light ones, the two of
+///   the console style theirs after the twelve, and each reads above every floor.
+/// - A file's `style` is plain when left out, console when it says so, and any other text leaves the file out
+///   (record 151).
 /// - A user's file is offered after the built-in ones, with a ground and tint of its own, in the order of the names.
 /// - A file that does not parse, names a bad id, mode or colour, repeats an id, or reads below a floor, dark or light,
 ///   is left out, with one line naming the file and why; one left out for its colours leaves its id to the next.
@@ -23,13 +25,28 @@ class ThemeFilesTest {
     @TempDir
     Path folder;
 
-    /// The built-in files give the colours the enums had, the labels in the swatch's order, paper and ochre last and
-    /// light, and every built-in theme reads above every floor of [ThemeRules].
+    /// The built-in files give the colours the enums had, the labels in the swatch's order, paper and ochre first of
+    /// the light ones, the two console themes last, dark, in the console style and with colours of their own, and every
+    /// built-in theme reads above every floor of [ThemeRules].
     @Test
     void theBuiltInFilesGiveTheThemesAsBefore() {
         assertThat(NamedTheme.builtIn()).extracting(t -> t.id).containsExactly("graphite_gold", "espresso_champagne",
                 "aubergine_gold", "midnight_blue", "evergreen_forest", "slate_silver", "paper_ochre", "cream_bronze", "lilac_gold",
-                "ice_navy", "mint_forest", "fog_slate");
+                "ice_navy", "mint_forest", "fog_slate", "console_amber", "console_cyan");
+        assertThat(NamedTheme.builtIn().subList(0, 12)).as("the twelve stay plain").allMatch(t -> t.style == Style.PLAIN);
+        assertThat(NamedTheme.builtIn().subList(12, 14)).containsExactly(NamedTheme.CONSOLE_AMBER, NamedTheme.CONSOLE_CYAN)
+                .allMatch(t -> t.style == Style.CONSOLE && !t.ground.light && t.twin.isEmpty());
+        assertThat(NamedTheme.CONSOLE_AMBER.label).isEqualTo("Console amber");
+        assertThat(NamedTheme.CONSOLE_CYAN.label).isEqualTo("Console cyan");
+        assertThat(Theme.hex(NamedTheme.CONSOLE_AMBER.ground.color) + Theme.hex(NamedTheme.CONSOLE_AMBER.tint.highlight)
+                + Theme.hex(NamedTheme.CONSOLE_AMBER.tint.body) + Theme.hex(NamedTheme.CONSOLE_AMBER.tint.shade))
+                .isEqualTo("#0b0a08#ffe3a3#ffb000#b87400");
+        assertThat(Theme.hex(NamedTheme.CONSOLE_CYAN.ground.color) + Theme.hex(NamedTheme.CONSOLE_CYAN.tint.highlight)
+                + Theme.hex(NamedTheme.CONSOLE_CYAN.tint.body) + Theme.hex(NamedTheme.CONSOLE_CYAN.tint.shade))
+                .isEqualTo("#070b12#d2f6ff#4fd6e8#2a8fa3");
+        assertThat(Ground.values()).as("a ground of its own").doesNotContain(NamedTheme.CONSOLE_AMBER.ground);
+        assertThat(Ground.find("CONSOLE_AMBER")).contains(NamedTheme.CONSOLE_AMBER.ground);
+        assertThat(Tint.named("CONSOLE_CYAN")).isSameAs(NamedTheme.CONSOLE_CYAN.tint);
         assertThat(NamedTheme.builtIn()).filteredOn(t -> t.ground.light).hasSize(6).first().isEqualTo(NamedTheme.PAPER_OCHRE);
         assertThat(NamedTheme.PAPER_OCHRE.twin).contains("graphite_gold");
         assertThat(NamedTheme.ICE_NAVY.twin).contains("midnight_blue");
@@ -75,8 +92,8 @@ class ThemeFilesTest {
         assertThat(pine.commandId()).isEqualTo("theme.pine");
         try {
             NamedTheme.offer(read.themes());
-            assertThat(NamedTheme.values()).hasSize(15);
-            assertThat(NamedTheme.values()[12]).isSameAs(pine);
+            assertThat(NamedTheme.values()).hasSize(17);
+            assertThat(NamedTheme.values()[14]).isSameAs(pine);
             assertThat(NamedTheme.withId("ink_rose")).contains(read.themes().get(1));
             assertThat(Ground.find("PINE")).contains(pine.ground);
             assertThat(Tint.named("INK_ROSE")).isSameAs(read.themes().get(1).tint);
@@ -84,8 +101,24 @@ class ThemeFilesTest {
         } finally {
             NamedTheme.offer(List.of());
         }
-        assertThat(NamedTheme.values()).hasSize(12);
+        assertThat(NamedTheme.values()).hasSize(14);
         assertThat(Ground.find("PINE")).isEmpty();
+    }
+
+    /// A file without `style` is plain, one with `"console"` console and one with `"plain"` plain; `"neon"` and a
+    /// number leave their files out with the reason.
+    @Test
+    void aStyleIsReadDefaultedAndRefused() throws IOException {
+        write("1-none.json", theme("none", "None", "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F"));
+        write("2-console.json", styled("console", "\"console\""));
+        write("3-plain.json", styled("plain", "\"plain\""));
+        write("4-neon.json", styled("neon", "\"neon\""));
+        write("5-number.json", styled("number", "3"));
+        final ThemeFiles.Read read = ThemeFiles.read(folder);
+        assertThat(read.themes()).extracting(t -> t.id).containsExactly("none", "console", "plain");
+        assertThat(read.themes()).extracting(t -> t.style).containsExactly(Style.PLAIN, Style.CONSOLE, Style.PLAIN);
+        assertThat(read.problems()).containsExactly("4-neon.json: \"style\" must be \"plain\" or \"console\": neon",
+                "5-number.json: \"style\" must be a text");
     }
 
     /// Each broken file is left out with one line that names it and its problem; a good one beside them is still read.
@@ -165,6 +198,11 @@ class ThemeFilesTest {
     private static String described(final String id, final String description) {
         return theme(id, id, "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F")
                 .replace("\"mode\"", "\"description\": \"" + description + "\", \"mode\"");
+    }
+
+    /// A good dark theme `id` whose `style` is `style`, written into the JSON as it is.
+    private static String styled(final String id, final String style) {
+        return theme(id, id, "#14101A", "#FFE3EC", "#F2A7C0", "#B5627F").replace("\"mode\"", "\"style\": " + style + ", \"mode\"");
     }
 
     private static String theme(final String id, final String label, final String ground, final String highlight, final String body, final String shade) {

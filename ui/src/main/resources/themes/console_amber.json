@@ -1,0 +1,17 @@
+{
+  "id": "console_amber",
+  "label": "Console amber",
+  "description": "Amber on near-black, as a ship's console: warm, steady, alert. Made for a dim room.",
+  "mode": "dark",
+  "style": "console",
+  "ground": {
+    "label": "Carbon",
+    "color": "#0B0A08"
+  },
+  "tint": {
+    "label": "Amber phosphor",
+    "highlight": "#FFE3A3",
+    "body": "#FFB000",
+    "shade": "#B87400"
+  }
+}

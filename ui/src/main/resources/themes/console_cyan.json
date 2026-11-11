@@ -1,0 +1,17 @@
+{
+  "id": "console_cyan",
+  "label": "Console cyan",
+  "description": "Cyan on near-black blue, as a flight deck: cool, precise, alert. Made for a dim room.",
+  "mode": "dark",
+  "style": "console",
+  "ground": {
+    "label": "Deep space",
+    "color": "#070B12"
+  },
+  "tint": {
+    "label": "Cyan phosphor",
+    "highlight": "#D2F6FF",
+    "body": "#4FD6E8",
+    "shade": "#2A8FA3"
+  }
+}

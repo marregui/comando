@@ -20,6 +20,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.BracketBorder;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
@@ -80,6 +81,8 @@ public final class LowerPanel {
         tabs.addTab("Results", Icons.get("table"), this.results.component());
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        // the region's frame under the console style; none, and no room, under the plain one (record 151)
+        tabs.setBorder(new BracketBorder());
         views = new ViewTabs(tabs, FIXED_TABS, Placement.LOWER, registry, context);
         // no buttons at the strip's end: the theme is chosen at the top right, Clear from the palette (record 104)
         tabs.addChangeListener(e -> {

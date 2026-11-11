@@ -126,6 +126,7 @@ val uiTest = tasks.register<Test>("uiTest") {
         "**/QuitTeardownUiTest.class",
         "**/WorkListUiTest.class",
         "**/DiffThemeUiTest.class",
+        "**/ConsoleStyleUiTest.class",
         "**/AttentionUiTest.class",
         "**/ReportFirstUiTest.class",
         "**/SubjectUiTest.class",
@@ -150,6 +151,8 @@ val uiTest = tasks.register<Test>("uiTest") {
     systemProperty("comando.offScreen", "true")
     systemProperty("apple.awt.UIElement", "true")
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")
+    // no window test reads the user's real Codex plan: the status bar would change under a test at the read's return
+    environment("COMANDO_CODEX", layout.buildDirectory.file("no-codex").get().asFile.path)
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
     // never from the build cache: what it checks is the desktop and the windows it opens, which are no input
     outputs.cacheIf { false }

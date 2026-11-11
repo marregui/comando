@@ -70,6 +70,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.tabs.MovableTabs;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.BracketBorder;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -212,6 +213,8 @@ public final class Workspace {
         texts.onOutsideChange(change -> Edt.later(() -> takeOutside(change)));
         texts.onDeleted(deleted -> Edt.later(() -> closeDeleted(deleted)));
         TabLook.apply(tabs);
+        // the region's frame under the console style; none, and no room, under the plain one (record 151)
+        tabs.setBorder(new BracketBorder());
         tabs.putClientProperty(TabLook.CLOSE_CALLBACK, (IntConsumer) i -> {
             final EditorPanel p = (EditorPanel) tabs.getComponentAt(i);
             closer.accept(p.panel().id());

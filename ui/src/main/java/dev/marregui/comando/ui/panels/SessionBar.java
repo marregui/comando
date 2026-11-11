@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.io.File;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -30,6 +31,9 @@ import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Gauge;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
+import dev.marregui.comando.ui.kit.theme.Style;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -56,6 +60,11 @@ public final class SessionBar {
     private final JButton effort = EditorPanel.chip();
     /** How full the context is; purple once the checkpoint is due. */
     private final JLabel context = new JLabel();
+    /**
+     * The context under the console style, once its share of the window is known: filled to it, purple once the
+     * checkpoint is due, ticked at the checkpoint threshold (record 151).
+     */
+    private final Gauge contextGauge = new Gauge("CTX");
     /**
      * Sends the session's checkpoint command; once its turn has finished, the conversation is compacted (record 129).
      * Beside the context, which makes it due; shown while the session has one.
@@ -99,8 +108,11 @@ public final class SessionBar {
         right.add(model);
         right.add(effort);
         right.add(context);
+        right.add(contextGauge);
         right.add(checkpoint);
         context.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
+        contextGauge.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
+        contextGauge.setVisible(false);
         root.add(left, BorderLayout.CENTER);
         root.add(right, BorderLayout.EAST);
 
@@ -112,6 +124,13 @@ public final class SessionBar {
                 ? new Intent.StopSession(x.name()) : new Intent.StartSession(x.name()))));
         fresh.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
         checkpoint.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
+        // the console style shows the context as a gauge, in the tint: drawn again on another theme while in a window,
+        // whose close stops it
+        SidebarLook.whileShown(root, () -> {
+            if (state != null) {
+                render(state);
+            }
+        });
     }
 
     public JComponent component() {
@@ -153,7 +172,7 @@ public final class SessionBar {
             session.setIcon(Icons.get("claude-off"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
-            for (final JComponent c : new JComponent[]{toggle, fresh, activity, model, effort, context, checkpoint}) {
+            for (final JComponent c : new JComponent[]{toggle, fresh, activity, model, effort, context, contextGauge, checkpoint}) {
                 c.setVisible(false);
             }
             return;
@@ -189,10 +208,20 @@ public final class SessionBar {
         effort.setText(SessionRow.effortName(ss) + " ▾");
         effort.setToolTipText(SessionRow.effortTip(ss));
         final boolean due = ss.reflection().due() && showsCheckpoint(ss);
-        context.setVisible(true);
+        final int percent = threshold.getAsInt();
+        // a gauge shows a share it knows: before a turn reports the context, or without its window, the label stays
+        final boolean gauge = Theme.style() == Style.CONSOLE && !SessionRow.contextText(ss).isEmpty();
+        context.setVisible(!gauge);
         context.setText(contextText(ss));
         context.setForeground(due ? Theme.THINKING : Theme.MUTED);
-        context.setToolTipText(contextTip(ss, due, threshold.getAsInt()));
+        context.setToolTipText(contextTip(ss, due, percent));
+        contextGauge.setVisible(gauge);
+        if (gauge) {
+            contextGauge.show((int) Math.min(100L, ss.contextTokens() * 100L / ss.contextWindow()),
+                    due ? Theme.THINKING : Theme.tint().body);
+            contextGauge.tick(showsCheckpoint(ss) ? OptionalInt.of(percent) : OptionalInt.empty());
+            contextGauge.setToolTipText(context.getToolTipText());
+        }
         checkpoint.setVisible(showsCheckpoint(ss));
         checkpoint.setEnabled(canCheckpoint(ss));
         checkpoint.setIcon(Icons.get(checkpointIcon(ss)));

@@ -91,6 +91,7 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 | `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |
 | `OutlineUiTest` | a Markdown document's outline at the panel's right; a double click on a heading scrolls the page to it ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)) |
 | `DiffThemeUiTest` | the comparison window opens on the theme chosen, its texts and rendered sides, and follows the next ([record 135](adr/0135-the-comparison-follows-the-theme-and-lies-level.md)) |
+| `ConsoleStyleUiTest` | a console theme frames the four regions and shows the plan usage and the context as gauges; a plain theme's bounds are the same after the console was chosen and left ([record 151](adr/0151-a-theme-has-a-style-the-console.md)) |
 | `LowerDividerUiTest` | the divider above the lower panel is each panel's own ([record 115](adr/0115-the-lower-divider-per-panel.md)) |
 | `LocateUiTest` | a panel's Locate button selects its file in the Files tab or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
 | `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |

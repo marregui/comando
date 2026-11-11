@@ -150,7 +150,9 @@ opens the session at its report. Usage takes the warning colour at 75% of a wind
 
 The theme button at the tab row's right end, a gilded square split between your theme's ground and its twin's, opens
 the theme chooser under it: a **Dark** | **Light** switch over the six
-themes of that mode, each drawn small in its own colours. Each light theme sits where its dark twin does. The toggle
+themes of that mode, each drawn small in its own colours, and under Dark two more, Console amber and Console cyan,
+which draw the window as an instrument console: frames with corner brackets, and gauges for the plan usage and the
+context. Each light theme sits where its dark twin does. The toggle
 (or **D** and **L**) turns the whole window to the twin of your theme and each card into its twin in place, the
 chooser still open. Click a card, or move to it with the arrows and
 press ⏎: the window takes that theme and the chooser stays open, so you can try the next; the last you chose is
@@ -182,7 +184,7 @@ To add a theme of your own, put a JSON file in the `themes` folder of comando's 
 
 *You should see* the theme in the chooser, under its mode, in its twin's place or after the built-in ones. comando reads
 the files only at start. A file that is not valid, repeats an id, or would make text hard to read (the tint's body below
-7.5:1 on the ground, for one) is left out, and the status bar names the file and the reason. The twelve built-in themes
+7.5:1 on the ground, for one) is left out, and the status bar names the file and the reason. The fourteen built-in themes
 are files of the same shape inside the app. [Workbench §1.3](workbench.md#13-themes) has the full rules.
 
 ## 2. A database

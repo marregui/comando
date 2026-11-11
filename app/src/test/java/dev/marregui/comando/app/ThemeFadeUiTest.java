@@ -121,7 +121,7 @@ class ThemeFadeUiTest {
         }
     }
 
-    /// A theme file in the data root's `themes` folder is offered after the twelve built in, by its label, and chosen
+    /// A theme file in the data root's `themes` folder is offered after the fourteen built in, by its label, and chosen
     /// from the swatch it applies its own ground and tint and is kept by its id; a broken file beside it is left out
     /// with a notice that names it.
     @Test
@@ -142,7 +142,7 @@ class ThemeFadeUiTest {
                     -> loop.state().focused() != null && onEdt(() -> frame() != null));
             Awaitility.await("the notice for the broken file").atMost(WAIT).until(() -> loop.state().notices().stream()
                     .anyMatch(n -> n.text().startsWith("Theme file left out: broken.json: not JSON")));
-            assertThat(NamedTheme.values()).extracting(t -> t.label).hasSize(13).last().isEqualTo("Ink and rose");
+            assertThat(NamedTheme.values()).extracting(t -> t.label).hasSize(15).last().isEqualTo("Ink and rose");
 
             pick(NamedTheme.withId("ink_rose").orElseThrow());
             assertThat(onEdt(() -> Theme.groundChosen().name() + "/" + Theme.tint().name())).isEqualTo("INK_ROSE/INK_ROSE");

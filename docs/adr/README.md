@@ -171,3 +171,4 @@ row and its record differ, or when a record has no row.
 | [148](0148-agents-drive-a-panel-terminal.md) | Agents drive a panel's Terminal | 2026-11-09 | Miguel and Claude | accepted; built |
 | [149](0149-questdb-is-the-only-metrics-store.md) | QuestDB is the only metrics store | 2026-11-10 | Miguel and Claude | accepted; built |
 | [150](0150-a-card-only-when-a-session-cannot-go-on.md) | A card only when a session cannot go on; the Logbook tab lists what waits on the user | 2026-11-10 | Miguel and Claude | accepted; built |
+| [151](0151-a-theme-has-a-style-the-console.md) | A theme has a style: the console | 2026-11-11 | Miguel and Claude | accepted; built |

@@ -90,26 +90,52 @@ public final class SidebarLook {
 
     /**
      * A group's header ({@code Brain}, {@code Without a session}): small capitals, set as spaced capitals at the
-     * scale's caption step, in the tint's body, read at each paint.
+     * scale's caption step, in the tint's body, read at each paint; in the technical face under the console style,
+     * read at each paint and layout, so that a theme chosen reaches a header already shown (record 151).
      */
     public static JLabel header(final String text) {
-        final JLabel l = new JLabel() {
-            @Override
-            public Color getForeground() {
-                return Theme.tint().body;
-            }
-        };
+        final Header l = new Header();
         l.putClientProperty("html.disable", Boolean.TRUE);
         l.setText(text.toUpperCase(Locale.ROOT));
-        l.setFont(headerFont(l.getFont()));
+        l.setFont(plainHeaderFont(l.plainFont()));
         l.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S));
         l.setOpaque(false);
         return l;
     }
 
-    /** A group header's font for names set in {@code base}: bold capitals at the caption step, spaced (record 102). */
+    /**
+     * A group header's font for names set in {@code base}: bold capitals at the caption step, spaced (record 102); the
+     * technical face under the console style (record 151).
+     */
     public static Font headerFont(final Font base) {
+        return Theme.style() == Style.CONSOLE ? Theme.technical() : plainHeaderFont(base);
+    }
+
+    private static Font plainHeaderFont(final Font base) {
         return Theme.font(base, Theme.TextSize.CAPTION).deriveFont(Font.BOLD).deriveFont(Map.of(TextAttribute.TRACKING, 0.12f));
+    }
+
+    /**
+     * A group's header: the tint's body and, under the console style, the technical face, read where Swing reads them.
+     * The plain font is kept as set, so that plain chosen again finds it; while the look installs its own, before one
+     * is set, the header reads none.
+     */
+    private static final class Header extends JLabel {
+
+        @Override
+        public Color getForeground() {
+            return Theme.tint().body;
+        }
+
+        @Override
+        public Font getFont() {
+            final Font plain = super.getFont();
+            return plain != null && Theme.style() == Style.CONSOLE ? Theme.technical() : plain;
+        }
+
+        Font plainFont() {
+            return super.getFont();
+        }
     }
 
     /**

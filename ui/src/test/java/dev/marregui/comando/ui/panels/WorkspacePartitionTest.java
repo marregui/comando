@@ -18,6 +18,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+import javax.swing.border.Border;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,12 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
+import dev.marregui.comando.ui.kit.theme.BracketBorder;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Style;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
@@ -390,6 +397,47 @@ class WorkspacePartitionTest {
         @Override
         public void unmount() {
         }
+    }
+
+    /// Under a plain theme the side pane's frame, kept through a look and feel update, leaves every part of the
+    /// strip at the bounds it has with the strip's own border; under a console theme the tab shown lays out
+    /// inside the frame, 3 px in at the sides and the bottom.
+    @Test
+    void theSidePaneFrameTakesRoomOnlyUnderAConsoleTheme() throws Exception {
+        final List<List<Rectangle>> bounds = new ArrayList<>();
+        final Rectangle[] shown = new Rectangle[2];
+        final Border[] kept = new Border[1];
+        final Style[] style = new Style[1];
+        SwingUtilities.invokeAndWait(() -> {
+            final JTabbedPane tabs = new SidePane(new WidgetContext(_ -> { }, new ActionRegistry()),
+                    new WidgetRegistry()).strip();
+            tabs.addTab("Body", new JLabel("body"));
+            tabs.setSelectedIndex(tabs.getTabCount() - 1);
+            SwingUtilities.updateComponentTreeUI(tabs);
+            kept[0] = tabs.getBorder();
+            style[0] = Theme.style();
+            bounds.add(ConsoleChecks.laidOut(tabs));
+            shown[0] = tabs.getSelectedComponent().getBounds();
+            tabs.setBorder(new JTabbedPane().getBorder());
+            bounds.add(ConsoleChecks.laidOut(tabs));
+            tabs.setBorder(kept[0]);
+            final Ground ground = Theme.groundChosen();
+            final Tint tint = Theme.tint();
+            Theme.choose(NamedTheme.CONSOLE_AMBER.ground, NamedTheme.CONSOLE_AMBER.tint);
+            try {
+                ConsoleChecks.laidOut(tabs);
+                shown[1] = tabs.getSelectedComponent().getBounds();
+            } finally {
+                Theme.choose(ground, tint);
+            }
+        });
+        assertThat(style[0]).isEqualTo(Style.PLAIN);
+        assertThat(kept[0]).isInstanceOf(BracketBorder.class);
+        assertThat(bounds.get(0)).as("plain: as with no frame").isEqualTo(bounds.get(1));
+        assertThat(shown[1].x).as("console: left").isEqualTo(shown[0].x + BracketBorder.INSET);
+        assertThat(shown[1].width).as("console: width").isEqualTo(shown[0].width - 2 * BracketBorder.INSET);
+        assertThat(shown[1].y + shown[1].height).as("console: bottom")
+                .isEqualTo(shown[0].y + shown[0].height - BracketBorder.INSET);
     }
 
     /** A workspace handing its side panels to a partition, both built on the EDT, recording the intents sent. */

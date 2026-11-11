@@ -1,15 +1,24 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Gauge;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /// [StatusBar]'s plan-usage labels: one per CLI, each window's percentage, coloured by how near its limit.
 /// - the text starts with the plan's name, lists each window and says when the session window resets
@@ -18,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the second CLI's read has a label of its own after the first, and its failure leaves the first alone
 /// - a CLI that cannot run never shows its label
 /// - a window near its limit turns the label to attention, then danger
+/// - under the console style each window is a gauge, coloured and muted as the label is, with the label's tooltip
+/// - a theme change swaps the label and the gauges at once, keeping the last read, while the bar is in a window
 class StatusBarUsageTest {
 
     private static final PlanUsage READ = new PlanUsage(List.of(
@@ -126,5 +137,124 @@ class StatusBarUsageTest {
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.ATTENTION);
         SwingUtilities.invokeAndWait(() -> bar.planUsage(new PlanUsage(List.of(new PlanUsage.Window("Session", 95, "")), 1L, "")));
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.DANGER);
+    }
+
+    /// Under the console style a read shows a gauge per window, captioned with the plan's initial and the window's name,
+    /// filled to its percent and carrying the label's tooltip; the label hides and keeps its text.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void underTheConsoleStyleEachWindowIsAGauge() {
+        ConsoleChecks.inTheme(NamedTheme.CONSOLE_AMBER, () -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            bar.planUsage(READ);
+            final List<Gauge> gauges = showing(bar.component());
+            assertThat(gauges).extracting(Gauge::caption).containsExactly("CL SESSION", "CL WEEK", "CL FABLE");
+            assertThat(gauges).extracting(Gauge::percent).containsExactly(5, 43, 17);
+            assertThat(gauges).extracting(Gauge::fill).containsOnly(Theme.MUTED);
+            assertThat(gauges).extracting(Gauge::getToolTipText).containsOnly(bar.usageLabel().getToolTipText());
+            assertThat(bar.usageLabel().isVisible()).as("the gauges stand for it").isFalse();
+            assertThat(bar.usageLabel().getText()).isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+        });
+    }
+
+    /// Under the console style a window at 40% fills muted, one at 80% in [Theme#ATTENTION] and one at 96% in
+    /// [Theme#DANGER], each gauge by its own window.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void aGaugeNearItsLimitTurnsToAWarningThenADanger() {
+        ConsoleChecks.inTheme(NamedTheme.CONSOLE_AMBER, () -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            bar.planUsage(new PlanUsage(List.of(new PlanUsage.Window("Session", 40, ""),
+                    new PlanUsage.Window("Week", 96, "")), 1L, ""));
+            assertThat(showing(bar.component())).extracting(Gauge::fill).containsExactly(Theme.MUTED, Theme.DANGER);
+            bar.planUsage(new PlanUsage(List.of(new PlanUsage.Window("Session", 80, ""),
+                    new PlanUsage.Window("Week", 96, "")), 1L, ""));
+            assertThat(showing(bar.component())).extracting(Gauge::fill).containsExactly(Theme.ATTENTION, Theme.DANGER);
+        });
+    }
+
+    /// Under the console style a failed read after a good one keeps the gauges at their percents, all muted, and their
+    /// tooltip says why; the second plan's gauges follow its own label.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void aFailedReadKeepsTheGaugesMutedAndSaysWhy() {
+        ConsoleChecks.inTheme(NamedTheme.CONSOLE_AMBER, () -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            bar.planUsage(new PlanUsage(PlanUsage.CODEX, List.of(new PlanUsage.Window("Week", 92, "")), 1L, ""));
+            assertThat(showing(bar.component())).extracting(Gauge::caption, Gauge::fill)
+                    .containsExactly(tuple("CO WEEK", Theme.DANGER));
+            bar.planUsage(PlanUsage.failed(PlanUsage.CODEX, "timeout", 2L));
+            final List<Gauge> gauges = showing(bar.component());
+            assertThat(gauges).extracting(Gauge::percent).containsExactly(92);
+            assertThat(gauges).extracting(Gauge::fill).containsExactly(Theme.MUTED);
+            assertThat(gauges.getFirst().getToolTipText()).contains("failed: timeout")
+                    .isEqualTo(bar.codexUsageLabel().getToolTipText());
+        });
+    }
+
+    /// Under a plain theme a read shows the label as before and no gauge.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void underAPlainThemeNoGaugeShows() {
+        ConsoleChecks.inTheme(NamedTheme.GRAPHITE_GOLD, () -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            bar.planUsage(READ);
+            assertThat(showing(bar.component())).isEmpty();
+            assertThat(bar.usageLabel().isVisible()).isTrue();
+            assertThat(bar.usageLabel().getText()).isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+            assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.MUTED);
+        });
+    }
+
+    /// While the bar is in a window, choosing the console style turns the last read into gauges and choosing a plain
+    /// theme turns it back into the label, with no new read; out of the window it no longer follows the theme.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void aThemeChangeSwapsTheLabelAndTheGaugesKeepingTheRead() {
+        ConsoleChecks.inTheme(NamedTheme.GRAPHITE_GOLD, () -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            final JComponent root = bar.component();
+            root.addNotify();
+            try {
+                bar.planUsage(READ);
+                Theme.choose(NamedTheme.CONSOLE_AMBER.ground, NamedTheme.CONSOLE_AMBER.tint);
+                assertThat(showing(root)).extracting(Gauge::percent).containsExactly(5, 43, 17);
+                assertThat(bar.usageLabel().isVisible()).isFalse();
+                Theme.choose(NamedTheme.GRAPHITE_GOLD.ground, NamedTheme.GRAPHITE_GOLD.tint);
+                assertThat(showing(root)).isEmpty();
+                assertThat(bar.usageLabel().isVisible()).isTrue();
+            } finally {
+                root.removeNotify();
+            }
+            Theme.choose(NamedTheme.CONSOLE_AMBER.ground, NamedTheme.CONSOLE_AMBER.tint);
+            assertThat(bar.usageLabel().isVisible()).as("out of its window it stopped listening").isTrue();
+        });
+    }
+
+
+    /// The gauges under `root` that show: each, and every container up to `root`, visible.
+    private static List<Gauge> showing(final JComponent root) {
+        final List<Gauge> out = new ArrayList<>();
+        collect(root, out);
+        return out;
+    }
+
+    private static void collect(final Component c, final List<Gauge> out) {
+        if (!c.isVisible()) {
+            return;
+        }
+        if (c instanceof Gauge g) {
+            out.add(g);
+        }
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
+                collect(child, out);
+            }
+        }
     }
 }

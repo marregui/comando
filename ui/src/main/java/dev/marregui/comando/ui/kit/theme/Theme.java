@@ -5,9 +5,11 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontFormatException;
 import java.awt.GraphicsEnvironment;
+import java.awt.font.TextAttribute;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,6 +18,7 @@ import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.ColorUIResource;
+import javax.swing.plaf.FontUIResource;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
@@ -179,6 +182,20 @@ public final class Theme {
     static final String[] SERIFS = {"Georgia", "Cambria", "Noto Serif", "DejaVu Serif", "Liberation Serif"};
     private static volatile Tint tint = Tint.TREASURE;
     private static volatile Ground ground = Ground.GRAPHITE;
+    /** Written on the EDT by {@link #applyChoice}; read on the EDT at paint and layout, and by tests. */
+    private static volatile Style style = Style.PLAIN;
+    /** The look and feel's arcs that the console style squares beside the three it puts itself (record 151). */
+    static final List<String> SQUARE_UNDER_CONSOLE = List.of("TabbedPane.cardTabArc", "TabbedPane.buttonArc",
+            "TabbedPane.tabArc", "TabbedPane.tabSelectionArc", "CheckBox.arc", "MenuItem.selectionArc",
+            "MenuBar.selectionArc", "List.selectionArc", "Tree.selectionArc", "ComboBox.selectionArc", "ProgressBar.arc",
+            "Popup.borderCornerRadius", "ToolTip.borderCornerRadius");
+    /** The technical face's families, in the order tried: the DIN faces macOS ships. */
+    static final String[] TECHNICAL = {"DIN Condensed", "DIN Alternate"};
+    /**
+     * The technical face's tracking, as a fraction of its size: less than a sidebar header's 0.12, as the DIN faces are
+     * narrow and spaced already.
+     */
+    static final float TECHNICAL_TRACKING = 0.08f;
     /** What shows the tint and must lay itself out or recolour when another is chosen. */
     private static final List<Runnable> TINT_LISTENERS = new CopyOnWriteArrayList<>();
 
@@ -188,10 +205,6 @@ public final class Theme {
     /** Installs the look and feel; call once on the EDT before any component exists. */
     public static void install() {
         System.setProperty("apple.laf.useScreenMenuBar", "true");
-        UIManager.put("Component.arc", RADIUS);
-        UIManager.put("Button.arc", RADIUS);
-        UIManager.put("TextComponent.arc", RADIUS);
-        UIManager.put("ScrollBar.thumbArc", 999);
         UIManager.put("ScrollBar.width", 10);
         UIManager.put("TabbedPane.showTabSeparators", true);
         UIManager.put("TabbedPane.tabsOverlapBorder", true);
@@ -205,19 +218,37 @@ public final class Theme {
 
     /**
      * The look and feel on the ground chosen, set here once for every panel (records 98, 99): its background, and the
-     * background of the content components that draw their own; then the tooltips, as a report reads.
+     * background of the content components that draw their own; then the tooltips, as a report reads. The style
+     * chosen sets the corners and the tabs' face (record 151): rounded and the look's own under {@link Style#PLAIN},
+     * square and {@link #technical()} under {@link Style#CONSOLE}.
      */
     private static void setUpLook() {
+        final boolean console = style == Style.CONSOLE;
+        final int arc = console ? 0 : RADIUS;
+        UIManager.put("Component.arc", arc);
+        UIManager.put("Button.arc", arc);
+        UIManager.put("TextComponent.arc", arc);
+        // 999 rounds a thumb's ends whatever its width
+        UIManager.put("ScrollBar.thumbArc", console ? 0 : 999);
+        // a UI resource, so that the tabs take the look's own font again when plain is chosen; null leaves the look's
+        UIManager.put("TabbedPane.font", console ? new FontUIResource(technical()) : null);
         final String g = hex(ground.color);
         final String focus = hex(tint.body);
         // focus is marked in the tint, as everything that says where the user is (record 100), not the system accent;
         // the macOS looks derive a scroll bar's track, and with it a scroll pane's corner, from @componentBackground
-        FlatLaf.setGlobalExtraDefaults(Map.ofEntries(Map.entry("@background", g), Map.entry("List.background", g),
+        final Map<String, String> extra = new HashMap<>(Map.ofEntries(Map.entry("@background", g), Map.entry("List.background", g),
                 Map.entry("Tree.background", g), Map.entry("Table.background", g), Map.entry("TextArea.background", g),
                 Map.entry("EditorPane.background", g), Map.entry("TextPane.background", g),
                 Map.entry("Viewport.background", g), Map.entry("ScrollBar.track", g),
                 Map.entry("Component.focusedBorderColor", focus),
                 Map.entry("Component.focusColor", focus), Map.entry("TabbedPane.underlineColor", focus)));
+        if (console) {
+            // the arcs the look derives or sets apart from the three above: card tabs, selections, check boxes, popups
+            for (final String key : SQUARE_UNDER_CONSOLE) {
+                extra.put(key, "0");
+            }
+        }
+        FlatLaf.setGlobalExtraDefaults(extra);
         // a light ground takes the light look and feel, whose controls, borders and text are drawn for it (record 127)
         final boolean ok = ground.light ? (Platform.isMac() ? FlatMacLightLaf.setup() : FlatLightLaf.setup())
                 : Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
@@ -289,6 +320,7 @@ public final class Theme {
 
     /** The ground and tint chosen, applied: the look and feel set up again on them, then the tint's listeners. */
     private static void applyChoice() {
+        style = NamedTheme.of(ground, tint).map(t -> t.style).orElse(Style.PLAIN);
         if (UIManager.getLookAndFeel() instanceof FlatLaf) {
             // the look and feel's own focus marks take the tint only from its defaults
             setUpLook();
@@ -369,6 +401,44 @@ public final class Theme {
      */
     public static ContentPalette content() {
         return ContentPalette.of(tint, ground);
+    }
+
+    /**
+     * The style of the theme chosen (record 151): {@link Style#PLAIN} until a theme with another is, and whenever the
+     * ground and tint chosen make no theme. Read at paint and at layout.
+     */
+    public static Style style() {
+        return style;
+    }
+
+    /**
+     * The technical face of the console style's designators and gauge captions (record 151): the first of
+     * {@link #TECHNICAL} installed, else the look's label font, bold at the scale's caption step and tracked by
+     * {@link #TECHNICAL_TRACKING}. Picked on first use, as {@link #serif()} is.
+     */
+    public static Font technical() {
+        return TechnicalHolder.TECHNICAL_FACE;
+    }
+
+    /** Picked on first use: in the window, after {@link #install()} has put the look's label font. */
+    private static final class TechnicalHolder {
+        static final Font TECHNICAL_FACE = pickTechnical(installedFamilies(), UIManager.getFont("Label.font"));
+    }
+
+    /**
+     * The technical face among {@code installed}, else {@code ui}, else Java's logical sans serif, bold at the caption
+     * step of {@code ui}'s size (of {@link #BASE_SIZE} without it), tracked by {@link #TECHNICAL_TRACKING}.
+     */
+    static Font pickTechnical(final Set<String> installed, final Font ui) {
+        final float size = size(ui == null ? BASE_SIZE : ui.getSize2D(), TextSize.CAPTION);
+        Font face = ui == null ? new Font(Font.DIALOG, Font.PLAIN, 1) : ui;
+        for (final String family : TECHNICAL) {
+            if (installed.contains(family)) {
+                face = new Font(family, Font.PLAIN, 1);
+                break;
+            }
+        }
+        return face.deriveFont(Font.BOLD, size).deriveFont(Map.of(TextAttribute.TRACKING, TECHNICAL_TRACKING));
     }
 
     /** The tint chosen; {@link Tint#TREASURE} until one is. */

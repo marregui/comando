@@ -682,8 +682,9 @@ class UiKeysTest {
             });
             assertThat(onEdt(() -> modeSwitch.getAccessibleContext().getAccessibleDescription())).isEqualTo("Light");
             await("the window turned light", () -> Theme.light() ? Boolean.TRUE : null, WAIT_MILLIS);
-            final List<String> twins = darkOnes.stream().map(d -> NamedTheme.builtIn().stream().filter(t -> t.twin.map(d.id::equals).orElse(false))
-                    .findFirst().orElseThrow().label).toList();
+            // a dark theme without a twin, as the console's two, has no card under Light
+            final List<String> twins = darkOnes.stream().flatMap(d -> NamedTheme.builtIn().stream().filter(t -> t.twin.map(d.id::equals).orElse(false))
+                    .findFirst().stream()).map(t -> t.label).toList();
             assertThat(onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
                     .map(b -> b.getAccessibleContext().getAccessibleName()).toList())).as("each slot's twin").containsExactlyElementsOf(twins);
             // the toggle turns the whole window to the twin of the theme chosen, the chooser open on it

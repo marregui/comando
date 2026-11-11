@@ -26,6 +26,7 @@ import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
+import dev.marregui.comando.ui.kit.theme.Style;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas.RunningAgent;
 
@@ -267,9 +268,17 @@ final class AgentStrip extends JPanel {
         protected void paintComponent(final Graphics g) {
             final Graphics2D g2 = (Graphics2D) g.create();
             try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(Theme.CARD);
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                if (Theme.style() == Style.CONSOLE) {
+                    // square, in the regions' hairline (record 151)
+                    g2.setColor(Theme.CARD);
+                    g2.fillRect(0, 0, getWidth(), getHeight());
+                    g2.setColor(Theme.CARD_BORDER);
+                    g2.drawRect(0, 0, getWidth() - 1, getHeight() - 1);
+                } else {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(Theme.CARD);
+                    g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                }
             } finally {
                 g2.dispose();
             }

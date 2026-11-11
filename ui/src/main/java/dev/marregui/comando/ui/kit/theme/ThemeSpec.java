@@ -11,7 +11,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, a short
  * description of the theme's effect (record 147), the mode (dark, the default, or light: a pale ground under dark text,
- * record 127), the ground and the tint's three steps. The twelve built in and every file in the data root's
+ * record 127), the style (plain, the default, or console: square corners, framed regions and the technical face,
+ * record 151), the ground and the tint's three steps. The fourteen built in and every file in the data root's
  * {@code themes} folder have this shape:
  *
  * <pre>{@code
@@ -27,7 +28,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * The id is lower case letters, digits and underscores, and names the theme's command ({@code theme.graphite_gold});
  * the ground's and the tint's labels may be left out, and are then the theme's. {@code twin}, which may be left out,
- * names the theme of the other mode it pairs with, which the chooser shows beside it (record 128). {@code description},
+ * names the theme of the other mode it pairs with, which the chooser shows beside it (record 128). {@code style}, which
+ * may be left out, is {@code "plain"} or {@code "console"}; any other text leaves the file out. {@code description},
  * which may be left out, is at most {@value #DESCRIPTION_MAX} characters of plain text, shown in the theme's tooltips.
  * The tint's steps run from the one that stands out most from the ground, the highlight, to the one that stands out
  * least, the shade: pale to deep on a dark ground, deep to pale on a light one.
@@ -37,6 +39,7 @@ record ThemeSpec(String id,
                  Optional<String> description,
                  boolean light,
                  Optional<String> twin,
+                 Style style,
                  String groundLabel,
                  Color ground,
                  String tintLabel,
@@ -80,9 +83,14 @@ record ThemeSpec(String id,
         if (twin.isPresent() && !ID.matcher(twin.get()).matches()) {
             throw new IllegalArgumentException("\"twin\" must be another theme's id: " + twin.get());
         }
+        final String style = text(root, "style", "plain");
+        if (!style.equals("plain") && !style.equals("console")) {
+            throw new IllegalArgumentException("\"style\" must be \"plain\" or \"console\": " + style);
+        }
         final JsonNode ground = object(root, "ground");
         final JsonNode tint = object(root, "tint");
-        return new ThemeSpec(id, label, description, mode.equals("light"), twin, text(ground, "label", label),
+        return new ThemeSpec(id, label, description, mode.equals("light"), twin,
+                style.equals("console") ? Style.CONSOLE : Style.PLAIN, text(ground, "label", label),
                 colour(ground, "ground.color"), text(tint, "label", label), colour(tint, "tint.highlight"),
                 colour(tint, "tint.body"), colour(tint, "tint.shade"));
     }

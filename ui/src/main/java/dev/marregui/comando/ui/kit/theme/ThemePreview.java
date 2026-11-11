@@ -6,19 +6,28 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 
 /**
  * A theme drawn small, in its own colours whichever theme is chosen (record 128): its ground, the report's bar in its
  * tint, a heading in the tint, a line of code in its syntax colours and a card with muted text on it, as a panel of
- * the window would show them. The theme chooser's cards draw it.
+ * the window would show them. The theme chooser's cards draw it. A theme of the console style is drawn as its window
+ * is (record 151): square corners, and a bracket in its tint's shade at each corner.
  */
 public final class ThemePreview {
+
+    /** A corner bracket's arms, in pixels: long enough to read as a bracket on a card, short of its heading. */
+    static final int BRACKET = 8;
 
     private ThemePreview() {
     }
 
-    /** {@code theme} drawn in the box at {@code x}, {@code y}, {@code w} by {@code h}, with rounded corners. */
+    /**
+     * {@code theme} drawn in the box at {@code x}, {@code y}, {@code w} by {@code h}: with rounded corners, or square
+     * ones and corner brackets for a theme of the console style.
+     */
     public static void paint(final Graphics2D g0, final NamedTheme theme, final int x, final int y, final int w, final int h, final Font text, final Font mono) {
         final Graphics2D g = (Graphics2D) g0.create();
         try {
@@ -28,10 +37,15 @@ public final class ThemePreview {
             final Tint tint = theme.tint;
             final boolean light = ground.light;
             final ContentPalette p = ContentPalette.of(tint, ground);
-            final RoundRectangle2D box = new RoundRectangle2D.Float(x, y, w, h, Theme.RADIUS, Theme.RADIUS);
+            final boolean console = theme.style == Style.CONSOLE;
+            final Shape box = console ? new Rectangle2D.Float(x, y, w, h) : new RoundRectangle2D.Float(x, y, w, h, Theme.RADIUS, Theme.RADIUS);
             g.setColor(ground.color);
             g.fill(box);
             g.clip(box);
+            if (console) {
+                g.setColor(tint.shade);
+                BracketBorder.brackets(g, x, y, w, h, BRACKET);
+            }
             final int pad = Theme.SPACE_S;
             // the report's bar down the left, along the tint's ramp
             g.setPaint(tint.ramp(y + pad, y + h - pad, false));

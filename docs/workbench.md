@@ -264,7 +264,8 @@ A theme is a ground and the tint made for it, chosen together, and everything in
 editors, the terminal, diffs, plots and rendered Markdown ([record 103](adr/0103-curated-themes-in-actions.md)). Twelve
 ship with comando: six dark ones, Graphite and gold (the default), Espresso and champagne, Aubergine and yellow gold,
 Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and a light twin for each
-([record 127](adr/0127-light-themes.md)). The choice is kept across restarts.
+([record 127](adr/0127-light-themes.md)). Two more, Console amber and Console cyan, are dark, have no twin and draw
+the window as an instrument console (below). The choice is kept across restarts.
 
 - **The look.** A dark theme puts the window on FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf` elsewhere)
   on the theme's ground; a light theme puts it on the light look, its text dark and each window's title bar light. The
@@ -285,9 +286,17 @@ Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and
   ([record 128](adr/0128-a-chooser-of-twelve-themes.md)). The switch is a pill with a knob of polished metal, a moon on
   it in dark and a sun in light. The palette has every theme too ([record 104](adr/0104-the-theme-beside-new-panel.md),
   [record 114](adr/0114-help-menu-and-corner-buttons.md)).
+- **The console.** A theme whose file says `"style": "console"` draws the window as the consoles in films are
+  drawn, the instrument kind: square corners; a hairline with four corner brackets round the sidebar, the editors,
+  the lower panel and the side pane; the tabs' titles and the sidebar's group headers in DIN Condensed (DIN
+  Alternate, else the look's own font, where it is not installed); and gauges where the other themes show text: the
+  status bar's plan usage as one bar per window, the session bar's context as a bar with a tick at the checkpoint
+  threshold. The figures stay in the tooltips, a file's name in a tab keeps its case, and nothing moves or glows:
+  I wanted the look without paying for it in reading
+  ([record 151](adr/0151-a-theme-has-a-style-the-console.md)).
 - **The fade.** A theme chosen applies its ground and tint in one pass and fades in over the one before for half a
   second.
-- **Your own.** Each theme is a JSON file; the twelve built in are files of the same shape inside the app
+- **Your own.** Each theme is a JSON file; the fourteen built in are files of the same shape inside the app
   ([record 126](adr/0126-themes-are-json-files.md)). Yours go in the `themes` folder of the data root
   (`~/.comando/themes/`; Help ▸ Reveal comando folder opens the root) and are read at start:
 
@@ -309,6 +318,7 @@ Midnight and electric blue, Evergreen and tropical forest, Slate and silver, and
 | `description` | optional: what the theme's colours do to the mind, in short, plain text of at most 140 characters; shown under the name in the card's tooltip and in the theme button's ([record 147](adr/0147-a-theme-says-what-it-does-to-the-mind.md)) |
 | `mode` | `dark`, or `light` for a pale ground under dark text: the window takes the light look, and its syntax, terminal and plot colours are drawn dark enough to read |
 | `twin` | optional: the id of the theme of the other mode it pairs with; the chooser puts the two in the same place |
+| `style` | optional: `plain` (the default) or `console`, the instrument console's look ([record 151](adr/0151-a-theme-has-a-style-the-console.md)) |
 | `ground` | the background of every panel; its `label` may be left out |
 | `tint` | the accent in three steps, from the one that stands out most from the ground, the `highlight`, through the `body`, to the `shade`, as on polished metal: pale to deep on a dark ground, deep to pale on a light one; its `label` may be left out |
 

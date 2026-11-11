@@ -4,6 +4,7 @@ import java.awt.Component;
 import java.awt.Container;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.AbstractButton;
 import javax.swing.JCheckBoxMenuItem;
@@ -14,6 +15,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
@@ -25,8 +27,11 @@ import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SessionSubject;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Gauge;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the chip's menu follows the focused panel's kind
 /// - a session named like HTML is shown as text
 /// - the chip names the branch of what the session works on with the repository's short name, else its folder's branch
+/// - under the console style the context is a gauge ticked at the checkpoint threshold, purple once it is due
 class SessionBarTest {
 
     private static final PanelId A = new PanelId("a");
@@ -246,6 +252,91 @@ class SessionBarTest {
         final SessionState session = SessionState.closed(SessionSpec.fresh("work", "/w"));
         assertThat(SessionBar.chipText(session)).isEqualTo("work");
         assertThat(SessionBar.chipText(session.withBranch("main"))).isEqualTo("work  ⎇ main");
+    }
+
+    /// Under the console style a session at half its context, with a checkpoint at the 40% threshold, shows one gauge
+    /// captioned "CTX" at 50 with its tick at 40 and the label's tooltip, purple once due and in the tint before; the
+    /// label hides; without a checkpoint command the gauge has no tick.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void underTheConsoleStyleTheContextIsAGaugeTickedAtTheCheckpoint() {
+        final SessionState x = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
+                .withStatus(Status.OPEN, "").withUsage(1.0, 500_000, 1_000_000, 1L);
+        final PanelState own = new PanelState(A, "work", "", "work");
+        ConsoleChecks.inTheme(NamedTheme.CONSOLE_AMBER, () -> {
+            final SessionBar bar = new SessionBar(i -> { });
+            bar.render(AppState.initial(List.of(own), List.of(), List.of(x.withReflection(new Reflection(true, false)))));
+            final List<Gauge> gauges = showing(bar.component());
+            assertThat(gauges).hasSize(1);
+            final Gauge gauge = gauges.getFirst();
+            assertThat(gauge.caption()).isEqualTo("CTX");
+            assertThat(gauge.percent()).isEqualTo(50);
+            assertThat(gauge.tick()).hasValue(Reflection.DEFAULT_PERCENT).hasValue(40);
+            assertThat(gauge.fill()).isSameAs(Theme.THINKING);
+            assertThat(gauge.getToolTipText()).isEqualTo(label(bar, "Context").getToolTipText())
+                    .endsWith("the checkpoint beside it is due");
+            assertThat(label(bar, "Context").isVisible()).as("the gauge stands for it").isFalse();
+
+            bar.render(AppState.initial(List.of(own), List.of(), List.of(x.withReflection(new Reflection(false, true)))));
+            assertThat(gauge.fill()).as("not due yet").isSameAs(Theme.tint().body);
+            bar.render(AppState.initial(List.of(own), List.of(),
+                    List.of(x.withSpec(x.spec().withCheckpoint("")).withReflection(new Reflection(true, false)))));
+            assertThat(gauge.tick()).as("no checkpoint, no tick").isEqualTo(OptionalInt.empty());
+            assertThat(gauge.fill()).as("no checkpoint, nothing due").isSameAs(Theme.tint().body);
+        });
+    }
+
+    /// Under the console style a session whose context share is not known, before a turn reports it or without its
+    /// window, keeps the label and shows no gauge.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void underTheConsoleStyleAnUnknownContextStaysALabel() {
+        final SessionState x = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
+                .withStatus(Status.OPEN, "");
+        final PanelState own = new PanelState(A, "work", "", "work");
+        ConsoleChecks.inTheme(NamedTheme.CONSOLE_AMBER, () -> {
+            final SessionBar bar = new SessionBar(i -> { });
+            for (final SessionState s : List.of(x, x.withUsage(1.0, 500_000, 0, 1L))) {
+                bar.render(AppState.initial(List.of(own), List.of(), List.of(s)));
+                assertThat(showing(bar.component())).isEmpty();
+                assertThat(label(bar, "Context").isVisible()).isTrue();
+            }
+        });
+    }
+
+    /// Under a plain theme the context stays the label it was, with its text and colour, and no gauge shows.
+    @Test
+    @ExtendWith(OnEdt.class)
+    void underAPlainThemeTheContextStaysALabel() {
+        final SessionState x = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
+                .withStatus(Status.OPEN, "").withUsage(1.0, 500_000, 1_000_000, 1L).withReflection(new Reflection(true, false));
+        final PanelState own = new PanelState(A, "work", "", "work");
+        ConsoleChecks.inTheme(NamedTheme.GRAPHITE_GOLD, () -> {
+            final SessionBar bar = new SessionBar(i -> { });
+            bar.render(AppState.initial(List.of(own), List.of(), List.of(x)));
+            assertThat(showing(bar.component())).isEmpty();
+            assertThat(label(bar, "Context").isVisible()).isTrue();
+            assertThat(label(bar, "Context").getText()).isEqualTo("ctx " + Labels.tokens(500_000) + " (50%)");
+            assertThat(label(bar, "Context").getForeground()).isEqualTo(Theme.THINKING);
+        });
+    }
+
+
+    /// The gauges under `c` that show: each, and every container up to `c`, visible.
+    private static List<Gauge> showing(final Component c) {
+        final List<Gauge> out = new ArrayList<>();
+        if (!c.isVisible()) {
+            return out;
+        }
+        if (c instanceof Gauge g) {
+            out.add(g);
+        }
+        if (c instanceof Container k) {
+            for (final Component child : k.getComponents()) {
+                out.addAll(showing(child));
+            }
+        }
+        return out;
     }
 
     /** The x of each control a session always shows, laid out at a fixed width. */

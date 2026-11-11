@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Style;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
@@ -153,7 +155,13 @@ final class ViewTabs {
     private JComponent header(final ViewState v) {
         final JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         p.setOpaque(false);
-        final JLabel title = new JLabel(Plain.text(v.title()), Icons.get(icon(v.spec().type()), 14), JLabel.LEFT);
+        // a view's title in the face the fixed tabs' titles have under the console style (record 151)
+        final JLabel title = new JLabel(Plain.text(v.title()), Icons.get(icon(v.spec().type()), 14), JLabel.LEFT) {
+            @Override
+            public Font getFont() {
+                return Theme.style() == Style.CONSOLE ? Theme.technical() : super.getFont();
+            }
+        };
         final String placedBy = v.session().isEmpty() ? v.title() : v.title() + " · placed by " + v.session();
         title.setToolTipText(Plain.text(placedBy));
         final String pinTip = v.pinned()
