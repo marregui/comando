@@ -165,7 +165,28 @@ final class TurnRules {
             case Intent.RemovePanel r -> s.panel(r.panel()).or(() -> s.closedPanel(r.panel()))
                     .filter(p -> !p.document()).map(p -> locked(s, p.session())).orElse(false);
             case Intent.ClearTranscript c -> locked(s, c.name());
-            default -> false;
+            case Intent.AddPanel _, Intent.PlacePanel _, Intent.PinPanel _, Intent.PlaceView _, Intent.ClosePanel _,
+                    Intent.RenamePanel _, Intent.MovePanel _, Intent.ReopenPanel _, Intent.FocusPanel _,
+                    Intent.BindConnection _, Intent.BindSession _, Intent.OpenSession _, Intent.RefreshSql _,
+                    Intent.RefreshView _, Intent.CancelRun _, Intent.SqlStarted _, Intent.SqlRows _,
+                    Intent.SqlCompleted _, Intent.SqlFailed _, Intent.SqlCancelled _, Intent.SqlWarning _,
+                    Intent.SaveConnection _, Intent.RemoveConnection _, Intent.AddFolder _, Intent.SaveFolders _,
+                    Intent.FoldersRead _, Intent.LogbookRead _, Intent.OpenConnection _, Intent.CloseConnection _,
+                    Intent.TestConnection _, Intent.ConnectionOpened _, Intent.ConnectionClosed _,
+                    Intent.ConnectionFailed _, Intent.ExploreSchema _, Intent.SchemaChanged _, Intent.ConnectionLost _,
+                    Intent.ConnectionTested _, Intent.ImportSessions _, Intent.StartSession _, Intent.StopSession _,
+                    Intent.OrderSessions _, Intent.InterruptSession _, Intent.SessionStarted _, Intent.SessionRanAt _,
+                    Intent.SessionInit _, Intent.SessionActivity _, Intent.SessionTasksChanged _,
+                    Intent.SessionTurnRunning _, Intent.SessionTurnEnded _, Intent.SessionExited _,
+                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionContext _,
+                    Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
+                    Intent.ShowView _, Intent.CloseView _, Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _,
+                    Intent.SessionLayout _, Intent.SessionFocus _, Intent.PromptSession _, Intent.EditPanel _,
+                    Intent.OpenFile _, Intent.OpenSubagent _, Intent.RunGradle _, Intent.CommandFinished _,
+                    Intent.CancelCommand _, Intent.BrowseFolders _, Intent.WatchFolders _, Intent.FolderLoaded _,
+                    Intent.ReposLoaded _, Intent.OpenChange _, Intent.ChangeRead _, Intent.DeleteFiles _,
+                    Intent.RollBack _, Intent.RemoveFiles _, Intent.Unstage _, Intent.InstancesChanged _,
+                    Intent.PlanUsageRead _, Intent.Notify _, Intent.DismissNotice _ -> false;
         };
     }
 
@@ -233,7 +254,28 @@ final class TurnRules {
             case Intent.RemoveSession r -> r.from();
             case Intent.RemovePanel r -> r.from();
             case Intent.ClearTranscript c -> c.from();
-            default -> "";
+            case Intent.AddPanel _, Intent.PlacePanel _, Intent.PinPanel _, Intent.PlaceView _, Intent.ClosePanel _,
+                    Intent.RenamePanel _, Intent.MovePanel _, Intent.ReopenPanel _, Intent.FocusPanel _,
+                    Intent.BindConnection _, Intent.BindSession _, Intent.OpenSession _, Intent.RefreshSql _,
+                    Intent.RefreshView _, Intent.CancelRun _, Intent.SqlStarted _, Intent.SqlRows _,
+                    Intent.SqlCompleted _, Intent.SqlFailed _, Intent.SqlCancelled _, Intent.SqlWarning _,
+                    Intent.SaveConnection _, Intent.RemoveConnection _, Intent.AddFolder _, Intent.SaveFolders _,
+                    Intent.FoldersRead _, Intent.LogbookRead _, Intent.OpenConnection _, Intent.CloseConnection _,
+                    Intent.TestConnection _, Intent.ConnectionOpened _, Intent.ConnectionClosed _,
+                    Intent.ConnectionFailed _, Intent.ExploreSchema _, Intent.SchemaChanged _, Intent.ConnectionLost _,
+                    Intent.ConnectionTested _, Intent.ImportSessions _, Intent.StartSession _, Intent.StopSession _,
+                    Intent.OrderSessions _, Intent.InterruptSession _, Intent.SessionStarted _, Intent.SessionRanAt _,
+                    Intent.SessionInit _, Intent.SessionActivity _, Intent.SessionTasksChanged _,
+                    Intent.SessionTurnRunning _, Intent.SessionTurnEnded _, Intent.SessionExited _,
+                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionContext _,
+                    Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
+                    Intent.ShowView _, Intent.CloseView _, Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _,
+                    Intent.SessionLayout _, Intent.SessionFocus _, Intent.PromptSession _, Intent.EditPanel _,
+                    Intent.OpenFile _, Intent.OpenSubagent _, Intent.RunGradle _, Intent.CommandFinished _,
+                    Intent.CancelCommand _, Intent.BrowseFolders _, Intent.WatchFolders _, Intent.FolderLoaded _,
+                    Intent.ReposLoaded _, Intent.OpenChange _, Intent.ChangeRead _, Intent.DeleteFiles _,
+                    Intent.RollBack _, Intent.RemoveFiles _, Intent.Unstage _, Intent.InstancesChanged _,
+                    Intent.PlanUsageRead _, Intent.Notify _, Intent.DismissNotice _ -> "";
         };
     }
 
