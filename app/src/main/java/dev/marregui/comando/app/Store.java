@@ -839,7 +839,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         try {
             read = folders.readAsIs();
         } catch (final IOException e) {
-            notices.accept("folders.json does not read (" + e.getMessage().lines().findFirst().orElse("") + "); the Files tab keeps its folders");
+            notices.accept("folders.json does not read (" + e.getMessage().lines().findFirst().orElse("")
+                    + "); the sidebar keeps its folders");
             return;
         }
         foldersChanged.accept(valid(orEmpty(read)));

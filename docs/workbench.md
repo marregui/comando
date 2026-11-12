@@ -11,24 +11,24 @@ are under Running text.
 3. [The database](#3-the-database)
 4. [Instances and the comando Edge](#4-instances-and-the-comando-edge)
 5. [Development tools](#5-development-tools)
-6. [The Files tab](#6-the-files-tab)
+6. [The Kit, Brain and Scratchpad tabs](#6-the-kit-brain-and-scratchpad-tabs)
 7. [Persistence](#7-persistence)
 
 ## 1. The window
 
-![The window's regions: the sidebar on the left with its five tabs; the panel tabs across the top with the corner's buttons, the theme button and New panel at their right; the focused panel's header and editor; the side pane on the right; the lower panel with the Session, Approvals, Terminal and Results tabs; the session bar and the status bar at the bottom](images/window.svg)
+![The window's regions: the sidebar on the left with its seven tabs; the panel tabs across the top with the corner's buttons, the theme button and New panel at their right; the focused panel's header and editor; the side pane on the right; the lower panel with the Session, Approvals, Terminal and Results tabs; the session bar and the status bar at the bottom](images/window.svg)
 
 A panel is an editor bound to at most one database connection and one Claude Code session, and that one idea runs the
 whole window: SQL you run in a panel goes to its connection, anything else goes to its session. Around the panels sit
-the sidebar (sessions, connections, files, logbook, instances), the side pane (views placed beside the editor, the schema, the
+the sidebar (sessions, connections, kit, brain, scratchpad, logbook, instances), the side pane (views placed beside the editor, the schema, the
 uncommitted changes), the lower panel, which follows the focused panel (its transcript, the approvals, its terminal, its
 results), the session bar under it, and the status bar under everything.
 
 ### 1.1 One model for connections, sessions and folders
 
-A connection, a session and a folder of the Files tab are resources: configured, stored and listed in the sidebar. Each
+A connection, a session and a folder of the Kit, Brain and Scratchpad tabs are resources: configured, stored and listed in the sidebar. Each
 is written once as a resource kind. Connections and sessions are edited in one dialog; folders in a window of their own,
-Configure Files tab folders, which keeps them in `folders.json` ([§6](#6-the-files-tab)).
+the folders window, which keeps them in `folders.json` ([§6](#6-the-kit-brain-and-scratchpad-tabs)).
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
@@ -85,7 +85,7 @@ Any number of document panels may be attached to a session
   side leaves the lower area as the main tabs' front panel has it, and the side opens at the width a side view does.
 - **Files written** (Window ▸ "Files written by the session", [record 143](adr/0143-a-session-lists-the-files-it-wrote.md)):
   a side-pane view of the files the session with the keyboard wrote (its Write, Edit, MultiEdit and NotebookEdit
-  calls), in the order it first wrote each, gold until opened as in the Files tab. ↓/↑ show a row's file in the preview
+  calls), in the order it first wrote each, gold until opened as in the Kit, Brain and Scratchpad tabs. ↓/↑ show a row's file in the preview
   tab without taking the keyboard; Enter or a double click keeps the tab. It follows the focused session and grows as
   the session writes.
 - **The transcript above the prompt** (a trial that ended, off by default,
@@ -97,7 +97,7 @@ Any number of document panels may be attached to a session
   before a session arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
 - **Closing returns to where you came from.** Each panel and view remembers where you were just before you last
-  arrived at it, an opening included (a panel, a view, the Files tab, a lower tab of the panel in front). Closing the
+  arrived at it, an opening included (a panel, a view, a sidebar tab, a lower tab of the panel in front). Closing the
   one you are at returns there: its panel, the lower tab, the component with the keyboard. Openings chain (A opens B,
   B opens C; closing C returns to B, closing B to A); going from B to main and back to B returns to main when B closes;
   closing a tab you are not at moves nothing ([record 112](adr/0112-closing-gives-the-keyboard-back.md)).
@@ -123,7 +123,7 @@ Any number of document panels may be attached to a session
   stays as it is); `#` alone goes to the top. Until the reader scrolls, the heading stays at the top as pictures and
   diagrams arrive above it. Front matter at the top of a page shows as a table of its keys and values. In the
   transcript, a link to a file the session's folder does not hold is looked for as a bare file reference is, in that
-  folder's tree and then the Files tab's folders; a `#heading` on such a link is dropped.
+  folder's tree and then the folders of the Kit, Brain and Scratchpad tabs; a `#heading` on such a link is dropped.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The session bar**, under the lower panel, shows the focused panel's session
   ([record 105](adr/0105-a-session-bar-under-the-lower-panel.md)). On the left: its chip, the session's state icon (as
@@ -153,21 +153,23 @@ Any number of document panels may be attached to a session
   A panel without a session shows only the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
   plans' usage, each under its name, and the work running in every session and query on the right, gold only on what
-  waits for the user's approval. A click on that count lists who needs you,
+  waits for the user's approval. A plan's session window says when it resets, and its week window the weekday and the
+  time: "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%", "Codex Session 4% (resets
+  12:06) · Week 3% (resets Thu 13:00)" ([record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)). A click on that count lists who needs you,
   whose finished work waits to be read, who works and who waits, each with what it does and for how long; a click on a
   line goes to its panel ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)), and does
   nothing for a session with no panel open. The count adds "2 to read" while finished work waits; such a line reads
   "name · to read · 3 min", and its click opens the session, with a panel if it has none, at its report
   ([record 136](adr/0136-finished-work-waits-to-be-read.md)). The session bar's time is the whole turn's ("Bash · turn 4 min"); a tool card's is
   the tool's. The kit's version is not here: it is on
-  the Files tab's KIT row ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)).
+  the Kit tab's KIT row ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)).
 - **The header** holds icons without a button's shape, at the right. First the connection: a database icon in its
   state's colour (grey closed, blue open, amber opening or closing, red failed) whose click connects or disconnects, and
   without a connection binds one; beside it the connection's name, whose click binds another or unbinds; each tooltip
   says what a click does ([record 116](adr/0116-one-connection-toggle.md)). Then Browser (HTML: the page in the
   browser), Outline (a Markdown document or a panel's own text), Preview or Edit (Markdown), Run, Stop, Locate, Clear
   (the panel's own text, one ⌘Z step; not on documents). Locate shows where the panel comes from in the sidebar: a
-  document in the Files tab, every closed row and folder on its way opened and the file selected; else the panel's
+  document in the tab whose folder holds it (Kit, Brain or Scratchpad), brought to the front, every closed row and folder on its way opened and the file selected; else the panel's
   session in the Sessions tab, selected; a panel with neither has no Locate
   ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)). A production connection frames the
   panel in red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
@@ -204,7 +206,7 @@ Any number of document panels may be attached to a session
   until a click; its height is taken above the view, so nothing moves. ⌘F reads inside the rows and opens them, not
   their titles; a find that moves on closes what it opened, and clearing it keeps the current match's row open. Export
   to Markdown gives every step, and a closed row gives nothing to ⌘A.
-- **Find in files** (⌘⇧F) looks through the Files tab's folders and the stored conversations from the **Search** view
+- **Find in files** (⌘⇧F) looks through the folders of the Kit, Brain and Scratchpad tabs and the stored conversations from the **Search** view
   in the side pane, as ⌘K opens the Changes view ([record 139](adr/0139-one-window-finds-in-files-and-conversations.md)).
   The menu bar is Edit, Find and Help; the Find menu holds the view's Find…, Find next and Find previous, then Find in
   files…, which the palette has too. ⌘⇧F with the keyboard in the view closes it; elsewhere, the viewer included, it brings the view forward with the keyboard in its field.
@@ -213,7 +215,7 @@ Any number of document panels may be attached to a session
   boxes, Files and Conversations, both on, say where to look, and with both off the foot says "Nothing to search: turn
   on Files or Conversations". A search starts 200 ms after the last keystroke and ends the one before it. ASCII letters
   match in either case.
-- **The hits show by where they are**, as the Changes view shows a repository: each folder of the Files tab with its
+- **The hits show by where they are**, as the Changes view shows a repository: each configured folder with its
   count, its folders (a folder holding only one folder is one row, `docs/adr`), each file with its count, then each
   hit, named by its snippet, with the Markdown headings above it and its line as detail (`Setup › macOS · line 12`); a
   file whose name matches says so. The conversations come last, each under its title, a hit named by who wrote the
@@ -228,9 +230,9 @@ Any number of document panels may be attached to a session
   the view or the preview tab. A double click on the tab, an edit,
   or **Open** in the view keeps it as a tab that stays; the next hit then opens a new preview. A conversation's hit opens
   in the session that holds it, with the transcript's Find on the query, or the Import dialog when no session holds it;
-  its row's tooltip shows the message around the match. **Show in Files tab** reveals the file. The view's buttons are
-  icons; their tooltips say what they do. In files a search takes what the Files tab shows: its folders, without what
-  the tab leaves out and without hidden entries, names first, then lines, one hit a line. A file with a NUL in its
+  its row's tooltip shows the message around the match. **Show in sidebar** reveals the file, in the tab whose folder holds it. The view's buttons are
+  icons; their tooltips say what they do. In files a search takes what the three folder tabs show: their folders, without what
+  the tabs leave out and without hidden entries, names first, then lines, one hit a line. A file with a NUL in its
   first 8 kB is passed over as binary. What counts in a conversation:
   [Claude Code §1.4](claude-code.md#14-stored-conversations). Nothing is indexed and nothing is saved.
 - **The right side is a partition of the workspace**
@@ -328,10 +330,10 @@ their twin's place or after the built-in ones.
 
 ### 1.4 The sidebar
 
-Five tabs in one row, each an icon named by its tooltip: Sessions, Connections, Files, Logbook, Instances; the tab in front is
-kept across restarts, by its name (an index kept by an earlier version is read in that version's order) ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
+Seven tabs in one row, each an icon named by its tooltip: Sessions, Connections, Kit, Brain, Scratchpad, Logbook, Instances; the tab in front is
+kept across restarts, by its name: `kit`, `brain`, `scratchpad` (`files`, kept from an earlier version, reads as `kit`; an index kept by a still earlier version is read in that version's order); `ui_set_layout`'s `sidebar` takes the same names ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
 [record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md),
-[record 124](adr/0124-the-sidebar-shows-the-instances.md), [record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). A right click on a tab selects it and opens its
+[record 124](adr/0124-the-sidebar-shows-the-instances.md), [record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md), [record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)). A right click on a tab selects it and opens its
 menu: the tab's own actions, then the window's commands for it with their keys. Every panel of the window, the sidebar
 included, lies on one ground set once (`Theme.ground()`, the theme's); names are in the transcript's ivory; the folders'
 icons are outlines in one grey ink, told apart by their shape; the tint chosen draws the hairline between groups, the
@@ -342,7 +344,9 @@ left edge ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-t
 |---|---|
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start the machine's QuestDB, Stop the machine's QuestDB; Start the comando Edge, Stop the comando Edge |
-| Files | Configure Files tab folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([Kit and brain §3.5](kit-and-brain.md#35-scheduled-jobs)) |
+| Kit | the folders window ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([Kit and brain §3.5](kit-and-brain.md#35-scheduled-jobs)) |
+| Brain | the folders window |
+| Scratchpad | the folders window |
 | Logbook | none of its own; a task's own menu (below) |
 | Instances | none of its own; another instance's own menu asks it, refuses its questions, copies its id; one that left, forgets it; this instance's, sets its role; a session's row has none |
 
@@ -351,14 +355,14 @@ clones and removes it (`ResourceActions`). Removing something in use asks **Stop
 or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)). ⌘B or the
 `⋯` button hides the sidebar to a rail on the left edge: its `⋯` shows the sidebar again at the width it had, and an
 icon per tab under it shows the sidebar at that tab. A name wider than the sidebar scrolls sideways into view, in every
-tab: the sessions, the panels without a session, the connections and the Files tree show a horizontal scroll bar while
+tab: the sessions, the panels without a session, the connections and the folder trees show a horizontal scroll bar while
 a row is wider than the tab, and none while every row fits. A tree's row gives up its detail (a size, a count, a path)
 before its name: the detail moves to the row's tooltip and comes back when the tab is wide enough
 ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)).
 
 **The Logbook tab** ("the scratchpad's open tasks; N need you", N the tasks that wait on the user; also an icon on the
 rail) lists the open tasks of the newest day folder of the scratchpad, read from its `INDEX.md` ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)),
-in the tree the Files tab draws, with its group headers, row icons and menus. A group **Needs you (N)** comes first,
+in the tree the folder tabs draw, with its group headers, row icons and menus. A group **Needs you (N)** comes first,
 hidden at 0: the tasks that hold a decision for the user (a `**Needs you:**` line in their entry) or whose State begins
 "waiting on Miguel". Then one group per topic, in the index's order. Within a group the newest task comes first, by its
 number. A row is the task's name, its title without the attribution, then, muted, its number and the day it started
@@ -382,7 +386,7 @@ per ticket of the task (its `**Ticket:**` line, then the ids that begin its head
 workspace; **Resume in ▸** each running session, which prompts it "Resume task N from the scratchpad."; **Ask me its
 decisions in ▸** each running session, on a task that waits on the user, which prompts it to ask the task's decisions
 as question cards, recommended option first, and write the answers into the task; and **Open document ▸** each file
-of the task's Documents, opened as the Files tab opens one. The tab reads the index and never writes it: sessions edit
+of the task's Documents, opened as the folder tabs open one. The tab reads the index and never writes it: sessions edit
 it, as before. It shows the list again when the index changes, keeping the selected task by its number and each group
 open or closed as the user left it.
 
@@ -472,7 +476,7 @@ for open (●) or closed (○), the title, the connection and the file; a double
 menu:
 Open (or Bring forward), Rename…, New session ‹title›… (the session dialog with the name filled in; saved, the panel
 becomes the session's own), Remove… (deletes the panel's file; removing the last open panel leaves an empty one). A
-session's own panel and a document are not listed: the session's row and the Files tab reach them.
+session's own panel and a document are not listed: the session's row and the folder tabs reach them.
 
 **A connection row** is one line too: the state icon, which a click connects or disconnects, and the name; a red "prod"
 marks a production database, and the name takes the accent colour while the focused panel uses it
@@ -729,12 +733,16 @@ session: the nearest directory at or above its working directory with an executa
   came from.
 - A run of 10 s or more ends with a desktop notification while the window is not active.
 
-## 6. The Files tab
+## 6. The Kit, Brain and Scratchpad tabs
 
 The folders the user chose inside the folder comando's sessions run on, or the brain's, one top-level row each, as a
-navigator of their folders and files
-([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md)). It is no browser of code
-repositories: those are read in an IDE ([record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The tab only
+navigator of their folders and files, in three tabs after Connections: **Kit**, **Brain** and **Scratchpad**
+([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md), split by
+[record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md); they were one tab, Files). The three are one
+component: the tree, git's marks and trails, the filter under the tree, the row and file menus, the Trash where a folder
+is deletable, a double click on a top row for its changes. Each has an icon of its own, drawn like the former Files
+icon. They are no browser of code
+repositories: those are read in an IDE ([record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). A tab only
 shows and opens: it has no buttons, and writes nothing but the Trash of a deletable folder
 ([record 63](adr/0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md)). The files it opens are
 edited and saved like any other; a `.log` stays read-only and is a live view of its file: what is appended shows within
@@ -742,23 +750,31 @@ a second, and while the view shows the end it stays there; scrolled up to read, 
 and the selection stay while the log grows below; back at the end it follows again; a file rolled over or truncated
 replaces the text.
 
+- **Which tab.** `folders.json` is unchanged; a folder's tab follows from it. The Scratchpad tab holds the folders whose
+  icon is `scratchpad`; the Brain tab, the other folders of the group `Brain`; the Kit tab, every other folder: the Kit
+  group's and any folder in no group. In the Scratchpad tab the scratchpad's row reads SCRATCHPAD, as KIT and BRAIN
+  read in theirs. A file shown from elsewhere (a file link, Locate, Search's Show in sidebar) brings to the front the
+  tab whose folder holds it.
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path, an
   optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
   plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`) and a group
   (`group`): a group is one top-level row named in capitals, the folder itself for a group of one (KIT), else the folder
-  holding the group's folders (BRAIN), with them inside it, then its other folders, no file and nothing hidden; a
+  holding the group's folders (BRAIN), with only the folders `folders.json` configures for the group inside it, in
+  their order: BRAIN shows KB and Memory, and EVAL or any other folder of BRAIN that is not configured never shows, as a
+  folder outside `folders.json` never shows in a tab ([record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)),
+  no file and nothing hidden; a
   hairline parts one group's row from the next ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)); a
   group's row has no icon, and its detail is its repository's short commit, KIT's followed by the kit's newer release
   when one is out ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)); a `repository` key is
   ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
   ([Kit and brain §3](kit-and-brain.md#3-comando-and-a-kit)). Without a kit and without `folders.json` there is one
-  folder, Claude Code's (`~/.claude`), opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and
+  folder, in the Kit tab, Claude Code's (`~/.claude`), opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and
   per-session state; an emptied list stays empty. Here and below, `~/.claude` stands for the root comando's sessions run
   on (the kit, else Claude Code's own folder), and with a kit the folders may lie in the brain's folder as well,
   wherever it is ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
-- **Configuring.** The Files tab's menu (a right click on its tab) and the palette's Configure Files tab folders open
-  the Files tab folders window ([records 69, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md),
-  [record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The entries are on the left in the tab's order (+
+- **Configuring.** The menu of each of the three tabs (a right click on its tab) and the palette open the folders
+  window ([records 69, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md),
+  [record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The entries are on the left in their order (+
   chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), and the selected one's fields on
   the right, each field's name explaining it under the mouse. Each field is checked as it is typed: a name used once in
   `folders.json`; a folder that exists and can be read, set only by choosing it, inside `~/.claude` or, with a kit, the
@@ -780,7 +796,7 @@ replaces the text.
 - **Bounds.** 12 levels; at most 80 000 names listed and 20 000 entries kept per folder tree; past a bound the folder
   ends with `…`. An unreadable subfolder says why and the rest stands.
 - **Clicks.** A click on a folder opens or closes it; on a file it selects. A double click opens a file in a panel
-  (Enter opens a file). On a top-level row (BRAIN, KIT, a folder in no group) a double click shows the row's
+  (Enter opens a file). On a top-level row (BRAIN, KIT, SCRATCHPAD's folder, a folder in no group) a double click shows the row's
   changes instead and leaves the row open or closed as it was; on a subfolder it does nothing more than its first
   click ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). A text file of at most 2 MB opens in
   a panel bound to it; a larger one (to 4 MB) or a binary one shows in the side pane. Opening a folder opens no file;
@@ -800,7 +816,7 @@ replaces the text.
   indented under an item; never inside a code block), and the notice gives the lines that still name it. A panel on a
   moved file is removed as for any file deleted outside.
 - **Sync.** Only folders whose rows are open are read: at once when opened, then every 5 s on `folder-poll`, sent only
-  when something changed; while the Files tab does not show, or no comando window is active, none is read, and showing
+  when something changed; while their tab does not show, or no comando window is active, none is read, and showing
   again or coming back to comando reads them at once. Each is read as deep as its open subfolders show (one level, plus each open subfolder and one
   level inside it); opening or closing a subfolder reads it again at once. While the filter has text every folder is
   searched whole, one read in part and then closed included. A tree carries the settings it was read with and is dropped
@@ -826,9 +842,9 @@ replaces the text.
   so ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). The open folders' repositories are read
   with them every 5 s, the others (and the open ones while the tab is not shown or comando is in the background) every
   30 s ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
-- **Filter.** A field under the tree finds entries by name across every folder, reading never-read folders once; a
-  second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The palette's Files
-  command puts the keyboard there.
+- **Filter.** A field under the tree finds entries by name across every folder of its own tab, reading never-read
+  folders once; a second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The
+  palette's command for a tab puts the keyboard there.
 
 | Entry | Icon |
 |---|---|
@@ -840,10 +856,10 @@ replaces the text.
 
 ### 6.1 Changes
 
-The Changes view, titled Uncommitted changes, in the side pane, lists what the repositories of the Files tab's folders
+The Changes view, titled Uncommitted changes, in the side pane, lists what the repositories of the configured folders
 hold that their last commits do not, read only, as IntelliJ's commit view does
 ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)). ⌘K opens it on every folder's repository, and closes
-it when it shows them all. A top-level row's double click in the Files tab, or Show changes in its menu, shows the
+it when it shows them all. A top-level row's double click in a folder tab, or Show changes in its menu, shows the
 changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md),
 [118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)), each replacing what the view showed.
 
@@ -915,12 +931,12 @@ the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry; the folder is the user's alone (`rwx------`), set at each start |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
-| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)), the checkpoint threshold as a percentage, `sessions.checkpointThresholdPercent` ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
+| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab (by name: `kit`, `brain`, `scratchpad`, …), the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)), the checkpoint threshold as a percentage, `sessions.checkpointThresholdPercent` ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `themes/` | your own themes, one JSON file each, read at start ([§1.3](#13-themes)) |
-| `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
+| `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the folder tabs ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
-| `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out; and, since version 2, where the kit put each folder last, so a kit folder still there follows the kit and the brain at every start while one the user pointed elsewhere stays ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
+| `kit-folders` | the roots whose kit folders comando has added to `folders.json`, one per line, so a kit folder the user took out stays out; and, since version 2, where the kit put each folder last, so a kit folder still there follows the kit and the brain at every start while one the user pointed elsewhere stays ([Kit and brain §3.2](kit-and-brain.md#32-the-kit-brain-and-scratchpad-tabs)) |
 | `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
 | `instances-seen.json` | the other instances seen, so the Instances tab lists those that left until **Forget** ([§4.3](#43-the-instances-tab)) |
 | `questdb/` | the tables of the QuestDB comando embedded before record 146, copied into `~/.comando-questdb/` at the machine's QuestDB's first start; delete it once the copy is checked |
@@ -975,7 +991,7 @@ in Git.
 | close | the text is written; a panel of comando's own stays in `panels.json` as closed; a document is let go |
 | remove | the panel's own file is deleted; a document's file never is |
 | a write that fails | the text waits in `panels.json` and is retried every 5 s and on every save |
-| ⌘O, or a double click in the Files tab | opens the file in a panel titled after it; a file of `panels/` bound by name and titled without `.md`, any other bound by absolute path and titled with its extension (`reviewer.md`), so it never takes a session's or a panel's name; when that title is taken, the folder follows it (`README.md · docs`), then a number; a file already open brings its panel forward ([record 77](adr/0077-a-files-panel-keeps-its-extension.md)) |
+| ⌘O, or a double click in a folder tab | opens the file in a panel titled after it; a file of `panels/` bound by name and titled without `.md`, any other bound by absolute path and titled with its extension (`reviewer.md`), so it never takes a session's or a panel's name; when that title is taken, the folder follows it (`README.md · docs`), then a number; a file already open brings its panel forward ([record 77](adr/0077-a-files-panel-keeps-its-extension.md)) |
 | edited outside comando | checked once a second; reloads into its panel when the panel has no unsaved edits (the caret stays; ⌘Z restores the text the reload replaced, one step, and the history before it is not kept) ([record 27](adr/0027-panels-reload-files-changed-outside.md)); otherwise the next save moves the outside version aside as `<name> (outside comando <date time>).md` |
 | deleted outside comando | the panel is removed, unless it has unsaved edits, which its save writes back ([record 34](adr/0034-a-deleted-document-closes-its-panel.md)); a session's own panel is kept and its text written again, with a notice ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)) |
 | a file of `panels/` no panel names, at start | becomes a closed panel without a session, listed under the sessions, with a notice |

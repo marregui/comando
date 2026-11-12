@@ -29,7 +29,7 @@ class WindowLayoutTest {
         assertThat(layout.sidebarTab()).as("nothing saved").isEqualTo(SessionsSidebar.SESSIONS);
         // Sessions, Panels, Connections, Files: the Panels tab reads as Sessions, which lists the panels without one
         final int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.SESSIONS}, {2, SessionsSidebar.CONNECTIONS},
-                {3, SessionsSidebar.FILES}};
+                {3, SessionsSidebar.KIT}};
         for (final int[] pair : oldToNew) {
             prefs.putInt("sidebar.tab", pair[0]);
             assertThat(layout.sidebarTab()).as("old index " + pair[0]).isEqualTo(pair[1]);
@@ -44,13 +44,13 @@ class WindowLayoutTest {
         prefs.putInt("sidebar.tab", 2);
         // Sessions, Connections, Panels, Files (record 70), read over the older key
         final int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.CONNECTIONS}, {2, SessionsSidebar.SESSIONS},
-                {3, SessionsSidebar.FILES}};
+                {3, SessionsSidebar.KIT}};
         for (final int[] pair : oldToNew) {
             prefs.putInt("sidebar.front", pair[0]);
             assertThat(layout.sidebarTab()).as("index " + pair[0] + " with a Panels tab").isEqualTo(pair[1]);
         }
         prefs.putInt("sidebar.selected", 2);
-        assertThat(layout.sidebarTab()).as("the index key wins").isEqualTo(SessionsSidebar.FILES);
+        assertThat(layout.sidebarTab()).as("the index key wins").isEqualTo(SessionsSidebar.KIT);
     }
 
     /// Without a name kept, the index key is read in the order before the Logbook moved ahead of Instances (Sessions,
@@ -60,7 +60,7 @@ class WindowLayoutTest {
     void theIndexKeptBeforeTheLogbookMovedReadsAsTheSameTab() {
         final WindowLayout layout = new WindowLayout(prefs);
         final int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.CONNECTIONS},
-                {2, SessionsSidebar.FILES}, {3, SessionsSidebar.INSTANCES}, {4, SessionsSidebar.LOGBOOK},
+                {2, SessionsSidebar.KIT}, {3, SessionsSidebar.INSTANCES}, {4, SessionsSidebar.LOGBOOK},
                 {7, SessionsSidebar.SESSIONS}};
         for (final int[] pair : oldToNew) {
             prefs.putInt("sidebar.selected", pair[0]);
@@ -77,13 +77,17 @@ class WindowLayoutTest {
         prefs.putInt("sidebar.front", 3);
         prefs.putInt("sidebar.selected", 2);
         final Map<Integer, String> names = Map.of(SessionsSidebar.SESSIONS, "sessions",
-                SessionsSidebar.CONNECTIONS, "connections", SessionsSidebar.FILES, "files",
-                SessionsSidebar.LOGBOOK, "logbook", SessionsSidebar.INSTANCES, "instances");
+                SessionsSidebar.CONNECTIONS, "connections", SessionsSidebar.KIT, "kit", SessionsSidebar.BRAIN, "brain",
+                SessionsSidebar.SCRATCHPAD, "scratchpad", SessionsSidebar.LOGBOOK, "logbook",
+                SessionsSidebar.INSTANCES, "instances");
         names.forEach((tab, name) -> {
             assertThat(WindowLayout.tabName(tab)).isEqualTo(name);
             prefs.put("sidebar.shown", WindowLayout.tabName(tab));
             assertThat(layout.sidebarTab()).as(name).isEqualTo(tab);
         });
+        prefs.put("sidebar.shown", "files");
+        assertThat(layout.sidebarTab()).as("the Files tab the folder tabs replaced reads as Kit, in its place")
+                .isEqualTo(SessionsSidebar.KIT);
         prefs.put("sidebar.shown", "panels");
         assertThat(layout.sidebarTab()).as("a name no tab has, not the index kept beside it")
                 .isEqualTo(SessionsSidebar.SESSIONS);

@@ -94,8 +94,8 @@ final class FolderRules {
             }
         }
         final AppState next = s.withFolders(i.folders());
-        final String text = s.folders().equals(i.base()) ? "Saved the Files tab's folders"
-                : "Saved the Files tab's folders, replacing a change to folders.json made while the window was open";
+        final String text = s.folders().equals(i.base()) ? "Saved the sidebar's folders"
+                : "Saved the sidebar's folders, replacing a change to folders.json made while the window was open";
         return new Transition(notice(clock, next, Notice.Level.INFO, text), List.of(new Effect.SaveFolders(next.folders())));
     }
 

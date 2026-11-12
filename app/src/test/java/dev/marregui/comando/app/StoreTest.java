@@ -418,7 +418,8 @@ class StoreTest {
             Files.setLastModifiedTime(json, FileTime.fromMillis(System.currentTimeMillis() + 4_000));
             store.checkFilesNow().get(5, TimeUnit.SECONDS);
             assertThat(read).as("a file half edited keeps the tab's folders").hasSize(1);
-            assertThat(told).singleElement().asString().startsWith("folders.json does not read (").endsWith("); the Files tab keeps its folders");
+            assertThat(told).singleElement().asString().startsWith("folders.json does not read (")
+                    .endsWith("); the sidebar keeps its folders");
             assertThat(json).as("not moved aside: the user is editing it").hasContent("[{\"name\":");
 
             store.saveFolders(List.of(new FolderRoot("Own", "/o", "", List.of())));

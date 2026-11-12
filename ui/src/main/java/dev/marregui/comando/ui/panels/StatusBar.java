@@ -11,8 +11,13 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.TextStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -209,6 +214,10 @@ public final class StatusBar {
     private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
     /** The window that resets within hours; a read may not have it. */
     private static final String SESSION_WINDOW = "Session";
+    /** The window that resets on a weekday; its reset says the day as well as the time. */
+    private static final String WEEK_WINDOW = "Week";
+    /** The date in both tools' reset text: "Oct 15" of "Oct 15 at 1:59pm (Europe/Madrid)" and "Oct 15 at 13:00". */
+    private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
 
     /**
      * Shows a plan's usage limits, Claude's or Codex's, each on its own label: each window's share used, and when the
@@ -308,8 +317,9 @@ public final class StatusBar {
     }
 
     /**
-     * "Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the plan's name, then each window; the session's
-     * reset is the one that comes within hours. Codex's reads the same: "Codex Session 4% (resets 12:06) · Week 3%".
+     * "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%": the plan's name, then each
+     * window; the session's reset is the one that comes within hours, the week's comes with its weekday. Codex's reads
+     * the same: "Codex Session 4% (resets 12:06) · Week 3% (resets Thu 13:00)".
      */
     static String usageText(final PlanUsage u) {
         final StringBuilder sb = new StringBuilder(u.provider() + " ");
@@ -319,11 +329,10 @@ public final class StatusBar {
                 sb.append(" · ");
             }
             sb.append(w.name()).append(' ').append(w.percent()).append('%');
-            if (w.name().equals(SESSION_WINDOW)) {
-                final String at = resetTime(w.resets());
-                if (!at.isEmpty()) {
-                    sb.append(" (resets ").append(at).append(')');
-                }
+            final String at = w.name().equals(SESSION_WINDOW) ? resetTime(w.resets())
+                    : w.name().equals(WEEK_WINDOW) ? weekReset(w.resets(), u.readAtMillis()) : "";
+            if (!at.isEmpty()) {
+                sb.append(" (resets ").append(at).append(')');
             }
         }
         return sb.toString();
@@ -338,6 +347,33 @@ public final class StatusBar {
         final String t = resets.substring(at + 4);
         final int paren = t.indexOf(" (");
         return (paren < 0 ? t : t.substring(0, paren)).strip();
+    }
+
+    /**
+     * The weekday and time of a weekly reset: "Oct 15 at 1:59pm (Europe/Madrid)" read in 2026 gives "Thu 1:59pm". The
+     * text has no year: the date is taken in the year that puts it nearest {@code readAtMillis}, so a December read of
+     * "Jan 2" is next year's. Without a date it is the time alone, without a time empty.
+     */
+    static String weekReset(final String resets, final long readAtMillis) {
+        final String time = resetTime(resets);
+        if (time.isEmpty()) {
+            return "";
+        }
+        final MonthDay day;
+        try {
+            day = MonthDay.parse(resets.substring(0, resets.lastIndexOf(" at ")).strip(), MONTH_DAY);
+        } catch (final DateTimeParseException _) {
+            return time;
+        }
+        final LocalDate read = LocalDate.ofInstant(Instant.ofEpochMilli(readAtMillis), ZoneId.systemDefault());
+        LocalDate nearest = day.atYear(read.getYear());
+        for (final int year : new int[]{read.getYear() - 1, read.getYear() + 1}) {
+            final LocalDate d = day.atYear(year);
+            if (Math.abs(ChronoUnit.DAYS.between(read, d)) < Math.abs(ChronoUnit.DAYS.between(read, nearest))) {
+                nearest = d;
+            }
+        }
+        return nearest.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH) + " " + time;
     }
 
     /** Goes where {@code n} is about; a notice about nothing to go to opens the recent notices instead. */

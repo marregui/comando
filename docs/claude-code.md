@@ -272,7 +272,7 @@ typed command carry no argument and ask as before; answering their cards is what
 | `ui_open_file` | `path`, `line` | shows a file in the side pane: Markdown rendered when no `line` is given, other text read-only at the line, binary said so; `~/` and relative paths resolve; at most 4 MB |
 | `ui_notify` | `text`, `level` | a status-bar message, and a desktop notification while the window is not active |
 | `ui_get_state` | none | panels with bindings and last run, connections, sessions (busy, `waitingOn`), open views |
-| `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share`, `transcript_above` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes, the lower share and the transcript's side (`transcript_above`, [record 144](adr/0144-the-transcript-sits-above-the-prompt.md)) change after the same pause; Restore layout in the palette undoes it |
+| `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share`, `transcript_above` | `sidebar` is the sidebar's tab by the name the window keeps it under: `kit`, `brain` or `scratchpad` for the folder tabs (`files`, from before, reads as `kit`, [record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)); without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes, the lower share and the transcript's side (`transcript_above`, [record 144](adr/0144-the-transcript-sits-above-the-prompt.md)) change after the same pause; Restore layout in the palette undoes it |
 | `ui_close_view` | `id` | closes a view this session placed; the user's or pinned views are refused |
 | `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§4.2](#42-sql-from-claude)); returns the first result as tab-separated text in PostgreSQL COPY text form (`\N` is SQL NULL; a tab, newline, carriage return or backslash in a value is escaped); `show` also opens it as a table, SQL NULL shown as `null` in muted italics, told apart from the text `null` |
 | `db_describe` | `table`, `connection` | a table's columns and types, in the COPY text form of `db_run_sql` |
@@ -328,7 +328,7 @@ sends for the same gesture:
   interrupting are open to every caller ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)'s breaker,
   amended).
 - **Notice.** Every act but a read and a refusal names its caller in the status bar (`foreman: session new — …`).
-- **Not yet.** The Files tab's git changes and entries (open a change, delete, roll back, remove, unstage) and the
+- **Not yet.** The folder tabs' git changes and entries (open a change, delete, roll back, remove, unstage) and the
   folders window; `Actions.NOT_YET` names each with the reason, and `ActionParityTest` fails for any other intent the
   window sends without an action.
 - **Other instances** ([record 123](adr/0123-instances-consult-each-other.md)). `instances_list`, `instance_ask` and
@@ -343,7 +343,7 @@ sends for the same gesture:
   brainstorm has no tool of its own: a session asks each instance in turn and passes the others' answers on, as
   `instance_ask`'s description says.
 - **What an agent sees.** `ui_get_state` adds each session's model, effort and creator, the closed panels, the pending
-  approval cards (id, session, kind, tool, summary), the Files tab's folders, the local servers and the other instances
+  approval cards (id, session, kind, tool, summary), the folders of the Kit, Brain and Scratchpad tabs, the local servers and the other instances
   on the comando Edge (`instances`: connected, and each one's name, id, role, version, busy, whether it is refused,
   whether it is present or one that left, and whether it started the Edge;
   [record 124](adr/0124-the-sidebar-shows-the-instances.md)).

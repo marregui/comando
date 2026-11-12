@@ -11,6 +11,7 @@ import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.panels.SessionsSidebar;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +48,19 @@ class MenusTest {
             }
         }));
         return subs;
+    }
+
+    /// A folder tab's menu gains the folders window, the Kit tab's also the kit jobs window; no other tab gains either
+    /// (record 152).
+    @Test
+    void theFolderTabsGainTheFoldersWindowAndTheKitTabTheJobs() {
+        assertThat(Menus.folderTab(SessionsSidebar.KIT)).containsExactly("files.settings", "files.jobs");
+        assertThat(Menus.folderTab(SessionsSidebar.BRAIN)).containsExactly("files.settings");
+        assertThat(Menus.folderTab(SessionsSidebar.SCRATCHPAD)).containsExactly("files.settings");
+        for (final int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.LOGBOOK,
+            SessionsSidebar.INSTANCES}) {
+            assertThat(Menus.folderTab(tab)).as("tab " + tab).isEmpty();
+        }
     }
 
     /// [Menus#bar] is exactly Edit, Find and Help with the listed item ids in order, no submenus, one separator before

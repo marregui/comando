@@ -137,6 +137,10 @@ final class FilesTab {
     private static final int MAX_FOUND_ROWS = 2_000;
 
     private final IntentSink intents;
+    /** Which configured folders the tab shows, each as the tab shows it; empty for one it leaves to another tab. */
+    private final Function<FolderRoot, Optional<FolderRoot>> shelf;
+    /** Where the tab's open folders go to be read; the sidebar's tabs share one watch. */
+    private final FolderWatch.Part watch;
     private final Consumer<Path> open;
     /** Opens a file in a panel in its editor, rather than rendered. */
     private final Consumer<Path> editFile;
@@ -221,9 +225,23 @@ final class FilesTab {
         this(intents, open, editFile, ResourceActions.Questions.MODAL);
     }
 
-    /** With the question asked before entries go to the Trash; tests answer it. */
+    /** Every folder, its watch its own, with the question asked before entries go to the Trash; tests answer it. */
     FilesTab(final IntentSink intents, final Consumer<Path> open, final Consumer<Path> editFile, final ResourceActions.Questions questions) {
+        this(intents, Optional::of, new FolderWatch(intents).part(), open, editFile, questions);
+    }
+
+    /** The folders {@code shelf} takes, read through {@code watch}. */
+    FilesTab(
+            final IntentSink intents,
+            final Function<FolderRoot, Optional<FolderRoot>> shelf,
+            final FolderWatch.Part watch,
+            final Consumer<Path> open,
+            final Consumer<Path> editFile,
+            final ResourceActions.Questions questions
+    ) {
         this.intents = intents;
+        this.shelf = shelf;
+        this.watch = watch;
         this.open = open;
         this.editFile = editFile;
         this.questions = questions;
@@ -365,20 +383,42 @@ final class FilesTab {
         return filter;
     }
 
+    /** Names the tab's trees for assistive technology: its tab's name, and that name with "found" for the filter's. */
+    void name(final String title) {
+        tree.tree().getAccessibleContext().setAccessibleName(title);
+        found.tree().getAccessibleContext().setAccessibleName(title + " found");
+    }
+
+    /**
+     * How closely a folder of the tab holds {@code file}: the depth of the deepest folder holding it, so the sidebar
+     * reveals a file in the tab whose folder is nearest it; -1 when no folder of the tab holds it.
+     */
+    int holds(final Path file) {
+        return holder(file.toAbsolutePath().normalize())
+                .map(f -> Path.of(f.path()).normalize().getNameCount()).orElse(-1);
+    }
+
+    /** The folder of the tab holding {@code file} (absolute, normalized) most closely: Memory rather than Kit. */
+    private Optional<FolderRoot> holder(final Path file) {
+        return folders.stream().filter(f -> f.contains(file) && !excluded(f, file))
+                .max(Comparator.comparingInt(f -> Path.of(f.path()).normalize().getNameCount()));
+    }
+
     /**
      * Follows the configured folders: a folder that changed or went is forgotten, and the open ones are watched again,
      * so a folder edited while open is read with its new settings at once. A folder renamed and otherwise unchanged
      * keeps its tree, and stays open when it was.
      */
     void render(final AppState s) {
-        if (built && s.folders().equals(folders)) {
+        final List<FolderRoot> now = s.folders().stream().map(shelf).flatMap(Optional::stream).toList();
+        if (built && now.equals(folders)) {
             return;
         }
         final List<FolderRoot> before = folders;
-        final Set<String> nowNames = new HashSet<>(s.folders().stream().map(FolderRoot::name).toList());
+        final Set<String> nowNames = new HashSet<>(now.stream().map(FolderRoot::name).toList());
         final Set<String> renamed = new HashSet<>();
         final Set<String> reopen = new HashSet<>();
-        for (final FolderRoot f : s.folders()) {
+        for (final FolderRoot f : now) {
             if (before.stream().anyMatch(b -> b.name().equals(f.name()))) {
                 continue;
             }
@@ -392,7 +432,7 @@ final class FilesTab {
             });
         }
         final List<FolderRoot> allBefore = all;
-        folders = s.folders();
+        folders = now;
         all = FolderRoot.withGroupRoots(folders);
         indexNames = indexNames(folders);
         final Set<String> keep = new HashSet<>(renamed);
@@ -444,13 +484,12 @@ final class FilesTab {
             return;
         }
         final Path file = revealing;
-        // the folder holding it most closely: Memory rather than BRAIN, BRAIN rather than KIT
-        final Optional<FolderRoot> holder = all.stream().filter(f -> f.contains(file) && !excluded(f, file))
-                .max(Comparator.comparingInt(f -> Path.of(f.path()).normalize().getNameCount()));
+        final Optional<FolderRoot> holder = holder(file);
         TreePath at = holder.map(f -> folderRow(f.name())).orElse(null);
         if (at == null) {
             revealed();
-            tell.tell(tree.tree(), new Point(8, 8), "Not in a folder of the Files tab: " + Labels.shortPath(file.toString()));
+            tell.tell(tree.tree(), new Point(8, 8),
+                    "Not in a folder the sidebar shows: " + Labels.shortPath(file.toString()));
             return;
         }
         final FolderRoot f = holder.get();
@@ -473,7 +512,7 @@ final class FilesTab {
                     return; // its tree, or this folder's part of it, is on its way: show() goes on
                 }
                 revealed();
-                tell.tell(tree.tree(), below(tree, at), "The Files tab does not show " + rel + " (left out, or not read)");
+                tell.tell(tree.tree(), below(tree, at), "The tab does not show " + rel + " (left out, or not read)");
                 return;
             }
             at = at.pathByAddingChild(next);
@@ -534,7 +573,7 @@ final class FilesTab {
      * the folder's, or of a folder no longer configured, is ignored.
      */
     void show(final FolderRoot folder, final ViewSpec.TreeNode folderTree) {
-        if (!all.contains(folder)) {
+        if (shelf.apply(folder).filter(folders::contains).isEmpty()) {
             return;
         }
         final String name = folder.name();
@@ -878,7 +917,7 @@ final class FilesTab {
             rows.add(jobsRow()); // no kit's folder to lead: last, in a row of its own
         }
         final ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
-                rows.isEmpty() ? List.of(placeholder("No folders yet: right-click the Files tab to add some")) : rows);
+                rows.isEmpty() ? List.of(placeholder("No folders yet: right-click the tab to add some")) : rows);
         restoring = true;
         try {
             if (built) {
@@ -915,9 +954,7 @@ final class FilesTab {
                 for (final FolderRoot m : members) {
                     add(inside, m, kids.apply(m), keepEmpty);
                 }
-                final FolderRoot r = groupRoot.get();
-                kids.apply(r).stream().filter(n -> isFolderEntry(n) && !n.label().startsWith(".")).forEach(inside::add);
-                addGroup(rows, r, inside, keepEmpty);
+                addGroup(rows, groupRoot.get(), inside, keepEmpty);
             } else if (members.size() == 1 && f.group().isEmpty()) {
                 add(rows, f, kids.apply(f), keepEmpty);
             } else if (members.size() == 1) {
@@ -1098,7 +1135,7 @@ final class FilesTab {
      */
     private void watchOpen(final boolean force) {
         final List<String> open = new ArrayList<>();
-        for (final FolderRoot f : all) {
+        for (final FolderRoot f : folders) {
             final TreePath row = folderRow(f.name());
             if (row != null && tree.tree().isExpanded(row)) {
                 open.add(f.name());
@@ -1110,7 +1147,7 @@ final class FilesTab {
         if (!sent.equals(watched) || !inside.equals(watchedOpen) || force && !sent.isEmpty()) {
             watched = List.copyOf(sent);
             watchedOpen = inside;
-            intents.dispatch(new Intent.WatchFolders(watched, watchedOpen));
+            watch.watch(watched, watchedOpen, force);
         }
     }
 
@@ -1426,7 +1463,7 @@ final class FilesTab {
      * level of the closed ones too; the open ones are watched whole while the filter has text.
      */
     private void readUnread() {
-        final List<String> unread = all.stream().map(FolderRoot::name)
+        final List<String> unread = folders.stream().map(FolderRoot::name)
                 .filter(name -> !open(name) && (!read.containsKey(name) || partlyRead.contains(name)) && requested.add(name)).toList();
         if (!unread.isEmpty()) {
             intents.dispatch(new Intent.BrowseFolders(unread));

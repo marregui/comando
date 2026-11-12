@@ -50,8 +50,7 @@ final class MenuBuilder {
         final List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
             case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.edge() != null);
-            case SessionsSidebar.FILES -> List.of("files.settings", "files.jobs");
-            default -> List.of();
+            default -> Menus.folderTab(tab);
         };
         for (final String id : ids) {
             final Command c = actions.get(id);

@@ -46,8 +46,8 @@ A kit honours the contract; everything else here is the recommended way of worki
 drifts with its user's habits, as it should. The contract is: the manifest ([§2.4](#24-the-manifest)), where comando finds the kit and the brain
 ([§3.1](#31-the-root)), the settings
 comando reads and the retention it needs ([§2.5](#25-settings)), what the repository ignores
-([§2.6](#26-what-the-repository-ignores)), the launch environment ([§3.1](#31-the-root)), the Files tab's layout
-([§3.2](#32-the-files-tab)), the `INSTALL.md` section *Upgrade* when the kit is tagged on a remote
+([§2.6](#26-what-the-repository-ignores)), the launch environment ([§3.1](#31-the-root)), the layout of the Kit, Brain and Scratchpad tabs
+([§3.2](#32-the-kit-brain-and-scratchpad-tabs)), the `INSTALL.md` section *Upgrade* when the kit is tagged on a remote
 ([§3.4](#34-version-and-upgrade)), the jobs tool when the manifest lists jobs ([§3.5](#35-scheduled-jobs)) and the
 checkpoint skill with its automatic form ([§6.2](#62-depths)). A kit created from this document, or brought by the user, is checked
 against these sections alone. A kit may add a **layout contract** of its own, the rules its hooks and tools meet, in
@@ -57,7 +57,7 @@ its `README.md`; comando reads none of it.
 
 | Part | What it holds | |
 |---|---|---|
-| `comando-kit.json` | the manifest: the kit's name, its brain, the Files tab's folders, its scheduled jobs, what it needs outside the folder ([§2.4](#24-the-manifest)) | required |
+| `comando-kit.json` | the manifest: the kit's name, its brain, the folders of the Kit, Brain and Scratchpad tabs, its scheduled jobs, what it needs outside the folder ([§2.4](#24-the-manifest)) | required |
 | `.gitignore` | what the kit's repository leaves out: credentials, Claude Code's runtime files, the brain when it sits inside the kit ([§2.6](#26-what-the-repository-ignores)) | required |
 | `settings.json` | Claude Code's settings: permissions, retention, the hooks; each hook entry runs a command under `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`, so it works on any root ([§2.5](#25-settings)) | required |
 | `skills/` | the skills; `reflect` answers the checkpoint ([§6](#6-reflect-the-consolidation-step)) | `reflect` required |
@@ -71,17 +71,17 @@ its `README.md`; comando reads none of it.
 | `INSTALL.md` | the kit's own recipe; its section *Upgrade* is what the `kit` session follows ([§3.4](#34-version-and-upgrade)) | when tagged on a remote |
 | `install/kit.py` | the jobs tool, which alone writes the jobs to the platform's scheduler ([§3.5](#35-scheduled-jobs)) | when the manifest lists jobs |
 
-comando's code reads of a kit: the manifest; the folders it names and their index files ([§3.2](#32-the-files-tab)); the
+comando's code reads of a kit: the manifest; the folders it names and their index files ([§3.2](#32-the-kit-brain-and-scratchpad-tabs)); the
 root's `settings.json`, for the keys of [§2.5](#25-settings); the root's `projects/`, for stored conversations; the
 root's `skills/<name>/SKILL.md`, to link a skill call in a transcript to its file; the root as a git repository, for
 its version and backup ([§3.3](#33-back-up-the-brain-and-the-kit), [§3.4](#34-version-and-upgrade)); `.kit-jobs/`, the
 jobs' runner files ([§3.5](#35-scheduled-jobs)); `tools/`, where the job editor's program chooser starts; and, when the
 kit has one, the jobs tool, which it calls. Its upgrade prompt names the kit's `INSTALL.md`. It writes, on the user's
 action: a file edited in a panel or the comparison window; a listing file's lines for an entry moved to the Trash
-([Workbench §6](workbench.md#6-the-files-tab)); the backup's commits and pushes ([§3.3](#33-back-up-the-brain-and-the-kit));
+([Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs)); the backup's commits and pushes ([§3.3](#33-back-up-the-brain-and-the-kit));
 the manifest when the user repairs it, keeping the old one as `comando-kit.json.bak-<time>`
-([§2.4](#24-the-manifest)). When the folders are saved it writes a missing index file of a Files-tab folder inside the
-kit or the brain ([§3.2](#32-the-files-tab)). The rest of the layout is what the sessions work by: a kit that lacks a recommended
+([§2.4](#24-the-manifest)). When the folders are saved it writes a missing index file of a configured folder inside the
+kit or the brain ([§3.2](#32-the-kit-brain-and-scratchpad-tabs)). The rest of the layout is what the sessions work by: a kit that lacks a recommended
 part runs without what that part carries.
 
 ### 2.2 A session's life, and which part acts
@@ -111,7 +111,7 @@ compaction as the plain output of a `SessionStart` hook with the matcher `compac
 
 ### 2.3 Outside any session
 
-comando reads `comando-kit.json` at start for the brain's folder and the Files tab's folders; the jobs it asks the
+comando reads `comando-kit.json` at start for the brain's folder and the folders the Kit, Brain and Scratchpad tabs show; the jobs it asks the
 kit's jobs tool for. The tool writes the jobs to the platform's scheduler; each runs headless, outside comando, and leaves a report in the brain's
 scratchpad for `/reflect` ([§3.5](#35-scheduled-jobs), [§7](#7-the-learning-loop-how-the-brain-gets-sharper)).
 
@@ -125,7 +125,7 @@ comando reads in [record 133](adr/0133-every-stored-file-has-a-schema-and-a-vers
 | `kit` | no; write it | the schema's version, `1`; a file without it is read as version 1, any other value is refused ("the kit is newer than comando" for a higher one) |
 | `name` | yes | the kit's name, not empty; lower-case letters, digits and `-` keep it usable in the scheduler's ids |
 | `brain` | no; write it | the brain's folder: absolute, `~/…`, or relative to the kit; `BRAIN` (inside the kit) when absent; `COMANDO_BRAIN` overrides it ([§3.1](#31-the-root)); memory is its `MEMORY/` |
-| `folders` | no | the Files tab's folders, a list of objects: `name` (used once), `root` (`kit`, the default, or `brain`: the folder the path starts from), `path` (relative to that root, without `..`; `"."` is the root itself), `index` (a file inside the folder, or empty), `excludes` (a list of names left out), `icon` (`folder`, `scratchpad`, `memory`, `knowledge`, `skills` or `plugin`; empty is `folder`), `deletable` (`true`: its entries go to the Trash from the Files tab), `listedIn` (a file name, no `/`), `group` |
+| `folders` | no | the folders the Kit, Brain and Scratchpad tabs show, a list of objects: `name` (used once), `root` (`kit`, the default, or `brain`: the folder the path starts from), `path` (relative to that root, without `..`; `"."` is the root itself), `index` (a file inside the folder, or empty), `excludes` (a list of names left out), `icon` (`folder`, `scratchpad`, `memory`, `knowledge`, `skills` or `plugin`; empty is `folder`), `deletable` (`true`: its entries go to the Trash from its tab), `listedIn` (a file name, no `/`), `group` |
 | `requirements` | no | the tools the kit needs outside the folder: `tool`, `check` (a command as a list of words), `install` (an object, one command per `macos`, `linux`, `windows`); for the agent that installs or checks the kit; comando reads them and uses none of them |
 | `credentials` | no | the keys the kit's tools read from the root's `settings.local.json`: `key`, `for`, `where` (where the user gets it); never a value; comando uses none of them |
 | `jobs` | no | the scheduled jobs, written by the jobs tool only ([§3.5](#35-scheduled-jobs)) |
@@ -133,15 +133,15 @@ comando reads in [record 133](adr/0133-every-stored-file-has-a-schema-and-a-vers
 comando ignores keys it does not know, so a kit may add its own (`required` and `for` on a requirement, say). A file
 that is not a JSON object, has another version, no `name`, or a folder whose path is empty or leaves its root, is refused whole:
 comando tells the user why at start and runs without the kit, ending "Correct the file, then restart comando to run on
-the kit". A folder that breaks one of the rules every Files-tab folder meets
-([Workbench §6](workbench.md#6-the-files-tab): a name, used once; a `root` of `kit` or `brain`; its icon; an index
+the kit". A folder that breaks one of the rules every folder of the three tabs meets
+([Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs): a name, used once; a `root` of `kit` or `brain`; its icon; an index
 inside it; a listing file that is a file name) is left out, and the window names it at start, by its place and name, with what is wrong; **Kit ▸ Repair
 comando-kit.json…** in the palette rewrites the file without those entries once the user confirms (and removes nothing
 when the file's problems changed since, as after a kit upgrade), a notice naming each entry it took out, and keeps the
 old one beside it as `comando-kit.json.bak-<time>`, one per repair, never overwritten. comando writes the manifest only
 then; the jobs tool writes its `jobs` block; anything else is edited by the kit's user or the agent that made it.
 
-A manifest for a kit at `~/comando-kit` with its brain at `~/comando-brain`, laid out as [§3.2](#32-the-files-tab)
+A manifest for a kit at `~/comando-kit` with its brain at `~/comando-brain`, laid out as [§3.2](#32-the-kit-brain-and-scratchpad-tabs)
 wants, is in [§8.2](#82-the-kits-files).
 
 ### 2.5 Settings
@@ -212,8 +212,8 @@ what Claude Code is known to write into a config folder; a later Claude Code may
 | `__pycache__/`, `.DS_Store` | the machine's |
 
 The same names, without the leading `/` and the patterns, and with `settings.local.json`, are the `excludes` of the
-root's Files-tab folder, so the KIT row shows the kit and not Claude Code's runtime ([§3.2](#32-the-files-tab)); the
-Files tab hides names that start with a dot anyway. The file itself is in [§8.2](#82-the-kits-files).
+root's folder, so the KIT row shows the kit and not Claude Code's runtime ([§3.2](#32-the-kit-brain-and-scratchpad-tabs)); the
+tabs hide names that start with a dot anyway. The file itself is in [§8.2](#82-the-kits-files).
 
 ### 2.7 Agents, specs and reviews
 
@@ -256,8 +256,8 @@ whether its manifest reads or not; comando never passes over it for the next one
 | otherwise | `~/.claude`, without a kit |
 
 A brain applies only with a kit: without one there is no brain, `COMANDO_BRAIN` names nothing, sessions get neither
-`COMANDO_BRAIN` nor `autoMemoryDirectory`, and the session dialog, **Back up the brain** and the Files tab's folder
-roots show none. The brain, in this order:
+`COMANDO_BRAIN` nor `autoMemoryDirectory`, and the session dialog, **Back up the brain** and the folder
+roots of the Kit and Brain tabs show none. The brain, in this order:
 
 | When | Brain |
 |---|---|
@@ -298,25 +298,29 @@ claude auth login`) opens the browser to sign in with the same account as the us
 `CLAUDE_CONFIG_DIR=~/comando-kit claude auth status --text` then names the account. The user's own `~/.claude` stays
 signed in as it was.
 
-### 3.2 The Files tab
+### 3.2 The Kit, Brain and Scratchpad tabs
 
 `comando-kit.json` lists the kit's folders with the fields of a `folders.json` entry
-([Workbench §6](workbench.md#6-the-files-tab)), each path relative to its `root`, the kit or the brain, without `..`;
+([Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs)), each path relative to its `root`, the kit or the brain, without `..`;
 `"."` is that root itself (the kit's folder, its excludes leaving out the rest). The brain's folders name `root`
 `brain`, so `COMANDO_BRAIN` moves them with the brain, at every start: comando records where it put each kit folder last
 (`kit-folders`), and a folder still there follows the kit and the brain, while one the user pointed elsewhere stays.
 When `folders.json` holds none of them, comando adds them at the top, their paths made absolute under their root, once,
 and saves; the user's own entries stay, and a kit folder whose name an entry already takes is not added (`KitFolders`).
 An entry that names the same folder on disk as a kit folder (links followed, letter case ignored) counts as that folder,
-so an entry through a link is not added twice. **Use the kit's folders** in the Files tab's folders window adds the
+so an entry through a link is not added twice. **Use the kit's folders** in the folders window adds the
 missing ones again.
 
-The rows the Files tab gives a kit depend on its layout:
+A configured folder shows in one of the three tabs, **Kit**, **Brain** or **Scratchpad**, which `folders.json` decides
+without a new key: a folder whose `icon` is `scratchpad` in the Scratchpad tab; the other folders of the group `Brain`
+in the Brain tab; every other folder, the Kit group's and any in no group, in the Kit tab
+([Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs), [record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)).
+A group's row holds only the folders the manifest configures for it. The rows the tabs give a kit depend on its layout:
 
 | Layout | Row |
 |---|---|
-| one folder, path `"."`, alone in group `Kit` (that spelling) | the KIT row: the Jobs row first inside it, the kit's commit and a newer release ([§3.4](#34-version-and-upgrade)), and in its menu **Back up the kit** and **Upgrade the kit…** |
-| the brain's folders in one group (`Brain`), all inside the brain's folder | the BRAIN row: the brain's folder, those folders first, then its other folders; **Back up the brain** in its menu and in the menu of each folder inside the brain |
+| one folder, path `"."`, alone in group `Kit` (that spelling) | the KIT row, in the Kit tab: the Jobs row first inside it, the kit's commit and a newer release ([§3.4](#34-version-and-upgrade)), and in its menu **Back up the kit** and **Upgrade the kit…** |
+| the brain's folders in one group (`Brain`), all inside the brain's folder | the BRAIN row, in the Brain tab: the brain's folder holding those folders alone, in their order, so a folder of the brain the manifest does not list (EVAL, say) never shows; **Back up the brain** in its menu and in the menu of each folder inside the brain |
 | a `Kit` folder other than the root | no kit backup or upgrade in its row's menu (the palette keeps them) |
 | two folders in group `Kit` | the Jobs row in a row of its own, last, not inside the KIT row |
 
@@ -324,12 +328,12 @@ A folder inside the kit's folder or the brain's that names an `index` file which
 gets one when the folders are saved, with a title and the line "`/reflect` keeps it current"; without a kit, comando
 creates none in the user's own `~/.claude`. A new brain also has its index files from its skeleton
 ([§4.3](#43-the-skeleton)). Keeping them is the kit's ([§6.3](#63-the-steps)). `listedIn` names the file the Trash keeps
-current ([Workbench §6](workbench.md#6-the-files-tab)); any other line naming an entry stays and is reported
+current ([Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs)); any other line naming an entry stays and is reported
 ([§4.1.2](#412-scratchpad)).
 
 ### 3.3 Back up the brain and the kit
 
-**Back up the brain** (the palette and the menu of the Files tab's BRAIN row) runs in
+**Back up the brain** (the palette and the menu of the Brain tab's BRAIN row) runs in
 the brain's folder, off the EDT: `git add -A`, a commit when anything changed (nothing to commit is not an error), `git
 push`. The commit's first line says what it adds, `Brain backup 2026-10-28: MEMORY 2 changed; SCRATCHPAD 3 added, 1
 changed` (each top folder, or a file at the top, with its counts; past 120 characters the rest are counted), and its
@@ -342,7 +346,7 @@ user adds one, a private repository each ([§8.1](#81-the-steps)).
 
 ### 3.4 Version and upgrade
 
-The Files tab's KIT row shows the kit's commit and, when `git -C <root> ls-remote --tags origin` lists a newer `vX.Y.Z`,
+The Kit tab's KIT row shows the kit's commit and, when `git -C <root> ls-remote --tags origin` lists a newer `vX.Y.Z`,
 "‹commit› · vB available", with a notice the first time a newer release is seen
 (`git -C <root> describe --tags --always` still gives the version the notice names). Both are read at start and every 6
 hours, off the EDT, never holding the window.
@@ -391,19 +395,19 @@ Exit codes: 0 done; 1 done in part (a running job left as it was, a load that fa
 unexpected error, part may be done. Standard output and standard error are shown to the user when a call is refused. The
 runner the scheduler starts keeps, per job, its process id while it runs and one line per run (start, exit), so
 `running` and `last` can be answered, and never lets two runs of one job overlap. A kit with no scheduled jobs leaves
-out `jobs` and the tool, and the Files tab then shows no Jobs row. A kit with the tool and no job shows the row as
+out `jobs` and the tool, and the Kit tab then shows no Jobs row. A kit with the tool and no job shows the row as
 "none", its tooltip "No scheduled jobs in comando-kit.json; double-click to add one"; a manifest that lists jobs without
 the tool shows "cannot be read", its tooltip naming the missing `install/kit.py`.
 
-The Files tab shows the jobs as one **Jobs** row, the first inside the KIT row
+The Kit tab shows the jobs as one **Jobs** row, the first inside the KIT row
 ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)): its detail counts them and names what runs
 now or the next run (`5 jobs · 1 paused · next Thu 07:15`); the dot marks a change the scheduler has not taken (a job
 running when it was saved is left as it was), a red name a failed last run or jobs that cannot be read; its tooltip says
 the most pressing of these. comando reads them through `jobs --json` at start, after every change it makes, and,
-while the Files tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (a job's pid or its runs;
+while the Kit tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (a job's pid or its runs;
 looked at every 10 s, logs left out).
 
-A double click, Enter, or **Configure kit jobs** (the row's menu, the Files tab's menu, the palette) reads the jobs
+A double click, Enter, or **Configure kit jobs** (the row's menu, the Kit tab's menu, the palette) reads the jobs
 again and opens the **Kit jobs** window on them (a list that cannot be read opens none, and a notice says why): the jobs
 on the left, +, −; the selected job's name, description, days of the week, time, program (a path inside the kit, picked
 with …), arguments, environment (`NAME=value` lines), log and Enabled on the right, checked as typed, and under them,
@@ -488,9 +492,9 @@ that fails unless its anchor is there exactly once), never a whole-file write ov
 |---|---|
 | the roll | at session start and before a job writes: when today's folder is missing, the newest day folder is renamed to today; any other day folder is merged into today's topic by topic, its `INDEX.md` parked in `work/` to be folded; anything else at the top moves to today's `inbox/` to be filed |
 | the index | `# Scratchpad`; a table of the topic folders; `## Waiting on <user>` (every open decision, each naming its task); `## Open`, one `### <topic>/` heading per topic folder, each task as `#### N. <title>`; last `## Scheduled reports`, where jobs file their reports until `/reflect` moves them |
-| a task | **Ticket** or **Repo**, **State** (done, waiting on whom, in progress, with the last verified fact), **Next** (who moves it, and how), **Resume from**, **Needs you** (when it holds a decision for the user: a `- **Needs you:**` line with one sub-item per decision; the Logbook tab lists it first, [Workbench §1.4](workbench.md#14-the-sidebar)), and its documents, each a list item of its own led by its path relative to the index (`` `topic/01-x.md` — what it holds ``), so comando's Trash takes the line out with the file ([§3.2](#32-the-files-tab)) |
+| a task | **Ticket** or **Repo**, **State** (done, waiting on whom, in progress, with the last verified fact), **Next** (who moves it, and how), **Resume from**, **Needs you** (when it holds a decision for the user: a `- **Needs you:**` line with one sub-item per decision; the Logbook tab lists it first, [Workbench §1.4](workbench.md#14-the-sidebar)), and its documents, each a list item of its own led by its path relative to the index (`` `topic/01-x.md` — what it holds ``), so comando's Trash takes the line out with the file ([§3.2](#32-the-kit-brain-and-scratchpad-tabs)) |
 | task numbers | a new task takes the highest number in the index plus one, read just before writing; numbers never change |
-| names | sized for comando's Files tab, which does not scroll sideways: topics lower-case, at most 20 characters; documents `NN-<what>.md`, at most 25; `work/` files at most 22; no date in a name (the folder carries it); the name alone says what the file holds; a topic's living plan is `00-<topic>-plan.md` |
+| names | sized for comando's Scratchpad tab, which does not scroll sideways: topics lower-case, at most 20 characters; documents `NN-<what>.md`, at most 25; `work/` files at most 22; no date in a name (the folder carries it); the name alone says what the file holds; a topic's living plan is `00-<topic>-plan.md` |
 | pointers | carry no date, as the folder's name changes daily: `topic/01-x.md`, task 3 |
 | reports | an agent report in `work/` is `<name>-report.md` (or `.json`) with a stamp in its front matter: `generated` (`by` the runner, `at` in UTC, `against` the checkout and its commit, `+dirty` when it had uncommitted changes) when it lands; `verified` (`by`, `at`, `result`) once the session checked it; stamping `generated` again drops `verified` |
 | `FRICTION.md` | lines `- <date> <agent type> <spec or task>: <what got in the way> → <what would have prevented it>`; agents only append; `/reflect` deletes the lines it handled and keeps the file, even empty |
@@ -636,7 +640,7 @@ a prompt from another session counts as headless.
 | Memory | the conversation | memory entries rewritten (a rule plus one line of evidence), cues sharpened to triggers, the topic's state, the logs through their tools, the recall report's fixes, new `EVAL` rows; kit edits proposed by a job, once the user confirms |
 | KB | corrections the session proved; the drift report | each statement through the gate ([§4](#4-the-brain) rule 2), then written through its set's `99`: the statement, the header date, the register's state, a change-log line |
 | Scratchpad | the index as the root set | a collection: a file no open task points at (a code span naming it exactly) is read, its true content folded, and moved to the Trash; every done task of any session has its decisions settled with the user, its proved content folded through the gate, its files trashed and its entry deleted; open tasks rewritten to State and Next; anything changed after the run started is live work and stays; agent reports fold only when stamped `verified`; friction lines turned into changes |
-| Indexes | every file written | `MEMORY.md`, each set's `00`, the day's `INDEX.md`, and, in a folder the Files tab shows, the folder's `index` file and the `listedIn` lines ([§3.2](#32-the-files-tab)); an index check after each write |
+| Indexes | every file written | `MEMORY.md`, each set's `00`, the day's `INDEX.md`, and, in a folder the tabs show, the folder's `index` file and the `listedIn` lines ([§3.2](#32-the-kit-brain-and-scratchpad-tabs)); an index check after each write |
 | Report | the snapshot | the index before and after, lines changed per file, files only appended to, budget warnings, decisions held or settled; four lines at most |
 
 ### 6.4 Why it is built this way
@@ -762,7 +766,7 @@ user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windo
    ([§3.3](#33-back-up-the-brain-and-the-kit)).
 8. **Sign the kit in.** The kit is a Claude Code config folder of its own, signed in once: ask the user to run, in
    their own terminal, the commands of [§3.1 *Signing in*](#31-the-root), and to report the account they name.
-9. **Restart comando** when it runs, so it finds the kit: the KIT and BRAIN rows appear in the Files tab, and every
+9. **Restart comando** when it runs, so it finds the kit: the KIT and BRAIN rows appear in the Kit and Brain tabs, and every
    session's Checkpoint answers through the `reflect` skill. The KIT row has no Jobs row, as this kit has no jobs and no
    jobs tool ([§3.5](#35-scheduled-jobs)). Report what was created, in a table.
 
@@ -771,7 +775,7 @@ user's own `~/.claude` is never written. Paths are for macOS and Linux; on Windo
 **What Claude Code and comando load.**
 
 `K/comando-kit.json`: the kit's folder as the KIT row, the brain's three folders as the BRAIN row
-([§3.2](#32-the-files-tab)).
+([§3.2](#32-the-kit-brain-and-scratchpad-tabs)).
 
 ```json
 {
@@ -948,7 +952,7 @@ at most three lines). Otherwise ask the decisions with this run's own, one form 
    changed after this run started is another session's live work and stays. Agent reports fold only when stamped
    `verified`. Turn each `FRICTION.md` line into a change, with the user, and delete the line.
 5. **Indexes.** `MEMORY.md`, each set's `00_START_HERE.md`, the day's `INDEX.md`, and the index files of the folders the
-   Files tab shows; a file without its index line is invisible. `index-check` prints nothing when they are true.
+   Kit, Brain and Scratchpad tabs show; a file without its index line is invisible. `index-check` prints nothing when they are true.
 6. **Report.** `MEMORY.md` before and after, files written, decisions held or settled; four lines at most.
 ```
 
@@ -1030,7 +1034,7 @@ name: writer
 description: Writes code or tests from one agent spec, editing only the files the spec lists, and proves the result with the spec's acceptance.
 ---
 
-You work from one spec. Read it whole first; its Files table is what you may touch, and nothing else.
+You work from one spec. Read it whole first; its Files section is what you may touch, and nothing else.
 
 - Run every row of its Acceptance and report each result, as printed. A row you cannot pass is reported, not reworded.
 - No git writes, no deleting outside what the spec names, nothing that leaves this machine.
@@ -2487,7 +2491,7 @@ fix, never fixed unasked:
 | Check | Passes when |
 |---|---|
 | the manifest | the first command of [§8.1](#81-the-steps) step 6 passes, with `K` and `B` the kit's and brain's real folders, and comando names no left-out folder at start |
-| the Files tab | one folder `"."` alone in group `Kit`; the brain's folders with `root` `brain`, in one group ([§3.2](#32-the-files-tab)) |
+| the Kit and Brain tabs | one folder `"."` alone in group `Kit`; the brain's folders with `root` `brain`, in one group ([§3.2](#32-the-kit-brain-and-scratchpad-tabs)) |
 | the ignore list | the third command of [§8.1](#81-the-steps) step 6 prints `checked` alone; a brain inside the kit is ignored too |
 | retention | `cleanupPeriodDays` set high, or a sweep that spares comando's sessions |
 | compaction | `autoCompactWindow` unset or above comando's threshold |

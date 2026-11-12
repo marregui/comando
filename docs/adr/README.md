@@ -138,7 +138,7 @@ row and its record differ, or when a record has no row.
 | [115](0115-the-lower-divider-per-panel.md) | The lower divider is each panel's | 2026-10-28 | Miguel and Claude | accepted; amended on 2026-10-29 (see Amendments) |
 | [116](0116-one-connection-toggle.md) | A panel's connection is one toggle and its name, first of the tools | 2026-10-28 | Miguel and Claude | accepted |
 | [117](0117-kit-jobs-a-row-and-a-window.md) | The kit's scheduled jobs: a row in the Kit group and a window; the manifest is their record | 2026-10-28 | Miguel and Claude | accepted; the Jobs row moved inside KIT by [record 118](0118-brain-and-kit-are-rows-each-one-unit.md) |
-| [118](0118-brain-and-kit-are-rows-each-one-unit.md) | BRAIN and KIT are rows of the Files tab, each one unit: its changes and its backup at its row alone | 2026-10-28 | Miguel and Claude | accepted |
+| [118](0118-brain-and-kit-are-rows-each-one-unit.md) | BRAIN and KIT are rows of the Files tab, each one unit: its changes and its backup at its row alone | 2026-10-28 | Miguel and Claude | accepted; the row "a group" amended by [record 152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) |
 | [119](0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md) | Fewer marks: BRAIN and KIT without icons and with their commit, the kit off the status bar, Locate, no thinking mark | 2026-10-28 | Miguel and Claude | accepted |
 | [120](0120-the-context-follows-each-model-call.md) | The session bar's context follows each model call, and a restart keeps it | 2026-10-29 | Miguel and Claude | accepted |
 | [121](0121-an-agent-has-every-action-the-user-has.md) | An agent has every action the user has: one registry of actions, a parity test, two rules | 2026-10-29 | Miguel and Claude | accepted; increment 1 built, increments 2–4 proposed (§3); amended 2026-11-01 (see Amendments: rule 1 covers the asker's whole creation family) |
@@ -172,3 +172,4 @@ row and its record differ, or when a record has no row.
 | [149](0149-questdb-is-the-only-metrics-store.md) | QuestDB is the only metrics store | 2026-11-10 | Miguel and Claude | accepted; built |
 | [150](0150-a-card-only-when-a-session-cannot-go-on.md) | A card only when a session cannot go on; the Logbook tab lists what waits on the user | 2026-11-10 | Miguel and Claude | accepted; built |
 | [151](0151-a-theme-has-a-style-the-console.md) | A theme has a style: the console | 2026-11-11 | Miguel and Claude | accepted; built |
+| [152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) | The Files tab splits into the Kit, Brain and Scratchpad tabs | 2026-11-12 | Miguel and Claude | accepted |

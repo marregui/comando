@@ -76,7 +76,7 @@ public final class FoldersDialog {
      * brain, each anywhere (Miguel's decision of 2026-11-01), so no one folder names them.
      */
     public static String title() {
-        return "Files tab folders";
+        return "Sidebar folders";
     }
 
     /**

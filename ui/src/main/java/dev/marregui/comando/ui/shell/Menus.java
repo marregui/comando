@@ -12,6 +12,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.panels.SessionsSidebar;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
 import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
@@ -102,7 +103,7 @@ final class Menus {
             Map.entry("view.find", "Find text in the view that has the keyboard"),
             Map.entry("view.findNext", "Go to the next match of the find bar's text"),
             Map.entry("view.findPrevious", "Go to the previous match of the find bar's text"),
-            Map.entry("view.findInFiles", "Search the Files tab's folders and the stored conversations"),
+            Map.entry("view.findInFiles", "Search the sidebar's folders and the stored conversations"),
             Map.entry("view.nextHit", "Show the search's next hit in the preview tab"),
             Map.entry("view.previousHit", "Show the search's previous hit in the preview tab"),
             Map.entry("view.palette", "Run any command by typing part of its name"),
@@ -173,6 +174,18 @@ final class Menus {
             buttons.add(List.of("edge.start", "edge.stop"));
         }
         return List.copyOf(buttons);
+    }
+
+    /**
+     * The window's commands a folder tab's menu gains (record 152): the folders window in each, the kit jobs window in
+     * the Kit tab alone; none for another tab.
+     */
+    static List<String> folderTab(final int tab) {
+        return switch (tab) {
+            case SessionsSidebar.KIT -> List.of("files.settings", "files.jobs");
+            case SessionsSidebar.BRAIN, SessionsSidebar.SCRATCHPAD -> List.of("files.settings");
+            default -> List.of();
+        };
     }
 
     /** The Connections tab's menu: the embedded server's start and stop, then the Edge's, each when comando has one. */

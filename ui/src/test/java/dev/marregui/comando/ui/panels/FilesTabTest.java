@@ -253,7 +253,7 @@ class FilesTabTest {
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of()));
 
         f.render();
-        assertThat(f.labels()).containsExactly("No folders yet: right-click the Files tab to add some");
+        assertThat(f.labels()).containsExactly("No folders yet: right-click the tab to add some");
     }
 
     /// Typing a filter reads the folders never read once; matching folders stay closed, a filter with no match says so,

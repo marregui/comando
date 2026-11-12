@@ -72,7 +72,7 @@ class ReducerChangesTest {
         apply(new Intent.SaveFolders(List.of(notes, kb), List.of(kb)));
         assertThat(state.folders()).containsExactly(notes, kb);
         assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(notes, kb)), new Effect.WatchRepos(List.of(notes, kb), false));
-        assertThat(state.notice().text()).isEqualTo("Saved the Files tab's folders");
+        assertThat(state.notice().text()).isEqualTo("Saved the sidebar's folders");
 
         apply(new Intent.SaveFolders(List.of(kb), List.of(kb)));
         assertThat(state.notice().text()).contains("replacing a change to folders.json");

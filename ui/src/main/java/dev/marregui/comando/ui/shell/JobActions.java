@@ -65,7 +65,7 @@ final class JobActions {
         if (deps.setup().root().kit().isEmpty()) {
             return;
         }
-        timer = new ShownTimer(bar.filesComponent(), LOOK_MILLIS, this::look);
+        timer = new ShownTimer(bar.kitComponent(), LOOK_MILLIS, this::look);
         timer.want(true);
         refresh();
     }

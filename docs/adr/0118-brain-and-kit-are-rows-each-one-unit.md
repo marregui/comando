@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted | Miguel and Claude |
+| 2026-10-28 | accepted; the row "a group" amended by [record 152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) | Miguel and Claude |
 
 ## 1. Context
 

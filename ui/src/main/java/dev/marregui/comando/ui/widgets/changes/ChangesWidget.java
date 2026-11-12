@@ -55,7 +55,7 @@ import dev.marregui.comando.ui.widget.capability.Copyable;
 public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
 
     /** What the view shows when the Files tab's folders hold no git repository. */
-    static final String NO_REPOS = "No git repository in the Files tab's folders";
+    static final String NO_REPOS = "No git repository in the sidebar's folders";
     /** What a view of one repository shows while that repository is not among those read. */
     static final String NOT_WATCHED = "Not read as a git repository: ";
     /** The three groups of a repository's row, in this order: what changed, what is new and untracked, what went. */

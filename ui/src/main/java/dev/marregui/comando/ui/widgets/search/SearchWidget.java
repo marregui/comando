@@ -79,7 +79,8 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
     private final JToggleButton conversations = toggle("session", "Conversations",
             "Search the stored conversations of Claude Code");
     private final JTextField field = new JTextField();
-    private final JToggleButton files = toggle("files", "Files", "Search the folders of the Files tab");
+    private final JToggleButton files = toggle("files", "Files",
+            "Search the folders of the Kit, Brain and Scratchpad tabs");
     private final JLabel foot = Plain.only(new JLabel(" "));
     private final Timer gather = new Timer(GATHER_MILLIS, _ -> {
         build();
@@ -518,7 +519,7 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
         menu.add(item(hit.kind() == SearchHit.Kind.CONVERSATION && !hub.opener().inSession(hit.conversation())
                 ? "Import…" : "Open", "open-file", () -> activate(n)));
         if (hit.kind() != SearchHit.Kind.CONVERSATION) {
-            menu.add(item("Show in Files tab", "files", () -> hub.opener().showInFiles(hit)));
+            menu.add(item("Show in the sidebar", "files", () -> hub.opener().showInFiles(hit)));
         }
         menu.show(e.getComponent(), e.getX(), e.getY());
     }

@@ -92,7 +92,7 @@ final class KitActions {
             if (root.kit().isPresent() && newest.isPresent() && !newest.get().equals(announced)) {
                 announced = newest.get();
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, now.version().label(root.name())
-                        + ": " + UPGRADE + " in the KIT row's menu of the Files tab or the palette", false));
+                        + ": " + UPGRADE + " in the KIT row's menu of the Kit tab or the palette", false));
             }
         });
     }

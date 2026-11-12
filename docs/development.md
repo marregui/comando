@@ -23,7 +23,7 @@ how the code is organised is in [Architecture](architecture.md).
 | macOS | the login keychain, `:app:dmg` | everything else runs on Linux too, with Ctrl for ⌘ ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)). CI builds and tests on macOS and Linux; Windows has a package, built by the release workflow, and no test run |
 | IntelliJ IDEA's `idea` launcher | "Open in IntelliJ" | optional; without it a file opens in the system's default application |
 | `mmdc` (Mermaid CLI) | diagrams in Markdown previews | optional; looked for on the `PATH`, under `~/.nvm`, in `/opt/homebrew/bin` and `/usr/local/bin`; without it a Mermaid block is not drawn |
-| folders of documents | the sidebar's Files tab | optional; at first the kit's folders when there is a kit, else Claude Code's folder, until you choose your own ([Kit and brain §3](kit-and-brain.md#3-comando-and-a-kit)); a configured folder that is missing says so in its row |
+| folders of documents | the sidebar's Kit, Brain and Scratchpad tabs | optional; at first the kit's folders when there is a kit, else Claude Code's folder, until you choose your own ([Kit and brain §3](kit-and-brain.md#3-comando-and-a-kit)); a configured folder that is missing says so in its row |
 | `gradle-serial` on the `PATH` | Run Gradle tasks (⌥⌘G), queued per checkout | optional; comando ships none. Found on comando's `PATH`, a run goes through it; else a run is the checkout's `./gradlew` |
 
 ## 2. Gradle tasks
@@ -80,7 +80,7 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 |---|---|
 | `UiReplayTest` | recorded intent logs replayed against the window, every adapter a recording fake; the window shows what the final state says |
 | `UiKeysTest` | the keyboard with macOS's keys and with the other desktops' (`comando.keys`): no two commands share a key, Ctrl with a letter reaches the terminal's shell, the run keys run, every text names this desktop's keys ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)) |
-| `TreeClicksUiTest` | a tree that opens a folder on one click, as the Files tab's; a window started on a kit's root opens on the kit's folders |
+| `TreeClicksUiTest` | a tree that opens a folder on one click, as the folder tabs'; a window started on a kit's root opens on the kit's folders |
 | `DarkPageTintUiTest` | a rendered Markdown page takes a newly chosen tint at once, as the transcript does |
 | `ThreadBudgetTest` | comando's own platform threads stay within their budget with the processor count plus four fake sessions running ([record 82](adr/0082-threads-by-kind-with-a-budget.md)) |
 | `CheckpointCompactUiTest` | the Checkpoint button against a stand-in for `claude -p`: the checkpoint, then `/compact` once its turn has finished, the conversation and the Session tab kept, nothing carried, the panel's text kept ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
@@ -93,7 +93,7 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 | `DiffThemeUiTest` | the comparison window opens on the theme chosen, its texts and rendered sides, and follows the next ([record 135](adr/0135-the-comparison-follows-the-theme-and-lies-level.md)) |
 | `ConsoleStyleUiTest` | a console theme frames the four regions and shows the plan usage and the context as gauges; a plain theme's bounds are the same after the console was chosen and left ([record 151](adr/0151-a-theme-has-a-style-the-console.md)) |
 | `LowerDividerUiTest` | the divider above the lower panel is each panel's own ([record 115](adr/0115-the-lower-divider-per-panel.md)) |
-| `LocateUiTest` | a panel's Locate button selects its file in the Files tab or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
+| `LocateUiTest` | a panel's Locate button selects its file in the tab whose folder holds it or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
 | `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |
 | `LayoutKeeperUiTest` | the sidebar's width kept in `settings.json` comes back at the start (a value that is no number gives the default); a session's arrangement hides the sidebar to its rail and shows it again at its kept width; the width left is saved a second after the window last changed size and the next window opens with it; a close without the quit flow, as on the shutdown hook's path, keeps a width moved just before |
 | `QuitTeardownUiTest` | a step of the window's teardown or close that throws stops neither the quit nor the closing of the window's errands |
@@ -318,7 +318,7 @@ becomes a link. A document that is not the owner keeps only what its reader need
 | what the user does with a database: connections, cancel, results, plots, the schema explorer | [Workbench](workbench.md) §3 |
 | instances, the comando Edge, what travels between instances and the question protocol | [Workbench](workbench.md) §4 |
 | the terminal and Gradle runs (command, output bound, stop) | [Workbench](workbench.md) §5 |
-| the Files tab and git changes | [Workbench](workbench.md) §6 |
+| the Kit, Brain and Scratchpad tabs and git changes | [Workbench](workbench.md) §6 |
 | what is kept on disk: the data root and each file in it | [Workbench](workbench.md) §7 |
 | Find in files: the Search view, its viewer, its keys, what a hit opens | [Workbench](workbench.md) §1.2 |
 | the `claude -p` process contract: arguments, MCP configuration, stderr, threads; the stored conversations and their search; what a session works on, read from its writes | [Claude Code](claude-code.md) §1 |

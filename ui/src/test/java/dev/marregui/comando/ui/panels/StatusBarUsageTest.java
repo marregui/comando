@@ -2,8 +2,13 @@ package dev.marregui.comando.ui.panels;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
@@ -21,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 /// [StatusBar]'s plan-usage labels: one per CLI, each window's percentage, coloured by how near its limit.
-/// - the text starts with the plan's name, lists each window and says when the session window resets
+/// - the text starts with the plan's name, lists each window and says when the session window resets, and the week's
+///   on which weekday, its year the one nearest the read
 /// - a read without a session window says so in the tooltip
 /// - a failed read keeps the last good numbers, muted, and says why in the tooltip
 /// - the second CLI's read has a label of its own after the first, and its failure leaves the first alone
@@ -31,18 +37,65 @@ import static org.assertj.core.api.Assertions.tuple;
 /// - a theme change swaps the label and the gauges at once, keeping the last read, while the bar is in a window
 class StatusBarUsageTest {
 
+    /// Noon on 2026-10-14 where the test runs: the reads' time, so the resets' dates fall in 2026.
+    private static final long OCT_14_2026 = at(2026, 10, 14);
     private static final PlanUsage READ = new PlanUsage(List.of(
             new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm (Europe/Madrid)"),
             new PlanUsage.Window("Week", 43, "Oct 15 at 1:59pm (Europe/Madrid)"),
-            new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)")), 1L, "");
+            new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)")), OCT_14_2026, "");
+    private static final String READ_TEXT = "Claude Session 5% (resets 7:19pm) · Week 43% (resets "
+            + weekday(2026, 10, 15) + " 1:59pm) · Fable 17%";
 
     /// [StatusBar#usageText] joins the windows with the session's reset time; [StatusBar#resetTime] takes the clock
     /// time out of a dated reset and returns empty for a relative one.
     @Test
     void theBarShowsEachWindowAndWhenTheSessionResets() {
-        assertThat(StatusBar.usageText(READ)).isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+        assertThat(StatusBar.usageText(READ)).isEqualTo(READ_TEXT);
         assertThat(StatusBar.resetTime("Oct 15 at 1:59pm (Europe/Madrid)")).isEqualTo("1:59pm");
         assertThat(StatusBar.resetTime("in 3 hours")).isEmpty();
+    }
+
+    /// Claude's week window says the weekday it resets on and the time; the session window keeps the time alone and
+    /// the model's week says nothing. 2026-10-15 is a Thursday by `java.time`.
+    @Test
+    void claudesWeekSaysTheWeekdayItResetsOn() {
+        assertThat(weekday(2026, 10, 15)).isEqualTo("Thu");
+        assertThat(StatusBar.usageText(READ))
+                .isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%");
+    }
+
+    /// Codex's week reset, worded "Oct 15 at 13:00", says the weekday and its 24-hour time.
+    @Test
+    void codexsWeekSaysTheWeekdayItResetsOn() {
+        final PlanUsage codex = new PlanUsage(PlanUsage.CODEX,
+                List.of(new PlanUsage.Window("Session", 4, "Oct 14 at 12:06"),
+                        new PlanUsage.Window("Week", 3, "Oct 15 at 13:00")), OCT_14_2026, "");
+        assertThat(StatusBar.usageText(codex)).isEqualTo("Codex Session 4% (resets 12:06) · Week 3% (resets "
+                + weekday(2026, 10, 15) + " 13:00)");
+    }
+
+    /// The reset text has no year: a December read of "Jan 2" is next year's Jan 2, a January read of "Dec 30" last
+    /// year's, each weekday by `java.time` and different from the same date in the read's own year.
+    @Test
+    void aResetAcrossTheNewYearTakesTheNearestYear() {
+        assertThat(StatusBar.weekReset("Jan 2 at 1pm (Europe/Madrid)", at(2026, 12, 20)))
+                .isEqualTo(weekday(2027, 1, 2) + " 1pm")
+                .isNotEqualTo(weekday(2026, 1, 2) + " 1pm");
+        assertThat(StatusBar.weekReset("Dec 30 at 13:00", at(2026, 1, 3)))
+                .isEqualTo(weekday(2025, 12, 30) + " 13:00")
+                .isNotEqualTo(weekday(2026, 12, 30) + " 13:00");
+    }
+
+    /// A week reset without a date it can read shows the time alone; one without a time, or none at all, shows nothing.
+    @Test
+    void aWeekResetWithoutADateShowsTheTimeAlone() {
+        assertThat(StatusBar.weekReset("soon at 1:59pm (Europe/Madrid)", OCT_14_2026)).isEqualTo("1:59pm");
+        assertThat(StatusBar.weekReset("in 3 hours", OCT_14_2026)).isEmpty();
+        assertThat(StatusBar.usageText(
+                new PlanUsage(List.of(new PlanUsage.Window("Week", 43, "soon at 1:59pm")), OCT_14_2026, "")))
+                .isEqualTo("Claude Week 43% (resets 1:59pm)");
+        assertThat(StatusBar.usageText(new PlanUsage(List.of(new PlanUsage.Window("Week", 43, "")), OCT_14_2026, "")))
+                .isEqualTo("Claude Week 43%");
     }
 
     /// Claude Code lists no window the server reports no limit for: a read of the weeks alone shows them and the
@@ -55,8 +108,9 @@ class StatusBarUsageTest {
         SwingUtilities.invokeAndWait(() -> {
             final StatusBar bar = new StatusBar(intent -> {
             });
-            bar.planUsage(new PlanUsage(weeks, 1L, ""));
-            assertThat(bar.usageLabel().getText()).isEqualTo("Claude Week 25% · Fable 0%");
+            bar.planUsage(new PlanUsage(weeks, OCT_14_2026, ""));
+            assertThat(bar.usageLabel().getText())
+                    .isEqualTo("Claude Week 25% (resets " + weekday(2026, 11, 12) + " 1pm) · Fable 0%");
             assertThat(bar.usageLabel().getToolTipText()).contains("Claude Code's /usage reports no session window");
 
             bar.planUsage(new PlanUsage(PlanUsage.CODEX, weeks, 1L, ""));
@@ -79,12 +133,12 @@ class StatusBarUsageTest {
 
         SwingUtilities.invokeAndWait(() -> bar.planUsage(READ));
         assertThat(label.isVisible()).isTrue();
-        assertThat(label.getText()).isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+        assertThat(label.getText()).isEqualTo(READ_TEXT);
         assertThat(label.getToolTipText()).contains("Fable: 17% used, resets Oct 15 at 1:59pm (Europe/Madrid)").doesNotContain("failed");
 
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed("<b>timeout</b>", 3L)));
         assertThat(label.getText()).as("the last good read stays")
-                .isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+                .isEqualTo(READ_TEXT);
         assertThat(label.getForeground()).isEqualTo(Theme.MUTED);
         assertThat(label.getToolTipText()).contains("failed: &lt;b&gt;timeout&lt;/b&gt;");
     }
@@ -96,25 +150,27 @@ class StatusBarUsageTest {
         final StatusBar bar = new StatusBar(intent -> {
         });
         final PlanUsage codex = new PlanUsage(PlanUsage.CODEX, List.of(new PlanUsage.Window("Session", 4, "Oct 27 at 12:06"),
-                new PlanUsage.Window("Week", 92, "Nov 2 at 14:15")), 1L, "");
+                new PlanUsage.Window("Week", 92, "Nov 2 at 14:15")), OCT_14_2026, "");
+        final String codexText = "Codex Session 4% (resets 12:06) · Week 92% (resets " + weekday(2026, 11, 2)
+                + " 14:15)";
         SwingUtilities.invokeAndWait(() -> bar.planUsage(READ));
         SwingUtilities.invokeAndWait(() -> bar.planUsage(codex));
-        assertThat(StatusBar.usageText(codex)).isEqualTo("Codex Session 4% (resets 12:06) · Week 92%");
+        assertThat(StatusBar.usageText(codex)).isEqualTo(codexText);
         assertThat(bar.codexUsageLabel().isVisible()).isTrue();
         assertThat(bar.usageLabel().getAccessibleContext().getAccessibleName()).isEqualTo("Claude plan usage");
         assertThat(bar.codexUsageLabel().getAccessibleContext().getAccessibleName()).isEqualTo("Codex plan usage");
-        assertThat(bar.codexUsageLabel().getText()).isEqualTo("Codex Session 4% (resets 12:06) · Week 92%");
+        assertThat(bar.codexUsageLabel().getText()).isEqualTo(codexText);
         assertThat(bar.codexUsageLabel().getForeground()).isEqualTo(Theme.DANGER);
         assertThat(bar.codexUsageLabel().getToolTipText()).contains("Week: 92% used, resets Nov 2 at 14:15").contains("from codex app-server");
         assertThat(bar.usageLabel().getText()).as("Claude's label keeps its own read")
-                .isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+                .isEqualTo(READ_TEXT);
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.MUTED);
         final int[] order = {bar.usageLabel().getParent().getComponentZOrder(bar.usageLabel()),
                 bar.usageLabel().getParent().getComponentZOrder(bar.codexUsageLabel())};
         assertThat(order[0]).as("Claude's first, then Codex's").isLessThan(order[1]);
 
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed(PlanUsage.CODEX, "timeout", 2L)));
-        assertThat(bar.codexUsageLabel().getText()).as("the last good Codex read stays").isEqualTo("Codex Session 4% (resets 12:06) · Week 92%");
+        assertThat(bar.codexUsageLabel().getText()).as("the last good Codex read stays").isEqualTo(codexText);
         assertThat(bar.codexUsageLabel().getForeground()).isEqualTo(Theme.MUTED);
         assertThat(bar.usageLabel().getToolTipText()).as("a Codex failure is not Claude's").doesNotContain("failed");
     }
@@ -154,7 +210,7 @@ class StatusBarUsageTest {
             assertThat(gauges).extracting(Gauge::fill).containsOnly(Theme.MUTED);
             assertThat(gauges).extracting(Gauge::getToolTipText).containsOnly(bar.usageLabel().getToolTipText());
             assertThat(bar.usageLabel().isVisible()).as("the gauges stand for it").isFalse();
-            assertThat(bar.usageLabel().getText()).isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+            assertThat(bar.usageLabel().getText()).isEqualTo(READ_TEXT);
         });
     }
 
@@ -205,7 +261,7 @@ class StatusBarUsageTest {
             bar.planUsage(READ);
             assertThat(showing(bar.component())).isEmpty();
             assertThat(bar.usageLabel().isVisible()).isTrue();
-            assertThat(bar.usageLabel().getText()).isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+            assertThat(bar.usageLabel().getText()).isEqualTo(READ_TEXT);
             assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.MUTED);
         });
     }
@@ -236,6 +292,16 @@ class StatusBarUsageTest {
         });
     }
 
+
+    /// Noon on the given day in the system zone, as epoch milliseconds: the zone [StatusBar] reads a reset's year in.
+    private static long at(final int year, final int month, final int day) {
+        return LocalDateTime.of(year, month, day, 12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+
+    /// The English short weekday of the given date by `java.time`: "Thu".
+    private static String weekday(final int year, final int month, final int day) {
+        return LocalDate.of(year, month, day).getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH);
+    }
 
     /// The gauges under `root` that show: each, and every container up to `root`, visible.
     private static List<Gauge> showing(final JComponent root) {

@@ -164,7 +164,7 @@ public final class FoldersEditor {
         this.repos = repos;
         this.chooser = chooser;
         add = FormRows.tool("add", "Add a folder: choose it inside " + configShown());
-        remove = FormRows.tool("close", "Take the selected folder out of the Files tab; nothing on disk changes");
+        remove = FormRows.tool("close", "Take the selected folder out of the sidebar; nothing on disk changes");
         up = FormRows.tool(new JButton("↑"), KeyText.of("Move the selected folder up (⌥↑)"));
         down = FormRows.tool(new JButton("↓"), KeyText.of("Move the selected folder down (⌥↓)"));
         for (final FolderRoot f : folders) {
@@ -563,7 +563,7 @@ public final class FoldersEditor {
         chooseListing.addActionListener(e -> chooseInFolder("listing").ifPresent(f -> listedIn.setText(f.getFileName().toString())));
 
         final String home = configShown();
-        form.row("Name", name, name, NAME, "The row's name in the Files tab; unique");
+        form.row("Name", name, name, NAME, "The row's name in the sidebar; unique");
         form.row("Folder", FormRows.withButton(path, choosePath), path, PATH,
                 "The folder the row shows; chosen with …, only inside " + home);
         form.row("Index file", FormRows.withButton(index, chooseIndex), index, INDEX,
@@ -577,7 +577,7 @@ public final class FoldersEditor {
                                 + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
         form.row("Icon", icon, icon, ICON, "The icon of the folder's row");
         form.row("Trash", deletable, deletable, DELETABLE,
-                "Whether the Files tab moves the folder's files and subfolders to the Trash; never the folder");
+                "Whether the sidebar moves the folder's files and subfolders to the Trash; never the folder");
         form.row("Listed in", FormRows.withButton(listedIn, chooseListing), listedIn, LISTED_IN,
                 FormRows.lines(
                         "The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
@@ -586,7 +586,7 @@ public final class FoldersEditor {
                         "Empty, or Trash off: no file is changed"));
         form.row("Group", group, group, GROUP,
                 FormRows.lines(
-                        "A header the Files tab shows above this folder and the folders after it in the same group,"
+                        "A header the sidebar shows above this folder and the folders after it in the same group,"
                                 + " such as Brain",
                         "The folders stay where they are: nothing nests, nothing opens or closes",
                         "Empty: the folder is in no group"));

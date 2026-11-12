@@ -156,35 +156,35 @@ public final class Snapshot {
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
         click("Edit");
-        // the sidebar's Files tab, clicked as a user would: the folders as rows, the first opened as by a click
-        selectSidebarTab("Files");
+        // the sidebar's Scratchpad tab, clicked as a user would: its folder as a row, opened as by a click
+        selectSidebarTab("Scratchpad");
         SwingUtilities.invokeAndWait(() -> {
-            final JTree files = tree("Files");
+            final JTree files = tree("Scratchpad");
             if (files != null) {
                 files.expandRow(0);
             }
         });
         // opening the row opens no panel; its tree is read meanwhile
-        await(loop, st -> rowShown("Files", "INDEX.md"), 10_000);
+        await(loop, st -> rowShown("Scratchpad", "INDEX.md"), 10_000);
         shoot(out.resolve("02c-sidebar-files.png"));
         // its filter, typed as a user would, then cleared; it applies on the event thread: done when the call returns
         SwingUtilities.invokeAndWait(() -> filesFilter().setText("lane"));
         shoot(out.resolve("02c2-sidebar-files-filter.png"));
         SwingUtilities.invokeAndWait(() -> filesFilter().setText(""));
         // the memory: its index leads it, and a double click opens it rendered, to edit like any file
+        selectSidebarTab("Kit");
         SwingUtilities.invokeAndWait(() -> {
-            final JTree files = tree("Files");
+            final JTree files = tree("Kit");
             if (files != null) {
-                files.collapseRow(0);
-                files.expandRow(1);
-                files.setSelectionRow(1);
+                files.expandRow(0);
+                files.setSelectionRow(0);
             }
         });
-        await(loop, st -> rowShown("Files", "MEMORY.md"), 10_000);
+        await(loop, st -> rowShown("Kit", "MEMORY.md"), 10_000);
         SwingUtilities.invokeAndWait(() -> {
-            final JTree files = tree("Files");
+            final JTree files = tree("Kit");
             if (files != null) {
-                final Rectangle row = files.getRowBounds(2);
+                final Rectangle row = files.getRowBounds(1);
                 files.dispatchEvent(new MouseEvent(files, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0,
                         row.x + 4, row.y + row.height / 2, 2, false, MouseEvent.BUTTON1));
             }
@@ -298,9 +298,9 @@ public final class Snapshot {
         shootDialog("About comando", out.resolve("02k-about.png"));
         // a git repository among the folders: the Files tab in git's colours, the Changes view beside the editor, and a
         // changed file compared side by side in the window that floats over comando's
-        selectSidebarTab("Files");
+        selectSidebarTab("Kit");
         SwingUtilities.invokeAndWait(() -> {
-            final JTree files = tree("Files");
+            final JTree files = tree("Kit");
             for (int i = 0; files != null && i < files.getRowCount(); i++) {
                 if (files.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                         && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals("Repo")) {
@@ -308,9 +308,9 @@ public final class Snapshot {
                 }
             }
         });
-        await(loop, st -> rowShown("Files", "src"), 10_000);
+        await(loop, st -> rowShown("Kit", "src"), 10_000);
         SwingUtilities.invokeAndWait(() -> {
-            final JTree files = tree("Files");
+            final JTree files = tree("Kit");
             for (int i = 0; files != null && i < files.getRowCount() && i < 60; i++) {
                 if (files.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                         && n.getUserObject() instanceof ViewSpec.TreeNode node && !node.children().isEmpty()) {
@@ -319,10 +319,10 @@ public final class Snapshot {
             }
         });
         // the repository's row: git icon and flag; a double click opens the Changes view and leaves the row open
-        await(loop, st -> rowExpanded("Files", "Repo") && repoMarked(), 15_000);
-        SwingUtilities.invokeAndWait(() -> doubleClickRow(tree("Files"), "Repo"));
+        await(loop, st -> rowExpanded("Kit", "Repo") && repoMarked(), 15_000);
+        SwingUtilities.invokeAndWait(() -> doubleClickRow(tree("Kit"), "Repo"));
         await(loop, st -> st.views().stream().anyMatch(v -> v.spec() instanceof ViewSpec.Changes), 10_000);
-        if (!rowExpanded("Files", "Repo")) {
+        if (!rowExpanded("Kit", "Repo")) {
             throw new IllegalStateException("the double click closed the repository's row");
         }
         await(loop, st -> rowShown(ViewSpec.Changes.TITLE, "Lane.java"), 15_000);
@@ -457,7 +457,7 @@ public final class Snapshot {
     }
 
     /**
-     * Sample folders for the Files tab, written as {@code folders.json} before the start: a scratchpad of two days
+     * Sample folders for the folder tabs, written as {@code folders.json} before the start: a scratchpad of two days
      * whose index is {@code INDEX.md}, a knowledge base with build output the tab leaves out, a memory whose
      * index leads it, a folder of skills and one of a plugin, so every folder icon shows, and a git repository with
      * changes; answers the repository.
@@ -556,12 +556,12 @@ public final class Snapshot {
         return open[0];
     }
 
-    /** Whether the Files tab knows the sample repository, so its row has the git icon and the flag. */
+    /** Whether the Kit tab knows the sample repository, so its row has the git icon and the flag. */
     static boolean repoMarked() {
         final boolean[] marked = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
-                final JTree t = tree("Files");
+                final JTree t = tree("Kit");
                 for (int i = 0; t != null && i < t.getRowCount(); i++) {
                     if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                             && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals("Repo")) {
@@ -626,7 +626,7 @@ public final class Snapshot {
     }
 
     /**
-     * Runs the Files tab's command {@code id} as the user would: a right click on the tab's header, then its item in
+     * Runs the Kit tab's command {@code id} as the user would: a right click on the tab's header, then its item in
      * the menu that opens. EDT only.
      */
     static void findCommand(final String id) {
@@ -636,7 +636,7 @@ public final class Snapshot {
         };
         for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
-                final AbstractButton tab = named(jf, "Files");
+                final AbstractButton tab = named(jf, "Kit");
                 if (tab != null) {
                     tab.dispatchEvent(new MouseEvent(tab, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0, 4, 4, 1, true, MouseEvent.BUTTON3));
                     for (final Window w : Window.getWindows()) {
@@ -720,11 +720,12 @@ public final class Snapshot {
         return shown[0];
     }
 
-    /** The Files tab's filter field in the visible window. */
+    /** The filter field of the folder tab that shows in the visible window. */
     private static JTextField filesFilter() {
         for (final Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
-                final JTextField t = find(jf.getContentPane(), JTextField.class, x -> "Filter files".equals(x.getAccessibleContext().getAccessibleName()));
+                final JTextField t = find(jf.getContentPane(), JTextField.class,
+                        x -> "Filter files".equals(x.getAccessibleContext().getAccessibleName()) && x.isShowing());
                 if (t != null) {
                     return t;
                 }

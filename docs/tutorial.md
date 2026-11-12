@@ -40,19 +40,19 @@ repository:
 ```
 
 The window opens with one panel, **scratch**, holding a short welcome text. With a kit, which the install offers to
-create for you from the docs (`INSTALL.md` §5), the sessions run on the kit, and the Files tab opens on its folders,
-its KIT row naming the kit's commit.
+create for you from the docs (`INSTALL.md` §5), the sessions run on the kit, and the Kit and Brain tabs show its folders,
+the KIT row naming the kit's commit.
 
 | Part | What it is |
 |---|---|
 | **Menu bar** | **Edit**, **Find** (the finds of the view in front, and **Find in files…**), and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Tab row's right end** | stop refreshing plots, start or stop the machine's QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
-| **Sidebar**, left | five tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**, **Logbook**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
+| **Sidebar**, left | seven tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Kit**, **Brain**, **Scratchpad**, **Logbook**, **Instances**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Outline** and **Preview** (Markdown), **Run**, **Stop**, **Locate**, **Clear**; rest the pointer on one for what a click does |
 | **Editor** | where you write SQL and prompts, mixed in one text |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here |
-| **Uncommitted changes**, right, ⌘K | what the Files tab's git repositories hold that their last commits do not ([§1.4](#14-uncommitted-changes)) |
+| **Uncommitted changes**, right, ⌘K | what the git repositories of your folders hold that their last commits do not ([§1.4](#14-uncommitted-changes)) |
 | **Session bar**, under the lower tabs | the focused panel's **session** chip, its icon showing whether it runs and, once the session has written to a repository, that branch and repository; a plug button that starts it, and what it does ([§1.3](#13-the-session-bar)); on the right its model and effort, which you can change there, and its context with the checkpoint button |
 | **Status bar**, bottom | the current message on the left; plan usage and the work running in every session and query on the right ([§1.5](#15-the-status-bar)) |
 
@@ -61,7 +61,7 @@ the panel goes to its connection; anything else goes to its session.
 
 The command palette lists every command that can run now, with its key: press **⌘⇧P**, type a few letters, press
 **⏎**. **⌘⇧/** shows the table of keys: every command's, with its menu or area, then the keys of an approval card and
-of single places (find bar, transcript, sessions list, Files tab, dialogs). **Help ▸ Markdown sheet** shows, beside
+of single places (find bar, transcript, sessions list, folder tabs, dialogs). **Help ▸ Markdown sheet** shows, beside
 the editor, what Markdown the preview draws and how a prompt reaches Claude. Each menu item's tooltip says what it
 does; the menus grey out what cannot run now.
 
@@ -71,7 +71,7 @@ does; the menus grey out what cannot run now.
 |---|---|---|
 | **Sessions** | Claude Code sessions in four groups, each under its heading: **Needs you**, **Working**, **To read** (finished work you have not looked at) and **Idle**; inside a group, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel, and under **To read** opens it at the report; a right click opens its menu, which does the rest; drag a row to order its group yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the ⓘ shows a card of its facts, without a summary; a double click on the name binds the connection to the focused panel |
-| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder, the kit's or the brain's; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a top-level row's right click shows the changes inside it |
+| **Kit**, **Brain**, **Scratchpad** | the folders you choose, in three tabs of one kind: the Scratchpad tab holds the folders with the scratchpad icon, the Brain tab the other folders of the group Brain (KB and Memory, as configured; a folder of the brain that is not configured never shows), the Kit tab every other folder: at first the kit's, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder, the kit's or the brain's; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a top-level row's right click shows the changes inside it |
 | **Logbook** | the open tasks of the scratchpad's newest day folder, read from its `INDEX.md`: first **Needs you**, the tasks that wait on you, then each topic, newest first; a row is the task's name, then its number, the day it started and who asked for it when that is not you | resting the pointer on a row shows its card (when it started, who asked, its ticket, state, next step and ask); a double click opens the task as a page, its tickets linked to Linear and its documents to their files; a right click shows it, opens its tickets in Linear, resumes it in a session, asks you its decisions there, or opens its documents |
 | **Instances** | the other comando instances on this machine and what their sessions are doing, while the comando Edge runs; then the questions they asked each other | a click on a row shows its card |
 
@@ -81,7 +81,8 @@ The tabs' right-click menus:
 |---|---|
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
 | **Connections** | New connection…, starting or stopping the machine's QuestDB and the comando Edge |
-| **Files** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
+| **Kit** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
+| **Brain**, **Scratchpad** | the folders window |
 | **Logbook** | none of its own; a task's row has its own menu |
 | **Instances** | none of its own; an instance's row asks it, refuses its questions or forgets one that left |
 
@@ -128,7 +129,7 @@ so the rest of the session's and the connection's menus: copy details, clone, re
 
 ### 1.4 Uncommitted changes
 
-⌘K shows or hides, in the side pane, what the Files tab's git repositories hold that their last commits do not, in
+⌘K shows or hides, in the side pane, what the git repositories of your folders hold that their last commits do not, in
 three groups (Changed, Untracked, Removed), each by folder.
 
 - Double-click a file to compare it with its last commit, side by side, in a window over comando's; F7 goes to the
@@ -141,8 +142,8 @@ three groups (Changed, Untracked, Removed), each by folder.
 
 On the left, the current message: click it to go where it is about (a failure's line in the log, which flashes);
 right-click it for the recent messages. On the right: your Claude plan's usage (the session window, the week, and a
-model's weekly window where the plan has one; rest the pointer on it for the reset times; read every 20 minutes), then
-Codex's (session, week) when Codex is installed, then the queries and sessions working, the requests waiting for
+model's weekly window where the plan has one, each window saying when it resets, the week with its weekday and time: "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%"; read every 20 minutes), then
+Codex's (session, week; "Codex Session 4% (resets 12:06) · Week 3% (resets Thu 13:00)") when Codex is installed, then the queries and sessions working, the requests waiting for
 approval and the sessions with finished work to read. Click that count for the list; a click on a **to read** line
 opens the session at its report. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
 
@@ -279,7 +280,7 @@ stops working on it, and the connection is ready for the next query.
 
 Results keeps up to 5 000 000 rows of a query. **⌘F** searches the view in front of you (the one with the keyboard,
 else the lower tab in front), **⌘G** and **⌘⇧G** step through the matches, **⌘⇧C** copies the view, **⌘⇧S** exports
-it. **⌘S** saves the panel now; panels also save as you type. **⌘⇧F** finds in the Files tab's folders and the stored
+it. **⌘S** saves the panel now; panels also save as you type. **⌘⇧F** finds in the folders of the Kit, Brain and Scratchpad tabs and the stored
 conversations, in a window of its own: type, choose with ↑ ↓, and ⏎ opens the hit and keeps the window; ⎋ closes it.
 
 When a statement fails, Results shows the database's error as text you can select and copy. When the error names a
@@ -408,7 +409,7 @@ Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 
 | File or folder | Holds |
 |---|---|
-| `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the connections, the sessions, the Files tab's folders, the panels and their bindings |
+| `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the connections, the sessions, the folders of the three folder tabs, the panels and their bindings |
 | `panels/` | each panel's text as a Markdown file named after the panel. **⌘O** opens a file as a panel; edit a panel's file in another editor and the panel shows the change within a second |
 | `settings.json` | the window's kept state: the theme, the window's size and dividers, the sidebar, the last Gradle tasks |
 | `themes/` | your own themes ([§1.6](#16-themes-of-your-own)) |

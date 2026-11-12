@@ -87,9 +87,10 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 
 /**
- * The left column, five tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
+ * The left column, seven tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
  * the rest in its card and its menu; under them, the panels of comando's own that belong to no session:
- * {@link PanelsWithoutSession}), Connections, Files (the folders the user chose, as trees: {@link FilesTab}), Logbook
+ * {@link PanelsWithoutSession}), Connections, Kit, Brain and Scratchpad (the folders the user chose, as trees, each
+ * tab the folders its {@link FilesShelf} holds: {@link FilesTab}; record 152), Logbook
  * (the scratchpad's open tasks: {@link LogbookTab}) and Instances ({@link InstancesTab}). No
  * tab has a bar of buttons: a tab's menu adds (and, for sessions, imports and sorts), and a row's menu edits, clones
  * and removes, through the same {@link ResourceActions}. Double-click on a session opens it in a panel
@@ -242,9 +243,11 @@ public final class SessionsSidebar {
             "No connections yet. Right-click the tab to add one.");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
-    public static final int FILES = 2;
-    public static final int LOGBOOK = 3;
-    public static final int INSTANCES = 4;
+    public static final int KIT = 2;
+    public static final int BRAIN = 3;
+    public static final int SCRATCHPAD = 4;
+    public static final int LOGBOOK = 5;
+    public static final int INSTANCES = 6;
 
     private final ResourceActions<SessionState> sessionActions;
     /** The Instances tab (record 124) and what it acts through, set by the window once it has it. */
@@ -283,6 +286,8 @@ public final class SessionsSidebar {
     private BiConsumer<Integer, JPopupMenu> moreForTab = (tab, menu) -> {
     };
     private final Runnable toggle;
+    /** The Kit, Brain and Scratchpad tabs, in that order, from {@link #KIT}; the Kit's holds the kit's jobs. */
+    private final List<FilesTab> folderTabs;
     private final FilesTab files;
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
@@ -491,7 +496,17 @@ public final class SessionsSidebar {
                 restOn(c == null || onIcon ? null : new Rest(true, c.name()));
             }
         });
-        files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
+        // one watch for the three: the intent that reads the open folders names all of them (record 152)
+        final FolderWatch watch = new FolderWatch(intents);
+        final List<FilesTab> made = new ArrayList<>();
+        for (final FilesShelf shelf : FilesShelf.values()) {
+            final FilesTab t = new FilesTab(intents, shelf, watch.part(), dialogs::openFile, dialogs::editFile,
+                    questions);
+            t.name(shelf.title());
+            made.add(t);
+        }
+        folderTabs = List.copyOf(made);
+        files = folderTabs.get(FilesShelf.KIT.ordinal());
         instances = new InstancesTab(intents, () -> instancesPort, () -> cards);
         logbook = new LogbookTab(intents, dialogs::openFile, () -> cards);
         sessionActions = new ResourceActions<>(sessions,
@@ -511,8 +526,9 @@ public final class SessionsSidebar {
         // the sidebar's look (record 98): the transcript's ground, ivory names, the tint for headers and the selection
         SidebarLook.list(sessions);
         SidebarLook.list(connections);
-        tabs.add("Files", "files", "your folders and their git changes; double-click a file to open it",
-                section(files.component()));
+        for (final FilesShelf shelf : FilesShelf.values()) {
+            tabs.add(shelf.title(), shelf.icon(), shelf.tip(), section(folderTabs.get(shelf.ordinal()).component()));
+        }
         tabs.add("Logbook", "logbook", LogbookTab.tip(Logbook.NONE), logbook.component());
         tabs.add("Instances", "instances", "the comando instances on the Edge and the questions between them",
                 instances.component());
@@ -526,12 +542,18 @@ public final class SessionsSidebar {
         railButtons.setLayout(new BoxLayout(railButtons, BoxLayout.Y_AXIS));
         railButtons.setOpaque(false);
         railButtons.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle));
-        final String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"},
-            {"Logbook", "logbook"}, {"Instances", "instances"}};
-        for (int i = 0; i < railTabs.length; i++) {
+        final List<String[]> railTabs = new ArrayList<>();
+        railTabs.add(new String[] {"Sessions", "session"});
+        railTabs.add(new String[] {"Connections", "database"});
+        for (final FilesShelf shelf : FilesShelf.values()) {
+            railTabs.add(new String[] {shelf.title(), shelf.icon()});
+        }
+        railTabs.add(new String[] {"Logbook", "logbook"});
+        railTabs.add(new String[] {"Instances", "instances"});
+        for (int i = 0; i < railTabs.size(); i++) {
             final int tab = i;
             railButtons.add(Box.createVerticalStrut(Theme.SPACE_XS));
-            railButtons.add(ToolButton.of(railTabs[i][1], "Show the sidebar at " + railTabs[i][0], () -> {
+            railButtons.add(ToolButton.of(railTabs.get(i)[1], "Show the sidebar at " + railTabs.get(i)[0], () -> {
                 selectTab(tab);
                 toggle.run();
             }));
@@ -560,8 +582,8 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS}, {@link #FILES}, {@link #LOGBOOK} or
-     * {@link #INSTANCES}.
+     * The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS}, {@link #KIT}, {@link #BRAIN}, {@link #SCRATCHPAD},
+     * {@link #LOGBOOK} or {@link #INSTANCES}.
      */
     public int selectedTab() {
         return tabs.selectedIndex();
@@ -571,15 +593,24 @@ public final class SessionsSidebar {
         tabs.select(tab);
     }
 
-    /** A folder of the Files tab as read; a later read keeps the tree as the user left it. */
+    /** A folder as read, for the folder tab that holds it; a later read keeps the tree as the user left it. */
     public void showFolder(final FolderRoot folder, final ViewSpec.TreeNode tree) {
-        files.show(folder, tree);
+        folderTabs.forEach(t -> t.show(folder, tree));
     }
 
-    /** Shows {@code file} in the Files tab, in front, its folders open and the file selected (record 119). */
+    /**
+     * Shows {@code file} in the folder tab whose folder holds it most closely, in front, its folders open and the file
+     * selected (records 119, 152); one no tab holds is told in the Kit tab.
+     */
     public void revealFile(final Path file) {
-        selectTab(FILES);
-        files.reveal(file);
+        int best = 0;
+        for (int i = 1; i < folderTabs.size(); i++) {
+            if (folderTabs.get(i).holds(file) > folderTabs.get(best).holds(file)) {
+                best = i;
+            }
+        }
+        selectTab(KIT + best);
+        folderTabs.get(best).reveal(file);
     }
 
     /** Brings the Sessions tab to the front with session {@code name} selected and in view (record 119). */
@@ -597,17 +628,17 @@ public final class SessionsSidebar {
 
     /** The kit's root and its newer release, "" when none: the Files tab's KIT row says it (record 119). */
     public void kitRelease(final Path dir, final String newer) {
-        files.kitRelease(dir, newer);
+        folderTabs.forEach(t -> t.kitRelease(dir, newer));
     }
 
     /** The watched git repositories as read: the Files tab colours their files. */
     public void showRepos(final List<RepoStatus> repos) {
-        files.showRepos(repos);
+        folderTabs.forEach(t -> t.showRepos(repos));
     }
 
-    /** The files the user opens: a new file opened once is no longer marked in the Files tab. */
+    /** The files the user opens: a new file opened once is no longer marked in the folder tabs. */
     public void watchOpened(final OpenedFiles opened) {
-        files.watchOpened(opened);
+        folderTabs.forEach(t -> t.watchOpened(opened));
     }
 
     /** Adds the window's own commands to each tab's menu: {@code more} gets the tab and the menu built so far. */
@@ -615,9 +646,9 @@ public final class SessionsSidebar {
         moreForTab = more;
     }
 
-    /** What a folder row's menu in the Files tab gains from the window, after its own items. */
+    /** What a folder row's menu in the folder tabs gains from the window, after its own items. */
     public void onFolderMenu(final BiConsumer<FolderRoot, JPopupMenu> extra) {
-        files.onFolderMenu(extra);
+        folderTabs.forEach(t -> t.onFolderMenu(extra));
     }
 
     /** The kit's jobs as read, on the Files tab's Jobs row; {@link KitJobs#NONE} takes the row away. */
@@ -630,8 +661,8 @@ public final class SessionsSidebar {
         files.onJobs(configure, apply);
     }
 
-    /** The Files tab's body: a timer it owns ticks only while the tab shows. */
-    public JComponent filesComponent() {
+    /** The Kit tab's body, where the kit's jobs show: a timer it owns ticks only while the tab shows. */
+    public JComponent kitComponent() {
         return files.component();
     }
 
@@ -669,9 +700,16 @@ public final class SessionsSidebar {
         return loosePanels;
     }
 
-    /** Puts the keyboard in the Files tab's filter. */
+    /** Puts the keyboard in the filter of the folder tab in front, the Kit tab's when none is. */
     public void focusFilesFilter() {
-        files.filter().requestFocusInWindow();
+        folderTabs.get(folderTab(selectedTab()) - KIT).filter().requestFocusInWindow();
+    }
+
+    /**
+     * {@code tab} when it is a folder tab (Kit, Brain, Scratchpad), else the Kit tab: where a look at the files goes.
+     */
+    public static int folderTab(final int tab) {
+        return tab >= KIT && tab <= SCRATCHPAD ? tab : KIT;
     }
 
     /** The width the hidden sidebar takes: the rail's. */
@@ -701,7 +739,7 @@ public final class SessionsSidebar {
         sync(connectionModel, s.connections(), connections);
         loosePanels.render(s);
         followFocus(s);
-        files.render(s);
+        folderTabs.forEach(t -> t.render(s));
         instances.render(s);
         logbook.render(s);
         tabs.header(LOGBOOK).setToolTipText("Logbook: " + LogbookTab.tip(s.logbook()));

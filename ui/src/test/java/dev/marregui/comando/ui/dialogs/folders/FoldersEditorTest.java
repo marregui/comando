@@ -124,11 +124,11 @@ class FoldersEditorTest {
         assertThat(on(e, FoldersDialog::saveOffered)).as("the message says Save creates the index").isTrue();
     }
 
-    /// The window is titled by what it holds, the Files tab's folders, not by one folder they may lie outside of, and
-    /// the palette's command reads "Configure Files tab folders".
+    /// The window is titled by what it holds, the sidebar's folders, not by one folder they may lie outside of, and
+    /// the palette's command reads "Configure Sidebar folders".
     @Test
     void theWindowIsTitledByWhatItHolds() {
-        assertThat(FoldersDialog.title()).isEqualTo("Files tab folders");
+        assertThat(FoldersDialog.title()).isEqualTo("Sidebar folders");
     }
 
     /// A missing folder, a taken name, a blank name, an index climbing out and a relative path each show their problem

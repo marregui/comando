@@ -8,7 +8,7 @@ the others link to it.
 |---|---|
 | install it | [Install](../INSTALL.md): the recipe Claude Code follows to install, upgrade and uninstall comando, and to offer a kit |
 | use it for the first time | [Tutorial](tutorial.md): comando in ten minutes, step by step; also Help ▸ Tutorial in the app |
-| know what every gesture does | [Workbench](workbench.md): the window, panels, themes, the sidebar, running text, the database, instances and the comando Edge, the terminal and Gradle, the Files tab and git changes, what is kept on disk |
+| know what every gesture does | [Workbench](workbench.md): the window, panels, themes, the sidebar, running text, the database, instances and the comando Edge, the terminal and Gradle, the Kit, Brain and Scratchpad tabs and git changes, what is kept on disk |
 | know what a session can do and what it must ask | [Claude Code](claude-code.md): the `claude -p` bridge, the checkpoint, the MCP tools, approvals and safety |
 | understand the other two parts of the flow | [Kit and brain](kit-and-brain.md): the kit's parts and what each does in a session, what comando does with a kit, the brain's stores, its flows, `/reflect` and the learning loop, and how an agent creates a default kit and brain or checks one the user brings |
 | change the code | [Architecture](architecture.md): modules, state and intents, ports, threads, ownership, then each module's classes, interface, threads and tests |

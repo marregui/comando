@@ -21,15 +21,15 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
     public static final FolderKind INSTANCE = new FolderKind();
 
     private static final List<Attribute> ATTRIBUTES = List.of(
-            Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "unique; the folder's name in the Files tab"),
+            Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "unique; the folder's name in the sidebar"),
             Attribute.of("path", "Folder", Attribute.Kind.DIRECTORY, true, ""),
             Attribute.of("index", "Index file", Attribute.Kind.TEXT, false,
                     "a file in the folder, such as 00_START_HERE.md; opened with the folder"),
             Attribute.of("excludes", "Leave out", Attribute.Kind.TEXT, false,
                     "folder and file names, comma-separated; build output is always left out"),
-            Attribute.choice("icon", "Icon", FolderRoot.ICONS, "the icon of the folder's row in the Files tab"),
+            Attribute.choice("icon", "Icon", FolderRoot.ICONS, "the icon of the folder's row in the sidebar"),
             Attribute.of("deletable", "Trash", Attribute.Kind.BOOLEAN, false,
-                    "whether the Files tab moves the folder's files and subfolders to the Trash"),
+                    "whether the sidebar moves the folder's files and subfolders to the Trash"),
             Attribute.of("listedIn", "Listed in", Attribute.Kind.TEXT, false,
                     "a file name, such as INDEX.md: an entry moved to the Trash leaves the nearest one above it"),
             Attribute.of("group", "Group", Attribute.Kind.TEXT, false,
@@ -121,6 +121,6 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
 
     @Override
     public String removalQuestion(final AppState s, final String name) {
-        return "Remove folder " + name + " from the Files tab? Its files stay on disk.";
+        return "Remove folder " + name + " from the sidebar? Its files stay on disk.";
     }
 }

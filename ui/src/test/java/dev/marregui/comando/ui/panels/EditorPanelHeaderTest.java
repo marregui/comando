@@ -265,7 +265,7 @@ class EditorPanelHeaderTest {
             assertThat(b.isVisible()).as("a session's panel").isTrue();
             b.doClick();
             p[0].file(Path.of("/b/MEMORY/x.md"), true);
-            assertThat(b.getToolTipText()).isEqualTo("Show the file in the Files tab");
+            assertThat(b.getToolTipText()).isEqualTo("Show the file in the sidebar");
             assertThat(b.getIcon()).as("the Files tab's mark after an arrow, not the tab's own icon")
                     .isSameAs(Icons.locate("files")).isNotSameAs(Icons.get("files"));
             assertThat(b.getIcon().getIconWidth()).as("the arrow before the mark").isGreaterThan(Icons.get("files").getIconWidth());

@@ -60,7 +60,8 @@ class LocateUiTest {
 
             final AbstractButton locate = await(AbstractButton.class, "Show in Files", b -> "Show in Files".equals(b.getAccessibleContext().getAccessibleName()));
             SwingUtilities.invokeAndWait(locate::doClick);
-            final JTree files = await(JTree.class, "the Files tree", t -> "Files".equals(t.getAccessibleContext().getAccessibleName()));
+            final JTree files = await(JTree.class, "the Kit tree",
+                    t -> "Kit".equals(t.getAccessibleContext().getAccessibleName()));
             Awaitility.await("the file selected").atMost(WAIT).until(() -> onEdt(() -> {
                 final TreePath p = files.getSelectionPath();
                 return p != null && ((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n

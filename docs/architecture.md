@@ -46,7 +46,7 @@ comando is built with and runs on JDK 25.
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude | `core`, PostgreSQL JDBC driver |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core`, Jackson |
-| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
+| `tools` | Gradle runs, the folder tabs' folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and `ui.kit`, which they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, the store files, the keychain, the intent log, the machine's QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`), `main` | every module, Jackson, QuestDB, the HiveMQ MQTT client |
 
@@ -94,7 +94,7 @@ One immutable record of metadata and ids. Lists hold tens of entries, so lookups
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
 | `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, what its writes say it works on (`SessionSubject`, record 138), process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint compacts when it ends, whether the automatic checkpoint is armed (record 129), whether the automatic checkpoint's compaction is followed by a carry-on prompt (`checkpointContinues`, `Reducer.CONTINUE_PROMPT`), whether the carry-on ran and no prompt of the user's or another session's has since (`carriedOn`, which holds the next automatic checkpoint back), and `checkpointTurns`, the turns still to end up to the checkpoint command or its `/compact`: while non-zero the session is locked and every intent on it but an interrupt or a stop is dropped (record 130) |
 | `instances` | the other comando instances on the comando Edge and the questions between them (`InstancesState`, record 124) |
-| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group whose row shows them ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)) |
+| `folders` | the folders of the Kit, Brain and Scratchpad tabs in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group whose row shows them ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `logbook` | the scratchpad's open tasks as the newest day folder's `INDEX.md` lists them (`Logbook`, `LogbookTask`), set by `LogbookRead`; read only, never saved ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)) |
@@ -122,7 +122,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Logbook | `LogbookRead` (the Logbook tab's tasks, from `tools`' read of the newest day folder's index, record 150) |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `PlaceView` (a view moved between the lower panel and the partition), `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
-| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead`, `RollBack`, `RemoveFiles`, `Unstage` (the git writes of the Changes view and the comparison window) |
+| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the folder tabs' move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead`, `RollBack`, `RemoveFiles`, `Unstage` (the git writes of the Changes view and the comparison window) |
 | Notices | `Notify`, `DismissNotice` |
 | Instances | `InstancesChanged` (the Instances tab's state, from `mcp`'s `Peers`, record 124) |
 
@@ -150,7 +150,7 @@ it: `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules` (runs and connection
 | Repositories | after any intent, folders that changed, or a Changes view that appeared or went, add `WatchRepos` with every folder and whether the view shows; `App` asks for the first read at start |
 | To read | `Shared.finished` sets `SessionSpec.unreadMillis` to the time when a turn's work ends or a session exits at work, unless the focused panel is on it; after every intent a session busy or the focused panel's loses the mark, and when a mark changed, one `SaveSessions` replaces any other (record 136) |
 | The folders window | `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change to `folders.json` read while the window was open; a list naming one folder twice saves nothing |
-| The user's file | `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and saves nothing; the kit's folders join the list read at start, once per root, and are saved ([Kit and brain §3.2](kit-and-brain.md#32-the-files-tab)) |
+| The user's file | `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and saves nothing; the kit's folders join the list read at start, once per root, and are saved ([Kit and brain §3.2](kit-and-brain.md#32-the-kit-brain-and-scratchpad-tabs)) |
 
 **Notices.** Every notice joins the history. A new notice replaces the standing one, except that a standing ERROR stays
 until it is dismissed, replaced by another error, or settled by its own subject. An event that settles a subject clears
@@ -382,7 +382,7 @@ registries for data too large to copy with every state in [§4.5](#45-stores-out
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog`, `ExecutorStop` (an owner's bounded stop of its executors), with `Threads.alive` listing the live threads by name for tests; `Queues`, the depth and peak of each unbounded queue (the intent queue, every strand, a timed strand's waiting and delayed tasks, each `claude` process's stdin), counted with two atomic operations a task, a timed strand's queue, which the JDK keeps, sampled at each submission, and read for the metrics log; `Processes`, the one way a short command is run |
 | `port` | the interfaces adapters implement ([§8.2](#82-interface-with-the-rest-of-the-app)); among them `SearchPort` (`search`, `cancel`, with its `Sink` and `Source`: record 139), `InstancesPort` (`ask`, `deny`, `forget`, `role`: what the user does from the Instances tab, implemented by `mcp`'s `Peers`, record 124) and `ServerSwitch` (`name`, `isRunning`, `want(up)`, `status`: a local server an agent starts or stops naming the direction, the comando Edge or the embedded QuestDB, record 121) |
-| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `SearchHit`, `SearchQuery`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `VersionedLines` (a file of one entry a line whose first line names its format and version, record 133); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
+| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `SearchHit`, `SearchQuery`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `VersionedLines` (a file of one entry a line whose first line names its format and version, record 133); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the folders), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `logbook` | `Logbook` and `LogbookTask` (the scratchpad's open tasks, and which of them wait on the user), `IndexParser` (an `INDEX.md` read into them: the tasks under `## Open`, their key lines, documents and `**Needs you:**` items; a heading with no number is skipped, an unknown key ignored), [record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md) |
@@ -837,7 +837,7 @@ Further reading: [Claude Code §3](claude-code.md#3-mcp-tools).
 
 ## 13. The `tools` module
 
-The development tools behind `core`'s `ToolPort`: Gradle runs with their console and test tree, the Files tab's folders
+The development tools behind `core`'s `ToolPort`: Gradle runs with their console and test tree, the folder tabs' folders
 read as trees and their entries moved to the Trash, and the git repositories of those folders read, and changed on
 request from the comparison window (roll back, remove, unstage). It also reads a kit's version and backs up its brain
 and its root for `app`. Everything runs outside the reducer and the EDT and ends in an intent or a returned value. It
@@ -854,8 +854,8 @@ One package, `dev.marregui.comando.tools`.
 | `GradleBuild` | the build a directory belongs to and the command that runs its tasks ([Workbench §5.2](workbench.md#52-gradle-runs)) |
 | `Args` | splits the tasks the user typed as a POSIX shell splits words, without expansion |
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
-| `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without hidden entries, excluded names and the entries a caller skips; read whole, or only as deep as the Files tab shows it: one level, plus each open subfolder and one level inside it, a subfolder not read holding one `…` entry (`ViewSpec.TreeNode.NOT_READ`) so it can still be opened |
-| `FolderSearch` | a `SearchPort.Source`: the Files tab's folders, less its excludes, `FolderRoot.ALWAYS_EXCLUDED` and hidden entries; names first, then each file mapped and scanned with `ByteScan`, at most `Searcher.SCANNERS` at once and 500 000 files in all. A NUL in the first 8 kB skips a file, a line's slice is clipped to 200 characters, and a file or folder that fails counts as failed; no index (record 139) |
+| `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without hidden entries, excluded names and the entries a caller skips; read whole, or only as deep as a folder tab shows it: one level, plus each open subfolder and one level inside it, a subfolder not read holding one `…` entry (`ViewSpec.TreeNode.NOT_READ`) so it can still be opened |
+| `FolderSearch` | a `SearchPort.Source`: the folders of the three tabs, less its excludes, `FolderRoot.ALWAYS_EXCLUDED` and hidden entries; names first, then each file mapped and scanned with `ByteScan`, at most `Searcher.SCANNERS` at once and 500 000 files in all. A NUL in the first 8 kB skips a file, a line's slice is clipped to 200 characters, and a file or folder that fails counts as failed; no index (record 139) |
 | `ListingLines` | the lines a listing file (an index file that names the entries beside it) gives an entry, taken out once the entry went to the Trash; other lines naming it stay and are reported |
 | `ToolSettings` | where the tools are, by convention: a `gradle-serial` executable on comando's `PATH` when there is one, and the JDK for child processes |
 | `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the backup of the brain or the kit's root (`git add -A`, a commit when anything changed whose message says what it adds, `Brain backup <date>: <top folders and counts>` or `Kit backup …`, then one line a file, `git push`) only when the folder is a repository's top with a remote; remote runs bounded at 120 s, the commit at 60 s |
@@ -869,10 +869,10 @@ stop: [Workbench §5.2](workbench.md#52-gradle-runs).
 installed while comando runs is used from the next run.
 
 **Folders.** `readFolders` reads once, whole, and sends each tree (Refresh, the filter's reads of closed folders).
-`watchFolders(folders, open)` replaces the set the poll reads and, by folder name, the subfolders open in the Files tab:
+`watchFolders(folders, open)` replaces the set the poll reads and, by folder name, the subfolders open in the folder tabs:
 a folder with an entry is read one level deep, plus each open subfolder and one level inside it, so every row the tab
 shows has its entries and its count; a folder with no entry is read whole, which is what an agent's `folders_browse`, a
-replay and the one-argument `watchFolders` ask for. The Files tab sends no entries while its filter has text, so the
+replay and the one-argument `watchFolders` ask for. A folder tab sends no entries while its filter has text, so the
 filter searches every level, and the partial read comes back when it is cleared. Opening or closing a subfolder changes
 the watch, and a folder whose open set changed is read at once, as a folder newly watched is. The poll sends a tree only
 when it changed. Reads are ticketed, so an older read never overwrites a newer one.
@@ -903,8 +903,8 @@ reads the open folders again. Nothing is deleted for good.
 `ToolSettings::now`), and a `Trash`.
 
 **Sends back.** `CommandFinished` (the reducer updates the run's console view and may ask for a desktop notification),
-`FolderLoaded` (the reducer turns it into a `ShowFolder` effect for the Files tab), `ReposLoaded` (`ShowRepos`: the
-Files tab's colours and the Changes view), `ChangeRead` (`ShowChange`: the diff window), `Notify`.
+`FolderLoaded` (the reducer turns it into a `ShowFolder` effect for the folder tab that holds the folder), `ReposLoaded` (`ShowRepos`: the
+folder tabs' colours and the Changes view), `ChangeRead` (`ShowChange`: the diff window), `Notify`.
 
 The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 
@@ -916,7 +916,7 @@ The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 | `tool-output-<run>` | fork | the run's output while the run waits for its process | its run, at most 2 s after the exit |
 | `folder-search-<n>` | fork | a search's file reads, at most half the cores | `FolderSearch.scan`, which collects them; the search's end stops their reading |
 | `folder-read`, `repo-read`, `file-trash` | errands | a read asked for now; the repositories read at once when `watchRepos` changes them; moves to the Trash and the listing edits | `close()` |
-| `folder-poll` | timed strand | reads the watched repositories, then the open folders, each as deep as the Files tab shows it, every period | `close()` |
+| `folder-poll` | timed strand | reads the watched repositories, then the open folders, each as deep as a folder tab shows it, every period | `close()` |
 | `change-read` | strand | a changed file's two versions, one at a time | `close()` |
 | `repo-write` | strand | `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again | `close()`, which lets the queued writes finish within 10 s first (one git run each), so no `.git/index.lock` is left |
 
@@ -941,7 +941,7 @@ run, sends SIGTERM to every run's process tree and SIGKILL 2 s later, and closes
 ```
 
 Further reading: [Workbench §5.2](workbench.md#52-gradle-runs),
-[Workbench §6](workbench.md#6-the-files-tab), [record 62](adr/0062-gradle-runs-by-convention.md),
+[Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs), [record 62](adr/0062-gradle-runs-by-convention.md),
 [record 68](adr/0068-git-changes-and-a-side-by-side-diff.md).
 
 ## 14. The `ui` module
@@ -964,7 +964,7 @@ other), and no test orders them.
 | `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`, `Unmountable` (listeners and timers released in one call); `capability`: `Searchable`, `Copyable`, `Exportable`, `Zoomable`, `FindBar`, `Capabilities` |
 | `widgets.*` | one package per widget: `approval` (`ApprovalInbox`), `changes` (`ChangesWidget`, `ChangeEditor`), `console` (`ConsoleWidget`), `deliverables` (`DeliverablesWidget`, `WrittenFiles`), `diff` (`DiffWidget`), `editor` (`CommandEditor`, `PanelDocument`, `PanelTokenMaker`, `SqlCompletion`), `markdown` (`MarkdownWidget`), `plot` (`PlotWidget`, `PlotCanvas`), `search` (`SearchWidget`, `SearchTree`, `SearchHub`), `table` (`TableViewWidget`, `GridTable`, `TableSource`), `terminal` (`TerminalWidget`, `Pty`, `InputGate`), `text` (`TextWidget`), `tree` (`TreeWidget`) |
 | `widgets.transcript` | `TranscriptWidget`, `TranscriptView`, `AgentWidget` (a sub-agent's tab), `AgentStrip`, `ToolText`; `doc`: `MarkdownDoc`, `Para`, `Span`; `render`: `TranscriptCanvas` (the painted transcript), `Items` and its `Item`s (`ToolCallItem` among them), `Paras`, `Rich`, `TextBox`, `Placed`, `Style`, `Marks`, `Fold`, `Finder` (find within cells), `AgentTracker` |
-| `panels` | the window's regions: `Workspace` (the main tabs and the right-hand partition's strip, record 141; `TabLook`, the look both strips share), `EditorPanel` (with `OutlinePane`), `LowerPanel`, `SidePane`, `StatusBar`, `SessionBar`, `ResultsView` (with `PlanTree`), `TerminalTabs`, `ViewTabs`, `SessionsSidebar` (its rows: `IconRow`, `SessionRow`, `ConnectionRow`; `PanelsWithoutSession`), `FilesTab` (its watch carries each folder's open subfolders, none while the filter has text; every expand and collapse re-checks it; a reveal into a subfolder not read yet waits for that read), `InstancesTab` (the other instances from their presence on the comando Edge, the questions between them, record 124), `LogbookTab` (the scratchpad's open tasks from `AppState.logbook`: Needs you first, then each topic; a task opens as a page, resumes in a session or asks its decisions there, record 150), `TabCard`, `CardFacts`, `Delegation`, `TabStatus`, `SessionIcons`, `CommandButton`, `ThemeButton`, `ThemeChooser` and `ModeSwitch` (the popover under the swatch and its Dark / Light switch, record 128), `LockVeil` (greys the views of a session whose checkpoint runs, record 130) |
+| `panels` | the window's regions: `Workspace` (the main tabs and the right-hand partition's strip, record 141; `TabLook`, the look both strips share), `EditorPanel` (with `OutlinePane`), `LowerPanel`, `SidePane`, `StatusBar`, `SessionBar`, `ResultsView` (with `PlanTree`), `TerminalTabs`, `ViewTabs`, `SessionsSidebar` (its rows: `IconRow`, `SessionRow`, `ConnectionRow`; `PanelsWithoutSession`), `FilesTab` (one component, built for each of the Kit, Brain and Scratchpad tabs, record 152; its watch carries each folder's open subfolders, none while the filter has text; every expand and collapse re-checks it; a reveal into a subfolder not read yet waits for that read), `InstancesTab` (the other instances from their presence on the comando Edge, the questions between them, record 124), `LogbookTab` (the scratchpad's open tasks from `AppState.logbook`: Needs you first, then each topic; a task opens as a page, resumes in a session or asks its decisions there, record 150), `TabCard`, `CardFacts`, `Delegation`, `TabStatus`, `SessionIcons`, `CommandButton`, `ThemeButton`, `ThemeChooser` and `ModeSwitch` (the popover under the swatch and its Dark / Light switch, record 128), `LockVeil` (greys the views of a session whose checkpoint runs, record 130) |
 | `dialogs` | `FormRows` (the labelled rows, list side and frame the folders and jobs windows share), `folders` (`FoldersEditor`, `FoldersDialog`), `jobs` (`JobsEditor`, `JobsDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions; `ConversationField`, the session's conversation picked from those stored; `ProjectSettings`, the working folder's own `.claude/settings.json` and `settings.local.json` and the permission mode they set over the kit's), `sessions` (`ImportSessionsDialog`, `StoredConversation`) |
 | `shell` | `ComandoUi` (the frame and the UI port) and the parts it delegates to: `Commands` (the command table), `MenuBuilder` and `Menus`, `Keys`, `LayoutKeeper` (splits and panes), `FocusRouter` and `FocusOrigins` (where the keyboard goes back to), `PanelFiles` (files opened, panels saved, views exported), `QuitFlow` and `ClosingCover`, `ShellParts`; then `WindowLayout`, `Settings`, `HelpActions`, `HelpFiles`, `About`, `MarkdownSheet`, `AppIcon`, `KitActions`, `JobActions`, `LivePlots`, `ResultViews`, `Attachments`, `Notifier`, `OpenFiles`, `DiffWindow`, `WorkedIn`, `ThemeFade` (a chosen theme fading in over the one before, record 103); `ServerToggle` and `Setup`, implemented in `app` |
 | (top) | `PanelTexts`: editor text between saves, implemented in `app` |
@@ -1012,8 +1012,8 @@ runs) moves to an errand of `UiErrands`.
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them), `Versions` (version texts compared by number) |
 | `text` | editors, find, diffs, Markdown and links ([§14.2.2](#1422-text)); `Tooltips`, `FrontMatter`, `LocalImages`; `Previews`, the port to the workspace's preview tab the shell gives the Search and Files written views (records 141, 143) |
 | `tree`, `layout`, `tabs` | `TreeView`, `ShrinkingRow`, `TabStrip`, `MovableTabs` ([§14.2.3](#1423-trees-tabs-and-overlays)) |
-| `vcs` | `RepoChanges`: the watched git repositories on the EDT, looked up by path (a file's change, a folder holding one), with git's colour for each kind. `OpenedFiles`: the files opened in comando, kept in `opened-files`, so the Files tab stops marking a new file once it is opened. The Files tab and the Changes view keep one each. `RepositoryTop`: the top of the git repository above a folder, for the files a session wrote, the folders it worked in and a note's links |
-| `desktop` | `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `FileSearch`, `DesktopTrash` (the Files tab's Trash), `Links` ([§14.2.2](#1422-text)) |
+| `vcs` | `RepoChanges`: the watched git repositories on the EDT, looked up by path (a file's change, a folder holding one), with git's colour for each kind. `OpenedFiles`: the files opened in comando, kept in `opened-files`, so the folder tabs stop marking a new file once it is opened. The folder tabs and the Changes view keep one each. `RepositoryTop`: the top of the git repository above a folder, for the files a session wrote, the folders it worked in and a note's links |
+| `desktop` | `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `FileSearch`, `DesktopTrash` (the folder tabs' Trash), `Links` ([§14.2.2](#1422-text)) |
 
 #### 14.2.1 Threads
 
@@ -1144,7 +1144,7 @@ the view closes. A view tab has a pin toggle and a close button.
 |---|---|---|
 | `table` | `TableViewWidget` over `GridTable` | rows, only the visible ones painted, each cell formatted into one reused buffer; sort and find run on the EDT, so a sort stops at 200 000 rows and a find at 2 000 000 cells, the first rows that fit; a copy takes at most 200 000 rows; a growing result appends rows |
 | `plot` | `PlotWidget` over `PlotCanvas` | series over shared axes, each pixel column reduced to its min and max; more than 100 000 points are sorted off the EDT; time axes step on clock units; drag to zoom, double-click to reset |
-| `changes` | `ChangesWidget` | the Files tab's git repositories: Changed, Untracked and Removed, by folder. A file opens the side-by-side window, whose body is `ChangeEditor`: edited and saved every second with an edited/saved cue, undo by keys, roll back and remove from its menu, Markdown rendered. The selection's menu rolls back or removes its files ([Workbench §6.1](workbench.md#61-changes)) |
+| `changes` | `ChangesWidget` | the git repositories of the configured folders: Changed, Untracked and Removed, by folder. A file opens the side-by-side window, whose body is `ChangeEditor`: edited and saved every second with an edited/saved cue, undo by keys, roll back and remove from its menu, Markdown rendered. The selection's menu rolls back or removes its files ([Workbench §6.1](workbench.md#61-changes)) |
 | `search` | `SearchWidget` | Find in files and conversations: a field, then the hits by folder, folder chain and file, each named by its heading and line; the conversations last. The selection shows a file's hit in the preview tab through `kit.text.Previews`, which the shell gives (record 141); `SearchHub` keeps the text and toggles while comando runs ([Workbench §1.2](workbench.md#12-panels), record 139) |
 | `diff` | `DiffWidget` | a unified diff |
 | `deliverables` | `DeliverablesWidget` | Files written: the files the session with the keyboard wrote, read off the EDT from its transcript, first write first, gold until opened; ↓/↑ show a row's file in the preview tab through `kit.text.Previews`, Enter keeps it (record 143) |
@@ -1253,9 +1253,9 @@ label), so counting the matches over the whole conversation and stepping through
 closed cards that hold a match and closes them again when the find ends, and lays out only the item of the match it
 scrolls to. On a long conversation the reading for a find or a copy of everything is spread over the cores while the EDT
 waits (`Forks`). A link is followed at a double click: a `path:line` link opens the file in the side pane at the line; a
-file path opens as the Files tab opens a file, in a panel, or brings forward the panel that has it (a binary or large
+file path opens as a folder tab opens a file, in a panel, or brings forward the panel that has it (a binary or large
 file in the side pane), and a relative one that is not under the session's folder is looked for in that folder's tree,
-then in the Files tab's folders ([record 111](adr/0111-a-file-link-opens-as-the-files-tab-does.md)); a Markdown link to
+then in the folders of the Kit, Brain and Scratchpad tabs ([record 111](adr/0111-a-file-link-opens-as-the-files-tab-does.md)); a Markdown link to
 such a file is looked for the same way, its `#heading` dropped; a web address, a `[[name]]` note or any other Markdown
 link goes to `Links`. Every text a card shows has its links: the prompt, the text, thinking, hook notes, a tool's result
 and what the call is given (a command, a delegation's prompt, the JSON of any other call); a card's summary links the
@@ -1352,7 +1352,7 @@ the synthetic session at a scroll offset to a PNG.
 | Interface | Methods | Caller |
 |---|---|---|
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage`; each hands its work to the EDT, an errand (`showFile`) or the store (`forgetPanel`, `deletePanel`) and returns | the reducer's effects, through `EffectRouter` |
-| `ComandoUi(Dependencies)`, `topics(port)`, `search(port)`, `instances(port)`, `checkpointThreshold(consumer)`, `start()`, `kitStatus(status)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through the port `topics` sets before `start()`; acts on the other instances through the `InstancesPort` `instances` sets (`mcp`'s `Peers`, record 124); tells the given consumer the checkpoint threshold the settings hold (record 129); shows the kit's version on the Files tab's KIT row; closes terminals, live plots, the EDT watchdog and the window, then the errands | `app` |
+| `ComandoUi(Dependencies)`, `topics(port)`, `search(port)`, `instances(port)`, `checkpointThreshold(consumer)`, `start()`, `kitStatus(status)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through the port `topics` sets before `start()`; acts on the other instances through the `InstancesPort` `instances` sets (`mcp`'s `Peers`, record 124); tells the given consumer the checkpoint threshold the settings hold (record 129); shows the kit's version on the Kit tab's KIT row; closes terminals, live plots, the EDT watchdog and the window, then the errands | `app` |
 | `MermaidDiagrams.install(cache)`, `LocalImages.install(cache)` and their `shutdown()` | the drawing services Markdown previews use, with their caches under the data root | `app` |
 | `DesktopTrash.moveToTrash(file)` | the desktop's Trash | `app` passes it to `tools` as its `Trash` |
 
@@ -1366,8 +1366,8 @@ the synthetic session at a scroll offset to a PNG.
 | `catalogue` | the stored conversations for the import dialog and the session dialog's conversation picker (record 125), as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
 | `server` | `ServerToggle`: the machine's QuestDB (`app`'s `MachineQuestDb`) |
 | `edge` | `ServerToggle`: the comando Edge (`app`'s `EmbeddedEdge`), its button right of QuestDB's; null, no button |
-| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups, the kit's jobs (`app`'s `RootSetup`). `KitActions` shows the kit on the KIT row, repairs `comando-kit.json` on Kit ▸ Repair comando-kit.json… after a confirm, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; `JobActions` reads the kit's jobs at start, after each change comando makes, and, while the Files tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (looked at every 10 s; logs left out), puts them on the Jobs row, and opens the Kit jobs window ([record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
-| `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` (the data root) holds `settings.json` (the window's layout and settings, record 106), `themes/` (the user's theme files, record 126) and `opened-files`, the files opened once, which the Files tab no longer marks new; a null `home` keeps the settings in memory, offers no user themes and turns Tutorial and Reveal off; what quitting runs once the window has asked |
+| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups, the kit's jobs (`app`'s `RootSetup`). `KitActions` shows the kit on the KIT row, repairs `comando-kit.json` on Kit ▸ Repair comando-kit.json… after a confirm, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; `JobActions` reads the kit's jobs at start, after each change comando makes, and, while the Kit tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (looked at every 10 s; logs left out), puts them on the Jobs row, and opens the Kit jobs window ([record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
+| `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` (the data root) holds `settings.json` (the window's layout and settings, record 106), `themes/` (the user's theme files, record 126) and `opened-files`, the files opened once, which the folder tabs no longer mark new; a null `home` keeps the settings in memory, offers no user themes and turns Tutorial and Reveal off; what quitting runs once the window has asked |
 
 `PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a
 record declared here that `app` fills, so the window reaches the store, QuestDB, the Edge, the kit and the stored
@@ -1511,11 +1511,11 @@ What `app` connects, and nothing else does:
 | `claude` `MetricsSink` | `StateLoop` | `IntentSink`: `Notify` for a metrics outage, once an outage (record 149) |
 
 **At start** (`App.start`): the reducer starts, the window is built, every folder's git repository is watched for the
-Files tab's marks, the Files tab's open folders are read every 5 s while the tab shows in an active window, the plans' usage every 20 minutes, every session with
+the folder tabs' marks, their open folders are read every 5 s while their tab shows in an active window, the plans' usage every 20 minutes, every session with
 a stored conversation loads its transcript, `claude --version` is checked, and, on a kit's root, the kit's version and
-its remote's newer releases are read now and every 6 hours for the Files tab's KIT row and this instance's presence, and `Peers` sets its last will and
+its remote's newer releases are read now and every 6 hours for the Kit tab's KIT row and this instance's presence, and `Peers` sets its last will and
 subscriptions before `MqttPeerBroker` takes its first look at the Edge. Before that, the constructor names the
-root (`KitRoot.use`) and gives the Files tab the kit's folders at the first start on it.
+root (`KitRoot.use`) and gives the folder tabs the kit's folders at the first start on it.
 
 ### 15.3 Threads
 

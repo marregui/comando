@@ -57,8 +57,10 @@ final class WindowLayout {
     static final Set<String> KEPT_SIDE_VIEWS = Set.of("search", "changes");
 
     /** The sidebar's tabs, each kept by its {@link #tabName}. */
-    private static final int[] TABS = {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES,
-        SessionsSidebar.LOGBOOK, SessionsSidebar.INSTANCES};
+    private static final int[] TABS = {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.KIT,
+        SessionsSidebar.BRAIN, SessionsSidebar.SCRATCHPAD, SessionsSidebar.LOGBOOK, SessionsSidebar.INSTANCES};
+    /** The name the one Files tab was kept by, before it became Kit, Brain and Scratchpad (record 152): Kit's place. */
+    private static final String FILES_TAB = "files";
 
     private final Settings prefs;
     private final boolean offScreen;
@@ -124,7 +126,8 @@ final class WindowLayout {
 
     /**
      * The sidebar tab in front when the window closed, saved by its name as {@code sidebar.shown} (record 150); a name
-     * no tab has reads as Sessions. Until it is, read from the older keys: {@code sidebar.selected}, an index in the
+     * no tab has reads as Sessions, and {@code files}, the tab the Kit, Brain and Scratchpad tabs replaced, as Kit
+     * (record 152). Until it is, read from the older keys: {@code sidebar.selected}, an index in the
      * order before the Logbook moved ahead of Instances (Sessions, Connections, Files, Instances, Logbook), else
      * {@code sidebar.front} (Sessions, Connections, Panels, Files), else {@code sidebar.tab} (Sessions, Panels,
      * Connections, Files). Panels reads as Sessions, which lists the panels without a session (record 91).
@@ -132,6 +135,9 @@ final class WindowLayout {
     int sidebarTab() {
         final String shown = prefs.get("sidebar.shown", null);
         if (shown != null) {
+            if (shown.equals(FILES_TAB)) {
+                return SessionsSidebar.KIT;
+            }
             for (final int tab : TABS) {
                 if (tabName(tab).equals(shown)) {
                     return tab;
@@ -143,7 +149,7 @@ final class WindowLayout {
         if (selected >= 0) {
             return switch (selected) {
                 case 1 -> SessionsSidebar.CONNECTIONS;
-                case 2 -> SessionsSidebar.FILES;
+                case 2 -> SessionsSidebar.KIT;
                 case 3 -> SessionsSidebar.INSTANCES;
                 case 4 -> SessionsSidebar.LOGBOOK;
                 default -> SessionsSidebar.SESSIONS;
@@ -153,13 +159,13 @@ final class WindowLayout {
         if (front >= 0) {
             return switch (front) {
                 case 1 -> SessionsSidebar.CONNECTIONS;
-                case 3 -> SessionsSidebar.FILES;
+                case 3 -> SessionsSidebar.KIT;
                 default -> SessionsSidebar.SESSIONS;
             };
         }
         return switch (prefs.getInt("sidebar.tab", 0)) {
             case 2 -> SessionsSidebar.CONNECTIONS;
-            case 3 -> SessionsSidebar.FILES;
+            case 3 -> SessionsSidebar.KIT;
             default -> SessionsSidebar.SESSIONS;
         };
     }
@@ -168,7 +174,9 @@ final class WindowLayout {
     static String tabName(final int tab) {
         return switch (tab) {
             case SessionsSidebar.CONNECTIONS -> "connections";
-            case SessionsSidebar.FILES -> "files";
+            case SessionsSidebar.KIT -> "kit";
+            case SessionsSidebar.BRAIN -> "brain";
+            case SessionsSidebar.SCRATCHPAD -> "scratchpad";
             case SessionsSidebar.LOGBOOK -> "logbook";
             case SessionsSidebar.INSTANCES -> "instances";
             default -> "sessions";

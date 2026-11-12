@@ -118,10 +118,16 @@ class TreeClicksUiTest {
             final StateLoop loop = app.loop();
             assertThat(loop.state().folders()).extracting(FolderRoot::name).as("the kit's first, the user's kept")
                     .containsExactly("Memory", "KB", "Skills", "Notes");
-            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> front("Files"));
-            Awaitility.await("the Files tab's rows").atMost(Duration.ofSeconds(10)).until(() -> rows().size() >= 3);
-            assertThat(rows()).as("in the Files tab: the Brain group one row; then, no Kit folder here, the jobs' row of its own")
-                    .startsWith("BRAIN", "Skills", "Notes").doesNotContain("Memory", "KB");
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> front("Brain"));
+            Awaitility.await("the Brain tab's rows").atMost(Duration.ofSeconds(10))
+                    .until(() -> !rows("Brain").isEmpty());
+            assertThat(rows("Brain")).as("in the Brain tab: the Brain group one row (record 152)")
+                    .containsExactly("BRAIN");
+            Awaitility.await("the Kit tab").atMost(Duration.ofSeconds(10)).until(() -> front("Kit"));
+            Awaitility.await("the Kit tab's rows").atMost(Duration.ofSeconds(10)).until(() -> rows("Kit").size() >= 2);
+            assertThat(rows("Kit")).as("in the Kit tab: the folders in no group; no Kit folder here")
+                    .startsWith("Skills", "Notes").doesNotContain("BRAIN", "Memory", "KB");
+            Awaitility.await("the Brain tab again").atMost(Duration.ofSeconds(10)).until(() -> front("Brain"));
             assertThat(loop.state().folders()).extracting(FolderRoot::group).as("the kit's groups (record 98)")
                     .containsExactly("Brain", "Brain", "", "");
             paintSidebar();
@@ -133,7 +139,7 @@ class TreeClicksUiTest {
     }
 
     /**
-     * The sidebar as it shows, the Files tab in front with its second row selected, painted in three tints side by side
+     * The sidebar as it shows, the Brain tab in front with its second row selected, painted in three tints side by side
      * to {@code build/snapshots/sidebar.png} (records 98, 118): the BRAIN row, hairlines between groups, the selection
      * in the tint.
      */
@@ -141,7 +147,8 @@ class TreeClicksUiTest {
         final Tint[] tints = {Tint.TREASURE, Tint.SILVER, Tint.ELECTRIC_BLUE};
         final BufferedImage sheet = onEdt(() -> {
             final JComponent sidebar = first(JComponent.class, c -> c.getAccessibleContext() != null && "Sidebar".equals(c.getAccessibleContext().getAccessibleName()) && c.isShowing());
-            final JTree tree = first(JTree.class, t -> "Files".equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
+            final JTree tree = first(JTree.class,
+                    t -> "Brain".equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
             tree.setSelectionRow(1);
             final int w = sidebar.getWidth();
             final int h = Math.min(sidebar.getHeight(), 420);
@@ -164,10 +171,11 @@ class TreeClicksUiTest {
         ImageIO.write(sheet, "png", out.toFile());
     }
 
-    /** The Files tab's folder rows, top first. */
-    private static List<String> rows() throws Exception {
+    /** The top rows of folder tab {@code tab} while it shows, top first. */
+    private static List<String> rows(final String tab) throws Exception {
         return onEdt(() -> {
-            final JTree tree = first(JTree.class, t -> "Files".equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
+            final JTree tree = first(JTree.class,
+                    t -> tab.equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
             final List<String> out = new ArrayList<>();
             if (tree != null) {
                 for (int i = 0; i < tree.getRowCount(); i++) {

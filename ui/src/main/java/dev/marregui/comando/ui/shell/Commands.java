@@ -310,7 +310,7 @@ final class Commands {
             if (!sidebar.isShown()) {
                 layout.toggleSidebar();
             }
-            sidebar.selectTab(SessionsSidebar.FILES);
+            sidebar.selectTab(SessionsSidebar.folderTab(sidebar.selectedTab()));
             sidebar.focusFilesFilter();
         });
         cmd("view.restoreLayout", "Restore layout", null, layout::restoreArranged, layout::arranged);

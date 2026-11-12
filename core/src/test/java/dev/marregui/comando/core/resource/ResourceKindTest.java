@@ -89,7 +89,8 @@ class ResourceKindTest {
             assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "index", outside)))
                     .as(outside).hasMessageStartingWith("the index file must be inside the folder");
         }
-        assertThat(FolderKind.INSTANCE.removalQuestion(null, "KB")).isEqualTo("Remove folder KB from the Files tab? Its files stay on disk.");
+        assertThat(FolderKind.INSTANCE.removalQuestion(null, "KB"))
+                .isEqualTo("Remove folder KB from the sidebar? Its files stay on disk.");
         final FolderRoot skills = new FolderRoot("Skills", "/s", "", List.of(), "skills");
         assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(skills))).isEqualTo(skills);
         assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p")).icon()).as("none set").isEqualTo(FolderRoot.FOLDER);
