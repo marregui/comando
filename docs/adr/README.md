@@ -172,4 +172,5 @@ row and its record differ, or when a record has no row.
 | [149](0149-questdb-is-the-only-metrics-store.md) | QuestDB is the only metrics store | 2026-11-10 | Miguel and Claude | accepted; built |
 | [150](0150-a-card-only-when-a-session-cannot-go-on.md) | A card only when a session cannot go on; the Logbook tab lists what waits on the user | 2026-11-10 | Miguel and Claude | accepted; built |
 | [151](0151-a-theme-has-a-style-the-console.md) | A theme has a style: the console | 2026-11-11 | Miguel and Claude | accepted; built |
-| [152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) | The Files tab splits into the Kit, Brain and Scratchpad tabs | 2026-11-12 | Miguel and Claude | accepted |
+| [152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) | The Files tab splits into the Kit, Brain and Scratchpad tabs | 2026-11-12 | Miguel and Claude | accepted; built |
+| [153](0153-the-icon-is-three-steps-ahead.md) | The icon is three steps ahead | 2026-11-12 | Miguel and Claude | accepted; built |

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/comando.svg" width="128" alt="comando's icon: a green prompt chevron and an orange cursor on a dark glass tile">
+  <img src="docs/images/comando.svg" width="128" alt="comando's icon: three chevrons, grey, gold and orange, on a graphite tile: the kit, the brain and Claude, three steps ahead">
 </p>
 
 <h1 align="center">comando</h1>
