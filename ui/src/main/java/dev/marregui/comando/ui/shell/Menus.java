@@ -9,6 +9,7 @@ import java.util.Map;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
@@ -129,6 +130,9 @@ final class Menus {
         for (final NamedTheme t : NamedTheme.values()) {
             Icons.put(t.commandId(), new GroundIcon(t));
         }
+        for (final IconSet set : IconSet.values()) {
+            Icons.put(set.commandId(), Icons.of(set, "session"));
+        }
         return areasOf();
     }
 
@@ -137,7 +141,7 @@ final class Menus {
 
     /** The icon of command {@code id}, or null; a theme's command is named as its swatch is. */
     static String icon(final String id) {
-        return id.startsWith("theme.") ? id : ICONS.get(id);
+        return id.startsWith("theme.") || id.startsWith("icons.") ? id : ICONS.get(id);
     }
 
     /** The tooltip of command {@code id}, or null. */
@@ -230,6 +234,9 @@ final class Menus {
         put(a, "comando", "app.about", "app.quit");
         for (final NamedTheme t : NamedTheme.values()) {
             a.put(t.commandId(), "Theme");
+        }
+        for (final IconSet set : IconSet.values()) {
+            a.put(set.commandId(), "Icons");
         }
         return Map.copyOf(a);
     }

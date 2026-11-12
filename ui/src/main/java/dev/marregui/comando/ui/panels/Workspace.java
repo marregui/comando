@@ -66,6 +66,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.tabs.MovableTabs;
@@ -564,6 +565,11 @@ public final class Workspace {
     /** {@code chosen} hears the theme picked from the swatch beside New panel. */
     public void onThemeChosen(final Consumer<NamedTheme> chosen) {
         theme.onChosen(chosen);
+    }
+
+    /** {@code chosen} hears an icon family picked beside the themes. */
+    public void onIconSetChosen(final Consumer<IconSet> chosen) {
+        theme.onIconSetChosen(chosen);
     }
 
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */

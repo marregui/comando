@@ -32,15 +32,19 @@ import java.util.function.Consumer;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JToggleButton;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 
+import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -75,6 +79,7 @@ public final class ThemeChooser {
     private final JPanel grid = new JPanel(new GridLayout(0, COLUMNS, Theme.SPACE_M, Theme.SPACE_M));
     private final ModeSwitch mode;
     private final Consumer<NamedTheme> chosen;
+    private final Consumer<IconSet> iconSetChosen;
     private final List<Card> cards = new ArrayList<>();
     /** When a chooser last closed by losing the focus. */
     private static long closedNanos = Long.MIN_VALUE / 2;
@@ -85,8 +90,9 @@ public final class ThemeChooser {
     /** Closed by Esc, its close button or {@link #close}: the deactivation that follows is not a click elsewhere. */
     private boolean closing;
 
-    private ThemeChooser(final Window owner, final Consumer<NamedTheme> chosen) {
+    private ThemeChooser(final Window owner, final Consumer<NamedTheme> chosen, final Consumer<IconSet> iconSetChosen) {
         this.chosen = chosen;
+        this.iconSetChosen = iconSetChosen;
         dialog = new JDialog(owner, TITLE);
         dialog.setUndecorated(true);
         dialog.setModal(false);
@@ -120,6 +126,7 @@ public final class ThemeChooser {
                 BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD)));
         content.add(top, BorderLayout.NORTH);
         content.add(scroll, BorderLayout.CENTER);
+        content.add(iconSets(iconSetChosen), BorderLayout.SOUTH);
         dialog.setContentPane(content);
         keys(dialog.getRootPane());
         dialog.addWindowListener(new WindowAdapter() {
@@ -145,15 +152,35 @@ public final class ThemeChooser {
 
     /**
      * Opens the chooser under {@code anchor}, right-aligned with it; {@code chosen} hears each theme picked, at once,
-     * while the chooser stays open (record 128).
+     * while the chooser stays open (record 128); the icon sets' row reports a set picked to {@code iconSetChosen}
+     * (record 155).
      */
-    public static ThemeChooser show(final Component anchor, final Consumer<NamedTheme> chosen) {
-        final ThemeChooser c = new ThemeChooser(SwingUtilities.getWindowAncestor(anchor), chosen);
+    public static ThemeChooser show(
+            final Component anchor,
+            final Consumer<NamedTheme> chosen,
+            final Consumer<IconSet> iconSetChosen) {
+        final ThemeChooser c = new ThemeChooser(SwingUtilities.getWindowAncestor(anchor), chosen, iconSetChosen);
         final Point at = anchor.getLocationOnScreen();
         final Rectangle anchorOnScreen = new Rectangle(at, anchor.getSize());
         c.dialog.setLocation(place(anchorOnScreen, c.dialog.getSize(), screenOf(at)));
         c.dialog.setVisible(true);
         return c;
+    }
+
+    static JPanel iconSets(final Consumer<IconSet> chosen) {
+        final JPanel sets = new JPanel(new FlowLayout(FlowLayout.CENTER, Theme.SPACE_XS, 0));
+        sets.add(new JLabel("Icons"));
+        final ButtonGroup group = new ButtonGroup();
+        for (final IconSet set : IconSet.values()) {
+            final JToggleButton button = new JToggleButton(Icons.of(set, "session"));
+            button.putClientProperty("JButton.buttonType", "toolBarButton");
+            button.setToolTipText(set.label());
+            button.setSelected(set == Icons.chosen());
+            button.addActionListener(_ -> chosen.accept(set));
+            group.add(button);
+            sets.add(button);
+        }
+        return sets;
     }
 
     JDialog dialog() {

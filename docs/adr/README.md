@@ -175,3 +175,4 @@ row and its record differ, or when a record has no row.
 | [152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) | The Files tab splits into the Kit, Brain and Scratchpad tabs | 2026-11-12 | Miguel and Claude | accepted; built |
 | [153](0153-the-icon-is-three-steps-ahead.md) | The icon is three steps ahead | 2026-11-12 | Miguel and Claude | accepted; built |
 | [154](0154-a-link-to-a-page-opens-the-browser.md) | A link to a page opens the browser | 2026-11-12 | Miguel | accepted; built |
+| [155](0155-icon-sets-switch-like-themes.md) | Icon sets switch like themes | 2026-11-12 | Miguel and Claude | accepted; built |

@@ -290,6 +290,11 @@ the window as an instrument console (below). The choice is kept across restarts.
   ([record 128](adr/0128-a-chooser-of-twelve-themes.md)). The switch is a pill with a knob of polished metal, a moon on
   it in dark and a sun in light. The palette has every theme too ([record 104](adr/0104-the-theme-beside-new-panel.md),
   [record 114](adr/0114-help-menu-and-corner-buttons.md)).
+- **Icon sets.** Under the cards, a row of icon sets: Classic and eight more (Hairline, Gold duotone, Solid glyph,
+  Console, Chevron line, Graphite tile, Signal lamp, Monospace), each shown by its session icon. A click changes every
+  icon in every window at once and is kept, as the theme is; the palette has each as `Icons: <set>`. Every set draws
+  the same icons, coloured by owner: grey the kit, gold the brain, orange Claude; on a light theme a set's ivory
+  paints in the text colour ([record 155](adr/0155-icon-sets-switch-like-themes.md)).
 - **The console.** A theme whose file says `"style": "console"` draws the window as the consoles in films are
   drawn, the instrument kind: square corners; a hairline with four corner brackets round the sidebar, the editors,
   the lower panel and the side pane; the tabs' titles and the sidebar's group headers in DIN Condensed (DIN

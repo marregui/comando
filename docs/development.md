@@ -86,6 +86,7 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 | `CheckpointCompactUiTest` | the Checkpoint button against a stand-in for `claude -p`: the checkpoint, then `/compact` once its turn has finished, the conversation and the Session tab kept, nothing carried, the panel's text kept ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md)) |
 | `CheckpointLockUiTest` | the session locked while its checkpoint runs ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)) |
 | `ThemeFadeUiTest` | a theme chosen fades in over the one before: ground and tint applied at once, the old picture over the new |
+| `IconSetUiTest` | an icon set chosen from the palette applies at once and is painted again after a restart ([record 155](adr/0155-icon-sets-switch-like-themes.md)) |
 | `SessionCardUiTest` | a session's row shows the tab's card, a connection's row a card of its facts; both painted to `app/build/snapshots/` |
 | `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)); an HTML page a session names opens in the browser, not a panel ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)) |
 | `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |

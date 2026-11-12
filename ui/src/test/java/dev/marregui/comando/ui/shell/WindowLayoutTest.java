@@ -6,6 +6,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 
@@ -123,6 +124,18 @@ class WindowLayoutTest {
         prefs.put("theme.ground", "ONYX");
         prefs.put("theme.tint", "SILVER");
         assertThat(layout.theme()).as("a ground no theme has, then the tint").isEqualTo(NamedTheme.SLATE_SILVER);
+    }
+
+    /// The icon family is kept by its id; nothing or an id of a family no longer shipped reads as Classic.
+    @Test
+    void anIconSetIsKeptByItsIdAndUnknownIdsReadAsClassic() {
+        final WindowLayout layout = new WindowLayout(prefs);
+        assertThat(layout.iconSet()).isEqualTo(IconSet.CLASSIC);
+        layout.iconSet(IconSet.MONOSPACE);
+        assertThat(prefs.get("icons.id", null)).isEqualTo("monospace");
+        assertThat(new WindowLayout(prefs).iconSet()).isEqualTo(IconSet.MONOSPACE);
+        prefs.put("icons.id", "removed_since");
+        assertThat(layout.iconSet()).isEqualTo(IconSet.CLASSIC);
     }
 
     /// The types of the views on the right side are read back by a new layout in their order; nothing saved reads as

@@ -38,6 +38,18 @@ class GildedIconsTest {
         assertThat(Icons.gilded(new Color(Icons.SVG_GOLD))).isEqualTo(Tint.TREASURE.body);
     }
 
+    /// A set's ivory paints as the text colour only on a light theme and only for a set other than Classic, keeping
+    /// its alpha; on a dark theme, or in Classic, it stays ivory.
+    @Test
+    void aSetsIvoryPaintsAsTheTextColourOnALightTheme() {
+        final Color ivory = new Color(Icons.SVG_IVORY);
+        final Color text = new Color(0x2B2B2B);
+        assertThat(Icons.gilded(ivory, IconSet.HAIRLINE, true, text)).isEqualTo(text);
+        assertThat(Icons.gilded(new Color(0xE8, 0xE2, 0xD4, 90), IconSet.MONOSPACE, true, text).getAlpha()).isEqualTo(90);
+        assertThat(Icons.gilded(ivory, IconSet.HAIRLINE, false, text)).as("dark theme").isEqualTo(ivory);
+        assertThat(Icons.gilded(ivory, IconSet.CLASSIC, true, text)).as("Classic").isEqualTo(ivory);
+    }
+
     /// [Tint#named] falls back to TREASURE for a name no tint has, and every tint's [Tint#at] gives highlight at 0,
     /// body at 0.45 and shade at 1.
     @Test

@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.ui.kit.action.MenuEntry;
+import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
@@ -141,6 +142,9 @@ class MenusTest {
         assertThat(Menus.areas()).as("the connection menu's acts, in the palette too")
                 .containsEntry("connection.test", "Connection").containsEntry("connection.copyDetails", "Connection")
                 .containsEntry("connection.clone", "Connection").containsEntry("connection.remove", "Connection");
+        for (final IconSet set : IconSet.values()) {
+            assertThat(Menus.areas()).containsEntry(set.commandId(), "Icons");
+        }
     }
 
     /// Every menu and submenu is non-empty, starts and ends with an entry, and has no two separators in a row.

@@ -42,6 +42,8 @@ import dev.marregui.comando.ui.kit.action.CommandPalette;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.IconSet;
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.panels.EditorPanel;
@@ -369,6 +371,10 @@ final class Commands {
         for (final NamedTheme t : NamedTheme.values()) {
             cmd(t.commandId(), t.label, null, () -> ui.themeChosen(t));
             actions.choice(t.commandId(), () -> NamedTheme.chosen().orElse(null) == t);
+        }
+        for (final IconSet set : IconSet.values()) {
+            cmd(set.commandId(), "Icons: " + set.label(), null, () -> ui.iconSetChosen(set));
+            actions.choice(set.commandId(), () -> Icons.chosen() == set);
         }
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         final boolean mac = Platform.isMac();

@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import javax.swing.JButton;
 
+import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.theme.GildedSplitIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
@@ -16,6 +17,7 @@ import dev.marregui.comando.ui.kit.theme.NamedTheme;
 public final class ThemeButton extends JButton {
 
     private Consumer<NamedTheme> chosen = t -> { };
+    private Consumer<IconSet> iconSetChosen = _ -> { };
     /** The chooser last opened from here, if any. */
     private ThemeChooser open;
 
@@ -33,7 +35,7 @@ public final class ThemeButton extends JButton {
             if (open != null && open.open()) {
                 open.close();
             } else if (!ThemeChooser.justClosed()) {
-                open = ThemeChooser.show(this, t -> chosen.accept(t));
+                open = ThemeChooser.show(this, chosen, iconSetChosen);
             }
         });
     }
@@ -48,5 +50,10 @@ public final class ThemeButton extends JButton {
     /** {@code chosen} hears the theme picked in the chooser. */
     public void onChosen(final Consumer<NamedTheme> chosen) {
         this.chosen = chosen;
+    }
+
+    /** {@code chosen} hears an icon family picked in the chooser. */
+    public void onIconSetChosen(final Consumer<IconSet> chosen) {
+        iconSetChosen = chosen;
     }
 }

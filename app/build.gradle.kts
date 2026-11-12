@@ -121,6 +121,7 @@ val uiTest = tasks.register<Test>("uiTest") {
         "**/LowerDividerUiTest.class",
         "**/OwnLogUiTest.class",
         "**/ThemeFadeUiTest.class",
+        "**/IconSetUiTest.class",
         "**/LayoutKeeperUiTest.class",
         "**/FocusRouterUiTest.class",
         "**/QuitTeardownUiTest.class",
