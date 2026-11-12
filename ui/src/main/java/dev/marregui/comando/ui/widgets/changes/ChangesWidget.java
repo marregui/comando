@@ -32,6 +32,7 @@ import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tree.TreeView;
@@ -428,9 +429,9 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         final Target t = targets.get(n.link());
         final List<Target> chosen = chosen();
         if (t != null && chosen.size() <= 1) {
-            menu.add(item("Compare with HEAD", "diff", () -> compare(n, ChangeAsk.OPEN)));
+            menu.add(IconMenus.item("Compare with HEAD", "diff", () -> compare(n, ChangeAsk.OPEN)));
             if (t.change().kind() != RepoStatus.Kind.DELETED) {
-                menu.add(item("Open in a panel", "text", () -> openFile.accept(Path.of(t.root()).resolve(t.change().path()))));
+                menu.add(IconMenus.item("Open in a panel", "text", () -> openFile.accept(Path.of(t.root()).resolve(t.change().path()))));
             }
         }
         if (chosen.isEmpty()) {
@@ -439,9 +440,9 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         if (menu.getComponentCount() > 0) {
             menu.addSeparator();
         }
-        menu.add(item("Roll back " + what(chosen) + " to HEAD…", "rollback", () -> rollBack(chosen)));
+        menu.add(IconMenus.item("Roll back " + what(chosen) + " to HEAD…", "rollback", () -> rollBack(chosen)));
         final List<Target> removable = chosen.stream().filter(x -> x.change().kind() != RepoStatus.Kind.DELETED).toList();
-        final JMenuItem trash = item(removable.isEmpty() ? "Move to the Trash…" : "Move " + what(removable) + " to the Trash…", "trash",
+        final JMenuItem trash = IconMenus.item(removable.isEmpty() ? "Move to the Trash…" : "Move " + what(removable) + " to the Trash…", "trash",
                 () -> remove(removable));
         trash.setEnabled(!removable.isEmpty());
         menu.add(trash);
@@ -492,11 +493,5 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         final Map<String, List<Target>> out = new LinkedHashMap<>();
         files.forEach(f -> out.computeIfAbsent(f.root(), k -> new ArrayList<>()).add(f));
         return out;
-    }
-
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(a -> r.run());
-        return i;
     }
 }

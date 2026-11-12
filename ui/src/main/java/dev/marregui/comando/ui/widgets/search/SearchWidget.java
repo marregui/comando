@@ -18,7 +18,6 @@ import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
@@ -39,6 +38,7 @@ import dev.marregui.comando.core.port.SearchPort;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.Tooltips;
@@ -174,12 +174,6 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
         // a click leaves the keyboard where it was
         b.setFocusable(false);
         return b;
-    }
-
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(_ -> r.run());
-        return i;
     }
 
     /** Searches {@code text} with the keyboard in the field; the text already searched is not searched again. */
@@ -516,10 +510,10 @@ public final class SearchWidget implements Widget<ViewSpec.Search>, Copyable {
             return;
         }
         final JPopupMenu menu = new JPopupMenu();
-        menu.add(item(hit.kind() == SearchHit.Kind.CONVERSATION && !hub.opener().inSession(hit.conversation())
+        menu.add(IconMenus.item(hit.kind() == SearchHit.Kind.CONVERSATION && !hub.opener().inSession(hit.conversation())
                 ? "Import…" : "Open", "open-file", () -> activate(n)));
         if (hit.kind() != SearchHit.Kind.CONVERSATION) {
-            menu.add(item("Show in the sidebar", "files", () -> hub.opener().showInFiles(hit)));
+            menu.add(IconMenus.item("Show in the sidebar", "files", () -> hub.opener().showInFiles(hit)));
         }
         menu.show(e.getComponent(), e.getX(), e.getY());
     }

@@ -75,7 +75,7 @@ import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.TabStrip;
@@ -675,24 +675,18 @@ public final class SessionsSidebar {
         final JPopupMenu menu = new JPopupMenu();
         switch (tab) {
             case SESSIONS -> {
-                menu.add(menuItem("New session…", "add", sessionActions::addNew));
-                menu.add(menuItem("Import stored conversations…", "import", dialogs::importSessions));
-                final JMenuItem sorting = menuItem(SORT_TIP, "sort", () -> order(false));
+                menu.add(IconMenus.item("New session…", "add", sessionActions::addNew));
+                menu.add(IconMenus.item("Import stored conversations…", "import", dialogs::importSessions));
+                final JMenuItem sorting = IconMenus.item(SORT_TIP, "sort", () -> order(false));
                 sorting.setEnabled(manualOrder); // sorted already: nothing to do until a drag orders them by hand
                 menu.add(sorting);
             }
-            case CONNECTIONS -> menu.add(menuItem("New connection…", "add", connectionActions::addNew));
+            case CONNECTIONS -> menu.add(IconMenus.item("New connection…", "add", connectionActions::addNew));
             default -> {
             }
         }
         moreForTab.accept(tab, menu);
         return menu;
-    }
-
-    private static JMenuItem menuItem(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(a -> r.run());
-        return i;
     }
 
     /** The panels without a session under the sessions; for tests. */
@@ -1375,27 +1369,27 @@ public final class SessionsSidebar {
         final JPopupMenu m = new JPopupMenu();
         // the session runs its checkpoint: what acts on it waits, but a stop or an interrupt (record 130)
         final boolean free = !s.isCheckpointing();
-        m.add(item("Open in a panel", "claude", () -> intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()))));
+        m.add(IconMenus.item("Open in a panel", "claude", () -> intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()))));
         m.addSeparator();
         if (s.status().isUsable()) {
-            m.add(item("Stop", "stop", () -> intents.dispatch(new Intent.StopSession(s.name()))));
+            m.add(IconMenus.item("Stop", "stop", () -> intents.dispatch(new Intent.StopSession(s.name()))));
             if (s.isBusy()) {
-                m.add(item("Interrupt the turn", "interrupt", () -> intents.dispatch(new Intent.InterruptSession(s.name()))));
+                m.add(IconMenus.item("Interrupt the turn", "interrupt", () -> intents.dispatch(new Intent.InterruptSession(s.name()))));
             }
         } else {
-            m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
+            m.add(IconMenus.item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
         if (SessionBar.showsFresh(s)) {
-            m.add(tipped(item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))),
+            m.add(tipped(IconMenus.item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))),
                     SessionRow.freshTip(s))).setEnabled(free);
         }
         if (SessionBar.showsCheckpoint(s)) {
-            m.add(tipped(item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", SessionBar.checkpointIcon(s),
+            m.add(tipped(IconMenus.item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", SessionBar.checkpointIcon(s),
                     () -> intents.dispatch(new Intent.Checkpoint(s.name()))), SessionBar.checkpointTip(s)))
                     .setEnabled(SessionBar.canCheckpoint(s));
         }
         if (s.status().isUsable()) {
-            m.add(tipped(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),
+            m.add(tipped(IconMenus.item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),
                     SessionRow.COMPACT_TIP)).setEnabled(free);
             rewriteItem(s).ifPresent(m::add);
         }
@@ -1412,11 +1406,11 @@ public final class SessionsSidebar {
         efforts.setEnabled(free);
         m.add(efforts);
         m.addSeparator();
-        m.add(item("Copy details", "copy", () -> copyDetails(s)));
+        m.add(IconMenus.item("Copy details", "copy", () -> copyDetails(s)));
         m.addSeparator();
-        m.add(item("Edit…", "edit", () -> dialogs.sessions().edit(s.name()))).setEnabled(free);
-        m.add(item("Clone…", "copy", () -> cloneSession(s)));
-        m.add(item("Remove…", "close", () -> removeSession(s))).setEnabled(free);
+        m.add(IconMenus.item("Edit…", "edit", () -> dialogs.sessions().edit(s.name()))).setEnabled(free);
+        m.add(IconMenus.item("Clone…", "copy", () -> cloneSession(s)));
+        m.add(IconMenus.item("Remove…", "close", () -> removeSession(s))).setEnabled(free);
         return m;
     }
 
@@ -1432,7 +1426,7 @@ public final class SessionsSidebar {
         }
         final PanelState panel = bound.stream().filter(p -> p.id().equals(state.focused())).findFirst().orElse(bound.getFirst());
         final String text = texts.load(panel.id());
-        final JMenuItem i = item(Plain.text("Rewrite " + panel.title() + " as a document"), "markdown", () -> {
+        final JMenuItem i = IconMenus.item(Plain.text("Rewrite " + panel.title() + " as a document"), "markdown", () -> {
             final String now = texts.load(panel.id());
             if (!now.isBlank()) {
                 intents.dispatch(new Intent.RunText(panel.id(), EditorPanel.polishPrompt(panel.title(), now), Target.CLAUDE));
@@ -1445,21 +1439,21 @@ public final class SessionsSidebar {
 
     JPopupMenu connectionMenu(final ConnectionState c) {
         final JPopupMenu m = new JPopupMenu();
-        m.add(item("Bind to the focused panel", "database", () -> intents.dispatch(new Intent.BindConnection(state.focused(), c.name()))));
+        m.add(IconMenus.item("Bind to the focused panel", "database", () -> intents.dispatch(new Intent.BindConnection(state.focused(), c.name()))));
         m.addSeparator();
         if (c.status().isUsable()) {
-            m.add(item("Disconnect", "unplug", () -> intents.dispatch(new Intent.CloseConnection(c.name()))));
+            m.add(IconMenus.item("Disconnect", "unplug", () -> intents.dispatch(new Intent.CloseConnection(c.name()))));
         } else {
-            m.add(item("Connect", "plug", () -> intents.dispatch(new Intent.OpenConnection(c.name()))));
+            m.add(IconMenus.item("Connect", "plug", () -> intents.dispatch(new Intent.OpenConnection(c.name()))));
         }
-        m.add(item("Test", "check", () -> intents.dispatch(new Intent.TestConnection(c.spec()))));
-        m.add(item("Explore the schema", "tree", () -> dialogs.exploreSchema(c.name())));
+        m.add(IconMenus.item("Test", "check", () -> intents.dispatch(new Intent.TestConnection(c.spec()))));
+        m.add(IconMenus.item("Explore the schema", "tree", () -> dialogs.exploreSchema(c.name())));
         m.addSeparator();
-        m.add(item("Copy details", "copy", () -> copyDetails(c)));
+        m.add(IconMenus.item("Copy details", "copy", () -> copyDetails(c)));
         m.addSeparator();
-        m.add(item("Edit…", "edit", () -> dialogs.connections().edit(c.name())));
-        m.add(item("Clone…", "copy", () -> cloneConnection(c)));
-        m.add(item("Remove…", "close", () -> removeConnection(c)));
+        m.add(IconMenus.item("Edit…", "edit", () -> dialogs.connections().edit(c.name())));
+        m.add(IconMenus.item("Clone…", "copy", () -> cloneConnection(c)));
+        m.add(IconMenus.item("Remove…", "close", () -> removeConnection(c)));
         return m;
     }
 
@@ -1651,12 +1645,6 @@ public final class SessionsSidebar {
         SidebarLook.ground(p);
         p.add(content, BorderLayout.CENTER);
         return p;
-    }
-
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(e -> r.run());
-        return i;
     }
 
     /** Selects the first row of {@code list} that {@code which} accepts; with none, no row. */

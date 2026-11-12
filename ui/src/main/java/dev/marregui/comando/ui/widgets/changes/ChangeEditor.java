@@ -59,6 +59,7 @@ import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
@@ -211,8 +212,8 @@ public final class ChangeEditor implements Unmountable {
         this.questions = questions;
         previous = arrow("↑", KeyText.of("Previous difference (⇧F7)"), diff::previous);
         next = arrow("↓", "Next difference (F7)", diff::next);
-        rollBack = menuItem("Roll back to HEAD", "rollback", this::rollBack);
-        remove = menuItem("Move to the Trash…", "trash", this::remove);
+        rollBack = IconMenus.item("Roll back to HEAD", "rollback", this::rollBack);
+        remove = IconMenus.item("Move to the Trash…", "trash", this::remove);
         mode = ToolButton.of("preview", "", this::toggleRendered);
         recompare = new Debouncer(RECOMPARE_MILLIS, this::recompare);
         relevel = new Debouncer(LEVEL_MILLIS, this::level);
@@ -1036,12 +1037,6 @@ public final class ChangeEditor implements Unmountable {
             }
         }
         return toSpan;
-    }
-
-    private static JMenuItem menuItem(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(e -> r.run());
-        return i;
     }
 
     private static JButton arrow(final String text, final String tip, final Runnable r) {

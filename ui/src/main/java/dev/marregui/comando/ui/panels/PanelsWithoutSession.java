@@ -33,6 +33,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -207,14 +208,14 @@ final class PanelsWithoutSession {
     /** A row's menu: open or bring forward, rename, make it a session's own, remove. */
     JPopupMenu menu(final Row r) {
         final JPopupMenu m = new JPopupMenu();
-        m.add(item(r.open() ? "Bring forward" : "Open", "file", () -> open(r)));
+        m.add(IconMenus.item(r.open() ? "Bring forward" : "Open", "file", () -> open(r)));
         m.addSeparator();
-        m.add(item("Rename…", "edit", () -> Workspace.rename(r.panel(), list, intents)));
-        final JMenuItem create = item(Plain.text("New session " + r.panel().title() + "…"), "add", () -> newSession.accept(r.panel().title()));
+        m.add(IconMenus.item("Rename…", "edit", () -> Workspace.rename(r.panel(), list, intents)));
+        final JMenuItem create = IconMenus.item(Plain.text("New session " + r.panel().title() + "…"), "add", () -> newSession.accept(r.panel().title()));
         create.setToolTipText("A session with this panel's name, this panel its own");
         m.add(create);
         m.addSeparator();
-        m.add(item("Remove…", "close", () -> actions.remove(r)));
+        m.add(IconMenus.item("Remove…", "close", () -> actions.remove(r)));
         return m;
     }
 
@@ -247,11 +248,5 @@ final class PanelsWithoutSession {
                 "&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>closed</span>")
                 + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
                 + MarkdownHtml.escape(String.join(" · ", parts)) + "</span></nobr></html>";
-    }
-
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(e -> r.run());
-        return i;
     }
 }

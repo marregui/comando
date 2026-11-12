@@ -23,13 +23,11 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -46,14 +44,11 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeCellRenderer;
-import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import dev.marregui.comando.core.intent.Intent;
@@ -74,6 +69,7 @@ import dev.marregui.comando.ui.kit.text.Tooltips;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.tree.TreeView;
 
 /**
  * The sidebar's Instances tab (record 124): what the other comando instances are doing, from their presence on the
@@ -119,10 +115,12 @@ final class InstancesTab {
     private final Supplier<InstancesPort> port;
     private final Supplier<SessionsSidebar.Cards> cards;
     /**
-     * A row's card: after a click, as in the Sessions tab, it follows the pointer onto the other rows, each row's card
-     * after a rest of {@link SessionsSidebar#FOLLOW_MILLIS}, until it closes otherwise.
+     * The instances and their sessions: a row's card, after a click, as in the Sessions tab, follows the pointer onto
+     * the other rows, each row's card after a rest of {@link SessionsSidebar#FOLLOW_MILLIS}, until it closes otherwise.
      */
-    private final CardFollower<Row> follower;
+    private final Navigator<Row> navigator;
+    /** The rows shown, by their node's link: the key of each row's card. */
+    private Map<String, Row> rows = Map.of();
     private volatile Edge edge = Edge.NONE;
     private final JPanel root = new JPanel(new BorderLayout());
     /**
@@ -136,9 +134,6 @@ final class InstancesTab {
         }
     };
     private final JButton start = new JButton("Start the Edge");
-    private final DefaultMutableTreeNode top = new DefaultMutableTreeNode();
-    private final DefaultTreeModel model = new DefaultTreeModel(top);
-    private final JTree tree = new JTree(model);
     private final DefaultListModel<Consult> consultModel = new DefaultListModel<>();
     private final JList<Consult> consults = new JList<>(consultModel);
     /** Refreshes the header while shown: the Edge starts and stops without a change of state. */
@@ -165,35 +160,14 @@ final class InstancesTab {
         head.add(status, BorderLayout.CENTER);
         head.add(buttons, BorderLayout.SOUTH);
 
-        tree.setRootVisible(false);
-        tree.setShowsRootHandles(true);
-        tree.setCellRenderer(new RowRenderer());
-        tree.setToggleClickCount(0);
-        SidebarLook.tree(tree);
-        follower = new CardFollower<>(tree, cards, InstancesTab::rowOf, InstancesTab::key, InstancesTab::same,
-                this::cardOf);
-        tree.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(final MouseEvent e) {
-                menu(e);
-            }
-
-            @Override
-            public void mouseReleased(final MouseEvent e) {
-                menu(e);
-            }
-
-            @Override
-            public void mouseClicked(final MouseEvent e) {
-                // a click shows the row's card, which then follows the pointer; a double click does nothing more
-                if (e.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(e)) {
-                    final Row r = rowAt(e);
-                    if (r != null) {
-                        follower.clicked(r);
-                    }
-                }
-            }
-        });
+        navigator = new Navigator<>("Instances", cards, this::rowOf, InstancesTab::key, InstancesTab::same, this::cardOf);
+        final TreeView view = navigator.view();
+        view.sidebar(_ -> null);
+        // a double click does nothing: an instance opens and closes at its handle
+        view.tree().setToggleClickCount(0);
+        view.nodeIcons(n -> icon(rowOf(n)));
+        view.colors(n -> color(rowOf(n)));
+        navigator.menus(this::menuFor);
 
         consults.setCellRenderer(new ConsultRenderer());
         SidebarLook.list(consults);
@@ -214,7 +188,7 @@ final class InstancesTab {
         final JPanel upper = new JPanel(new BorderLayout());
         SidebarLook.ground(upper);
         upper.add(head, BorderLayout.NORTH);
-        upper.add(scroll(tree), BorderLayout.CENTER);
+        upper.add(navigator.component(), BorderLayout.CENTER);
         // the instances over the questions, 3 to 2; no split pane: the window finds its own panes by orientation
         final JPanel both = new JPanel(new GridBagLayout());
         both.setOpaque(false);
@@ -270,53 +244,45 @@ final class InstancesTab {
             newest.forEach(consultModel::addElement);
         }
         header();
-        follower.refresh(this::now);
+        navigator.refresh(navigator::shown);
     }
 
-    /** The tree again, keeping the instances the user opened open and the selected one selected. */
+    /**
+     * The tree again, keeping the instances the user opened open and the selected row selected: a row is named by its
+     * instance's or session's name, what changes about it follows the name, muted.
+     */
     private void rebuild(final InstancesState i) {
-        final Set<String> open = new HashSet<>();
-        String selected = null;
-        final Enumeration<TreePath> expanded = tree.getExpandedDescendants(new TreePath(top));
-        while (expanded != null && expanded.hasMoreElements()) {
-            if (expanded.nextElement().getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row r) {
-                open.add(r.instance().slug());
-            }
-        }
-        if (tree.getLastSelectedPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row r) {
-            selected = r.instance().slug() + (r.member() == null ? "" : "/" + r.member().name());
-        }
-        top.removeAllChildren();
+        final Map<String, Row> byKey = new HashMap<>();
+        final List<ViewSpec.TreeNode> nodes = new ArrayList<>();
         if (!i.self().slug().isEmpty()) {
-            top.add(node(i.self(), true));
+            nodes.add(node(i.self(), true, i.self().version(), byKey));
         }
-        i.others().forEach(o -> top.add(node(o, false)));
-        model.reload();
-        for (int k = 0; k < top.getChildCount(); k++) {
-            final DefaultMutableTreeNode n = (DefaultMutableTreeNode) top.getChildAt(k);
-            final Row r = (Row) n.getUserObject();
-            final TreePath path = new TreePath(n.getPath());
-            if (open.contains(r.instance().slug())) {
-                tree.expandPath(path);
-            }
-            if (selected != null) {
-                if (selected.equals(r.instance().slug())) {
-                    tree.setSelectionPath(path);
-                }
-                for (int m = 0; m < n.getChildCount(); m++) {
-                    final DefaultMutableTreeNode c = (DefaultMutableTreeNode) n.getChildAt(m);
-                    if (selected.equals(r.instance().slug() + "/" + ((Row) c.getUserObject()).member().name())) {
-                        tree.setSelectionPath(new TreePath(c.getPath()));
-                    }
-                }
-            }
-        }
+        i.others().forEach(o -> nodes.add(node(o, false, i.self().version(), byKey)));
+        rows = byKey;
+        navigator.view().update(new ViewSpec.TreeNode("", "", "", nodes));
+        // what only the icons show (busy, refused, the Edge started) leaves the nodes equal: the rows are drawn again
+        navigator.view().rowsChanged();
     }
 
-    private static DefaultMutableTreeNode node(final Instance in, final boolean self) {
-        final DefaultMutableTreeNode n = new DefaultMutableTreeNode(new Row(in, null, self));
-        in.sessions().forEach(m -> n.add(new DefaultMutableTreeNode(new Row(in, m, self))));
-        return n;
+    /** {@code in}'s node, its sessions' under it; each row kept in {@code byKey} by its node's link. */
+    private static ViewSpec.TreeNode node(final Instance in, final boolean self, final String myVersion, final Map<String, Row> byKey) {
+        final List<ViewSpec.TreeNode> sessions = new ArrayList<>();
+        for (final Member m : in.sessions()) {
+            final Row r = new Row(in, m, self);
+            byKey.put(key(r), r);
+            sessions.add(new ViewSpec.TreeNode(m.name(), after(m.name(), line(m)), key(r), List.of()));
+        }
+        final Row r = new Row(in, null, self);
+        byKey.put(key(r), r);
+        final String name = in.name() + (self ? " (this one)" : "");
+        final String line = line(in, self, myVersion, System.currentTimeMillis(), ZoneId.systemDefault());
+        return new ViewSpec.TreeNode(name, after(name, line), key(r), sessions);
+    }
+
+    /** What {@code line} says after {@code name}, which it starts with: the row's detail. */
+    private static String after(final String name, final String line) {
+        final String rest = line.substring(name.length());
+        return rest.startsWith(" · ") ? rest.substring(3) : rest;
     }
 
     /** The header says something only while this instance is not connected: why, and the Edge's start. */
@@ -346,26 +312,6 @@ final class InstancesTab {
             start.setVisible(offer);
             root.revalidate();
         }
-    }
-
-    private Row rowAt(final MouseEvent e) {
-        final TreePath path = tree.getPathForLocation(e.getX(), e.getY());
-        if (path == null || !(path.getLastPathComponent() instanceof DefaultMutableTreeNode n) || !(n.getUserObject() instanceof Row r)) {
-            return null;
-        }
-        tree.setSelectionPath(path);
-        return r;
-    }
-
-    private void menu(final MouseEvent e) {
-        if (!e.isPopupTrigger()) {
-            return;
-        }
-        final Row r = rowAt(e);
-        if (r == null) {
-            return;
-        }
-        menuFor(r).show(tree, e.getX(), e.getY());
     }
 
     /**
@@ -439,9 +385,12 @@ final class InstancesTab {
     }
 
     /** The row at {@code path}, or null; the selection stays. */
-    private static Row rowOf(final TreePath path) {
-        return path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode n
-                && n.getUserObject() instanceof Row r ? r : null;
+    private Row rowOf(final TreePath path) {
+        return path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode n ? rowOf(n) : null;
+    }
+
+    private Row rowOf(final DefaultMutableTreeNode n) {
+        return n.getUserObject() instanceof ViewSpec.TreeNode node ? rows.get(node.link()) : null;
     }
 
     private static String key(final Row r) {
@@ -456,18 +405,6 @@ final class InstancesTab {
     private Card cardOf(final Row r) {
         return cardOf(r, shown == null ? "" : shown.self().version(), shown != null && shown.denied().contains(r.instance().slug()),
                 System.currentTimeMillis(), ZoneId.systemDefault());
-    }
-
-    /** The row shown now as {@code r}, the last of them, or null when it is gone. */
-    private Row now(final Row r) {
-        Row now = null;
-        for (int i = 0; i < tree.getRowCount(); i++) {
-            final Row x = rowOf(tree.getPathForRow(i));
-            if (x != null && same(r, x)) {
-                now = x;
-            }
-        }
-        return now;
     }
 
     /** What a row's card says: its title, its facts, and under a heading the last exchange of a session. */
@@ -701,38 +638,27 @@ final class InstancesTab {
         }
     }
 
-    /** A row's text comes from the instance it names, a peer's among them: text, never HTML (own rule 6). */
-    private final class RowRenderer extends DefaultTreeCellRenderer {
-        RowRenderer() {
-            Plain.only(this);
+    /** A row's icon: a session's, or an instance's, with the dot of busy, idle or refused and the Edge's antenna. */
+    private Icon icon(final Row r) {
+        if (r == null) {
+            return null;
         }
+        if (r.member() != null) {
+            return new Dot(Icons.get("session"), dot(r.member()), null);
+        }
+        final Instance in = r.instance();
+        final boolean denied = shown != null && shown.denied().contains(in.slug());
+        final Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
+        return new Dot(Icons.get("instances"), dot, in.edge() ? Icons.get("edge") : null);
+    }
 
-        @Override
-        public Component getTreeCellRendererComponent(final JTree t, final Object value, final boolean sel, final boolean expanded, final boolean leaf, final int row, final boolean focus) {
-            super.getTreeCellRendererComponent(t, value, sel, expanded, leaf, row, focus);
-            setBackgroundNonSelectionColor(Theme.ground());
-            if (!(value instanceof DefaultMutableTreeNode n) || !(n.getUserObject() instanceof Row r)) {
-                return this;
-            }
-            final String mine = shown == null ? "" : shown.self().version();
-            final boolean denied = shown != null && shown.denied().contains(r.instance().slug());
-            // the card, at a click, says what the row only marks
-            setToolTipText(null);
-            if (r.member() != null) {
-                setText(line(r.member()));
-                setIcon(new Dot(Icons.get("session"), dot(r.member()), null));
-            } else {
-                final Instance in = r.instance();
-                setText(line(in, r.self(), mine, System.currentTimeMillis(), ZoneId.systemDefault()));
-                final Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
-                setIcon(new Dot(Icons.get("instances"), dot, in.edge() ? Icons.get("edge") : null));
-            }
-            if (!sel) {
-                setForeground(r.member() == null && !r.self() && !r.instance().present() ? Theme.MUTED
-                        : !r.self() && r.member() == null && !r.instance().version().equals(mine) ? Theme.ATTENTION : SidebarLook.TEXT);
-            }
-            return this;
+    /** A row's name: muted for an instance that left, in the attention colour for another comando version. */
+    private Color color(final Row r) {
+        if (r == null || r.member() != null || r.self()) {
+            return null;
         }
+        final String mine = shown == null ? "" : shown.self().version();
+        return !r.instance().present() ? Theme.MUTED : !r.instance().version().equals(mine) ? Theme.ATTENTION : null;
     }
 
     /** A question's line and tooltip come from the peer that asked it: text, never HTML (own rule 6). */

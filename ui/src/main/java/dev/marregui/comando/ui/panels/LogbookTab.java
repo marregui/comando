@@ -1,8 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.Rectangle;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -22,15 +20,10 @@ import java.util.function.Supplier;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
-import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
-import javax.swing.JScrollPane;
 import javax.swing.JTree;
-import javax.swing.SwingUtilities;
-import javax.swing.ToolTipManager;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
-import javax.swing.tree.TreeSelectionModel;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.logbook.Logbook;
@@ -43,6 +36,7 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -76,15 +70,15 @@ final class LogbookTab {
 
     /** The sidebar's cards, shown in place of a row's tooltip. */
     private final Supplier<SessionsSidebar.Cards> cards;
-    /**
-     * A row's card: after a click, as in the Instances tab, it follows the pointer onto the other rows, each row's card
-     * after a rest of {@link SessionsSidebar#FOLLOW_MILLIS}, until it closes otherwise.
-     */
-    private final CardFollower<Row> follower;
     private final IntentSink intents;
+    /**
+     * The rows: a row's card, after a click, follows the pointer onto the other rows, as in the Instances tab; a double
+     * click opens the task's page.
+     */
+    private final Navigator<Row> navigator;
     /** Opens a file in a panel, as a double click in the Files tab does. */
     private final Consumer<Path> open;
-    private final TreeView view = new TreeView();
+    private final TreeView view;
     /** {@link #shown}'s tasks by number. */
     private Map<Integer, LogbookTask> numbered = Map.of();
     /** The logbook the rows show; {@link Logbook#NONE} before the first render. */
@@ -95,47 +89,15 @@ final class LogbookTab {
         this.intents = intents;
         this.open = open;
         this.cards = cards;
-        final JTree tree = view.tree();
-        tree.setRootVisible(false);
-        tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
-        tree.getAccessibleContext().setAccessibleName("Logbook");
+        navigator = new Navigator<>("Logbook", cards, this::rowAt, LogbookTab::key, LogbookTab::same, r -> r);
+        view = navigator.view();
         view.icons(this::icon);
         view.colors(n -> n.getUserObject() instanceof ViewSpec.TreeNode node && node.link().isEmpty()
                 ? Theme.MUTED_STRONG : null);
         view.toggleOnClick(true);
         view.sidebar(LogbookTab::header);
-        view.spaceAbove();
-        view.onActivate(n -> {
-            final LogbookTask t = task(n);
-            if (t != null) {
-                page(t);
-            }
-        });
-        view.onMenu((n, e) -> {
-            final LogbookTask t = task(n);
-            if (t != null) {
-                menu(t).show(e.getComponent(), e.getX(), e.getY());
-            }
-        });
-        // a row tells its task on its card, not in a tooltip: the tree's own, and a detail cut short, are not shown
-        ToolTipManager.sharedInstance().unregisterComponent(tree);
-        follower = new CardFollower<>(tree, cards, this::rowAt, LogbookTab::key, LogbookTab::same, r -> r);
-        tree.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(final MouseEvent e) {
-                // a click shows the row's card, which then follows the pointer; a double click shows the page
-                if (e.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(e)) {
-                    final Row r = rowUnder(e.getX(), e.getY());
-                    if (r != null) {
-                        follower.clicked(r);
-                    }
-                }
-            }
-        });
-        if (view.component() instanceof JScrollPane sp) {
-            // as the Files tab: a name wider than the tab scrolls into view rather than being cut at the edge
-            sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        }
+        navigator.onOpen(r -> page(r.task()));
+        navigator.menus(r -> menu(r.task()));
         view.setRoot(root(Logbook.NONE), 2);
     }
 
@@ -257,7 +219,7 @@ final class LogbookTab {
     }
 
     JComponent component() {
-        return view.component();
+        return navigator.component();
     }
 
     /**
@@ -270,7 +232,7 @@ final class LogbookTab {
         if (l.equals(shown)) {
             return;
         }
-        final Row selected = selectedRow();
+        final Row selected = navigator.selected();
         final Set<String> closed = closedGroups();
         final JTree tree = view.tree();
         final Rectangle seen = tree.getVisibleRect();
@@ -288,7 +250,7 @@ final class LogbookTab {
         }
         reselect(selected);
         tree.scrollRectToVisible(seen);
-        follower.refresh(this::now);
+        navigator.refresh(this::now);
     }
 
     /**
@@ -298,12 +260,12 @@ final class LogbookTab {
      */
     JPopupMenu menu(final LogbookTask t) {
         final JPopupMenu m = new JPopupMenu();
-        m.add(item("Show the task", "markdown", () -> page(t)));
+        m.add(IconMenus.item("Show the task", "markdown", () -> page(t)));
         final LinearTickets.Site site = cards.get().linearSite();
         if (!site.workspace().isEmpty()) {
             for (final String id : t.tickets()) {
                 final String url = LinearTickets.url(site, id);
-                m.add(item(Plain.text("Open " + id + " in Linear"), "browser", () -> Links.open(url, null)));
+                m.add(IconMenus.item(Plain.text("Open " + id + " in Linear"), "browser", () -> Links.open(url, null)));
             }
         }
         final List<String> running = state == null ? List.of()
@@ -312,10 +274,10 @@ final class LogbookTab {
         if (t.isWaitingOnUser()) {
             m.add(sessions("Ask me its decisions in", "question", running, askPrompt(t.number())));
         }
-        final JMenu documents = submenu("Open document", "open-file");
+        final JMenu documents = IconMenus.submenu("Open document", "open-file");
         for (final String d : t.documents()) {
             for (final Path p : resolved(shown, d)) {
-                documents.add(item(Plain.text(d), "file", () -> open.accept(p)));
+                documents.add(IconMenus.item(Plain.text(d), "file", () -> open.accept(p)));
             }
         }
         if (documents.getItemCount() > 0) {
@@ -396,18 +358,6 @@ final class LogbookTab {
         return b != null && a.waiting() == b.waiting() && a.task().number() == b.task().number();
     }
 
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(_ -> r.run());
-        return i;
-    }
-
-    private static JMenu submenu(final String text, final String icon) {
-        final JMenu m = new JMenu(text);
-        m.setIcon(Icons.get(icon));
-        return m;
-    }
-
     private Icon icon(final ViewSpec.TreeNode n) {
         final LogbookTask t = task(n);
         if (t != null) {
@@ -439,19 +389,10 @@ final class LogbookTab {
         return new Row(waiting, t);
     }
 
-    /** The row under {@code (x, y)}, its icon or text, or null; the selection stays. */
-    private Row rowUnder(final int x, final int y) {
-        return rowAt(view.tree().getPathForLocation(x, y));
-    }
-
     /** {@code r} with its task as the logbook says now; null when the task is gone. */
     private Row now(final Row r) {
         final LogbookTask t = numbered.get(r.task().number());
         return t == null ? null : new Row(r.waiting(), t);
-    }
-
-    private Row selectedRow() {
-        return rowAt(view.tree().getSelectionPath());
     }
 
     /** The links of the groups shown closed. */
@@ -500,8 +441,8 @@ final class LogbookTab {
 
     /** A submenu with one item per running session, each sending {@code prompt}; disabled while none runs. */
     private JMenu sessions(final String text, final String icon, final List<String> running, final String prompt) {
-        final JMenu m = submenu(text, icon);
-        running.forEach(n -> m.add(item(Plain.text(n), "session", () -> prompt(n, prompt))));
+        final JMenu m = IconMenus.submenu(text, icon);
+        running.forEach(n -> m.add(IconMenus.item(Plain.text(n), "session", () -> prompt(n, prompt))));
         m.setEnabled(!running.isEmpty());
         return m;
     }

@@ -57,6 +57,7 @@ import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.OverlayIcon;
 import dev.marregui.comando.ui.kit.icon.RowIcon;
@@ -1219,14 +1220,14 @@ final class FilesTab {
         final JPopupMenu menu = new JPopupMenu();
         final TreePath at = shown().tree().getSelectionPath();
         if (isJobs(n)) {
-            menu.add(item(CONFIGURE_JOBS, "kit", configureJobs));
-            final JMenuItem apply = item(APPLY_JOBS, "refresh", applyJobs);
+            menu.add(IconMenus.item(CONFIGURE_JOBS, "kit", configureJobs));
+            final JMenuItem apply = IconMenus.item(APPLY_JOBS, "refresh", applyJobs);
             apply.setEnabled(jobs.pending() && jobs.running().isEmpty());
             menu.add(apply);
         } else if (n.link().startsWith(SourceLinks.SCHEME)) {
             final Path file = Path.of(SourceLinks.path(n.link()));
-            menu.add(item("Open in a panel", "text", () -> open.accept(file)));
-            menu.add(item("Edit in a panel", "edit", () -> editFile.accept(file)));
+            menu.add(IconMenus.item("Open in a panel", "text", () -> open.accept(file)));
+            menu.add(IconMenus.item("Edit in a panel", "edit", () -> editFile.accept(file)));
             addCompare(menu, file);
             addTrash(menu);
         } else if (entry(n)) {
@@ -1234,7 +1235,7 @@ final class FilesTab {
         } else if (selectedFolder() != null && at != null && rowFolder(n).equals(Optional.of(selectedFolder()))) {
             final FolderRoot f = selectedFolder();
             // asked for by name: a missing index says so in the status bar, as any file that cannot be opened
-            f.indexFile().ifPresent(index -> menu.add(item("Open " + f.index(), "index", () -> open.accept(index))));
+            f.indexFile().ifPresent(index -> menu.add(IconMenus.item("Open " + f.index(), "index", () -> open.accept(index))));
             if (isTop(at.getPath())) {
                 addChanges(menu, at);
                 folderMenu.accept(f, menu);
@@ -1342,8 +1343,8 @@ final class FilesTab {
         final String title = title(at);
         final String inside = inside(repo.get(), folder.get());
         final JMenuItem item = changes.holdsChanges(folder.get())
-                ? item("Show changes in " + title, "diff", () -> showChanges(repo.get(), inside, title))
-                : item("No changes in " + title, "diff", () -> {
+                ? IconMenus.item("Show changes in " + title, "diff", () -> showChanges(repo.get(), inside, title))
+                : IconMenus.item("No changes in " + title, "diff", () -> {
                 });
         item.setEnabled(changes.holdsChanges(folder.get()));
         menu.add(item);
@@ -1354,7 +1355,7 @@ final class FilesTab {
         changes.repoOf(file).ifPresent(repo -> {
             final String inside = Path.of(repo.root()).toAbsolutePath().normalize().relativize(file.toAbsolutePath().normalize()).toString().replace('\\', '/');
             repo.changes().stream().filter(c -> c.path().equals(inside)).findFirst().ifPresent(c ->
-                    menu.add(item("Compare with HEAD", "diff", () -> intents.dispatch(new Intent.OpenChange(repo.root(), c, ChangeAsk.OPEN)))));
+                    menu.add(IconMenus.item("Compare with HEAD", "diff", () -> intents.dispatch(new Intent.OpenChange(repo.root(), c, ChangeAsk.OPEN)))));
         });
     }
 
@@ -1409,7 +1410,7 @@ final class FilesTab {
             final List<Path> paths = t.getValue();
             final String what = paths.size() == 1 ? paths.getFirst().getFileName().toString() : paths.size() + " entries";
             menu.addSeparator();
-            menu.add(item("Move " + what + " to the Trash…", "trash", () -> moveToTrash(t.getKey(), paths)));
+            menu.add(IconMenus.item("Move " + what + " to the Trash…", "trash", () -> moveToTrash(t.getKey(), paths)));
         });
     }
 
@@ -1425,12 +1426,6 @@ final class FilesTab {
         if (questions.ask(shown().tree(), Plain.text(text), "Move to the Trash", options) == 0) {
             intents.dispatch(new Intent.DeleteFiles(folder.name(), paths.stream().map(Path::toString).toList()));
         }
-    }
-
-    private static JMenuItem item(final String text, final String icon, final Runnable r) {
-        final JMenuItem i = new JMenuItem(text, Icons.get(icon));
-        i.addActionListener(a -> r.run());
-        return i;
     }
 
     // ---- filter

@@ -213,6 +213,9 @@ public final class TreeView {
                             }
                         }
                         cell.setToolTipText(cellTip);
+                        // the cell is a panel, which has no name of its own: a screen reader reads what the row says
+                        cell.getAccessibleContext().setAccessibleName(node.detail().isEmpty() ? l.getText()
+                                : l.getText() + " · " + Plain.text(node.detail()));
                         return underHeader(n, cell);
                     }
                     return underHeader(n, l);
