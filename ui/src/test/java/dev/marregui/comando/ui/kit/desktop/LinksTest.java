@@ -37,6 +37,7 @@ class LinksTest {
         Links.install((f, heading) -> opened.add(f + (heading == null ? "" : " at " + heading)), told::add,
                 session -> session.equals("work") ? repo : null);
         Links.browseWith(browsed::add);
+        Links.browsePagesWith(page -> browsed.add(page.toString()));
     }
 
     @AfterEach
@@ -45,6 +46,7 @@ class LinksTest {
         }, text -> {
         }, session -> null);
         Links.browseWith(Browser::open);
+        Links.browsePagesWith(Browser::openFile);
     }
 
     /// An `https` link is handed to the browser and opens no file.
@@ -53,6 +55,17 @@ class LinksTest {
         assertThat(Links.open("https://example.org/x", null)).isTrue();
         assertThat(browsed).containsExactly("https://example.org/x");
         assertThat(opened).isEmpty();
+    }
+
+    /// A link to a local HTML page, `.html` or `.htm` in any letter case, goes to the browser and opens no panel.
+    @Test
+    void aLocalPageGoesToTheBrowser() {
+        assertThat(Links.open("harness/20-icons.html", Path.of("/kb"))).isTrue();
+        assertThat(Links.open("OLD.HTM", Path.of("/kb"))).isTrue();
+        assertThat(browsed).containsExactly("/kb/harness/20-icons.html", "/kb/OLD.HTM");
+        assertThat(opened).isEmpty();
+        assertThat(Links.isPage(Path.of("/kb/notes.md"))).isFalse();
+        assertThat(Links.isPage(Path.of("/"))).as("no file name").isFalse();
     }
 
     /// A relative link resolves against the folder, `..` included, and opens at its fragment kept percent-encoded; a
@@ -92,6 +105,17 @@ class LinksTest {
         await().atMost(Duration.ofSeconds(5)).until(() -> !opened.isEmpty());
         assertThat(opened).containsExactly(repo.resolve("MEMORY/project_current_lane.md") + " at rules");
         assertThat(onEdt).containsExactly(true);
+    }
+
+    /// A note link that resolves to an HTML page goes to the browser, not to the opener.
+    @Test
+    void aNoteThatNamesAPageGoesToTheBrowser() throws Exception {
+        Files.createDirectories(repo.resolve(".git"));
+        final Path page = Files.writeString(Files.createDirectories(repo.resolve("harness")).resolve("report.html"), "<p>r</p>");
+        SwingUtilities.invokeAndWait(() -> Links.open(NoteLinks.href("report.html", null), Links.folderOf("work")));
+        await().atMost(Duration.ofSeconds(5)).until(() -> !browsed.isEmpty());
+        assertThat(browsed).containsExactly(page.toString());
+        assertThat(opened).isEmpty();
     }
 
     /// A note href that resolves to no file tells the user `No file for [[name]] under …` and opens nothing.

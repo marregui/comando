@@ -1043,7 +1043,7 @@ runs) moves to an errand of `UiErrands`.
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
 | `TextLinks` | the one finder of links in plain text: web addresses, `[[name]]` notes, `path:line` references, file paths with a folder (`docs/a.md`, `/tmp/b.log`, `~/c.md`) and, outside parsed Markdown, Markdown links |
 | `NoteLinks` | `[[name]]`, `[[name#heading]]` and `[[name\|label]]` as `comando-note:` links. `resolve` looks in the repository that holds the document, else in its folder, hidden folders left out: a file named `name` or `name.md`, then a Markdown file whose front matter says `name: <name>`, then the name with `-` and `_` swapped; the nearest wins; off the EDT |
-| `Links` (`kit/desktop`) | follows a link from any surface: a web address to the browser; a file or a note to the opener the shell installs (a panel); a note that names no file is told as a notice. A session's links are read from its working directory ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
+| `Links` (`kit/desktop`) | follows a link from any surface: a web address, and a local HTML page, to the browser ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)); any other file or a note to the opener the shell installs (a panel); a note that names no file is told as a notice. A session's links are read from its working directory ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
 | `LocalLinks` | the file on this machine a link in a document names: the one reading of a link destination as a path |
 | `LogLines` | an entry of comando's log, found by its time |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string that starts with `<html>` |

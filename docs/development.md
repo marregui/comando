@@ -87,7 +87,7 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 | `CheckpointLockUiTest` | the session locked while its checkpoint runs ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)) |
 | `ThemeFadeUiTest` | a theme chosen fades in over the one before: ground and tint applied at once, the old picture over the new |
 | `SessionCardUiTest` | a session's row shows the tab's card, a connection's row a card of its facts; both painted to `app/build/snapshots/` |
-| `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
+| `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)); an HTML page a session names opens in the browser, not a panel ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)) |
 | `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |
 | `OutlineUiTest` | a Markdown document's outline at the panel's right; a double click on a heading scrolls the page to it ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)) |
 | `DiffThemeUiTest` | the comparison window opens on the theme chosen, its texts and rendered sides, and follows the next ([record 135](adr/0135-the-comparison-follows-the-theme-and-lies-level.md)) |

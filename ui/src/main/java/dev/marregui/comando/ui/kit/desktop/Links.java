@@ -1,9 +1,12 @@
 package dev.marregui.comando.ui.kit.desktop;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
@@ -11,9 +14,10 @@ import dev.marregui.comando.ui.kit.text.LocalLinks;
 import dev.marregui.comando.ui.kit.text.NoteLinks;
 
 /**
- * Follows a link double-clicked anywhere in comando: a web address in the browser; a file, by its path or a
- * {@code [[name]]} note link, in a panel, through the opener the shell installs. One way for every surface: rendered
- * Markdown, the transcript, a tool's result, a tab's card, an editor's text.
+ * Follows a link double-clicked anywhere in comando: a web address, and a local HTML page, in the browser; any other
+ * file, by its path or a {@code [[name]]} note link, in a panel, through the opener the shell installs. One way for
+ * every surface: rendered Markdown, the transcript, a tool's result, a tab's card, an editor's text. A page opened from
+ * the sidebar is not a link: it opens in a panel, to edit.
  */
 public final class Links {
 
@@ -28,6 +32,8 @@ public final class Links {
     private static volatile Consumer<String> notices = text -> {
     };
     private static volatile Consumer<String> browser = Browser::open;
+    // written only by tests, read by whichever thread follows a link
+    private static volatile Consumer<Path> pages = Browser::openFile;
     private static volatile Function<String, Path> sessionFolders = session -> null;
 
     private Links() {
@@ -49,8 +55,27 @@ public final class Links {
     }
 
     /** Where web addresses go instead of the browser; for tests. */
+    @TestOnly
     public static void browseWith(final Consumer<String> browse) {
         browser = browse;
+    }
+
+    /** Where local pages go instead of the browser; for tests. */
+    @TestOnly
+    public static void browsePagesWith(final Consumer<Path> browse) {
+        pages = browse;
+    }
+
+    /** Whether {@code file} is a page a browser shows: its name ends in {@code .html} or {@code .htm}, in any case. */
+    public static boolean isPage(final Path file) {
+        final Path name = file.getFileName();
+        final String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
+        return n.endsWith(".html") || n.endsWith(".htm");
+    }
+
+    /** Opens the local page {@code file} in the browser; returns at once. */
+    public static void browsePage(final Path file) {
+        pages.accept(file);
     }
 
     /**
@@ -76,7 +101,7 @@ public final class Links {
             UiErrands.start("note-link", () -> {
                 final Optional<Path> file = NoteLinks.resolve(folder, name);
                 final String missing = "No file for [[" + name + "]]" + (folder == null ? "" : " under " + NoteLinks.rootOf(folder));
-                Edt.later(() -> file.ifPresentOrElse(f -> opener.open(f, heading), () -> notices.accept(missing)));
+                Edt.later(() -> file.ifPresentOrElse(f -> follow(f, heading, opener), () -> notices.accept(missing)));
             });
             return true;
         }
@@ -84,8 +109,17 @@ public final class Links {
         if (file.isEmpty()) {
             return false;
         }
-        opener.open(file.get(), heading(href));
+        follow(file.get(), heading(href), opener);
         return true;
+    }
+
+    /** A page to the browser, any other file to {@code opener} at {@code heading}. */
+    private static void follow(final Path file, final String heading, final Opener opener) {
+        if (isPage(file)) {
+            pages.accept(file);
+        } else {
+            opener.open(file, heading);
+        }
     }
 
     /** The heading a link names after the file's name, as written; null when it names none. */

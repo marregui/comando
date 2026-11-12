@@ -42,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a double click on a `[[name]]` link opens the file whose front matter declares that name, in a new panel
 /// - a double click on a web address goes to the browser
 /// - a file link without a line is found under the session's folder and opens in a panel, once
+/// - a page such a link names opens in the browser instead
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class LinksUiTest {
 
@@ -144,6 +145,40 @@ class LinksUiTest {
             loop.dispatch(new Intent.OpenFile("lane", "harness/07-fleet-vision.md", 0));
             Awaitility.await("followed again: the same panel").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(3))
                     .until(() -> loop.state().panels().size() == after);
+        }
+    }
+
+    /// A page a session names without a line, found deep under its folder, goes to the browser: no panel and no side
+    /// view opens for it.
+    @Test
+    void aPageASessionNamesOpensInTheBrowserNotInAPanel() throws Exception {
+        final Path work = Files.createDirectories(home.resolve("work"));
+        final Path page = work.resolve("BRAIN/SCRATCHPAD/2026-11-12/harness/20-icon-inventory.html");
+        Files.createDirectories(page.getParent());
+        Files.writeString(page, "<!doctype html><title>icons</title>\n");
+        final List<Path> browsed = new CopyOnWriteArrayList<>();
+        try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
+                home.resolve("projects"), false),
+                "links", () -> {
+        })) {
+            app.start();
+            final StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
+            Links.browsePagesWith(browsed::add);
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("lane", work.toString())));
+            Awaitility.await("the session").atMost(Duration.ofSeconds(10))
+                    .until(() -> loop.state().session("lane").isPresent());
+            final int before = loop.state().panels().size();
+
+            loop.dispatch(new Intent.OpenFile("lane", "harness/20-icon-inventory.html", 0));
+
+            Awaitility.await("the browser").atMost(Duration.ofSeconds(10)).until(() -> !browsed.isEmpty());
+            assertThat(browsed).hasSize(1);
+            assertThat(Files.isSameFile(browsed.getFirst(), page)).as("the page itself").isTrue();
+            assertThat(loop.state().panels()).as("no panel").hasSize(before);
+            assertThat(loop.state().views()).as("no side view").noneMatch(v -> v.title().contains("20-icon-inventory"));
+        } finally {
+            Links.browsePagesWith(Browser::openFile);
         }
     }
 

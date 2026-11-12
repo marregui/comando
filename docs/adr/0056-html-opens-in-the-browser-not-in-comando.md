@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-17 | accepted | Miguel and Claude |
+| 2026-10-17 | accepted; links row replaced by [record 154](0154-a-link-to-a-page-opens-the-browser.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -17,7 +17,7 @@ variables, flexbox, grid, web fonts, style sheets on the network and scripts. A 
 | rendering | comando does not render HTML; an HTML file opens as its text, to edit | Swing's renderer does not show current pages as a browser does |
 | browser | an HTML document's header has a Browser button that opens the file in the desktop's browser | the browser's rendering, one click away |
 | engines | no browser engine is embedded | their weight, against a page the browser already shows (§4) |
-| links | a link to an HTML file, double-clicked in rendered Markdown, opens it in a panel, as text | as links to Markdown |
+| links | a link to an HTML file, double-clicked in rendered Markdown, opens it in a panel, as text (replaced 2026-11-12: it opens in the browser, [record 154](0154-a-link-to-a-page-opens-the-browser.md)) | as links to Markdown |
 
 Miguel decided that comando renders no HTML, after seeing Swing's rendering, and that a button opens the page in the
 browser; Claude weighed the options and their cost.

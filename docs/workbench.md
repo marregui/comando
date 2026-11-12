@@ -108,13 +108,15 @@ Any number of document panels may be attached to a session
   in `settings.json` ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)). The pane takes room only while
   the text has headings: with the outline on and none yet, the button says so, and the first heading brings the pane
   ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)).
-- **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
-  ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
+- **HTML files** open from the sidebar as text, to edit; the Browser button opens the page in the desktop's browser
+  ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)). A link to one opens it in the browser
+  ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)).
 - **Links**, wherever text shows (a rendered page, a panel's text, the transcript, every card in it: a command, a
   skill's or a tool's input, a delegation's prompt, a tool's result, a tab's card), are followed at a double click
   ([record 108](adr/0108-links-in-every-card.md)); a single click follows nothing
   ([record 94](adr/0094-links-in-both-styles-everywhere.md)). A web address, written as a link or bare, opens in the
-  browser. A link to a file, beside the document or by its full path, opens that file in a panel, or brings forward the
+  browser, and so does a link to an HTML page ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)). A link to
+  any other file, beside the document or by its full path, opens that file in a panel, or brings forward the
   panel that has it. A note link, `[[name]]`, opens the file it names, found in the document's git repository (else its
   folder): a file named `name` or `name.md`, then a Markdown file whose front matter says `name: <name>`, then a file
   named with `-` and `_` swapped; the nearest match wins. A link to a heading (`#` and the heading's id, as GitHub makes
@@ -380,7 +382,7 @@ them. A double click, or ⏎, opens the task as a Markdown view titled `Task N`:
 Linear ticket id, of a team the window learnt from Linear's links or named by the task, links to the ticket once the
 window knows Linear's workspace, and each document of its Documents line links to the file in the day folder; ids
 and paths inside code blocks and existing links stay as written. A double click on a ticket's link opens it in the
-browser, on a document's opens the file in a panel ([record 94](adr/0094-links-in-both-styles-everywhere.md)).
+browser, on a document's opens the file in a panel, an HTML page in the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)).
 A right click on a task opens, each item with its icon: **Show the task**, the same page; **Open ID in Linear**, one
 per ticket of the task (its `**Ticket:**` line, then the ids that begin its heading), while the window knows Linear's
 workspace; **Resume in ▸** each running session, which prompts it "Resume task N from the scratchpad."; **Ask me its

@@ -24,6 +24,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.FileSearch;
+import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.text.HitMarks;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
@@ -309,11 +310,19 @@ final class PanelFiles {
                 .findFirst();
     }
 
-    /** A file a session or a link names, opened as the Files tab opens it, or shown in the side pane. Any thread. */
+    /**
+     * A file a session or a link names, opened as the sidebar opens it, or shown in the side pane; a page without a
+     * line in the browser. Any thread.
+     */
     void showFile(final String session, final String path, final String baseDir, final int line) {
         UiErrands.start("show-file", () -> {
             try {
                 final Path p = located(session, path, baseDir);
+                // a page a link names opens in the browser, as a web address does; the sidebar opens it to edit
+                if (line <= 0 && Files.isRegularFile(p) && Links.isPage(p)) {
+                    Links.browsePage(p);
+                    return;
+                }
                 // a file named without a line opens as the Files tab opens it: in a panel, or its panel comes forward;
                 // a binary or large one, and one at a line, show in the side pane (record 111)
                 if (line <= 0 && Files.isRegularFile(p) && OpenFiles.isText(p)) {

@@ -831,17 +831,12 @@ public final class EditorPanel extends JPanel {
     }
 
     private boolean isHtml() {
-        return file != null && htmlName(file);
+        return file != null && Links.isPage(file);
     }
 
     private static boolean markdownName(final Path file) {
         final String n = lowerName(file);
         return n.endsWith(".md") || n.endsWith(".markdown");
-    }
-
-    private static boolean htmlName(final Path file) {
-        final String n = lowerName(file);
-        return n.endsWith(".html") || n.endsWith(".htm");
     }
 
     private static String lowerName(final Path file) {

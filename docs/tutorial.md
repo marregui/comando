@@ -465,7 +465,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |
 | ⌘Q | quit |
-| double click | on a link anywhere (a rendered page, a panel's text, the transcript, a tool's result, a tab's card): a web address opens in the browser; a file, or a `[[name]]` note, opens in a panel |
+| double click | on a link anywhere (a rendered page, a panel's text, the transcript, a tool's result, a tab's card): a web address, or an HTML page, opens in the browser; any other file, or a `[[name]]` note, opens in a panel |
 
 On an approval card:
 

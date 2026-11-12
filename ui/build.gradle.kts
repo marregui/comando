@@ -13,6 +13,7 @@ dependencies {
     implementation(libs.jediterm.core)
     implementation(libs.jediterm.ui)
     implementation(libs.pty4j)
+    compileOnly(libs.annotations)
     runtimeOnly(libs.slf4j.jdk14)
     testImplementation(project(":testkit"))
     testImplementation(libs.archunit)
