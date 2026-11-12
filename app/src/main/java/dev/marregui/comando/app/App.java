@@ -212,6 +212,7 @@ public final class App implements AutoCloseable {
                     : config.home().resolve("machine-questdb"), config.home(), InstanceName.current(), loop);
             metrics = own(metricsLog(machineQuestDb, config.home(), questDb, loop));
             claude.metrics(metrics);
+            mcpTools.waits(metrics);
             claude.checkpointByComando();
             final ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;

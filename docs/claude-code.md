@@ -370,12 +370,15 @@ sends for the same gesture:
   Claude Code sends them, context and window, how it ended); `agent` at each sub-agent's end, live only (the Agent
   call's type, description and model asked, the parent's model, background, status, start and duration, the tool calls
   inside it at any depth, and its `spend` read from its own file: model calls, tokens by kind, models); `usage` at each
-  plan-usage read (provider, window, percent, reset). Money fields are kept as they arrive and shown nowhere. Read by
+  plan-usage read (provider, window, percent, reset); `wait` when an approval card closes (the session that asked,
+  the card's kind and tool, how it ended, when it was shown, and its wait in milliseconds on a monotonic clock, written
+  by `McpTools` through `core`'s `WaitLog`). Money fields are kept as they arrive and shown nowhere. Read by
   the kit's calibration; comando reads back only a stored conversation's last context size, from its last row in
   `comando_turn`, when the conversation loads (`MetricsLog.lastContext`,
   [record 120](adr/0120-the-context-follows-each-model-call.md)); with no server or no row, none. The tables:
   `comando_turn` (a row per turn, its `usage` flattened), `comando_turn_model` (a row per model of
-  `modelUsage`, running totals per conversation), `comando_agent`, `comando_usage` and `comando_queue`, each row with
+  `modelUsage`, running totals per conversation), `comando_agent`, `comando_usage`, `comando_queue` and `comando_wait`
+  (a row per closed card), each row with
   the data root as `instance`. A bounded queue and one thread write them in batches over ILP, starting the server when
   none runs; a batch QuestDB does not take is lost, and the first of an outage is a warning notice. comando run with
   `-Dcomando.questdb=false`, as the tests are, keeps no metrics.

@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.LongSupplier;
@@ -17,17 +18,19 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.loop.Queues;
+import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.WaitLog;
 
 /**
  * What the sessions spend and how their work ends, kept to calibrate who does what (record 110) in the machine's
  * QuestDB alone (records 146, 149). Each event is a JSON object with {@code ts} (UTC, ISO 8601), {@code event}
- * ({@code turn}, {@code agent}, {@code usage}, {@code queues}) and the event's fields, handed to a {@link MetricsSink},
- * which never holds up a write and keeps nothing on disk: an event QuestDB does not take is lost, and the sink says so
- * in a notice once an outage. Written from the sessions' strands and the plan-usage strand. Money fields are kept as
- * they arrive and shown nowhere. {@link #close} ends the sink.
+ * ({@code turn}, {@code agent}, {@code usage}, {@code queues}, {@code wait}) and the event's fields, handed to a
+ * {@link MetricsSink}, which never holds up a write and keeps nothing on disk: an event QuestDB does not take is lost,
+ * and the sink says so in a notice once an outage. Written from the sessions' strands, the plan-usage strand and the
+ * MCP request threads. Money fields are kept as they arrive and shown nowhere. {@link #close} ends the sink.
  */
-public final class MetricsLog implements AutoCloseable {
+public final class MetricsLog implements AutoCloseable, WaitLog {
 
     private static final System.Logger LOG = System.getLogger(MetricsLog.class.getName());
 
@@ -147,6 +150,27 @@ public final class MetricsLog implements AutoCloseable {
         if (!list.isEmpty()) {
             write(e);
         }
+    }
+
+    /**
+     * A {@code wait} event, stamped when the card closed: the session that asked, what the card asked and through which
+     * tool, how it ended, its id, when it was shown and how long it waited: the time work sits waiting on the user, by
+     * kind of card. Called from the MCP request thread that waited; never blocks.
+     */
+    @Override
+    public void waited(final Approval card, final WaitLog.Outcome outcome, final long waitMs) {
+        if (sink == null) {
+            return;
+        }
+        final ObjectNode e = event("wait");
+        e.put("session", card.session());
+        e.put("kind", card.kind().name().toLowerCase(Locale.ROOT));
+        e.put("tool", card.toolName());
+        e.put("outcome", outcome.name().toLowerCase(Locale.ROOT));
+        e.put("card", card.id());
+        e.put("opened", Instant.ofEpochMilli(card.createdMillis()).toString());
+        e.put("wait_ms", waitMs);
+        write(e);
     }
 
     /** Hands {@code event} to the sink, which never blocks; {@code event} must not change after. */

@@ -229,9 +229,10 @@ returns; outcomes come back as intents.
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `app` `Store` | `EffectRouter` |
 | `InstancesPort` | `ask`, `deny`, `forget`, `role` (the Instances tab's acts, off the caller's thread; record 124) | `mcp` `Peers` | `ui` (the Instances tab; the outcome comes back as a notice and in `AppState.instances`) |
 | `ServerSwitch` | `name`, `isRunning`, `want(up)`, `status` (a local server an agent starts or stops, record 121) | `app` `EmbeddedEdge`, `MachineQuestDb` | `mcp` (`ActionTools`: `server_start`, `server_stop`) |
+| `WaitLog` | `waited` (a closed approval card's kind, outcome and wait in milliseconds; record 110) | `claude` `MetricsLog` | `mcp` (`McpTools.ask`, set by `app` through `McpTools.waits`) |
 
-Tests replace each effect port with a fake from `testkit`; `McpGateway.NONE`, `TopicPort.NONE` and a test's own
-`QueryPort` stand in for the others.
+Tests replace each effect port with a fake from `testkit`; `McpGateway.NONE`, `TopicPort.NONE`, `WaitLog.NONE` and a
+test's own `QueryPort` stand in for the others.
 
 ## 6. Threads
 

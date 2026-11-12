@@ -19,6 +19,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Queues;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.port.WaitLog;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.RecordingSink;
@@ -34,6 +37,7 @@ import static org.awaitility.Awaitility.await;
 /// - Counts each stored message once in a sub-agent's spend.
 /// - Keeps nothing when metrics are disabled.
 /// - Sends the queues' depths and peaks as `comando_queue` rows.
+/// - Sends a closed card's wait as a `comando_wait` row stamped when it closed.
 /// - Leaves out a queue whose reading repeats its last entry, idle or busy, and an event left with no queue.
 /// - Loses an event QuestDB does not take, tells the user, and makes no file.
 /// - Sends each event as a row of the instance it is built for.
@@ -173,6 +177,22 @@ class MetricsTest {
             assertThat(server.lines).containsExactly(
                     "comando_queue,instance=/data,name=intents depth=0i,peak=12i 1793181600000000000",
                     "comando_queue,instance=/data,name=claude-stdin-work depth=1i,peak=3i 1793181600000000000");
+        }
+    }
+
+    /// A question card shown at 09:58 and answered two minutes later is one `comando_wait` row stamped at its close,
+    /// its kind and outcome in lower case.
+    @Test
+    void aClosedCardIsAWaitRowStampedAtItsClose() throws Exception {
+        try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                final MetricsLog log = log(server)) {
+            final Approval card = new Approval(1_000_001L, "work", ApprovalKind.QUESTION, "AskUserQuestion", "{}",
+                    "Which store?", 1_793_181_480_000L);
+            log.waited(card, WaitLog.Outcome.ANSWERED, 120_000L);
+            await().atMost(WITHIN).until(() -> server.lines.size() == 1);
+            assertThat(server.lines).containsExactly(
+                    "comando_wait,instance=/data,session=work,kind=question,tool=AskUserQuestion,outcome=answered "
+                            + "card=1000001i,opened=1793181480000000t,wait_ms=120000i 1793181600000000000");
         }
     }
 

@@ -13,9 +13,10 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * The metrics events as the lines QuestDB's line protocol takes (record 146), and the tables they go to: a
  * {@code turn} is a {@code comando_turn} row and a {@code comando_turn_model} row per model it names, an {@code agent}
- * a {@code comando_agent} row, a {@code usage} a {@code comando_usage} row, a {@code queues} a {@code comando_queue} row
- * per queue. SYMBOL columns are tags, every other column a field; a null or absent value, and an empty tag value, is
- * left out, and a row left with no field is not sent. Mapping only: nothing here reads or writes.
+ * a {@code comando_agent} row, a {@code usage} a {@code comando_usage} row, a {@code queues} a
+ * {@code comando_queue} row per queue, a {@code wait} a {@code comando_wait} row. SYMBOL columns are tags, every other
+ * column a field; a null or absent value, and an empty tag value, is left out, and a row left with no field is not
+ * sent. Mapping only: nothing here reads or writes.
  */
 final class MetricsLines {
 
@@ -47,9 +48,12 @@ final class MetricsLines {
                     + "window_name" + SYMBOL + "pct DOUBLE, resets VARCHAR" + TABLE_END
                     + "ts, instance, provider, window_name)",
             "CREATE TABLE IF NOT EXISTS comando_queue (ts TIMESTAMP, instance" + SYMBOL + "name" + SYMBOL
-                    + "depth LONG, peak LONG" + TABLE_END + "ts, instance, name)");
+                    + "depth LONG, peak LONG" + TABLE_END + "ts, instance, name)",
+            "CREATE TABLE IF NOT EXISTS comando_wait (ts TIMESTAMP, instance" + SYMBOL + "session" + SYMBOL + "kind"
+                    + SYMBOL + "tool" + SYMBOL + "outcome" + SYMBOL + "card LONG, opened TIMESTAMP, wait_ms LONG"
+                    + TABLE_END + "ts, instance, card)");
 
-    private static final Set<String> KNOWN = Set.of("turn", "agent", "usage", "queues");
+    private static final Set<String> KNOWN = Set.of("turn", "agent", "usage", "queues", "wait");
 
     private final String instance;
     private final ObjectMapper json;
@@ -89,6 +93,11 @@ final class MetricsLines {
                             .longField("peak", q.path("peak")), ts);
                 }
             }
+            case "wait" -> add(out, row("comando_wait").tag("session", event.path("session"))
+                    .tag("kind", event.path("kind")).tag("tool", event.path("tool"))
+                    .tag("outcome", event.path("outcome"))
+                    .longField("card", event.path("card")).timestampField("opened", event.path("opened"))
+                    .longField("wait_ms", event.path("wait_ms")), ts);
             default -> {
                 // a type with no table is not sent; the sink counts it
             }

@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [MetricsLines] turns each metrics event into the QuestDB lines of its table (record 146).
 ///
 /// - Maps a `turn` to a `comando_turn` line and a `comando_turn_model` line a model.
-/// - Maps an `agent`, a `usage` and each queue of a `queues` event to their tables.
+/// - Maps an `agent`, a `usage`, each queue of a `queues` event and a `wait` to their tables.
 /// - Escapes tag and string values that hold a comma, a space, `=`, `"`, a backslash or a line break.
 /// - Leaves absent, null and empty values out, and a row with no fields unsent.
 /// - Gives no line for an event of an unknown type or without a timestamp.
@@ -84,6 +84,19 @@ class MetricsLinesTest {
         assertThat(lines.of(queues)).containsExactly(
                 "comando_queue,instance=/data,name=intents depth=0i,peak=12i " + AT,
                 "comando_queue,instance=/data,name=claude-stdin-work depth=1i,peak=3i " + AT);
+    }
+
+    /// A closed card's `wait` is one `comando_wait` line: who asked, what and through which tool, and how it ended as
+    /// tags; its id, its opening as a microsecond timestamp field and its wait in milliseconds as fields.
+    @Test
+    void aWaitIsOneWaitLine() {
+        final JsonNode wait = event("""
+                {"ts":"2026-10-28T10:00:00Z","event":"wait","session":"work","kind":"question",\
+                "tool":"AskUserQuestion","outcome":"answered","card":1000001,"opened":"2026-10-28T09:58:00Z",\
+                "wait_ms":120000}""");
+        assertThat(lines.of(wait)).containsExactly(
+                "comando_wait,instance=/data,session=work,kind=question,tool=AskUserQuestion,outcome=answered "
+                        + "card=1000001i,opened=1793181480000000t,wait_ms=120000i " + AT);
     }
 
     /// A tag value gets a backslash before a comma, a space, `=` and a backslash, and a line break becomes an escaped

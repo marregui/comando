@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,6 +42,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.port.WaitLog;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.reduce.Transition;
 import dev.marregui.comando.core.result.ColumnKind;
@@ -75,6 +77,8 @@ import static org.awaitility.Awaitility.await;
 /// - A permission call raises an approval card and answers with the user's decision and the rule it saves.
 /// - A cancelled, unanswered or closing-time approval is denied and its card withdrawn; an unanswered question is
 ///   denied too, and nothing of it is kept.
+/// - Each closed card's wait is kept with its kind and how it ended: allowed, denied, answered, cancelled, unanswered,
+///   session ended; a card never shown keeps none.
 /// - The view tools turn their input into view intents.
 /// - At most a bound of requests run at once, and a smaller bound of one session's; one past either is refused at once.
 /// - A request whose body does not arrive in time has its connection closed, and its place comes back; one whose
@@ -119,6 +123,12 @@ class McpServerTest {
     };
 
     private McpTools tools;
+    /** The waits of the cards closed so far, as the request threads keep them. */
+    private final List<Wait> waited = new CopyOnWriteArrayList<>();
+
+    /** One closed card's wait. */
+    private record Wait(ApprovalKind kind, WaitLog.Outcome outcome, long waitMs) {
+    }
 
     @BeforeEach
     void start() throws Exception {
@@ -127,6 +137,7 @@ class McpServerTest {
 
     private McpServer start(final Duration approvalTimeout) throws Exception {
         tools = new McpTools(sink, state::get, transcripts, db, AuditLog.none(), new FakeClock(), approvalTimeout);
+        tools.waits((card, outcome, waitMs) -> waited.add(new Wait(card.kind(), outcome, waitMs)));
         final McpServer s = McpServer.start(tools, 0, "test");
         ticket = s.register("work");
         return s;
@@ -382,6 +393,10 @@ class McpServerTest {
         final JsonNode update = result.path("updatedPermissions").path(0);
         assertThat(update.path("destination").asString()).isEqualTo("session");
         assertThat(update.path("rules").path(0).path("ruleContent").asString()).isEqualTo("git status:*");
+        assertThat(waited).singleElement().satisfies(w -> {
+            assertThat(w.kind()).isEqualTo(ApprovalKind.TOOL);
+            assertThat(w.outcome()).isEqualTo(WaitLog.Outcome.ALLOWED);
+        });
     }
 
     /// Always allowing a WebFetch saves a WebFetch rule `domain:<host>` for that host only in the local settings.
@@ -418,6 +433,7 @@ class McpServerTest {
                 .statusCode()).isEqualTo(202);
         assertThat(json.readTree(text(call.get())).path("behavior").asString()).isEqualTo("deny");
         assertThat(sink.await(Intent.ApprovalWithdrawn.class, WAIT).id()).isEqualTo(asked.approval().id());
+        assertThat(waited).extracting(Wait::outcome).containsExactly(WaitLog.Outcome.CANCELLED);
     }
 
     /// A question approval's answers come back in the updated input beside the original questions.
@@ -436,6 +452,10 @@ class McpServerTest {
         final JsonNode result = json.readTree(text(call.get()));
         assertThat(result.path("updatedInput").path("answers").path("Colour?").asString()).isEqualTo("Red");
         assertThat(result.path("updatedInput").path("questions").isArray()).isTrue();
+        assertThat(waited).singleElement().satisfies(w -> {
+            assertThat(w.kind()).isEqualTo(ApprovalKind.QUESTION);
+            assertThat(w.outcome()).isEqualTo(WaitLog.Outcome.ANSWERED);
+        });
     }
 
     /// An approval nobody answers is denied at its deadline and its card withdrawn.
@@ -465,6 +485,12 @@ class McpServerTest {
         sink.await(Intent.ApprovalWithdrawn.class, WAIT);
         assertThat(sink.intents()).extracting(Object::getClass)
                 .containsExactly(Intent.ApprovalRequested.class, Intent.ApprovalWithdrawn.class);
+        // the wait is the whole deadline, measured from the card's showing
+        assertThat(waited).singleElement().satisfies(w -> {
+            assertThat(w.kind()).isEqualTo(ApprovalKind.QUESTION);
+            assertThat(w.outcome()).isEqualTo(WaitLog.Outcome.NO_ANSWER);
+            assertThat(w.waitMs()).isGreaterThanOrEqualTo(300L);
+        });
     }
 
     /// The deadline as a denial says it: whole hours in h, so comando's own 24 h reads "24 h"; whole minutes in min;
@@ -764,6 +790,10 @@ class McpServerTest {
         assertThat(r.path("isError").asBoolean()).isTrue();
         assertThat(text(r)).contains("not today");
         assertThat(queries).isEmpty();
+        assertThat(waited).singleElement().satisfies(w -> {
+            assertThat(w.kind()).isEqualTo(ApprovalKind.SQL_WRITE);
+            assertThat(w.outcome()).isEqualTo(WaitLog.Outcome.DENIED);
+        });
     }
 
     /// A write approved after its connection was pointed at another server runs on neither and says the connection
@@ -789,7 +819,8 @@ class McpServerTest {
     }
 
     /// When the asking session's process exits while its SQL-write card waits, the call answers a tool error saying the
-    /// session ended before the user answered, the card is withdrawn, and a late allow runs nothing.
+    /// session ended before the user answered, the card is withdrawn, its wait is kept as `session_ended`, and a late
+    /// allow runs nothing; a call from the ended session shows no card and keeps no wait.
     @Test
     void aSessionThatEndsWhileItsCardWaitsIsDeniedAndItsCardWithdrawn() throws Exception {
         final CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
@@ -808,6 +839,13 @@ class McpServerTest {
         assertThat(sink.await(Intent.ApprovalWithdrawn.class, WAIT).id()).as("its card goes").isEqualTo(asked.approval().id());
         server.resolve(asked.approval(), ApprovalDecision.allowOnce());
         assertThat(queries).as("a late allow runs nothing").isEmpty();
+        assertThat(waited).extracting(Wait::outcome).containsExactly(WaitLog.Outcome.SESSION_ENDED);
+        // a session already gone asks again: no card is shown, and no wait is kept for it
+        sink.clear();
+        assertThat(tools.call("work", "approve", json.readTree("{\"tool_name\":\"Bash\",\"input\":{\"command\":\"make\"}}"))
+                .text()).contains("The session ended before the user answered");
+        assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
+        assertThat(waited).hasSize(1);
     }
 
     /// A DDL batch that fails part-way may have run its earlier statements: the schema is reloaded all the same, so

@@ -67,3 +67,12 @@ strands (`kit-check`, `db-timer`, `peer-broker`, …) read depth 1 or more at ev
 queue not written before has none): its last row holds until the next, so a return to idle is written, and the peak's
 fall to 0 after it; an event left with no queue is not sent. The state is one reading a queue name, on the
 `kit-check` strand, the only caller. Tested in `MetricsTest`.
+
+2026-11-12: a closed approval card is a `wait` event, a `comando_wait` row: the session, the card's `kind` and `tool`,
+its `outcome` (`allowed`, `denied`, `answered`, `no_answer`, `session_ended`, `cancelled`, `shutdown`, `failed`), its
+id as `card`, when it was shown as `opened`, and `wait_ms`, measured on a monotonic clock from its showing to its close.
+It answers how long work sits waiting on the user, by kind of card. `McpTools.ask` writes it through `core`'s `WaitLog`
+port, which `MetricsLog` implements; a card never shown (its session already gone) is not written. `denied` also holds
+the cards comando withdraws at a turn's end, which reach the wait as a denial. A card still open at quit is not
+written: the metrics log closes before the MCP server denies what still waits, which is not time spent on the user.
+Tested in `McpServerTest`, `MetricsLinesTest` and `MetricsTest`.

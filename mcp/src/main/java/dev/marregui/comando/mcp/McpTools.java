@@ -45,6 +45,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.port.TerminalPort;
+import dev.marregui.comando.core.port.WaitLog;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
@@ -150,8 +151,15 @@ public final class McpTools {
     private volatile Predicate<String> live = session -> true;
     /** Panels that take no text: a log follows its program and is never written. */
     private volatile Predicate<PanelId> readOnly = panel -> false;
+    /**
+     * Where each card's wait goes once it closes; written once by the application thread when its metrics log is
+     * built, read by the request threads that wait on cards, which keep nothing before then.
+     */
+    private volatile WaitLog waits = WaitLog.NONE;
     /** The answer to every card of a session that ended while the card waited. */
     private static final ApprovalDecision.Deny SESSION_ENDED = new ApprovalDecision.Deny("The session ended before the user answered.");
+    /** The answer to a card whose call Claude Code cancelled. */
+    private static final ApprovalDecision.Deny CANCELLED = new ApprovalDecision.Deny("The call was cancelled.");
     /** The JSON-RPC call this request thread serves; each request runs on its own thread. */
     private static final ThreadLocal<String> CALL = new ThreadLocal<>();
 
@@ -211,6 +219,11 @@ public final class McpTools {
         this.results = results;
     }
 
+    /** Where each card's wait is kept once it closes (record 110); the application sets it once. */
+    public void waits(final WaitLog waits) {
+        this.waits = waits;
+    }
+
     /** Runs tool {@code name} for {@code session}; never throws for bad input, which becomes an error outcome. */
     Outcome call(final String session, final String name, final JsonNode args) {
         return call(session, name, args, null);
@@ -233,7 +246,7 @@ public final class McpTools {
     void cancelled(final String callKey) {
         final Long id = callKey == null ? null : approvalByCall.remove(callKey);
         final CompletableFuture<ApprovalDecision> f = id == null ? null : pending.get(id);
-        if (f != null && f.complete(new ApprovalDecision.Deny("The call was cancelled."))) {
+        if (f != null && f.complete(CANCELLED)) {
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "Claude Code cancelled the call"));
         }
     }
@@ -303,23 +316,31 @@ public final class McpTools {
         if (call != null) {
             approvalByCall.put(call, id);
         }
+        Approval card = null;
+        long shownNanos = 0L;
+        WaitLog.Outcome outcome = WaitLog.Outcome.FAILED;
         try {
             // a session that ended before its card was shown gets none: its process is gone and nothing it asked runs
             if (!live.test(session)) {
                 return SESSION_ENDED;
             }
-            sink.dispatch(new Intent.ApprovalRequested(new Approval(id, session, kind, tool, inputJson, summary, clock.millis(), toolUseId)));
+            card = new Approval(id, session, kind, tool, inputJson, summary, clock.millis(), toolUseId);
+            shownNanos = System.nanoTime();
+            sink.dispatch(new Intent.ApprovalRequested(card));
             final ApprovalDecision d = answer.get(approvalTimeout.toMillis(), TimeUnit.MILLISECONDS);
             if (d == SESSION_ENDED) {
                 sink.dispatch(new Intent.ApprovalWithdrawn(id, "the session ended"));
             }
+            outcome = outcomeOf(d);
             return d;
         } catch (final TimeoutException e) {
             // nothing is kept for later: a question the session still needs is asked again as a new card
+            outcome = WaitLog.Outcome.NO_ANSWER;
             final String waited = waited(approvalTimeout);
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "no answer within " + waited));
             return new ApprovalDecision.Deny("No answer from the user within " + waited + ".");
         } catch (final InterruptedException e) {
+            outcome = WaitLog.Outcome.SHUTDOWN;
             Thread.currentThread().interrupt();
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "comando is shutting down"));
             return new ApprovalDecision.Deny("comando is shutting down.");
@@ -331,7 +352,25 @@ public final class McpTools {
             if (call != null) {
                 approvalByCall.remove(call, id);
             }
+            if (card != null) {
+                waits.waited(card, outcome, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - shownNanos));
+            }
         }
+    }
+
+    /** How a wait that got a decision ended: the session's end and a cancel are told by their own answers. */
+    private static WaitLog.Outcome outcomeOf(final ApprovalDecision d) {
+        if (d == SESSION_ENDED) {
+            return WaitLog.Outcome.SESSION_ENDED;
+        }
+        if (d == CANCELLED) {
+            return WaitLog.Outcome.CANCELLED;
+        }
+        return switch (d) {
+            case ApprovalDecision.Allow _ -> WaitLog.Outcome.ALLOWED;
+            case ApprovalDecision.Deny _ -> WaitLog.Outcome.DENIED;
+            case ApprovalDecision.Answer _ -> WaitLog.Outcome.ANSWERED;
+        };
     }
 
     /** How long a card waited, as its denial says it: whole hours in h, else whole minutes in min, else in ms. */
