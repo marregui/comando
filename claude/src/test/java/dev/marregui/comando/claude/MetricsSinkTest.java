@@ -59,10 +59,10 @@ class MetricsSinkTest {
         try (final FakeQuestDb server = new FakeQuestDb();
                 final MetricsSink sink = sink(Endpoint.at(server.uri()))) {
             sink.offer(usage("five_hour"));
-            await().atMost(WITHIN).until(() -> server.lines.size() == 1);
+            // the sink counts a line once the server answers it, after the server has it: wait for both
+            await().atMost(WITHIN).until(() -> server.lines.size() == 1 && sink.sentLines() == 1);
             assertThat(server.lines).containsExactly(usageLine("five_hour"));
             assertThat(server.ddls()).isEqualTo(MetricsLines.DDL.size());
-            assertThat(sink.sentLines()).isEqualTo(1);
             assertThat(sink.failedLines()).isZero();
         }
     }
