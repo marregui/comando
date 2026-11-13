@@ -38,7 +38,10 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
     public static final MetricsLog NONE =
             new MetricsLog(new ObjectMapper(), System::currentTimeMillis, null, null, null);
 
-    /** How long {@link #lastContext} waits for QuestDB: the contract's bound (record 146). */
+    /**
+     * How long the query of {@link #lastContext} waits for QuestDB, its connect included: the contract's bound (record
+     * 146). The live check before it is the endpoint's and waits on its own bound.
+     */
     static final Duration CONTEXT_QUERY_WITHIN = Duration.ofSeconds(2);
 
     /** A conversation id as Claude Code makes them; nothing else is put into a query. */
@@ -95,7 +98,8 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
     /**
      * The context and its window the last {@code turn} of conversation {@code id} ended with (record 120), as QuestDB
      * keeps it; empty when it has none, when no server runs or answers within {@link #CONTEXT_QUERY_WITHIN}, and for a
-     * log that keeps nothing. Waits on QuestDB: off the EDT.
+     * log that keeps nothing. Waits on QuestDB for the endpoint's live check (the machine's: its token, at most 2 s),
+     * then at most {@link #CONTEXT_QUERY_WITHIN} for the query: off the EDT.
      */
     Optional<long[]> lastContext(final String id) {
         if (sink == null || id == null || !CONVERSATION.matcher(id).matches()) {

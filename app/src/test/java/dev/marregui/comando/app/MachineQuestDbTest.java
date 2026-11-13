@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import io.questdb.ServerMain;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - two concurrent starts start one server
 ///
 /// Every server runs in a `@TempDir` machine folder on free loopback ports, never QuestDB's defaults, and is stopped in
-/// a `finally` through its owner's stop.
+/// a `finally` through its owner's stop; one a start left without a `server.json` is ended by the pid `start.sh`
+/// printed to the instance that launched it, while that process still names the test's machine folder.
 class MachineQuestDbTest {
 
     /// QuestDB's default ports, which no test binds: a developer's machine QuestDB may hold them.
@@ -69,9 +71,11 @@ class MachineQuestDbTest {
                 "export QDB_HTTP_MIN_NET_BIND_TO=127.0.0.1:19003",
                 "export QDB_PG_NET_BIND_TO=127.0.0.1:18812",
                 "export QDB_LINE_TCP_NET_BIND_TO=127.0.0.1:19009");
-        assertThat(script.lines()).contains("export QDB_LINE_UDP_ENABLED=false", "export QDB_TELEMETRY_ENABLED=false", "echo $!");
-        assertThat(script).contains("nohup \"/opt/jdk/bin/java\" ", "-cp \"" + dir + "/lib/questdb-10.1.0.jar\" io.questdb.ServerMain -d \""
-                + dir + "/root\"", "-Dout=\"" + dir + "/root/conf/comando-log.conf\"");
+        assertThat(script.lines()).contains("export QDB_LINE_UDP_ENABLED=false", "export QDB_TELEMETRY_ENABLED=false",
+                "echo $!");
+        assertThat(script).contains("nohup \"/opt/jdk/bin/java\" ",
+                "-cp \"" + dir + "/lib/questdb-10.1.0.jar\" io.questdb.ServerMain -d \"" + dir + "/root\"",
+                "-Dout=\"" + dir + "/root/conf/comando-log.conf\"");
         assertThatThrownBy(() -> MachineQuestDb.script(dir.resolve("a$b"), ports, Path.of("/opt/jdk"), "10.1.0"))
                 .isInstanceOf(IOException.class);
     }
@@ -103,7 +107,8 @@ class MachineQuestDbTest {
 
         assertThat(MachineQuestDb.migrate(old, root)).isTrue();
         assertThat(root.resolve("db").resolve("metrics~1").resolve("_meta")).hasContent("meta");
-        assertThat(old.resolve("db").resolve("metrics~1").resolve("_meta")).as("the old folder, left").hasContent("meta");
+        assertThat(old.resolve("db").resolve("metrics~1").resolve("_meta")).as("the old folder, left")
+                .hasContent("meta");
         assertThat(root.resolve("db.migrating")).doesNotExist();
         assertThat(MachineQuestDb.migrate(old, root)).as("a root with a db").isFalse();
     }
@@ -115,12 +120,15 @@ class MachineQuestDbTest {
         // a backlog for both connects below: the socket never accepts, and a full backlog drops a connect unanswered
         try (final ServerSocket held = new ServerSocket(0, 50, loopback())) {
             final MachineQuestDb.Ports free = freePorts();
-            final MachineQuestDb.Ports ports = new MachineQuestDb.Ports(held.getLocalPort(), free.httpMin(), free.pg(), free.ilp());
+            final MachineQuestDb.Ports ports = new MachineQuestDb.Ports(held.getLocalPort(), free.httpMin(), free.pg(),
+                    free.ilp());
             final RecordingSink sink = new RecordingSink();
-            try (final MachineQuestDb db = new MachineQuestDb(dir.resolve("machine"), dir.resolve("data"), "", sink, ports)) {
+            try (final MachineQuestDb db = new MachineQuestDb(dir.resolve("machine"), dir.resolve("data"), "", sink,
+                    ports)) {
                 assertThat(db.ensureUp()).isEmpty();
                 assertThat(db.want(true)).startsWith("starting QuestDB");
-                final Intent.Notify refused = sink.await(Intent.Notify.class, n -> n.text().startsWith("Cannot start"), START_WITHIN);
+                final Intent.Notify refused = sink.await(Intent.Notify.class, n -> n.text().startsWith("Cannot start"),
+                        START_WITHIN);
 
                 assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
                 assertThat(refused.text()).isEqualTo("Cannot start QuestDB: port " + held.getLocalPort()
@@ -139,12 +147,15 @@ class MachineQuestDbTest {
         final MachineQuestDb.Ports ports = freePorts();
         final String later = """
                 {"version": 2, "pid": %d, "owner": "kit:/elsewhere", "name": "kit", "started": "2026-11-09T16:30:00Z",
-                 "ports": {"http": %d, "httpMin": %d, "pg": %d, "ilp": %d}, "token": "00", "questdb": "11.0.0", "more": true}
+                 "ports": {"http": %d, "httpMin": %d, "pg": %d, "ilp": %d}, "token": "00", "questdb": "11.0.0",
+                 "more": true}
                 """.formatted(ProcessHandle.current().pid(), ports.http(), ports.httpMin(), ports.pg(), ports.ilp());
         Files.writeString(machine.resolve("server.json"), later);
-        try (final MachineQuestDb db = new MachineQuestDb(machine, dir.resolve("data"), "", new RecordingSink(), ports)) {
+        try (final MachineQuestDb db = new MachineQuestDb(machine, dir.resolve("data"), "", new RecordingSink(),
+                ports)) {
             assertThat(db.ensureUp()).isEmpty();
-            assertThat(db.want(false)).isEqualTo("refused: its server.json is of version 2, which this comando uses and does not manage");
+            assertThat(db.want(false))
+                    .isEqualTo("refused: its server.json is of version 2, which this comando uses and does not manage");
             assertThat(machine.resolve("server.json")).hasContent(later);
             assertThat(machine.resolve("bin").resolve("start.sh")).doesNotExist();
         }
@@ -166,17 +177,19 @@ class MachineQuestDbTest {
         final MachineQuestDb b = new MachineQuestDb(machine, dir.resolve("b"), "b", sink, ports);
         try {
             assertThat(a.want(false)).isEqualTo("QuestDB is not running");
-            assertThat(a.want(true)).isEqualTo("starting QuestDB; the outcome comes as a notice, and ui_get_state's servers show it");
-            final Intent.Notify up = sink.await(Intent.Notify.class, n -> n.text().startsWith("QuestDB is up") || n.text().startsWith("Cannot"),
-                    START_WITHIN);
+            assertThat(a.want(true))
+                    .isEqualTo("starting QuestDB; the outcome comes as a notice, and ui_get_state's servers show it");
+            final Intent.Notify up = sink.await(Intent.Notify.class,
+                    n -> n.text().startsWith("QuestDB is up") || n.text().startsWith("Cannot"), START_WITHIN);
             assertThat(up.level()).as(up.text()).isEqualTo(Notice.Level.INFO);
-            assertThat(up.text()).isEqualTo("QuestDB is up: PG wire on 127.0.0.1:" + ports.pg() + ", console on http://localhost:" + ports.http());
+            assertThat(up.text()).isEqualTo("QuestDB is up: PG wire on 127.0.0.1:" + ports.pg()
+                    + ", console on http://localhost:" + ports.http());
 
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(machine))).isEqualTo("rwx------");
-            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(machine.resolve("bin").resolve("start.sh"))))
-                    .isEqualTo("rwx------");
-            assertThat(machine.resolve("lib").resolve("questdb-" + ServerMain.class.getPackage().getImplementationVersion() + ".jar"))
-                    .isRegularFile();
+            final Path script = machine.resolve("bin").resolve("start.sh");
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(script))).isEqualTo("rwx------");
+            final String version = ServerMain.class.getPackage().getImplementationVersion();
+            assertThat(machine.resolve("lib").resolve("questdb-" + version + ".jar")).isRegularFile();
             final Path registry = machine.resolve("server.json");
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(registry))).isEqualTo("rw-------");
             final JsonNode entry = registry(machine);
@@ -187,15 +200,16 @@ class MachineQuestDbTest {
             assertThat(entry.path("ports").path("httpMin").asInt()).isEqualTo(ports.httpMin());
             assertThat(entry.path("ports").path("pg").asInt()).isEqualTo(ports.pg());
             assertThat(entry.path("ports").path("ilp").asInt()).isEqualTo(ports.ilp());
-            assertThat(entry.path("questdb").asString()).isEqualTo(ServerMain.class.getPackage().getImplementationVersion());
+            assertThat(entry.path("questdb").asString()).isEqualTo(version);
             final String token = entry.path("token").asString();
             assertThat(token).matches("[0-9a-f]{32}");
             final long pid = entry.path("pid").asLong();
             assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).contains(true);
-            assertThat(query(ports, "SELECT token FROM qdb_server ORDER BY ts DESC LIMIT 1").path("dataset").path(0).path(0).asString())
-                    .isEqualTo(token);
+            assertThat(query(ports, "SELECT token FROM qdb_server ORDER BY ts DESC LIMIT 1").path("dataset").path(0)
+                    .path(0).asString()).isEqualTo(token);
             assertThat(a.want(true)).startsWith("QuestDB is up already: PG wire on 127.0.0.1:" + ports.pg() + ',');
-            assertThat(a.log()).as("the day's log, in the root's log folder").isRegularFile().hasParent(machine.resolve("root").resolve("log"));
+            assertThat(a.log()).as("the day's log, in the root's log folder").isRegularFile()
+                    .hasParent(machine.resolve("root").resolve("log"));
             try (final Socket s = new Socket()) {
                 s.connect(new InetSocketAddress(loopback(), ports.pg()), 2_000);
             }
@@ -212,14 +226,17 @@ class MachineQuestDbTest {
             assertThat(b.live()).contains(URI.create("http://127.0.0.1:" + ports.http()));
             assertThat(b.ensureUp()).contains(URI.create("http://127.0.0.1:" + ports.http()));
             assertThat(registry).as("no second start rewrote it").hasContent(written);
-            assertThat(query(ports, "SELECT count() FROM qdb_server").path("dataset").path(0).path(0).asLong()).as("one start").isEqualTo(1);
-            final String startedBy = "started by comando · a (" + rootA.toAbsolutePath().normalize() + "); only it stops it";
+            assertThat(query(ports, "SELECT count() FROM qdb_server").path("dataset").path(0).path(0).asLong())
+                    .as("one start").isEqualTo(1);
+            final String startedBy = "started by comando · a (" + rootA.toAbsolutePath().normalize()
+                    + "); only it stops it";
             assertThat(b.status()).isEqualTo(startedBy);
             assertThat(b.want(false)).isEqualTo("refused: " + startedBy);
             assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).contains(true);
 
             a.close();
-            assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).as("the owner's close leaves it").contains(true);
+            assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).as("the owner's close leaves it")
+                    .contains(true);
             assertThat(b.live()).isPresent();
 
             sink.clear();
@@ -230,7 +247,11 @@ class MachineQuestDbTest {
         } finally {
             a.close();
             b.close();
-            stopThroughOwner(machine, ports);
+            try {
+                stopThroughOwner(machine, ports);
+            } finally {
+                endLaunched(machine, a, b);
+            }
         }
     }
 
@@ -244,18 +265,25 @@ class MachineQuestDbTest {
         final MachineQuestDb b = new MachineQuestDb(machine, dir.resolve("b"), "b", new RecordingSink(), ports);
         try {
             final CyclicBarrier start = new CyclicBarrier(2);
-            final CompletableFuture<Optional<URI>> first = CompletableFuture.supplyAsync(() -> afterBarrier(start, a));
-            final CompletableFuture<Optional<URI>> second = CompletableFuture.supplyAsync(() -> afterBarrier(start, b));
+            final CompletableFuture<Optional<URI>> first = CompletableFuture.supplyAsync(
+                    () -> afterBarrier(start, a));
+            final CompletableFuture<Optional<URI>> second = CompletableFuture.supplyAsync(
+                    () -> afterBarrier(start, b));
             final Optional<URI> one = first.get(START_WITHIN.toSeconds() * 2, TimeUnit.SECONDS);
             final Optional<URI> other = second.get(START_WITHIN.toSeconds() * 2, TimeUnit.SECONDS);
 
             assertThat(one).contains(URI.create("http://127.0.0.1:" + ports.http()));
             assertThat(other).isEqualTo(one);
-            assertThat(query(ports, "SELECT count() FROM qdb_server").path("dataset").path(0).path(0).asLong()).as("one start").isEqualTo(1);
+            assertThat(query(ports, "SELECT count() FROM qdb_server").path("dataset").path(0).path(0).asLong())
+                    .as("one start").isEqualTo(1);
         } finally {
             a.close();
             b.close();
-            stopThroughOwner(machine, ports);
+            try {
+                stopThroughOwner(machine, ports);
+            } finally {
+                endLaunched(machine, a, b);
+            }
         }
     }
 
@@ -302,11 +330,39 @@ class MachineQuestDbTest {
         return InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
     }
 
+    /// Ends the server each of `dbs` launched while it still runs and names this test's `machine` folder: a start
+    /// that timed out, failed its statements or was cut off leaves its process without a `server.json`, which
+    /// [#stopThroughOwner] then finds nothing in. The pid is the one `start.sh` printed to that instance, never a
+    /// process found by name; a pid the system gave to another process since names another folder and is left.
+    private static void endLaunched(final Path machine, final MachineQuestDb... dbs) throws Exception {
+        final String root = machine.toAbsolutePath().normalize().resolve("root").toString();
+        for (final MachineQuestDb db : dbs) {
+            final long pid = db.launchedPid();
+            final Optional<ProcessHandle> ours = pid <= 0 ? Optional.empty() : ProcessHandle.of(pid)
+                    .filter(ProcessHandle::isAlive)
+                    .filter(h -> h.info().arguments().map(args -> List.of(args).contains(root)).orElse(false));
+            if (ours.isPresent()) {
+                final ProcessHandle h = ours.get();
+                h.destroy();
+                try {
+                    h.onExit().get(STOP_WITHIN.toSeconds(), TimeUnit.SECONDS);
+                } catch (final TimeoutException _) {
+                    h.destroyForcibly();
+                    h.onExit().get(STOP_WITHIN.toSeconds(), TimeUnit.SECONDS);
+                }
+            }
+        }
+    }
+
     /// `sql`'s answer from the server's `/exec`, which must be 200.
-    private static JsonNode query(final MachineQuestDb.Ports ports, final String sql) throws IOException, InterruptedException {
+    private static JsonNode query(
+            final MachineQuestDb.Ports ports,
+            final String sql
+    ) throws IOException, InterruptedException {
         try (final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
-            final HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + ports.http() + "/exec?query="
-                    + URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20"))).timeout(Duration.ofSeconds(5)).build(),
+            final URI uri = URI.create("http://127.0.0.1:" + ports.http() + "/exec?query="
+                    + URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20"));
+            final HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
             return JsonFile.JSON.readTree(r.body());
@@ -324,9 +380,11 @@ class MachineQuestDbTest {
             return;
         }
         final RecordingSink sink = new RecordingSink();
-        try (final MachineQuestDb owner = new MachineQuestDb(machine, Path.of(registry(machine).path("owner").asString()), "", sink, ports)) {
+        final Path ownerRoot = Path.of(registry(machine).path("owner").asString());
+        try (final MachineQuestDb owner = new MachineQuestDb(machine, ownerRoot, "", sink, ports)) {
             if (owner.want(false).startsWith("stopping")) {
-                sink.await(Intent.Notify.class, n -> n.text().equals("QuestDB is down") || n.text().contains("not stopped"), STOP_WITHIN);
+                sink.await(Intent.Notify.class,
+                        n -> n.text().equals("QuestDB is down") || n.text().contains("not stopped"), STOP_WITHIN);
             }
         }
     }

@@ -11,15 +11,16 @@ import java.util.Set;
 
 /**
  * Files and folders of the data root that only their owner may read (rule 15): a folder {@code rwx------}, a file
- * {@code rw-------}, set at creation and narrowed again at each start, whatever the umask comando started with or the
- * program that wrote the file last. A file system without POSIX permissions is left as it is. The one way comando makes
- * a file or folder owner-only, for every module.
+ * {@code rw-------}, a script its owner runs {@code rwx------}, set at creation and narrowed again at each start,
+ * whatever the umask comando started with or the program that wrote the file last. A file system without POSIX
+ * permissions is left as it is. The one way comando makes a file or folder owner-only, for every module.
  */
 public final class OwnerOnly {
 
     private static final System.Logger LOG = System.getLogger(OwnerOnly.class.getName());
     private static final Set<PosixFilePermission> FOLDER = PosixFilePermissions.fromString("rwx------");
     private static final Set<PosixFilePermission> FILE = PosixFilePermissions.fromString("rw-------");
+    private static final Set<PosixFilePermission> SCRIPT = PosixFilePermissions.fromString("rwx------");
     private static final FileAttribute<Set<PosixFilePermission>> BORN_FILE = PosixFilePermissions.asFileAttribute(FILE);
 
     private OwnerOnly() {
@@ -34,13 +35,12 @@ public final class OwnerOnly {
 
     /** Narrows {@code p}, a folder or a file, to its owner; a symbolic link is not followed. */
     public static void narrow(final Path p) throws IOException {
-        if (Files.isSymbolicLink(p) || !Files.getFileStore(p).supportsFileAttributeView(PosixFileAttributeView.class)) {
-            return;
-        }
-        final Set<PosixFilePermission> wanted = Files.isDirectory(p) ? FOLDER : FILE;
-        if (!Files.getPosixFilePermissions(p).equals(wanted)) {
-            Files.setPosixFilePermissions(p, wanted);
-        }
+        set(p, Files.isDirectory(p) ? FOLDER : FILE);
+    }
+
+    /** Narrows {@code file}, a script its owner runs, to its owner and runnable; a symbolic link is not followed. */
+    public static void executable(final Path file) throws IOException {
+        set(file, SCRIPT);
     }
 
     /**
@@ -56,13 +56,25 @@ public final class OwnerOnly {
         }
     }
 
-    /** A new empty file in the platform's temporary folder, owner-only from its creation, named {@code prefix…suffix}. */
+    /**
+     * A new empty file in the platform's temporary folder, owner-only from its creation, named {@code prefix…suffix}.
+     */
     public static Path tempFile(final String prefix, final String suffix) throws IOException {
         try {
             return Files.createTempFile(prefix, suffix, BORN_FILE);
         } catch (final UnsupportedOperationException e) {
             LOG.log(System.Logger.Level.DEBUG, "no POSIX permissions on this file system");
             return Files.createTempFile(prefix, suffix);
+        }
+    }
+
+    /** Sets {@code wanted} on {@code p} when it differs, unless {@code p} is a link or its store has no POSIX modes. */
+    private static void set(final Path p, final Set<PosixFilePermission> wanted) throws IOException {
+        if (Files.isSymbolicLink(p) || !Files.getFileStore(p).supportsFileAttributeView(PosixFileAttributeView.class)) {
+            return;
+        }
+        if (!Files.getPosixFilePermissions(p).equals(wanted)) {
+            Files.setPosixFilePermissions(p, wanted);
         }
     }
 }

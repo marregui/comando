@@ -34,7 +34,8 @@ class MetricsLinesTest {
                 "model":"claude-opus-5-5","effort":"high","subtype":"success","duration_ms":120000,"api_ms":80000,\
                 "calls":4,"context":588979,"window":1000000,"queued":0,"error":false,"cost_usd":1.25,\
                 "usage":{"input_tokens":10,"output_tokens":500,"service_tier":"standard"},\
-                "models":{"claude-opus-5-5":{"inputTokens":10,"outputTokens":500,"contextWindow":1000000,"costUSD":1.25}}}""");
+                "models":{"claude-opus-5-5":{"inputTokens":10,"outputTokens":500,\
+                "contextWindow":1000000,"costUSD":1.25}}}""");
         assertThat(lines.of(turn)).containsExactly(
                 "comando_turn,instance=/data,session=work,conversation=conv-1,model=claude-opus-5-5,effort=high,"
                         + "subtype=success,service_tier=standard duration_ms=120000i,api_ms=80000i,calls=4i,"

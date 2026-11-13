@@ -380,8 +380,10 @@ sends for the same gesture:
   `modelUsage`, running totals per conversation), `comando_agent`, `comando_usage`, `comando_queue` and `comando_wait`
   (a row per closed card), each row with
   the data root as `instance`. A bounded queue and one thread write them in batches over ILP, starting the server when
-  none runs; a batch QuestDB does not take is lost, and the first of an outage is a warning notice. comando run with
-  `-Dcomando.questdb=false`, as the tests are, keeps no metrics.
+  none runs; a batch QuestDB does not take is lost, and the first of an outage is a warning notice. A batch QuestDB
+  refuses for some of its lines is sent again in halves, so only the lines it refuses alone are lost; those are logged
+  at most once a minute and are no outage. comando run with `-Dcomando.questdb=false`, as the tests are, keeps no
+  metrics.
 
 ## 4. Approvals and safety
 

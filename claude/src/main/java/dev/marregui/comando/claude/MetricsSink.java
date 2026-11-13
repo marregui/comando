@@ -39,9 +39,11 @@ import dev.marregui.comando.core.state.Notice;
  * a process writes to a server, and again after a write is refused for a missing table.
  * <p>
  * Delivery is at most once per event offered: a batch that fails is lost, counted, and logged at most once a minute;
- * nothing is kept on disk to send later. The first failure after a write the server took, or after the start, is also a
- * notice to the user, once for that outage; the next outage, after a batch was taken again, is told again. What the
- * close cuts off, the events still queued and the lines of a batch not sent, is counted and logged once at the close.
+ * nothing is kept on disk to send later. A write the server refuses for some of its lines is sent again in halves, so
+ * that only the lines it refuses alone are lost; such a line is logged at most once a minute, and is no outage. The
+ * first other failure after a write the server took, or after the start, is also a notice to the user, once for that
+ * outage; the next outage, after a batch was taken again, is told again. What the close cuts off, the events still
+ * queued and the lines of a batch not sent, is counted and logged once at the close.
  */
 final class MetricsSink implements AutoCloseable {
 
@@ -58,7 +60,7 @@ final class MetricsSink implements AutoCloseable {
     static final Duration CLOSE_WAIT = Duration.ofSeconds(2);
     /**
      * How often, at most, {@link QuestDbEndpoint#ensureUp} is asked and a recurring failure logged: the contract's
-     * bound (record 146), as the start it may cause takes up to a minute.
+     * bound (record 146).
      */
     static final long MINUTE_NANOS = TimeUnit.MINUTES.toNanos(1);
     /** The contract's connect bound (record 146, §5): a server on this machine answers a connect at once. */
@@ -97,7 +99,7 @@ final class MetricsSink implements AutoCloseable {
     private boolean ensuredOnce;
     private long failureLoggedAtNanos;
     private boolean failureLoggedOnce;
-    /** A batch failed and none was taken since: the outage told in a notice. */
+    /** A write failed, not for a line refused alone, and none was taken since: the outage told in a notice. */
     private boolean outage;
     private long reportedDrops;
     private URI server;
@@ -174,7 +176,8 @@ final class MetricsSink implements AutoCloseable {
         final String query = URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20");
         final HttpRequest request = HttpRequest.newBuilder(base.resolve("/exec?query=" + query)).timeout(timeout)
                 .GET().build();
-        final HttpResponse<String> answer = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        final HttpResponse<String> answer = http.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (answer.statusCode() != 200) {
             throw new IOException("QuestDB refused a query [status=" + answer.statusCode() + ", answer="
                     + shortened(answer.body()) + ']');
@@ -266,7 +269,9 @@ final class MetricsSink implements AutoCloseable {
         return true;
     }
 
-    /** Adds the lines of {@code event} to {@code batch}; an event of a type with no table is counted and logged once. */
+    /**
+     * Adds the lines of {@code event} to {@code batch}; an event of a type with no table is counted and logged once.
+     */
     private void map(final ObjectNode event, final List<String> batch) {
         final String type = event.path("event").asString("");
         if (!MetricsLines.known(type)) {
@@ -285,19 +290,32 @@ final class MetricsSink implements AutoCloseable {
     }
 
     /**
-     * Sends {@code chunk}, at most {@link #BATCH_LINES} lines, counting its lines as sent or failed; a refused connection
-     * is tried once more, on the server found again.
+     * Sends {@code chunk}, at most {@link #BATCH_LINES} lines, counting its lines as sent or failed; a refused
+     * connection is tried once more, on the server found again. QuestDB refuses a whole write for one line it does not
+     * take (400): a chunk so refused, for any reason but a missing table, is sent again in halves, down to the lines it
+     * refuses alone, so that only those are counted failed; each such line costs at most 2 * ceil(log2 n) more writes.
+     * A line refused alone is a refusal of its data, not an outage: it is no notice.
      */
     private void deliver(final List<String> chunk) {
         try {
+            HttpResponse<String> answer;
             try {
-                took(attempt(chunk, null), chunk);
+                answer = attempt(chunk, null);
             } catch (final ConnectException _) {
                 final URI refused = server;
                 server = null;
                 tablesOn = null;
-                took(attempt(chunk, refused), chunk);
+                answer = attempt(chunk, refused);
             }
+            if (answer != null && answer.statusCode() == 400 && !missingTable(answer.body())) {
+                if (chunk.size() > 1) {
+                    split(chunk);
+                } else {
+                    refused(chunk, answer.body());
+                }
+                return;
+            }
+            took(answer == null ? -1 : answer.statusCode(), chunk);
         } catch (final ConnectException _) {
             server = null;
             tablesOn = null;
@@ -310,14 +328,40 @@ final class MetricsSink implements AutoCloseable {
         }
     }
 
+    /** Each half of {@code chunk}, which the server refused, delivered; the second not tried once the close cut in. */
+    private void split(final List<String> chunk) {
+        final int half = chunk.size() / 2;
+        deliver(chunk.subList(0, half));
+        if (Thread.currentThread().isInterrupted()) {
+            unsent.addAndGet(chunk.size() - half);
+            return;
+        }
+        deliver(chunk.subList(half, chunk.size()));
+    }
+
     /**
-     * The status of one write of {@code chunk}, the tables made again once when the server says one is missing; -1 when
-     * no server answers. {@code refused} is the server that just refused a connection, or null.
+     * Counts {@code line}, a write of one line the server refuses alone, failed, and logs it at most once a minute with
+     * the recurring failures: a refusal of its data, not an outage, so no notice, and an outage under way goes on.
      */
-    private int attempt(final List<String> chunk, final URI refused) throws IOException, InterruptedException {
+    private void refused(final List<String> line, final String answer) {
+        final long total = failed.addAndGet(line.size());
+        if (mayLogFailure(nanos.getAsLong())) {
+            LOG.log(System.Logger.Level.WARNING, "QuestDB refused a line, its metrics row is lost [answer="
+                    + shortened(answer) + ", failedLines=" + total + ']');
+        }
+    }
+
+    /**
+     * The answer to one write of {@code chunk}, the tables made again once when the server says one is missing; null
+     * when no server answers. {@code refused} is the server that just refused a connection, or null.
+     */
+    private HttpResponse<String> attempt(
+            final List<String> chunk,
+            final URI refused
+    ) throws IOException, InterruptedException {
         final URI base = connect(refused);
         if (base == null) {
-            return -1;
+            return null;
         }
         HttpResponse<String> answer = post(base, chunk);
         if (answer.statusCode() == 400 && missingTable(answer.body())) {
@@ -328,7 +372,7 @@ final class MetricsSink implements AutoCloseable {
             LOG.log(System.Logger.Level.DEBUG, "QuestDB refused a write [status=" + answer.statusCode() + ", answer="
                     + shortened(answer.body()) + ']');
         }
-        return answer.statusCode();
+        return answer;
     }
 
     private void took(final int status, final List<String> chunk) {
@@ -386,7 +430,10 @@ final class MetricsSink implements AutoCloseable {
         }
     }
 
-    private HttpResponse<String> post(final URI base, final List<String> chunk) throws IOException, InterruptedException {
+    private HttpResponse<String> post(
+            final URI base,
+            final List<String> chunk
+    ) throws IOException, InterruptedException {
         final StringBuilder body = new StringBuilder();
         for (final String line : chunk) {
             body.append(line).append('\n');
@@ -426,16 +473,24 @@ final class MetricsSink implements AutoCloseable {
                     Character.toUpperCase(message.charAt(0)) + message.substring(1), cause));
             return;
         }
-        if (failureLoggedOnce && nowNanos - failureLoggedAtNanos < MINUTE_NANOS) {
+        if (!mayLogFailure(nowNanos)) {
             return;
         }
-        failureLoggedOnce = true;
-        failureLoggedAtNanos = nowNanos;
         if (cause == null) {
             LOG.log(System.Logger.Level.WARNING, message);
         } else {
             LOG.log(System.Logger.Level.WARNING, message, cause);
         }
+    }
+
+    /** Whether a recurring failure may be logged at {@code nowNanos}, once a minute at most; if so, a minute starts. */
+    private boolean mayLogFailure(final long nowNanos) {
+        if (failureLoggedOnce && nowNanos - failureLoggedAtNanos < MINUTE_NANOS) {
+            return false;
+        }
+        failureLoggedOnce = true;
+        failureLoggedAtNanos = nowNanos;
+        return true;
     }
 
     /**

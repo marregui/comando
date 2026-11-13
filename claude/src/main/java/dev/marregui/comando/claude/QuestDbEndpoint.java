@@ -8,7 +8,8 @@ public interface QuestDbEndpoint {
 
     /**
      * The live server's HTTP base URI ({@code http://127.0.0.1:9000}), starting it when none runs; empty when it cannot
-     * be had now, the cause logged. Blocks up to a minute: never on the EDT.
+     * be had now, the cause logged. Blocks for the whole of a start, minutes at most, its waits each bounded by the
+     * implementation: never on the EDT.
      */
     Optional<URI> ensureUp();
 

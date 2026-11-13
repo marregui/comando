@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 ///
 /// - a folder is created, with its missing parents, and narrowed to `rwx------`; one that exists wider is narrowed
 /// - a file is narrowed to `rw-------`; a symbolic link is not followed
+/// - a script is narrowed to `rwx------`, runnable by its owner alone; a symbolic link is not followed
 /// - a new file and a temporary file are `rw-------` from their creation
 class OwnerOnlyTest {
 
@@ -41,10 +42,31 @@ class OwnerOnlyTest {
         final Path link = Files.createSymbolicLink(tmp.resolve("link"), file);
 
         OwnerOnly.narrow(link);
-        assertThat(Files.getPosixFilePermissions(file)).as("through the link: untouched").isEqualTo(PosixFilePermissions.fromString("rw-rw-rw-"));
+        assertThat(Files.getPosixFilePermissions(file)).as("through the link: untouched")
+                .isEqualTo(PosixFilePermissions.fromString("rw-rw-rw-"));
 
         OwnerOnly.narrow(file);
         assertThat(Files.getPosixFilePermissions(file)).isEqualTo(PosixFilePermissions.fromString("rw-------"));
+    }
+
+    /// A script a wider umask made `rwxrwxr-x` is narrowed to `rwx------`, and one made `rw-rw-rw-` made runnable by
+    /// its owner alone; a symbolic link to it is left alone, and so is the file it names.
+    @Test
+    void aScriptIsNarrowedToItsOwnerAndRunnable(@TempDir final Path tmp) throws Exception {
+        final Path wide = Files.writeString(tmp.resolve("start.sh"), "#!/bin/bash\n");
+        Files.setPosixFilePermissions(wide, PosixFilePermissions.fromString("rwxrwxr-x"));
+        OwnerOnly.executable(wide);
+        assertThat(Files.getPosixFilePermissions(wide)).isEqualTo(PosixFilePermissions.fromString("rwx------"));
+
+        final Path plain = Files.writeString(tmp.resolve("stop.sh"), "#!/bin/bash\n");
+        Files.setPosixFilePermissions(plain, PosixFilePermissions.fromString("rw-rw-rw-"));
+        final Path link = Files.createSymbolicLink(tmp.resolve("link"), plain);
+        OwnerOnly.executable(link);
+        assertThat(Files.getPosixFilePermissions(plain)).as("through the link: untouched")
+                .isEqualTo(PosixFilePermissions.fromString("rw-rw-rw-"));
+
+        OwnerOnly.executable(plain);
+        assertThat(Files.getPosixFilePermissions(plain)).isEqualTo(PosixFilePermissions.fromString("rwx------"));
     }
 
     /// A new file and a temporary file are owner-only from their creation; a file that exists is not created again.

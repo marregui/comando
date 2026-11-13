@@ -39,6 +39,9 @@ import static org.awaitility.Awaitility.await;
 ///
 /// - Creates the tables on the first write to a server, then sends the event's line.
 /// - Creates the tables again, once, when a write is refused for a missing table.
+/// - Sends a write refused for one line again in halves, so only that line is counted failed.
+/// - Counts a line refused in batch after batch as lost each time, with no notice: a refused line is no outage.
+/// - Sends an event of more lines than a write carries in writes of at most [MetricsSink#BATCH_LINES] lines.
 /// - Asks the endpoint to start a server at most once a minute while none answers.
 /// - Asks the endpoint to start a server when the one it named refuses the connection.
 /// - Drops and counts the events a full queue cannot take.
@@ -79,6 +82,34 @@ class MetricsSinkTest {
             assertThat(server.posts.get()).isEqualTo(2);
             assertThat(server.ddls()).as("once at the start, once after the refusal")
                     .isEqualTo(2 * MetricsLines.DDL.size());
+        }
+    }
+
+    /// A write of eight lines refused for one of them is sent again in halves, down to that line: the other seven are
+    /// taken, the one is counted failed, in at most 2 * ceil(log2 8) writes more than the first.
+    @Test
+    void aWriteRefusedForOneLineIsSentAgainInHalves() throws Exception {
+        try (final FakeQuestDb server = new FakeQuestDb();
+                final MetricsSink sink = sink(Endpoint.at(server.uri()))) {
+            server.refuseLine.set(",name=q5 ");
+            sink.offer(queues(8));
+            // the counters move after the server's answer: every one is read inside the wait
+            await().atMost(WITHIN).until(() -> sink.sentLines() == 7 && sink.failedLines() == 1
+                    && server.lines.size() == 7 && server.posts.get() == 1 + 2 * 3);
+            assertThat(server.lines).noneMatch(line -> line.contains(",name=q5 "));
+        }
+    }
+
+    /// One event of two lines more than a write carries is sent in two writes, the first of
+    /// [MetricsSink#BATCH_LINES] lines.
+    @Test
+    void anEventOfMoreLinesThanAWriteIsSentInWritesOfTheBatch() throws Exception {
+        try (final FakeQuestDb server = new FakeQuestDb();
+                final MetricsSink sink = sink(Endpoint.at(server.uri()))) {
+            sink.offer(queues(MetricsSink.BATCH_LINES + 2));
+            await().atMost(WITHIN).until(() -> sink.sentLines() == MetricsSink.BATCH_LINES + 2
+                    && server.postSizes.equals(List.of(MetricsSink.BATCH_LINES, 2)));
+            assertThat(sink.failedLines()).isZero();
         }
     }
 
@@ -236,6 +267,23 @@ class MetricsSinkTest {
         }
     }
 
+    /// The same line refused in three batches in a row is lost each time and is no outage: the server took the rest of
+    /// each batch, so no notice is told.
+    @Test
+    void aLineRefusedInBatchAfterBatchIsNoOutage() throws Exception {
+        try (final FakeQuestDb server = new FakeQuestDb();
+                final MetricsSink sink = sink(Endpoint.at(server.uri()))) {
+            server.refuseLine.set(",name=q5 ");
+            for (int batch = 1; batch <= 3; batch++) {
+                final long taken = batch;
+                sink.offer(queues(8));
+                // one errand delivers each batch whole before the next: a notice of the one before would be in by now
+                await().atMost(WITHIN).until(() -> sink.sentLines() == 7 * taken && sink.failedLines() == taken
+                        && notices.of(Intent.Notify.class).isEmpty());
+            }
+        }
+    }
+
     /// With no server, the first failed batch is a notice that the rows are lost and the next failed batch is none;
     /// a batch the server takes ends the outage, and the first failure after it is a notice again.
     @Test
@@ -318,7 +366,8 @@ class MetricsSinkTest {
     }
 
     /// A loopback HTTP server that answers `/exec` and `/write` as QuestDB 10.1.0 does: DDL is `{"ddl":"OK"}`, a
-    /// `SELECT` gets the answer set, a write gets 204, or 400 naming a missing table while `refuseAsMissing` counts.
+    /// `SELECT` gets the answer set, a write gets 204, or 400 naming a missing table while `refuseAsMissing` counts,
+    /// or 400 for the whole write when a line holds `refuseLine`.
     static final class FakeQuestDb implements AutoCloseable {
 
         /** The body QuestDB 10.1.0 sends when a line names a table it does not have (probed). */
@@ -326,14 +375,23 @@ class MetricsSinkTest {
                 + "errors encountered on line(s):\\nerror in line 1: table: comando_usage; table does not exist, "
                 + "creating new tables is disabled\",\"line\":1,\"errorId\":\"t-1\"}";
 
+        /** The body QuestDB sends for a write with a line it cannot take: the whole write is refused. */
+        private static final String BAD_LINE = "{\"code\":\"invalid\",\"message\":\"failed to parse line protocol:"
+                + "errors encountered on line(s):\\nerror in line 1: table: comando_queue, column: depth; cast error\","
+                + "\"line\":1,\"errorId\":\"t-2\"}";
+
         /** A permit per write received, before it is held. */
         final Semaphore arrived = new Semaphore(0);
         /** While set, each write waits for it before it is answered. */
         final AtomicReference<CountDownLatch> hold = new AtomicReference<>();
         final List<String> lines = new CopyOnWriteArrayList<>();
         final AtomicInteger posts = new AtomicInteger();
+        /** The lines of each write received, in order. */
+        final List<Integer> postSizes = new CopyOnWriteArrayList<>();
         final List<String> queries = new CopyOnWriteArrayList<>();
         final AtomicInteger refuseAsMissing = new AtomicInteger();
+        /** While set, a write with a line holding it is refused whole. */
+        final AtomicReference<String> refuseLine = new AtomicReference<>();
         final AtomicReference<String> selectAnswer = new AtomicReference<>(
                 "{\"query\":\"\",\"columns\":[],\"dataset\":[],\"count\":0}");
         private final AtomicBoolean closed = new AtomicBoolean();
@@ -380,6 +438,7 @@ class MetricsSinkTest {
             }
             // the latch is read before the arrival is told: a test that swaps it on the arrival sets the next write's
             final CountDownLatch held = hold.get();
+            postSizes.add((int) body.lines().count());
             posts.incrementAndGet();
             arrived.release();
             if (held != null) {
@@ -391,6 +450,11 @@ class MetricsSinkTest {
             }
             if (refuseAsMissing.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
                 answer(exchange, 400, MISSING);
+                return;
+            }
+            final String refused = refuseLine.get();
+            if (refused != null && body.contains(refused)) {
+                answer(exchange, 400, BAD_LINE);
                 return;
             }
             lines.addAll(body.lines().toList());

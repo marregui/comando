@@ -18,8 +18,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.PosixFileAttributeView;
-import java.nio.file.attribute.PosixFilePermission;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,7 +26,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +38,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
 import io.questdb.ServerMain;
+import org.jetbrains.annotations.TestOnly;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 
@@ -76,8 +74,9 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
      * {@code .log} so that a panel follows it, kept a week; the console as shipped.
      */
     static final String LOG_CONFIG = """
-            # Written by comando at each start of its QuestDB: the console as shipped, and one file a day in log/, kept a
-            # week, for Help > Show QuestDB's log. A file writer set in conf/log.conf is used instead of this file.
+            # Written by comando at each start of its QuestDB: the console as shipped, and one file a day in
+            # log/, kept a week, for Help > Show QuestDB's log. start.sh names this file (-Dout), so
+            # conf/log.conf is not read.
             writers=file,stdout,http.min
             w.file.class=io.questdb.log.LogRollingFileWriter
             w.file.location=${log.dir}/questdb-${date:yyyyMMdd}.log
@@ -120,7 +119,9 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             echo $!
             """;
 
-    /** How long {@link #isRunning} trusts its last live check: each costs an HTTP request; the window asks every second. */
+    /**
+     * How long {@link #isRunning} trusts its last live check: each costs an HTTP request; the window asks every second.
+     */
     private static final Duration CHECK_EVERY = Duration.ofSeconds(2);
     /** After SIGKILL, how long the process is given to be gone; as the Edge's stop, not measured. */
     private static final Duration KILL_WAIT = Duration.ofSeconds(5);
@@ -151,7 +152,9 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     private final AtomicBoolean busy = new AtomicBoolean();
     private final AtomicBoolean checking = new AtomicBoolean();
     private final Path dataRoot;
-    /** The starts, stops and live checks under way, each on a virtual thread; closed with comando, the server left up. */
+    /**
+     * The starts, stops and live checks under way, each on a virtual thread; closed with comando, the server left up.
+     */
     private final Errands errands = new Errands("questdb");
     private final Path folder;
     private final IntentSink intents;
@@ -161,9 +164,14 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     private final Path registry;
     private final Path root;
     /** Written by the live checks, on any thread; read by {@link #isRunning} on the EDT, which never waits for one. */
-    private volatile long checkedAt = System.nanoTime() - CHECK_EVERY.toNanos();
+    private volatile long checkedAtNanos = System.nanoTime() - CHECK_EVERY.toNanos();
     /** What a start or stop under way does; written by its errand, read by the EDT's {@link #status}. */
     private volatile String doing = "";
+    /**
+     * The pid {@code start.sh} printed at this instance's last launch, 0 before one; written by a start's errand, read
+     * by tests.
+     */
+    private volatile long launchedPid;
     /** The registry names a live server, as last checked; written by the live checks, read by the EDT. */
     private volatile boolean running;
     /** The live entry at the last check, or null: whose server the button stands for; written and read as above. */
@@ -175,7 +183,13 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     }
 
     /** As above, on {@code ports}; for tests, which never bind the standard ones. */
-    MachineQuestDb(final Path machineFolder, final Path dataRoot, final String instanceName, final IntentSink intents, final Ports ports) {
+    MachineQuestDb(
+            final Path machineFolder,
+            final Path dataRoot,
+            final String instanceName,
+            final IntentSink intents,
+            final Ports ports
+    ) {
         this.folder = machineFolder.toAbsolutePath().normalize();
         this.dataRoot = dataRoot.toAbsolutePath().normalize();
         this.owner = this.dataRoot.toString();
@@ -199,14 +213,17 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
 
     /**
      * Runs record 146's start: the live server's endpoint, else one started now under {@code start.lock}, with this
-     * instance as its owner; empty with the refusal logged. Blocks for the lock (at most 90 s) and the start (at most
-     * 60 s): never on the EDT.
+     * instance as its owner; empty with the refusal logged. Blocks for the live checks ({@link #LIVE_WITHIN} each),
+     * this JVM's hold of the folder and then {@code start.lock} ({@link #LOCK_WITHIN} each), the jar's copy when it is
+     * missing, {@code start.sh} ({@link #SCRIPT_WITHIN}), the wait for the server ({@link #UP_WITHIN}) and its two
+     * statements ({@link #UP_WITHIN} each): minutes, never on the EDT.
      */
     @Override
     public Optional<URI> ensureUp() {
         final Outcome o = up();
         if (o.entry() == null) {
-            LOG.log(System.Logger.Level.WARNING, "cannot have the machine's QuestDB [folder=" + folder + ", why=" + o.refusal() + ']');
+            LOG.log(System.Logger.Level.WARNING, "cannot have the machine's QuestDB [folder=" + folder + ", why="
+                    + o.refusal() + ']');
             return Optional.empty();
         }
         return Optional.of(uri(o.entry()));
@@ -219,7 +236,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
      */
     @Override
     public boolean isRunning() {
-        if (System.nanoTime() - checkedAt >= CHECK_EVERY.toNanos() && checking.compareAndSet(false, true)) {
+        if (System.nanoTime() - checkedAtNanos >= CHECK_EVERY.toNanos() && checking.compareAndSet(false, true)) {
             final Thread t = errands.start("questdb-check", () -> {
                 try {
                     liveEntry();
@@ -254,7 +271,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         } catch (final IOException | UncheckedIOException _) {
             // no log folder yet: today's file, which says there is no log yet
         }
-        return dir.resolve("questdb-" + DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.now(ZoneOffset.UTC)) + ".log");
+        return dir.resolve("questdb-" + DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.now(ZoneOffset.UTC))
+                + ".log");
     }
 
     @Override
@@ -279,7 +297,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     @Override
     public void toggle() {
         if (!busy.compareAndSet(false, true)) {
-            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is " + (doing.isEmpty() ? "busy" : doing) + "; wait for it", false));
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO,
+                    "QuestDB is " + (doing.isEmpty() ? "busy" : doing) + "; wait for it", false));
             return;
         }
         final Thread t = errands.start("questdb-toggle", () -> {
@@ -326,7 +345,17 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             busy.set(false);
             return "refused: comando is closing";
         }
-        return (up ? "starting" : "stopping") + " QuestDB; the outcome comes as a notice, and ui_get_state's servers show it";
+        return (up ? "starting" : "stopping")
+                + " QuestDB; the outcome comes as a notice, and ui_get_state's servers show it";
+    }
+
+    /**
+     * The pid {@code start.sh} printed at this instance's last launch, 0 before one: the process a test that started it
+     * ends.
+     */
+    @TestOnly
+    long launchedPid() {
+        return launchedPid;
     }
 
     /** Writes {@link #LOG_CONFIG} as {@code root/conf/comando-log.conf}, which {@code start.sh} names; returns it. */
@@ -362,7 +391,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             }
         }
         Files.move(copying, to);
-        LOG.log(System.Logger.Level.INFO, "QuestDB database copied to the machine's [from=" + from + ", to=" + to + ']');
+        LOG.log(System.Logger.Level.INFO, "QuestDB database copied to the machine's [from=" + from + ", to=" + to
+                + ']');
         return true;
     }
 
@@ -370,7 +400,12 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
      * {@link #SCRIPT} for {@code folder}; refused when a path holds a character the double-quoted shell words would
      * read ({@code "}, {@code $}, {@code `}, {@code \}).
      */
-    static String script(final Path folder, final Ports ports, final Path javaHome, final String version) throws IOException {
+    static String script(
+            final Path folder,
+            final Ports ports,
+            final Path javaHome,
+            final String version
+    ) throws IOException {
         for (final String s : List.of(folder.toString(), javaHome.toString(), version)) {
             if (s.chars().anyMatch(c -> c == '"' || c == '$' || c == '`' || c == '\\')) {
                 throw new IOException("a path start.sh cannot quote [path=" + s + ']');
@@ -407,7 +442,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     private static JsonNode exec(final int port, final String sql, final Duration within) {
         final String query = URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20");
         try {
-            final HttpURLConnection c = (HttpURLConnection) URI.create("http://127.0.0.1:" + port + "/exec?query=" + query).toURL().openConnection();
+            final HttpURLConnection c = (HttpURLConnection) URI.create("http://127.0.0.1:" + port + "/exec?query="
+                    + query).toURL().openConnection();
             final int halfMillis = (int) Math.max(1, within.toMillis() / 2);
             c.setConnectTimeout(halfMillis);
             c.setReadTimeout(halfMillis);
@@ -460,7 +496,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             h.onExit().get(STOP_WAIT.toMillis(), TimeUnit.MILLISECONDS);
             return true;
         } catch (final TimeoutException _) {
-            LOG.log(System.Logger.Level.WARNING, "QuestDB did not stop within " + STOP_WAIT.toSeconds() + " s; killing it [pid=" + h.pid() + ']');
+            LOG.log(System.Logger.Level.WARNING, "QuestDB did not stop within " + STOP_WAIT.toSeconds()
+                    + " s; killing it [pid=" + h.pid() + ']');
             h.destroyForcibly();
             try {
                 h.onExit().get(KILL_WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -490,7 +527,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             return new URI("http", null, "127.0.0.1", e.ports().http(), null, null, null);
         } catch (final URISyntaxException ex) {
-            throw new IllegalStateException("a loopback URI with a port is always valid [port=" + e.ports().http() + ']', ex);
+            throw new IllegalStateException("a loopback URI with a port is always valid [port=" + e.ports().http()
+                    + ']', ex);
         }
     }
 
@@ -499,9 +537,9 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     }
 
     /**
-     * Asks the new server {@code SELECT 1} every {@link #POLL_EVERY} until it answers 200: empty then, else why the start
-     * failed. Past {@link #UP_WITHIN} the server is left running (it may still come up); one that exited is reported at
-     * once.
+     * Asks the new server {@code SELECT 1} every {@link #POLL_EVERY} until it answers 200: empty then, else why the
+     * start failed. Past {@link #UP_WITHIN} the server is left running (it may still come up); one that exited is
+     * reported at once.
      */
     private String awaitUp(final long pid) throws InterruptedException {
         final long deadline = System.nanoTime() + UP_WITHIN.toNanos();
@@ -514,7 +552,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             }
             Thread.sleep(POLL_EVERY);
         }
-        return "QuestDB [pid=" + pid + "] was not up within " + UP_WITHIN.toSeconds() + " s and is left running; see " + stdout();
+        return "QuestDB [pid=" + pid + "] was not up within " + UP_WITHIN.toSeconds() + " s and is left running; see "
+                + stdout();
     }
 
     /** The jar {@code ServerMain} was loaded from, copied to {@code jar}: beside it first, then moved into place. */
@@ -537,11 +576,15 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             throw e;
         }
         OwnerOnly.narrow(jar);
-        LOG.log(System.Logger.Level.INFO, "QuestDB jar copied to the machine folder [from=" + source + ", to=" + jar + ']');
+        LOG.log(System.Logger.Level.INFO, "QuestDB jar copied to the machine folder [from=" + source + ", to=" + jar
+                + ']');
     }
 
-    /** Starts or stops as the registry finds it; {@code want}, when given, is the only direction it may go. */
-    private synchronized void flip(final Boolean want) {
+    /**
+     * Starts or stops as the registry finds it; {@code want}, when given, is the only direction it may go. One at a
+     * time: its callers hold {@link #busy}, so no monitor is held while it waits or tells its notices.
+     */
+    private void flip(final Boolean want) {
         final Entry e = readQuietly();
         final Optional<ProcessHandle> h = e == null ? Optional.empty() : live(e);
         if (want != null && want == h.isPresent()) {
@@ -556,11 +599,13 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                 if (o.entry() != null) {
                     intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: " + where(o.entry()), false));
                 } else {
-                    intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot start QuestDB: " + o.refusal(), null));
+                    intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
+                            "Cannot start QuestDB: " + o.refusal(), null));
                 }
             } else if (!mine(e)) {
                 // the user asked for a stop this comando may not do: say why, where the eye is, and in the log
-                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot stop QuestDB: " + refusal(e), null));
+                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
+                        "Cannot stop QuestDB: " + refusal(e), null));
             } else {
                 doing = "stopping";
                 stopLocked(e, h.get());
@@ -573,10 +618,12 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
 
     /** Runs {@code start.sh} through {@link Processes} and returns the pid it printed. */
     private long launch(final Path script) throws IOException, InterruptedException {
-        final Processes.Result r = Processes.run(List.of("/bin/bash", script.toString()), null, folder, null, SCRIPT_WITHIN, 64);
+        final Processes.Result r = Processes.run(List.of("/bin/bash", script.toString()), null, folder, null,
+                SCRIPT_WITHIN, 64);
         final String printed = r.out().strip();
         if (r.timedOut() || r.exitCode() != 0 || !printed.matches("\\d{1,10}")) {
-            throw new IOException("start.sh did not print a pid [exit=" + r.exitCode() + ", timedOut=" + r.timedOut() + ", stdout=" + stdout() + ']');
+            throw new IOException("start.sh did not print a pid [exit=" + r.exitCode() + ", timedOut=" + r.timedOut()
+                    + ", stdout=" + stdout() + ']');
         }
         return Long.parseLong(printed);
     }
@@ -601,14 +648,14 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         final Entry live = e != null && live(e).isPresent() ? e : null;
         seen = live;
         running = live != null;
-        checkedAt = System.nanoTime();
+        checkedAtNanos = System.nanoTime();
         return live;
     }
 
     /**
-     * The lock on {@code channel}, polled every {@link #POLL_EVERY} until {@link #LOCK_WITHIN}; null when it stays held.
-     * Another process's lock answers null; one of this JVM's (another instance, or a second caller here) throws, and is
-     * waited for the same way.
+     * The lock on {@code channel}, polled every {@link #POLL_EVERY} until {@link #LOCK_WITHIN}; null when it stays
+     * held. Another process's lock answers null; one of this JVM's (another instance, or a second caller here) throws,
+     * and is waited for the same way.
      */
     private FileLock lock(final FileChannel channel) throws IOException, InterruptedException {
         final long deadline = System.nanoTime() + LOCK_WITHIN.toNanos();
@@ -658,11 +705,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         ownerOnlyFile(stdout());
         final Path script = OwnerOnly.folder(folder.resolve("bin")).resolve("start.sh");
         AtomicFiles.writeString(script, text);
-        if (Files.getFileStore(script).supportsFileAttributeView(PosixFileAttributeView.class)) {
-            // the user's alone, and runnable: rwx------, which OwnerOnly has no mode for
-            Files.setPosixFilePermissions(script, EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE,
-                    PosixFilePermission.OWNER_EXECUTE));
-        }
+        OwnerOnly.executable(script);
         return script;
     }
 
@@ -679,7 +722,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             tree = Mapped.read(registry, m -> JsonFile.JSON.readTree(m.stream()));
         } catch (final JacksonException e) {
-            LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry is not JSON; no server is known [file=" + registry + ']', e);
+            LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry is not JSON; no server is known [file="
+                    + registry + ']', e);
             return null;
         }
         final int version = tree.path("version").asInt(REGISTRY_VERSION);
@@ -688,9 +732,11 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             e = JsonFile.JSON.treeToValue(tree, Entry.class);
         } catch (final JacksonException ex) {
             if (version > REGISTRY_VERSION) {
-                throw new IOException("the registry is of version " + version + ", written by a later comando or kit [file=" + registry + ']', ex);
+                throw new IOException("the registry is of version " + version
+                        + ", written by a later comando or kit [file=" + registry + ']', ex);
             }
-            LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry does not read; no server is known [file=" + registry + ']', ex);
+            LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry does not read; no server is known"
+                    + " [file=" + registry + ']', ex);
             return null;
         }
         return e.ports() == null || e.token() == null || e.owner() == null ? null : e;
@@ -701,7 +747,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             return read();
         } catch (final IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read the machine's QuestDB registry [file=" + registry + ']', e);
+            LOG.log(System.Logger.Level.WARNING, "cannot read the machine's QuestDB registry [file=" + registry + ']',
+                    e);
             return null;
         }
     }
@@ -716,10 +763,12 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             return Outcome.refused(refusal(e) + "; its server is not live, and only a later comando or kit starts it");
         }
         if (answers(ports.http())) {
-            return Outcome.refused("port " + ports.http() + " is held by a process that is not this machine's comando QuestDB");
+            return Outcome.refused("port " + ports.http()
+                    + " is held by a process that is not this machine's comando QuestDB");
         }
         final Path script = prepare();
         final long pid = launch(script);
+        launchedPid = pid;
         LOG.log(System.Logger.Level.INFO, "QuestDB starting [pid=" + pid + ", folder=" + folder + ']');
         final String failure = awaitUp(pid);
         if (!failure.isEmpty()) {
@@ -727,13 +776,16 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         }
         final String token = token();
         // the token is in this INSERT and in server.json only: neither the statement nor its failure is logged
-        if (exec(ports.http(), "CREATE TABLE IF NOT EXISTS qdb_server (ts TIMESTAMP, token VARCHAR, pid LONG, owner VARCHAR)"
-                + " TIMESTAMP(ts) PARTITION BY NONE BYPASS WAL", UP_WITHIN) == null
-                || exec(ports.http(), "INSERT INTO qdb_server VALUES (now(), '" + token + "', " + pid + ", '" + owner.replace("'", "''") + "')",
-                UP_WITHIN) == null) {
-            return Outcome.refused("QuestDB [pid=" + pid + "] did not record its token in qdb_server and is left running; see " + stdout());
+        if (exec(ports.http(), "CREATE TABLE IF NOT EXISTS qdb_server"
+                + " (ts TIMESTAMP, token VARCHAR, pid LONG, owner VARCHAR) TIMESTAMP(ts) PARTITION BY NONE BYPASS WAL",
+                UP_WITHIN) == null
+                || exec(ports.http(), "INSERT INTO qdb_server VALUES (now(), '" + token + "', " + pid + ", '"
+                        + owner.replace("'", "''") + "')", UP_WITHIN) == null) {
+            return Outcome.refused("QuestDB [pid=" + pid
+                    + "] did not record its token in qdb_server and is left running; see " + stdout());
         }
-        final Entry entry = new Entry(REGISTRY_VERSION, pid, owner, name, Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), ports, token,
+        final Entry entry = new Entry(REGISTRY_VERSION, pid, owner, name,
+                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), ports, token,
                 ServerMain.class.getPackage().getImplementationVersion());
         AtomicFiles.write(registry, JsonFile.JSON.writeValueAsBytes(entry));
         OwnerOnly.narrow(registry);
@@ -745,28 +797,34 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         return folder.resolve("stdout.log");
     }
 
-    /** {@link #stop} under {@code start.lock}: a writer that finds the server gone waits until it has left the root. */
+    /**
+     * {@link #stop} under {@code start.lock}: a writer that finds the server gone waits until it has left the root. Its
+     * notices are told once both locks are released.
+     */
     private void stopLocked(final Entry e, final ProcessHandle h) {
         try {
-            final Outcome o = underLock(() -> {
-                stop(e, h);
-                return Outcome.of(e);
-            });
+            final Outcome o = underLock(() -> stop(e, h));
             if (o.entry() == null) {
-                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot stop QuestDB: " + o.refusal(), null));
+                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
+                        "Cannot stop QuestDB: " + o.refusal(), null));
+            } else {
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is down", false));
             }
         } catch (final IOException ex) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot stop QuestDB [pid=" + e.pid() + "]: " + ex.getMessage(), ex));
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
+                    "Cannot stop QuestDB [pid=" + e.pid() + "]: " + ex.getMessage(), ex));
         } catch (final InterruptedException _) {
             Thread.currentThread().interrupt();
         }
     }
 
-    /** Record 146's stop of this instance's server, then its entry removed while it still names that process. */
-    private void stop(final Entry e, final ProcessHandle h) {
+    /**
+     * Record 146's stop of this instance's server, then its entry removed while it still names that process; refused
+     * while the server has not stopped. It tells nothing: its caller holds the start locks.
+     */
+    private Outcome stop(final Entry e, final ProcessHandle h) {
         if (!terminate(h)) {
-            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "QuestDB [pid=" + e.pid() + "] has not stopped yet", null));
-            return;
+            return Outcome.refused("the server [pid=" + e.pid() + "] has not stopped yet");
         }
         try {
             final Entry now = read();
@@ -774,21 +832,25 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                 Files.deleteIfExists(registry);
             }
         } catch (final IOException ex) {
-            LOG.log(System.Logger.Level.WARNING, "cannot remove the machine's QuestDB registry [file=" + registry + ']', ex);
+            LOG.log(System.Logger.Level.WARNING, "cannot remove the machine's QuestDB registry [file=" + registry
+                    + ']', ex);
         }
         LOG.log(System.Logger.Level.INFO, "QuestDB stopped [pid=" + e.pid() + ']');
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is down", false));
+        return Outcome.of(e);
     }
 
     /**
      * Takes this JVM's hold of the folder, then {@code start.lock}, each at most {@link #LOCK_WITHIN}, and runs
-     * {@code action} under both: a start, or a stop, so that no start begins while a stopping server still holds the root.
+     * {@code action} under both: a start, or a stop, so that no start begins while a stopping server still holds the
+     * root.
      */
     private Outcome underLock(final Locked action) throws IOException, InterruptedException {
-        final ReentrantLock here = IN_PROCESS.computeIfAbsent(folder.toAbsolutePath().normalize(), _ -> new ReentrantLock());
+        final ReentrantLock here = IN_PROCESS.computeIfAbsent(folder.toAbsolutePath().normalize(),
+                _ -> new ReentrantLock());
         final Path lockFile = folder.resolve("start.lock");
         if (!here.tryLock(LOCK_WITHIN.toMillis(), TimeUnit.MILLISECONDS)) {
-            return Outcome.refused(lockFile + " is held by another start in this comando for over " + LOCK_WITHIN.toSeconds() + " s");
+            return Outcome.refused(lockFile + " is held by another start in this comando for over "
+                    + LOCK_WITHIN.toSeconds() + " s");
         }
         try {
             OwnerOnly.folder(folder);
@@ -796,7 +858,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             try (final FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.WRITE)) {
                 final FileLock lock = lock(channel);
                 if (lock == null) {
-                    return Outcome.refused(lockFile + " is held by another start for over " + LOCK_WITHIN.toSeconds() + " s");
+                    return Outcome.refused(lockFile + " is held by another start for over " + LOCK_WITHIN.toSeconds()
+                            + " s");
                 }
                 try {
                     return action.run();
@@ -834,7 +897,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         if (o.entry() != null) {
             seen = o.entry();
             running = true;
-            checkedAt = System.nanoTime();
+            checkedAtNanos = System.nanoTime();
         }
         return o;
     }
@@ -849,7 +912,16 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
      * {@code server.json}, version 1 (record 146): the server's process, its owner and instance name, when it started,
      * its ports, the token it answers and QuestDB's version.
      */
-    record Entry(int version, long pid, String owner, String name, String started, Ports ports, String token, String questdb) {
+    record Entry(
+            int version,
+            long pid,
+            String owner,
+            String name,
+            String started,
+            Ports ports,
+            String token,
+            String questdb
+    ) {
 
         Entry {
             version = version <= 0 ? REGISTRY_VERSION : version;

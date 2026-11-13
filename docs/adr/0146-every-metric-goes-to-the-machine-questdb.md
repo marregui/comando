@@ -50,3 +50,9 @@ its own close; `start.sh` is a short command under `Processes`, and the server i
 Keeping the embedded server, one per instance: three servers on one machine, and the kit without one when comando is
 closed. Files with SQL views over them (DuckDB over the JSON lines): no new process, but the files and their backups
 stay, which is what Miguel wanted gone.
+
+## 5. Amendments
+
+2026-11-13: a batch QuestDB refuses (400) for some of its lines, a missing table aside, is sent again in halves, down to
+the lines it refuses alone; only those are dropped, and a line refused alone is logged at most once a minute, with no
+notice: a refusal of its data is no outage.
