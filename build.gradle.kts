@@ -45,6 +45,13 @@ subprojects {
         isIgnoreFailures = false
     }
 
+    // Checkstyle's worker defaults to 512 MB; its ANTLR parser cache grows with every file parsed and peaked near
+    // 500 MB live, which failed CI run 43475075868 with an OutOfMemoryError wrapped as "Error was thrown while
+    // processing"
+    tasks.withType<Checkstyle>().configureEach {
+        maxHeapSize = "1g"
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         systemProperty("java.awt.headless", "true")
