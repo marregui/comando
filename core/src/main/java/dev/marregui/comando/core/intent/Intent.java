@@ -201,12 +201,12 @@ public sealed interface Intent {
     record RemoveConnection(String name) implements Intent {
     }
 
-    /** Adds a folder to the Files tab, as the kit does; refused when one has its name. */
+    /** Adds a folder to the folder tabs (Kit, Brain, Scratchpad), as the kit does; refused when one has its name. */
     record AddFolder(FolderRoot spec) implements Intent {
     }
 
     /**
-     * The Files tab's folders as the folders window saves them, all of them in order; {@code base} is the list the
+     * The folder tabs' folders as the folders window saves them, all of them in order; {@code base} is the list the
      * window started from, so a change to {@code folders.json} made while it was open is said to be replaced.
      */
     record SaveFolders(List<FolderRoot> folders, List<FolderRoot> base) implements Intent {
@@ -216,7 +216,7 @@ public sealed interface Intent {
         }
     }
 
-    /** The Files tab's folders as {@code folders.json} now has them, read again after it changed. */
+    /** The folder tabs' folders as {@code folders.json} now has them, read again after it changed. */
     record FoldersRead(List<FolderRoot> folders) implements Intent {
         public FoldersRead {
             folders = List.copyOf(folders);
@@ -618,7 +618,7 @@ public sealed interface Intent {
     record CancelCommand(long runId) implements Intent {
     }
 
-    /** Reads the named folders of the Files tab once, now: a refresh, or a filter over folders that are not open. */
+    /** Reads the named folders of the folder tabs once, now: a refresh, or a filter over folders that are not open. */
     record BrowseFolders(List<String> names) implements Intent {
         public BrowseFolders {
             names = List.copyOf(names);
@@ -626,8 +626,8 @@ public sealed interface Intent {
     }
 
     /**
-     * The Files tab's open folders: these are read every few seconds, the others not at all. {@code open} gives, by
-     * folder name, the subfolders open in the tab (absolute paths): such a folder is read one level deep, plus its open
+     * The folder tabs' open folders: these are read every few seconds, the others not at all. {@code open} gives, by
+     * folder name, the subfolders open in its tab (absolute paths): such a folder is read one level deep, plus its open
      * subfolders and one level inside each, which is all the tab shows. A folder without an entry is read whole, as the
      * filter needs.
      */
@@ -645,15 +645,15 @@ public sealed interface Intent {
     }
 
     /**
-     * A folder of the Files tab as read, with the settings it was read with: a tree read with settings since edited
+     * A folder of the folder tabs as read, with the settings it was read with: a tree read with settings since edited
      * is not shown under the edited folder.
      */
     record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
     }
 
     /**
-     * The git repositories watched, each as read: those of the open Files tab folders, and of every folder while the
-     * Changes view is open.
+     * The git repositories watched, each as read: those of the open folders of the folder tabs, and of every folder
+     * while the Changes view is open.
      */
     record ReposLoaded(List<RepoStatus> repos) implements Intent {
         public ReposLoaded {
@@ -670,7 +670,7 @@ public sealed interface Intent {
     }
 
     /**
-     * Moves files and subfolders of the Files tab's folder {@code folder} to the desktop's Trash, full paths; refused
+     * Moves files and subfolders of the folder tabs' folder {@code folder} to the desktop's Trash, full paths; refused
      * unless the folder is deletable and every path is inside it, never the folder itself.
      */
     record DeleteFiles(String folder, List<String> paths) implements Intent {

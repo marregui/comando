@@ -20,11 +20,11 @@ import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
- * The Files tab's folders inside Claude Code's folder in a window over comando's: the {@link FoldersEditor}, Cancel
- * and Save, and {@link #USE_KIT} when comando runs on a kit. Save writes {@code folders.json} once, when something
- * changed or an entry names an index file that does not exist yet in the kit or the brain (Save creates it), and is on
- * only then and while every entry passes; Cancel, Esc and the window's close drop the edits, asking first when there
- * are any. EDT only.
+ * The folders of the folder tabs (Kit, Brain, Scratchpad), inside Claude Code's folder, in a window over comando's:
+ * the {@link FoldersEditor}, Cancel and Save, and {@link #USE_KIT} when comando runs on a kit. Save writes
+ * {@code folders.json} once, when something changed or an entry names an index file that does not exist yet in the
+ * kit or the brain (Save creates it), and is on only then and while every entry passes; Cancel, Esc and the window's
+ * close drop the edits, asking first when there are any. EDT only.
  */
 public final class FoldersDialog {
 
@@ -72,7 +72,7 @@ public final class FoldersDialog {
     }
 
     /**
-     * The window's title: what it holds, the Files tab's folders, which lie in Claude Code's folder, the kit or the
+     * The window's title: what it holds, the folder tabs' folders, which lie in Claude Code's folder, the kit or the
      * brain, each anywhere (Miguel's decision of 2026-11-01), so no one folder names them.
      */
     public static String title() {

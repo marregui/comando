@@ -44,7 +44,7 @@ public record Notice(Level level, String text, long atMillis, String subject) {
         return "session:" + name;
     }
 
-    /** About a folder of the Files tab: saving it, reading it. */
+    /** About a folder of the folder tabs: saving it, reading it. */
     public static String folder(final String name) {
         return "folder:" + name;
     }

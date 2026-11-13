@@ -141,7 +141,7 @@ On yes, follow [§8.1](docs/kit-and-brain.md#81-the-steps) of that document: che
 and ask once; create the kit in `~/comando-kit` and the brain in `~/comando-brain`, each a git repository of its own,
 with the files of its §8.2 and §8.3; run its checks; commit. Then ask the user to sign the kit's folder in, once, in
 their own terminal, with the commands of that document's [§3.1 *Signing in*](docs/kit-and-brain.md#31-the-root). When
-comando runs, quit it and start it again, so its sessions use the kit: the Files tab then shows the KIT and BRAIN rows.
+comando runs, quit it and start it again, so its sessions use the kit: the Kit tab then shows the KIT row and the Brain tab the BRAIN row.
 
 ## 6. Start comando
 

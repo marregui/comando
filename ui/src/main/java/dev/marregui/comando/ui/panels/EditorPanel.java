@@ -81,10 +81,11 @@ import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 /**
  * One editor panel: a header with its connection and its controls, and the command editor; its session is shown in the
  * session bar under the lower panel (record 105). A panel's own text is SQL and prompts; a panel opened on a file, such
- * as a document from the Files tab, is coloured as the file's language, and a Markdown one opens rendered. Such a panel
- * switches between the editor and the rendered text with its header button, which names the other view: Preview while
- * editing, Edit while previewing. An HTML file opens as its text, with a button that opens it in the browser. A link to
- * a file on this machine, of any kind, double-clicked in the rendered text, opens that file in a panel (record 94).
+ * as a document from the folder tabs (Kit, Brain, Scratchpad), is coloured as the file's language, and a Markdown one
+ * opens rendered. Such a panel switches between the editor and the rendered text with its header button, which names
+ * the other view: Preview while editing, Edit while previewing. An HTML file opens as its text, with a button that
+ * opens it in the browser. A link to a file on this machine, of any kind, double-clicked in the rendered text, opens
+ * that file in a panel (record 94).
  * Rendered, there is no text to run: the connection, Run and Clear leave the header, and Stop stays while something
  * runs. A production connection frames the panel in red.
  */
@@ -103,8 +104,8 @@ public final class EditorPanel extends JPanel {
     /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied here. */
     private final JButton clear = iconButton();
     /**
-     * Shows where the panel comes from in the sidebar (record 119): a document's file in the Files tab, else the
-     * panel's session in the Sessions tab; not there for a panel with neither.
+     * Shows where the panel comes from in the sidebar (record 119): a document's file in the folder tab that holds
+     * it, else the panel's session in the Sessions tab; not there for a panel with neither.
      */
     private final JButton locate = iconButton();
     private BiConsumer<Path, String> locator = (file, session) -> {
@@ -989,7 +990,7 @@ public final class EditorPanel extends JPanel {
         stop.setVisible(!previewing || running);
     }
 
-    /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else none. */
+    /** The Locate button: the files icon for a document, the Sessions tab's for a session's panel, else none. */
     private void showLocate() {
         final boolean isFile = document && file != null;
         final boolean isSession = panel != null && !panel.session().isEmpty();

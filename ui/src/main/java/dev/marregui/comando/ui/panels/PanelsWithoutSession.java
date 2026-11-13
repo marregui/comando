@@ -44,7 +44,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
  * The foot of the Sessions tab: comando's own panels that belong to no session, open and closed, by title (record 91).
- * A session's own panel is its session's row, and a document is the Files tab's, so neither is here; the section shows
+ * A session's own panel is its session's row, and a document is a folder tab's, so neither is here; the section shows
  * only while it has a row. A row's menu opens or brings forward, renames, makes the panel a session's own and removes;
  * a double-click opens a closed panel or brings an open one forward.
  */
@@ -141,7 +141,7 @@ final class PanelsWithoutSession {
                 // panels are not cloned (record 91)
             }
         }, id -> intents.dispatch(new Intent.RemovePanel(new PanelId(id))), questions);
-        // a group's header, as the Files tab's (record 98)
+        // a group's header, as the folder tabs' (record 98)
         final JLabel title = SidebarLook.header("Without a session");
         final JScrollPane scroll = new JScrollPane(list);
         // a name wider than the sidebar scrolls into view, as in the sessions and connections lists above it

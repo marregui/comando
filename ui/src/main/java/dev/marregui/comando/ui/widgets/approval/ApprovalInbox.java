@@ -906,7 +906,7 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         }
     }
 
-    /** A group's header, as the sidebar's and the Files tab's. */
+    /** A group's header, as the sidebar's and the folder tabs'. */
     private static JLabel section(final String text) {
         final JLabel l = SidebarLook.header(text);
         l.setName("section");

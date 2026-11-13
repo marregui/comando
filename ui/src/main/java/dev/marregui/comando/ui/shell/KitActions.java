@@ -76,7 +76,7 @@ final class KitActions {
         this.frame = frame;
     }
 
-    /** Where the kit's newer release shows, the Files tab's KIT row (record 119), once the window is built. */
+    /** Where the kit's newer release shows, the Kit tab's KIT row (record 119), once the window is built. */
     void attach(final BiConsumer<Path, String> release) {
         this.release = release;
         paint();

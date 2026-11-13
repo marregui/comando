@@ -6,9 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The kit's folders in the Files tab. A folder of {@code folders.json} is a kit's folder when both name one folder on
- * disk, links followed and case ignored as macOS's volume compares names: {@code ~/.claude/MEMORY}, a link to {@code
- * ~/.claude/BRAIN/MEMORY}, is the kit's Memory.
+ * The kit's folders in the folder tabs (Kit, Brain, Scratchpad). A folder of {@code folders.json} is a kit's folder
+ * when both name one folder on disk, links followed and case ignored as macOS's volume compares names: {@code
+ * ~/.claude/MEMORY}, a link to {@code ~/.claude/BRAIN/MEMORY}, is the kit's Memory.
  */
 public final class KitFolders {
 

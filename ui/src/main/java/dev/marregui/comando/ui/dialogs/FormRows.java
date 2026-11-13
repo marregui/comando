@@ -40,10 +40,10 @@ import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
- * The form the Files tab folders window and the kit jobs window share: a list beside labelled fields, each field with
- * its label, accessible name and tooltip, outlined in red while it fails, and a message line under the fields naming
- * the first that fails. An instance holds one window's fields and lays them out as rows; the static parts build the
- * list beside them, the window around them and its buttons, alike in both windows. EDT only.
+ * The form the folder tabs' folders window and the kit jobs window share: a list beside labelled fields, each field
+ * with its label, accessible name and tooltip, outlined in red while it fails, and a message line under the fields
+ * naming the first that fails. An instance holds one window's fields and lays them out as rows; the static parts
+ * build the list beside them, the window around them and its buttons, alike in both windows. EDT only.
  */
 public final class FormRows {
 

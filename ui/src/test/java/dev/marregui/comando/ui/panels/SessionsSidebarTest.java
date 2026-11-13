@@ -76,9 +76,10 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// [SessionsSidebar] and its rows ([SessionRow], [ConnectionRow]): three tabs of sessions, connections and files.
-/// - the column is three icon tabs in one row and hides to a rail whose buttons show it again
-/// - the Files tab shows one row per folder and opens a file with a double click
+/// [SessionsSidebar] and its rows ([SessionRow], [ConnectionRow]): seven tabs: sessions, connections, the
+/// kit, the brain, the scratchpad, the logbook and instances.
+/// - the column is seven icon tabs in one row and hides to a rail whose buttons show it again
+/// - a folder tab shows one row per folder and opens a file with a double click
 /// - a session row's state icon connects, its name opens, its ⓘ shows the card, its menu holds the session's commands
 /// - tab menus add; row menus edit, clone and remove, with no bar of buttons
 /// - sessions list running first, then by name, until a drag orders them; a started row stays put under the pointer
@@ -203,7 +204,7 @@ class SessionsSidebarTest {
         assertThat(shows(show, sidebar.component())).isFalse();
     }
 
-    /// The Files tab hides its root, shows one row per folder, watches a folder only when expanded, and opens a file on
+    /// A folder tab hides its root, shows one row per folder, watches a folder only when expanded, and opens a file on
     /// a double click, not a single one.
     @Test
     void theFilesTabShowsOneRowPerFolderAndOpensAFileWithADoubleClick() throws Exception {
@@ -1694,7 +1695,7 @@ class SessionsSidebarTest {
         return find(root, AbstractButton.class, b -> name.equals(b.getAccessibleContext().getAccessibleName()));
     }
 
-    /// Each tab's menu lists its own actions first, then the window commands added by the shell; the Files tab has only
+    /// Each tab's menu lists its own actions first, then the window commands added by the shell; a folder tab has only
     /// the window commands.
     @Test
     void eachTabsMenuOffersItsOwnActionsThenTheWindowsThenHidingTheSidebar() throws Exception {

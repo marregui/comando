@@ -24,7 +24,7 @@ import dev.marregui.comando.core.model.PanelId;
  * connections and within sessions; at most one run per panel; a session has at most one panel of comando's own, open
  * or closed, and any number of documents attached (record 88).</p>
  *
- * @param folders the folders the Files tab shows at its top level, in the user's order
+ * @param folders the folders the folder tabs (Kit, Brain, Scratchpad) show at their top level, in the user's order
  * @param closed  comando's own panels that are closed, most recently closed last: each keeps its file, title and
  *                bindings until it is removed; documents are not kept here
  * @param notice  the notice the status bar shows: an error stands until the user dismisses it, a newer error

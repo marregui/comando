@@ -178,7 +178,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     };
     private final HelpActions help;
     private final KitActions kit;
-    /** The kit's scheduled jobs: the Files tab's Jobs row and the window that edits them. */
+    /** The kit's scheduled jobs: the Kit tab's Jobs row and the window that edits them. */
     private final JobActions jobs;
     private final ActionRegistry actions = new ActionRegistry();
     private final WidgetRegistry widgets = new WidgetRegistry();
@@ -220,7 +220,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private KeyPriority keyPriority;
     /** The watched git repositories as last read, for the Changes view. */
     private final RepoChanges repoChanges = new RepoChanges();
-    /** The files opened in a panel or the side pane: a new file opened once is no longer marked in the Files tab. */
+    /** The files opened in a panel or the side pane: a new file opened once is no longer marked in the folder tabs. */
     private final OpenedFiles openedFiles;
     /** Refreshes what changes with time alone: elapsed times, the server state. */
     private Timer tickTimer;
@@ -271,7 +271,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         help.showAbout();
     }
 
-    /** Shows the kit's newer release on the Files tab's KIT row, and whether the brain and the kit can be backed up. */
+    /** Shows the kit's newer release on the Kit tab's KIT row, and whether the brain and the kit can be backed up. */
     public void kitStatus(final Setup.Status status) {
         kit.show(status);
     }
@@ -470,7 +470,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         kit.attach(sidebar::kitRelease);
-        // a panel's Locate button: its document in the Files tab, else its session in the Sessions tab (record 119)
+        // a panel's Locate button: its document in the folder tab that holds it, else its session in the Sessions tab
+        // (record 119)
         workspace.onLocate((file, session) -> {
             if (!sidebar.isShown()) {
                 layout.toggleSidebar();
@@ -954,7 +955,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return new Intent.SaveConnection(previous, spec, typed.contains(PASSWORD));
     }
 
-    /** The Files tab's folders in their window; saving replaces them. */
+    /** The folder tabs' folders in their window; saving replaces them. */
     void editFolders() {
         final KitRoot root = deps.setup().root();
         final List<Path> roots = new ArrayList<>(List.of(HomeDir.claudeDir()));

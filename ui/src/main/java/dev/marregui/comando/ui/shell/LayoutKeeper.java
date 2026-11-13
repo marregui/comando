@@ -216,8 +216,8 @@ final class LayoutKeeper {
 
     /**
      * Every window in {@code theme} now, its ground and tint applied in one pass: what listens to the tint (the
-     * transcript, the tab card, rendered Markdown) lays itself out or recolours in it, and the rest (icons, the Files
-     * tab, About) read it as they repaint.
+     * transcript, the tab card, rendered Markdown) lays itself out or recolours in it, and the rest (icons, the folder
+     * tabs, About) read it as they repaint.
      */
     static void paintIn(final NamedTheme theme) {
         recolour(theme);

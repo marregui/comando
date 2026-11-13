@@ -21,16 +21,17 @@ import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /**
- * A folder of the Files tab as a tree, every level ordered the same way, names ignoring case: folders not named after
- * a date first, by name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name. The folder's
- * index file, when it sits at the top level, comes before everything else there. A file links to itself; a folder has
- * no link and its label has no trailing slash. Hidden entries, the folder's excluded names and the entries a caller
- * skips (those git ignores) are left out; a symbolic link to a folder is listed as a folder and not followed into. A
- * subfolder that cannot be read says so and the rest of the tree stands. The depth is bounded, and so is the read: at
- * most {@link #MAX_LISTED} names are listed and {@link #MAX_ENTRIES} entries kept in the whole tree, so a folder read
- * every few seconds while open costs a bounded read however large it is. Past a bound a folder ends with
- * {@link ViewSpec.TreeNode#MORE}. A folder the Files tab shows in part is read only as deep as it shows: inside a
- * subfolder that is not open, nothing is listed. The tree's root is labelled with the folder's name and details its path.
+ * A folder of the folder tabs (Kit, Brain, Scratchpad) as a tree, every level ordered the same way, names ignoring
+ * case: folders not named after a date first, by name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then
+ * files by name. The folder's index file, when it sits at the top level, comes before everything else there. A file
+ * links to itself; a folder has no link and its label has no trailing slash. Hidden entries, the folder's excluded
+ * names and the entries a caller skips (those git ignores) are left out; a symbolic link to a folder is listed as a
+ * folder and not followed into. A subfolder that cannot be read says so and the rest of the tree stands. The depth is
+ * bounded, and so is the read: at most {@link #MAX_LISTED} names are listed and {@link #MAX_ENTRIES} entries kept in
+ * the whole tree, so a folder read every few seconds while open costs a bounded read however large it is. Past a bound
+ * a folder ends with {@link ViewSpec.TreeNode#MORE}. A folder the folder tabs show in part is read only as deep as it
+ * shows: inside a subfolder that is not open, nothing is listed. The tree's root is labelled with the folder's name and
+ * details its path.
  */
 final class FolderTree {
 
@@ -82,9 +83,9 @@ final class FolderTree {
     /**
      * The folder's tree as deep as {@code open} asks: the folder's own entries, and the entries of each subfolder of a
      * folder read so far that is open ({@code open} true of its path) or the top folder itself, so every subfolder the
-     * Files tab shows has its entries and its count. A subfolder inside one that is not open is not listed: all it holds
-     * is a {@link ViewSpec.TreeNode#MORE} entry detailed {@link ViewSpec.TreeNode#NOT_READ}. {@link #WHOLE} reads every
-     * level.
+     * folder tabs show has its entries and its count. A subfolder inside one that is not open is not listed: all it
+     * holds is a {@link ViewSpec.TreeNode#MORE} entry detailed {@link ViewSpec.TreeNode#NOT_READ}. {@link #WHOLE} reads
+     * every level.
      */
     static ViewSpec.TreeNode tree(final FolderRoot folder, final Lister lister, final Predicate<Path> skip, final Predicate<Path> open)
             throws IOException {

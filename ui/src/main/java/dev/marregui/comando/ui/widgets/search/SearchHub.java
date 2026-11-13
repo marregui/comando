@@ -118,7 +118,7 @@ public final class SearchHub {
         /** Whether a session of this instance holds {@code conversation}. */
         boolean inSession(String conversation);
 
-        /** Shows the file of {@code hit} in the Files tab. */
+        /** Shows the file of {@code hit} in the folder tab that holds it. */
         void showInFiles(SearchHit hit);
     }
 

@@ -15,7 +15,7 @@ import dev.marregui.comando.core.view.ViewSpec;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [SearchTree]: the rows of the Search view, built from a batch of hits.
-/// - a row per Files-tab folder in the order of its first hit, with its hits and files counted
+/// - a row per folder of the folder tabs in the order of its first hit, with its hits and files counted
 /// - a chain of single folders is one row; folders come before files, each by name
 /// - two folders of one name are told apart by path; a hit outside its folder goes under its parent
 /// - a file's name match and its lines, in line order with their headings

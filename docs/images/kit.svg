@@ -102,7 +102,7 @@
   <!-- outside any session -->
   <text x="640" y="520" class="cap" fill="#6CC69A">OUTSIDE ANY SESSION</text>
   <g class="s">
-    <text x="640" y="552">comando reads comando-kit.json at start: the brain's folder, the Files tab's folders, the jobs.</text>
+    <text x="640" y="552">comando reads comando-kit.json at start: the brain's folder, the folders of the Kit, Brain and Scratchpad tabs, the jobs.</text>
     <text x="640" y="574">The kit's jobs tool writes the jobs to the platform's scheduler; each runs headless and leaves a report in the brain.</text>
   </g>
 

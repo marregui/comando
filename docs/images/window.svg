@@ -11,13 +11,19 @@
 <line x1="60" y1="162" x2="1540" y2="162" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>
 <line x1="340" y1="162" x2="340" y2="840" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>
 <rect x="76" y="176" width="28" height="22" rx="4" fill="none" stroke="#6FAEE8"/>
-<text x="90" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#6FAEE8" >S</text>
-<rect x="116" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
-<text x="130" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >C</text>
-<rect x="156" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
-<text x="170" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >F</text>
-<rect x="196" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
-<text x="210" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >I</text>
+<text x="90" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#6FAEE8" >Se</text>
+<rect x="112" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
+<text x="126" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >Co</text>
+<rect x="148" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
+<text x="162" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >Ki</text>
+<rect x="184" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
+<text x="198" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >Br</text>
+<rect x="220" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
+<text x="234" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >Sc</text>
+<rect x="256" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
+<text x="270" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >Lo</text>
+<rect x="292" y="176" width="28" height="22" rx="4" fill="none" stroke="#4A4A4A"/>
+<text x="306" y="192" text-anchor="middle" font-size="12" font-weight="300" fill="#8E8E8E" >In</text>
 <line x1="76" y1="202" x2="104" y2="202" stroke="#E7C55A" stroke-opacity="1.0" stroke-width="1.4"/>
 <rect x="68" y="217" width="264" height="26" rx="4" fill="#232017" stroke="none"/>
 <line x1="68" y1="217" x2="68" y2="243" stroke="#E7C55A" stroke-opacity="1.0" stroke-width="2"/>
@@ -31,10 +37,11 @@
 <text x="76" y="342" text-anchor="start" font-size="10" font-weight="500" fill="#8E8E8E" letter-spacing="2">WITHOUT A SESSION</text>
 <text x="84" y="366" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >● scratch · local QuestDB</text>
 <text x="76" y="430" text-anchor="start" font-size="12" font-weight="500" fill="#E7C55A" letter-spacing="3">SIDEBAR</text>
-<text x="76" y="450" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >Sessions, Connections, Files,</text>
-<text x="76" y="467" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >Instances, Logbook: one tab each;</text>
-<text x="76" y="484" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >a row is its icon and name,</text>
-<text x="76" y="501" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >its menu does the rest (⌘B hides it)</text>
+<text x="76" y="450" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >Sessions, Connections, Kit, Brain,</text>
+<text x="76" y="467" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >Scratchpad, Logbook, Instances:</text>
+<text x="76" y="484" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >one tab each; a row is its icon</text>
+<text x="76" y="501" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >and name; its menu does the rest</text>
+<text x="76" y="518" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >(⌘B hides it)</text>
 <line x1="340" y1="198" x2="1540" y2="198" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>
 <text x="364" y="185" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >scratch</text>
 <line x1="486" y1="197" x2="596" y2="197" stroke="#E7C55A" stroke-opacity="1.0" stroke-width="1.6"/>
@@ -98,8 +105,8 @@
 <text x="800" y="829" text-anchor="middle" font-size="10" font-weight="500" fill="#E7C55A" letter-spacing="1.5">SESSION BAR · the focused panel's session</text>
 <line x1="60" y1="840" x2="1540" y2="840" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>
 <text x="76" y="864" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >tutor added 4 lines to tutor</text>
-<text x="1524" y="864" text-anchor="end" font-size="12" font-weight="300" fill="#BDBDBD" >5 h 12% · week 30%   1 session working · 1 waiting for approval</text>
-<text x="800" y="864" text-anchor="middle" font-size="10" font-weight="500" fill="#E7C55A" letter-spacing="1.5">STATUS BAR · the standing notice; plan usage and the work running</text>
+<text x="1524" y="864" text-anchor="end" font-size="12" font-weight="300" fill="#BDBDBD" >Claude Session 12% (resets 7:19pm) · Week 30% (resets Thu 1:59pm)   1 session working · 1 waiting for approval</text>
+<text x="300" y="864" text-anchor="start" font-size="10" font-weight="500" fill="#E7C55A" letter-spacing="1.5">STATUS BAR · the standing notice; plan usage and the work running</text>
 <text x="60" y="940" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >A drawn mock-up, not a screenshot. Gold capitals name the regions. Copper: the session. Blue: comando and the database.</text>
 <text x="1540" y="940" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/workbench</text>
 </svg>

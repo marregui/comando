@@ -54,13 +54,14 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /**
- * The tools port: Gradle runs, the Files tab's folders and their git repositories, and moves to the Trash. Nothing
- * blocks the caller. A run is a child process an errand waits for while a fork copies its output into the run's
- * console; it ends with {@link Intent.CommandFinished}. A folder read ends in {@link Intent.FolderLoaded}, a move to
- * the Trash in a notice and a read of the open folders. The poll reads the repositories of the open folders, and of
- * every folder while the Changes view is open, then the open folders, whose trees leave out what git ignores; the other
- * repositories are read every {@link #COLD_POLLS} polls. The Files tab watches no folder while it does not show or no
- * comando window is active, so then every repository is read at that slower pace and no tree at all.
+ * The tools port: Gradle runs, the folders of the folder tabs (Kit, Brain, Scratchpad) and their git repositories, and
+ * moves to the Trash. Nothing blocks the caller. A run is a child process an errand waits for while a fork copies its
+ * output into the run's console; it ends with {@link Intent.CommandFinished}. A folder read ends in {@link
+ * Intent.FolderLoaded}, a move to the Trash in a notice and a read of the open folders. The poll reads the repositories
+ * of the open folders, and of every folder while the Changes view is open, then the open folders, whose trees leave out
+ * what git ignores; the other repositories are read every {@link #COLD_POLLS} polls. The folder tabs watch no folder
+ * while none shows or no comando window is active, so then every repository is read at that slower pace and no tree at
+ * all.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
@@ -351,11 +352,11 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * apart from the reads with the new ones. Guarded by itself; a send happens under that lock so sends keep order.
      */
     private final Map<FolderRoot, Sent> sentFolders = new HashMap<>();
-    /** The folders the Files tab has open: the poll reads these and no others. */
+    /** The folders the folder tabs have open: the poll reads these and no others. */
     private volatile List<FolderRoot> watchedFolders = List.of();
     /**
-     * By folder name, the subfolders open in the Files tab (absolute, normalized paths): a watched folder with an entry
-     * is read only as deep as the tab shows it, one without whole.
+     * By folder name, the subfolders open in the folder tabs (absolute, normalized paths): a watched folder with an
+     * entry is read only as deep as its tab shows it, one without whole.
      */
     private volatile Map<String, Set<String>> watchedOpen = Map.of();
 
@@ -376,8 +377,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /**
-     * From now on the poll reads {@code folders} only, one with an entry in {@code open} as deep as the Files tab shows
-     * it; a folder newly watched, or one whose open subfolders changed, is read at once.
+     * From now on the poll reads {@code folders} only, one with an entry in {@code open} as deep as the folder tabs
+     * show it; a folder newly watched, or one whose open subfolders changed, is read at once.
      */
     @Override
     public void watchFolders(final List<FolderRoot> folders, final Map<String, List<String>> open) {
@@ -405,7 +406,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /**
-     * Keeps the Files tab in sync: every {@code every}, on a thread of its own, reads the repositories, then each
+     * Keeps the folder tabs in sync: every {@code every}, on a thread of its own, reads the repositories, then each
      * watched folder, and sends what changed: a tree when an entry was added, removed, renamed or resized. Folders that
      * are not open cost nothing.
      */
@@ -508,7 +509,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }
     }
 
-    /** Which subfolders of the watched {@code folder} are read: those open in the Files tab, or every one. */
+    /** Which subfolders of the watched {@code folder} are read: those open in the folder tabs, or every one. */
     private Predicate<Path> scope(final FolderRoot folder) {
         final Set<String> open = watchedOpen.get(folder.name());
         return open == null ? FolderTree.WHOLE : dir -> open.contains(dir.toAbsolutePath().normalize().toString());
@@ -704,7 +705,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     /**
      * Changes the working trees and indexes of repositories one at a time, in the order asked, then reads the
-     * repositories again so the Files tab and the Changes view show the result.
+     * repositories again so the folder tabs and the Changes view show the result.
      */
     private final ExecutorService repoWrites =
             Threads.strand("repo-write");

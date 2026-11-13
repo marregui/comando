@@ -15,8 +15,8 @@ import dev.marregui.comando.core.model.VersionedLines;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 
 /**
- * The files the user opened in comando, by absolute path: a new file opened once is no longer marked new in the Files
- * tab. Kept in a file of one path per line, oldest first, at most {@link #MAX} paths, after its version line (record
+ * The files the user opened in comando, by absolute path: a new file opened once is no longer marked new in the folder
+ * tabs. Kept in a file of one path per line, oldest first, at most {@link #MAX} paths, after its version line (record
  * 133); read once when made, written whole after each path added, off the EDT, one write at a time. A file of a later
  * version is kept as it is and not written. Used on the EDT.
  */

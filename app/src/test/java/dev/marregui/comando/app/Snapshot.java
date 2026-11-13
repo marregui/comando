@@ -151,7 +151,7 @@ public final class Snapshot {
         shoot(out.resolve("02b-sidebar-collapsed.png"));
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
         Thread.sleep(2800);
-        // before the Files tab: the focused panel's Markdown preview, on with its Preview button, off with Edit
+        // before the folder tabs: the focused panel's Markdown preview, on with its Preview button, off with Edit
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
@@ -192,7 +192,7 @@ public final class Snapshot {
         await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("MEMORY.md")), 10_000);
         shoot(out.resolve("02c3-sidebar-files-memory.png"));
         selectSidebarTab("Sessions");
-        // files opened from the Files tab: a Markdown document opens rendered, its code in the editors' colours,
+        // files opened from the folder tabs: a Markdown document opens rendered, its code in the editors' colours,
         // and a source file opens as text coloured as its language
         final Path docs = Files.createTempDirectory("comando-snapshot-docs");
         final Path plan = Files.writeString(docs.resolve("LANE-PLAN.md"), """
@@ -296,7 +296,7 @@ public final class Snapshot {
         // About comando, as the application menu opens it: the card alone, at the Retina scale it is seen at
         SwingUtilities.invokeAndWait(() -> app.ui().showAbout());
         shootDialog("About comando", out.resolve("02k-about.png"));
-        // a git repository among the folders: the Files tab in git's colours, the Changes view beside the editor, and a
+        // a git repository among the folders: the Kit tab in git's colours, the Changes view beside the editor, and a
         // changed file compared side by side in the window that floats over comando's
         selectSidebarTab("Kit");
         SwingUtilities.invokeAndWait(() -> {
@@ -649,7 +649,7 @@ public final class Snapshot {
                 }
             }
         }
-        throw new IllegalStateException("no Files tab item for " + id);
+        throw new IllegalStateException("no Kit tab item for " + id);
     }
 
     private static AbstractButton named(final Component c, final String name) {

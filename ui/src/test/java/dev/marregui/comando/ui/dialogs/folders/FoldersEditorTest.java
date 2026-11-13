@@ -28,7 +28,7 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/// [FoldersEditor] edits the folders the Files tab shows, checking each before it can be saved.
+/// [FoldersEditor] edits the folders the folder tabs show, checking each before it can be saved.
 /// - An unchanged list is valid, clean and saves as it was; the window offers Save once it is valid and changed, or
 ///   names an index file Save creates.
 /// - A missing, relative or outside folder, an empty or taken name and an index outside the folder block the save and

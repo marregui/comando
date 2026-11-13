@@ -30,8 +30,8 @@ import dev.marregui.comando.core.state.PanelState;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// The data root's files: settings, panels and their text, the Files tab's folders and the secret store behind the
-/// connections.
+/// The data root's files: settings, panels and their text, the folders of the folder tabs (Kit, Brain, Scratchpad) and
+/// the secret store behind the connections.
 class StoreTest {
 
     private static final Path CLAUDE_DIR = Path.of("/home/u/.claude");
@@ -175,7 +175,7 @@ class StoreTest {
         }
     }
 
-    /// The Files tab's folders start as the default, come back as saved with their index, excludes, icon, group and
+    /// The folder tabs' folders start as the default, come back as saved with their index, excludes, icon, group and
     /// trash listing, a hand-written entry with only a name and path loads with defaults, an emptied list stays empty,
     /// and an unreadable `folders.json` gives the default and is kept aside.
     @Test
@@ -271,8 +271,8 @@ class StoreTest {
     }
 
     /// A kit folder never shows at one start to vanish at the next (record 133): the manifest is read by the rules
-    /// every Files-tab folder meets, so a folder with an icon outside the list is left out at the first start, named
-    /// with what is wrong, while the folder beside it shows at both starts.
+    /// every folder of the folder tabs meets, so a folder with an icon outside the list is left out at the first start,
+    /// named with what is wrong, while the folder beside it shows at both starts.
     @Test
     void aKitFolderTheManifestAcceptsSurvivesTheNextStart() throws Exception {
         final Path root = Files.createDirectories(home.resolve("claude/kit"));
@@ -354,7 +354,7 @@ class StoreTest {
     /// kit's folders at the next start, and a list the user then empties stays empty.
     @Test
     void aHomeTheDefaultHidTheKitFromIsRepairedAtTheNextStart() throws Exception {
-        // a fresh home that recorded the root in kit-folders and saved no folders file: the Files tab would show only
+        // a fresh home that recorded the root in kit-folders and saved no folders file: the folder tabs would show only
         // "Claude", and no later start would try again
         final Path root = Files.createDirectories(home.resolve("claude/kit"));
         final KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
@@ -870,8 +870,8 @@ class StoreTest {
     }
 
     /// The kit's `Memory` folder lies in the brain (`root: brain`). The first start runs on brain A; the next one, with
-    /// `COMANDO_BRAIN` naming brain B, finds the Files tab's Memory moved to B with the brain, as D10 says a brain moved
-    /// by `COMANDO_BRAIN` takes its folders with it, at every start and not only the first on the kit.
+    /// `COMANDO_BRAIN` naming brain B, finds the Brain tab's Memory moved to B with the brain, as D10 says a brain
+    /// moved by `COMANDO_BRAIN` takes its folders with it, at every start and not only the first on the kit.
     @Test
     void aBrainMovedByComandoBrainTakesItsFilesTabFoldersWithIt() throws Exception {
         final Path kit = Files.createDirectories(home.resolve("comando-kit"));

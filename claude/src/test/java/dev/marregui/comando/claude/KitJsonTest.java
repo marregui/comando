@@ -128,7 +128,7 @@ class KitJsonTest {
         assertThatThrownBy(() -> KitJson.read(write(tmp, KIT_JSON.replace("\"kit\": 1", "\"kit\": \"one\"")))).hasMessageContaining("\"kit\" is");
     }
 
-    /// A folder that breaks the rules every Files-tab folder meets (an icon outside the list, a listing file with a
+    /// A folder that breaks the rules every folder-tab folder meets (an icon outside the list, a listing file with a
     /// slash, a name used twice) is left out and named, by its place and name, with what is wrong; the others read.
     @Test
     void aFolderThatBreaksTheFoldersRulesIsLeftOutAndNamed(@TempDir final Path tmp) throws Exception {

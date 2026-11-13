@@ -40,10 +40,11 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
- * The Files tab's folders as a list with the selected one's fields beside it: add (a folder chosen first), remove,
- * move up and down, and the fields of an entry of {@code folders.json}. A folder lies inside one of the roots: Claude
- * Code's folder ({@code ~/.claude}), and with a kit the kit's folder and the brain's, which may lie anywhere (Miguel's
- * decision of 2026-11-01); it is set only by choosing it. Each field is checked as it is typed, with {@link FolderKind}'s
+ * The folder tabs' (Kit, Brain, Scratchpad) folders as a list with the selected one's fields beside it: add (a
+ * folder chosen first), remove, move up and down, and the fields of an entry of {@code folders.json}. A folder lies
+ * inside one of the roots: Claude Code's folder ({@code ~/.claude}), and with a kit the kit's folder and the brain's,
+ * which may lie anywhere (Miguel's decision of 2026-11-01); it is set only by choosing it. Each field is checked as it
+ * is typed, with {@link FolderKind}'s
  * rules, a name used once in {@code folders.json} and a folder that exists and can be read; a field that fails says
  * why beside it, the list marks its entry, and the list can be saved only when every entry passes. Whether a folder
  * exists, and the git repository it belongs to, are looked up off the EDT. EDT only.

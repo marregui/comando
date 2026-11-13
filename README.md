@@ -67,7 +67,7 @@ the brain well enough for Claude Code to create both; no kit is published, and m
 | **Claude drives the window** | an MCP server inside the app: tables, plots, diffs, files, Markdown and trees on screen, text into the editor, SQL under a lexical policy, every action the user has ([Claude Code](docs/claude-code.md#3-mcp-tools)) |
 | **Approvals are cards** | allow once, for the session or always, with the rule shown before it is saved; a card waits up to 24 hours, as long as its session waits ([Claude Code](docs/claude-code.md#41-approval-cards)) |
 | **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, an embedded QuestDB one click away, results stored by column up to 5 000 000 rows, plots, live plots, `EXPLAIN` trees ([Workbench](docs/workbench.md#3-the-database)) |
-| **Documents and changes** | chosen folders of Claude Code's folder as trees, Markdown rendered, uncommitted changes and a side-by-side comparison with `HEAD` that edits, rolls back and removes ([Workbench](docs/workbench.md#6-the-files-tab)) |
+| **Documents and changes** | the chosen folders of the kit, the brain and the scratchpad as trees in three tabs, Markdown rendered, uncommitted changes and a side-by-side comparison with `HEAD` that edits, rolls back and removes ([Workbench](docs/workbench.md#6-the-kit-brain-and-scratchpad-tabs)) |
 | **Several instances** | each with its own name, data root, kit and brain, talking through a local HiveMQ Edge comando runs on `127.0.0.1` ([Workbench](docs/workbench.md#4-instances-and-the-comando-edge)) |
 | **Development tools** | a terminal per panel; Gradle runs with test results as a tree and failures sent to Claude ([Workbench](docs/workbench.md#5-development-tools)) |
 

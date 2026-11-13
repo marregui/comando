@@ -41,7 +41,10 @@ final class Git implements AutoCloseable {
     /** The bytes looked at for a NUL, as git does, to tell a binary file. */
     private static final int BINARY_PROBE = 8_000;
 
-    /** What one status read gives: the status, and the ignored entries the Files tab leaves out. */
+    /**
+     * What one status read gives: the status, and the ignored entries the folder tabs (Kit, Brain, Scratchpad) leave
+     * out.
+     */
     record Read(RepoStatus status, Set<Path> ignored) {
         Read {
             ignored = Set.copyOf(ignored);

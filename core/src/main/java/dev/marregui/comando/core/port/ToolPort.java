@@ -8,8 +8,9 @@ import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.RepoStatus;
 
 /**
- * Development tools run outside the JVM or read from disk: Gradle builds, the Files tab's folders and their git
- * repositories. Calls return at once; output goes to the run's console and results come back as intents.
+ * Development tools run outside the JVM or read from disk: Gradle builds, the folders of the folder tabs (Kit, Brain,
+ * Scratchpad) and their git repositories. Calls return at once; output goes to the run's console and results come back
+ * as intents.
  */
 public interface ToolPort {
 
@@ -30,7 +31,7 @@ public interface ToolPort {
 
     /**
      * As {@link #watchFolders(List)}, a folder with an entry in {@code open} (by name, the absolute paths of its
-     * subfolders open in the Files tab) read one level deep plus those subfolders and one level inside each. A port
+     * subfolders open in the folder tabs) read one level deep plus those subfolders and one level inside each. A port
      * that reads no folders in part reads them whole.
      */
     default void watchFolders(final List<FolderRoot> folders, final Map<String, List<String>> open) {

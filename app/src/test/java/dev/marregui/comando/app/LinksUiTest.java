@@ -113,7 +113,7 @@ class LinksUiTest {
     }
 
     /// A file link without a line, written relative to a folder deep under the session's, is found there and opens in a
-    /// panel as the Files tab opens a file, not as a side view; a second follow brings that panel forward instead of
+    /// panel as the sidebar opens a file, not as a side view; a second follow brings that panel forward instead of
     /// opening another.
     @Test
     void aFileLinkWithoutALineIsFoundUnderTheSessionsFolderAndOpensInAPanelAsTheFilesTabOpensIt() throws Exception {

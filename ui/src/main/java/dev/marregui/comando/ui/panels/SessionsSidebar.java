@@ -626,12 +626,12 @@ public final class SessionsSidebar {
         }
     }
 
-    /** The kit's root and its newer release, "" when none: the Files tab's KIT row says it (record 119). */
+    /** The kit's root and its newer release, "" when none: the Kit tab's KIT row says it (record 119). */
     public void kitRelease(final Path dir, final String newer) {
         folderTabs.forEach(t -> t.kitRelease(dir, newer));
     }
 
-    /** The watched git repositories as read: the Files tab colours their files. */
+    /** The watched git repositories as read: the folder tabs colour their files. */
     public void showRepos(final List<RepoStatus> repos) {
         folderTabs.forEach(t -> t.showRepos(repos));
     }
@@ -651,7 +651,7 @@ public final class SessionsSidebar {
         folderTabs.forEach(t -> t.onFolderMenu(extra));
     }
 
-    /** The kit's jobs as read, on the Files tab's Jobs row; {@link KitJobs#NONE} takes the row away. */
+    /** The kit's jobs as read, on the Kit tab's Jobs row; {@link KitJobs#NONE} takes the row away. */
     public void showJobs(final KitJobs jobs) {
         files.showJobs(jobs);
     }
@@ -669,7 +669,7 @@ public final class SessionsSidebar {
     /**
      * What a tab's header offers on a right click: the tab's own actions (a new session or connection, importing
      * conversations, sorting the sessions while a drag ordered them by hand), then the window's commands for it, with
-     * their keys (a new or reopened panel; the Files tab's two configuration windows). Hiding the sidebar is ⌘B or ⋯.
+     * their keys (a new or reopened panel; the folder tabs' two configuration windows). Hiding the sidebar is ⌘B or ⋯.
      */
     JPopupMenu tabMenu(final int tab) {
         final JPopupMenu menu = new JPopupMenu();

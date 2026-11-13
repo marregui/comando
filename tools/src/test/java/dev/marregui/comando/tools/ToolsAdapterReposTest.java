@@ -60,7 +60,7 @@ class ToolsAdapterReposTest {
     }
 
     /// The tree of a watched repository folder holds its tracked and untracked entries but not the ignored `dist`, and
-    /// the repository's status follows for the Files tab's colours.
+    /// the repository's status follows for the folder tabs' colours.
     @Test
     void aWatchedFolderInARepositoryLeavesOutWhatGitIgnores(@TempDir final Path dir) throws Exception {
         final Path root = GitTest.repo(dir.toRealPath());

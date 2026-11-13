@@ -43,8 +43,9 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 
 /**
- * What the Files tab's git repositories hold that their last commits do not, as IDEs show it before a commit: a row per
- * repository with its branch and its count (one repository only, or one folder of it, when the view says so), then up
+ * What the folder tabs' (Kit, Brain, Scratchpad) git repositories hold that their last commits do not, as IDEs show
+ * it before a commit: a row per repository with its branch and its count (one repository only, or one folder of it,
+ * when the view says so), then up
  * to three groups, Changed, Untracked and Removed, each by folder (a chain of folders holding only one folder is one
  * row), its files named in git's colour for how they changed. A double click or Enter on a file compares it with its
  * {@code HEAD} version side by side; the menu of the selection rolls back every file in it, or under a folder in it, to
@@ -55,7 +56,7 @@ import dev.marregui.comando.ui.widget.capability.Copyable;
  */
 public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
 
-    /** What the view shows when the Files tab's folders hold no git repository. */
+    /** What the view shows when the folder tabs' folders hold no git repository. */
     static final String NO_REPOS = "No git repository in the sidebar's folders";
     /** What a view of one repository shows while that repository is not among those read. */
     static final String NOT_WATCHED = "Not read as a git repository: ";

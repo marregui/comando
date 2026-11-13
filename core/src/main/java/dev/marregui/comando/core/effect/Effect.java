@@ -147,7 +147,7 @@ public sealed interface Effect {
 
     /**
      * Reads these folders every few seconds, and no others; a folder with an entry in {@code open} (by name, its open
-     * subfolders' absolute paths) only as deep as the Files tab shows it, any other whole.
+     * subfolders' absolute paths) only as deep as the folder tabs (Kit, Brain, Scratchpad) show it, any other whole.
      */
     record WatchFolders(List<FolderRoot> folders, Map<String, List<String>> open) implements Effect {
         public WatchFolders {
@@ -193,7 +193,10 @@ public sealed interface Effect {
         }
     }
 
-    /** Shows a folder's tree in the sidebar's Files tab, when the folder still has the settings it was read with. */
+    /**
+     * Shows a folder's tree in the sidebar's tab that holds it, when the folder still has the settings it was read
+     * with.
+     */
     record ShowFolder(FolderRoot folder, ViewSpec.TreeNode tree) implements Effect {
     }
 
@@ -211,7 +214,7 @@ public sealed interface Effect {
     record ReadChange(String root, RepoStatus.FileChange change, ChangeAsk ask) implements Effect {
     }
 
-    /** Shows the watched repositories' changes: the Changes view, and the Files tab's colours. */
+    /** Shows the watched repositories' changes: the Changes view, and the folder tabs' colours. */
     record ShowRepos(List<RepoStatus> repos) implements Effect {
         public ShowRepos {
             repos = List.copyOf(repos);

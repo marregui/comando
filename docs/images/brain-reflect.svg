@@ -114,8 +114,8 @@
     <text x="1110" y="470" class="step">Indexes</text>
     <text x="1110" y="494" class="mut" fill="#E7C55A">MUTATES ALL INDEXES</text>
     <text x="1110" y="524" class="s">MEMORY.md, each set's 00,</text>
-    <text x="1110" y="542" class="s">the day's INDEX.md, the Files</text>
-    <text x="1110" y="560" class="s">tab's index and listedIn files</text>
+    <text x="1110" y="542" class="s">the day's INDEX.md, the folder</text>
+    <text x="1110" y="560" class="s">tabs' index and listedIn files</text>
     <text x="1110" y="584" class="s">part of every write,</text>
     <text x="1110" y="602" class="s">never a follow-up</text>
     <text x="1110" y="626" class="s">an index check runs</text>

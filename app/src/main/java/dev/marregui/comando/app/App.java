@@ -88,7 +88,10 @@ public final class App implements AutoCloseable {
     static final Duration APPROVAL_TIMEOUT = Duration.ofHours(24);
 
     private final Deque<AutoCloseable> owned = new ArrayDeque<>();
-    /** How often the Files tab's open folders are read for changes: often enough to follow a session writing. */
+    /**
+     * How often the open folders of the folder tabs (Kit, Brain, Scratchpad) are read for changes: often enough to
+     * follow a session writing.
+     */
     static final Duration FOLDERS_EVERY = Duration.ofSeconds(5);
     /**
      * How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second.
@@ -281,9 +284,9 @@ public final class App implements AutoCloseable {
     public void start() {
         loop.start();
         ui.start();
-        // every folder's repository, for the Files tab's git marks; the reducer says when folders or Changes change
+        // every folder's repository, for the folder tabs' git marks; the reducer says when folders or Changes change
         tools.watchRepos(loop.state().folders(), false);
-        // the Files tab's open folders stay in sync whether the tab shows or not; closed ones are not read
+        // the folder tabs' open folders stay in sync whether a tab shows or not; closed ones are not read
         tools.pollFolders(FOLDERS_EVERY);
         // the Logbook tab: the open tasks of the brain's newest scratchpad day folder, read on the folder poll
         // (record 150)

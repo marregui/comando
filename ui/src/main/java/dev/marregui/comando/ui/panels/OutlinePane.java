@@ -85,7 +85,7 @@ final class OutlinePane {
                 }
             }
         });
-        // Enter goes to the heading selected, as Enter opens what the Files tab's and the Changes view's lists select
+        // Enter goes to the heading selected, as Enter opens what the folder tabs' and the Changes view's lists select
         list.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "outline-open");
         list.getActionMap().put("outline-open", new AbstractAction() {
             @Override

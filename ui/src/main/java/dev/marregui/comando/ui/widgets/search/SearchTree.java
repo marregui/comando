@@ -15,10 +15,10 @@ import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 
 /**
- * The rows of the Search view, built afresh for each batch of hits: a row per Files-tab folder searched, in the order
- * its first hit came, its files by folder (a chain of folders holding only one folder is one row, as in the Changes
- * view), a row per line found under its file; last, the conversations, a row per conversation and one per message
- * found in it. Every row that opens a hit is linked to it in the targets.
+ * The rows of the Search view, built afresh for each batch of hits: a row per folder of the folder tabs (Kit, Brain,
+ * Scratchpad) searched, in the order its first hit came, its files by folder (a chain of folders holding only one
+ * folder is one row, as in the Changes view), a row per line found under its file; last, the conversations, a row
+ * per conversation and one per message found in it. Every row that opens a hit is linked to it in the targets.
  */
 final class SearchTree {
 
@@ -202,7 +202,7 @@ final class SearchTree {
         final List<ViewSpec.TreeNode> out = new ArrayList<>(talks.size());
         for (final List<Found> found : talks.values()) {
             final SearchHit first = found.getFirst().hit();
-            // the conversation's id, not its file: a folder of the Files tab may hold the transcripts as files too
+            // the conversation's id, not its file: a folder of the folder tabs may hold the transcripts as files too
             final String link = SOURCE + first.conversation();
             targets.put(link, first);
             final List<ViewSpec.TreeNode> rows = new ArrayList<>(found.size());
@@ -246,7 +246,7 @@ final class SearchTree {
     private record Found(int index, SearchHit hit) {
     }
 
-    /** A folder of the Files tab searched, or the folder of a hit outside its own: its files and its name. */
+    /** A folder of the folder tabs searched, or the folder of a hit outside its own: its files and its name. */
     private static final class Place {
         final String path;
         final Dir top = new Dir();

@@ -34,10 +34,10 @@ public interface UiPort {
     /** Shows or hides panes and moves the split. */
     void arrange(Layout layout);
 
-    /** Shows a folder's tree in the sidebar's Files tab; the folder as configured when it was read. */
+    /** Shows a folder's tree in the sidebar's tab that holds it; the folder as configured when it was read. */
     void showFolder(FolderRoot folder, ViewSpec.TreeNode tree);
 
-    /** Shows the watched git repositories' changes in the Changes view and the Files tab. */
+    /** Shows the watched git repositories' changes in the Changes view and the folder tabs (Kit, Brain, Scratchpad). */
     void showRepos(List<RepoStatus> repos);
 
     /** Shows a changed file's two versions side by side, as {@code ask} says. */

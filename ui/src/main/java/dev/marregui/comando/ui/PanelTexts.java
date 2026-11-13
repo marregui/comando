@@ -84,8 +84,9 @@ public interface PanelTexts {
     }
 
     /**
-     * True when the panel was opened on a file outside the panels' folder, a document from the Files tab or any file opened:
-     * it shows as that file's language, not as the panel's own SQL and prompts.
+     * True when the panel was opened on a file outside the panels' folder, a document from the folder tabs (Kit,
+     * Brain, Scratchpad) or any file opened: it shows as that file's language, not as the panel's own SQL and
+     * prompts.
      */
     default boolean document(final PanelId panel) {
         return false;

@@ -14,9 +14,9 @@ import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
- * The watched git repositories as last read, on the EDT: what the Changes view lists and what the Files tab colours.
- * Looked up by absolute path, a file gives how it changed and a folder whether it holds a change; listeners hear of
- * every new read that differs from the one before.
+ * The watched git repositories as last read, on the EDT: what the Changes view lists and what the folder tabs (Kit,
+ * Brain, Scratchpad) colour. Looked up by absolute path, a file gives how it changed and a folder whether it holds a
+ * change; listeners hear of every new read that differs from the one before.
  */
 public final class RepoChanges {
 

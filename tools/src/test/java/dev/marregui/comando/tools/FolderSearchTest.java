@@ -21,9 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
-/// A search of the Files tab's folders.
+/// A search of the folder tabs' folders (Kit, Brain, Scratchpad).
 /// - file names first, then lines, each with its folder, line number and marked match
-/// - what the Files tab leaves out is left out here too, and a binary file is not read
+/// - what the folder tabs leave out is left out here too, and a binary file is not read
 /// - a snippet is one line of at most 200 chars with the match inside it, whatever the line's length or encoding
 /// - a hit goes over in the walk's order whichever fork read it first; refusing a hit or ending the search stops the
 /// scan

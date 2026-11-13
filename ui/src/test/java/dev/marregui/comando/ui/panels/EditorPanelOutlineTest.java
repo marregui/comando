@@ -150,8 +150,8 @@ class EditorPanelOutlineTest {
         assertThat(p.editor().area().getCaretLineNumber()).isEqualTo(line);
     }
 
-    /// Enter on the heading selected goes to it, as a double click does, and as Enter opens what the Files tab's and the
-    /// Changes view's lists select; with nothing selected it goes nowhere.
+    /// Enter on the heading selected goes to it, as a double click does, and as Enter opens what the folder tabs' and
+    /// the Changes view's lists select; with nothing selected it goes nowhere.
     @Test
     void enterOnTheHeadingSelectedGoesToIt() throws Exception {
         final List<MarkdownHtml.Section> opened = new CopyOnWriteArrayList<>();

@@ -9,8 +9,9 @@ import dev.marregui.comando.core.model.PanelId;
  *
  * @param connection bound connection name, empty when none
  * @param session    bound session name, empty when none
- * @param document   true for a file opened from outside comando's panels folder (a document from the Files tab):
- *                   closing it drops it, while a panel of comando's own is kept, closed, until it is removed
+ * @param document   true for a file opened from outside comando's panels folder (a document from the folder tabs (Kit,
+ *                   Brain, Scratchpad)): closing it drops it, while a panel of comando's own is kept, closed, until
+ *                   it is removed
  * @param side       true when the panel's tab is in the right-hand partition of the workspace, not the main tabs
  *                   (record 141)
  * @param preview    true for the one preview tab: a file shown for a search's hit, replaced by the next one shown,

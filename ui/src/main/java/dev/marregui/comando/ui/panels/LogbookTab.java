@@ -44,14 +44,14 @@ import dev.marregui.comando.ui.kit.tree.TreeView;
 
 /**
  * The sidebar's Logbook tab: the scratchpad's open tasks, as {@link AppState#logbook()} read them from the newest day
- * folder's {@code INDEX.md}, which comando only reads, in the tree every widget uses with the Files tab's look. The
+ * folder's {@code INDEX.md}, which comando only reads, in the tree every widget uses with the folder tabs' look. The
  * tasks that wait on the user come first, under Needs you, then every open task under its topic in the index's order,
  * so a task that waits on the user is listed twice; within a group the newest task, the highest number, leads. A row
  * is the task's name, its number and start day muted after it, and who asked for it when that is not the logbook's
  * owner. A click shows the task's card, which then follows the pointer, as the Instances tab's rows do; a double
  * click or ⏎ shows its page; its menu opens its tickets in Linear, has a running session resume it or ask the user
  * its decisions, the prompt going in through the session's own panel as the user's, and opens its documents as the
- * Files tab opens a file. No bar of buttons (record 74).
+ * sidebar opens a file. No bar of buttons (record 74).
  */
 final class LogbookTab {
 
@@ -76,7 +76,7 @@ final class LogbookTab {
      * click opens the task's page.
      */
     private final Navigator<Row> navigator;
-    /** Opens a file in a panel, as a double click in the Files tab does. */
+    /** Opens a file in a panel, as a double click in a folder tab does. */
     private final Consumer<Path> open;
     private final TreeView view;
     /** {@link #shown}'s tasks by number. */
@@ -345,7 +345,7 @@ final class LogbookTab {
         }
     }
 
-    /** A group after the first opens with the Files tab's separator, a hairline alone; nothing else has a header. */
+    /** A group after the first opens with the folder tabs' separator, a hairline alone; nothing else has a header. */
     private static String header(final DefaultMutableTreeNode n) {
         return n.getLevel() == 1 && n.getParent() != null && n.getParent().getIndex(n) > 0 ? "" : null;
     }
@@ -363,7 +363,7 @@ final class LogbookTab {
         if (t != null) {
             return Icons.get(t.isWaitingOnUser() ? "question" : "logbook");
         }
-        // a group's row is its name alone, as the Files tab's groups; the row saying why there is no task, a problem's
+        // a group's row is its name alone, as the folder tabs' groups; the row saying why there is no task, a problem's
         // warning
         return n.link().isEmpty() && !shown.problem().isEmpty() ? Icons.get("warning") : TreeView.NO_ICON;
     }

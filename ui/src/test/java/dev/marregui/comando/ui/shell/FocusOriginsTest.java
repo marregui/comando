@@ -69,14 +69,14 @@ class FocusOriginsTest {
         assertThat(render(Set.of("panel:review", "panel:main"), "panel:main")).as("F closed in the background").isNull();
     }
 
-    /// An origin given by [FocusOrigins#opened] (the Files tree) replaces the panel in front at the render, and closing
-    /// returns to it.
+    /// An origin given by [FocusOrigins#opened] (a folder tab's tree) replaces the panel in front at the render, and
+    /// closing returns to it.
     @Test
     void anArrivalToldAtTheRequestWinsOverTheRender() {
         render(Set.of("panel:a", "panel:b"), "panel:a");
         origins.opened("panel:f", new FocusOrigins.Origin(tree, null, LowerTab.SESSION, "panel:b"));
         render(Set.of("panel:a", "panel:b", "panel:f"), "panel:f");
-        assertThat(origins.of("panel:f").owner()).as("opened from the Files tab, not the panel in front").isSameAs(tree);
+        assertThat(origins.of("panel:f").owner()).as("opened from a folder tab, not the panel in front").isSameAs(tree);
         assertThat(render(Set.of("panel:a", "panel:b"), "panel:a").owner()).isSameAs(tree);
     }
 

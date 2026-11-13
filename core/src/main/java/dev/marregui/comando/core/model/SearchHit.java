@@ -16,8 +16,8 @@ import java.util.Objects;
  * @param modifiedMillis when the source last changed
  * @param context     the message around the match, for a conversation, whose file is no text to show; else empty
  * @param contextStart where the match starts in {@code context}, in chars
- * @param root        the folder of the Files tab searched, as walked, that holds {@code source}; empty for a
- *                    conversation
+ * @param root        the folder of the folder tabs (Kit, Brain, Scratchpad) searched, as walked, that holds
+ *                    {@code source}; empty for a conversation
  * @param heading     where in its source the hit is: the path of Markdown headings above a file's line, joined by
  *                    {@link #HEADING_SEPARATOR}, or who wrote a conversation's message and when; empty for none
  */

@@ -41,9 +41,9 @@ import dev.marregui.comando.ui.kit.tree.TreeView;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// A tree that opens a folder on one click, as the Files tab's, and the Files tab of a window started on a kit's root.
-/// The look opens and closes folders on a press, which needs a display, so this runs in `./gradlew :app:uiTest` (on
-/// Linux under `xvfb-run`).
+/// A tree that opens a folder on one click, as the folder tabs' (Kit, Brain, Scratchpad), and the Kit tab of a window
+/// started on a kit's root. The look opens and closes folders on a press, which needs a display, so this runs in
+/// `./gradlew :app:uiTest` (on Linux under `xvfb-run`).
 /// - the first click opens or closes a folder, and a double click puts it back as it was, once
 /// - other trees keep the look's double click
 /// - a window started on a kit's root lists the kit's folders first and names the kit in the status bar

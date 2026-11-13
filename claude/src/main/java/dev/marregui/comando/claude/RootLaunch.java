@@ -29,7 +29,7 @@ import dev.marregui.comando.core.model.KitRoot;
  * to comando; every other process has the variable taken out.
  * <p>
  * Every process gets {@code COMANDO_HOME=<data root>}, the instance's own, beside {@code CLAUDE_CONFIG_DIR}: an
- * instance is isolated, so a kit's hook that reads comando's files (its sessions, the Files tab's folders) reads this
+ * instance is isolated, so a kit's hook that reads comando's files (its sessions, the folder tabs' folders) reads this
  * instance's, whatever data root comando was started with ({@code -Dcomando.home}, {@code COMANDO_HOME} or
  * {@code ~/.comando}). With a kit, every process gets {@code COMANDO_BRAIN=<brain>} too, the brain the instance
  * resolved ({@link KitRoot#brain}: Miguel's decision D10 of the first-release review), and {@code autoMemoryDirectory}

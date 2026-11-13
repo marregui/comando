@@ -17,8 +17,8 @@ import dev.marregui.comando.core.model.RepoStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-/// [Git] runs git for the Files tab and the Changes view: status, the two texts of a change, and the repositories of a
-/// folder.
+/// [Git] runs git for the folder tabs (Kit, Brain, Scratchpad) and the Changes view: status, the two texts of a change,
+/// and the repositories of a folder.
 /// - Status lists every kind of change, the branch and the ignored folders; a missing git is a status that says so.
 /// - A change's texts are `HEAD`'s version and the working tree's; binary files and submodules are not compared.
 /// - A repository without commits, or a path missing from `HEAD`, has nothing before, whatever the user's locale.

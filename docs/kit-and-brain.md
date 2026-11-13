@@ -311,9 +311,7 @@ An entry that names the same folder on disk as a kit folder (links followed, let
 so an entry through a link is not added twice. **Use the kit's folders** in the folders window adds the
 missing ones again.
 
-A configured folder shows in one of the three tabs, **Kit**, **Brain** or **Scratchpad**, which `folders.json` decides
-without a new key: a folder whose `icon` is `scratchpad` in the Scratchpad tab; the other folders of the group `Brain`
-in the Brain tab; every other folder, the Kit group's and any in no group, in the Kit tab
+A configured folder shows in the Kit, Brain or Scratchpad tab, by its group and icon
 ([Workbench §6](workbench.md#6-the-kit-brain-and-scratchpad-tabs), [record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)).
 A group's row holds only the folders the manifest configures for it. The rows the tabs give a kit depend on its layout:
 

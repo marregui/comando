@@ -283,7 +283,7 @@ class LogbookTabTest {
         assertThat(resume.getItemCount()).isZero();
     }
 
-    /// A task's document is opened at its path against the folder that holds the index, as the Files tab opens a file;
+    /// A task's document is opened at its path against the folder that holds the index, as the sidebar opens a file;
     /// a task with no documents has no Open document entry.
     @Test
     void aDocumentOpensResolvedAgainstTheIndexsFolder() {

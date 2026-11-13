@@ -49,13 +49,14 @@ import dev.marregui.comando.ui.PanelTexts.Opened;
 import dev.marregui.comando.ui.PanelTexts.Outside;
 
 /**
- * The store files: {@code connections.json}, {@code sessions.json}, {@code folders.json} (the Files tab's folders),
- * {@code panels.json} (each panel's title, bindings and file name, and whether it is closed) and one Markdown file per
- * panel under {@code panels/} with its text ({@link PanelFiles}). A panel of comando's own is kept, closed or open,
- * until it is removed or its file is deleted outside comando; its text stays in memory while it is closed, so it
- * reopens at once. Every write runs on the {@code store} strand from an immutable snapshot, so a save never races an
- * edit; connections go through the {@code store-secrets} strand, for the keychain. Panel text is saved 800 ms after the
- * first unsaved change, so continuous typing saves about every 800 ms, and only the panels that changed are written.
+ * The store files: {@code connections.json}, {@code sessions.json}, {@code folders.json} (the folders of the folder
+ * tabs: Kit, Brain, Scratchpad), {@code panels.json} (each panel's title, bindings and file name, and whether it is
+ * closed) and one Markdown file per panel under {@code panels/} with its text ({@link PanelFiles}). A panel of
+ * comando's own is kept, closed or open, until it is removed or its file is deleted outside comando; its text stays in
+ * memory while it is closed, so it reopens at once. Every write runs on the {@code store} strand from an immutable
+ * snapshot, so a save never races an edit; connections go through the {@code store-secrets} strand, for the keychain.
+ * Panel text is saved 800 ms after the first unsaved change, so continuous typing saves about every 800 ms, and only
+ * the panels that changed are written.
  */
 final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
@@ -97,7 +98,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final JsonFile<List<SessionSpec>> sessions;
     private final JsonFile<List<FolderRoot>> folders;
     private final JsonFile<List<StoredPanel>> panels;
-    /** The kit roots whose folders the Files tab gained at a start, one path a line: each root's are added once. */
+    /** The kit roots whose folders the folder tabs gained at a start, one path a line: each root's are added once. */
     private final Path kitFolders;
     private final ScheduledExecutorService writer = writer();
     /**
@@ -152,7 +153,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     };
     private volatile Consumer<Deleted> deletions = deleted -> {
     };
-    /** Where {@code folders.json} goes when the user changed it; the Files tab follows. */
+    /** Where {@code folders.json} goes when the user changed it; the folder tabs follow. */
     private volatile Consumer<List<FolderRoot>> foldersChanged = f -> {
     };
     /**
@@ -554,7 +555,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * The Files tab's folders; without a readable {@code folders.json}, the default: Claude Code's folder {@code
+     * The folder tabs' folders; without a readable {@code folders.json}, the default: Claude Code's folder {@code
      * claudeDir} (an unreadable file is moved aside). A list the user emptied stays empty: no folder is a choice.
      */
     List<FolderRoot> loadFolders(final Path claudeDir) {
@@ -608,7 +609,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             }
         }
         if (!placed.equals(loaded)) {
-            LOG.log(System.Logger.Level.INFO, "the Files tab gains the kit's folders [root=" + key + ", folders="
+            LOG.log(System.Logger.Level.INFO, "the folder tabs gain the kit's folders [root=" + key + ", folders="
                     + KitFolders.missing(loaded, kit).stream().map(FolderRoot::name).toList() + ']');
         }
         if (!merged.equals(placed)) {
@@ -654,7 +655,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * {@code kit-folders}' format and version (record 133): a kit root a line, the roots whose folders the Files tab
+     * {@code kit-folders}' format and version (record 133): a kit root a line, the roots whose folders the folder tabs
      * gained once; and, since version 2, a line {@code folder<TAB>name<TAB>path} for each folder of the kit comando ran
      * on last, where the kit put it. A file of version 1 has roots only.
      */

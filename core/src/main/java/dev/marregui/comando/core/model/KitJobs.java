@@ -9,7 +9,7 @@ import java.util.Optional;
  * The kit's scheduled jobs as {@code kit.py jobs --json} last reported them (record 117), or why they could not be
  * read.
  *
- * @param read  whether the root has a kit whose jobs were asked for; false hides the Files tab's Jobs row
+ * @param read  whether the root has a kit whose jobs were asked for; false hides the Kit tab's Jobs row
  * @param error why {@code kit.py} could not be asked or answered; empty when it answered
  */
 public record KitJobs(boolean read, List<Entry> jobs, String error) {

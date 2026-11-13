@@ -50,7 +50,7 @@ import dev.marregui.comando.ui.widget.capability.Copyable;
 
 /**
  * Find in files and conversations (record 139), as a view of the side pane: a field, then the hits by where they are,
- * as the Changes view shows a repository's files ({@link SearchTree}: each Files-tab folder, its folders and files,
+ * as the Changes view shows a repository's files ({@link SearchTree}: each folder of the folder tabs, its folders and files,
  * each file's hits named by line and heading; then the conversations). Every row is open but those the user closed;
  * the selection is kept as hits arrive. Moving the selection shows a file's hit in the workspace's preview tab, every
  * hit of the file marked, without taking the keyboard from the rows (record 141); a conversation's hit reads in its

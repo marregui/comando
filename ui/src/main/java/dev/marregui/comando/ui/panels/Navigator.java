@@ -93,7 +93,7 @@ final class Navigator<R> {
             }
         });
         if (view.component() instanceof JScrollPane sp) {
-            // as the Files tab: a name wider than the tab scrolls into view rather than being cut at the edge
+            // as the folder tabs: a name wider than the tab scrolls into view rather than being cut at the edge
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         }
     }

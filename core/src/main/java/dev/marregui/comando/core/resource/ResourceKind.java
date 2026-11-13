@@ -7,7 +7,7 @@ import dev.marregui.comando.core.state.AppState;
 
 /**
  * The generic part of a configurable resource: its attributes and the conversion between a spec and the
- * attribute map a form edits. Connections, sessions and the Files tab's folders are its kinds.
+ * attribute map a form edits. Connections, sessions and the folder tabs' folders are its kinds.
  *
  * @param <S> the spec record
  */

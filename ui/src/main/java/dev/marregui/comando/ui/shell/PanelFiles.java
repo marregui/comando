@@ -323,7 +323,7 @@ final class PanelFiles {
                     Links.browsePage(p);
                     return;
                 }
-                // a file named without a line opens as the Files tab opens it: in a panel, or its panel comes forward;
+                // a file named without a line opens as the sidebar opens it: in a panel, or its panel comes forward;
                 // a binary or large one, and one at a line, show in the side pane (record 111)
                 if (line <= 0 && Files.isRegularFile(p) && OpenFiles.isText(p)) {
                     Edt.run(() -> openFile(p));
@@ -349,7 +349,7 @@ final class PanelFiles {
     /**
      * The file {@code path} names, read from {@code baseDir}; a relative one that is not there is looked for under
      * that folder's tree, then under the repositories of the files {@code session}'s own tool calls named, the latest
-     * first, then under the Files tab's folders (record 111). Off the EDT.
+     * first, then under the folder tabs' folders (record 111). Off the EDT.
      */
     private Path located(final String session, final String path, final String baseDir) {
         final Path p = FileView.resolve(path, baseDir);

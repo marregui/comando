@@ -63,7 +63,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 /**
  * The window's status: the standing notice on the left, which takes the user to what it is about when clicked and opens
  * the recent notices on a right click (or a click, when it is about nothing to go to); Claude's and Codex's plan usage
- * and the work running across every panel and session on the right. The kit is the Files tab's KIT row (record 119).
+ * and the work running across every panel and session on the right. The kit is the Kit tab's KIT row (record 119).
  * The focused panel's session is in the {@link SessionBar}, its connection in the panel's header (record 105).
  */
 public final class StatusBar {
@@ -248,7 +248,7 @@ public final class StatusBar {
             tip.append(MarkdownHtml.escape(u.source + " reports no session window")).append("<br>");
         }
         tip.append(MarkdownHtml.escape("Read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(u.last.readAtMillis()))
-                + " from " + u.source + ", every 5 minutes"));
+                + " from " + u.source + ", every 20 minutes"));
         if (stale) {
             tip.append("<br>").append(MarkdownHtml.escape("The read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(read.readAtMillis()))
                     + " failed: " + read.problem()));

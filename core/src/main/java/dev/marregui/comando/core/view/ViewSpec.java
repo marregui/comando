@@ -129,7 +129,7 @@ public sealed interface ViewSpec {
         public static final String MORE = "…";
         /**
          * The detail of the {@link #MORE} entry that is all a folder holds when it was not read: the folder holding it is
-         * closed in the Files tab. It goes once that folder is open and read.
+         * closed in the folder tabs (Kit, Brain, Scratchpad). It goes once that folder is open and read.
          */
         public static final String NOT_READ = "not read while the folder holding it is closed";
 
@@ -165,7 +165,7 @@ public sealed interface ViewSpec {
     }
 
     /**
-     * What the git repositories of the Files tab's folders hold that their last commits do not. The view carries no
+     * What the git repositories of the folder tabs' folders hold that their last commits do not. The view carries no
      * data: the repositories are read while it is open, and its widget shows them as they arrive.
      *
      * @param root   the top folder of the one repository shown; empty for every repository
@@ -216,7 +216,7 @@ public sealed interface ViewSpec {
 
     /**
      * The files the session that has the keyboard wrote (record 143), in the order it first wrote each, gold until
-     * opened as in the Files tab. The view carries no data: the widget reads the session's transcript.
+     * opened as the sidebar opens a file. The view carries no data: the widget reads the session's transcript.
      */
     record Deliverables() implements ViewSpec {
 

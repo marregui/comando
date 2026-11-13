@@ -29,7 +29,8 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
 
 /// A panel's Locate button in the real window (record 119). Opens the window, so this runs in `./gradlew :app:uiTest`.
-/// - on a document's panel it brings the Files tab to the front with the file selected, its closed folders opened
+/// - on a document's panel it brings the tab that holds the file to the front with it selected, its closed folders
+///   opened
 /// - on a session's panel it brings the Sessions tab to the front with the session selected
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class LocateUiTest {
@@ -39,7 +40,7 @@ class LocateUiTest {
     @TempDir
     Path home;
 
-    /// A file two folders down in a folder of the Files tab, never opened there: Locate shows it selected; then a panel
+    /// A file two folders down in a folder of the Kit tab, never opened there: Locate shows it selected; then a panel
     /// bound to a session: Locate selects the session in the Sessions tab.
     @Test
     void locateShowsTheFileInFilesAndTheSessionInSessions() throws Exception {

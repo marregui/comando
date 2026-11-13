@@ -63,8 +63,9 @@ final class MenuBuilder {
     }
 
     /**
-     * A Files tab top row's menu (record 118): the brain's row, or a folder inside the brain, gains the brain's backup;
-     * the kit's root's row gains the kit's backup and its upgrade (record 119), each enabled as it can run.
+     * A top row's menu in the folder tabs (record 118): the brain's row, or a folder inside the brain, gains the
+     * brain's backup; the kit's root's row gains the kit's backup and its upgrade (record 119), each enabled as it
+     * can run.
      */
     void folderMenu(final FolderRoot folder, final JPopupMenu menu) {
         final KitRoot root = deps.setup().root();

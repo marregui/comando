@@ -47,7 +47,7 @@ final class Keys {
     /**
      * Every command with a key, with its menu or area, as a Markdown table, grouped by where it belongs, each group
      * where its first command is; then the keys that belong to one place and are no command: an approval card's, and
-     * those of the find bar, the transcript, the sessions list, the Files tab and the dialogs.
+     * those of the find bar, the transcript, the sessions list, the folder tabs and the dialogs.
      */
     static String markdown(final List<Command> commands) {
         final StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Where | Command | Keys |\n|---|---|---|\n");
@@ -91,8 +91,8 @@ final class Keys {
                     close it and give the keyboard back |
             | Transcript | ⌘C, ⌘A | copy the selection, select all |
             | Sessions list | ⌘C | copy the selected session's details |
-            | Files tab | ⏎ | open the selected file in a panel |
-            | Files tab filter | ⎋ | clear the filter |
+            | Folder tabs | ⏎ | open the selected file in a panel |
+            | Folder tabs filter | ⎋ | clear the filter |
             | Connection and session dialogs | ⏎, ⌘⏎, ⎋ | save, save and assign to the panel, close (asking first when unsaved) |
             """;
 }

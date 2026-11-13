@@ -39,7 +39,7 @@ import dev.marregui.comando.ui.widget.capability.Copyable;
 /**
  * The files the session with the keyboard wrote (record 143), as a view of the side pane: one row per file its Write,
  * Edit, MultiEdit and NotebookEdit calls wrote, in the order it first wrote each, named by the file and its folder in
- * its repository. A file not opened yet is gold, with the Files tab's mark of a new file (record 76), and plain once
+ * its repository. A file not opened yet is gold, with the folder tabs' mark of a new file (record 76), and plain once
  * opened. Moving the selection shows the file in the workspace's preview tab without taking the keyboard from the
  * rows; Enter or a double click keeps the tab, and the file counts as opened. The rows follow the session as it
  * writes; while a panel that is no session's has the keyboard, the last session's rows stay.
@@ -306,7 +306,7 @@ public final class DeliverablesWidget implements Widget<ViewSpec.Deliverables>, 
         return file != null && !opened.contains(file) ? Theme.tint().body : null;
     }
 
-    /** The Files tab's mark of a new file, while the file was not opened. */
+    /** The folder tabs' mark of a new file, while the file was not opened. */
     private Icon mark(final DefaultMutableTreeNode node) {
         final Path file = fileOf(node);
         return file != null && !opened.contains(file) ? Icons.get("new-file") : null;

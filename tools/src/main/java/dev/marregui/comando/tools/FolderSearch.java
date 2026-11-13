@@ -36,12 +36,11 @@ import dev.marregui.comando.core.model.SearchQuery;
 import dev.marregui.comando.core.port.SearchPort;
 
 /**
- * Looks in the Files tab's folders, with no index (record 139): every search walks them and reads them. The walk leaves
- * out what the tab leaves out, hidden entries and the folder's excluded names, and follows no link to a folder, then
- * hands the files whose name holds the text. The contents come next: each file is mapped and its bytes scanned in
- * place, and only the part of a line a hit shows is decoded. A file with a NUL in its first 8 kB is binary and is not
- * read
- * further. A line gives one hit, at its first match.
+ * Looks in the folder tabs' folders (Kit, Brain, Scratchpad), with no index (record 139): every search walks them and
+ * reads them. The walk leaves out what the tabs leave out, hidden entries and the folder's excluded names, and follows
+ * no link to a folder, then hands the files whose name holds the text. The contents come next: each file is mapped and
+ * its bytes scanned in place, and only the part of a line a hit shows is decoded. A file with a NUL in its first 8 kB
+ * is binary and is not read further. A line gives one hit, at its first match.
  * <p>
  * The reading is spread over forks, as many as the searcher allows, which {@link #scan} collects before it returns.
  * The hits still reach {@code found} on the scanning thread and in the walk's order, whichever fork was first, so one
@@ -137,7 +136,7 @@ public final class FolderSearch implements SearchPort.Source {
         private final BooleanSupplier ended;
         private FolderRoot folder;
         private Path root;
-        /** The folder as the Files tab lists it: {@link #root} unless the tab's folder is a link to it. */
+        /** The folder as the folder tabs list it: {@link #root} unless the tab's folder is a link to it. */
         private Path listed;
         private boolean refused;
 
@@ -195,7 +194,7 @@ public final class FolderSearch implements SearchPort.Source {
                 failed++;
                 return FileVisitResult.TERMINATE;
             }
-            // a hit names the file where the Files tab shows it, under the folder as listed, links or not
+            // a hit names the file where the folder tabs show it, under the folder as listed, links or not
             final Path shown = listed.resolve(root.relativize(file));
             final Target target = new Target(file, shown.toAbsolutePath().toString(),
                     listed.toAbsolutePath().toString(), folder.name(), attributes.lastModifiedTime().toMillis());

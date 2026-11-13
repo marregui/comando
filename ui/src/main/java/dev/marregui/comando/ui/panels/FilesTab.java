@@ -72,12 +72,14 @@ import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 /**
- * The sidebar's Files tab: the folders the user configured ({@link FolderRoot}) as a navigator of their folders and
- * files. A folder in no group is a top-level row; a group is one top-level row, its name in capitals (record 118): the
- * folder itself for a group of one, such as KIT, else the folder holding the group's folders, such as BRAIN, with them
- * inside it beside its other folders (no files, nothing hidden). A hairline parts one group's row from the next. A
- * click selects; a double click (or Enter) opens a file in a panel, and a double click opens or closes a folder;
- * nothing opens a panel but a file asked for. Each kind of file has its icon, and a folder's index file leads it,
+ * One of the sidebar's folder tabs (Kit, Brain, Scratchpad; {@link FilesShelf} says which holds which folder), all
+ * three this component: the folders the tab takes of those the user configured ({@link FolderRoot}) as a navigator
+ * of their folders and files. A folder in no group is a top-level row; a group is one top-level row, its name in
+ * capitals (record 118): the folder itself for a group of one, such as KIT, else the folder holding the group's
+ * folders, such as BRAIN, with only them inside it (record 152). A hairline parts
+ * one group's row from the next. A click selects; a double click (or Enter) opens a file in a panel, and a double
+ * click opens or closes a folder; nothing opens a panel but a file asked for. Each kind of file has its icon, and a
+ * folder's index file leads it,
  * offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
  * ({@link Intent.WatchFolders}), so a closed folder costs nothing, and of an open one only as deep as it shows: its
  * entries, and those of each subfolder that shows, so a subfolder inside a closed one is read once it is opened. The
@@ -93,10 +95,10 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
  * inside offer neither (record 118). A changed file's menu compares it with {@code HEAD}. Every folder lies inside
  * Claude Code's folder, the kit's or the brain's, which may lie anywhere: the tab is no browser of code repositories.
  *
- * <p>With a kit, a Jobs row is the first inside the kit's row (record 118): the kit's scheduled jobs at a glance
- * (record 117), its detail what runs next, its marks a pending change (the dot) and a failed last run (the name in
- * red); a double click or its menu opens the window that edits them, and its menu applies a change the scheduler has
- * not taken yet.
+ * <p>With a kit, a Jobs row is the first inside the kit's row, in the Kit tab (record 118): the kit's scheduled jobs
+ * at a glance (record 117), its detail what runs next, its marks a pending change (the dot) and a failed last run
+ * (the name in red); a double click or its menu opens the window that edits them, and its menu applies a change the
+ * scheduler has not taken yet.
  *
  * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in
  * {@code folders.json}, through the windows the tab's own menu opens. In a folder configured as deletable, the menu
@@ -935,8 +937,8 @@ final class FilesTab {
     /**
      * The top-level rows (record 118): a folder in no group as its own row; a group's folders under one row, the
      * group's name in capitals: the folder itself for a group of one, which leads with the Jobs row for the kit's
-     * group, else the folder holding them ({@link FolderRoot#groupRoots}), with them first, then its other folders,
-     * neither its files nor anything hidden. A group whose folders share no parent shows them as rows of their own.
+     * group, else the folder holding them ({@link FolderRoot#groupRoots}), holding only them
+     * (record 152). A group whose folders share no parent shows them as rows of their own.
      * {@code kids} gives a folder's entries; with {@code keepEmpty} false, a row with none is left out, as the filter's
      * tree wants.
      */

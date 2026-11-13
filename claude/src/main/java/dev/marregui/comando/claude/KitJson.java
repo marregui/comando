@@ -34,12 +34,13 @@ import dev.marregui.comando.core.resource.FolderKind;
 /**
  * A kit's {@code comando-kit.json} read into a {@link KitRoot.Manifest}: schema version 1 ({@code "kit": 1}; a file
  * without the key is version 1), a name, the brain's folder when it names one (absolute, {@code ~/…} or relative to the
- * kit), the Files tab's folders, each inside its {@code root} (the kit, or the brain), the requirements, credentials and
- * jobs (record 133 gives the schema). A file that is no JSON, of a later version, without a name, or with a folder
- * outside its root, is refused whole, with the reason. A folder that breaks the rules every Files-tab folder meets
- * ({@link FolderKind}: its icon, index, listing file, a name used once) or names a root other than {@code kit} or
- * {@code brain} is left out and named in {@link KitRoot.Manifest#problems}, so it never shows at one start to vanish at
- * the next; {@link #repair} rewrites the file without such folders once the user confirms.
+ * kit), the folders of the folder tabs (Kit, Brain, Scratchpad), each inside its {@code root} (the kit, or the brain),
+ * the requirements, credentials and jobs (record 133 gives the schema). A file that is no JSON, of a later version,
+ * without a name, or with a folder outside its root, is refused whole, with the reason. A folder that breaks the rules
+ * every folder of the folder tabs meets ({@link FolderKind}: its icon, index, listing file, a name used once) or names
+ * a root other than {@code kit} or {@code brain} is left out and named in {@link KitRoot.Manifest#problems}, so it
+ * never shows at one start to vanish at the next; {@link #repair} rewrites the file without such folders once the user
+ * confirms.
  */
 public final class KitJson {
 
@@ -152,8 +153,8 @@ public final class KitJson {
     }
 
     /**
-     * What is wrong with folder {@code f} by the rules every Files-tab folder meets, its path taken inside {@code base};
-     * empty when nothing is. {@code kept} holds the folders before it that passed.
+     * What is wrong with folder {@code f} by the rules every folder of the folder tabs meets, its path taken inside
+     * {@code base}; empty when nothing is. {@code kept} holds the folders before it that passed.
      */
     private static Optional<String> folderProblem(final Path base, final FolderRoot f, final List<FolderRoot> kept) {
         if (f.name().isEmpty()) {
@@ -242,7 +243,7 @@ public final class KitJson {
 
     /**
      * {@code path} when it names a place inside the root: relative, without {@code ..}; with {@code root}, the root
-     * itself too ({@code "."}): a folder of the Files tab may be the kit's whole folder, its excludes leaving out the
+     * itself too ({@code "."}): a folder of the folder tabs may be the kit's whole folder, its excludes leaving out the
      * rest.
      */
     private static String inside(final String path, final String what, final boolean root) throws IOException {

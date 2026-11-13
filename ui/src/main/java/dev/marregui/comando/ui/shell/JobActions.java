@@ -27,7 +27,7 @@ import dev.marregui.comando.ui.panels.SessionsSidebar;
 
 /**
  * The kit's scheduled jobs in the window (record 117): read through {@link Setup#jobs} at start, after each change
- * comando makes, and while the Files tab shows whenever the manifest or the runner's state changed, shown on its Jobs
+ * comando makes, and while the Kit tab shows whenever the manifest or the runner's state changed, shown on its Jobs
  * row; edited in the {@link JobsDialog}, whose Save hands the whole list to {@code kit.py}; run now, and brought to the
  * scheduler, from the row's and the window's menus. Every call of {@code kit.py} runs on an errand of the window. EDT
  * only, but for those errands.
@@ -35,7 +35,7 @@ import dev.marregui.comando.ui.panels.SessionsSidebar;
 final class JobActions {
 
     /**
-     * How often, while the Files tab shows, the manifest and the runner's state are looked at: a run starts or ends, the
+     * How often, while the Kit tab shows, the manifest and the runner's state are looked at: a run starts or ends, the
      * next one moves on. Only a change is read through {@code kit.py}: a read is a {@code python3} and the scheduler's
      * own calls, which once a minute made 60 processes an hour on an idle window (soak run 8, 2026-11-03).
      */
@@ -58,7 +58,7 @@ final class JobActions {
         this.openFile = openFile;
     }
 
-    /** Shows the jobs in {@code bar}'s Files tab, once the window is built: read now, then again on a change it shows. */
+    /** Shows the jobs in {@code bar}'s Kit tab, once the window is built: read now, then again on a change it shows. */
     void attach(final SessionsSidebar bar) {
         sidebar = bar;
         bar.onJobs(this::configure, this::apply);

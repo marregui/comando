@@ -12,9 +12,9 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 
 /**
- * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out, the row's icon,
- * whether its entries may go to the Trash and the file that lists them.
- * Its rules are the ones every entry of {@code folders.json} meets as the store reads it.
+ * The folder tabs' folders (Kit, Brain, Scratchpad) as a resource kind: a name, a folder, an index file, what to leave
+ * out, the row's icon, whether its entries may go to the Trash and the file that lists them. Its rules are the ones
+ * every entry of {@code folders.json} meets as the store reads it.
  */
 public final class FolderKind implements ResourceKind<FolderRoot> {
 

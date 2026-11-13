@@ -10,11 +10,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
- * opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED},
- * the icon of its row, whether its entries may go to the Trash and the file each of its folders lists them in. The
- * folders are configured in {@code folders.json}, each by its full path; the Files tab shows them, and moves entries of
- * a deletable folder to the Trash.
+ * A folder the folder tabs (Kit, Brain, Scratchpad) show at their top level, configured like a connection: a name, the
+ * folder, the file its name opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides
+ * {@link #ALWAYS_EXCLUDED}, the icon of its row, whether its entries may go to the Trash and the file each of its
+ * folders lists them in. The folders are configured in {@code folders.json}, each by its full path; the folder tabs
+ * show them, and moves entries of a deletable folder to the Trash.
  *
  * <p>A kit's folders come from its {@code comando-kit.json} ({@link KitRoot#folders}): there each names its {@code
  * root}, {@code kit} (the default) or {@code brain}, and a path relative to that root, so the folder follows its root
@@ -28,10 +28,10 @@ import java.util.Set;
  * @param index     a path relative to the folder, empty when none
  * @param excludes  folder or file names left out wherever they appear, matched ignoring case
  * @param icon      one of {@link #ICONS}; {@link #FOLDER} when none is set
- * @param deletable whether the Files tab moves the folder's files and subfolders to the Trash; never the folder itself
+ * @param deletable whether the folder tabs move the folder's files and subfolders to the Trash; never the folder itself
  * @param listedIn  a file name, such as {@code INDEX.md}, that lists the entries beside it: an entry moved to the Trash
  *                  leaves the nearest such file above it, without its own lines; empty when none
- * @param group the row the Files tab shows the folders that share it under, such as {@code Brain}: its name in
+ * @param group the row the folder tabs show the folders that share it under, such as {@code Brain}: its name in
  *                  capitals, and the folders inside that row when the group has more than one (record 118); empty when
  *                  none
  */
@@ -106,9 +106,9 @@ public record FolderRoot(String name, String path, String index, List<String> ex
 
     /**
      * The row of each group of two or more folders that share a parent folder (record 118): that folder, named by the
-     * group in capitals, its own entries read with the group's folders left out, as the Files tab shows only its other
-     * folders beside them. None for a group of one folder, which is its folder's row, nor when the name is a configured
-     * folder's.
+     * group in capitals, its own entries read with the group's folders left out; the folder tabs show under its row
+     * only the group's folders, not its other entries (record 152). None for a group of one folder, which is its
+     * folder's row, nor when the name is a configured folder's.
      */
     public static List<FolderRoot> groupRoots(final List<FolderRoot> folders) {
         final Map<String, List<FolderRoot>> groups = new LinkedHashMap<>();
@@ -127,7 +127,7 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         return out;
     }
 
-    /** {@code folders} and their {@link #groupRoots}: every folder the Files tab reads. */
+    /** {@code folders} and their {@link #groupRoots}: every folder the folder tabs read. */
     public static List<FolderRoot> withGroupRoots(final List<FolderRoot> folders) {
         final List<FolderRoot> out = new ArrayList<>(folders);
         out.addAll(groupRoots(folders));
@@ -138,7 +138,9 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         return new FolderRoot(newName, path, index, excludes, icon, deletable, listedIn, group);
     }
 
-    /** A folder whose entries go to the Trash from the Files tab, each leaving its lines in {@code listing}, if set. */
+    /**
+     * A folder whose entries go to the Trash from the folder tabs, each leaving its lines in {@code listing}, if set.
+     */
     public FolderRoot withTrash(final String listing) {
         return new FolderRoot(name, path, index, excludes, icon, true, listing, group);
     }

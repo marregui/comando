@@ -35,7 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   the run going.
 /// - Each run reads the settings again; a console closed during its run is released when the run ends.
 /// - Folder trees are sent when read and when changed, ordered (the index first, folders, day folders by date, files),
-///   without hidden, build and excluded entries; a watched folder is read only as deep as the Files tab shows it.
+///   without hidden, build and excluded entries; a watched folder is read only as deep as the folder tabs (Kit, Brain,
+///   Scratchpad) show it.
 /// - An unreadable folder or subfolder says so in its tree; a large, deep or linked folder is bounded and says so.
 /// - Entries go to the Trash and leave their lines in the nearest listing; nothing goes without a Trash or outside the
 ///   folder.
@@ -283,7 +284,7 @@ class ToolsAdapterTest {
         }
     }
 
-    /// A folder read as deep as the Files tab shows lists the top folder and each subfolder that shows, inside the top
+    /// A folder read as deep as the folder tabs show lists the top folder and each subfolder that shows, inside the top
     /// folder or an open one, and nothing inside a subfolder that is closed: that subfolder holds one entry saying so.
     @Test
     void aFolderReadAsDeepAsItShowsListsNothingInsideAClosedSubfolder(@TempDir final Path dir) throws Exception {

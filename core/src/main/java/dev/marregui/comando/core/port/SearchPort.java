@@ -8,9 +8,8 @@ import dev.marregui.comando.core.model.SearchHit;
 import dev.marregui.comando.core.model.SearchQuery;
 
 /**
- * Searches what the user reads: the Files tab's folders and the stored conversations (record 139). The answer is
- * derived
- * data, so it goes from the searcher to the window that asked and never through the state.
+ * Searches what the user reads: the folder tabs' folders (Kit, Brain, Scratchpad) and the stored conversations (record
+ * 139). The answer is derived data, so it goes from the searcher to the window that asked and never through the state.
  */
 public interface SearchPort {
 

@@ -17,7 +17,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [FormRows] lays out the fields the Files tab folders window and the kit jobs window share.
+/// [FormRows] lays out the fields the folder tabs' folders window and the kit jobs window share.
 /// - A row's label points at its input, and both explain it under the mouse; the input is named by the label, also
 ///   when it sits inside a field with a button.
 /// - The message line says what was refused first, then the first problem by its label, then the note; a problem is

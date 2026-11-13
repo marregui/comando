@@ -32,8 +32,8 @@ import dev.marregui.comando.ui.kit.async.OnEdt;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [FilesTab]'s groups as rows (record 118): the brain and the kit, each one unit.
-/// - a group of folders is one row in capitals, the folder holding them, with them inside it and its other folders, no
-///   file and nothing hidden; a group of one is its folder's row, named in capitals
+/// - a group of folders is one row in capitals, the folder holding them, with only them inside it (record 152); a
+///   group of one is its folder's row, named in capitals
 /// - a group's folders inside its row keep their icons, are watched when open, and their entries resolve to their paths
 /// - only a top-level row shows its changes, on a double click or in its menu, and gains the window's items (the
 ///   backup)

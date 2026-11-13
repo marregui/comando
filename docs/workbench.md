@@ -32,7 +32,7 @@ the folders window, which keeps them in `folders.json` ([§6](#6-the-kit-brain-a
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86), whether finished work waits to be read (record 136) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary an earlier checkpoint carried into the next prompt (record 86), whether finished work waits to be read (record 136) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | none |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -110,7 +110,7 @@ Any number of document panels may be attached to a session
   ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)).
 - **HTML files** open from the sidebar as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)). A link to one opens it in the browser
-  ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)).
+  ([record 154](adr/0154-a-link-to-a-page-opens-the-browser.md)), unless it names a line, which shows the source at that line in the side pane; a page too large or binary for a panel opens in the browser from the sidebar too.
 - **Links**, wherever text shows (a rendered page, a panel's text, the transcript, every card in it: a command, a
   skill's or a tool's input, a delegation's prompt, a tool's result, a tab's card), are followed at a double click
   ([record 108](adr/0108-links-in-every-card.md)); a single click follows nothing
@@ -232,7 +232,7 @@ Any number of document panels may be attached to a session
   the view or the preview tab. A double click on the tab, an edit,
   or **Open** in the view keeps it as a tab that stays; the next hit then opens a new preview. A conversation's hit opens
   in the session that holds it, with the transcript's Find on the query, or the Import dialog when no session holds it;
-  its row's tooltip shows the message around the match. **Show in sidebar** reveals the file, in the tab whose folder holds it. The view's buttons are
+  its row's tooltip shows the message around the match. **Show in the sidebar** reveals the file, in the tab whose folder holds it. The view's buttons are
   icons; their tooltips say what they do. In files a search takes what the three folder tabs show: their folders, without what
   the tabs leave out and without hidden entries, names first, then lines, one hit a line. A file with a NUL in its
   first 8 kB is passed over as binary. What counts in a conversation:
@@ -370,17 +370,17 @@ before its name: the detail moves to the row's tooltip and comes back when the t
 **The Logbook tab** ("the scratchpad's open tasks; N need you", N the tasks that wait on the user; also an icon on the
 rail) lists the open tasks of the newest day folder of the scratchpad, read from its `INDEX.md` ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)),
 in the tree the folder tabs draw, with its group headers, row icons and menus. A group **Needs you (N)** comes first,
-hidden at 0: the tasks that hold a decision for the user (a `**Needs you:**` line in their entry) or whose State begins
-"waiting on Miguel". Then one group per topic, in the index's order. Within a group the newest task comes first, by its
+hidden at 0: the tasks that hold a decision for the user (a `**Needs you:**` line in their entry) or whose State says it is
+waiting on the user. Then one group per topic, in the index's order. Within a group the newest task comes first, by its
 number. A row is the task's name, its title without the attribution, then, muted, its number and the day it started
 (`97 · 10 Nov`; the number alone without a date) and who asked for it when that is not the logbook's owner, the name
 most of its tasks give; its icon is the question mark on a task that waits on the user, the Logbook's mark otherwise.
 The attribution is the heading's last parenthetical when it closes the heading and gives a start date (a part that
-begins with `YYYY-MM-DD`) or a name (a capitalised word, or `Name's …`): `(Dominic's question, Miguel, 2026-11-02)` is
-Dominic's, started on 2 November; `(from task 2, closed 2026-11-03)` is no attribution and stays in the name. An index
+begins with `YYYY-MM-DD`) or a name (a capitalised word, or `Name's …`): `(Ana's question, Ben, 2026-11-02)` is
+Ana's, started on 2 November; `(from task 2, closed 2026-11-03)` is no attribution and stays in the name. An index
 that could not be read shows its problem as one row.
 
-Resting the pointer on a task shows the sidebar's card, as a session's row does, with the same delay and the same exit:
+A click on a task shows the sidebar's card, which then follows the pointer onto the other tasks, as it does in the Instances tab:
 titled `Task N`, headed by the task's name, its facts Started, By, From, Topic, Ticket, State and Next (their first
 sentences) and Needs you (the number of decisions it holds), each only when the task has it, and the task's Ask under
 them. A double click, or ⏎, opens the task as a Markdown view titled `Task N`: its section of the index, in which each
@@ -449,7 +449,7 @@ Everything else is in the row's menu:
 | Edit…, Clone…, Remove… | always | the session dialog; a copy; removal with its own panel |
 
 The model and effort shown are what the session runs at, the same in the row, its card and menus, and the session bar.
-While a turn runs, they are its latest message's: a skill's `model` or `effort` (the `deep` skill's `high`) lasts the
+While a turn runs, they are its latest message's: a skill's `model` or `effort` lasts the
 rest of its turn, and the tooltip names what the session returns to. Between turns, they are the latest turn's first
 message's, the session's own setting, so a `/model` or `/effort` typed in the prompt shows. The stream reports a
 message's model but not its effort: each top-level message's line in the conversation's transcript gives both
@@ -760,7 +760,7 @@ replaces the text.
 - **Which tab.** `folders.json` is unchanged; a folder's tab follows from it. The Scratchpad tab holds the folders whose
   icon is `scratchpad`; the Brain tab, the other folders of the group `Brain`; the Kit tab, every other folder: the Kit
   group's and any folder in no group. In the Scratchpad tab the scratchpad's row reads SCRATCHPAD, as KIT and BRAIN
-  read in theirs. A file shown from elsewhere (a file link, Locate, Search's Show in sidebar) brings to the front the
+  read in theirs. A file shown from elsewhere (a file link, Locate, Search's Show in the sidebar) brings to the front the
   tab whose folder holds it.
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path, an
   optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
@@ -810,8 +810,8 @@ replaces the text.
   the first time, its newest date-named folder opens too.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
   changed. A folder row's: Open ‹index file›. A top-level row's only: Show changes in it (off, as No changes in it, when
-  it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's
-  also offers Back up the brain, KIT's Back up the kit and Upgrade the kit…
+  it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's,
+  and the SCRATCHPAD's when the scratchpad lies in the brain, also offer Back up the brain; KIT's Back up the kit and Upgrade the kit…
   ([Kit and brain §3.3](kit-and-brain.md#33-back-up-the-brain-and-the-kit)). A folder of `comando-kit.json` that breaks
   the folders' rules is left out; [Kit and brain §2.4](kit-and-brain.md#24-the-manifest) tells the repair. A group's folder inside its row and a subfolder offer
   neither: the brain and the kit are each one unit ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).

@@ -203,7 +203,7 @@ public final class Actions {
                     List.of(PANEL, Arg.required("tasks", Type.STRING, "e.g. :app:test")), Set.of(Intent.RunGradle.class)),
             new Action("command_cancel", Kind.ACT, "Cancels a running command, as its Cancel does.",
                     List.of(Arg.required("run_id", Type.INTEGER, "")), Set.of(Intent.CancelCommand.class)),
-            new Action("folders_browse", Kind.READ, "Reads the Files tab's folders again, as Refresh does.",
+            new Action("folders_browse", Kind.READ, "Reads the folder tabs' folders again, as Refresh does.",
                     List.of(Arg.optional("names", Type.STRINGS, "default: every folder")), Set.of(Intent.BrowseFolders.class, Intent.WatchFolders.class)),
 
             // ---- terminals: each editor panel's Terminal in the lower panel, reached through the terminal port, which
@@ -289,12 +289,12 @@ public final class Actions {
 
     private static Map<Class<? extends Intent>, String> notYet() {
         final Map<Class<? extends Intent>, String> m = new LinkedHashMap<>();
-        final String git = "a git change of the Files tab: needs the repository status, which the window reads and comando's state does not hold (record 121, increment 2)";
+        final String git = "a git change of a folder tab: needs the repository status, which the window reads and comando's state does not hold (record 121, increment 2)";
         m.put(Intent.OpenChange.class, git);
         m.put(Intent.RollBack.class, git);
         m.put(Intent.RemoveFiles.class, git);
         m.put(Intent.Unstage.class, git);
-        m.put(Intent.DeleteFiles.class, "a Files-tab entry: needs the folder tree the window holds (record 121, increment 2)");
+        m.put(Intent.DeleteFiles.class, "a folder tab's entry: needs the folder tree the window holds (record 121, increment 2)");
         m.put(Intent.AddFolder.class, "the folders window (record 121, increment 3, with the Setup actions)");
         m.put(Intent.SaveFolders.class, "the folders window (record 121, increment 3, with the Setup actions)");
         return Map.copyOf(m);

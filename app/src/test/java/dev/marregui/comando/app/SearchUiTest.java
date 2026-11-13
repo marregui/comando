@@ -77,7 +77,7 @@ class SearchUiTest {
     private StateLoop loop;
     private Path open;
 
-    /// A window on a folder of the Files tab, one of its files open in a panel with the keyboard in its text, and two
+    /// A window on a folder of the Kit tab, one of its files open in a panel with the keyboard in its text, and two
     /// stored conversations.
     @BeforeEach
     void openWindow() throws Exception {

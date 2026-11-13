@@ -20,7 +20,7 @@ import dev.marregui.comando.core.state.Notice;
 import static dev.marregui.comando.core.reduce.Shared.notice;
 
 /**
- * The Files and Changes tabs' rules: the folders, their trees and repositories, and actions on their files.
+ * The folder tabs' and the Changes tab's rules: the folders, their trees and repositories, and actions on their files.
  */
 final class FolderRules {
 

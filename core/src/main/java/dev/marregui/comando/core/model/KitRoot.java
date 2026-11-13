@@ -13,8 +13,8 @@ import java.util.Set;
 /**
  * The Claude Code folder comando starts its sessions on, and the kit in it, when it has one. A kit is the setup of a
  * Claude Code folder, declared by the {@code comando-kit.json} at its top: its name, its brain (the folder holding
- * memory, knowledge base and scratchpad), the folders the Files tab shows, and what it needs outside the folder.
- * What else comando reads of a kit is listed in the Kit and brain document, §2.1.
+ * memory, knowledge base and scratchpad), the folders the folder tabs (Kit, Brain, Scratchpad) show, and what it needs
+ * outside the folder. What else comando reads of a kit is listed in the Kit and brain document, §2.1.
  *
  * <p>The root is {@code CLAUDE_CONFIG_DIR} when comando itself was started with it; else {@code ~/.claude} when it
  * holds a {@code comando-kit.json}; else {@code ~/comando-kit}, where a new install puts its kit, when that holds one;
@@ -25,8 +25,9 @@ import java.util.Set;
  *
  * <p>The brain is a folder of its own, anywhere, and only with a kit: {@code COMANDO_BRAIN} when comando was started
  * with it; else the manifest's {@code brain}, absolute, {@code ~/…} or relative to the kit; else the kit's {@code BRAIN}
- * (Miguel's decision D10 of the first-release review, record 80). A Files-tab folder of the manifest lies in the kit or
- * in the brain, as its {@code root} says, so a brain moved by {@code COMANDO_BRAIN} takes its folders with it.</p>
+ * (Miguel's decision D10 of the first-release review, record 80). A folder of the folder tabs of the manifest lies in
+ * the kit or in the brain, as its {@code root} says, so a brain moved by {@code COMANDO_BRAIN} takes its folders with
+ * it.</p>
  *
  * @param dir      the root, absolute and normalised
  * @param kit      the kit's {@code comando-kit.json}, when the root has one that reads
@@ -53,9 +54,9 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir, String ref
     public static final String BRAIN = "BRAIN";
     /** The variable that names the brain, over the manifest; every session comando starts gets it. */
     public static final String BRAIN_ENV = "COMANDO_BRAIN";
-    /** A Files-tab folder's {@code root}: its path is relative to the kit, the default. */
+    /** The {@code root} of a folder of the folder tabs: its path is relative to the kit, the default. */
     public static final String IN_KIT = "kit";
-    /** A Files-tab folder's {@code root}: its path is relative to the brain. */
+    /** The {@code root} of a folder of the folder tabs: its path is relative to the brain. */
     public static final String IN_BRAIN = "brain";
     /**
      * The session that upgrades the kit: in the root, on the user's own Claude Code folder, so it can replace the kit.
@@ -108,7 +109,7 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir, String ref
      * @param name         the kit's name, shown with its version
      * @param brain        the brain's folder as the manifest names it: absolute, {@code ~/…} or relative to the root;
      *                     empty for the root's {@link #BRAIN}
-     * @param folders      the Files tab's folders, their paths relative to the root, or to the brain for those
+     * @param folders      the folder tabs' folders, their paths relative to the root, or to the brain for those
      *                     {@code inBrain} names
      * @param requirements the tools the kit needs outside the root
      * @param credentials  the keys its tools read, never their values
@@ -292,7 +293,7 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir, String ref
     }
 
     /**
-     * The kit's folders for the Files tab, their paths made absolute under the root, or under the {@link #brain} for
+     * The kit's folders for the folder tabs, their paths made absolute under the root, or under the {@link #brain} for
      * those whose {@code root} is {@link #IN_BRAIN}; none without a kit.
      */
     public List<FolderRoot> folders() {

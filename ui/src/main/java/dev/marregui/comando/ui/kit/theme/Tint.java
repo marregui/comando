@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * The tint of the window: the transcript's headings, list marks and table heads, the bar beside a turn's report and
- * down a tooltip's edge, new files in the Files tab, the tab card's title and summary heading and About's accents.
+ * down a tooltip's edge, new files in the folder tabs, the tab card's title and summary heading and About's accents.
  * Three steps each, as polished metal reads: a pale highlight, the body, a darker shade; large type and the report's
  * bar run from one to the next, small text takes the body alone. Each is light on the transcript's ground, its body
  * above 8:1 and its shade above 4.5:1 there. {@link Theme#tint()} is the one chosen (records 83, 96). The six named
