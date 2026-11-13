@@ -17,10 +17,6 @@ import java.util.stream.StreamSupport;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClass;
-import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.loop.StateLoop;
@@ -43,12 +39,6 @@ class ThreadRulesTest {
 
     /** Package-private in {@code claude}: named, not referenced. */
     private static final String CLAUDE_PROCESS = "dev.marregui.comando.claude.ClaudeProcess";
-    private static JavaClasses comando;
-
-    @BeforeAll
-    static void load() {
-        comando = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS).importPackages("dev.marregui.comando");
-    }
 
     /// No class but [StateLoop], [Watchdog], `ClaudeProcess` and [Main] calls `Thread.ofPlatform` or constructs a
     /// `Thread`.
@@ -60,7 +50,7 @@ class ThreadRulesTest {
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .should().callMethod(Thread.class, "ofPlatform")
                 .orShould().callConstructorWhere(target(owner(assignableTo(Thread.class))))
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 
     /// No class but [Threads] and its nested classes (its measured strand) calls `Thread.ofVirtual`, an `Executors`
@@ -73,7 +63,7 @@ class ThreadRulesTest {
                 .orShould().callMethodWhere(target(owner(assignableTo(Executors.class))).and(target(name("newVirtualThreadPerTaskExecutor")).negate()))
                 .orShould().callConstructorWhere(target(owner(assignableTo(ThreadPoolExecutor.class))))
                 .orShould().callConstructorWhere(target(owner(assignableTo(Timer.class))))
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 
     /// No class runs work on the JDK's shared fork-join pool: no `parallelStream`, no `parallel()` on a stream, no
@@ -90,7 +80,7 @@ class ThreadRulesTest {
                 .orShould().callMethodWhere(target(owner(assignableTo(ForkJoinTask.class))))
                 .orShould().callMethodWhere(target(owner(assignableTo(CompletableFuture.class))).and(nameEndsWith("Async"))
                         .and(lastParameterIs(Executor.class).negate()))
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 
     private static DescribedPredicate<JavaCall<?>> nameStartsWith(final String prefix) {

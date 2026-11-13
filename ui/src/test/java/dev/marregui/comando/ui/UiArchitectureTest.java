@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui;
 
+import java.util.List;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -21,9 +23,14 @@ class UiArchitectureTest {
     private static final String PANEL_TEXTS = "dev.marregui.comando.ui.PanelTexts";
     private static JavaClasses ui;
 
+    // this module's main class folder only: `importPackages` would open every jar of the classpath to look for the
+    // package, and no other entry holds a class of it
     @BeforeAll
     static void load() {
-        ui = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS).importPackages("dev.marregui.comando.ui");
+        ui = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
+                .importUrls(List.of(PanelTexts.class.getProtectionDomain().getCodeSource().getLocation()));
     }
 
     /// The slices under `ui.widgets` do not depend on each other.

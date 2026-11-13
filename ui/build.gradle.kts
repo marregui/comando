@@ -27,12 +27,25 @@ tasks.processResources {
     }
 }
 
-// TestDocsTest reads every module's test sources, so they are inputs of this module's tests: a comment removed in
-// another module runs them again instead of reusing an earlier pass.
-tasks.test {
+// TestDocsTest reads every module's test sources, so it runs in a task of its own with them as inputs: a comment
+// removed in another module runs it again instead of reusing an earlier pass, and the rest of this module's tests keep
+// only their own inputs. By class file, not by a filter, so neither task forks a JVM for the other's classes.
+val testDocsClass = "dev/marregui/comando/ui/shell/TestDocsTest.class"
+val testDocs = tasks.register<Test>("testDocs") {
+    group = "verification"
+    description = "Checks that every module's test classes and test methods carry a /// comment."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    include(testDocsClass)
     inputs.files(rootProject.fileTree(rootDir) { include("*/src/test/java/**/*Test.java") })
         .withPropertyName("testSourcesOfEveryModule")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+tasks.test {
+    exclude(testDocsClass)
+}
+tasks.check {
+    dependsOn(testDocs)
 }
 
 // The transcript renderer's frame-time gate: ./gradlew :ui:transcriptGate

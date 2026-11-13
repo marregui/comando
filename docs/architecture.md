@@ -1553,7 +1553,7 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 | `ColourRulesTest` | ArchUnit: colours made and named only in `ui`'s `kit.theme` | `./gradlew :app:test` |
 | `FileReadRulesTest` | ArchUnit over every module: no main class calls `Files.readString`, `readAllBytes`, `readAllLines`, `lines`, `newBufferedReader` or `newInputStream`, or depends on `FileInputStream`, `FileReader` or `RandomAccessFile` (rule 16) | `./gradlew :app:test` |
 | `AdrIndexTest` | `docs/adr/README.md` against the records: one row each, its title, date, deciders and status word for word | `./gradlew :app:test` |
-| `TestDocsTest` | every module's `*Test.java`: a `///` comment on the top-level type and on every `@Test`, `@ParameterizedTest`, `@RepeatedTest` or `@TestFactory` method, never `/** */` (G-11.7) | `./gradlew :ui:test` |
+| `TestDocsTest` | every module's `*Test.java`: a `///` comment on the top-level type and on every `@Test`, `@ParameterizedTest`, `@RepeatedTest` or `@TestFactory` method, never `/** */` (G-11.7) | `./gradlew :ui:testDocs`, which `check` runs |
 | the window tests | the real window, one JVM per class; each class and what it checks in [Development §2.1](development.md#21-the-window-tests) | `./gradlew :app:uiTest` |
 
 `:app:uiTest` needs a display (`xvfb-run` on Linux) and runs one JVM per class; its windows open on no screen and never

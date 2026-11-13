@@ -2,10 +2,12 @@ package dev.marregui.comando.claude;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -195,10 +197,11 @@ class SubagentTailEdgesTest {
 
         adapter.close();
         final int before = sink.intents().size();
-        try (final OutputStream out = Files.newOutputStream(fifo)) { // releases the blocked open
-            out.write((text("late") + "\n").getBytes(StandardCharsets.UTF_8));
-        } catch (final IOException e) {
-            // the reader may have closed already: a broken pipe
+        // opened for reading and writing, the FIFO opens at once on Linux and macOS and holds a read end of its own, so
+        // neither the open nor the write can block or break whether or not the tail's reader is gone after close(); the
+        // open releases the tail's blocked one
+        try (final FileChannel both = FileChannel.open(fifo, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+            both.write(ByteBuffer.wrap((text("late") + "\n").getBytes(StandardCharsets.UTF_8)));
         }
         // the read released, the tail thread finishes its task and ends
         final long end = System.nanoTime() + WAIT.toNanos();

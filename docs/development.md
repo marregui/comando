@@ -38,6 +38,7 @@ how the code is organised is in [Architecture](architecture.md).
 | `./gradlew :app:appImage` | the application as a folder with its own runtime, in `app/build/app-image`: `comando.app` on macOS, `comando/` elsewhere |
 | `./gradlew test -PkeychainTest=true` | the tests, plus the one that writes and deletes one item in the login keychain |
 | `./gradlew :app:test -PedgeLiveTest=true` | the tests, plus the one that downloads the pinned open-source Edge release (359 MB) and runs it on free loopback ports; `-PedgeLiveCache=<folder>` keeps the zip between runs |
+| `./gradlew :ui:testDocs` | the test-doc rule over every module's tests alone (`TestDocsTest`, G-11.7); `check` and `build` run it, `:ui:test` does not, so a test edit in another module reruns only it |
 | `./gradlew :app:uiTest` | the tests that need a real window ([§2.1](#21-the-window-tests)); needs a display (`xvfb-run` on Linux) |
 | `./gradlew :ui:gridGate`, `./gradlew :ui:plotGate` | measure the grid's and the plot's frame times; print, never fail ([Architecture §14.5.3](architecture.md#1453-the-frame-time-gate)) |
 | `./gradlew :ui:transcriptGate` | measures the transcript's frame times; fails when a 99th percentile exceeds 16 ms (exit 1) or when the JVM does not end by itself within 10 s of the measurement (exit 2) ([Architecture §14.5.3](architecture.md#1453-the-frame-time-gate)) |
@@ -113,7 +114,7 @@ taken from the cache and never up to date: what it checks is the desktop, which 
 
 | Workflow | Runs on | Does |
 |---|---|---|
-| `build` | every push to `main` and every pull request, Ubuntu and macOS; a weekly run on Mondays; by hand | `./gradlew build`, then `:app:uiTest` (under `xvfb-run` on Ubuntu), a per-module test report with every skipped test named (`ci/TestReport.java`), `:ui:transcriptGate` reported but not enforced, as runner speed varies, and on macOS `:app:dmg` |
+| `build` | every push to `main` and every pull request, Ubuntu and macOS; a weekly run on Mondays; by hand | jobs side by side: `./gradlew build` on each system; `:app:uiTest` in shards, three runners on macOS and two on Ubuntu (under `xvfb-run`), each with `-PuiShard=<k>/<n>`, which keeps the k-th of n groups of the window test classes balanced on their times in `ci/ui-test-seconds.tsv`; each job a per-module test report with every skipped test named (`ci/TestReport.java`); on each system's last shard `:ui:transcriptGate`, reported but not enforced, as runner speed varies; `:app:dmg` on macOS in the weekly run only, as a tag builds the packages in `release` |
 | `release` | a tag `v*`; by hand | `:app:package` with `-PreleaseVersion=<tag without v>` on macOS, Ubuntu and Windows without the tests, then the tag's GitHub release of the three files, its notes the commits since the previous tag; by hand, the packages are the run's artifacts, kept 7 days, and a release is made only on a tag with dry run off |
 | `assign` | every pull request opened, reopened or ready for review | assigns it to the owner; checks out nothing |
 
@@ -122,6 +123,8 @@ month for the actions and one for the Gradle dependencies.
 
 A push or pull request that changes only documentation builds nothing, except a change to `docs/tutorial.md`, which
 the ui jar carries. The PostgreSQL adapter test runs on Ubuntu only: macOS runners have no Docker.
+`ci/ui-test-seconds.tsv` is written from a run's `uiTest` results; a window test class not in it counts the median of
+those that are.
 
 ## 4. Configuration
 

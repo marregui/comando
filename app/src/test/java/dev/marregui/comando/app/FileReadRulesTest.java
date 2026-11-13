@@ -11,10 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 
-import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -31,14 +27,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 /// part cannot bring back a whole-file read without changing this test.
 class FileReadRulesTest {
 
-    private static JavaClasses comando;
-
-    @BeforeAll
-    static void load() {
-        comando = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-                .importPackages("dev.marregui.comando");
-    }
-
     /// No class calls the `Files` methods that read a file whole or as a stream.
     @Test
     void noClassReadsAFileWithFiles() {
@@ -52,7 +40,7 @@ class FileReadRulesTest {
                 .orShould().callMethod(Files.class, "newBufferedReader", Path.class)
                 .orShould().callMethod(Files.class, "newBufferedReader", Path.class, Charset.class)
                 .orShould().callMethod(Files.class, "newInputStream", Path.class, OpenOption[].class)
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 
     /// No class hands a `File` to the JSON reader, or opens a channel on a file but the lock on the data root and the
@@ -63,12 +51,12 @@ class FileReadRulesTest {
                 .orShould().callMethodWhere(target(name("readValue")).and(target(rawParameterTypes(File.class,
                         Class.class))))
                 .orShould().callMethod(Files.class, "newByteChannel", Path.class, OpenOption[].class)
-                .check(comando);
+                .check(ComandoClasses.MAIN);
         noClasses().that().doNotHaveFullyQualifiedName(Mapped.class.getName())
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .and().doNotHaveFullyQualifiedName(MachineQuestDb.class.getName())
                 .should().callMethodWhere(target(name("open")).and(target(owner(assignableTo(FileChannel.class)))))
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 
     /// Bytes leave a mapping through `Mapped` only, byte by byte: a compiled bulk copy that meets a cut file ends the
@@ -77,7 +65,7 @@ class FileReadRulesTest {
     void noClassCopiesBytesOffASegmentInBulk() {
         noClasses().should().callMethodWhere(target(owner(assignableTo(MemorySegment.class)))
                 .and(target(name("toArray")).or(target(name("copy"))).or(target(name("asByteBuffer")))))
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 
     /// No class opens a file by the older stream and random-access types.
@@ -86,6 +74,6 @@ class FileReadRulesTest {
         noClasses().should().dependOnClassesThat().areAssignableTo(FileInputStream.class)
                 .orShould().dependOnClassesThat().areAssignableTo(FileReader.class)
                 .orShould().dependOnClassesThat().areAssignableTo(RandomAccessFile.class)
-                .check(comando);
+                .check(ComandoClasses.MAIN);
     }
 }
