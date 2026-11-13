@@ -6,7 +6,7 @@
 |---|---|
 | `alpha/` | the first synthetic topic |
 
-## Waiting on Miguel
+## Waiting on the user
 
 #### 90. A heading outside Open is no task
 
@@ -29,7 +29,7 @@ Prose between the topic heading and its first task is not part of any task.
 
 #### 2. Second synthetic task
 
-**State:** waiting on Miguel: pick a flavour
+**State:** waiting on the user: pick a flavour
 **Ask:** which flavour of synthetic task to build
 and why it matters
 **Next:** build it

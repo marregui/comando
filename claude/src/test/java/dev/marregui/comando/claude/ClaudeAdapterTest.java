@@ -130,7 +130,7 @@ class ClaudeAdapterTest {
         sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 2, WAIT);
         assertThat(blocks("work")).filteredOn(Block.AssistantText.class::isInstance)
                 .extracting(b -> ((Block.AssistantText) b).text()).containsExactly("pong 1", "pong 2");
-        assertThat(blocks("work")).filteredOn(Block.UserPrompt.class::isInstance)
+        assertThat(blocks("work")).filteredOn(Block.UserPrompt.class::isInstance).usingRecursiveFieldByFieldElementComparatorIgnoringFields("atMillis")
                 .containsExactly(new Block.UserPrompt("ping", "panel one", ""), new Block.UserPrompt("ping again", "panel one", ""));
 
         a.stop("work");
@@ -234,7 +234,7 @@ class ClaudeAdapterTest {
 
         a.send("work", "go on", "panel one", "Context carried over: the summary\n\n---\n\n");
         sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 2, WAIT);
-        assertThat(blocks("work")).filteredOn(Block.UserPrompt.class::isInstance)
+        assertThat(blocks("work")).filteredOn(Block.UserPrompt.class::isInstance).usingRecursiveFieldByFieldElementComparatorIgnoringFields("atMillis")
                 .containsExactly(new Block.UserPrompt("ping", "panel one", ""), new Block.UserPrompt("go on", "panel one", ""));
         a.stop("work");
         sink.await(Intent.SessionExited.class, WAIT);

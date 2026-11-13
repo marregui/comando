@@ -371,7 +371,8 @@ before its name: the detail moves to the row's tooltip and comes back when the t
 rail) lists the open tasks of the newest day folder of the scratchpad, read from its `INDEX.md` ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)),
 in the tree the folder tabs draw, with its group headers, row icons and menus. A group **Needs you (N)** comes first,
 hidden at 0: the tasks that hold a decision for the user (a `**Needs you:**` line in their entry) or whose State says it is
-waiting on the user. Then one group per topic, in the index's order. Within a group the newest task comes first, by its
+waiting on the user: it begins `waiting on the user`, or `waiting on` and the logbook's owner, the name most of its
+tasks give. Then one group per topic, in the index's order. Within a group the newest task comes first, by its
 number. A row is the task's name, its title without the attribution, then, muted, its number and the day it started
 (`97 · 10 Nov`; the number alone without a date) and who asked for it when that is not the logbook's owner, the name
 most of its tasks give; its icon is the question mark on a task that waits on the user, the Logbook's mark otherwise.

@@ -100,6 +100,11 @@ final class StreamMapper {
     private String ranLast = "";
     /** Whether the running turn has had a top-level message: its first runs at the session's own setting. */
     private boolean turnHadMessage;
+    /**
+     * When the line being mapped was written, epoch milliseconds: a stored line's timestamp, else comando's clock as
+     * it reads a live line; {@link Block#UNKNOWN_TIME} for a stored line without one.
+     */
+    private long lineMillis = Block.UNKNOWN_TIME;
 
     StreamMapper(final String session, final Transcript transcript, final IntentSink sink, final ObjectMapper json) {
         this.session = session;
@@ -115,6 +120,7 @@ final class StreamMapper {
             return "";
         }
         final String type = e.path("type").asString("");
+        lineMillis = System.currentTimeMillis();
         if (ranPending != null) {
             readRan(false);
         }
@@ -166,6 +172,7 @@ final class StreamMapper {
         if (typed(e)) {
             turnFirstLine = ""; // a turn that stopped with no end of its own lends the new one no time
         }
+        lineMillis = epochMillis(e.path("timestamp").asString(""));
         if (type.equals("user") || type.equals("assistant")) {
             turnLine(e.path("timestamp").asString(""));
         }
@@ -216,7 +223,7 @@ final class StreamMapper {
     }
 
     private void endHistoryTurn() {
-        transcript.append(Block.TurnEnd.stored(storedSpan(turnFirstLine, turnLastLine)));
+        transcript.append(Block.TurnEnd.stored(storedSpan(turnFirstLine, turnLastLine)).at(epochMillis(turnLastLine)));
         turnEndingMessage = null;
         turnFirstLine = "";
         turnLastLine = "";
@@ -245,6 +252,18 @@ final class StreamMapper {
         }
     }
 
+    /** {@code timestamp}, an ISO instant, in epoch milliseconds; {@link Block#UNKNOWN_TIME} when empty or unreadable. */
+    private static long epochMillis(final String timestamp) {
+        if (timestamp.isEmpty()) {
+            return Block.UNKNOWN_TIME;
+        }
+        try {
+            return Instant.parse(timestamp).toEpochMilli();
+        } catch (final DateTimeParseException _) {
+            return Block.UNKNOWN_TIME;
+        }
+    }
+
     /**
      * The millis from {@code first} to {@code last}, ISO instants; {@link Block.TurnEnd#UNTIMED} for no usable times.
      */
@@ -264,7 +283,7 @@ final class StreamMapper {
 
     /** Appends the prompt comando sent; called on the strand before the line goes to the process. */
     void prompt(final String text, final String origin) {
-        transcript.append(new Block.UserPrompt(text, origin, ""));
+        transcript.append(new Block.UserPrompt(text, origin, "", System.currentTimeMillis()));
     }
 
     void note(final Block.NoteKind kind, final String text) {
@@ -590,7 +609,7 @@ final class StreamMapper {
                 transcript.append(new Block.Note(Block.NoteKind.COMMAND, commandName(t), parent));
             }
         } else if (history || !parent.isEmpty()) {
-            transcript.append(new Block.UserPrompt(t, parent.isEmpty() ? "" : "subagent", parent));
+            transcript.append(new Block.UserPrompt(t, parent.isEmpty() ? "" : "subagent", parent, lineMillis));
         }
         // a live main-conversation prompt was appended by prompt() when comando sent it
     }
@@ -747,7 +766,7 @@ final class StreamMapper {
         // result.usage sums every API call of the turn; the context is the last call's input
         final long tokens = contextTokens;
         transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(0), e.path("duration_ms").asLong(0),
-                e.path("num_turns").asInt(0), error, message.isEmpty() ? subtype : message));
+                e.path("num_turns").asInt(0), error, message.isEmpty() ? subtype : message).at(lineMillis));
         long window = 0;
         for (final JsonNode model : e.path("modelUsage")) {
             window = Math.max(window, model.path("contextWindow").asLong(0));

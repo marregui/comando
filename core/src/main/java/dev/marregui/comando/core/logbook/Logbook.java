@@ -1,6 +1,8 @@
 package dev.marregui.comando.core.logbook;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -23,6 +25,34 @@ public record Logbook(String index, List<LogbookTask> tasks, String problem) {
 
     /** The tasks that wait on the user, in the index's order. */
     public List<LogbookTask> needingUser() {
-        return tasks.stream().filter(LogbookTask::isWaitingOnUser).toList();
+        final String owner = owner();
+        return tasks.stream().filter(t -> t.isWaitingOnUser(owner)).toList();
+    }
+
+    /** Whether {@code t} waits on the user, this logbook's {@link #owner()}. */
+    public boolean waitsOnUser(final LogbookTask t) {
+        return t.isWaitingOnUser(owner());
+    }
+
+    /**
+     * Who the logbook is for: who asked for most of its tasks (a heading's {@code (Name, date)}), the first of them on
+     * a tie; empty when no task names anyone.
+     */
+    public String owner() {
+        final Map<String, Integer> counts = new LinkedHashMap<>();
+        tasks.forEach(t -> {
+            if (!t.by().isEmpty()) {
+                counts.merge(t.by(), 1, Integer::sum);
+            }
+        });
+        String owner = "";
+        int most = 0;
+        for (final Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (e.getValue() > most) {
+                owner = e.getKey();
+                most = e.getValue();
+            }
+        }
+        return owner;
     }
 }

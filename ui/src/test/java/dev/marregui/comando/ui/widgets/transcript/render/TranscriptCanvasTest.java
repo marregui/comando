@@ -9,6 +9,7 @@ import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.lang.management.ManagementFactory;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 
@@ -170,6 +172,29 @@ class TranscriptCanvasTest {
         assertThat(((Items.TurnItem) canvas.itemAt(2)).summary()).as("a stored turn records no time").isEmpty();
         assertThat(((Items.TurnItem) canvas.itemAt(2)).markdown()).isEmpty();
         paint(800, 300);
+    }
+
+    /// A prompt shows when it was sent after who sent it, and a turn's end when it ended after how long it took: the
+    /// time of day for today, with the day before it for an earlier one; a stored turn, which records no duration,
+    /// shows only its end's time.
+    @Test
+    void aPromptAndATurnEndShowWhenTheyHappened() {
+        final long nowMillis = System.currentTimeMillis();
+        final long yesterdayMillis = nowMillis - 86_400_000L;
+        canvas.append(0, new Block.UserPrompt("ping", "panel one", "", nowMillis));
+        canvas.append(1, text("pong"));
+        canvas.append(2, new Block.TurnEnd(0.0, 12_400L, 1, false, "success").at(nowMillis));
+        canvas.append(3, Block.TurnEnd.stored().at(yesterdayMillis));
+        paint(800, 300);
+
+        final String today = Labels.startedAt(nowMillis, nowMillis, ZoneId.systemDefault());
+        assertThat(today).as("today reads as its time of day").matches("\\d\\d:\\d\\d");
+        assertThat(Items.clock(nowMillis)).isEqualTo(today);
+        assertThat(((Items.TurnItem) canvas.itemAt(2)).summary()).isEqualTo("12.4 s · " + today);
+        assertThat(((Items.TurnItem) canvas.itemAt(3)).summary()).as("an earlier day reads with its day first")
+                .isEqualTo(Labels.startedAt(yesterdayMillis, nowMillis, ZoneId.systemDefault()))
+                .matches("[A-Z][a-z]{2} \\d{1,2} \\d\\d:\\d\\d");
+        assertThat(((Items.PromptItem) canvas.itemAt(0)).label()).isEqualTo("you · panel one · " + today);
     }
 
     /// The style outside bubbles and cards uses [Theme#TRANSCRIPT_TEXT] for text and quotes and is built once; a prompt

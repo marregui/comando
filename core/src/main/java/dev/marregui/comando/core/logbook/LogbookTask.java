@@ -40,6 +40,9 @@ public record LogbookTask(
         List<String> tickets
 ) {
 
+    /** How a State naming whom a task waits on begins. */
+    private static final String WAITING_ON = "waiting on ";
+
     public LogbookTask {
         Objects.requireNonNull(title, "title");
         topic = topic == null ? "" : topic;
@@ -62,10 +65,22 @@ public record LogbookTask(
     }
 
     /**
-     * Whether the task waits on the user: it holds a decision for him, or its State begins {@code waiting on Miguel}
-     * (README §2: an open task's State begins {@code open}, {@code waiting on <whom>} or {@code in progress}).
+     * Whether the task waits on the user, {@code owner} (who asked for most of the logbook's tasks:
+     * {@link Logbook#owner()}): it holds a decision for them, or its State begins {@code waiting on <owner>} or
+     * {@code waiting on the user}, in any case (README §2: an open task's State begins {@code open},
+     * {@code waiting on <whom>} or {@code in progress}). With no owner known, only the second form counts.
      */
-    public boolean isWaitingOnUser() {
-        return !needsYou.isEmpty() || state.toLowerCase(Locale.ROOT).startsWith("waiting on miguel");
+    public boolean isWaitingOnUser(final String owner) {
+        if (!needsYou.isEmpty()) {
+            return true;
+        }
+        final String s = state.toLowerCase(Locale.ROOT);
+        return waitsOn(s, "the user") || !owner.isEmpty() && waitsOn(s, owner.toLowerCase(Locale.ROOT));
+    }
+
+    /** Whether {@code state}, lower case, begins {@code waiting on <whom>} with {@code whom} a whole word. */
+    private static boolean waitsOn(final String state, final String whom) {
+        final int end = WAITING_ON.length() + whom.length();
+        return state.startsWith(WAITING_ON + whom) && (state.length() == end || !Character.isLetterOrDigit(state.charAt(end)));
     }
 }

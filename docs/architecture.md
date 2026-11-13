@@ -1223,7 +1223,7 @@ every tint (`Theme.ATTENTION`), a status colour as red is for errors.
 
 | Item | Paints |
 |---|---|
-| prompt | a bubble, with the panel it came from |
+| prompt | a bubble, with the panel it came from and when it was sent: "you · tutor · 13:25", the day before the time on an earlier day (a live prompt by comando's clock, a stored one by its line's timestamp) |
 | text | paragraphs, highlighted code, tables, quotes; the turn's report framed |
 | thinking | shown only while it is the latest item of its list; collapsed with its token count once it ends; no mark before its line, which keeps the tools' column ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
 | tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2". Open: the input, the result (400 lines), a subagent's blocks. It opens by itself for edits, errors and running subagents |
@@ -1231,7 +1231,7 @@ every tint (`Theme.ATTENTION`), a status colour as red is for errors.
 | note | an icon by kind and the first line; error notes start open |
 | hook group | consecutive hook outputs as one line: "hooks · UserPromptSubmit, SessionStart (3)" |
 | turn row | `Items.StepsItem`, the hook group's sibling: at `TurnEnd` the items back to the prompt, under one line, "44 tools · 6 min", "· 1 failed" in the danger colour (record 137) |
-| turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); a failed turn shows its error first, in red; an interrupted turn reads "interrupted · 12.0 s", in the ivory of any text |
+| turn end | right-aligned and muted: how long the turn took, then when it ended, "12.4 s · 13:27", no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); a failed turn shows its error first, in red; an interrupted turn reads "interrupted · 12.0 s · 13:27", in the ivory of any text; a stored turn, which records no duration, shows its end's time alone (its last line's timestamp) |
 
 #### 14.5.2 The widget
 

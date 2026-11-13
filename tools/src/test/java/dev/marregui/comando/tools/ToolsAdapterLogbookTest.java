@@ -71,7 +71,7 @@ class ToolsAdapterLogbookTest {
             assertThat(next(sent).tasks()).hasSize(1);
             assertThat(sent.poll(QUIET.toMillis(), TimeUnit.MILLISECONDS)).as("an unchanged index is not sent again").isNull();
 
-            edit(day, INDEX + "\n#### 2. Second task\n\n- **State:** waiting on Miguel\n");
+            edit(day, INDEX + "\n#### 2. Second task\n\n- **State:** waiting on the user\n");
             final Logbook edited = next(sent);
             assertThat(edited.tasks()).hasSize(2);
             assertThat(edited.needingUser()).extracting(LogbookTask::number).containsExactly(2);

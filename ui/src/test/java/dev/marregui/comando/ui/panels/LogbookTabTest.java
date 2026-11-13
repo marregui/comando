@@ -101,14 +101,14 @@ class LogbookTabTest {
         final LogbookTask ben = dated(6, "2026-11-09", "Ben");
         final Logbook l = new Logbook(INDEX, List.of(ana, ben, dated(7, "", "Ana"), dated(8, "not a date", "")), "");
 
-        assertThat(LogbookTab.owner(l)).isEqualTo("Ana");
+        assertThat(l.owner()).isEqualTo("Ana");
         assertThat(LogbookTab.detail(ana, "Ana")).isEqualTo("5 · 10 Nov");
         assertThat(LogbookTab.detail(ben, "Ana")).isEqualTo("6 · 9 Nov · Ben");
         assertThat(LogbookTab.detail(dated(7, "", "Ana"), "Ana")).isEqualTo("7");
         assertThat(LogbookTab.detail(dated(8, "not a date", ""), "Ana")).isEqualTo("8");
         assertThat(LogbookTab.root(l).children().getFirst().children()).extracting(ViewSpec.TreeNode::detail)
                 .containsExactly("8", "7", "6 · 9 Nov · Ben", "5 · 10 Nov");
-        assertThat(LogbookTab.owner(new Logbook(INDEX, List.of(task(1, "t", "Open.")), ""))).isEmpty();
+        assertThat(new Logbook(INDEX, List.of(task(1, "t", "Open.")), "").owner()).isEmpty();
     }
 
     /// With no task waiting on the user there is no Needs you group: the first group is the first topic.
@@ -312,7 +312,7 @@ class LogbookTabTest {
         assertThat(label(tree.getSelectionPath())).isEqualTo("Task 3");
 
         final List<LogbookTask> more = new ArrayList<>(logbook().tasks());
-        more.addFirst(task(5, "harness", "Waiting on Miguel: a newer one."));
+        more.addFirst(task(5, "harness", "Waiting on the user: a newer one."));
         tab.render(state(new Logbook(INDEX, more, "")));
 
         assertThat(rows(tree)).containsExactly("Needs you (3)", "Task 5", "Task 4", "Logbook tab", "harness",
@@ -328,7 +328,7 @@ class LogbookTabTest {
         assertThat(LogbookTab.firstSentence("")).isEmpty();
     }
 
-    /// Tasks 1 and 4 wait on the user (a Needs you line; a State beginning "Waiting on Miguel"), topics harness then
+    /// Tasks 1 and 4 wait on the user (a Needs you line; a State beginning "Waiting on the user"), topics harness then
     /// release; task 1's section names a ticket of the site's team and one of its documents, so its page links both.
     private static Logbook logbook() {
         final LogbookTask one = new LogbookTask(1, "Logbook tab", "harness", "", "In progress: it is being built. Then "
@@ -336,7 +336,7 @@ class LogbookTabTest {
                 List.of("Gold or ivory icon?"), "#### 1. Logbook tab\n\n- **State:** see EDG-1 in `topic/01-first.md`",
                 "", "", "", List.of());
         return new Logbook(INDEX, List.of(one, task(2, "release", "Open."), task(3, "harness", "Open."),
-                task(4, "release", "Waiting on Miguel: the cut date.")), "");
+                task(4, "release", "Waiting on the user: the cut date.")), "");
     }
 
     private static LogbookTask task(final int number, final String topic, final String state) {

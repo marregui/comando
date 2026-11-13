@@ -12,12 +12,24 @@ public sealed interface Block {
 
     String parent();
 
-    /** A prompt sent to the session; {@code origin} names the panel, empty for history. */
-    record UserPrompt(String text, String origin, String parent) implements Block {
+    /** The wall-clock time of a block whose time is not known, as a stored line without a timestamp. */
+    long UNKNOWN_TIME = 0L;
+
+    /**
+     * A prompt sent to the session; {@code origin} names the panel, empty for history. {@code atMillis} is when it was
+     * sent, epoch milliseconds: comando's clock for a live prompt, the stored line's timestamp for history;
+     * {@link #UNKNOWN_TIME} when neither is known.
+     */
+    record UserPrompt(String text, String origin, String parent, long atMillis) implements Block {
         public UserPrompt {
             Objects.requireNonNull(text, "text");
             Objects.requireNonNull(origin, "origin");
             Objects.requireNonNull(parent, "parent");
+        }
+
+        /** A prompt whose time is not known. */
+        public UserPrompt(final String text, final String origin, final String parent) {
+            this(text, origin, parent, UNKNOWN_TIME);
         }
     }
 
@@ -100,7 +112,9 @@ public sealed interface Block {
     /**
      * The {@code result} that ended a turn; or, read from a stored conversation, the end of a turn without its numbers.
      * {@code spanMillis} is how far apart the stored lines of that turn were written, {@link #UNTIMED} for a live turn
-     * or when the lines do not say: a stored conversation records no duration, and a span is not one.
+     * or when the lines do not say: a stored conversation records no duration, and a span is not one. {@code atMillis} is
+     * when the turn ended, epoch milliseconds: comando's clock for a live turn, its last stored line's timestamp for
+     * history; {@link #UNKNOWN_TIME} when neither is known.
      */
     record TurnEnd(
             double costUsd,
@@ -108,7 +122,8 @@ public sealed interface Block {
             int numTurns,
             boolean error,
             String text,
-            long spanMillis
+            long spanMillis,
+            long atMillis
     ) implements Block {
         /** The duration of a turn read from a stored conversation, which records none. */
         public static final long UNTIMED = -1L;
@@ -125,7 +140,24 @@ public sealed interface Block {
                 final boolean error,
                 final String text
         ) {
-            this(costUsd, durationMillis, numTurns, error, text, UNTIMED);
+            this(costUsd, durationMillis, numTurns, error, text, UNTIMED, UNKNOWN_TIME);
+        }
+
+        /** A turn end whose wall-clock time is not known. */
+        public TurnEnd(
+                final double costUsd,
+                final long durationMillis,
+                final int numTurns,
+                final boolean error,
+                final String text,
+                final long spanMillis
+        ) {
+            this(costUsd, durationMillis, numTurns, error, text, spanMillis, UNKNOWN_TIME);
+        }
+
+        /** The same turn end, which happened at {@code millis}. */
+        public TurnEnd at(final long millis) {
+            return new TurnEnd(costUsd, durationMillis, numTurns, error, text, spanMillis, millis);
         }
 
         /** A turn of a stored conversation that ended: its last message stopped at the end of the turn. */

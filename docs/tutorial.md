@@ -307,7 +307,8 @@ A session is a Claude Code process that comando starts for you in a working dire
    one: renamed and removed together. `tutor` shows in the session bar and in the sidebar.
 2. In the **tutor** panel, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the
    panel's session. *You should see* the session start (its icon in the sidebar and on the tab turns Claude's orange),
-   the lower panel switch to **Session**, and the answer stream in, with the time it took under it. While the turn runs,
+   the lower panel switch to **Session**, and the answer stream in, with the time it took and when it ended under it
+   (your prompt's bubble says when you sent it). While the turn runs,
    the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into grey "hook · …"
    lines ("hooks · …" for several), one before the answer and one after it; click one to read it.
 3. **⌘⏎** also sends a block to Claude when the gutter shows the asterisk. At the end of the editor, after an empty

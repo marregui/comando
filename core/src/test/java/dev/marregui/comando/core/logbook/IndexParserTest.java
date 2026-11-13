@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.tuple;
 /// - A key is a bullet or a bare line; its value continues until the next key, a heading or a blank line.
 /// - Needs you gives one decision per sub-item, or its inline text, and nothing when it says none.
 /// - A task that waits on Miguel or holds a decision needs the user; the others do not.
-/// - A heading without a number, a heading in a code fence, `## Waiting on Miguel` and `## Scheduled reports` are no
+/// - A heading without a number, a heading in a code fence, `## Waiting on the user` and `## Scheduled reports` are no
 ///   tasks; an unknown key is ignored and a missing one leaves its field empty.
 /// - A heading's closing parenthetical that names who asked or when the task started is its attribution, left out of
 ///   the task's name; one that names neither stays in the name.
@@ -71,7 +71,7 @@ class IndexParserTest {
     @Test
     void aBareKeyTakesTheLinesBelowItAsItsValue() {
         final LogbookTask t = task(2);
-        assertThat(t.state()).isEqualTo("waiting on Miguel: pick a flavour");
+        assertThat(t.state()).isEqualTo("waiting on the user: pick a flavour");
         assertThat(t.ask()).isEqualTo("which flavour of synthetic task to build and why it matters");
         assertThat(t.next()).isEqualTo("build it");
         assertThat(t.documents()).containsExactly("alpha/02-second.md", "alpha/03-third.md");
@@ -113,11 +113,43 @@ class IndexParserTest {
         assertThat(task(6).next()).isEqualTo("the plain next");
     }
 
-    /// A task that waits on Miguel by its State, or holds a decision, needs the user; the others do not, and
+    /// A task that waits on the user by its State, or holds a decision, needs the user; the others do not, and
     /// the Logbook lists them in the index's order.
     @Test
-    void tasksThatWaitOnTheUserAreTheOnesNeedingHim() {
+    void tasksThatWaitOnTheUserAreTheOnesNeedingThem() {
         assertThat(logbook.needingUser()).extracting(LogbookTask::number).containsExactly(2, 3, 5);
+    }
+
+    /// The user is the logbook's owner, who asked for most of its tasks: a State waiting on them by name needs the
+    /// user, one waiting on someone else does not (a longer name that starts with theirs included), and with no owner
+    /// known only "waiting on the user" does.
+    @Test
+    void aStateWaitingOnTheOwnerByNameNeedsTheUser() {
+        final Logbook l = IndexParser.parse("i", """
+                ## Open
+
+                ### `t/`: x
+
+                #### 1. One (Ana, 2026-11-01)
+
+                - **State:** waiting on Ana: the date
+
+                #### 2. Two (Ana, 2026-11-02)
+
+                - **State:** waiting on Ben: his review
+
+                #### 3. Three (Ben, 2026-11-03)
+
+                - **State:** Waiting on ANA, then Ben
+
+                #### 4. Four (Ana, 2026-11-04)
+
+                - **State:** waiting on Anabel
+                """);
+        assertThat(l.owner()).isEqualTo("Ana");
+        assertThat(l.needingUser()).extracting(LogbookTask::number).containsExactly(1, 3);
+        assertThat(l.tasks().getFirst().isWaitingOnUser("")).as("no owner known: the name alone is not the user")
+                .isFalse();
     }
 
     /// A task with only a heading and prose has empty fields and its section as markdown.

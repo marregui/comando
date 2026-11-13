@@ -18,7 +18,7 @@ import dev.marregui.comando.core.model.LinearTickets;
  * <p>
  * The parser is tolerant, since sessions edit the index by hand: a key it does not know is ignored, a key that is
  * missing leaves its field empty, a {@code ####} heading without a number is skipped with its lines, and nothing
- * outside {@code ## Open} is a task ({@code ## Waiting on Miguel}, {@code ## Scheduled reports}). A key line is
+ * outside {@code ## Open} is a task ({@code ## Waiting on the user}, {@code ## Scheduled reports}). A key line is
  * {@code - **Key:** text} or {@code **Key:** text}; its value goes on over the following lines until the next key line,
  * a heading or a blank line. A key qualified in the heading's style ({@code **State (2026-11-02):**}) fills the field
  * when the plain key is absent.

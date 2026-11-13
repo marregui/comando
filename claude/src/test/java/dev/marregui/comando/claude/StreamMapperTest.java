@@ -1,11 +1,13 @@
 package dev.marregui.comando.claude;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -239,7 +241,8 @@ class StreamMapperTest {
                 {"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"report"}]}]}}""");
 
         assertThat(blocks()).hasSize(3);
-        assertThat(blocks().get(1)).isEqualTo(new Block.UserPrompt("look", "subagent", "t1"));
+        assertThat(blocks().get(1)).usingRecursiveComparison().ignoringFields("atMillis")
+                .isEqualTo(new Block.UserPrompt("look", "subagent", "t1"));
         assertThat(blocks().get(2).parent()).isEqualTo("t1");
         assertThat(((Block.ToolCall) blocks().get(0)).resultText()).isEqualTo("report");
     }
@@ -357,12 +360,12 @@ class StreamMapperTest {
                 {"type":"assistant","timestamp":"2026-01-02T10:00:05.000Z","message":{"id":"m2","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}""");
         mapper.endHistory();
 
-        assertThat(blocks().getLast()).isEqualTo(Block.TurnEnd.stored(5_000L));
+        assertThat(blocks().getLast()).isEqualTo(Block.TurnEnd.stored(5_000L).at(Instant.parse("2026-01-02T10:00:05Z").toEpochMilli()));
     }
 
     /// A stored turn's span runs from its first stored line to its last, through the lines of its tool calls, and
     /// leaves
-    /// out a hook's line after it and the next turn's lines; the end stays untimed.
+    /// out a hook's line after it and the next turn's lines; the end has no duration of its own.
     @Test
     void aStoredTurnSpansItsFirstAndLastLines() {
         mapper.acceptHistory("""
@@ -404,8 +407,41 @@ class StreamMapperTest {
                 {"type":"assistant","timestamp":"2026-01-02T10:00:00.000Z","message":{"id":"m3","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Three."}]}}""");
         mapper.endHistory();
 
-        assertThat(blocks(Block.TurnEnd.class)).containsExactly(Block.TurnEnd.stored(), Block.TurnEnd.stored(),
-                Block.TurnEnd.stored());
+        assertThat(blocks(Block.TurnEnd.class)).usingRecursiveFieldByFieldElementComparatorIgnoringFields("atMillis").containsExactly(Block.TurnEnd.stored(),
+                Block.TurnEnd.stored(), Block.TurnEnd.stored());
+    }
+
+    /// A stored prompt and a stored turn end carry the time their lines were written: the prompt its own line's, the
+    /// end its turn's last line's; a line with no timestamp gives no time.
+    @Test
+    void storedPromptsAndTurnEndsCarryTheTimeTheirLinesWereWritten() {
+        mapper.acceptHistory("""
+                {"type":"user","timestamp":"2026-01-02T10:00:00.000Z","message":{"role":"user","content":"go"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","timestamp":"2026-01-02T10:06:30.000Z","message":{"id":"m1","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}""");
+        mapper.acceptHistory("""
+                {"type":"user","message":{"role":"user","content":"no time"}}""");
+        mapper.endHistory();
+
+        assertThat(blocks(Block.UserPrompt.class)).extracting(Block.UserPrompt::atMillis)
+                .containsExactly(Instant.parse("2026-01-02T10:00:00Z").toEpochMilli(), Block.UNKNOWN_TIME);
+        assertThat(blocks(Block.TurnEnd.class)).extracting(Block.TurnEnd::atMillis)
+                .containsExactly(Instant.parse("2026-01-02T10:06:30Z").toEpochMilli());
+    }
+
+    /// A live prompt and a live turn end carry comando's clock as it sent the prompt and read the result.
+    @Test
+    void livePromptsAndTurnEndsCarryComandosClock() {
+        final long beforeMillis = System.currentTimeMillis();
+        mapper.prompt("ping", "panel one");
+        mapper.accept("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0,"
+                + "\"duration_ms\":3,\"num_turns\":1}");
+        final long afterMillis = System.currentTimeMillis();
+
+        assertThat(blocks(Block.UserPrompt.class)).singleElement().extracting(Block.UserPrompt::atMillis)
+                .asInstanceOf(InstanceOfAssertFactories.LONG).isBetween(beforeMillis, afterMillis);
+        assertThat(blocks(Block.TurnEnd.class)).singleElement().extracting(Block.TurnEnd::atMillis)
+                .asInstanceOf(InstanceOfAssertFactories.LONG).isBetween(beforeMillis, afterMillis);
     }
 
     /// The set of background tasks reported follows the session's own background work: an agent is listed while it runs

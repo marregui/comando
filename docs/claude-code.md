@@ -84,7 +84,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 | `user` with text | the compaction summary, local command output or the interrupt marker, as notes |
 | `system/compact_boundary`, `hook_response`, `api_retry`, `permission_denied` | a note of that kind |
 | `system/informational` | an INFO note with its text (at most 2 000 characters), prefixed "Warning: " at level `warning`: a banner of the loop, such as a model the organisation restricts replaced by another (2.1.316) |
-| `result` | the pending `SessionRanAt` first; a turn end (its duration, after the error text when it failed or was interrupted; no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
+| `result` | the pending `SessionRanAt` first; a turn end (its duration, after the error text when it failed or was interrupted, then when comando read the `result`, by its clock; no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
 | `rate_limit_event` | a note when its status is not `allowed` |
 | `conversation_reset` | a note "Conversation cleared"; the context size becomes 0 until a call reports the new one |
 
@@ -100,7 +100,7 @@ of text and shown to 400 lines.
   notifies when the turn Claude Code starts after that work ends, and a result while no turn ran notifies nothing.
 - **Interrupt** writes a `control_request` with subtype `interrupt`. The turn ends with a `result` marked interrupted
   (`terminal_reason` `aborted_streaming` or `aborted_tools`; an `error_during_execution` without one is a crash or a
-  startup failure, told by its subtype and errors); its turn end reads "interrupted · <time>" in the transcript's ivory,
+  startup failure, told by its subtype and errors); its turn end reads "interrupted · <duration> · <time of day>" in the transcript's ivory,
   not red; the session stays open and no "Turn failed" notification is sent.
 - **Stop** interrupts, closes stdin, sends SIGTERM after 3 s and SIGKILL 2 s later. A prompt sent while stopping is
   refused with a notice and stays in the editor. A process that cannot start is reported once, naming `COMANDO_CLAUDE`

@@ -110,7 +110,7 @@ final class LogbookTab {
         if (!why.isEmpty()) {
             return new ViewSpec.TreeNode("", "", List.of(new ViewSpec.TreeNode(why, "", List.of())));
         }
-        final String owner = owner(l);
+        final String owner = l.owner();
         final List<ViewSpec.TreeNode> groups = new ArrayList<>();
         final List<LogbookTask> waiting = l.needingUser();
         if (!waiting.isEmpty()) {
@@ -137,25 +137,6 @@ final class LogbookTab {
             d.append(" · ").append(t.by());
         }
         return d.toString();
-    }
-
-    /** Who asked for most of {@code l}'s tasks, the first of them on a tie; empty when no task names anyone. */
-    static String owner(final Logbook l) {
-        final Map<String, Integer> counts = new LinkedHashMap<>();
-        l.tasks().forEach(t -> {
-            if (!t.by().isEmpty()) {
-                counts.merge(t.by(), 1, Integer::sum);
-            }
-        });
-        String owner = "";
-        int most = 0;
-        for (final Map.Entry<String, Integer> e : counts.entrySet()) {
-            if (e.getValue() > most) {
-                owner = e.getKey();
-                most = e.getValue();
-            }
-        }
-        return owner;
     }
 
     /** What a task's card lists, as label and value, each only when it has one. */
@@ -271,7 +252,7 @@ final class LogbookTab {
         final List<String> running = state == null ? List.of()
                 : state.sessions().stream().filter(x -> x.status().isUsable()).map(SessionState::name).toList();
         m.add(sessions("Resume in", "play", running, resumePrompt(t.number())));
-        if (t.isWaitingOnUser()) {
+        if (shown.waitsOnUser(t)) {
             m.add(sessions("Ask me its decisions in", "question", running, askPrompt(t.number())));
         }
         final JMenu documents = IconMenus.submenu("Open document", "open-file");
@@ -361,7 +342,7 @@ final class LogbookTab {
     private Icon icon(final ViewSpec.TreeNode n) {
         final LogbookTask t = task(n);
         if (t != null) {
-            return Icons.get(t.isWaitingOnUser() ? "question" : "logbook");
+            return Icons.get(shown.waitsOnUser(t) ? "question" : "logbook");
         }
         // a group's row is its name alone, as the folder tabs' groups; the row saying why there is no task, a problem's
         // warning

@@ -5,6 +5,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.font.TextLayout;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -60,6 +61,15 @@ final class Items {
         return s;
     }
 
+    /**
+     * When something in the transcript happened, by this machine's clock and zone: "13:25" today, "Nov 12 13:25" on an
+     * earlier day ({@link Labels#startedAt}); empty when it is not known ({@link Block#UNKNOWN_TIME}).
+     */
+    static String clock(final long atMillis) {
+        return atMillis == Block.UNKNOWN_TIME ? ""
+                : Labels.startedAt(atMillis, System.currentTimeMillis(), ZoneId.systemDefault());
+    }
+
     /** {@code body} in a fenced code block whose fence is longer than any backtick run inside it. */
     static String fence(final String language, final String body) {
         int longest = 0;
@@ -96,6 +106,14 @@ final class Items {
             return (Block.UserPrompt) block;
         }
 
+        /** The line above the prompt: who sent it, from which panel, and when ({@link #clock}), when that is known. */
+        String label() {
+            final String o = prompt().origin();
+            final String who = o.isEmpty() ? "you" : o.equals("subagent") ? "task for the subagent" : "you · " + o;
+            final String at = clock(prompt().atMillis());
+            return at.isEmpty() ? who : who + " · " + at;
+        }
+
         @Override
         void changed(final Block previous, final Block next) {
             built = null;
@@ -112,9 +130,7 @@ final class Items {
         int doLayout(final int w, final Style s) {
             if (built != s) {
                 built = s;
-                final String o = prompt().origin();
-                final String who = o.isEmpty() ? "you" : o.equals("subagent") ? "task for the subagent" : "you · " + o;
-                origin = new TextBox(new Rich(s.small, s.muted).append(who));
+                origin = new TextBox(new Rich(s.small, s.muted).append(label()));
                 text = new TextBox(new Rich(s.mono, s.text).append(prompt().text()).linked(s.link));
             }
             final int inner = Math.max(40, w - 2 * IN_X);
@@ -1136,20 +1152,24 @@ final class Items {
         }
 
         /**
-         * {@code 12.4 s}, after the error text when the turn failed or was interrupted; nothing for a turn of a stored
-         * conversation, which records no time. No spend: a subscription's limits are the plan usage the status bar
+         * {@code 12.4 s · 13:27}: how long the turn took, after the error text when it failed or was interrupted, then
+         * when it ended ({@link #clock}). A turn of a stored conversation records no duration, so it shows only when it
+         * ended; nothing when that is unknown too. No spend: a subscription's limits are the plan usage the status bar
          * shows, not money per turn.
          */
         String summary() {
             final Block.TurnEnd t = turn();
-            if (!t.timed()) {
-                return "";
-            }
             final StringBuilder sb = new StringBuilder();
-            if (t.error()) {
-                sb.append(t.text()).append(" · ");
+            if (t.timed()) {
+                if (t.error()) {
+                    sb.append(t.text()).append(" · ");
+                }
+                Formats.appendMillis(sb, t.durationMillis());
             }
-            Formats.appendMillis(sb, t.durationMillis());
+            final String at = clock(t.atMillis());
+            if (!at.isEmpty()) {
+                sb.append(sb.isEmpty() ? "" : " · ").append(at);
+            }
             return sb.toString();
         }
 
