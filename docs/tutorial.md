@@ -349,7 +349,7 @@ asking; **writing needs your approval**.
    `Use db_run_sql to insert one row into trades: sym 'TEST', price 1.0, ts now().`
    *You should see* "1 waiting for approval" in the status bar and the **Approvals** tab come forward with the card;
    the Session tab's card for the tool reads "waiting for your approval · ⌃2".
-2. The card shows the connection and the exact statement.
+2. The card shows the connection and the exact statement, and when it was asked: "asked 13:25 · now", then its age.
    - **Run** (or **⏎**) executes it.
    - **Deny** (or **D**) refuses it. Type a reason in the note field first, and Claude receives it.
 

@@ -16,6 +16,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -418,9 +419,16 @@ public final class ApprovalInbox implements Widget<ApprovalInbox.Queue> {
         context.intents().dispatch(new Intent.ApprovalAnswered(a.id(), d));
     }
 
+    /**
+     * When the request was asked and how long ago: "asked 13:25 · now", "asked 13:25 · 2 min ago"; empty when unknown.
+     */
     static String age(final long createdMillis, final long now) {
         final String ago = Labels.ago(createdMillis, now);
-        return ago.isEmpty() || ago.equals("now") ? ago : ago + " ago";
+        if (ago.isEmpty()) {
+            return ago;
+        }
+        return "asked " + Labels.startedAt(createdMillis, now, ZoneId.systemDefault()) + " · "
+                + (ago.equals("now") ? ago : ago + " ago");
     }
 
     /** One approval. */

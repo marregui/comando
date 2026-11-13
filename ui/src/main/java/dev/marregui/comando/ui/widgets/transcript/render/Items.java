@@ -70,6 +70,11 @@ final class Items {
                 : Labels.startedAt(atMillis, System.currentTimeMillis(), ZoneId.systemDefault());
     }
 
+    /** The whole of {@link #clock}'s time, date, seconds and zone, for its tooltip; null when it is not known. */
+    static String fullClock(final long atMillis) {
+        return atMillis == Block.UNKNOWN_TIME ? null : Labels.fullAt(atMillis, ZoneId.systemDefault());
+    }
+
     /** {@code body} in a fenced code block whose fence is longer than any backtick run inside it. */
     static String fence(final String language, final String body) {
         int longest = 0;
@@ -112,6 +117,14 @@ final class Items {
             final String who = o.isEmpty() ? "you" : o.equals("subagent") ? "task for the subagent" : "you · " + o;
             final String at = clock(prompt().atMillis());
             return at.isEmpty() ? who : who + " · " + at;
+        }
+
+        /** Over the line above the prompt, the whole time it was sent. */
+        @Override
+        String hoverAt(final int px, final int py) {
+            final int top = TOP + IN_Y;
+            return origin == null || py < top || py >= top + origin.height() || px < IN_X
+                    || px >= IN_X + Math.ceil(origin.naturalWidth()) ? null : fullClock(prompt().atMillis());
         }
 
         @Override
@@ -1199,6 +1212,13 @@ final class Items {
 
         private int labelX(final int x) {
             return x + width() - Math.round(labelWidth);
+        }
+
+        /** Over the summary, the whole time the turn ended. */
+        @Override
+        String hoverAt(final int px, final int py) {
+            return label == null || px < labelX(0) || py < 6 || py >= 6 + label.height() ? null
+                    : fullClock(turn().atMillis());
         }
 
         @Override

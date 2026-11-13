@@ -8,6 +8,7 @@ import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,7 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 
@@ -589,19 +591,20 @@ class ApprovalInboxTest {
 
     // ---- age
 
-    /// A card's age reads "now", then "2 min ago" after 130 s; ticks are wanted only while cards wait, and the timer
-    /// itself waits until the inbox shows.
+    /// A card says when it was asked and its age: "now", then "2 min ago" after 130 s; ticks are wanted only while
+    /// cards wait, and the timer itself waits until the inbox shows.
     @Test
     void theAgeTicksWhileCardsWait() {
         render(inbox, List.of(bash(1, "ls")));
         final JLabel age = (JLabel) named(cards().getFirst(), "age");
-        assertThat(age.getText()).isEqualTo("now");
+        final String asked = "asked " + Labels.startedAt(T0, now.get(), ZoneId.systemDefault()) + " · ";
+        assertThat(age.getText()).isEqualTo(asked + "now");
         assertThat(inbox.ageWanted()).as("waiting cards want their ages ticked").isTrue();
         assertThat(inbox.ticking()).as("never shown: the timer waits for the window").isFalse();
 
         now.addAndGet(130_000);
         inbox.tick();
-        assertThat(age.getText()).isEqualTo("2 min ago");
+        assertThat(age.getText()).isEqualTo(asked + "2 min ago");
 
         render(inbox, List.of());
         assertThat(inbox.ageWanted()).isFalse();

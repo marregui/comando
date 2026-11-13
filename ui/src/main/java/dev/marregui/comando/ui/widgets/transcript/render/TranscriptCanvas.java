@@ -29,6 +29,7 @@ import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.state.BackgroundTask;
@@ -174,6 +175,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         };
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
+        // no text of its own: getToolTipText(MouseEvent) answers at each point, null where nothing has a tooltip
+        ToolTipManager.sharedInstance().registerComponent(this);
         final int menu = Platform.menuShortcutMask();
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), "copy-selection");
         getActionMap().put("copy-selection", new AbstractAction() {
@@ -1175,6 +1178,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private int viewportWidth() {
         final Component p = getParent();
         return p instanceof JViewport v ? v.getWidth() : getWidth();
+    }
+
+    /** Over a prompt's or a turn end's time, the whole time: its date, seconds and zone. */
+    @Override
+    public String getToolTipText(final MouseEvent e) {
+        final int i = firstAt(e.getY());
+        return i < items.size() && e.getY() >= tops[i] && items.get(i).laidOut()
+                ? items.get(i).hoverAt(e.getX() - PAD_X, e.getY() - tops[i]) : null;
     }
 
     @Override

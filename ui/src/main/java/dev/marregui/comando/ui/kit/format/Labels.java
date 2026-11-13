@@ -70,8 +70,15 @@ public final class Labels {
         return at.format(at.toLocalDate().equals(today) ? TIME : DAY_TIME);
     }
 
+    /** The whole time of {@code millis}, for a tooltip: "Friday 13 November 2026, 19:52:07 CET". */
+    public static String fullAt(final long millis, final ZoneId zone) {
+        return FULL.format(Instant.ofEpochMilli(millis).atZone(zone));
+    }
+
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT);
     private static final DateTimeFormatter DAY_TIME = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.ROOT);
+    private static final DateTimeFormatter FULL =
+            DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss z", Locale.ENGLISH);
 
     /** A token count: "950", "12.3k", "1.25M". */
     public static String tokens(final long tokens) {

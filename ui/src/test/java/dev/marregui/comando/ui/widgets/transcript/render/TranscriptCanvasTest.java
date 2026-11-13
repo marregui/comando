@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import javax.swing.ToolTipManager;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -197,6 +198,38 @@ class TranscriptCanvasTest {
                 .isEqualTo(Labels.startedAt(yesterdayMillis, nowMillis, ZoneId.systemDefault()))
                 .matches("[A-Z][a-z]{2} \\d{1,2} \\d\\d:\\d\\d");
         assertThat(((Items.PromptItem) canvas.itemAt(0)).label()).isEqualTo("you · panel one · " + today);
+    }
+
+    /// Hovering a prompt's or a turn end's time shows the whole time, date, seconds and zone; nowhere else has a
+    /// tooltip, and a prompt whose time is not known has none.
+    @Test
+    void hoveringATimeShowsTheWholeTime() {
+        final long nowMillis = System.currentTimeMillis();
+        final long yesterdayMillis = nowMillis - 86_400_000L;
+        canvas.append(0, new Block.UserPrompt("ping", "panel one", "", nowMillis));
+        canvas.append(1, text("pong"));
+        canvas.append(2, Block.TurnEnd.stored().at(yesterdayMillis));
+        canvas.append(3, new Block.UserPrompt("untimed", "", ""));
+        paint(800, 400);
+        canvas.setSize(800, canvas.contentHeight());
+        final Set<String> tips = new LinkedHashSet<>();
+        int tipY = -1;
+        for (int y = 0; y < canvas.contentHeight(); y += 2) {
+            for (int x = 0; x < 800; x += 3) {
+                final String tip = canvas.getToolTipText(
+                        new MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 0L, 0, x, y, 0, false, MouseEvent.NOBUTTON));
+                if (tip != null && tips.add(tip) && tip.equals(Labels.fullAt(nowMillis, ZoneId.systemDefault()))) {
+                    tipY = y;
+                }
+            }
+        }
+        final String now = Labels.fullAt(nowMillis, ZoneId.systemDefault());
+        assertThat(now).matches("[A-Z][a-z]+day \\d{1,2} [A-Z][a-z]+ \\d{4}, \\d\\d:\\d\\d:\\d\\d \\S+");
+        assertThat(tips).containsExactly(now, Labels.fullAt(yesterdayMillis, ZoneId.systemDefault()));
+        assertThat(canvas.getToolTipText(new MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 0L, 0, 795, tipY, 0, false,
+                MouseEvent.NOBUTTON))).as("the margin right of a prompt's time line has no tooltip").isNull();
+        assertThat(canvas.getMouseListeners()).as("registered, so Swing asks for the tooltip")
+                .contains(ToolTipManager.sharedInstance());
     }
 
     /// The style outside bubbles and cards uses [Theme#TRANSCRIPT_TEXT] for text and quotes and is built once; a prompt

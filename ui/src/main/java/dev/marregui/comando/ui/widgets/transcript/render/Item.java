@@ -183,6 +183,11 @@ abstract class Item {
         return null;
     }
 
+    /** The tooltip at {@code (px, py)} (relative): the whole time of a time the item shows there; else null. */
+    String hoverAt(final int px, final int py) {
+        return null;
+    }
+
     /** The link in the header at {@code (px, py)} (relative), which a click follows rather than toggling; else null. */
     String headerLinkAt(final int px, final int py) {
         return null;
