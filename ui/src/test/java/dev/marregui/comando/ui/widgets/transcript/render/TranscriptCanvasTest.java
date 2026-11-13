@@ -143,6 +143,8 @@ class TranscriptCanvasTest {
         assertThat(allocated).as("bytes allocated by 50 passes over %d blocks", n).isLessThan(16_384);
     }
 
+    /// A thinking item shows while it is the latest item of its list and gives its place to the next item, at the
+    /// top level and inside the card of an `Agent` call, while the canvas keeps every block.
     @Test
     void thinkingShowsUntilTheNextItemInItsListTakesItsPlace() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));

@@ -27,6 +27,14 @@ tasks.processResources {
     }
 }
 
+// TestDocsTest reads every module's test sources, so they are inputs of this module's tests: a comment removed in
+// another module runs them again instead of reusing an earlier pass.
+tasks.test {
+    inputs.files(rootProject.fileTree(rootDir) { include("*/src/test/java/**/*Test.java") })
+        .withPropertyName("testSourcesOfEveryModule")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // The transcript renderer's frame-time gate: ./gradlew :ui:transcriptGate
 tasks.register<JavaExec>("transcriptGate") {
     group = "verification"
