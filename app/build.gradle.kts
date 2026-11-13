@@ -97,6 +97,64 @@ tasks.register<JavaExec>("snapshot") {
     )
 }
 
+// The window replay's classes. CI splits them over several runners with -PuiShard=<k>/<n>: the k-th of n groups,
+// balanced by greedy assignment, longest first, on the times in ci/ui-test-seconds.tsv for this system (a class not in
+// it counts the median), so every runner of a system computes the same groups and each class runs in exactly one.
+val uiTestClasses = listOf(
+    "UiReplayTest",
+    "UiKeysTest",
+    "TreeClicksUiTest",
+    "DarkPageTintUiTest",
+    "ThreadBudgetTest",
+    "CheckpointCompactUiTest",
+    "CheckpointLockUiTest",
+    "SessionCardUiTest",
+    "LinksUiTest",
+    "FocusBackUiTest",
+    "OutlineUiTest",
+    "LocateUiTest",
+    "LowerDividerUiTest",
+    "OwnLogUiTest",
+    "ThemeFadeUiTest",
+    "IconSetUiTest",
+    "LayoutKeeperUiTest",
+    "FocusRouterUiTest",
+    "QuitTeardownUiTest",
+    "WorkListUiTest",
+    "DiffThemeUiTest",
+    "ConsoleStyleUiTest",
+    "AttentionUiTest",
+    "ReportFirstUiTest",
+    "SubjectUiTest",
+    "SearchUiTest",
+    "PartitionUiTest",
+    "CompareKeysUiTest",
+    "QuestionUnansweredUiTest",
+    "DeliverablesUiTest",
+    "TranscriptAboveUiTest",
+    "TranscriptFollowUiTest",
+    "TerminalToolsUiTest",
+)
+
+fun uiShard(spec: String, seconds: String, mac: Boolean): List<String> {
+    val (index, count) = spec.split("/").map(String::toInt)
+    require(count >= 1 && index in 1..count) { "uiShard is <k>/<n> with 1 <= k <= n, not $spec" }
+    val measured = seconds.lines().filter { it.isNotBlank() && !it.startsWith("#") }.associate { line ->
+        val cells = line.split("\t")
+        cells[0] to cells[if (mac) 1 else 2].toDouble()
+    }
+    val known = uiTestClasses.mapNotNull { measured[it] }.sorted()
+    val median = if (known.isEmpty()) 1.0 else known[known.size / 2]
+    val loads = DoubleArray(count)
+    val shards = List(count) { mutableListOf<String>() }
+    for (name in uiTestClasses.sortedWith(compareBy<String>({ -(measured[it] ?: median) }, { it }))) {
+        val lightest = loads.indices.minBy { loads[it] }
+        loads[lightest] += measured[name] ?: median
+        shards[lightest] += name
+    }
+    return shards[index - 1]
+}
+
 // Replays recorded intent logs against the Swing shell; needs a display (xvfb-run on Linux): ./gradlew :app:uiTest
 val uiTest = tasks.register<Test>("uiTest") {
     group = "verification"
@@ -104,42 +162,13 @@ val uiTest = tasks.register<Test>("uiTest") {
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform()
-    // by class file, not by a filter: with forkEvery a filter still starts a JVM for every test class to drop it there
-    include(
-        "**/UiReplayTest.class",
-        "**/UiKeysTest.class",
-        "**/TreeClicksUiTest.class",
-        "**/DarkPageTintUiTest.class",
-        "**/ThreadBudgetTest.class",
-        "**/CheckpointCompactUiTest.class",
-        "**/CheckpointLockUiTest.class",
-        "**/SessionCardUiTest.class",
-        "**/LinksUiTest.class",
-        "**/FocusBackUiTest.class",
-        "**/OutlineUiTest.class",
-        "**/LocateUiTest.class",
-        "**/LowerDividerUiTest.class",
-        "**/OwnLogUiTest.class",
-        "**/ThemeFadeUiTest.class",
-        "**/IconSetUiTest.class",
-        "**/LayoutKeeperUiTest.class",
-        "**/FocusRouterUiTest.class",
-        "**/QuitTeardownUiTest.class",
-        "**/WorkListUiTest.class",
-        "**/DiffThemeUiTest.class",
-        "**/ConsoleStyleUiTest.class",
-        "**/AttentionUiTest.class",
-        "**/ReportFirstUiTest.class",
-        "**/SubjectUiTest.class",
-        "**/SearchUiTest.class",
-        "**/PartitionUiTest.class",
-        "**/CompareKeysUiTest.class",
-        "**/QuestionUnansweredUiTest.class",
-        "**/DeliverablesUiTest.class",
-        "**/TranscriptAboveUiTest.class",
-        "**/TranscriptFollowUiTest.class",
-        "**/TerminalToolsUiTest.class",
-    )
+    // CI's shard (-PuiShard=<k>/<n>), else every class; by class file, not by a filter: with forkEvery a filter still
+    // starts a JVM for every test class to drop it there
+    val shard = providers.gradleProperty("uiShard").orNull
+    val classes = if (shard == null) uiTestClasses else uiShard(shard,
+        providers.fileContents(rootProject.layout.projectDirectory.file("ci/ui-test-seconds.tsv")).asText.get(),
+        providers.systemProperty("os.name").get().startsWith("Mac"))
+    include(classes.map { "**/$it.class" })
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1
     systemProperty("java.awt.headless", "false")

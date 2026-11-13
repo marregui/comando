@@ -31,13 +31,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Both systems on every push and pull request, in jobs side by side: the build with its unit tests, and the window
+# replay split over several runners. Standard runners cost nothing on a public repository.
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        # Both systems on every push and pull request: macOS adds the window replay on the runner's display
-        # and the disk image. Standard runners cost nothing on a public repository.
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -51,21 +51,10 @@ jobs:
       # Every test: embedded QuestDB, recorded Claude streams, and PostgreSQL through Testcontainers
       # where the runner has Docker (Ubuntu; macOS runners have none, so that test is skipped there).
       - run: ./gradlew build
-      # The intent-log replay in a real window: a virtual display on Linux, the runner's own on macOS.
-      - name: Window replay
-        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}./gradlew :app:uiTest
       # What ran, per module, in the job summary, with every skipped test named.
       - name: Test report
         if: success() || failure()
         run: java ci/TestReport.java
-      # The transcript renderer's frame-time gate: reported, not enforced, because runner speed varies.
-      - name: Transcript gate
-        continue-on-error: true
-        run: ./gradlew :ui:transcriptGate
-      # The macOS disk image, as a smoke test of the packaging: jpackage, the trimmed runtime.
-      - name: Disk image
-        if: runner.os == 'macOS'
-        run: ./gradlew :app:dmg
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -74,3 +63,62 @@ jobs:
             **/build/reports/tests/
             **/build/test-results/
           if-no-files-found: ignore
+
+  # The intent-log replay in a real window, a virtual display on Linux and the runner's own on macOS, in shards: each
+  # runner replays the shard of the classes `-PuiShard` picks (app/build.gradle.kts, balanced on ci/ui-test-seconds.tsv),
+  # still one JVM per class. macOS takes three shards, as its classes run about 40 % longer than Linux's.
+  window:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, shard: 1, of: 3 }
+          - { os: macos-latest, shard: 2, of: 3 }
+          - { os: macos-latest, shard: 3, of: 3 }
+          - { os: ubuntu-latest, shard: 1, of: 2 }
+          - { os: ubuntu-latest, shard: 2, of: 2 }
+    name: window replay (${{ matrix.os }}, ${{ matrix.shard }}/${{ matrix.of }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Window replay
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}./gradlew :app:uiTest -PuiShard=${{ matrix.shard }}/${{ matrix.of }}
+      - name: Test report
+        if: success() || failure()
+        run: java ci/TestReport.java
+      # The transcript renderer's frame-time gate, on the last shard: reported, not enforced, because runner speed
+      # varies; a step here rather than a job of its own keeps a run to four macOS runners of the five a free account
+      # gets at once.
+      - name: Transcript gate
+        if: matrix.shard == matrix.of
+        continue-on-error: true
+        run: ./gradlew :ui:transcriptGate
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: test-reports-window-${{ matrix.os }}-${{ matrix.shard }}
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          if-no-files-found: ignore
+
+  # The macOS disk image, as a smoke test of the packaging (jpackage, the trimmed runtime): in the weekly run only, as
+  # a version tag builds the packages in release.yml.
+  disk-image:
+    if: github.event_name == 'schedule'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - run: ./gradlew :app:dmg
