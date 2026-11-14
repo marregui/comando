@@ -31,6 +31,16 @@ class KitJobTest {
         assertThat(job("a", List.of("SUN", "MON"), "09:00", "bin/a").days()).as("week order").containsExactly("MON", "SUN");
     }
 
+    /// A service has no schedule: it is written as `service`, and no day or time is a problem of it.
+    @Test
+    void aServiceHasNoScheduleToCheck() {
+        final KitJob service = new KitJob("cdb-serve", "", List.of(), "", List.of("tools/cdb-serve/cdb-serve"),
+                Map.of(), "", true, true);
+        assertThat(service.when()).isEqualTo("service");
+        assertThat(KitJob.problems(List.of(service), 0)).isEmpty();
+        assertThat(job("cdb-serve", List.of(), "", "tools/cdb-serve/cdb-serve").service()).as("a timed job").isFalse();
+    }
+
     /// [KitJob#problems] names the field of each rule broken: name form and uniqueness, description length, no day,
     /// a time out of range, no program or one outside the root, a lower-case variable, a log outside the root.
     @Test

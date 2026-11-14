@@ -151,7 +151,8 @@ public final class KitJobsCli {
             final List<String> days = strings(j.path("days"));
             final KitJob job = new KitJob(j.path("name").asString(""), j.path("description").asString(""),
                     days.isEmpty() ? KitJob.WEEKDAYS : days, j.path("time").asString(""), strings(j.path("command")),
-                    env(j.path("env")), j.path("log").asString(""), j.path("enabled").asBoolean(true));
+                    env(j.path("env")), j.path("log").asString(""), j.path("enabled").asBoolean(true),
+                    j.path("schedule").has("service"));
             final JsonNode last = j.path("last");
             out.add(new KitJobs.Entry(job, j.path("installed").asBoolean(false), j.path("current").asBoolean(false),
                     j.path("loaded").isBoolean() ? j.path("loaded").asBoolean(false) : null, j.path("running").asBoolean(false),
@@ -171,7 +172,9 @@ public final class KitJobsCli {
                 o.put("description", j.description());
             }
             final ObjectNode schedule = o.putObject("schedule");
-            if (j.daily()) {
+            if (j.service()) {
+                schedule.put("service", "always");
+            } else if (j.daily()) {
                 schedule.put("daily", j.paddedTime());
             } else {
                 schedule.put("weekly", KitJob.daysText(j.days()) + " " + j.paddedTime());

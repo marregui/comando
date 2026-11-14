@@ -90,6 +90,31 @@ class JobsEditorTest {
         assertThat(e.dirty()).isFalse();
     }
 
+    /// A service opened in the list is handed back as a service: the editor has no schedule to give it.
+    @Test
+    void aServiceStaysAService() {
+        final KitJob service = new KitJob("cdb-serve", "", List.of(), "", List.of("tools/cdb-serve/cdb-serve", "run"),
+                Map.of(), "", true, true);
+        final JobsEditor e = new JobsEditor(List.of(entry(service, true)), Path.of("/k"), new JobsEditor.Actions() {
+            @Override
+            public Optional<Path> program(final Component owner, final Path bin) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void run(final String name) {
+                did.add("run " + name);
+            }
+
+            @Override
+            public void openLog(final Path log) {
+                did.add("log " + log);
+            }
+        });
+        assertThat(e.valid()).isTrue();
+        assertThat(e.jobs()).contains(List.of(service));
+    }
+
     /// The day toggles, the time, the arguments, the environment and Enabled become the job; setting them back makes
     /// the list clean again, and an unpadded time is the same time.
     @Test

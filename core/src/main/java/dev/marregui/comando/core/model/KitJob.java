@@ -12,16 +12,19 @@ import java.util.regex.Pattern;
  * One scheduled job of the kit, as {@code comando-kit.json} holds it and {@code install/kit.py} runs it (record 117):
  * its name, a one-line description, the days of the week it runs on (all seven: daily) at a time, the command (a path
  * inside the root, then its arguments), the environment it adds, the file its output goes to (empty:
- * {@code .kit-jobs/<name>.log}) and whether it runs on its schedule or is paused. {@code kit.py} is the judge of a job;
- * {@link #problems} checks the same rules as they are typed.
+ * {@code .kit-jobs/<name>.log}) and whether it runs on its schedule or is paused. A service has no schedule: the
+ * scheduler starts it at login (and launchd and systemd again whenever it exits), and its days and time mean nothing.
+ * {@code kit.py} is the judge of a job; {@link #problems} checks the same rules as they are typed.
  *
  * @param days    the weekdays, {@code MON} … {@code SUN}, in week order; all seven for a daily job
  * @param time    {@code HH:MM}, 24 hours
  * @param command the program, relative to the root with {@code /}, then its arguments; {@code {scheduler}} in any of
  *                them becomes the scheduler that started it
+ * @param service whether the scheduler keeps it running ({@code "schedule": {"service": "always"}}) instead of
+ *                starting it at a time
  */
 public record KitJob(String name, String description, List<String> days, String time, List<String> command,
-                     Map<String, String> env, String log, boolean enabled) {
+                     Map<String, String> env, String log, boolean enabled, boolean service) {
 
     /** The weekdays in week order, as the manifest writes them. */
     public static final List<String> WEEKDAYS = List.of("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
@@ -48,6 +51,12 @@ public record KitJob(String name, String description, List<String> days, String 
         log = log == null ? "" : log;
     }
 
+    /** A job run at its days and time. */
+    public KitJob(final String name, final String description, final List<String> days, final String time,
+                  final List<String> command, final Map<String, String> env, final String log, final boolean enabled) {
+        this(name, description, days, time, command, env, log, enabled, false);
+    }
+
     /** Whether it runs every day. */
     public boolean daily() {
         return days.size() == WEEKDAYS.size();
@@ -55,6 +64,9 @@ public record KitJob(String name, String description, List<String> days, String 
 
     /** When it runs, as the manifest writes it: {@code daily 07:15}, {@code MON-FRI 10:15}, {@code MON,THU 07:30}. */
     public String when() {
+        if (service) {
+            return "service";
+        }
         return (daily() ? "daily" : daysText(days)) + " " + paddedTime();
     }
 
@@ -100,7 +112,8 @@ public record KitJob(String name, String description, List<String> days, String 
 
     /**
      * The problems of job {@code self} of {@code all} by field, as {@code kit.py} would refuse it: a name not in its
-     * form or used twice, a description longer than one line of 80, no day, a time that is no {@code HH:MM}, no program
+     * form or used twice, a description longer than one line of 80, no day or a time that is no {@code HH:MM} (unless
+     * it is a service), no program
      * or one outside the root, an environment name not in capitals, a log outside the root. Whether the program is an
      * executable file is {@code kit.py}'s to say.
      */
@@ -122,10 +135,10 @@ public record KitJob(String name, String description, List<String> days, String 
         if (j.description.contains("\n") || j.description.codePointCount(0, j.description.length()) > 80) {
             out.put(DESCRIPTION_FIELD, "one line of at most 80 characters");
         }
-        if (j.days.isEmpty()) {
+        if (!j.service && j.days.isEmpty()) {
             out.put(DAYS_FIELD, "pick at least one day");
         }
-        if (!TIME.matcher(j.time.strip()).matches()) {
+        if (!j.service && !TIME.matcher(j.time.strip()).matches()) {
             out.put(TIME_FIELD, "HH:MM, from 00:00 to 23:59");
         }
         if (j.program().isBlank()) {

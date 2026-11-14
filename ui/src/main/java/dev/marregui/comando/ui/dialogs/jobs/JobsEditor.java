@@ -66,6 +66,7 @@ public final class JobsEditor {
         String env;
         String log;
         boolean enabled;
+        final boolean service;
         final String was;
 
         Row(final KitJob j, final String was) {
@@ -80,6 +81,7 @@ public final class JobsEditor {
             env = j.envLines();
             log = j.log();
             enabled = j.enabled();
+            service = j.service();
             this.was = was;
         }
 
@@ -94,7 +96,8 @@ public final class JobsEditor {
             command.add(program.strip());
             command.addAll(KitJob.words(arguments));
             // the description as written: kit.py takes outer spaces, and stripping them would change an untouched job
-            return new KitJob(name.strip(), description, d, time.strip(), command, KitJob.envOf(env), log.strip(), enabled);
+            return new KitJob(name.strip(), description, d, time.strip(), command, KitJob.envOf(env), log.strip(),
+                    enabled, service);
         }
 
         @Override

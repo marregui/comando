@@ -107,6 +107,26 @@ class KitJobsCliTest {
                 + "\"command\":[\"bin/b\",\"--x\"],\"env\":{\"T\":\"{scheduler}\"},\"log\":\"logs/b.log\",\"enabled\":false}");
     }
 
+    /// A service, `"schedule": {"service": "always"}`, reads as a service and is handed back to `jobs set` as one.
+    @Test
+    void aServiceIsReadAndHandedBackAsAService(@TempDir final Path root) throws IOException {
+        fake(root, """
+                {"root": "/r", "platform": "macos", "scheduler": "launchd", "jobs": [
+                  {"name": "cdb-serve", "description": "", "schedule": {"service": "always"}, "days": [], "time": "",
+                   "command": ["tools/cdb-serve/cdb-serve", "run"], "env": {}, "log": "",
+                   "logPath": "/r/.kit-jobs/cdb-serve.log",
+                   "enabled": true, "installed": true, "current": true, "loaded": true, "running": true, "pid": 7,
+                   "last": null, "next": null, "files": []}
+                ]}
+                """, 0);
+        final KitJob service = new KitJobsCli(root).read().jobs().getFirst().job();
+        assertThat(service.service()).isTrue();
+        assertThat(service.when()).isEqualTo("service");
+        final JsonNode sent = KitJobsCli.manifestJobs(List.of(service)).get(0);
+        assertThat(sent.path("schedule").path("service").asString("")).isEqualTo("always");
+        assertThat(sent.path("schedule").has("daily") || sent.path("schedule").has("weekly")).isFalse();
+    }
+
     /// [KitJobsCli#run] asks `job run <name>` and returns its answer.
     @Test
     void runNamesTheJob(@TempDir final Path root) throws IOException {
