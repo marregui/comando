@@ -111,7 +111,7 @@ final class Menus {
             Map.entry("view.previousHit", "Show the search's previous hit in the preview tab"),
             Map.entry("view.palette", "Run any command by typing part of its name"),
             Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
-            Map.entry("server.start", "Start the QuestDB every instance shares: PostgreSQL wire 8812, console 9000"),
+            Map.entry("server.start", "Start the QuestDB every instance shares: PostgreSQL wire 8812, HTTP 9000"),
             Map.entry("server.stop", "Stop the machine's QuestDB this comando started; its data stays"),
             Map.entry("edge.start", "Start the comando Edge, one per machine: MQTT 18883, WebSocket 18800, UI 18080"),
             Map.entry("edge.stop", "Stop the comando Edge this comando started; its data stays"),

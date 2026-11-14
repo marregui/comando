@@ -56,3 +56,10 @@ stay, which is what Miguel wanted gone.
 2026-11-13: a batch QuestDB refuses (400) for some of its lines, a missing table aside, is sent again in halves, down to
 the lines it refuses alone; only those are dropped, and a line refused alone is logged at most once a minute, with no
 notice: a refusal of its data is no outage.
+
+2026-11-14: the server is sized to comando's use (tens of small WAL tables, one writer at a time): 64 KiB column pages,
+one query and one write worker, two network workers (HTTP and PG wire stay answerable behind a long query), early idle parking, materialised and live views off, `sys.metrics` not persisted, the log at
+`ERROR,CRITICAL,ADVISORY`, `stdout.log` set aside past 10 MiB. Only 8812 (PG wire) and 9000 (HTTP `/exec`, ILP `/write`)
+listen: ILP over TCP (9009) and the health server (9003) had no user and are off; the registry still names all four
+ports, so other instances keep parsing it. The web console is not served. Measured on the machine's server: 2,015 MB
+of `db/` to 64 MB after one restart (16 MiB column pages had been reserved for tables of 61 to 213k rows).

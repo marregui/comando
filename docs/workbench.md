@@ -640,8 +640,13 @@ and the explorer (⌘⇧E): a tree in the side pane, whose table menu inserts `S
 
 **Start the machine's QuestDB**, the database button at the tab row's right end (also in the Connections tab's menu),
 starts the one QuestDB of this machine, shared by every comando instance and every kit ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md)): its own process, with
-its data in `~/.comando-questdb/`, on QuestDB's default ports (PG wire 8812, console 9000, ILP 9009). Every listener
-binds `127.0.0.1`, ILP over UDP and telemetry are off, and tables are made only by DDL. When none runs, the first
+its data in `~/.comando-questdb/`, on QuestDB's default ports: PG wire 8812 and HTTP 9000 (SQL at `/exec`, ILP at
+`/write`), the only two listeners; ILP over TCP (9009) and UDP, the health server (9003), the web console, telemetry,
+`sys.metrics` and views are off, though `server.json` still names all four ports. Every listener binds `127.0.0.1`, and
+tables are made only by DDL. It is sized for tens of small tables written a few rows a second: one query and one write
+worker, two network workers so that a long query leaves one for the 2 s liveness check, column files grown in
+64 KiB steps rather than 16 MiB, a log of errors and advisories only (`root/log/`, kept a week),
+and `stdout.log` moved to `stdout.log.1` at a start once past 10 MiB. When none runs, the first
 instance or kit that writes a metric starts it, so it is usually up without a click. It keeps running when the comando
 that started it quits; only that comando stops it, and in the others the button's tooltip says who started it. Every
 instance's metrics and the kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`). Its first
@@ -976,7 +981,7 @@ Outside it: connection passwords in the macOS keychain for the default data root
 `connections.json`; [Claude Code §4.3](claude-code.md#43-secrets)); `~/.comando-edge.json`, the registry of the one comando Edge,
 shared by every instance ([§4.1](#41-the-comando-edge)); `~/.comando-questdb/`, the machine's QuestDB: `bin/start.sh` (its
 launcher, written at each start), `lib/` (the jar), `root/` (its data and logs), `server.json` (its registry: pid,
-owner, ports, token) and `start.lock` ([§3.4](#34-the-machines-questdb)). The Java preferences that held the window's state before
+owner, ports, token), `stdout.log` (with `stdout.log.1`, the copy a start set aside past 10 MiB) and `start.lock` ([§3.4](#34-the-machines-questdb)). The Java preferences that held the window's state before
 `settings.json` (node `dev/marregui/comando`; tests use `comando.prefsNode`) are read once, when the file does not exist
 yet, and left as they were.
 

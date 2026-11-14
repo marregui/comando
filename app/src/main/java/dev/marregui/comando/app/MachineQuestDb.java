@@ -70,24 +70,24 @@ import dev.marregui.comando.ui.shell.ServerToggle;
 final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoint, AutoCloseable {
 
     /**
-     * QuestDB's shipped configuration with its file writer on: one file a day in the root's {@code log/}, ending in
-     * {@code .log} so that a panel follows it, kept a week; the console as shipped.
+     * comando's QuestDB log: one file a day in the root's {@code log/}, ending in {@code .log} so that a panel follows
+     * it, kept a week, with errors and advisories only; {@code stdout.log} gets errors and, as QuestDB writes them to
+     * every writer, the advisories of each start (21 lines). At INFO the file took 40 MB a day, mostly a line per
+     * query, and {@code stdout.log}, never rotated, reached 196 MB (2026-11-14).
      */
     static final String LOG_CONFIG = """
-            # Written by comando at each start of its QuestDB: the console as shipped, and one file a day in
-            # log/, kept a week, for Help > Show QuestDB's log. start.sh names this file (-Dout), so
-            # conf/log.conf is not read.
-            writers=file,stdout,http.min
+            # Written by comando at each start of its QuestDB: one file a day in log/, kept a week, for
+            # Help > Show QuestDB's log, with errors and advisories (the settings at start) but no line per
+            # query; stdout.log gets errors (and the advisories, which QuestDB writes to every writer).
+            # start.sh names this file (-Dout), so conf/log.conf is not read.
+            writers=file,stdout
             w.file.class=io.questdb.log.LogRollingFileWriter
             w.file.location=${log.dir}/questdb-${date:yyyyMMdd}.log
-            w.file.level=INFO,ERROR,CRITICAL,ADVISORY
+            w.file.level=ERROR,CRITICAL,ADVISORY
             w.file.rollEvery=day
             w.file.lifeDuration=7d
             w.stdout.class=io.questdb.log.LogConsoleWriter
-            w.stdout.level=INFO
-            w.http.min.class=io.questdb.log.LogConsoleWriter
-            w.http.min.level=ERROR
-            w.http.min.scope=http-min-server
+            w.stdout.level=ERROR,CRITICAL
             """;
     /** comando's log configuration, written in the root's {@code conf/} at each start; {@code start.sh} names it. */
     static final String LOG_CONFIG_NAME = "comando-log.conf";
@@ -97,19 +97,65 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
      * The launcher, written whole at each start this comando makes: the machine folder, the four ports, the Java home
      * and QuestDB's version filled in. Its server runs in a process group of its own ({@code set -m}), immune to the
      * launcher's hang-up ({@code nohup}), so it outlives the launcher and whoever ran it.
+     * <p>
+     * The server is sized for what uses it, tens of small tables written a few rows a second over ILP on HTTP and read
+     * over HTTP and PG wire: only the HTTP and PG wire listeners, no web console, no {@code sys.metrics}, one query and
+     * one write worker, two network workers so that a long query does not hold the token check, and column files grown
+     * in 64 KiB steps. On a scratch server after 100 rows (2026-11-14), the table took 1.2 MB instead of 163 MB and the
+     * database 7.7 MB instead of 431 MB; idle for 60 s it used 0.9 to 1.2 % of one core instead of 3.2 %, about 350 MiB
+     * resident instead of 401 MiB. {@code stdout.log}, appended to at every start, is rotated past 10 MiB.
      */
     static final String SCRIPT = """
             #!/bin/bash
             # Written by comando at each start of the machine's QuestDB (record 146). Prints the server's pid.
             set -m
             cd "%1$s" || exit 1
+            # stdout.log gains every start's output: past 10 MiB it becomes stdout.log.1, the one copy kept
+            if [ -f "%1$s/stdout.log" ] && [ "$(wc -c < "%1$s/stdout.log")" -gt 10485760 ]; then
+              mv -f "%1$s/stdout.log" "%1$s/stdout.log.1"
+            fi
+            (umask 077 && : >> "%1$s/stdout.log")
             export QDB_HTTP_NET_BIND_TO=127.0.0.1:%2$d
             export QDB_HTTP_MIN_NET_BIND_TO=127.0.0.1:%3$d
             export QDB_PG_NET_BIND_TO=127.0.0.1:%4$d
             export QDB_LINE_TCP_NET_BIND_TO=127.0.0.1:%5$d
             export QDB_LINE_UDP_ENABLED=false
             export QDB_TELEMETRY_ENABLED=false
-            export QDB_SHARED_WORKER_COUNT=2
+            # ILP over TCP: every writer sends ILP over HTTP; the bind above holds should it come back
+            export QDB_LINE_TCP_ENABLED=false
+            # the health server: comando checks its token over HTTP, nothing asks this port
+            export QDB_HTTP_MIN_ENABLED=false
+            # no web console: its files are served from a folder that does not exist, so its page answers 404
+            export QDB_HTTP_STATIC_PUBLIC_DIRECTORY=no-console
+            # sys.metrics, a row a second that nobody reads (93 MB on 2026-11-14)
+            export QDB_METRICS_PERSIST_ENABLED=false
+            # no table is a materialized or live view
+            export QDB_CAIRO_MAT_VIEW_ENABLED=false
+            export QDB_MAT_VIEW_REFRESH_WORKER_COUNT=0
+            export QDB_CAIRO_LIVE_VIEW_ENABLED=false
+            export QDB_LIVE_VIEW_REFRESH_WORKER_COUNT=0
+            export QDB_VIEW_COMPILER_WORKER_COUNT=1
+            # one query, one write and one WAL apply worker: tens of small tables, a few rows a second
+            export QDB_SHARED_WORKER_COUNT=1
+            export QDB_WAL_APPLY_WORKER_COUNT=1
+            # two network workers, as HTTP and PG wire run queries on them: with one, a query of 11.5 s held a
+            # SELECT 1 for 10.5 s, past the 2 s token check, so every instance read the server as down
+            export QDB_SHARED_NETWORK_WORKER_COUNT=2
+            # idle workers nap after 20 empty loops and sleep 50 ms after 50 (QuestDB: 7,000, 10,000 and 10 ms)
+            export QDB_SHARED_WORKER_NAP_THRESHOLD=20
+            export QDB_SHARED_WORKER_SLEEP_THRESHOLD=50
+            export QDB_SHARED_WORKER_SLEEP_TIMEOUT=50
+            export QDB_WAL_APPLY_WORKER_NAP_THRESHOLD=20
+            export QDB_WAL_APPLY_WORKER_SLEEP_THRESHOLD=50
+            export QDB_WAL_APPLY_WORKER_SLEEP_TIMEOUT=50
+            # an open table's column file takes a whole page: 16 MiB made 1.8 GB of tables of 61 to 11,425 rows
+            export QDB_CAIRO_WRITER_DATA_APPEND_PAGE_SIZE=64k
+            export QDB_CAIRO_WRITER_DATA_INDEX_VALUE_APPEND_PAGE_SIZE=64k
+            # WAL segment columns and events, 1 MiB and 128 KiB by default
+            export QDB_CAIRO_WAL_WRITER_DATA_APPEND_PAGE_SIZE=64k
+            export QDB_CAIRO_WAL_WRITER_EVENT_APPEND_PAGE_SIZE=64k
+            # out-of-order merge memory per column, 8 MiB by default; 256 KiB is QuestDB's for its system tables
+            export QDB_CAIRO_O3_COLUMN_MEMORY_SIZE=256k
             export QDB_LINE_AUTO_CREATE_NEW_TABLES=false
             export QDB_LINE_AUTO_CREATE_NEW_COLUMNS=false
             nohup "%6$s/bin/java" --add-exports=java.base/jdk.internal.vm=ALL-UNNAMED -Xmx1g \\
@@ -533,7 +579,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     }
 
     private static String where(final Entry e) {
-        return "PG wire on 127.0.0.1:" + e.ports().pg() + ", console on http://localhost:" + e.ports().http();
+        return "PG wire on 127.0.0.1:" + e.ports().pg() + ", HTTP on http://localhost:" + e.ports().http();
     }
 
     /**
