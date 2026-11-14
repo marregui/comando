@@ -41,15 +41,15 @@ comando is built with and runs on JDK 25.
 
 | Module | Holds | Depends on |
 |---|---|---|
-| `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the thread kit, the root sessions run on and its kit (`KitRoot`) | JDK only |
+| `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the thread kit, JSON trees and their binding to records (`json`, `json.bind`), the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude, `CdbAdapter` (cdb in-process) | `core`, `cdb`, PostgreSQL JDBC driver |
 | `cdb` | comando's own columnar, time-partitioned database: SQL parser, planner, vectorised executor, store, catalog, and `/exec` and `/write` in QuestDB's formats ([record 158](adr/0158-cdb-comandos-own-database.md)); one public facade, `Cdb`, reached only from `db.Cdb*` | JDK only |
-| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core`, Jackson |
-| `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core`, Jackson |
+| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core` |
+| `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core` |
 | `tools` | Gradle runs, the folder tabs' folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
-| `ui` | the Swing shell, panels, dialogs, widgets and `ui.kit`, which they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
-| `app` | wiring, the store files, the keychain, the intent log, the machine's QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`), `main` | every module, Jackson, QuestDB, the HiveMQ MQTT client |
+| `ui` | the Swing shell, panels, dialogs, widgets and `ui.kit`, which they share | `core`, FlatLaf, jsvg, RSyntaxTextArea, CommonMark (with tables), JediTerm, pty4j |
+| `app` | wiring, the store files, the keychain, the intent log, the machine's QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`, on comando's MQTT client in `app.mqtt`), `main` | every module, QuestDB |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
@@ -258,10 +258,9 @@ an executor.
 The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
 scheduler (its carriers: one per core while busy, plus one for each virtual thread held in file or pipe I/O, which is
 why a session's reader is a platform thread), the JDK's `process reaper` (one per child process), the MCP server's
-dispatcher and the libraries' (JNA, a `java.util.Timer`, and the MQTT client's one Netty event loop while this
-instance is connected to the comando Edge). Measured with five sessions: about 45 threads in all, 7 of them comando's
-own platform threads. Halving the GC threads to two lengthened the G1 pause p99 from 5–6 ms to 30–48 ms on
-`:ui:transcriptGate`, so the JVM keeps its default.
+dispatcher and the libraries' (JNA and a `java.util.Timer`). Measured with five sessions: about 45 threads in all, 7
+of them comando's own platform threads. Halving the GC threads to two lengthened the G1 pause p99 from 5–6 ms to
+30–48 ms on `:ui:transcriptGate`, so the JVM keeps its default.
 
 Swing timers are not threads, so neither test above sees them, yet one left running keeps AWT, and a JVM that does
 not call `System.exit`, alive. A delay after the last of a burst is a `Debouncer`; a timer that repeats while
@@ -394,6 +393,7 @@ registries for data too large to copy with every state in [§4.5](#45-stores-out
 | `transcript` | `Block`, `Transcript` (one writer, many readers), `TranscriptRegistry`, `TopicSource` (what a tab's topic is read from) |
 | `console` | `Console` (a command run's output), `ConsoleRegistry` |
 | `schema` | `Schema`, `SchemaRegistry` |
+| `json` | `JsonNode` and its kinds, `ObjectNode`, `ArrayNode`, `Json` (read strictly or the first value only, build, write compact and pretty) and `JsonException`: every module's JSON; `json.bind`'s `Binder`: records, enums, collections, `Optional` and `Path` to trees and back by reflection, with an `"@type"` class name, allowed only under `dev.marregui.comando.core.`, for the interfaces that need one; the format of the store files, the intent log and the registries ([record 157](adr/0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md)) |
 
 ### 8.2 Interface with the rest of the app
 
@@ -446,6 +446,7 @@ Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTe
 | loop and threads | `StateLoopTest` (`applyNow` drives the loop without its thread), `ThreadKitTest`, `ExecutorStopTest` (an owner's executors have ended when its close returns; `now` gives up at its bound and says so), `WatchdogTest` (a look that fails does not stop the others), `NotifyLoggedTest`, `ProcessesTest`, `QueuesTest` (a gauge's depth and peak; a strand's gauge gone when it ends) |
 | effects | `EffectRouterTest` (each effect to its own port method with its own arguments; every effect the sealed interface permits has a row) |
 | dispatch | `ClassifierTest`, `BlocksTest`, `StatementsTest` |
+| json | `JsonNodeTest`, `JsonContainerTest`, `JsonGoldenTest` (documents frozen with the compact and pretty output of the library `json` replaced, read and written again); `BinderTest` |
 | logbook | `IndexParserTest` (over a synthetic index: bullet and bare keys, continuation lines, `**Needs you:**` with and without sub-items, Scheduled reports left out, a heading with no number), `IndexParserLiveTest` (skipped unless `logbook.liveIndex` names an index: its open-task count equals the `#### ` headings under `## Open`, each task has a State) |
 | stores | `TranscriptTest`, `TopicSourceTest`, `ConsoleTest`, `FormatsTest`, `ResultTextTest` |
 | state and model | `AttentionTest`, `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `InstanceNameTest`, `AtomicFilesTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`, `KitJobTest`, `LinearTicketsTest`; `OwnerOnlyTest`, `MappedTest`, `ByteScanTest` (`files`) |
@@ -599,8 +600,8 @@ The Claude Code adapter: one headless `claude -p` process per session, speaking 
 output, mapped into transcript blocks and intents. It also lists the conversations Claude Code stored, follows
 subagents' stored conversations, reads the plans' usage (Claude Code's, and Codex's when its CLI is installed), reads
 the tabs' topics with Haiku, checks the installed CLI's version, keeps the sessions' metrics, and reads a kit's
-`comando-kit.json`, so that every `claude` it starts runs on the kit's root. It depends on `core` and Jackson; `app`
-alone constructs it.
+`comando-kit.json`, so that every `claude` it starts runs on the kit's root. It depends on `core` only; `app` alone
+constructs it.
 
 ### 11.1 Classes and design
 
@@ -718,10 +719,10 @@ Further reading: [Claude Code §1](claude-code.md#1-the-claude-bridge).
 ## 12. The `mcp` module
 
 comando's MCP server: the way a Claude Code session reaches back into the window. Streamable HTTP on `127.0.0.1`,
-JSON-RPC written on the JDK's `HttpServer` and Jackson with no MCP library, one bearer token per Claude Code process. It
-serves the UI tools, the database tools, the session tools, the tools that consult the other comando instances and the
-permission-prompt tool behind every approval card. It depends on `core` and Jackson, never on the MQTT client; `app`
-constructs it, and `claude` reaches it through `core`'s `McpGateway`.
+JSON-RPC written on the JDK's `HttpServer` and `core.json` with no MCP library, one bearer token per Claude Code
+process. It serves the UI tools, the database tools, the session tools, the tools that consult the other comando
+instances and the permission-prompt tool behind every approval card. It depends on `core` only, never on `app`'s MQTT
+client; `app` constructs it, and `claude` reaches it through `core`'s `McpGateway`.
 
 ### 12.1 Classes and design
 
@@ -950,9 +951,9 @@ Further reading: [Workbench §5.2](workbench.md#52-gradle-runs),
 
 The Swing window: the shell, the editor panels, the lower panel and side pane, the sidebar, the dialogs, the widgets and
 `ui.kit`, which they share. It renders `core`'s `AppState`, turns input into intents, and does the effects addressed to the
-window. It depends on `core` and the UI libraries (FlatLaf and its extras, jsvg, RSyntaxTextArea and AutoComplete,
-CommonMark with its tables extension, java-diff-utils, JediTerm, pty4j, Jackson; slf4j-jdk14 at run time), never on
-`db`, `claude`, `mcp` or `tools`. `app` alone constructs it.
+window. It depends on `core` and the UI libraries (FlatLaf, jsvg, RSyntaxTextArea, CommonMark with its tables
+extension, JediTerm, pty4j; slf4j-jdk14 at run time), never on `db`, `claude`, `mcp` or `tools`. `app` alone
+constructs it.
 
 ### 14.1 Packages and layers
 
@@ -964,7 +965,7 @@ other), and no test orders them.
 |---|---|
 | `kit.*` | what every part builds on: theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, layout, resource actions, desktop, vcs; each package and its classes in [§14.2](#142-the-uikit-package) |
 | `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`, `Unmountable` (listeners and timers released in one call); `capability`: `Searchable`, `Copyable`, `Exportable`, `Zoomable`, `FindBar`, `Capabilities` |
-| `widgets.*` | one package per widget: `approval` (`ApprovalInbox`), `changes` (`ChangesWidget`, `ChangeEditor`), `console` (`ConsoleWidget`), `deliverables` (`DeliverablesWidget`, `WrittenFiles`), `diff` (`DiffWidget`), `editor` (`CommandEditor`, `PanelDocument`, `PanelTokenMaker`, `SqlCompletion`), `markdown` (`MarkdownWidget`), `plot` (`PlotWidget`, `PlotCanvas`), `search` (`SearchWidget`, `SearchTree`, `SearchHub`), `table` (`TableViewWidget`, `GridTable`, `TableSource`), `terminal` (`TerminalWidget`, `Pty`, `InputGate`), `text` (`TextWidget`), `tree` (`TreeWidget`) |
+| `widgets.*` | one package per widget: `approval` (`ApprovalInbox`), `changes` (`ChangesWidget`, `ChangeEditor`), `console` (`ConsoleWidget`), `deliverables` (`DeliverablesWidget`, `WrittenFiles`), `diff` (`DiffWidget`), `editor` (`CommandEditor`, `PanelDocument`, `PanelTokenMaker`, `SqlCompletion`, its list `CompletionPopup`, `Completions`, `Completion`), `markdown` (`MarkdownWidget`), `plot` (`PlotWidget`, `PlotCanvas`), `search` (`SearchWidget`, `SearchTree`, `SearchHub`), `table` (`TableViewWidget`, `GridTable`, `TableSource`), `terminal` (`TerminalWidget`, `Pty`, `InputGate`), `text` (`TextWidget`), `tree` (`TreeWidget`) |
 | `widgets.transcript` | `TranscriptWidget`, `TranscriptView`, `AgentWidget` (a sub-agent's tab), `AgentStrip`, `ToolText`; `doc`: `MarkdownDoc`, `Para`, `Span`; `render`: `TranscriptCanvas` (the painted transcript), `Items` and its `Item`s (`ToolCallItem` among them), `Paras`, `Rich`, `TextBox`, `Placed`, `Style`, `Marks`, `Fold`, `Finder` (find within cells), `AgentTracker` |
 | `panels` | the window's regions: `Workspace` (the main tabs and the right-hand partition's strip, record 141; `TabLook`, the look both strips share), `EditorPanel` (with `OutlinePane`), `LowerPanel`, `SidePane`, `StatusBar`, `SessionBar` (its Reflect, Compact and Clear buttons and the predicates, intents and tooltips the session's menu and the palette share with it, record 156), `ResultsView` (with `PlanTree`), `TerminalTabs`, `ViewTabs`, `SessionsSidebar` (its rows: `IconRow`, `SessionRow`, `ConnectionRow`; `PanelsWithoutSession`; several sessions selected at once, and `SessionGroupMenu`, their one menu, record 156), `Navigator` (the tree of rows the Logbook and Instances tabs share: a row's card at a click, a menu on a right click, a double click or Enter to open), `FilesShelf` (which of the Kit, Brain and Scratchpad tabs a folder shows in, record 152), `FilesTab` (one component, built for each of the three; `FolderWatch`, its watch, carries each folder's open subfolders, none while the filter has text; every expand and collapse re-checks it; a reveal into a subfolder not read yet waits for that read), `InstancesTab` (the other instances from their presence on the comando Edge, the questions between them, record 124), `LogbookTab` (the scratchpad's open tasks from `AppState.logbook`: Needs you first, then each topic; a task opens as a page, resumes in a session or asks its decisions there, record 150), `TabCard`, `CardFacts`, `Delegation`, `TabStatus`, `SessionIcons`, `CommandButton`, `ThemeButton`, `ThemeChooser` and `ModeSwitch` (the popover under the swatch and its Dark / Light switch, record 128), `LockVeil` (greys the views of a session whose checkpoint runs, record 130) |
 | `dialogs` | `FormRows` (the labelled rows, list side and frame the folders and jobs windows share), `folders` (`FoldersEditor`, `FoldersDialog`), `jobs` (`JobsEditor`, `JobsDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions; `ConversationField`, the session's conversation picked from those stored; `ProjectSettings`, the working folder's own `.claude/settings.json` and `settings.local.json` and the permission mode they set over the kit's), `sessions` (`ImportSessionsDialog`, `StoredConversation`) |
@@ -1006,7 +1007,7 @@ runs) moves to an errand of `UiErrands`.
 | Package | Holds |
 |---|---|
 | `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS) on the ground chosen, the colour tokens in four tiers ([record 100](adr/0100-a-theme-is-four-tiers-of-tokens.md)), spacing, the fonts; `NamedTheme`, the curated themes, each a `Ground` and the `Tint` on it, chosen together ([record 103](adr/0103-curated-themes-in-actions.md)), read from JSON files (`BuiltInThemes` the fourteen in `/themes` on the class path, `ThemeFiles` the user's in the data root's `themes`, `ThemeSpec` their shape, `ThemeRules` the contrast floors a file must pass) ([record 126](adr/0126-themes-are-json-files.md)); `ContentPalette`, the colours of syntax, the terminal, diffs, plots and code derived from them in OKLCH (`Oklch`) ([record 101](adr/0101-content-colours-derived-from-the-theme.md)); `Style`, a theme's plain or console look, with the console's `BracketBorder` (a region's frame) and `Gauge` (an instrument) ([record 151](adr/0151-a-theme-has-a-style-the-console.md)); `SidebarLook`, `TintBarBorder`, `TintTitle`, `GroundIcon`; `ThemePreview` (a theme drawn small in its own colours) and `GildedSplitIcon` (the theme button's icon, [record 128](adr/0128-a-chooser-of-twelve-themes.md)); `FocusRing`, a hairline in the tint round a content view's scroll pane while the view holds the keyboard. FlatLaf's own focus marks (focused borders, the underline of the tab in front) take the tint too, set again with each tint. A border is replaced by an empty one, never removed with `null`: installing the look and feel again, as each theme change does, puts its border back on a component that has none. Dark or light by the theme's mode ([record 127](adr/0127-light-themes.md)): a light ground takes FlatLaf's light look, the colours a light ground cannot take as they are have a second value (`ByMode`, `OnGround`), and each window's title bar takes the mode; a JVM option at launch sets the application's macOS appearance dark, which its menus and the native file dialogs keep |
-| `icon` | `Icons` (the SVGs under `/icons`, one set, HiDPI, their gold recoloured to the tint chosen, record 156); `SpinnerIcon` (one shared wheel, advanced by its owner's timer; every owner's timer ticks on one spinner clock); `OverlayIcon`, `BesideIcon`; `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
+| `icon` | `Icons` (the SVGs under `/icons`, one set, HiDPI, their gold recoloured to the tint chosen, record 156); `SvgIcon` (an SVG drawn by jsvg, each colour through a filter at paint, a picture per scale, a disabled twin greyed as FlatLaf greys one; record 157); `SpinnerIcon` (one shared wheel, advanced by its owner's timer; every owner's timer ticks on one spinner clock); `OverlayIcon`, `BesideIcon`; `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§14.3](#143-commands-and-keys)) |
 | `resource` | `ResourceActions`: a list of resources' add, from its tab's menu, and its removal question, from a row's menu; no bar of buttons ([Workbench §1.4](workbench.md#14-the-sidebar)) |
 | `overlay` | `Overlay`, `Balloon`, `Flash` ([§14.2.3](#1423-trees-tabs-and-overlays)) |
@@ -1036,7 +1037,7 @@ runs) moves to an errand of `UiErrands`.
 | `EditorThemes`, `Fences` | the editors' theme, built from `Theme.content()` and built again for another tint or ground, the font and zoom kept ([record 101](adr/0101-content-colours-derived-from-the-theme.md)); a fenced block's language |
 | `TextSearch` | find in a text area, with every match marked |
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); callable from any thread |
-| `Diffs`, `DiffPane` | a unified diff with three lines of context, coloured |
+| `Diffs`, `DiffPane` | a unified diff with three lines of context, coloured; the differences from `Myers` (Myers' greedy algorithm, a cancel check each round), the text from `UnifiedDiff` ([record 157](adr/0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md)) |
 | `SplitDiff` | two versions side by side in editors, each with its syntax colours and line numbers, the right one editable: lost lines red, gained green, changed words marked, a band joining each difference, scrolling kept in step by the diff's line mapping. F7 and ⇧F7 move between differences. `compute` works the match out off the EDT and stops at a deadline; `remark` marks a comparison worked out for its new text without setting it ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)) |
 | `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing, raw HTML escaped. An image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG and GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text. Fences are coloured as in the editors; a pane has one dark style sheet (`HtmlPane.styles`). A table is a `grid`: its lines are the table's ground showing through 1 px between cells, with no CSS cell borders (Swing drew each as a polygon per side, and on the Metal pipeline each flushed the render queue: stalls up to 4 s, 2026-11-02). Headings carry GitHub's ids. Web addresses and `[[name]]` note links in text become links; front matter shows as a table of its facts (`FrontMatter`) |
 | `RenderedMarkdown` | an `HtmlPane` padded in a scroll pane: a panel's preview, the comparison window's rendered sides, which `MarkdownHtml.Marks` shades where a comparison found changes |
@@ -1427,11 +1428,11 @@ Tests that drive components with Swing timers run on the EDT through the `OnEdt`
 | `kit.action` | `CommandPaletteTest`, `KeyPriorityTest`, `MenuBarTest` |
 | `kit.async` | `EdtTest`, `EdtWatchdogTest`, `DebouncerTest`, `ShownTimerTest`, `SharedClockTest`, `WaitersTest` |
 | `kit.desktop` | `BrowserTest`, `FileChoosersTest`, `FileSearchTest`, `LinksTest`, `PlatformTest` |
-| `kit.format`, `kit.icon`, `kit.layout`, `kit.overlay` | `JsonTest`, `KeyTextTest`, `VersionsTest`; `GildedIconsTest`, `SpinnerIconTest`; `ShrinkingRowTest`; `FlashTest`, `OverlayTest` |
+| `kit.format`, `kit.icon`, `kit.layout`, `kit.overlay` | `JsonTest`, `KeyTextTest`, `VersionsTest`; `GildedIconsTest`, `SpinnerIconTest`, `SvgIconTest`; `ShrinkingRowTest`; `FlashTest`, `OverlayTest` |
 | `kit.resource`, `kit.tabs`, `kit.tree`, `kit.vcs` | `ResourceActionsTest`; `MovableTabsTest`, `TabStripTest`; `TreeViewTest`; `OpenedFilesTest`, `RepoChangesTest`, `RepositoryTopTest` |
-| `kit.text` | `MarkdownHtmlTest`, `HtmlPaneTest`, `ContentSheetTest`, `DarkPageTest`, `FrontMatterTest`, `FencesTest`, `MermaidDiagramsTest`, `LocalImagesTest`, `PlainTest`, `LogLinesTest`, `TextLinksTest`, `NoteLinksTest`, `SourceLinksTest`, `EditorsTest`, `EditorThemesTest`, `DiffsTest`, `SplitDiffTest`, `CaseFoldTest` |
+| `kit.text` | `MarkdownHtmlTest`, `HtmlPaneTest`, `ContentSheetTest`, `DarkPageTest`, `FrontMatterTest`, `FencesTest`, `MermaidDiagramsTest`, `LocalImagesTest`, `PlainTest`, `LogLinesTest`, `TextLinksTest`, `NoteLinksTest`, `SourceLinksTest`, `EditorsTest`, `EditorThemesTest`, `DiffsTest`, `SplitDiffTest`, `DiffGoldenTest` (139 diffs frozen as the replaced library made them, record 157), `CaseFoldTest` |
 | `kit.theme` | `NamedThemeTest`, `ContentPaletteTest`, `OnGroundTest`, `SerifTest`, `TooltipTintTest`, `TypeAndSpacingRulesTest`, `ThemeFilesTest`, `ThemeChoiceTest`, `ThemePreviewTest`, `FocusRingTest` |
-| `widgets.*` | `ApprovalInboxTest`, `ApprovalInboxGroupsTest`; `ChangesWidgetTest`, `ChangeEditorTest`; `DeliverablesWidgetTest`, `WrittenFilesTest`; `CommandEditorTest`, `PanelTokenMakerTest`, `SqlCompletionTest`; `PlotCanvasTest`; `GridTableTest`, `TableSourceTest`; `TerminalWidgetTest`, `TerminalKeysTest`, `TerminalMenuTest`, `PtyTest`, `InputGateTest`; `TextWidgetTest`; `TreeWidgetTest` |
+| `widgets.*` | `ApprovalInboxTest`, `ApprovalInboxGroupsTest`; `ChangesWidgetTest`, `ChangeEditorTest`; `DeliverablesWidgetTest`, `WrittenFilesTest`; `CommandEditorTest`, `PanelTokenMakerTest`, `SqlCompletionTest`, `SqlCompletionFilterTest`, `SqlCompletionPopupTest`, `SqlCompletionTypingTest`; `PlotCanvasTest`; `GridTableTest`, `TableSourceTest`; `TerminalWidgetTest`, `TerminalKeysTest`, `TerminalMenuTest`, `PtyTest`, `InputGateTest`; `TextWidgetTest`; `TreeWidgetTest` |
 | `widgets.transcript` | `TranscriptWidgetTest`, `AgentWidgetTest`, `AgentStripTest`, `AgentStripFollowTest`, `SubagentViewRefreshTest`, `ToolTextTest`; `doc`: `MarkdownDocTest`; `render`: `TranscriptCanvasTest`, `TranscriptCanvasViewportTest`, `TranscriptReadingTest`, `TranscriptFoldTest`, `TextBoxTest`, `FinderTest`, `ParasTest`, `RichFallbackTest`, `TintSheetTest`, `AgentStatusTest`, `AgentStatusEdgesTest`, `AgentBackgroundTest` |
 | `panels` | `WorkspaceTest`, `WorkspacePartitionTest`, `EditorPanelHitsTest`, `EditorPanelHeaderTest`, `EditorPanelOutlineTest`, `EditorPanelPreviewTest`, `PanelTextsTest`, `PanelsWithoutSessionTest`, `SessionsSidebarTest`, `SessionRowControlsTest`, `SidebarLookTest`, `SessionBarTest`, `TabStatusTest`, `CardFactsTest`, `FilesTabTest`, `FilesTabGroupsTest`, `FilesTabJobsTest`, `FolderWatchTest`, `ResultsViewTest`, `PlanTreeTest`, `StatusBarNoticeTest`, `StatusBarUsageTest`, `StatusBarWorkTest`, `TerminalTabsTest`, `ViewTabsTest`, `TabCardTest`, `ThemeChooserTest`, `CheckpointLockTest`, `LowerPanelApprovalsTest`, `InstancesTabTest`, `SessionGroupMenuTest`, `PanelMenusIconsTest` |
 | `dialogs.*` | `FormRowsTest`, `FoldersEditorTest`, `JobsEditorTest`, `ResourceDialogTest`, `ProjectSettingsTest`, `ImportSessionsDialogTest` |
@@ -1449,12 +1450,13 @@ The real window is tested from `app` (`./gradlew :app:uiTest`).
 
 The composition root: `main`, the configuration, the wiring of every module, the files comando keeps, the keychain, the
 intent log, logging, the machine's QuestDB, the comando Edge and this instance's link to it. It depends on every other
-module, QuestDB and the HiveMQ MQTT client; no module depends on it. It also holds the Gradle tasks that run, paint,
-replay and package the application.
+module and QuestDB; no module depends on it. It also holds the Gradle tasks that run, paint, replay and package the
+application.
 
 ### 15.1 Classes and design
 
-One package, `dev.marregui.comando.app`.
+Two packages: `dev.marregui.comando.app`, and `dev.marregui.comando.app.mqtt`, the MQTT 5 client `MqttPeerBroker` uses
+(the `mqtt.` rows, [record 157](adr/0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md)).
 
 | Class | Does |
 |---|---|
@@ -1469,7 +1471,9 @@ One package, `dev.marregui.comando.app`.
 | `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
 | `MachineQuestDb` | `ui`'s `ServerToggle`, `core`'s `ServerSwitch` (an agent's `server_start` and `server_stop`, record 121) and `claude`'s `QuestDbEndpoint` (the metrics sink's): the machine's one QuestDB, its own process in `~/.comando-questdb/` (record 146). Writes `bin/start.sh` and copies the jar to `lib/` at each start, runs the launcher under `Processes`, waits for `/exec`, writes the token to `qdb_server` and the registry `server.json`, all under `start.lock`, which the kit's `qdb` takes too. Live = the registry's pid alive and its token answered. Every listener on `127.0.0.1` (PostgreSQL wire on 8812, the web console on 9000, its minimal HTTP on 9003, ILP on 9009; UDP and telemetry off; tables by DDL only). Only the instance that started it stops it; `close()` leaves it running |
 | `EmbeddedEdge` | `ui`'s `ServerToggle` and `core`'s `ServerSwitch`: the one comando Edge on the machine, from the zip `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP` names, else the pinned release downloaded into `edge/dist`; a child process from a distribution zip installed in `edge/`, every listener on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010); `~/.comando-edge.json` names its pid and the instance that started it, which alone stops it; no other process is signalled ([Workbench §4.1](workbench.md#41-the-comando-edge)) |
-| `MqttPeerBroker` | `mcp`'s `PeerBroker` on the HiveMQ MQTT client (MQTT 5, async): client `comando-<instance>` to `127.0.0.1:18883` while `~/.comando-edge.json` names a live Edge, read every 5 s; reconnects 1 s after a drop, then at most every 5 s, while the Edge runs, and stops trying once it does not; the subscriptions renewed after every connect; the last will set at connect; messages to their handlers on one strand ([record 123](adr/0123-instances-consult-each-other.md)) |
+| `MqttPeerBroker` | `mcp`'s `PeerBroker` on `mqtt.MqttClient` (MQTT 5, a blocking socket): client `comando-<instance>` to `127.0.0.1:18883` while `~/.comando-edge.json` names a live Edge, read every 5 s; reconnects 1 s after a drop, then at most every 5 s, while the Edge runs, and stops trying once it does not; the subscriptions renewed after every connect; the last will set at connect; messages to their handlers on one strand ([record 123](adr/0123-instances-consult-each-other.md)) |
+| `mqtt.MqttClient` | an MQTT 5 client over a blocking socket to one broker: QoS 0 and 1 both ways, subscriptions, keep alive, a last will; it announces no Maximum Packet Size, so the broker hands it any packet the protocol allows, as the client before it took; it reconnects when its `Handler` returns a delay; the handler's calls and the futures' completions, but connect's and disconnect's, run on the executor it is given, in order. Within one connection at least once at QoS 1, a message in acknowledged after the handler has it; across connections at most once |
+| `mqtt.Packet`, `mqtt.Codec`, `mqtt.Wire`, `mqtt.Topics`, `mqtt.MqttException` | the packets the client speaks, sealed records checked when made; their encoding and decoding, a packet's size bounded before its body is read; MQTT's integers, variable byte integers, strings and binary data; topic names, filters and matching (§4.7); a failure with its reason code |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and the brain's backup through `tools`' `KitGit`, its scheduled jobs through `claude`'s `KitJobsCli`, the manifest's repair through `KitJson.repair` |
 | `Searcher` | implements `SearchPort`: one search at a time, its sources in turn on `search-scan`, its hits to the sink every 100 ms on `search-hits`; it stops at 1 000 hits and says so, and a new search or `cancel` ends the running one by generation, after which its sink hears nothing more (record 139) |
 | `Welcome` | the first panel's text on a fresh data root |
@@ -1530,12 +1534,15 @@ root (`KitRoot.use`) and gives the folder tabs the kit's folders at the first st
 | `questdb-toggle`, `questdb-start`, `questdb-stop` | errands of `MachineQuestDb` | one start or stop from the user's toggle, or from an agent's `ServerSwitch.want`; a toggle meanwhile only says so | `MachineQuestDb.close()` |
 | `edge-toggle`, `edge-start`, `edge-stop`, `edge-check` | errands of `EmbeddedEdge` | one start or stop from the toggle or an agent's `ServerSwitch.want`, up to 60 s for the admin API to answer; a read of the registry at most once a second for the button | `EmbeddedEdge.close()` |
 | `peer-broker` | timed strand of `MqttPeerBroker` | whether the registry names a live Edge, at start and every 5 s; connects or leaves | `MqttPeerBroker.close()` |
-| `peer-messages` | strand of `MqttPeerBroker` | the MQTT client's callbacks (its RxJava scheduler) and every message to its handlers, in order | `MqttPeerBroker.close()`, after the disconnect |
+| `peer-messages` | strand of `MqttPeerBroker` | the MQTT client's callbacks (connected, a message in, the futures' completions) and every message to its handlers, in order | `MqttPeerBroker.close()`, after the disconnect |
+| `mqtt-<client id>` | timed strand of `MqttClient` | opens each connection, reads it, keeps it alive, cuts a write that lasts over 10 s by closing the socket, and runs the reconnects the handler asks for; it writes nothing once the connection is up | `MqttClient.disconnect()` or `close()` |
+| `mqtt-writer-<client id>` | strand of `MqttClient` | every write after the connect, in the order queued, under the connection's write lock | `MqttClient.disconnect()` or `close()` |
 | `search-scan` | strand of `Searcher` | one search's sources, in turn | `Searcher.close()` |
 | `search-hits` | timed strand of `Searcher` | the hits found, to the sink every 100 ms | `Searcher.close()` |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook | the JVM's exit |
 
-The MQTT client adds one Netty event loop thread, a platform thread of the library's, while a client exists.
+The client id is `comando-<instance>`; both `mqtt-` strands exist while `MqttPeerBroker` has a client, from the Edge
+found running until it is left or the broker closes.
 
 The store's threads are virtual, so daemons: `close()` waits for what is queued, at a quit and in the shutdown hook. A
 keychain call runs on `store-secrets` through `Processes`, which starts no thread of its own.
@@ -1544,14 +1551,17 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 
 | Test | Covers | Runs in |
 |---|---|---|
-| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `MachineQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the data root's choice, the machine's QuestDB (a real process on free ports), the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
+| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `MachineQuestDbTest`, `EmbeddedEdgeTest`, `JsonGoldenTest` | the store files and panel files (against goldens, byte for byte: record 157), the intent log, logging, the lock message, the data root's choice, the machine's QuestDB (a real process on free ports), the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
 | `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run and audit folders owner-only, and no metrics folder, and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
-| `MqttPeerBrokerTest` | without a broker or a port: a question's response topic and correlation data through the client's types, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays | `./gradlew :app:test` |
+| `MqttPeerBrokerTest` | a message's payload, response topic and correlation data through `Packet.Publish`, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays; connect, will, resubscription and publish against a fake broker on a loopback port | `./gradlew :app:test` |
+| `CodecTest`, `WireTest`, `TopicsTest`, `MqttClientTest` | every packet written and read back, against the MQTT 5 specification's examples, and a malformed one refused with its reason code; topic names, filters and matching; the client against `FakeBroker` on a loopback socket: subscriptions, publishes both ways at QoS 0 and 1, Receive Maximum, keep alive and its timeout, a broker that drops, refuses or disconnects, a packet too large | `./gradlew :app:test` |
+| `MqttPeerBrokerTest`'s live round trip | one message through the running comando Edge | `./gradlew :app:test -PedgeLiveTest=true`, while one runs |
 | `SearcherTest` | sources in turn, the end after every hit; a new search or a cancel silences the last one; the limit and the cut; hits in batches while a source reads; a source that fails counts as one and the next runs; a close ends a running search and leaves no thread | `./gradlew :app:test` |
 | `StoreTest`'s keychain round trip | writes and deletes one login keychain item | `./gradlew :app:test -PkeychainTest=true` |
 | `EmbeddedEdgeTest`'s live start | downloads the pinned open-source Edge release (359 MB), runs it on free loopback ports, connects to its broker port, stops it | `./gradlew :app:test -PedgeLiveTest=true` |
 | `ThreadRulesTest` | ArchUnit over every module: platform threads only in `StateLoop`, `Watchdog`, `ClaudeProcess` and `Main`; virtual threads, executors other than per-task virtual ones, pools and `java.util.Timer` only in `Threads`; nothing on the JDK's shared fork-join pool | `./gradlew :app:test` |
 | `ColourRulesTest` | ArchUnit: colours made and named only in `ui`'s `kit.theme` | `./gradlew :app:test` |
+| `LibraryRulesTest` | ArchUnit over every module: no main class depends on the packages of a library [record 157](adr/0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) replaced | `./gradlew :app:test` |
 | `FileReadRulesTest` | ArchUnit over every module: no main class calls `Files.readString`, `readAllBytes`, `readAllLines`, `lines`, `newBufferedReader` or `newInputStream`, or depends on `FileInputStream`, `FileReader` or `RandomAccessFile` (rule 16) | `./gradlew :app:test` |
 | `AdrIndexTest` | `docs/adr/README.md` against the records: one row each, its title, date, deciders and status word for word | `./gradlew :app:test` |
 | `TestDocsTest` | every module's `*Test.java`: a `///` comment on the top-level type and on every `@Test`, `@ParameterizedTest`, `@RepeatedTest` or `@TestFactory` method, never `/** */` (G-11.7) | `./gradlew :ui:testDocs`, which `check` runs |

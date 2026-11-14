@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-12 | accepted | Miguel |
+| 2026-10-12 | accepted; its diff library replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | Miguel |
 
 ## 1. Context
 

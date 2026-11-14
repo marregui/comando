@@ -3,13 +3,10 @@ checkstyle = "14.3.0"
 # the coverage report (`./gradlew test jacocoTestReport`); not part of `build`
 jacoco = "0.8.16"
 flatlaf = "3.7.2"
-# the SVG renderer FlatLaf's extras use; kept at their version
+# the SVG renderer of comando's icons and Markdown images
 jsvg = "2.2.0"
 rsyntaxtextarea = "4.0.1"
-autocomplete = "4.0.0"
 commonmark = "0.31.0"
-diffutils = "4.18"
-jackson = "3.2.4"
 postgresql = "42.7.14"
 questdb = "10.1.0"
 annotations = "26.1.0"
@@ -21,19 +18,13 @@ jediterm = "3.76"
 pty4j = "0.14.0"
 slf4j = "2.0.20"
 testcontainers = "2.0.5"
-# MQTT 5 to the comando Edge, the instances' broker (record 123); app only
-hivemq-mqtt-client = "1.4.1"
 
 [libraries]
 flatlaf = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
-flatlaf-extras = { module = "com.formdev:flatlaf-extras", version.ref = "flatlaf" }
 jsvg = { module = "com.github.weisj:jsvg", version.ref = "jsvg" }
 rsyntaxtextarea = { module = "com.fifesoft:rsyntaxtextarea", version.ref = "rsyntaxtextarea" }
-autocomplete = { module = "com.fifesoft:autocomplete", version.ref = "autocomplete" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 commonmark-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
-diffutils = { module = "io.github.java-diff-utils:java-diff-utils", version.ref = "diffutils" }
-jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 questdb = { module = "org.questdb:questdb", version.ref = "questdb" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
@@ -49,4 +40,3 @@ pty4j = { module = "org.jetbrains.pty4j:pty4j", version.ref = "pty4j" }
 slf4j-jdk14 = { module = "org.slf4j:slf4j-jdk14", version.ref = "slf4j" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
-hivemq-mqtt-client = { module = "com.hivemq:hivemq-mqtt-client", version.ref = "hivemq-mqtt-client" }

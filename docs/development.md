@@ -226,7 +226,7 @@ on. Counts are of 2026-10-31, after the tool commit that added `final` and order
 | Rule | Class | Sites | Why not yet | Applied by |
 |---|---|---|---|---|
 | G-7.1 to G-7.5 | rule | none | Does not fit: no object pools, ring queues, padding or worker pools; comando's event rates are UI rates | when a path takes events at a rate a frame cannot absorb |
-| G-8.4 | rule | `SubagentFiles` | Does not fit: a JSONL tail read at UI rate whose consumer, Jackson, takes a `String` | when a tail is parsed below line level |
+| G-8.4 | rule | `SubagentFiles` | Does not fit: a JSONL tail read at UI rate whose consumer, `core.json`'s `Json.readTree`, takes a `String` | when a tail is parsed below line level |
 | G-10.11 | rule | 9 fully qualified names in main code (order and unused imports: enforced since 2026-10-31) | Predates the standard; Checkstyle does not report them | a change to the file |
 | G-10.8 | rule | 1,644 main lines over 120, 171 of them pushed past it by the tool that added `final` (2026-10-31); 66 signatures not wrapped | Predates the standard; a tool rewrap would touch every file for no defect | a change to the line by hand |
 | G-10.10 | rule | doclint off | Doc comments predate the standard; doclint's count is not taken | its own change: count the reports of `-Xdoclint:all/private,-missing`, fix them, turn it on |

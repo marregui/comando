@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-12 | accepted | Claude |
+| 2026-10-12 | accepted; its JSON library replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | Claude |
 
 ## 1. Context
 

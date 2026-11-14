@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md) | Miguel and Claude |
+| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md); its MQTT client replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | Miguel and Claude |
 
 ## 1. Context
 

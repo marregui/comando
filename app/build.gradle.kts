@@ -16,9 +16,7 @@ dependencies {
     implementation(project(":mcp"))
     implementation(project(":tools"))
     implementation(project(":ui"))
-    implementation(libs.jackson.databind)
     implementation(libs.questdb)
-    implementation(libs.hivemq.mqtt.client)
     testImplementation(project(":testkit"))
     // the keyboard tests reach into the editor and the terminal of a real window
     testImplementation(libs.rsyntaxtextarea)
@@ -28,6 +26,11 @@ dependencies {
     testImplementation(libs.archunit)
     // the uiTest lock is a launcher session listener in the test sources
     testImplementation(libs.junit.launcher)
+}
+
+// the PostgreSQL driver brings checker-qual for its annotations only: nothing reads them at run time (record 157)
+configurations.runtimeClasspath {
+    exclude(group = "org.checkerframework", module = "checker-qual")
 }
 
 // no test of this module joins the comando Edge or the machine's QuestDB: a developer's own comando may be running them

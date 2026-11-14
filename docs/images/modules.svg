@@ -6,7 +6,7 @@
 <rect x="500" y="140" width="600" height="96" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
 <text x="514" y="166" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >app</text>
 <text x="514" y="188" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >wiring, store files, keychain, intent log, embedded QuestDB, the comando Edge, main</text>
-<text x="514" y="207" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >every module · Jackson · QuestDB · HiveMQ MQTT client</text>
+<text x="514" y="207" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >every module · QuestDB</text>
 <rect x="60" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2" stroke-dasharray="5 4"/>
 <text x="74" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >testkit</text>
 <text x="74" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >fakes, recorded streams</text>
@@ -21,13 +21,13 @@
 <rect x="552" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
 <text x="566" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >claude</text>
 <text x="566" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >claude -p per session</text>
-<text x="566" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >Jackson</text>
+<text x="566" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >core only</text>
 <line x1="800" y1="236" x2="666.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <line x1="666.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <rect x="798" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>
 <text x="812" y="386" text-anchor="start" font-size="15" font-weight="400" fill="#6FAEE8" >mcp</text>
 <text x="812" y="408" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >MCP server, SQL policy</text>
-<text x="812" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >Jackson</text>
+<text x="812" y="427" text-anchor="start" font-size="12" font-weight="300" fill="#9A9A9A" font-family="Menlo, monospace" >core only</text>
 <line x1="800" y1="236" x2="912.0" y2="358" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <line x1="912.0" y1="460" x2="800" y2="588" stroke="#9A9A9A" stroke-width="1.1" marker-end="url(#a)"/>
 <rect x="1044" y="360" width="228" height="100" rx="8" fill="#1E1E1E" stroke="#6FAEE8" stroke-width="1.2"/>

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-17 | accepted | Miguel and Claude |
+| 2026-10-17 | accepted; the icons' route to jsvg (`flatlaf-extras`) replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | Miguel and Claude |
 
 ## 1. Context
 

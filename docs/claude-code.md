@@ -260,7 +260,7 @@ typed command carry no argument and ask as before; answering their cards is what
 | Origin | an `Origin` naming a host other than `localhost`, `127.0.0.1` or `::1` gets 403, so a web page cannot call the tools; the CLI sends none |
 | Protocol versions | `2025-03-26`, `2025-06-18`, `2025-11-25`; `initialize` answers the client's when supported, else `2025-06-18` |
 | Methods | `initialize`, `tools/list`, `tools/call`, `ping`; notifications get 202; anything else, including the `server/discover` Claude Code sends first, gets method-not-found |
-| Implementation | JSON-RPC over the JDK's `HttpServer` and Jackson, a virtual thread per request, at most 256 at once and 16 per session token (one past either gets 503 and `Retry-After: 1`); a request has 5 s to arrive, from its first byte, headers included, to its body's last, else its connection is closed; at most 1 024 connections are open at once; no MCP library |
+| Implementation | JSON-RPC over the JDK's `HttpServer` and comando's own JSON (`core.json`), a virtual thread per request, at most 256 at once and 16 per session token (one past either gets 503 and `Retry-After: 1`); a request has 5 s to arrive, from its first byte, headers included, to its body's last, else its connection is closed; at most 1 024 connections are open at once; no MCP library |
 
 ### 3.2 The tools
 

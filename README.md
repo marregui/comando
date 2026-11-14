@@ -112,11 +112,11 @@ brain, the architecture, development, and the decision records.
 
 ## Built with
 
-Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea and AutoComplete, JediTerm and pty4j, commonmark-java,
-java-diff-utils, Jackson, the PostgreSQL JDBC driver, QuestDB and the HiveMQ MQTT client. Eight Gradle modules (core,
-testkit, db, claude, mcp, tools, ui, app): about 72 000 lines of Java and 48 000 of tests. CI builds, tests and
-replays the window on Linux and macOS for every push to `main` and every pull request, except changes to documentation
-alone; a version tag builds the packages for macOS, Linux and Windows and publishes them as a release.
+Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea, JediTerm and pty4j, commonmark-java, the PostgreSQL JDBC driver
+and QuestDB; JSON, the MQTT client, diffs, SQL completion and SVG icons are comando's own code. Eight Gradle
+modules (core, testkit, db, claude, mcp, tools, ui, app): about 72 000 lines of Java and 48 000 of tests. CI builds,
+tests and replays the window on Linux and macOS for every push to `main` and every pull request, except changes to
+documentation alone; a version tag builds the packages for macOS, Linux and Windows and publishes them as a release.
 
 ## Status
 
@@ -124,5 +124,5 @@ In my daily use; version 2.0.0-SNAPSHOT. A release is made by pushing a version 
 unsigned.
 
 comando is under the [Apache License 2.0](LICENSE). Third-party components keep their licences: JediTerm (LGPL-3.0)
-and pty4j (EPL-1.0) for the terminal; Apache 2.0: FlatLaf, java-diff-utils, Jackson, QuestDB, the HiveMQ MQTT client,
-HiveMQ Edge; BSD: RSyntaxTextArea and AutoComplete, commonmark-java, the PostgreSQL JDBC driver; MIT: jsvg, SLF4J.
+and pty4j (EPL-1.0) for the terminal; Apache 2.0: FlatLaf, QuestDB, HiveMQ Edge; BSD: RSyntaxTextArea,
+commonmark-java, the PostgreSQL JDBC driver; MIT: jsvg, SLF4J.

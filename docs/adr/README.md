@@ -30,7 +30,7 @@ row and its record differ, or when a record has no row.
 | [7](0007-default-permission-mode.md) | Default permission mode | 2026-10-12 | Miguel | accepted; amended 2026-11-01 (see Amendments) |
 | [8](0008-the-lower-panel-follows-the-focused-panel.md) | The lower panel follows the focused panel | 2026-10-12 | Miguel | accepted |
 | [9](0009-running-a-prompt-on-a-stopped-session.md) | Running a prompt on a stopped session | 2026-10-12 | Miguel | accepted |
-| [10](0010-own-table-and-plot-on-java2d.md) | Own table and plot on Java2D | 2026-10-12 | Miguel | accepted |
+| [10](0010-own-table-and-plot-on-java2d.md) | Own table and plot on Java2D | 2026-10-12 | Miguel | accepted; its diff library replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) |
 | [11](0011-the-documented-cli-route-to-claude-code.md) | The documented CLI route to Claude Code | 2026-10-12 | Miguel | accepted |
 | [12](0012-scope-of-the-first-milestone.md) | Scope of the first milestone | 2026-10-12 | Miguel | accepted |
 | [13](0013-sessions-configured-like-connections.md) | Sessions configured like connections | 2026-10-12 | Miguel | accepted; amended by [record 88](0088-a-session-and-its-panel-share-a-name.md) |
@@ -39,7 +39,7 @@ row and its record differ, or when a record has no row.
 | [16](0016-unsigned-macos-build.md) | Unsigned macOS build | 2026-10-12 | Miguel | accepted; amended 2026-10-27 (see Amendments) |
 | [17](0017-system-logger-instead-of-questdb-s-logger.md) | System.Logger instead of QuestDB's logger | 2026-10-12 | Claude | accepted |
 | [18](0018-per-server-mcp-timeout-instead-of-progress-notifications.md) | Per-server MCP timeout instead of progress notifications | 2026-10-12 | Claude | accepted |
-| [19](0019-own-mcp-server-no-library.md) | Own MCP server, no library | 2026-10-12 | Claude | accepted |
+| [19](0019-own-mcp-server-no-library.md) | Own MCP server, no library | 2026-10-12 | Claude | accepted; its JSON library replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) |
 | [20](0020-passwords-in-the-macos-keychain-through-security.md) | Passwords in the macOS keychain through `security` | 2026-10-12 | Claude | accepted; amended 2026-11-01 (see Amendments) |
 | [21](0021-painted-transcript.md) | Painted transcript | 2026-10-12 | Claude | accepted |
 | [22](0022-no-parquet-export.md) | No Parquet export | 2026-10-12 | Claude | accepted |
@@ -78,7 +78,7 @@ row and its record differ, or when a record has no row.
 | [55](0055-the-files-tab-only-shows-folders-json-configures-it.md) | The Files tab only shows; folders.json configures it; every file opens to edit | 2026-10-17 | Miguel and Claude | accepted; the Trash returns for folders marked deletable in [record 63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md); the configuration row replaced by [record 69](0069-a-window-edits-the-files-tab-folders.md) |
 | [56](0056-html-opens-in-the-browser-not-in-comando.md) | HTML opens in the browser, not in comando | 2026-10-17 | Miguel and Claude | accepted; links row replaced by [record 154](0154-a-link-to-a-page-opens-the-browser.md) |
 | [57](0057-a-light-editor-and-a-header-of-icons.md) | A light editor, and a panel header of icons | 2026-10-17 | Miguel and Claude | accepted; the rows theme, scope and "what turns light" replaced by [record 93](0093-comando-is-dark-throughout.md), which takes the theme button out of the header; the header's clear removed by [record 86](0086-a-checkpoint-clears-and-carries-its-summary.md) |
-| [58](0058-markdown-shows-the-pictures-beside-it.md) | Markdown shows the pictures beside it | 2026-10-17 | Miguel and Claude | accepted |
+| [58](0058-markdown-shows-the-pictures-beside-it.md) | Markdown shows the pictures beside it | 2026-10-17 | Miguel and Claude | accepted; the icons' route to jsvg (`flatlaf-extras`) replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) |
 | [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | 2026-10-18 | Miguel and Claude | accepted; Tool settings removed by [record 62](0062-gradle-runs-by-convention.md); the bar replaced by [record 75](0075-the-menu-bar-is-edit-and-actions-flat.md) |
 | [60](0060-about-is-a-card-worded-by-a-file.md) | About comando is a card worded by a file | 2026-10-18 | Miguel and Claude | accepted |
 | [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | 2026-10-18 | Miguel and Claude | replaced by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md); not built |
@@ -143,7 +143,7 @@ row and its record differ, or when a record has no row.
 | [120](0120-the-context-follows-each-model-call.md) | The session bar's context follows each model call, and a restart keeps it | 2026-10-29 | Miguel and Claude | accepted |
 | [121](0121-an-agent-has-every-action-the-user-has.md) | An agent has every action the user has: one registry of actions, a parity test, two rules | 2026-10-29 | Miguel and Claude | accepted; increment 1 built, increments 2–4 proposed (§3); amended 2026-11-01 (see Amendments: rule 1 covers the asker's whole creation family) |
 | [122](0122-instances-name-kit-brain-data-root-edge.md) | Several instances: a name each, a kit and brain each, a data root each, and an Edge to find one another | 2026-10-29 | Miguel and Claude | accepted in part: §2.1, the layout and the kit's brain paths of §2.2 and the broker of §2.4 built, the presence and inbox of §2.4 built on one machine by [record 123](0123-instances-consult-each-other.md); proposed: the backups of §2.2–§2.3, the trust and bridging of §2.4, §2.5; amended 2026-11-01 and 2026-11-09 (see Amendments) |
-| [123](0123-instances-consult-each-other.md) | Instances consult each other through the comando Edge: presence, ask, reply | 2026-10-29 | Miguel and Claude | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md) |
+| [123](0123-instances-consult-each-other.md) | Instances consult each other through the comando Edge: presence, ask, reply | 2026-10-29 | Miguel and Claude | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md); its MQTT client replaced by [record 157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) |
 | [124](0124-the-sidebar-shows-the-instances.md) | The sidebar shows the instances: an Instances tab, a role and a kit in the presence | 2026-10-30 | Miguel and Claude | accepted; built; amended the same day (§4) |
 | [125](0125-the-session-dialog-asks-what-matters.md) | The session dialog asks what matters first and names its defaults | 2026-10-30 | Miguel and Claude | accepted; §2 built (§2.1 amended 2026-10-31, §2's permission mode and extra folders amended 2026-11-01, see Amendments), §3 proposed for the packaging work |
 | [126](0126-themes-are-json-files.md) | Themes are JSON files: six built in, the user's from the data root | 2026-10-30 | Miguel and Claude | accepted; built; `mode: light` built by [record 127](0127-light-themes.md); `description` added by [record 147](0147-a-theme-says-what-it-does-to-the-mind.md) |
@@ -177,4 +177,5 @@ row and its record differ, or when a record has no row.
 | [154](0154-a-link-to-a-page-opens-the-browser.md) | A link to a page opens the browser | 2026-11-12 | Miguel | accepted; built |
 | [155](0155-icon-sets-switch-like-themes.md) | Icon sets switch like themes | 2026-11-12 | Miguel and Claude | replaced by [record 156](0156-one-icon-set-and-a-split-checkpoint.md) |
 | [156](0156-one-icon-set-and-a-split-checkpoint.md) | One icon set and a split checkpoint | 2026-11-14 | Miguel and Claude | accepted; built |
+| [157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | comando owns its JSON, MQTT, diff, completion and icons | 2026-11-14 | Miguel and Claude | accepted; built |
 | [158](0158-cdb-comandos-own-database.md) | cdb, comando's own database | 2026-11-14 | Miguel and Claude | accepted; built, in shadow beside QuestDB |
