@@ -27,11 +27,6 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 
-import com.github.difflib.DiffUtils;
-import com.github.difflib.algorithm.DiffAlgorithmListener;
-import com.github.difflib.algorithm.myers.MyersDiff;
-import com.github.difflib.patch.AbstractDelta;
-import com.github.difflib.patch.Patch;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
@@ -337,32 +332,17 @@ public final class SplitDiff {
     }
 
     private static List<Chunk> chunks(final List<String> a, final List<String> b, final long deadline) {
-        final Patch<String> patch = DiffUtils.diff(a, b, new MyersDiff<>(), until(deadline));
-        final List<Chunk> out = new ArrayList<>(patch.getDeltas().size());
-        for (final AbstractDelta<String> d : patch.getDeltas()) {
-            final int ls = d.getSource().getPosition();
-            final int rs = d.getTarget().getPosition();
-            out.add(new Chunk(ls, ls + d.getSource().size(), rs, rs + d.getTarget().size()));
-        }
-        return out;
+        return Myers.diff(a, b, until(deadline));
     }
 
-    /** A progress listener that stops the diff once {@code deadline} (a {@link System#nanoTime} value) has passed. */
-    private static DiffAlgorithmListener until(final long deadline) {
-        return new DiffAlgorithmListener() {
-            @Override
-            public void diffStart() {
-            }
-
-            @Override
-            public void diffStep(final int value, final int max) {
-                if (System.nanoTime() - deadline > 0) {
-                    throw new OutOfTime();
-                }
-            }
-
-            @Override
-            public void diffEnd() {
+    /**
+     * A check, run before each round of a diff, that stops it once {@code deadline} (a {@link System#nanoTime} value)
+     * has passed.
+     */
+    private static Runnable until(final long deadline) {
+        return () -> {
+            if (System.nanoTime() - deadline > 0) {
+                throw new OutOfTime();
             }
         };
     }
@@ -449,14 +429,13 @@ public final class SplitDiff {
         final List<int[]> bPos = new ArrayList<>();
         final List<String> aw = words(a, aPos);
         final List<String> bw = words(b, bPos);
-        final Patch<String> patch = DiffUtils.diff(aw, bw, new MyersDiff<>(), until(deadline));
         int aChanged = 0;
         int bChanged = 0;
         final List<int[]> as = new ArrayList<>();
         final List<int[]> bs = new ArrayList<>();
-        for (final AbstractDelta<String> d : patch.getDeltas()) {
-            aChanged += collect(d.getSource().getPosition(), d.getSource().size(), aw, aPos, as);
-            bChanged += collect(d.getTarget().getPosition(), d.getTarget().size(), bw, bPos, bs);
+        for (final Chunk c : Myers.diff(aw, bw, until(deadline))) {
+            aChanged += collect(c.leftStart(), c.leftEnd(), aw, aPos, as);
+            bChanged += collect(c.rightStart(), c.rightEnd(), bw, bPos, bs);
         }
         if (aChanged * 2 > count(aw) || bChanged * 2 > count(bw)) {
             return false;
@@ -466,9 +445,14 @@ public final class SplitDiff {
         return true;
     }
 
-    private static int collect(final int from, final int size, final List<String> words, final List<int[]> pos, final List<int[]> out) {
+    private static int collect(
+            final int from,
+            final int to,
+            final List<String> words,
+            final List<int[]> pos,
+            final List<int[]> out) {
         int n = 0;
-        for (int i = from; i < from + size; i++) {
+        for (int i = from; i < to; i++) {
             if (!words.get(i).isBlank()) {
                 out.add(pos.get(i));
                 n++;

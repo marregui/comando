@@ -1,0 +1,7799 @@
+case random-0
+path 
+before 103
+g
+f
+
+c
+e
+
+a
+c
+b
+g
+b
+f
+c
+h
+b
+c
+f
+e
+e
+a
+e
+c
+e
+f
+f
+a
+e
+h
+f
+
+f
+e
+a
+
+h
+h
+
+e
+f
+b
+
+c
+a
+c
+a
+h
+f
+f
+d
+c
+b
+e
+h
+e
+a
+e
+b
+e
+d
+g
+c
+
+c
+h
+a
+a
+h
+a
+a
+a
+d
+b
+c
+c
+h
+c
+
+
+a
+e
+g
+g
+a
+f
+e
+d
+c
+c
+d
+h
+f
+b
+b
+e
+d
+g
+b
+h
+c
+b
+
+b
+f
+after 16
+b
+d
+d
+g
+e
+f
+
+f
+c
+f
+g
+e
+
+f
+f
+b
+chunks 12
+0 8 0 0
+9 9 1 3
+10 17 4 4
+18 23 5 5
+24 29 6 6
+31 41 8 8
+42 46 9 9
+47 59 10 10
+60 79 11 11
+80 83 12 13
+84 90 14 14
+92 103 16 16
+unified 109
+--- before
++++ after
+@@ -1,103 +1,16 @@
+-g
+-f
+-
+-c
+-e
+-
+-a
+-c
+ b
++d
++d
+ g
+-b
+-f
+-c
+-h
+-b
+-c
+-f
+ e
+-e
+-a
+-e
+-c
+-e
+ f
+-f
+-a
+-e
+-h
+-f
+ 
+ f
+-e
+-a
+-
+-h
+-h
+-
+-e
+-f
+-b
+-
+ c
+-a
+-c
+-a
+-h
+ f
+-f
+-d
+-c
+-b
+-e
+-h
+-e
+-a
+-e
+-b
+-e
+-d
+ g
+-c
+-
+-c
+-h
+-a
+-a
+-h
+-a
+-a
+-a
+-d
+-b
+-c
+-c
+-h
+-c
+-
+-
+-a
+ e
+-g
+-g
+-a
++
+ f
+-e
+-d
+-c
+-c
+-d
+-h
+ f
+ b
+-b
+-e
+-d
+-g
+-b
+-h
+-c
+-b
+-
+-b
+-f
+case random-1
+path src/F.java
+before 0
+after 2
+a
+c
+chunks 1
+0 0 0 2
+unified 5
+--- src/F.java
++++ src/F.java
+@@ -0,0 +1,2 @@
++a
++c
+case random-2
+path 
+before 22
+d
+c
+d
+b
+e
+d
+d
+a
+b
+c
+e
+a
+d
+b
+a
+b
+e
+c
+a
+e
+e
+d
+after 22
+d
+c
+d
+b
+a
+d
+d
+a
+b
+c
+e
+a
+d
+b
+a
+b
+e
+c
+a
+e
+e
+d
+chunks 1
+4 5 4 5
+unified 11
+--- before
++++ after
+@@ -2,7 +2,7 @@
+ c
+ d
+ b
+-e
++a
+ d
+ d
+ a
+case random-3
+path src/F.java
+before 3
+a
+b
+a
+after 22
+b
+b
+b
+a
+b
+a
+a
+b
+a
+a
+b
+b
+b
+b
+a
+a
+a
+b
+a
+b
+a
+a
+chunks 2
+0 0 0 3
+3 3 6 22
+unified 25
+--- src/F.java
++++ src/F.java
+@@ -1,3 +1,22 @@
++b
++b
++b
+ a
+ b
+ a
++a
++b
++a
++a
++b
++b
++b
++b
++a
++a
++a
++b
++a
++b
++a
++a
+case random-4
+path 
+before 0
+after 0
+chunks 0
+unified 0
+case random-5
+path src/F.java
+before 7
+b
+a
+c
+b
+c
+c
+a
+after 2
+a
+a
+chunks 2
+0 1 0 0
+2 6 1 1
+unified 10
+--- src/F.java
++++ src/F.java
+@@ -1,7 +1,2 @@
+-b
+ a
+-c
+-b
+-c
+-c
+ a
+case random-6
+path 
+before 9
+a
+b
+b
+b
+b
+b
+b
+b
+a
+after 8
+a
+b
+b
+b
+b
+b
+b
+a
+chunks 1
+7 8 7 7
+unified 8
+--- before
++++ after
+@@ -5,5 +5,4 @@
+ b
+ b
+ b
+-b
+ a
+case random-7
+path src/F.java
+before 19
+b
+b
+a
+a
+a
+
+
+
+a
+a
+a
+
+a
+
+a
+
+
+
+a
+after 20
+b
+b
+a
+a
+a
+
+b
+a
+
+
+a
+a
+
+a
+
+a
+
+
+a
+a
+chunks 4
+6 6 6 8
+10 11 12 12
+17 18 18 18
+19 19 19 20
+unified 22
+--- src/F.java
++++ src/F.java
+@@ -4,16 +4,17 @@
+ a
+ a
+ 
++b
++a
+ 
+ 
+ a
+ a
+-a
+ 
+ a
+ 
+ a
+ 
+ 
+-
+ a
++a
+case random-8
+path 
+before 13
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 15
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+13 13 13 15
+unified 8
+--- before
++++ after
+@@ -11,3 +11,5 @@
+ a
+ a
+ a
++a
++a
+case random-9
+path src/F.java
+before 19
+c
+c
+b
+c
+c
+c
+a
+a
+b
+c
+b
+c
+c
+b
+c
+b
+b
+a
+c
+after 0
+chunks 1
+0 19 0 0
+unified 22
+--- src/F.java
++++ src/F.java
+@@ -1,19 +0,0 @@
+-c
+-c
+-b
+-c
+-c
+-c
+-a
+-a
+-b
+-c
+-b
+-c
+-c
+-b
+-c
+-b
+-b
+-a
+-c
+case random-10
+path 
+before 15
+b
+a
+f
+b
+f
+e
+b
+h
+d
+d
+g
+d
+b
+g
+d
+after 15
+b
+a
+f
+b
+f
+e
+b
+h
+d
+d
+g
+d
+b
+g
+d
+chunks 0
+unified 0
+case random-11
+path src/F.java
+before 22
+d
+b
+h
+g
+h
+d
+g
+e
+g
+c
+a
+h
+d
+f
+f
+c
+f
+e
+b
+g
+g
+f
+after 21
+d
+e
+h
+g
+h
+d
+g
+e
+h
+g
+c
+a
+d
+f
+f
+c
+f
+e
+b
+g
+f
+chunks 4
+1 2 1 2
+8 8 8 9
+11 12 12 12
+20 21 20 20
+unified 26
+--- src/F.java
++++ src/F.java
+@@ -1,15 +1,15 @@
+ d
+-b
++e
+ h
+ g
+ h
+ d
+ g
+ e
++h
+ g
+ c
+ a
+-h
+ d
+ f
+ f
+@@ -18,5 +18,4 @@
+ e
+ b
+ g
+-g
+ f
+case random-12
+path 
+before 83
+b
+b
+c
+a
+a
+c
+a
+a
+a
+c
+b
+c
+a
+b
+b
+c
+c
+b
+a
+a
+a
+b
+c
+b
+b
+b
+a
+c
+c
+b
+b
+a
+b
+b
+b
+b
+a
+b
+a
+c
+a
+a
+c
+b
+a
+c
+c
+c
+b
+c
+b
+a
+c
+c
+a
+c
+b
+c
+a
+c
+a
+b
+a
+a
+c
+a
+c
+a
+b
+a
+a
+b
+a
+b
+b
+a
+c
+c
+c
+b
+c
+a
+b
+after 83
+b
+b
+c
+a
+a
+c
+a
+a
+a
+c
+b
+c
+a
+b
+b
+c
+c
+b
+a
+a
+a
+b
+c
+b
+b
+b
+a
+c
+c
+b
+b
+a
+b
+b
+b
+b
+a
+b
+a
+c
+a
+a
+c
+b
+a
+c
+c
+c
+b
+c
+b
+a
+c
+c
+a
+c
+b
+c
+a
+c
+a
+b
+a
+a
+c
+a
+c
+a
+b
+a
+a
+b
+a
+b
+b
+a
+c
+c
+c
+b
+c
+a
+b
+chunks 0
+unified 0
+case random-13
+path src/F.java
+before 81
+b
+
+
+a
+
+
+a
+a
+a
+b
+a
+a
+
+b
+a
+
+a
+a
+
+a
+a
+
+
+
+b
+b
+
+a
+a
+
+b
+
+a
+
+b
+a
+a
+b
+a
+a
+b
+a
+
+b
+b
+
+
+
+
+b
+b
+b
+
+
+
+a
+a
+a
+a
+b
+b
+
+a
+b
+b
+
+b
+a
+
+b
+b
+b
+
+b
+
+a
+
+
+
+
+
+after 18
+a
+b
+b
+a
+a
+b
+
+
+a
+a
+b
+a
+a
+
+
+b
+b
+a
+chunks 15
+0 3 0 0
+4 9 1 1
+10 13 2 2
+15 16 4 4
+17 24 5 5
+25 26 6 6
+27 29 7 7
+30 32 8 8
+33 35 9 9
+36 37 10 10
+40 42 13 13
+43 45 14 14
+46 49 15 15
+51 55 17 17
+56 81 18 18
+unified 84
+--- src/F.java
++++ src/F.java
+@@ -1,81 +1,18 @@
+-b
+-
+-
+ a
+-
+-
+-a
+-a
+-a
+ b
+-a
+-a
+-
+ b
+ a
+-
+ a
+-a
+-
+-a
+-a
+-
+-
+-
+ b
+-b
+ 
+-a
+-a
+ 
+-b
+-
+ a
+-
+-b
+ a
+-a
+ b
+ a
+ a
+-b
+-a
+ 
+-b
+-b
+ 
+-
+-
+-
+ b
+ b
+-b
+-
+-
+-
+ a
+-a
+-a
+-a
+-b
+-b
+-
+-a
+-b
+-b
+-
+-b
+-a
+-
+-b
+-b
+-b
+-
+-b
+-
+-a
+-
+-
+-
+-
+-
+case random-14
+path 
+before 15
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 7
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+7 15 7 7
+unified 14
+--- before
++++ after
+@@ -5,11 +5,3 @@
+ a
+ a
+ a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+case random-15
+path src/F.java
+before 3
+a
+c
+c
+after 11
+a
+a
+b
+c
+c
+b
+a
+c
+a
+b
+c
+chunks 2
+1 1 1 3
+3 3 5 11
+unified 14
+--- src/F.java
++++ src/F.java
+@@ -1,3 +1,11 @@
+ a
++a
++b
+ c
+ c
++b
++a
++c
++a
++b
++c
+case random-16
+path 
+before 112
+b
+
+
+b
+b
+
+b
+
+b
+b
+a
+b
+
+a
+b
+b
+
+
+a
+
+b
+
+
+a
+b
+b
+
+b
+a
+b
+a
+b
+a
+a
+b
+
+
+
+b
+a
+a
+a
+
+b
+b
+
+a
+a
+
+a
+a
+
+b
+
+b
+a
+
+b
+b
+
+a
+b
+b
+
+
+
+
+
+a
+a
+b
+b
+b
+
+b
+a
+b
+b
+
+b
+
+a
+
+
+a
+a
+b
+b
+a
+a
+a
+a
+b
+
+a
+b
+b
+
+b
+b
+b
+a
+
+a
+b
+a
+
+
+b
+b
+a
+
+after 9
+
+
+b
+a
+
+b
+a
+b
+b
+chunks 8
+0 1 0 0
+4 10 3 3
+11 12 4 4
+13 14 5 5
+15 18 6 6
+19 20 7 7
+21 24 8 8
+25 112 9 9
+unified 115
+--- before
++++ after
+@@ -1,112 +1,9 @@
+-b
+ 
+ 
+ b
+-b
+-
+-b
+-
+-b
+-b
+ a
+-b
+ 
+-a
+ b
+-b
+-
+-
+ a
+-
+ b
+-
+-
+-a
+ b
+-b
+-
+-b
+-a
+-b
+-a
+-b
+-a
+-a
+-b
+-
+-
+-
+-b
+-a
+-a
+-a
+-
+-b
+-b
+-
+-a
+-a
+-
+-a
+-a
+-
+-b
+-
+-b
+-a
+-
+-b
+-b
+-
+-a
+-b
+-b
+-
+-
+-
+-
+-
+-a
+-a
+-b
+-b
+-b
+-
+-b
+-a
+-b
+-b
+-
+-b
+-
+-a
+-
+-
+-a
+-a
+-b
+-b
+-a
+-a
+-a
+-a
+-b
+-
+-a
+-b
+-b
+-
+-b
+-b
+-b
+-a
+-
+-a
+-b
+-a
+-
+-
+-b
+-b
+-a
+-
+case random-17
+path src/F.java
+before 103
+e
+a
+c
+e
+d
+e
+c
+d
+
+f
+f
+h
+g
+h
+b
+f
+d
+b
+e
+d
+a
+f
+f
+e
+b
+c
+
+
+d
+d
+h
+h
+c
+h
+c
+b
+e
+c
+e
+e
+f
+b
+h
+
+d
+d
+h
+c
+d
+c
+g
+h
+h
+h
+e
+f
+c
+b
+a
+c
+c
+
+f
+d
+c
+d
+g
+
+g
+g
+c
+
+
+h
+a
+g
+b
+h
+f
+a
+h
+a
+c
+g
+a
+e
+h
+g
+c
+h
+f
+d
+e
+g
+h
+h
+e
+c
+f
+h
+f
+f
+b
+after 21
+c
+a
+e
+b
+c
+c
+c
+e
+b
+c
+
+a
+a
+h
+c
+c
+f
+c
+
+g
+g
+chunks 16
+0 2 0 0
+3 20 1 1
+21 23 2 2
+26 32 5 5
+33 34 6 6
+35 36 7 7
+37 41 8 8
+42 47 9 9
+48 61 10 10
+62 74 11 11
+75 79 12 12
+81 82 14 14
+83 88 15 15
+89 90 16 16
+91 97 17 17
+98 103 18 21
+unified 109
+--- src/F.java
++++ src/F.java
+@@ -1,103 +1,21 @@
+-e
+-a
+ c
+-e
+-d
+-e
+-c
+-d
+-
+-f
+-f
+-h
+-g
+-h
+-b
+-f
+-d
+-b
+-e
+-d
+ a
+-f
+-f
+ e
+ b
+ c
+-
+-
+-d
+-d
+-h
+-h
+ c
+-h
+ c
+-b
+ e
+-c
+-e
+-e
+-f
+ b
+-h
+-
+-d
+-d
+-h
+ c
+-d
+-c
+-g
+-h
+-h
+-h
+-e
+-f
+-c
+-b
+-a
+-c
+-c
+ 
+-f
+-d
+-c
+-d
+-g
+-
+-g
+-g
+-c
+-
+-
+-h
+ a
+-g
+-b
+-h
+-f
+ a
+ h
+-a
+ c
+-g
+-a
+-e
+-h
+-g
+ c
+-h
+ f
+-d
+-e
+-g
+-h
+-h
+-e
+ c
+-f
+-h
+-f
+-f
+-b
++
++g
++g
+case random-18
+path 
+before 15
+a
+a
+
+
+a
+
+a
+
+a
+a
+
+
+a
+a
+
+after 15
+a
+a
+
+
+
+
+a
+
+a
+a
+
+
+a
+a
+
+chunks 2
+4 5 4 4
+6 6 5 6
+unified 12
+--- before
++++ after
+@@ -2,8 +2,8 @@
+ a
+ 
+ 
+-a
+ 
++
+ a
+ 
+ a
+case random-19
+path src/F.java
+before 76
+h
+g
+f
+b
+e
+c
+g
+h
+a
+f
+g
+d
+f
+a
+a
+c
+g
+h
+b
+b
+g
+e
+e
+d
+a
+d
+c
+g
+e
+h
+f
+e
+g
+f
+e
+g
+d
+f
+h
+h
+e
+e
+e
+h
+e
+h
+h
+d
+c
+h
+d
+c
+b
+e
+c
+e
+e
+d
+e
+h
+e
+c
+e
+g
+a
+a
+c
+f
+c
+d
+a
+h
+h
+f
+g
+f
+after 75
+h
+f
+b
+e
+c
+g
+h
+a
+f
+g
+d
+f
+a
+a
+c
+g
+h
+b
+b
+g
+e
+e
+d
+a
+d
+c
+g
+e
+h
+e
+g
+f
+e
+g
+d
+f
+h
+h
+d
+e
+e
+e
+h
+e
+h
+h
+d
+c
+h
+d
+c
+b
+e
+c
+e
+e
+d
+e
+h
+e
+c
+e
+g
+a
+a
+c
+f
+c
+d
+a
+h
+h
+f
+g
+f
+chunks 3
+1 2 1 1
+30 31 29 29
+40 40 38 39
+unified 24
+--- src/F.java
++++ src/F.java
+@@ -1,5 +1,4 @@
+ h
+-g
+ f
+ b
+ e
+@@ -28,7 +27,6 @@
+ g
+ e
+ h
+-f
+ e
+ g
+ f
+@@ -38,6 +36,7 @@
+ f
+ h
+ h
++d
+ e
+ e
+ e
+case random-20
+path 
+before 12
+b
+c
+a
+b
+c
+c
+a
+b
+b
+c
+a
+b
+after 2
+c
+b
+chunks 3
+0 1 0 0
+2 3 1 1
+4 12 2 2
+unified 15
+--- before
++++ after
+@@ -1,12 +1,2 @@
+-b
+ c
+-a
+ b
+-c
+-c
+-a
+-b
+-b
+-c
+-a
+-b
+case random-21
+path src/F.java
+before 21
+b
+c
+c
+e
+e
+d
+a
+b
+d
+e
+b
+a
+c
+e
+c
+d
+b
+b
+a
+c
+e
+after 22
+b
+c
+c
+e
+e
+d
+a
+c
+d
+e
+e
+b
+a
+c
+e
+c
+d
+b
+b
+a
+c
+e
+chunks 2
+7 8 7 8
+10 10 10 11
+unified 14
+--- src/F.java
++++ src/F.java
+@@ -5,9 +5,10 @@
+ e
+ d
+ a
+-b
++c
+ d
+ e
++e
+ b
+ a
+ c
+case random-22
+path 
+before 105
+e
+e
+c
+e
+e
+
+b
+b
+a
+
+c
+b
+d
+a
+e
+a
+c
+e
+e
+b
+e
+
+e
+
+b
+b
+b
+d
+b
+e
+b
+e
+b
+b
+d
+
+e
+
+
+d
+b
+d
+a
+
+a
+e
+c
+b
+d
+a
+b
+d
+c
+e
+e
+e
+b
+b
+a
+b
+
+e
+c
+a
+a
+a
+d
+b
+b
+c
+b
+c
+b
+b
+a
+a
+
+e
+e
+
+d
+
+
+c
+d
+d
+c
+b
+b
+a
+a
+d
+a
+
+e
+d
+c
+c
+d
+c
+a
+c
+c
+e
+e
+after 102
+e
+e
+c
+e
+e
+
+b
+b
+a
+
+c
+b
+d
+a
+e
+a
+c
+e
+e
+b
+e
+e
+
+b
+b
+b
+d
+b
+e
+b
+b
+b
+d
+
+e
+
+
+d
+b
+d
+a
+
+a
+e
+c
+b
+d
+a
+b
+d
+c
+e
+e
+e
+b
+b
+a
+b
+
+e
+c
+a
+a
+a
+d
+b
+b
+c
+b
+c
+b
+b
+a
+
+e
+e
+
+d
+
+
+c
+d
+d
+c
+b
+b
+a
+a
+d
+a
+
+e
+d
+c
+c
+d
+c
+a
+e
+c
+e
+e
+chunks 5
+21 22 21 21
+31 32 30 30
+75 76 73 73
+101 101 98 99
+102 103 100 100
+unified 35
+--- before
++++ after
+@@ -19,7 +19,6 @@
+ e
+ b
+ e
+-
+ e
+ 
+ b
+@@ -29,7 +28,6 @@
+ b
+ e
+ b
+-e
+ b
+ b
+ d
+@@ -73,7 +71,6 @@
+ b
+ b
+ a
+-a
+ 
+ e
+ e
+@@ -99,7 +96,7 @@
+ d
+ c
+ a
++e
+ c
+-c
+ e
+ e
+case random-23
+path src/F.java
+before 4
+a
+b
+
+b
+after 14
+b
+b
+b
+b
+b
+
+a
+a
+a
+b
+a
+b
+
+a
+chunks 4
+0 1 0 0
+2 2 1 5
+3 3 6 9
+4 4 10 14
+unified 18
+--- src/F.java
++++ src/F.java
+@@ -1,4 +1,14 @@
+-a
+ b
++b
++b
++b
++b
+ 
++a
++a
++a
+ b
++a
++b
++
++a
+case random-24
+path 
+before 9
+d
+a
+b
+b
+b
+b
+a
+e
+e
+after 11
+d
+a
+b
+b
+b
+b
+b
+a
+e
+d
+e
+chunks 2
+6 6 6 7
+8 8 9 10
+unified 11
+--- before
++++ after
+@@ -4,6 +4,8 @@
+ b
+ b
+ b
++b
+ a
+ e
++d
+ e
+case random-25
+path src/F.java
+before 9
+f
+f
+b
+e
+e
+h
+a
+
+h
+after 6
+h
+h
+a
+c
+g
+b
+chunks 3
+0 5 0 0
+6 8 1 1
+9 9 2 6
+unified 16
+--- src/F.java
++++ src/F.java
+@@ -1,9 +1,6 @@
+-f
+-f
+-b
+-e
+-e
+ h
+-a
+-
+ h
++a
++c
++g
++b
+case random-26
+path 
+before 13
+c
+a
+c
+a
+b
+b
+b
+c
+c
+a
+b
+c
+a
+after 13
+a
+a
+c
+a
+b
+b
+b
+c
+c
+a
+b
+c
+a
+chunks 2
+0 1 0 0
+2 2 1 2
+unified 9
+--- before
++++ after
+@@ -1,5 +1,5 @@
+-c
+ a
++a
+ c
+ a
+ b
+case random-27
+path src/F.java
+before 5
+a
+a
+b
+b
+a
+after 12
+a
+a
+b
+a
+b
+a
+a
+a
+b
+b
+a
+a
+chunks 2
+3 3 3 4
+5 5 6 12
+unified 15
+--- src/F.java
++++ src/F.java
+@@ -1,5 +1,12 @@
+ a
+ a
+ b
++a
+ b
+ a
++a
++a
++b
++b
++a
++a
+case random-28
+path 
+before 21
+b
+a
+
+b
+a
+a
+b
+a
+a
+a
+
+
+b
+
+a
+b
+a
+b
+b
+
+a
+after 4
+b
+
+b
+
+chunks 3
+1 2 1 1
+4 10 3 3
+11 21 4 4
+unified 24
+--- before
++++ after
+@@ -1,21 +1,4 @@
+ b
+-a
+ 
+ b
+-a
+-a
+-b
+-a
+-a
+-a
+ 
+-
+-b
+-
+-a
+-b
+-a
+-b
+-b
+-
+-a
+case random-29
+path src/F.java
+before 19
+e
+b
+c
+a
+b
+a
+f
+a
+a
+f
+a
+e
+h
+h
+e
+d
+a
+d
+h
+after 23
+b
+h
+f
+d
+g
+a
+d
+a
+c
+c
+c
+h
+a
+d
+e
+h
+b
+h
+h
+d
+d
+f
+d
+chunks 10
+0 1 0 0
+2 6 1 2
+7 7 3 5
+8 8 6 7
+9 10 8 12
+11 11 13 14
+13 13 16 17
+14 15 18 19
+16 17 20 20
+18 19 21 23
+unified 35
+--- src/F.java
++++ src/F.java
+@@ -1,19 +1,23 @@
+-e
+ b
+-c
+-a
+-b
+-a
++h
+ f
++d
++g
+ a
++d
+ a
+-f
++c
++c
++c
++h
+ a
++d
+ e
+ h
++b
+ h
+-e
++h
+ d
+-a
+ d
+-h
++f
++d
+case random-30
+path 
+before 20
+
+
+
+a
+a
+
+a
+a
+a
+
+a
+
+a
+
+a
+a
+a
+a
+
+
+after 15
+a
+a
+
+a
+
+
+a
+a
+a
+a
+
+
+
+a
+a
+chunks 6
+0 3 0 0
+7 9 4 4
+10 11 5 5
+13 14 7 7
+17 18 10 10
+20 20 12 15
+unified 26
+--- before
++++ after
+@@ -1,20 +1,15 @@
+-
+-
+-
+ a
+ a
+ 
+ a
+-a
+-a
+ 
+-a
+ 
+ a
+-
+ a
+ a
+ a
+-a
+ 
+ 
++
++a
++a
+case random-31
+path src/F.java
+before 5
+b
+
+a
+
+a
+after 4
+b
+b
+a
+a
+chunks 2
+1 2 1 2
+3 4 3 3
+unified 9
+--- src/F.java
++++ src/F.java
+@@ -1,5 +1,4 @@
+ b
+-
++b
+ a
+-
+ a
+case random-32
+path 
+before 9
+a
+b
+c
+b
+a
+b
+b
+a
+a
+after 9
+a
+b
+c
+b
+a
+b
+b
+a
+c
+chunks 1
+8 9 8 9
+unified 8
+--- before
++++ after
+@@ -6,4 +6,4 @@
+ b
+ b
+ a
+-a
++c
+case random-33
+path src/F.java
+before 24
+a
+
+
+b
+h
+f
+g
+g
+g
+
+a
+b
+
+h
+e
+f
+
+e
+f
+d
+e
+c
+h
+f
+after 20
+f
+h
+a
+f
+e
+
+h
+a
+f
+a
+e
+g
+c
+c
+e
+d
+a
+b
+a
+
+chunks 9
+0 0 0 2
+1 1 3 5
+2 4 6 6
+5 5 7 8
+6 10 9 9
+11 14 10 10
+15 17 11 14
+18 19 15 15
+20 24 16 20
+unified 39
+--- src/F.java
++++ src/F.java
+@@ -1,24 +1,20 @@
++f
++h
+ a
++f
++e
+ 
+-
+-b
+ h
++a
+ f
+-g
+-g
+-g
+-
+ a
+-b
+-
+-h
+ e
+-f
+-
++g
++c
++c
+ e
+-f
+ d
+-e
+-c
+-h
+-f
++a
++b
++a
++
+case random-34
+path 
+before 18
+c
+a
+b
+c
+c
+d
+d
+c
+d
+b
+a
+d
+c
+e
+a
+a
+b
+b
+after 24
+e
+a
+e
+c
+d
+d
+d
+a
+b
+a
+d
+c
+b
+b
+d
+a
+b
+e
+a
+e
+c
+a
+d
+e
+chunks 8
+0 1 0 1
+2 3 2 3
+4 5 4 4
+7 8 6 6
+9 9 7 8
+13 13 12 17
+15 15 19 21
+16 18 22 24
+unified 33
+--- before
++++ after
+@@ -1,18 +1,24 @@
+-c
++e
+ a
+-b
++e
+ c
+-c
+ d
+ d
+-c
+ d
++a
+ b
+ a
+ d
+ c
++b
++b
++d
++a
++b
+ e
+ a
++e
++c
+ a
+-b
+-b
++d
++e
+case random-35
+path src/F.java
+before 6
+a
+b
+
+
+b
+a
+after 9
+b
+b
+
+b
+a
+
+b
+a
+
+chunks 4
+0 1 0 0
+2 2 1 2
+3 3 3 5
+6 6 8 9
+unified 13
+--- src/F.java
++++ src/F.java
+@@ -1,6 +1,9 @@
+-a
+ b
++b
+ 
++b
++a
+ 
+ b
+ a
++
+case random-36
+path 
+before 19
+d
+b
+e
+a
+c
+a
+b
+c
+d
+d
+d
+a
+d
+d
+a
+a
+d
+a
+d
+after 12
+e
+e
+c
+c
+d
+c
+c
+c
+c
+a
+a
+d
+chunks 7
+0 2 0 0
+3 4 1 2
+5 7 3 3
+9 11 5 9
+12 14 10 10
+15 16 11 11
+17 19 12 12
+unified 27
+--- before
++++ after
+@@ -1,19 +1,12 @@
+-d
+-b
+ e
+-a
++e
+ c
+-a
+-b
+ c
+ d
+-d
+-d
++c
++c
++c
++c
+ a
+-d
+-d
+ a
+-a
+ d
+-a
+-d
+case random-37
+path src/F.java
+before 16
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 17
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+16 16 16 17
+unified 7
+--- src/F.java
++++ src/F.java
+@@ -14,3 +14,4 @@
+ a
+ a
+ a
++a
+case random-38
+path 
+before 67
+b
+c
+b
+b
+
+c
+
+
+a
+b
+c
+c
+
+a
+a
+c
+
+b
+b
+b
+a
+a
+
+b
+b
+a
+c
+a
+a
+c
+a
+b
+
+b
+
+c
+b
+
+a
+b
+a
+a
+c
+b
+
+c
+b
+
+c
+b
+
+a
+
+c
+c
+a
+b
+c
+c
+a
+a
+c
+b
+b
+
+
+c
+after 15
+b
+a
+b
+b
+b
+c
+c
+
+b
+
+c
+a
+a
+b
+a
+chunks 10
+1 8 1 1
+10 17 3 3
+19 26 5 5
+27 29 6 6
+30 32 7 7
+36 38 11 11
+39 40 12 12
+41 43 13 13
+44 51 14 14
+52 67 15 15
+unified 70
+--- before
++++ after
+@@ -1,67 +1,15 @@
+ b
+-c
+-b
+-b
+-
+-c
+-
+-
+ a
+ b
+-c
+-c
+-
+-a
+-a
+-c
+-
+ b
+ b
+-b
+-a
+-a
+-
+-b
+-b
+-a
+ c
+-a
+-a
+ c
+-a
+-b
+ 
+ b
+ 
+ c
+-b
+-
+ a
+-b
+ a
+-a
+-c
+ b
+-
+-c
+-b
+-
+-c
+-b
+-
+ a
+-
+-c
+-c
+-a
+-b
+-c
+-c
+-a
+-a
+-c
+-b
+-b
+-
+-
+-c
+case random-39
+path src/F.java
+before 5
+a
+a
+a
+a
+a
+after 8
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+5 5 5 8
+unified 9
+--- src/F.java
++++ src/F.java
+@@ -3,3 +3,6 @@
+ a
+ a
+ a
++a
++a
++a
+case random-40
+path 
+before 6
+a
+a
+a
+a
+a
+a
+after 4
+a
+a
+a
+a
+chunks 1
+4 6 4 4
+unified 8
+--- before
++++ after
+@@ -2,5 +2,3 @@
+ a
+ a
+ a
+-a
+-a
+case random-41
+path src/F.java
+before 10
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 12
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+10 10 10 12
+unified 8
+--- src/F.java
++++ src/F.java
+@@ -8,3 +8,5 @@
+ a
+ a
+ a
++a
++a
+case random-42
+path 
+before 20
+a
+
+
+b
+
+a
+b
+b
+b
+a
+
+b
+
+a
+b
+b
+b
+
+a
+a
+after 2
+
+b
+chunks 3
+0 1 0 0
+2 3 1 1
+4 20 2 2
+unified 23
+--- before
++++ after
+@@ -1,20 +1,2 @@
+-a
+ 
+-
+ b
+-
+-a
+-b
+-b
+-b
+-a
+-
+-b
+-
+-a
+-b
+-b
+-b
+-
+-a
+-a
+case random-43
+path src/F.java
+before 107
+a
+a
+b
+b
+a
+a
+d
+a
+e
+a
+a
+e
+e
+a
+b
+b
+a
+a
+c
+c
+a
+a
+c
+a
+b
+d
+b
+a
+a
+d
+a
+a
+b
+e
+e
+d
+e
+b
+b
+b
+b
+d
+b
+e
+c
+a
+a
+d
+c
+d
+b
+e
+c
+b
+d
+d
+a
+a
+a
+b
+c
+e
+e
+c
+e
+b
+b
+a
+d
+b
+a
+e
+c
+d
+d
+b
+b
+a
+d
+a
+b
+e
+c
+e
+a
+a
+b
+c
+d
+e
+e
+d
+e
+d
+d
+e
+b
+c
+a
+a
+c
+d
+c
+a
+b
+c
+a
+after 106
+a
+a
+b
+b
+a
+a
+d
+a
+e
+a
+a
+e
+e
+a
+b
+a
+a
+c
+c
+a
+a
+c
+a
+b
+d
+b
+a
+a
+d
+a
+a
+b
+e
+e
+c
+e
+b
+b
+b
+b
+d
+b
+e
+c
+a
+a
+d
+c
+d
+b
+e
+c
+b
+d
+d
+a
+a
+a
+b
+c
+e
+e
+c
+e
+b
+b
+a
+d
+b
+a
+e
+c
+d
+d
+b
+b
+a
+d
+a
+b
+e
+c
+e
+a
+a
+b
+c
+d
+e
+e
+d
+e
+d
+d
+e
+b
+c
+a
+a
+c
+d
+c
+a
+b
+c
+a
+chunks 2
+15 16 15 15
+35 36 34 35
+unified 19
+--- src/F.java
++++ src/F.java
+@@ -13,7 +13,6 @@
+ e
+ a
+ b
+-b
+ a
+ a
+ c
+@@ -33,7 +32,7 @@
+ b
+ e
+ e
+-d
++c
+ e
+ b
+ b
+case random-44
+path 
+before 22
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 21
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+21 22 21 21
+unified 7
+--- before
++++ after
+@@ -19,4 +19,3 @@
+ a
+ a
+ a
+-a
+case random-45
+path src/F.java
+before 4
+h
+h
+h
+b
+after 4
+h
+h
+h
+b
+chunks 0
+unified 0
+case random-46
+path 
+before 24
+a
+a
+b
+a
+a
+a
+b
+b
+a
+a
+a
+b
+a
+b
+a
+a
+b
+a
+a
+b
+a
+a
+b
+a
+after 23
+b
+a
+a
+a
+a
+a
+a
+b
+a
+b
+a
+a
+a
+b
+a
+a
+a
+a
+b
+a
+b
+b
+b
+chunks 5
+0 2 0 0
+6 8 4 4
+16 16 12 13
+19 20 16 16
+24 24 20 23
+unified 30
+--- before
++++ after
+@@ -1,11 +1,7 @@
+-a
+-a
+ b
+ a
+ a
+ a
+-b
+-b
+ a
+ a
+ a
+@@ -14,11 +10,14 @@
+ b
+ a
+ a
++a
+ b
+ a
+ a
+-b
+ a
+ a
+ b
+ a
++b
++b
++b
+case random-47
+path src/F.java
+before 8
+b
+b
+b
+b
+b
+a
+a
+b
+after 8
+b
+b
+a
+b
+b
+a
+b
+b
+chunks 4
+2 2 2 3
+4 5 5 5
+6 7 6 6
+8 8 7 8
+unified 13
+--- src/F.java
++++ src/F.java
+@@ -1,8 +1,8 @@
+ b
+ b
++a
+ b
+ b
+-b
+ a
+-a
+ b
++b
+case random-48
+path 
+before 114
+d
+d
+d
+d
+
+a
+e
+a
+e
+d
+c
+b
+
+e
+e
+a
+
+c
+a
+d
+d
+e
+b
+e
+d
+e
+b
+a
+b
+c
+b
+c
+c
+d
+
+d
+
+c
+e
+
+a
+
+d
+a
+a
+c
+
+e
+e
+a
+c
+c
+
+a
+
+a
+e
+e
+c
+c
+c
+b
+
+d
+e
+e
+
+a
+
+d
+
+b
+a
+b
+a
+d
+
+e
+c
+e
+b
+c
+a
+d
+e
+
+c
+d
+
+a
+e
+
+c
+
+c
+b
+b
+b
+c
+c
+
+
+e
+e
+b
+a
+d
+
+
+a
+d
+a
+c
+d
+after 17
+c
+
+e
+a
+e
+b
+c
+e
+d
+b
+d
+e
+d
+d
+d
+e
+c
+chunks 14
+0 10 0 0
+11 12 1 1
+14 15 3 3
+16 21 4 4
+23 29 6 6
+30 38 7 7
+39 42 8 8
+43 61 9 9
+62 63 10 10
+65 69 12 12
+70 75 13 13
+76 83 14 14
+85 86 16 16
+87 114 17 17
+unified 117
+--- before
++++ after
+@@ -1,114 +1,17 @@
+-d
+-d
+-d
+-d
+-
+-a
+-e
+-a
+-e
+-d
+ c
+-b
+ 
+ e
+-e
+ a
+-
+-c
+-a
+-d
+-d
+ e
+ b
+-e
+-d
+-e
+-b
+-a
+-b
+ c
+-b
+-c
+-c
+-d
+-
+-d
+-
+-c
+ e
+-
+-a
+-
+ d
+-a
+-a
+-c
+-
+-e
+-e
+-a
+-c
+-c
+-
+-a
+-
+-a
+-e
+-e
+-c
+-c
+-c
+ b
+-
+ d
+ e
+-e
+-
+-a
+-
+ d
+-
+-b
+-a
+-b
+-a
+ d
+-
+-e
+-c
+-e
+-b
+-c
+-a
+ d
+ e
+-
+ c
+-d
+-
+-a
+-e
+-
+-c
+-
+-c
+-b
+-b
+-b
+-c
+-c
+-
+-
+-e
+-e
+-b
+-a
+-d
+-
+-
+-a
+-d
+-a
+-c
+-d
+case random-49
+path src/F.java
+before 7
+a
+e
+c
+c
+e
+e
+a
+after 22
+b
+d
+a
+e
+d
+c
+e
+c
+c
+e
+b
+d
+a
+a
+b
+d
+b
+d
+a
+e
+b
+e
+chunks 6
+0 0 0 2
+2 2 4 5
+3 3 6 7
+4 4 8 9
+5 6 10 12
+7 7 13 22
+unified 26
+--- src/F.java
++++ src/F.java
+@@ -1,7 +1,22 @@
++b
++d
+ a
+ e
++d
+ c
++e
+ c
++c
+ e
+-e
++b
++d
+ a
++a
++b
++d
++b
++d
++a
++e
++b
++e
+case random-50
+path 
+before 21
+b
+a
+a
+c
+c
+c
+a
+b
+c
+a
+b
+c
+b
+a
+a
+b
+b
+a
+c
+c
+b
+after 20
+b
+c
+a
+c
+c
+a
+b
+a
+b
+c
+b
+b
+a
+a
+b
+b
+a
+c
+c
+b
+chunks 5
+1 1 1 2
+2 3 3 3
+5 6 5 5
+8 9 7 7
+13 13 11 12
+unified 21
+--- before
++++ after
+@@ -1,16 +1,15 @@
+ b
++c
+ a
+-a
+ c
+ c
+-c
+ a
+ b
+-c
+ a
+ b
+ c
+ b
++b
+ a
+ a
+ b
+case random-51
+path src/F.java
+before 22
+a
+h
+a
+g
+f
+g
+c
+a
+c
+a
+c
+a
+e
+c
+a
+c
+h
+c
+g
+g
+b
+b
+after 24
+a
+g
+h
+a
+g
+g
+g
+c
+a
+c
+a
+c
+g
+a
+e
+c
+a
+c
+h
+h
+g
+g
+b
+b
+chunks 5
+1 1 1 2
+4 5 5 5
+6 6 6 7
+11 11 12 13
+17 18 19 20
+unified 28
+--- src/F.java
++++ src/F.java
+@@ -1,21 +1,23 @@
+ a
++g
+ h
+ a
+ g
+-f
+ g
++g
+ c
+ a
+ c
+ a
+ c
++g
+ a
+ e
+ c
+ a
+ c
+ h
+-c
++h
+ g
+ g
+ b
+case random-52
+path 
+before 21
+a
+
+a
+
+a
+a
+a
+
+a
+a
+a
+
+
+a
+a
+
+
+
+
+a
+a
+after 20
+
+a
+a
+
+
+a
+a
+a
+
+
+
+a
+a
+a
+a
+a
+a
+a
+a
+
+chunks 7
+0 1 0 0
+3 3 2 3
+4 4 4 5
+8 8 9 11
+11 13 14 14
+15 19 16 16
+21 21 18 20
+unified 30
+--- before
++++ after
+@@ -1,21 +1,20 @@
+-a
+ 
+ a
++a
+ 
++
+ a
+ a
+ a
+ 
++
++
+ a
+ a
+ a
+-
+-
+ a
+ a
+-
+-
+-
+-
+ a
+ a
++a
++
+case random-53
+path src/F.java
+before 10
+a
+b
+a
+b
+a
+b
+b
+b
+c
+c
+after 1
+c
+chunks 2
+0 8 0 0
+9 10 1 1
+unified 13
+--- src/F.java
++++ src/F.java
+@@ -1,10 +1,1 @@
+-a
+-b
+-a
+-b
+-a
+-b
+-b
+-b
+ c
+-c
+case random-54
+path 
+before 16
+b
+c
+b
+c
+c
+a
+b
+b
+b
+a
+c
+a
+a
+b
+a
+c
+after 24
+b
+c
+a
+a
+a
+b
+a
+b
+b
+c
+c
+a
+a
+b
+c
+b
+b
+b
+c
+b
+c
+c
+a
+a
+chunks 8
+2 2 2 5
+3 3 6 9
+6 6 12 13
+7 7 14 15
+9 10 17 18
+11 13 19 19
+14 15 20 20
+16 16 21 24
+unified 31
+--- before
++++ after
+@@ -1,16 +1,24 @@
+ b
+ c
++a
++a
++a
+ b
++a
++b
++b
+ c
+ c
+ a
++a
+ b
++c
+ b
+ b
+-a
++b
+ c
+-a
+-a
+ b
+-a
+ c
++c
++a
++a
+case random-55
+path src/F.java
+before 3
+
+a
+a
+after 4
+
+a
+a
+a
+chunks 1
+3 3 3 4
+unified 7
+--- src/F.java
++++ src/F.java
+@@ -1,3 +1,4 @@
+ 
+ a
+ a
++a
+case random-56
+path 
+before 9
+e
+e
+b
+c
+b
+a
+e
+c
+d
+after 9
+d
+a
+b
+c
+a
+a
+e
+c
+e
+chunks 4
+0 2 0 2
+4 5 4 4
+6 6 5 6
+8 9 8 9
+unified 16
+--- before
++++ after
+@@ -1,9 +1,9 @@
+-e
+-e
++d
++a
+ b
+ c
+-b
+ a
++a
+ e
+ c
+-d
++e
+case random-57
+path src/F.java
+before 2
+b
+a
+after 3
+b
+b
+a
+chunks 1
+1 1 1 2
+unified 6
+--- src/F.java
++++ src/F.java
+@@ -1,2 +1,3 @@
+ b
++b
+ a
+case random-58
+path 
+before 20
+a
+e
+b
+a
+c
+c
+c
+c
+c
+a
+d
+b
+d
+e
+c
+e
+d
+d
+c
+b
+after 20
+a
+e
+b
+a
+c
+c
+c
+c
+c
+a
+d
+b
+d
+e
+c
+e
+d
+d
+c
+b
+chunks 0
+unified 0
+case random-59
+path src/F.java
+before 6
+a
+a
+a
+a
+a
+a
+after 16
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+6 6 6 16
+unified 16
+--- src/F.java
++++ src/F.java
+@@ -4,3 +4,13 @@
+ a
+ a
+ a
++a
++a
++a
++a
++a
++a
++a
++a
++a
++a
+case random-60
+path 
+before 16
+b
+a
+c
+d
+c
+d
+b
+a
+b
+d
+e
+d
+a
+e
+a
+a
+after 20
+a
+e
+c
+b
+e
+c
+d
+c
+c
+b
+e
+d
+d
+e
+a
+e
+b
+b
+b
+a
+chunks 8
+0 1 0 0
+2 2 1 2
+3 4 3 5
+6 6 7 9
+7 10 10 10
+12 12 12 14
+14 14 16 19
+15 16 20 20
+unified 29
+--- before
++++ after
+@@ -1,16 +1,20 @@
+-b
+ a
++e
+ c
+-d
++b
++e
+ c
+ d
++c
++c
+ b
+-a
+-b
+-d
+ e
+ d
++d
++e
+ a
+ e
++b
++b
++b
+ a
+-a
+case random-61
+path src/F.java
+before 7
+a
+c
+b
+a
+
+b
+
+after 6
+a
+b
+a
+
+b
+
+chunks 1
+1 2 1 1
+unified 8
+--- src/F.java
++++ src/F.java
+@@ -1,5 +1,4 @@
+ a
+-c
+ b
+ a
+ 
+case random-62
+path 
+before 21
+c
+a
+b
+
+b
+b
+
+c
+b
+
+
+
+
+b
+c
+c
+b
+b
+c
+c
+c
+after 22
+c
+c
+
+c
+c
+a
+
+b
+b
+
+a
+
+a
+a
+b
+a
+
+
+
+c
+c
+a
+chunks 6
+1 1 1 5
+2 3 6 6
+7 8 10 14
+9 9 15 16
+12 14 19 19
+16 21 21 22
+unified 34
+--- before
++++ after
+@@ -1,21 +1,22 @@
+ c
++c
++
++c
++c
+ a
+-b
+ 
+ b
+ b
+ 
+-c
++a
++
++a
++a
+ b
++a
+ 
+ 
+ 
+-
+-b
+ c
+ c
+-b
+-b
+-c
+-c
+-c
++a
+case random-63
+path src/F.java
+before 21
+b
+c
+
+d
+a
+g
+a
+e
+f
+g
+e
+e
+d
+f
+e
+g
+b
+h
+b
+e
+e
+after 8
+
+e
+h
+h
+c
+b
+b
+c
+chunks 5
+0 2 0 0
+3 7 1 1
+8 17 2 2
+18 18 3 5
+19 21 6 8
+unified 28
+--- src/F.java
++++ src/F.java
+@@ -1,21 +1,8 @@
+-b
+-c
+ 
+-d
+-a
+-g
+-a
+ e
+-f
+-g
+-e
+-e
+-d
+-f
+-e
+-g
+-b
+ h
++h
++c
+ b
+-e
+-e
++b
++c
+case random-64
+path 
+before 24
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 24
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 0
+unified 0
+case random-65
+path src/F.java
+before 4
+g
+g
+h
+a
+after 23
+c
+d
+b
+f
+f
+b
+h
+f
+h
+d
+c
+c
+h
+f
+c
+g
+f
+a
+f
+c
+f
+d
+g
+chunks 3
+0 2 0 6
+3 3 7 17
+4 4 18 23
+unified 28
+--- src/F.java
++++ src/F.java
+@@ -1,4 +1,23 @@
+-g
+-g
++c
++d
++b
++f
++f
++b
+ h
++f
++h
++d
++c
++c
++h
++f
++c
++g
++f
+ a
++f
++c
++f
++d
++g
+case random-66
+path 
+before 5
+a
+b
+a
+a
+b
+after 10
+a
+a
+b
+a
+a
+a
+b
+a
+b
+a
+chunks 3
+1 1 1 2
+4 4 5 6
+5 5 7 10
+unified 13
+--- before
++++ after
+@@ -1,5 +1,10 @@
+ a
++a
+ b
+ a
+ a
++a
+ b
++a
++b
++a
+case random-67
+path src/F.java
+before 1
+c
+after 1
+b
+chunks 1
+0 1 0 1
+unified 5
+--- src/F.java
++++ src/F.java
+@@ -1,1 +1,1 @@
+-c
++b
+case random-68
+path 
+before 18
+a
+c
+e
+c
+e
+e
+d
+e
+e
+a
+d
+b
+d
+c
+d
+d
+a
+e
+after 19
+a
+c
+e
+c
+e
+e
+d
+e
+e
+a
+d
+b
+d
+c
+d
+d
+a
+e
+b
+chunks 1
+18 18 18 19
+unified 7
+--- before
++++ after
+@@ -16,3 +16,4 @@
+ d
+ a
+ e
++b
+case random-69
+path src/F.java
+before 4
+e
+c
+e
+c
+after 2
+c
+a
+chunks 2
+0 1 0 0
+2 4 1 2
+unified 8
+--- src/F.java
++++ src/F.java
+@@ -1,4 +1,2 @@
+-e
+ c
+-e
+-c
++a
+case random-70
+path 
+before 20
+b
+b
+b
+a
+c
+a
+a
+c
+b
+c
+b
+b
+b
+b
+c
+a
+c
+a
+b
+b
+after 19
+b
+b
+a
+c
+a
+a
+c
+b
+c
+b
+b
+b
+b
+c
+a
+c
+a
+b
+b
+chunks 1
+2 3 2 2
+unified 9
+--- before
++++ after
+@@ -1,6 +1,5 @@
+ b
+ b
+-b
+ a
+ c
+ a
+case random-71
+path src/F.java
+before 19
+a
+b
+b
+
+a
+c
+
+
+a
+b
+a
+b
+a
+a
+
+a
+a
+c
+b
+after 20
+a
+b
+b
+
+a
+c
+
+
+b
+a
+b
+a
+b
+a
+a
+a
+a
+a
+c
+b
+chunks 3
+8 8 8 9
+14 15 15 15
+17 17 17 18
+unified 19
+--- src/F.java
++++ src/F.java
+@@ -6,14 +6,15 @@
+ c
+ 
+ 
++b
+ a
+ b
+ a
+ b
+ a
+ a
+-
+ a
+ a
++a
+ c
+ b
+case random-72
+path 
+before 5
+a
+a
+a
+a
+a
+after 4
+a
+a
+a
+a
+chunks 1
+4 5 4 4
+unified 7
+--- before
++++ after
+@@ -2,4 +2,3 @@
+ a
+ a
+ a
+-a
+case random-73
+path src/F.java
+before 0
+after 1
+g
+chunks 1
+0 0 0 1
+unified 4
+--- src/F.java
++++ src/F.java
+@@ -0,0 +1,1 @@
++g
+case random-74
+path 
+before 15
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 2
+a
+a
+chunks 1
+2 15 2 2
+unified 18
+--- before
++++ after
+@@ -1,15 +1,2 @@
+ a
+ a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+case random-75
+path src/F.java
+before 20
+b
+d
+e
+c
+d
+e
+d
+b
+c
+a
+a
+d
+b
+a
+d
+e
+c
+c
+c
+
+after 20
+b
+d
+c
+d
+e
+d
+b
+c
+a
+a
+d
+b
+a
+d
+e
+c
+d
+c
+c
+
+chunks 2
+2 3 2 2
+17 17 16 17
+unified 17
+--- src/F.java
++++ src/F.java
+@@ -1,6 +1,5 @@
+ b
+ d
+-e
+ c
+ d
+ e
+@@ -15,6 +14,7 @@
+ d
+ e
+ c
++d
+ c
+ c
+ 
+case random-76
+path 
+before 92
+c
+c
+a
+a
+b
+a
+a
+b
+c
+b
+a
+b
+b
+a
+c
+a
+c
+c
+c
+a
+a
+a
+b
+a
+c
+b
+a
+c
+c
+c
+b
+b
+c
+a
+c
+b
+c
+a
+a
+b
+b
+b
+c
+a
+c
+c
+b
+b
+b
+a
+c
+a
+b
+b
+a
+b
+b
+b
+b
+c
+a
+c
+c
+c
+c
+b
+c
+a
+a
+a
+b
+b
+b
+b
+c
+a
+b
+a
+b
+c
+b
+c
+a
+a
+b
+b
+b
+c
+c
+c
+a
+b
+after 17
+a
+c
+b
+c
+a
+b
+b
+c
+c
+b
+c
+a
+c
+b
+b
+a
+a
+chunks 12
+0 2 0 0
+3 8 1 1
+10 14 3 3
+16 22 5 5
+23 25 6 6
+26 27 7 7
+29 30 9 9
+31 32 10 10
+36 39 14 14
+40 43 15 15
+44 49 16 16
+50 92 17 17
+unified 95
+--- before
++++ after
+@@ -1,92 +1,17 @@
+-c
+-c
+ a
+-a
+-b
+-a
+-a
+-b
+ c
+ b
+-a
+-b
+-b
+-a
+ c
+ a
+-c
+-c
+-c
+-a
+-a
+-a
+ b
+-a
+-c
+ b
+-a
+ c
+ c
+-c
+ b
+-b
+ c
+ a
+ c
+ b
+-c
+-a
+-a
+ b
+-b
+-b
+-c
+ a
+-c
+-c
+-b
+-b
+-b
+ a
+-c
+-a
+-b
+-b
+-a
+-b
+-b
+-b
+-b
+-c
+-a
+-c
+-c
+-c
+-c
+-b
+-c
+-a
+-a
+-a
+-b
+-b
+-b
+-b
+-c
+-a
+-b
+-a
+-b
+-c
+-b
+-c
+-a
+-a
+-b
+-b
+-b
+-c
+-c
+-c
+-a
+-b
+case random-77
+path src/F.java
+before 9
+
+c
+a
+a
+a
+a
+c
+a
+
+after 9
+c
+a
+a
+a
+a
+c
+a
+
+
+chunks 2
+0 1 0 0
+9 9 8 9
+unified 12
+--- src/F.java
++++ src/F.java
+@@ -1,4 +1,3 @@
+-
+ c
+ a
+ a
+@@ -7,3 +6,4 @@
+ c
+ a
+ 
++
+case random-78
+path 
+before 82
+e
+e
+d
+e
+c
+c
+e
+d
+d
+a
+d
+d
+b
+b
+d
+e
+e
+b
+e
+a
+d
+e
+e
+d
+e
+c
+b
+c
+b
+d
+a
+d
+d
+c
+a
+e
+d
+b
+e
+d
+e
+b
+c
+d
+c
+b
+d
+a
+b
+a
+a
+d
+a
+a
+a
+e
+c
+e
+d
+d
+e
+a
+b
+d
+e
+c
+a
+d
+d
+b
+c
+d
+a
+a
+a
+d
+c
+d
+c
+c
+e
+a
+after 6
+a
+b
+d
+d
+a
+d
+chunks 6
+0 9 0 0
+10 12 1 1
+13 14 2 2
+15 20 3 3
+21 30 4 4
+32 82 6 6
+unified 85
+--- before
++++ after
+@@ -1,82 +1,6 @@
+-e
+-e
+-d
+-e
+-c
+-c
+-e
+-d
+-d
+ a
+-d
+-d
+ b
+-b
+ d
+-e
+-e
+-b
+-e
+-a
+ d
+-e
+-e
+-d
+-e
+-c
+-b
+-c
+-b
+-d
+ a
+ d
+-d
+-c
+-a
+-e
+-d
+-b
+-e
+-d
+-e
+-b
+-c
+-d
+-c
+-b
+-d
+-a
+-b
+-a
+-a
+-d
+-a
+-a
+-a
+-e
+-c
+-e
+-d
+-d
+-e
+-a
+-b
+-d
+-e
+-c
+-a
+-d
+-d
+-b
+-c
+-d
+-a
+-a
+-a
+-d
+-c
+-d
+-c
+-c
+-e
+-a
+case random-79
+path src/F.java
+before 117
+c
+a
+d
+c
+g
+h
+e
+f
+d
+d
+f
+f
+b
+a
+c
+b
+c
+h
+b
+c
+d
+g
+g
+f
+d
+a
+a
+a
+a
+g
+g
+b
+e
+h
+h
+f
+g
+a
+a
+b
+g
+f
+f
+a
+g
+e
+g
+d
+d
+g
+h
+g
+e
+d
+h
+d
+b
+b
+f
+f
+e
+f
+c
+b
+e
+b
+g
+c
+a
+a
+d
+c
+b
+d
+d
+e
+f
+e
+h
+b
+e
+c
+h
+d
+g
+c
+f
+g
+f
+d
+a
+h
+d
+g
+a
+b
+f
+f
+a
+f
+f
+f
+d
+g
+h
+b
+f
+g
+a
+g
+c
+e
+a
+e
+b
+g
+b
+after 116
+c
+a
+d
+c
+g
+h
+e
+f
+d
+d
+f
+f
+b
+a
+c
+b
+c
+h
+b
+c
+d
+g
+g
+f
+d
+a
+a
+a
+g
+g
+b
+e
+h
+h
+f
+g
+a
+a
+b
+g
+f
+f
+a
+g
+e
+g
+d
+f
+g
+h
+g
+e
+d
+h
+d
+b
+b
+f
+f
+e
+f
+c
+b
+e
+b
+g
+c
+a
+a
+d
+c
+b
+d
+d
+e
+f
+e
+h
+b
+e
+c
+h
+d
+g
+c
+f
+g
+f
+d
+a
+h
+d
+g
+a
+b
+f
+f
+a
+f
+f
+f
+d
+g
+h
+b
+f
+a
+g
+c
+e
+c
+a
+e
+b
+g
+b
+chunks 4
+28 29 28 28
+48 49 47 48
+107 108 106 106
+112 112 110 111
+unified 32
+--- src/F.java
++++ src/F.java
+@@ -26,7 +26,6 @@
+ a
+ a
+ a
+-a
+ g
+ g
+ b
+@@ -46,7 +45,7 @@
+ e
+ g
+ d
+-d
++f
+ g
+ h
+ g
+@@ -105,11 +104,11 @@
+ h
+ b
+ f
+-g
+ a
+ g
+ c
+ e
++c
+ a
+ e
+ b
+case random-80
+path 
+before 2
+c
+c
+after 5
+b
+d
+d
+b
+c
+chunks 2
+0 0 0 4
+1 2 5 5
+unified 9
+--- before
++++ after
+@@ -1,2 +1,5 @@
++b
++d
++d
++b
+ c
+-c
+case random-81
+path src/F.java
+before 9
+b
+b
+b
+a
+a
+a
+b
+a
+a
+after 17
+b
+b
+b
+a
+b
+a
+a
+b
+b
+b
+a
+a
+b
+a
+b
+b
+a
+chunks 3
+4 4 4 5
+7 7 8 10
+9 9 12 17
+unified 19
+--- src/F.java
++++ src/F.java
+@@ -2,8 +2,16 @@
+ b
+ b
+ a
++b
+ a
+ a
+ b
++b
++b
+ a
+ a
++b
++a
++b
++b
++a
+case random-82
+path 
+before 15
+b
+b
+b
+b
+b
+b
+b
+a
+a
+a
+a
+a
+b
+a
+a
+after 13
+b
+b
+b
+b
+a
+a
+b
+b
+b
+b
+b
+b
+a
+chunks 4
+4 4 4 6
+7 12 9 9
+13 13 10 12
+14 15 13 13
+unified 21
+--- before
++++ after
+@@ -2,14 +2,12 @@
+ b
+ b
+ b
++a
++a
+ b
+ b
+ b
+-a
+-a
+-a
+-a
+-a
+ b
++b
++b
+ a
+-a
+case random-83
+path src/F.java
+before 1
+a
+after 4
+c
+e
+
+
+chunks 1
+0 1 0 4
+unified 8
+--- src/F.java
++++ src/F.java
+@@ -1,1 +1,4 @@
+-a
++c
++e
++
++
+case random-84
+path 
+before 81
+b
+b
+b
+b
+a
+b
+a
+b
+b
+a
+b
+a
+a
+a
+b
+b
+b
+a
+a
+b
+a
+b
+a
+b
+b
+b
+b
+a
+b
+a
+a
+a
+b
+b
+a
+b
+b
+a
+b
+b
+b
+b
+b
+b
+b
+a
+b
+a
+a
+a
+b
+a
+a
+b
+a
+a
+a
+b
+b
+b
+a
+a
+a
+a
+b
+a
+b
+b
+b
+a
+b
+a
+a
+b
+b
+a
+a
+a
+b
+a
+b
+after 81
+b
+b
+b
+b
+a
+b
+a
+b
+b
+a
+b
+a
+a
+a
+b
+b
+b
+a
+a
+b
+a
+b
+a
+b
+b
+b
+b
+a
+b
+a
+a
+a
+b
+b
+a
+b
+b
+a
+b
+b
+b
+b
+b
+b
+b
+a
+b
+a
+a
+a
+b
+a
+a
+b
+a
+a
+a
+b
+b
+b
+a
+a
+a
+a
+b
+a
+b
+b
+b
+a
+b
+a
+a
+b
+b
+a
+a
+a
+b
+a
+b
+chunks 0
+unified 0
+case random-85
+path src/F.java
+before 16
+
+b
+
+b
+b
+b
+b
+b
+b
+a
+a
+b
+b
+
+a
+
+after 13
+
+b
+
+b
+b
+b
+b
+a
+a
+b
+
+a
+
+chunks 2
+7 9 7 7
+12 13 10 10
+unified 15
+--- src/F.java
++++ src/F.java
+@@ -5,12 +5,9 @@
+ b
+ b
+ b
+-b
+-b
+ a
+ a
+ b
+-b
+ 
+ a
+ 
+case random-86
+path 
+before 75
+a
+c
+b
+c
+a
+a
+a
+a
+c
+a
+
+
+a
+a
+
+a
+a
+
+b
+b
+a
+a
+a
+
+b
+a
+b
+c
+b
+b
+a
+c
+c
+
+b
+b
+b
+c
+c
+c
+c
+b
+
+c
+
+c
+c
+b
+c
+a
+b
+a
+b
+c
+c
+c
+b
+c
+
+a
+b
+a
+b
+a
+b
+a
+a
+c
+a
+b
+
+b
+b
+
+a
+after 74
+a
+c
+b
+c
+a
+a
+a
+a
+c
+a
+
+
+a
+a
+
+a
+a
+
+b
+b
+a
+a
+a
+
+b
+a
+b
+c
+b
+b
+a
+c
+c
+
+b
+b
+b
+c
+c
+c
+c
+b
+c
+
+c
+c
+b
+a
+b
+a
+b
+c
+c
+c
+b
+a
+c
+
+a
+b
+a
+b
+a
+b
+a
+a
+c
+a
+b
+
+b
+b
+
+a
+chunks 3
+42 43 42 42
+48 49 47 47
+57 57 55 56
+unified 24
+--- before
++++ after
+@@ -40,13 +40,11 @@
+ c
+ c
+ b
+-
+ c
+ 
+ c
+ c
+ b
+-c
+ a
+ b
+ a
+@@ -55,6 +53,7 @@
+ c
+ c
+ b
++a
+ c
+ 
+ a
+case random-87
+path src/F.java
+before 0
+after 1
+g
+chunks 1
+0 0 0 1
+unified 4
+--- src/F.java
++++ src/F.java
+@@ -0,0 +1,1 @@
++g
+case random-88
+path 
+before 1
+b
+after 1
+c
+chunks 1
+0 1 0 1
+unified 5
+--- before
++++ after
+@@ -1,1 +1,1 @@
+-b
++c
+case random-89
+path src/F.java
+before 20
+c
+a
+c
+c
+b
+c
+b
+b
+a
+c
+b
+b
+b
+b
+a
+c
+a
+b
+b
+a
+after 3
+b
+b
+a
+chunks 4
+0 4 0 0
+5 6 1 1
+7 8 2 2
+9 20 3 3
+unified 23
+--- src/F.java
++++ src/F.java
+@@ -1,20 +1,3 @@
+-c
+-a
+-c
+-c
+ b
+-c
+ b
+-b
+ a
+-c
+-b
+-b
+-b
+-b
+-a
+-c
+-a
+-b
+-b
+-a
+case random-90
+path 
+before 19
+
+a
+
+c
+a
+c
+a
+
+b
+a
+
+a
+a
+a
+
+c
+
+b
+c
+after 19
+
+a
+
+c
+a
+c
+a
+
+b
+
+a
+
+a
+a
+
+c
+
+b
+c
+chunks 2
+9 9 9 10
+13 14 14 14
+unified 15
+--- before
++++ after
+@@ -7,11 +7,11 @@
+ a
+ 
+ b
++
+ a
+ 
+ a
+ a
+-a
+ 
+ c
+ 
+case random-91
+path src/F.java
+before 11
+a
+b
+a
+b
+a
+a
+b
+b
+a
+b
+b
+after 22
+b
+a
+
+
+a
+
+a
+b
+
+b
+a
+b
+a
+b
+b
+
+b
+b
+
+a
+b
+b
+chunks 5
+0 0 0 1
+1 1 2 7
+2 2 8 10
+5 6 13 13
+8 8 15 19
+unified 26
+--- src/F.java
++++ src/F.java
+@@ -1,11 +1,22 @@
++b
+ a
++
++
++a
++
++a
+ b
++
++b
+ a
+ b
+ a
+-a
+ b
+ b
++
++b
++b
++
+ a
+ b
+ b
+case random-92
+path 
+before 20
+c
+b
+b
+a
+e
+c
+b
+e
+a
+e
+b
+c
+d
+b
+c
+e
+d
+c
+d
+d
+after 12
+b
+b
+d
+d
+d
+b
+e
+c
+c
+d
+d
+a
+chunks 7
+0 1 0 0
+3 6 2 5
+8 11 7 7
+12 14 8 8
+15 16 9 9
+17 18 10 10
+19 20 11 12
+unified 27
+--- before
++++ after
+@@ -1,20 +1,12 @@
+-c
+ b
+ b
+-a
+-e
+-c
++d
++d
++d
+ b
+ e
+-a
+-e
+-b
+ c
+-d
+-b
+ c
+-e
+ d
+-c
+ d
+-d
++a
+case random-93
+path src/F.java
+before 13
+
+a
+a
+
+a
+
+
+a
+a
+
+a
+
+
+after 13
+
+a
+a
+
+a
+
+
+a
+a
+
+a
+
+
+chunks 0
+unified 0
+case random-94
+path 
+before 20
+c
+b
+d
+
+
+e
+a
+b
+c
+a
+c
+d
+b
+d
+c
+d
+a
+c
+d
+c
+after 24
+a
+b
+
+a
+a
+b
+c
+e
+e
+d
+a
+e
+c
+
+c
+a
+
+d
+
+c
+c
+b
+b
+d
+chunks 11
+0 1 0 1
+2 3 2 2
+4 6 3 3
+7 9 4 4
+10 12 5 5
+13 14 6 6
+15 15 7 9
+17 17 11 12
+18 18 13 17
+19 19 18 19
+20 20 20 24
+unified 36
+--- before
++++ after
+@@ -1,20 +1,24 @@
+-c
++a
+ b
+-d
+ 
+-
+-e
+ a
+-b
+-c
+ a
+-c
+-d
+ b
+-d
+ c
++e
++e
+ d
+ a
++e
+ c
++
++c
++a
++
+ d
++
+ c
++c
++b
++b
++d
+case random-95
+path src/F.java
+before 0
+after 3
+a
+b
+
+chunks 1
+0 0 0 3
+unified 6
+--- src/F.java
++++ src/F.java
+@@ -0,0 +1,3 @@
++a
++b
++
+case random-96
+path 
+before 13
+e
+a
+e
+a
+d
+e
+b
+a
+c
+a
+b
+e
+b
+after 12
+e
+a
+e
+a
+d
+b
+a
+a
+c
+e
+e
+b
+chunks 4
+5 6 5 5
+8 9 7 7
+10 11 8 9
+12 12 10 11
+unified 16
+--- before
++++ after
+@@ -3,11 +3,10 @@
+ e
+ a
+ d
+-e
+ b
+ a
+-c
+ a
+-b
++c
+ e
++e
+ b
+case random-97
+path src/F.java
+before 4
+c
+a
+c
+b
+after 20
+b
+c
+a
+b
+c
+b
+a
+a
+a
+a
+c
+a
+c
+c
+b
+c
+a
+c
+b
+b
+chunks 3
+0 0 0 1
+2 2 3 4
+4 4 6 20
+unified 23
+--- src/F.java
++++ src/F.java
+@@ -1,4 +1,20 @@
++b
+ c
+ a
++b
+ c
+ b
++a
++a
++a
++a
++c
++a
++c
++c
++b
++c
++a
++c
++b
++b
+case random-98
+path 
+before 1
+a
+after 10
+b
+b
+a
+a
+b
+a
+b
+a
+a
+b
+chunks 2
+0 0 0 2
+1 1 3 10
+unified 13
+--- before
++++ after
+@@ -1,1 +1,10 @@
++b
++b
+ a
++a
++b
++a
++b
++a
++a
++b
+case random-99
+path src/F.java
+before 24
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 21
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+21 24 21 21
+unified 9
+--- src/F.java
++++ src/F.java
+@@ -19,6 +19,3 @@
+ a
+ a
+ a
+-a
+-a
+-a
+case random-100
+path 
+before 10
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 11
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+10 10 10 11
+unified 7
+--- before
++++ after
+@@ -8,3 +8,4 @@
+ a
+ a
+ a
++a
+case random-101
+path src/F.java
+before 7
+a
+a
+a
+a
+a
+a
+a
+after 7
+a
+a
+a
+a
+a
+a
+a
+chunks 0
+unified 0
+case random-102
+path 
+before 11
+a
+b
+a
+b
+b
+b
+b
+b
+a
+b
+a
+after 6
+b
+b
+b
+a
+a
+a
+chunks 5
+0 1 0 0
+2 3 1 1
+5 8 3 3
+9 10 4 4
+11 11 5 6
+unified 15
+--- before
++++ after
+@@ -1,11 +1,6 @@
+-a
+ b
+-a
+ b
+ b
+-b
+-b
+-b
+ a
+-b
+ a
++a
+case random-103
+path src/F.java
+before 1
+f
+after 2
+h
+f
+chunks 1
+0 0 0 1
+unified 5
+--- src/F.java
++++ src/F.java
+@@ -1,1 +1,2 @@
++h
+ f
+case random-104
+path 
+before 8
+b
+a
+b
+a
+a
+b
+a
+a
+after 6
+b
+b
+b
+b
+a
+b
+chunks 4
+1 2 1 1
+3 5 2 2
+6 6 3 4
+7 8 5 6
+unified 13
+--- before
++++ after
+@@ -1,8 +1,6 @@
+ b
+-a
+ b
+-a
+-a
+ b
++b
+ a
+-a
++b
+case random-105
+path src/F.java
+before 11
+d
+e
+g
+a
+e
+e
+d
+g
+e
+a
+e
+after 11
+d
+e
+g
+a
+e
+e
+d
+g
+e
+a
+e
+chunks 0
+unified 0
+case random-106
+path 
+before 24
+b
+d
+e
+b
+b
+b
+d
+
+a
+d
+
+f
+e
+a
+g
+h
+b
+b
+d
+h
+a
+b
+
+
+after 22
+b
+d
+e
+b
+b
+d
+
+a
+d
+
+
+a
+g
+h
+b
+b
+d
+h
+a
+b
+
+
+chunks 2
+5 6 5 5
+11 13 10 11
+unified 18
+--- before
++++ after
+@@ -3,14 +3,12 @@
+ e
+ b
+ b
+-b
+ d
+ 
+ a
+ d
+ 
+-f
+-e
++
+ a
+ g
+ h
+case random-107
+path src/F.java
+before 1
+a
+after 14
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+a
+chunks 1
+1 1 1 14
+unified 17
+--- src/F.java
++++ src/F.java
+@@ -1,1 +1,14 @@
+ a
++a
++a
++a
++a
++a
++a
++a
++a
++a
++a
++a
++a
++a
+case random-108
+path 
+before 9
+a
+a
+a
+a
+a
+a
+a
+a
+a
+after 2
+a
+a
+chunks 1
+2 9 2 2
+unified 12
+--- before
++++ after
+@@ -1,9 +1,2 @@
+ a
+ a
+-a
+-a
+-a
+-a
+-a
+-a
+-a
+case random-109
+path src/F.java
+before 23
+b
+a
+a
+a
+b
+b
+a
+b
+b
+b
+a
+a
+b
+b
+a
+b
+b
+a
+a
+a
+a
+b
+b
+after 12
+b
+b
+b
+b
+a
+a
+a
+a
+b
+a
+a
+b
+chunks 8
+1 4 1 1
+6 7 3 3
+8 10 4 4
+12 14 6 6
+15 15 7 8
+16 17 9 9
+19 21 11 11
+22 23 12 12
+unified 27
+--- src/F.java
++++ src/F.java
+@@ -1,23 +1,12 @@
+ b
+-a
+-a
+-a
+ b
+ b
+-a
+ b
+-b
+-b
+ a
+ a
+-b
+-b
+ a
++a
+ b
+-b
+ a
+ a
+-a
+-a
+ b
+-b
