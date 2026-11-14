@@ -177,3 +177,4 @@ row and its record differ, or when a record has no row.
 | [154](0154-a-link-to-a-page-opens-the-browser.md) | A link to a page opens the browser | 2026-11-12 | Miguel | accepted; built |
 | [155](0155-icon-sets-switch-like-themes.md) | Icon sets switch like themes | 2026-11-12 | Miguel and Claude | replaced by [record 156](0156-one-icon-set-and-a-split-checkpoint.md) |
 | [156](0156-one-icon-set-and-a-split-checkpoint.md) | One icon set and a split checkpoint | 2026-11-14 | Miguel and Claude | accepted; built |
+| [158](0158-cdb-comandos-own-database.md) | cdb, comando's own database | 2026-11-14 | Miguel and Claude | accepted; built, in shadow beside QuestDB |

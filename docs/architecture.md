@@ -43,7 +43,8 @@ comando is built with and runs on JDK 25.
 |---|---|---|
 | `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the thread kit, the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
-| `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude | `core`, PostgreSQL JDBC driver |
+| `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude, `CdbAdapter` (cdb in-process) | `core`, `cdb`, PostgreSQL JDBC driver |
+| `cdb` | comando's own columnar, time-partitioned database: SQL parser, planner, vectorised executor, store, catalog, and `/exec` and `/write` in QuestDB's formats ([record 158](adr/0158-cdb-comandos-own-database.md)); one public facade, `Cdb`, reached only from `db.Cdb*` | JDK only |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core`, Jackson |
 | `tools` | Gradle runs, the folder tabs' folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |

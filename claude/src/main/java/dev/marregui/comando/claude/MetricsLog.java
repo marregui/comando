@@ -61,13 +61,15 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
     /**
      * Events of the comando instance whose data root is {@code instance}, an absolute path, sent to the machine's
      * QuestDB at {@code qdb}; a write QuestDB does not take is told to {@code notices}. Starts the sink's errand, which
-     * {@link #close} ends.
+     * {@link #close} ends. Each batch also goes to the shadow server {@link MetricsSink#SHADOW_ENV} names, read here
+     * only, so that no test of the sink or the log inherits it from the shell.
      */
     public MetricsLog(final String instance, final QuestDbEndpoint qdb, final IntentSink notices) {
-        this(new ObjectMapper(), System::currentTimeMillis, instance, qdb, notices);
+        this(new ObjectMapper(), System::currentTimeMillis, instance, qdb, notices,
+                System.getenv(MetricsSink.SHADOW_ENV));
     }
 
-    /** As the public constructor, stamped by {@code clock}; with no {@code qdb}, keeps nothing, as {@link #NONE}. */
+    /** As the public constructor, stamped by {@code clock}, with no shadow; with no {@code qdb}, keeps nothing. */
     MetricsLog(
             final ObjectMapper json,
             final LongSupplier clock,
@@ -75,11 +77,23 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
             final QuestDbEndpoint qdb,
             final IntentSink notices
     ) {
+        this(json, clock, instance, qdb, notices, null);
+    }
+
+    /** As above, each batch also sent to {@code shadow}, a base URL, when it is one. */
+    MetricsLog(
+            final ObjectMapper json,
+            final LongSupplier clock,
+            final String instance,
+            final QuestDbEndpoint qdb,
+            final IntentSink notices,
+            final String shadow
+    ) {
         this.json = json;
         this.clock = clock;
         this.qdb = qdb;
         this.sink = qdb == null ? null : new MetricsSink(qdb, new MetricsLines(json, instance), json, System::nanoTime,
-                notices);
+                notices, shadow);
     }
 
     /** A new event of {@code type}, stamped now; {@link #write} keeps it. */

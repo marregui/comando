@@ -1,3 +1,3 @@
 rootProject.name = "comando"
 
-include("core", "testkit", "db", "claude", "mcp", "tools", "ui", "app")
+include("core", "testkit", "cdb", "db", "claude", "mcp", "tools", "ui", "app")

@@ -39,26 +39,32 @@ class ThreadRulesTest {
 
     /** Package-private in {@code claude}: named, not referenced. */
     private static final String CLAUDE_PROCESS = "dev.marregui.comando.claude.ClaudeProcess";
+    /** cdb depends on the JDK alone, so it cannot take the thread kit (record 158): its launcher and its server. */
+    private static final String CDB_SERVE = "dev.marregui.comando.cdb.CdbServe";
+    private static final String CDB_ADMISSION = "dev.marregui.comando.cdb.serve.CdbServer$Admission";
 
-    /// No class but [StateLoop], [Watchdog], `ClaudeProcess` and [Main] calls `Thread.ofPlatform` or constructs a
-    /// `Thread`.
+    /// No class but [StateLoop], [Watchdog], `ClaudeProcess`, [Main] and cdb's launcher (its shutdown hook) calls
+    /// `Thread.ofPlatform` or constructs a `Thread`.
     @Test
     void platformThreadsComeOnlyFromTheKindsThatNeedThem() {
         noClasses().that().doNotHaveFullyQualifiedName(StateLoop.class.getName())
                 .and().doNotHaveFullyQualifiedName(Watchdog.class.getName())
                 .and().doNotHaveFullyQualifiedName(CLAUDE_PROCESS)
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
+                .and().doNotHaveFullyQualifiedName(CDB_SERVE)
                 .should().callMethod(Thread.class, "ofPlatform")
                 .orShould().callConstructorWhere(target(owner(assignableTo(Thread.class))))
                 .check(ComandoClasses.MAIN);
     }
 
-    /// No class but [Threads] and its nested classes (its measured strand) calls `Thread.ofVirtual`, an `Executors`
+    /// No class but [Threads] and its nested classes (its measured strand), and cdb's server admission (its request
+    /// threads, bounded by its own permits), calls `Thread.ofVirtual`, an `Executors`
     /// factory other than `newVirtualThreadPerTaskExecutor`, or constructs a `ThreadPoolExecutor` or a `java.util.Timer`.
     @Test
     void virtualThreadsAndExecutorsComeFromTheThreadKit() {
         noClasses().that().doNotHaveFullyQualifiedName(Threads.class.getName())
                 .and().haveNameNotMatching(Pattern.quote(Threads.class.getName() + "$") + ".*")
+                .and().doNotHaveFullyQualifiedName(CDB_ADMISSION)
                 .should().callMethod(Thread.class, "ofVirtual")
                 .orShould().callMethodWhere(target(owner(assignableTo(Executors.class))).and(target(name("newVirtualThreadPerTaskExecutor")).negate()))
                 .orShould().callConstructorWhere(target(owner(assignableTo(ThreadPoolExecutor.class))))

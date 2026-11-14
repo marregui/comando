@@ -3,6 +3,7 @@ package dev.marregui.comando.claude;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -63,6 +64,11 @@ final class MetricsSink implements AutoCloseable {
      * bound (record 146).
      */
     static final long MINUTE_NANOS = TimeUnit.MINUTES.toNanos(1);
+    /**
+     * The setting naming a second server, by its base URL, that gets every batch as well: a server to compare with the
+     * machine's QuestDB. Unset, nothing else is written.
+     */
+    static final String SHADOW_ENV = "COMANDO_QDB_SHADOW";
     /** The contract's connect bound (record 146, §5): a server on this machine answers a connect at once. */
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(1);
     private static final System.Logger LOG = System.getLogger(MetricsSink.class.getName());
@@ -70,6 +76,12 @@ final class MetricsSink implements AutoCloseable {
     private static final String MISSING_TABLE = "table does not exist";
     /** The contract's request bound (record 146, §5). */
     private static final Duration REQUEST_WITHIN = Duration.ofSeconds(5);
+    /**
+     * Each shadow request's bound: they run on the batch thread after the server's write, so a silent shadow delays a
+     * batch by at most this per request (its tables, then the write: seven at most); a loopback cdb answers in
+     * milliseconds.
+     */
+    private static final Duration SHADOW_WITHIN = Duration.ofMillis(500);
     /** Put on the queue by {@link #close} to wake the errand; carries no event. */
     private static final ObjectNode WAKE = JsonNodeFactory.instance.objectNode();
 
@@ -86,6 +98,8 @@ final class MetricsSink implements AutoCloseable {
     private final QuestDbEndpoint qdb;
     private final ArrayBlockingQueue<ObjectNode> queue = new ArrayBlockingQueue<>(CAPACITY);
     private final AtomicLong sent = new AtomicLong();
+    /** The server of {@link #SHADOW_ENV}; null when there is none. */
+    private final URI shadow;
     private final AtomicLong skipped = new AtomicLong();
     private final Thread thread;
     /** Event types with no table already logged; the errand's only. */
@@ -103,11 +117,15 @@ final class MetricsSink implements AutoCloseable {
     private boolean outage;
     private long reportedDrops;
     private URI server;
+    private boolean shadowLogged;
+    /** The shadow server's tables are made, and no write to it failed since. */
+    private boolean shadowReady;
     private URI tablesOn;
 
     /**
      * Starts the errand that sends the events, as {@code lines} maps them, to {@code qdb}; {@code nanos} times the
-     * once-a-minute bounds, and an outage is told to {@code notices}.
+     * once-a-minute bounds, and an outage is told to {@code notices}. No shadow: the environment's is read by
+     * {@code MetricsLog}'s public constructor alone, so a test of the sink never writes to the user's shadow.
      */
     MetricsSink(
             final QuestDbEndpoint qdb,
@@ -116,11 +134,31 @@ final class MetricsSink implements AutoCloseable {
             final LongSupplier nanos,
             final IntentSink notices
     ) {
+        this(qdb, lines, json, nanos, notices, null);
+    }
+
+    /**
+     * As the sink above, each batch also sent to {@code shadow}, a base URL, after the server had it; none when it is
+     * null or blank. A shadow that fails is logged once and is otherwise ignored: what is counted, logged and told of
+     * the server's writes never depends on it.
+     */
+    MetricsSink(
+            final QuestDbEndpoint qdb,
+            final MetricsLines lines,
+            final ObjectMapper json,
+            final LongSupplier nanos,
+            final IntentSink notices,
+            final String shadow
+    ) {
         this.qdb = qdb;
         this.lines = lines;
         this.json = json;
         this.nanos = nanos;
         this.notices = notices;
+        this.shadow = shadowOf(shadow);
+        if (this.shadow != null) {
+            LOG.log(System.Logger.Level.INFO, "metrics also go to a shadow server [server=" + this.shadow + ']');
+        }
         this.http = HttpClient.newBuilder().connectTimeout(CONNECT_WITHIN).build();
         try {
             this.thread = errands.start("metrics-sink", this::drain);
@@ -203,6 +241,24 @@ final class MetricsSink implements AutoCloseable {
         return dropped.get();
     }
 
+    /** The base URL in {@code value}; null when it is null, blank, or not an absolute URL, the last one logged. */
+    static URI shadowOf(final String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            final URI uri = new URI(value.strip());
+            if (uri.getScheme() != null && uri.getHost() != null) {
+                return uri;
+            }
+        } catch (final URISyntaxException _) {
+            // logged below, as a value with no scheme or host
+        }
+        LOG.log(System.Logger.Level.WARNING, "ignoring the shadow server, not a base URL [" + SHADOW_ENV + '=' + value
+                + ']');
+        return null;
+    }
+
     private static String shortened(final String text) {
         final String flat = text.replace('\n', ' ').replace('\r', ' ');
         return flat.length() <= 300 ? flat : flat.substring(0, 300) + "...";
@@ -217,7 +273,9 @@ final class MetricsSink implements AutoCloseable {
             more = collect(batch);
             int from = 0;
             while (from < batch.size() && !Thread.currentThread().isInterrupted()) {
-                deliver(batch.subList(from, Math.min(batch.size(), from + BATCH_LINES)));
+                final List<String> chunk = batch.subList(from, Math.min(batch.size(), from + BATCH_LINES));
+                deliver(chunk);
+                shadow(chunk);
                 from += BATCH_LINES;
             }
             if (Thread.currentThread().isInterrupted()) {
@@ -363,10 +421,10 @@ final class MetricsSink implements AutoCloseable {
         if (base == null) {
             return null;
         }
-        HttpResponse<String> answer = post(base, chunk);
+        HttpResponse<String> answer = post(base, chunk, REQUEST_WITHIN);
         if (answer.statusCode() == 400 && missingTable(answer.body())) {
-            createTables(base);
-            answer = post(base, chunk);
+            createTables(base, REQUEST_WITHIN);
+            answer = post(base, chunk, REQUEST_WITHIN);
         }
         if (answer.statusCode() != 204) {
             LOG.log(System.Logger.Level.DEBUG, "QuestDB refused a write [status=" + answer.statusCode() + ", answer="
@@ -407,7 +465,7 @@ final class MetricsSink implements AutoCloseable {
         }
         final URI base = server;
         if (!base.equals(tablesOn)) {
-            createTables(base);
+            createTables(base, REQUEST_WITHIN);
             tablesOn = base;
             LOG.log(System.Logger.Level.INFO, "metrics go to QuestDB [server=" + base + ']');
         }
@@ -424,24 +482,60 @@ final class MetricsSink implements AutoCloseable {
         return true;
     }
 
-    private void createTables(final URI base) throws IOException, InterruptedException {
+    private void createTables(final URI base, final Duration within) throws IOException, InterruptedException {
         for (final String ddl : MetricsLines.DDL) {
-            exec(base, ddl, REQUEST_WITHIN);
+            exec(base, ddl, within);
         }
     }
 
     private HttpResponse<String> post(
             final URI base,
-            final List<String> chunk
+            final List<String> chunk,
+            final Duration within
     ) throws IOException, InterruptedException {
         final StringBuilder body = new StringBuilder();
         for (final String line : chunk) {
             body.append(line).append('\n');
         }
-        final HttpRequest request = HttpRequest.newBuilder(base.resolve("/write?precision=n")).timeout(REQUEST_WITHIN)
+        final HttpRequest request = HttpRequest.newBuilder(base.resolve("/write?precision=n")).timeout(within)
                 .header("Content-Type", "text/plain; charset=utf-8")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
         return http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Sends {@code chunk} to the shadow server too, its tables made first after the start or a failed write; the first
+     * failure is logged and every one ignored, not counted, retried or told, so the server's writes never see it.
+     */
+    private void shadow(final List<String> chunk) {
+        if (shadow == null || Thread.currentThread().isInterrupted()) {
+            return;
+        }
+        try {
+            if (!shadowReady) {
+                createTables(shadow, SHADOW_WITHIN);
+                shadowReady = true;
+            }
+            final int status = post(shadow, chunk, SHADOW_WITHIN).statusCode();
+            if (status != 204) {
+                shadowReady = false;
+                shadowFailed("status=" + status, null);
+            }
+        } catch (final IOException | RuntimeException e) {
+            shadowReady = false;
+            shadowFailed("lines=" + chunk.size(), e);
+        } catch (final InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void shadowFailed(final String values, final Throwable cause) {
+        if (shadowLogged) {
+            return;
+        }
+        shadowLogged = true;
+        LOG.log(System.Logger.Level.WARNING, "cannot write metrics to the shadow server, its failures ignored from"
+                + " now on [server=" + shadow + ", " + values + ']', cause);
     }
 
     /** Whether a refused write's answer says a line names a table the server does not have. */

@@ -1,6 +1,7 @@
 // JDBC adapter: connection lanes, the executor with request ids and cancel, columnar results.
 dependencies {
     api(project(":core"))
+    implementation(project(":cdb"))
     implementation(libs.postgresql)
     testImplementation(project(":testkit"))
     testImplementation(libs.awaitility)
