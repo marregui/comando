@@ -1,0 +1,30 @@
+{
+  "version" : 1,
+  "sessions" : [ {
+    "name" : "edge",
+    "workDir" : "/Users/me/edge",
+    "model" : "opus",
+    "effort" : "xhigh",
+    "budgetUsd" : 12.5,
+    "claudeSessionId" : "0e952c0a-3aa6-4026",
+    "startMode" : "RESUME",
+    "checkpoint" : "/reflect",
+    "carried" : "the summary\nof two lines",
+    "createdBy" : "lead",
+    "family" : "family",
+    "unreadMillis" : 1763100000000
+  }, {
+    "name" : "Ünïcode ✓ 😀",
+    "workDir" : "/tmp/a b",
+    "model" : "",
+    "effort" : "",
+    "budgetUsd" : 0.0,
+    "claudeSessionId" : "",
+    "startMode" : "NEW",
+    "checkpoint" : "/reflect",
+    "carried" : "",
+    "createdBy" : "",
+    "family" : "",
+    "unreadMillis" : 0
+  } ]
+}

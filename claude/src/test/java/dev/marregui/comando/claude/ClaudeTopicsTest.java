@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.Topic;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,13 +27,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Stops pending and active work on close.
 class ClaudeTopicsTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     @TempDir
     Path dir;
 
     private static String answer(final String result, final boolean error) {
-        final ObjectNode n = JSON.createObjectNode();
+        final ObjectNode n = Json.object();
         n.put("type", "result");
         n.put("is_error", error);
         n.put("result", result);
@@ -44,20 +43,20 @@ class ClaudeTopicsTest {
     /// answer at `MAX_TEXT`, so a card receives one readable line.
     @Test
     void theWholeAnswerIsTheSummaryOnOneParagraphWithoutTheQuotesOrHeadingAModelAdds() {
-        assertThat(ClaudeTopics.parse(answer("\n\"In comando, fixing the flaky key test.\nUiKeysTest reads the focus owner.\"\n", false), 7L, JSON))
+        assertThat(ClaudeTopics.parse(answer("\n\"In comando, fixing the flaky key test.\nUiKeysTest reads the focus owner.\"\n", false), 7L))
                 .isEqualTo(new Topic("In comando, fixing the flaky key test. UiKeysTest reads the focus owner.", 7L, ""));
-        assertThat(ClaudeTopics.parse(answer("Summary: `Sticky tab cards in comando.`", false), 1L, JSON).line()).isEqualTo("Sticky tab cards in comando.");
-        assertThat(ClaudeTopics.parse(answer("Waiting...", false), 1L, JSON).line()).isEqualTo("Waiting...");
-        assertThat(ClaudeTopics.parse(answer("x".repeat(600), false), 1L, JSON).line()).hasSize(ClaudeTopics.MAX_TEXT);
+        assertThat(ClaudeTopics.parse(answer("Summary: `Sticky tab cards in comando.`", false), 1L).line()).isEqualTo("Sticky tab cards in comando.");
+        assertThat(ClaudeTopics.parse(answer("Waiting...", false), 1L).line()).isEqualTo("Waiting...");
+        assertThat(ClaudeTopics.parse(answer("x".repeat(600), false), 1L).line()).hasSize(ClaudeTopics.MAX_TEXT);
     }
 
     /// Error JSON, blank success text, and non-JSON output each become a specific problem instead of a displayable
     /// topic line.
     @Test
     void anAnswerWithoutALineSaysWhy() {
-        assertThat(ClaudeTopics.parse(answer("Not logged in", true), 1L, JSON).problem()).isEqualTo("Not logged in");
-        assertThat(ClaudeTopics.parse(answer(" \n ", false), 1L, JSON).problem()).isEqualTo("an empty answer from Haiku");
-        assertThat(ClaudeTopics.parse("<html>proxy error</html>", 1L, JSON).problem()).isEqualTo("unreadable answer from Haiku");
+        assertThat(ClaudeTopics.parse(answer("Not logged in", true), 1L).problem()).isEqualTo("Not logged in");
+        assertThat(ClaudeTopics.parse(answer(" \n ", false), 1L).problem()).isEqualTo("an empty answer from Haiku");
+        assertThat(ClaudeTopics.parse("<html>proxy error</html>", 1L).problem()).isEqualTo("unreadable answer from Haiku");
     }
 
     /// A real read invokes the safe, low-effort Haiku command without tools or persisted session, sends the source on
@@ -70,7 +69,7 @@ class ClaudeTopicsTest {
         final Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\ncat > '" + input + "'\nprintf '%s' \"$MAX_THINKING_TOKENS\" > '" + env
                 + "'\nprintf '%s' '" + answer("Sticky tab cards", false) + "'\n");
 
-        final Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "User: make the card sticky", Duration.ofSeconds(10));
+        final Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, "User: make the card sticky", Duration.ofSeconds(10));
 
         assertThat(topic.line()).isEqualTo("Sticky tab cards");
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "--model", "haiku", "--effort", "low", "--tools", "",
@@ -85,11 +84,11 @@ class ClaudeTopicsTest {
     void aReadThatHangsIsStoppedAndAMissingExecutableIsAProblem() throws Exception {
         final Path exe = script("hang", "exec sleep 30\n");
         final long start = System.nanoTime();
-        final Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofMillis(300));
+        final Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, "x", Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(topic.problem()).isEqualTo("Haiku did not answer within 300 ms");
-        assertThat(ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofSeconds(1)).problem()).isEqualTo("Haiku did not answer within 1 s");
-        assertThat(ClaudeTopics.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofSeconds(1)).problem()).startsWith("cannot run '");
+        assertThat(ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, "x", Duration.ofSeconds(1)).problem()).isEqualTo("Haiku did not answer within 1 s");
+        assertThat(ClaudeTopics.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, "x", Duration.ofSeconds(1)).problem()).startsWith("cannot run '");
     }
 
     /// While `a0` is reading, newer requests for `a` coalesce to `a3`, urgent `c0` moves ahead of waiting `b0`, and

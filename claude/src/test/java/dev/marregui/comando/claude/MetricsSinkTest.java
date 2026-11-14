@@ -23,11 +23,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -50,7 +50,6 @@ import static org.awaitility.Awaitility.await;
 /// - Tells the user of an outage once, and of the next one again after a batch was taken.
 class MetricsSinkTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final Duration WITHIN = Duration.ofSeconds(5);
 
     private final AtomicLong nanos = new AtomicLong();
@@ -318,13 +317,13 @@ class MetricsSinkTest {
 
     /// A `usage` event of `window`, at 2026-10-28T10:00:00Z.
     static ObjectNode usage(final String window) {
-        return JSON.createObjectNode().put("ts", "2026-10-28T10:00:00Z").put("event", "usage").put("provider", "claude")
+        return Json.object().put("ts", "2026-10-28T10:00:00Z").put("event", "usage").put("provider", "claude")
                 .put("window", window).put("pct", 1.0);
     }
 
     /// A `queues` event of `count` queues, each a line of its own.
     private static ObjectNode queues(final int count) {
-        final ObjectNode event = JSON.createObjectNode().put("ts", "2026-10-28T10:00:00Z").put("event", "queues");
+        final ObjectNode event = Json.object().put("ts", "2026-10-28T10:00:00Z").put("event", "queues");
         final ArrayNode read = event.putArray("queues");
         for (int i = 0; i < count; i++) {
             read.addObject().put("name", "q" + i).put("depth", 0).put("peak", 0);
@@ -337,7 +336,7 @@ class MetricsSinkTest {
     }
 
     private MetricsSink sink(final QuestDbEndpoint qdb) {
-        return new MetricsSink(qdb, new MetricsLines(JSON, "/data"), JSON, nanos::get, notices);
+        return new MetricsSink(qdb, new MetricsLines("/data"), nanos::get, notices);
     }
 
     /// An endpoint that names the server it is given and counts the starts asked of it.

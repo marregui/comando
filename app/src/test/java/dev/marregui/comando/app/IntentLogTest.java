@@ -12,6 +12,8 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -177,7 +179,7 @@ class IntentLogTest {
     /// written back; free text that only mentions the word stays as it is.
     @Test
     void aPasswordInsideJsonTextNeverReachesTheLog() {
-        final var node = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        final ObjectNode node = Json.object();
         node.put("input", "{\"name\":\"lab\",\"password\":\"s3cret\"}");
         node.put("note", "the password field is optional");
         final String out = IntentLog.redact(node).toString();

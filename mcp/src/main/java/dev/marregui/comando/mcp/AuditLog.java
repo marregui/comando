@@ -10,10 +10,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.OwnerOnly;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.view.Clip;
 
 /**
@@ -27,7 +26,6 @@ public final class AuditLog {
     private static final int MAX_FIELD = 2_000;
 
     private final Path dir;
-    private final ObjectMapper json = new ObjectMapper();
 
     public AuditLog(final Path dir) {
         this.dir = dir;
@@ -42,7 +40,7 @@ public final class AuditLog {
         if (dir == null) {
             return;
         }
-        final ObjectNode line = json.createObjectNode();
+        final ObjectNode line = Json.object();
         line.put("time", Instant.now().toString());
         line.put("session", session);
         line.put("event", event);

@@ -57,9 +57,9 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import tools.jackson.databind.JsonNode;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;

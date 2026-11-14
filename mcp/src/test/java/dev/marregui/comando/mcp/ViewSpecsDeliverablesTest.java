@@ -1,9 +1,9 @@
 package dev.marregui.comando.mcp;
 
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -17,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - An unknown type names `deliverables` among the types to use.
 class ViewSpecsDeliverablesTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final ViewSpec TEXT = new ViewSpec.Text("", "body", "", 0);
 
     /// [ViewSpecs#parse] maps `deliverables` to the view, with or without data.
@@ -58,6 +57,6 @@ class ViewSpecsDeliverablesTest {
     }
 
     private static JsonNode json(final String text) throws Exception {
-        return JSON.readTree(text);
+        return Json.readTree(text);
     }
 }

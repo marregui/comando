@@ -8,7 +8,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.core.type.TypeReference;
+
+import dev.marregui.comando.core.json.bind.TypeRef;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,8 +53,19 @@ class JsonFileTest {
         assertThat(f.read()).containsExactly("a");
     }
 
+    /// A name holding a lone surrogate (an agent's panel title cut mid-emoji) reads back as written: the file keeps it
+    /// as an escape, never as `?`.
+    @Test
+    void aLoneSurrogateReadsBackAsWritten() throws IOException {
+        final JsonFile<List<String>> f = file();
+        final String clipped = "clipped \uD83D";
+        f.write(List.of(clipped));
+        assertThat(f.read()).containsExactly(clipped);
+        assertThat(Files.readString(f.path())).contains("\\uD83D");
+    }
+
     private JsonFile<List<String>> file() {
-        return new JsonFile<>(dir.resolve("names.json"), "names", 1, new TypeReference<>() {
+        return new JsonFile<>(dir.resolve("names.json"), "names", 1, new TypeRef<>() {
         });
     }
 

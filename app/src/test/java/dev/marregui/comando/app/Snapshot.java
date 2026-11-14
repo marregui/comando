@@ -42,6 +42,7 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -483,14 +484,14 @@ public final class Snapshot {
         Files.writeString(memory.resolve("MEMORY.md"), "# Memory\n");
         Files.writeString(Files.createDirectories(root.resolve("skills").resolve("reflect")).resolve("SKILL.md"), "# reflect\n");
         Files.writeString(Files.createDirectories(root.resolve("plugin").resolve("bin")).resolve("gradle-serial"), "#!/bin/sh\n");
-        Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
+        Files.writeString(home.resolve("folders.json"), Json.pretty(JsonFile.BINDER.toTree(List.of(
                 new FolderRoot("Scratchpad", pad.toString(), "INDEX.md", List.of(), "scratchpad"),
                 new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory"),
                 new FolderRoot("KB", kb.toString(), "00_START_HERE.md", List.of(), "knowledge"),
                 new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills"),
                 new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin"),
                 new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()),
-                new FolderRoot("Repo", repo.toString(), "", List.of()))));
+                new FolderRoot("Repo", repo.toString(), "", List.of())))));
         return repo;
     }
 

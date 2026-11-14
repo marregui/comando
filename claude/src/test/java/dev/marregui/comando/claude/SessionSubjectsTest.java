@@ -9,7 +9,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -58,7 +57,7 @@ class SessionSubjectsTest {
     void setUp() throws Exception {
         work = Files.createDirectories(tmp.resolve("work"));
         projects = Files.createDirectories(tmp.resolve("claude/projects"));
-        subjects = new SessionSubjects(projects, new ObjectMapper());
+        subjects = new SessionSubjects(projects);
     }
 
     @AfterEach

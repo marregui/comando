@@ -13,16 +13,15 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
@@ -79,7 +78,6 @@ final class ActionTools {
     private final IntentSink sink;
     private final Supplier<AppState> state;
     private final Asker asker;
-    private final ObjectMapper json = new ObjectMapper();
     private final TerminalTools terminals;
     private volatile Path agentsFile;
     private volatile List<ServerSwitch> servers = List.of();
@@ -88,7 +86,7 @@ final class ActionTools {
         this.sink = sink;
         this.state = state;
         this.asker = asker;
-        this.terminals = new TerminalTools(asker, caller -> granted(caller, TERMINAL), json);
+        this.terminals = new TerminalTools(asker, caller -> granted(caller, TERMINAL));
     }
 
     /** Where the user's grants live; without one no caller holds a grant. */
@@ -118,7 +116,7 @@ final class ActionTools {
 
     /** The tool definitions of the actions not in {@code builtIn}, in the registry's order. */
     ArrayNode definitions(final Set<String> builtIn) {
-        final ArrayNode out = json.createArrayNode();
+        final ArrayNode out = Json.array();
         for (final Action a : Actions.ALL) {
             if (builtIn.contains(a.tool())) {
                 continue;
@@ -131,7 +129,7 @@ final class ActionTools {
             final ObjectNode schema = d.putObject("inputSchema");
             schema.put("type", "object");
             final ObjectNode props = schema.putObject("properties");
-            final ArrayNode required = json.createArrayNode();
+            final ArrayNode required = Json.array();
             for (final Action.Arg arg : a.args()) {
                 final ObjectNode p = props.putObject(arg.name());
                 switch (arg.type()) {
@@ -402,7 +400,7 @@ final class ActionTools {
         if (weakened.isEmpty()) {
             return send(save);
         }
-        final ObjectNode input = json.createObjectNode();
+        final ObjectNode input = Json.object();
         input.put("connection", old.name());
         input.put("change", String.join("; ", weakened));
         input.put("host", spec.host());
@@ -567,7 +565,7 @@ final class ActionTools {
             return false;
         }
         try {
-            final JsonNode root = json.readTree(Mapped.text(file));
+            final JsonNode root = Json.readTree(Mapped.text(file));
             // a file of a later version grants nothing this comando could misread (record 133)
             if (Peers.later(root)) {
                 return false;

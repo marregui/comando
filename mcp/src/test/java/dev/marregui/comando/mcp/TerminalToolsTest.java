@@ -15,10 +15,10 @@ import java.util.function.IntFunction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
@@ -38,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// budget and its wait ends on a match or on quiet output, and nothing runs before the application sets the port.
 class TerminalToolsTest {
 
-    private final ObjectMapper json = new ObjectMapper();
     private final RecordingSink sink = new RecordingSink();
     private final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
     private FakeTerminals terminals;
@@ -63,7 +62,7 @@ class TerminalToolsTest {
         assertThat(card.kind()).isEqualTo(ApprovalKind.TERMINAL);
         assertThat(card.toolName()).isEqualTo("terminal_send");
         assertThat(card.summary()).isEqualTo("one");
-        final JsonNode input = json.readTree(card.inputJson());
+        final JsonNode input = Json.readTree(card.inputJson());
         assertThat(input.path("panel").asString()).isEqualTo("one");
         assertThat(input.path("text").asString()).isEqualTo("make test");
         assertThat(input.path("enter").asBoolean()).isTrue();
@@ -224,7 +223,7 @@ class TerminalToolsTest {
     }
 
     private McpTools.Outcome call(final String caller, final String tool, final String args) throws Exception {
-        return tools.call(caller, tool, json.readTree(args));
+        return tools.call(caller, tool, Json.readTree(args));
     }
 
     private CompletableFuture<McpTools.Outcome> callAsync(final String caller, final String tool, final String args) {

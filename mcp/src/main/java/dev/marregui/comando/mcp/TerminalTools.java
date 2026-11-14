@@ -10,11 +10,10 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PanelId;
@@ -60,17 +59,15 @@ final class TerminalTools {
 
     private final ActionTools.Asker asker;
     private final Predicate<String> mayType;
-    private final ObjectMapper json;
     /** Written once by the application's thread through {@link #port}; read by every MCP request thread. */
     private volatile TerminalPort port;
 
     /**
      * @param mayType whether {@code agents.json} grants a caller {@code "terminal"}: its sends raise no card
      */
-    TerminalTools(final ActionTools.Asker asker, final Predicate<String> mayType, final ObjectMapper json) {
+    TerminalTools(final ActionTools.Asker asker, final Predicate<String> mayType) {
         this.asker = asker;
         this.mayType = mayType;
-        this.json = json;
     }
 
     void port(final TerminalPort port) {
@@ -90,7 +87,7 @@ final class TerminalTools {
         if (p == null) {
             return NOT_READY;
         }
-        final ArrayNode out = json.createArrayNode();
+        final ArrayNode out = Json.array();
         for (final TerminalPort.Terminal t : p.list()) {
             out.addObject()
                     .put("title", t.title())
@@ -148,7 +145,7 @@ final class TerminalTools {
         }
         final boolean enter = args.path("enter").asBoolean(true);
         if (!mayType.test(caller)) {
-            final ObjectNode input = json.createObjectNode();
+            final ObjectNode input = Json.object();
             input.put("panel", panel.title());
             input.put("text", text);
             input.put("enter", enter);

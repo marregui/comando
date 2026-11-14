@@ -39,6 +39,7 @@ import dev.marregui.comando.app.EmbeddedEdge.Entry;
 import dev.marregui.comando.app.EmbeddedEdge.Located;
 import dev.marregui.comando.app.EmbeddedEdge.Ports;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.testkit.RecordingSink;
@@ -641,11 +642,11 @@ class EmbeddedEdgeTest {
     }
 
     private Entry read() throws IOException {
-        return JsonFile.JSON.readValue(registry.toFile(), Entry.class);
+        return JsonFile.BINDER.fromTree(Json.readTree(Files.readString(registry)), Entry.class);
     }
 
     private void write(final Entry e) throws IOException {
-        Files.write(registry, JsonFile.JSON.writeValueAsBytes(e));
+        Files.write(registry, JsonFile.pretty(JsonFile.BINDER.toTree(e)));
     }
 
     private static int freePort() throws IOException {

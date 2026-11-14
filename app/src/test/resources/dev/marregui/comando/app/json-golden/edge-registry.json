@@ -1,0 +1,13 @@
+{
+  "version" : 1,
+  "pid" : 4343,
+  "owner" : "Comando",
+  "name" : "Comando Expert",
+  "ports" : {
+    "mqtt" : 18883,
+    "websocket" : 18800,
+    "api" : 18080,
+    "jmx" : 18010
+  },
+  "started" : "2026-11-14T08:00:00Z"
+}

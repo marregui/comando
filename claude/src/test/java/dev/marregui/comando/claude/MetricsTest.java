@@ -13,11 +13,10 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
@@ -44,8 +43,6 @@ import static org.awaitility.Awaitility.await;
 /// - Takes a conversation's last context from QuestDB, and none when QuestDB has no row or is down.
 class MetricsTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     @TempDir
     Path dir;
     /** 2026-10-28T10:00:00Z, then as the test moves it. */
@@ -65,7 +62,7 @@ class MetricsTest {
         try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
                 final MetricsLog log = log(server)) {
             final List<ObjectNode> ended = new ArrayList<>();
-            final StreamMapper mapper = new StreamMapper("work", new Transcript(), new RecordingSink(), JSON);
+            final StreamMapper mapper = new StreamMapper("work", new Transcript(), new RecordingSink());
             mapper.metrics(log, e -> {
                 ended.add(e);
                 log.write(e);
@@ -106,7 +103,7 @@ class MetricsTest {
                     .contains("output_tokens=500i");
 
             // a stored conversation read again says nothing that happens now
-            final StreamMapper replay = new StreamMapper("work", new Transcript(), new RecordingSink(), JSON);
+            final StreamMapper replay = new StreamMapper("work", new Transcript(), new RecordingSink());
             replay.metrics(log, log::write);
             replay.acceptHistory("""
                     {"type":"assistant","message":{"id":"h1","content":[{"type":"tool_use","id":"h2","name":"Agent","input":{"description":"old"}}]}}""");
@@ -123,7 +120,7 @@ class MetricsTest {
     void aBackgroundSubagentEndsAtItsTaskNotificationNotItsLaunch() throws IOException {
         try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
                 final MetricsLog log = log(server)) {
-            final StreamMapper mapper = new StreamMapper("work", new Transcript(), new RecordingSink(), JSON);
+            final StreamMapper mapper = new StreamMapper("work", new Transcript(), new RecordingSink());
             mapper.metrics(log, log::write);
             mapper.accept("""
                     {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","content":[{"type":"tool_use","id":"b1","name":"Agent","input":{"description":"Watch CI","run_in_background":true}}]}}""");
@@ -151,7 +148,7 @@ class MetricsTest {
                 "{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"model\":\"claude-sonnet-5-5\",\"usage\":{\"input_tokens\":5,\"output_tokens\":40,\"cache_read_input_tokens\":100,\"cache_creation_input_tokens\":7}}}",
                 "{\"type\":\"assistant\",\"message\":{\"id\":\"m2\",\"model\":\"claude-sonnet-5-5\",\"usage\":{\"input_tokens\":1,\"output_tokens\":10,\"cache_read_input_tokens\":200,\"cache_creation_input_tokens\":0}}}",
                 "not json") + "\n");
-        final JsonNode spend = SubagentFiles.spend(file, JSON);
+        final JsonNode spend = SubagentFiles.spend(file);
         assertThat(spend.path("calls").asLong()).as("a message stored a block a line counts once").isEqualTo(2);
         assertThat(spend.path("output").asLong()).isEqualTo(50);
         assertThat(spend.path("cache_read").asLong()).isEqualTo(300);
@@ -280,7 +277,7 @@ class MetricsTest {
                 throw new IllegalStateException("no server");
             }
         };
-        try (final MetricsLog log = new MetricsLog(JSON, now::get, dir.toString(), failing, notices)) {
+        try (final MetricsLog log = new MetricsLog(now::get, dir.toString(), failing, notices)) {
             log.queues(List.of(new Queues.Reading("intents", 0, 12)));
             final Intent.Notify told = notices.await(Intent.Notify.class, n -> true, WITHIN);
             assertThat(told.level()).isEqualTo(Notice.Level.WARN);
@@ -300,7 +297,7 @@ class MetricsTest {
                 + ",name=intents depth=0i,peak=12i 1793181600000000000";
         try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
                 final MetricsLog log = new MetricsLog(
-                        JSON, now::get, instance, MetricsSinkTest.Endpoint.at(server.uri()), notices)) {
+                        now::get, instance, MetricsSinkTest.Endpoint.at(server.uri()), notices)) {
             log.queues(List.of(new Queues.Reading("intents", 0, 12)));
             await().atMost(WITHIN).until(() -> server.lines.contains(expected));
             assertThat(server.lines).as("the live event alone").containsOnly(expected);
@@ -313,7 +310,7 @@ class MetricsTest {
     void theLastContextComesFromQuestDbAlone() throws Exception {
         try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb()) {
             final MetricsSinkTest.Endpoint endpoint = MetricsSinkTest.Endpoint.at(server.uri());
-            try (final MetricsLog log = new MetricsLog(JSON, now::get, "/data", endpoint, notices)) {
+            try (final MetricsLog log = new MetricsLog(now::get, "/data", endpoint, notices)) {
                 server.selectAnswer.set("{\"query\":\"\",\"columns\":[{\"name\":\"context\",\"type\":\"LONG\"},"
                         + "{\"name\":\"context_window\",\"type\":\"LONG\"}],\"dataset\":[[588979,1000000]],"
                         + "\"count\":1}");
@@ -340,7 +337,7 @@ class MetricsTest {
 
     /// A log of instance `/data` that sends to `server` and tells its outages to [#notices].
     private MetricsLog log(final MetricsSinkTest.FakeQuestDb server) {
-        return new MetricsLog(JSON, now::get, "/data", MetricsSinkTest.Endpoint.at(server.uri()), notices);
+        return new MetricsLog(now::get, "/data", MetricsSinkTest.Endpoint.at(server.uri()), notices);
     }
 
     /// Writes a marker queue reading and waits until `server` has its line: every event written before it was sent.

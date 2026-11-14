@@ -9,10 +9,10 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -25,8 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// The audit log records every tool call's arguments with each credential written `***`: a password Claude saves
 /// through `connection_save` reaches the connection, not the audit file.
 class McpToolsAuditTest {
-
-    private final ObjectMapper json = new ObjectMapper();
 
     @TempDir
     Path auditDir;
@@ -41,7 +39,7 @@ class McpToolsAuditTest {
         final McpTools tools = new McpTools(sink, state::get, new TranscriptRegistry(), db, new AuditLog(auditDir), new FakeClock(),
                 Duration.ofMinutes(1));
 
-        final McpTools.Outcome out = tools.call("work", "connection_save", json.readTree(
+        final McpTools.Outcome out = tools.call("work", "connection_save", Json.readTree(
                 "{\"name\":\"quest\",\"host\":\"localhost\",\"database\":\"qdb\",\"user\":\"admin\",\"password\":\"hunter2-s3cret\"}"));
 
         assertThat(out.error()).as(out.text()).isFalse();
@@ -53,7 +51,7 @@ class McpToolsAuditTest {
             audit = Files.readString(days.getFirst());
         }
         assertThat(audit).doesNotContain("hunter2-s3cret");
-        final JsonNode detail = json.readTree(json.readTree(audit).path("detail").asString());
+        final JsonNode detail = Json.readTree(Json.readTree(audit).path("detail").asString());
         assertThat(detail.path("password").asString()).isEqualTo(McpTools.REDACTED);
         assertThat(detail.path("host").asString()).isEqualTo("localhost");
         assertThat(detail.path("user").asString()).isEqualTo("admin");
@@ -63,10 +61,10 @@ class McpToolsAuditTest {
     /// match ignoring case; other fields keep their values and the node passed in is not changed.
     @Test
     void secretBearingFieldsAreRedactedAtAnyDepthAndTheInputIsLeftAsItWas() throws Exception {
-        final JsonNode args = json.readTree("{\"Password\":\"p\",\"nested\":{\"client_secret\":\"s\",\"list\":[{\"accessToken\":\"t\"},"
+        final JsonNode args = Json.readTree("{\"Password\":\"p\",\"nested\":{\"client_secret\":\"s\",\"list\":[{\"accessToken\":\"t\"},"
                 + "{\"api-key\":\"k\",\"apiKey\":\"k2\",\"api_key\":\"k3\"}]},\"name\":\"n\"}");
 
-        final JsonNode out = json.readTree(McpTools.redacted(args));
+        final JsonNode out = Json.readTree(McpTools.redacted(args));
 
         assertThat(out.path("Password").asString()).isEqualTo("***");
         assertThat(out.path("nested").path("client_secret").asString()).isEqualTo("***");

@@ -21,10 +21,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.transcript.Block;
@@ -46,7 +46,6 @@ class ClaudeAdapterTest {
 
     @TempDir
     Path tmp;
-    private final ObjectMapper json = new ObjectMapper();
     private final RecordingSink sink = new RecordingSink();
     private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private final List<String> registered = new ArrayList<>();
@@ -114,7 +113,7 @@ class ClaudeAdapterTest {
         sink.await(Intent.SessionStarted.class, WAIT);
         try (final Stream<Path> files = Files.list(runDir)) {
             final Path config = files.findFirst().orElseThrow();
-            final JsonNode server = json.readTree(Files.readString(config)).path("mcpServers").path("comando");
+            final JsonNode server = Json.readTree(Files.readString(config)).path("mcpServers").path("comando");
             assertThat(server.path("headers").path("Authorization").asString()).isEqualTo("Bearer token-work");
             assertThat(server.path("timeout").asLong()).as("24 h 5 min, in milliseconds").isEqualTo(86_700_000L);
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(config))).isEqualTo("rw-------");

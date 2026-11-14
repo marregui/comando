@@ -16,10 +16,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.view.Clip;
 
@@ -76,7 +75,7 @@ final class CodexUsageReader {
     }
 
     /** Runs the read; blocks up to {@code timeout}. Call it off the EDT and the reducer. */
-    static PlanUsage read(final String executable, final ObjectMapper json, final Duration timeout, final ZoneId zone) {
+    static PlanUsage read(final String executable, final Duration timeout, final ZoneId zone) {
         Process p = null;
         try {
             p = new ProcessBuilder(executable, "app-server").redirectError(ProcessBuilder.Redirect.DISCARD).start();
@@ -115,7 +114,7 @@ final class CodexUsageReader {
                         }
                         final String text = line.toString(StandardCharsets.UTF_8);
                         line.reset();
-                        final PlanUsage u = answer(text, System.currentTimeMillis(), json, zone);
+                        final PlanUsage u = answer(text, System.currentTimeMillis(), zone);
                         if (u != null) {
                             return u;
                         }
@@ -171,11 +170,11 @@ final class CodexUsageReader {
      * The read from one line of the server's output: the windows when it is the answer to the read, why there are
      * none when it is an error answer, and null for any other line.
      */
-    static PlanUsage answer(final String line, final long readAtMillis, final ObjectMapper json, final ZoneId zone) {
+    static PlanUsage answer(final String line, final long readAtMillis, final ZoneId zone) {
         JsonNode msg;
         try {
-            msg = json.readTree(line.strip());
-        } catch (final JacksonException e) {
+            msg = Json.readTree(line.strip());
+        } catch (final JsonException e) {
             return null;
         }
         if (msg == null || !msg.isObject() || msg.path("id").asInt(-1) != 2) {

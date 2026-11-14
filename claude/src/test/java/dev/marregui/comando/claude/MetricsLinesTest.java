@@ -1,8 +1,9 @@
 package dev.marregui.comando.claude;
 
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,14 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Gives no line for an event of an unknown type or without a timestamp.
 class MetricsLinesTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
     /** 2026-10-28T10:00:00Z in nanoseconds. */
     private static final String AT = "1793181600000000000";
 
-    private final MetricsLines lines = new MetricsLines(JSON, "/data");
+    private final MetricsLines lines = new MetricsLines("/data");
 
     private static JsonNode event(final String text) {
-        return JSON.readTree(text);
+        return Json.readTree(text);
     }
 
     /// A finished turn is one `comando_turn` line with its tags, numbers, error flag, total cost and raw usage, and
@@ -105,8 +105,8 @@ class MetricsLinesTest {
     /// tag too. QuestDB 10.1.0 takes both lines and reads the values back as written.
     @Test
     void tagAndStringValuesAreEscaped() {
-        final MetricsLines spaced = new MetricsLines(JSON, "/Users/a b/.comando");
-        final JsonNode agent = JSON.createObjectNode().put("ts", "2026-10-28T10:00:00Z").put("event", "agent")
+        final MetricsLines spaced = new MetricsLines("/Users/a b/.comando");
+        final JsonNode agent = Json.object().put("ts", "2026-10-28T10:00:00Z").put("event", "agent")
                 .put("session", "a,b c=d\"e\\f\ng").put("description", "a,b c=d\"e\\f\ng\rh");
         assertThat(spaced.of(agent)).containsExactly(
                 "comando_agent,instance=/Users/a\\ b/.comando,session=a\\,b\\ c\\=d\"e\\\\f\\ g"

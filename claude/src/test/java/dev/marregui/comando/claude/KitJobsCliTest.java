@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
 
@@ -27,7 +27,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisabledOnOs(OS.WINDOWS)
 class KitJobsCliTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     static final String REPORT = """
             {"root": "/r", "platform": "macos", "scheduler": "launchd", "jobs": [
@@ -102,7 +101,7 @@ class KitJobsCliTest {
         assertThat(r.exit()).isEqualTo(1);
         assertThat(r.text()).contains("manifest: 2 job(s)").contains("said on stderr");
         assertThat(Files.readString(install.resolve("argv.txt")).lines()).containsExactly("jobs", "set", "--root", root.toString());
-        final JsonNode sent = JSON.readTree(Files.readString(install.resolve("stdin.txt")));
+        final JsonNode sent = Json.readTree(Files.readString(install.resolve("stdin.txt")));
         assertThat(sent.get(0).toString()).isEqualTo("{\"name\":\"a\",\"schedule\":{\"daily\":\"07:15\"},\"command\":[\"bin/a\"]}");
         assertThat(sent.get(1).toString()).isEqualTo("{\"name\":\"b\",\"description\":\"Brief\",\"schedule\":{\"weekly\":\"MON-FRI 10:15\"},"
                 + "\"command\":[\"bin/b\",\"--x\"],\"env\":{\"T\":\"{scheduler}\"},\"log\":\"logs/b.log\",\"enabled\":false}");

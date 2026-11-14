@@ -1,0 +1,1 @@
+{"some":"x","none":null,"number":3,"path":"file:///tmp/a%20b/c.txt","level":"WARN","modes":["NEW","FORK"],"values":[1.5,"NaN",-0.0,1.0E20],"nothing":null,"box":null,"nan":"NaN","ratio":0.25,"big":9223372036854775807,"panel":{"value":"p1"},"withNull":["a",null],"map":{"k":[1,2]}}

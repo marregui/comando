@@ -7,7 +7,6 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.claude.MetricsSinkTest.Endpoint;
 import dev.marregui.comando.claude.MetricsSinkTest.FakeQuestDb;
@@ -25,7 +24,6 @@ import static org.awaitility.Awaitility.await;
 /// - The setting is a base URL; anything else is no shadow.
 class MetricsSinkShadowTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final Duration WITHIN = Duration.ofSeconds(5);
 
     private final AtomicLong nanos = new AtomicLong();
@@ -110,6 +108,6 @@ class MetricsSinkShadowTest {
     }
 
     private MetricsSink sink(final QuestDbEndpoint qdb, final String shadow) {
-        return new MetricsSink(qdb, new MetricsLines(JSON, "/data"), JSON, nanos::get, notices, shadow);
+        return new MetricsSink(qdb, new MetricsLines("/data"), nanos::get, notices, shadow);
     }
 }

@@ -4,9 +4,9 @@ import java.awt.Color;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 
 /**
  * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, a short
@@ -49,7 +49,6 @@ record ThemeSpec(String id,
 
     /** The longest description: two short sentences on the tooltip's second line; the longest built-in is 89. */
     static final int DESCRIPTION_MAX = 140;
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern ID = Pattern.compile("[a-z0-9_]{1,40}");
     private static final Pattern HEX = Pattern.compile("#[0-9A-Fa-f]{6}");
 
@@ -57,8 +56,8 @@ record ThemeSpec(String id,
     static ThemeSpec parse(final String json) {
         JsonNode root;
         try {
-            root = JSON.readTree(json);
-        } catch (final JacksonException e) {
+            root = Json.readTree(json);
+        } catch (final JsonException e) {
             throw new IllegalArgumentException("not JSON: " + e.getOriginalMessage());
         }
         if (root == null || !root.isObject()) {

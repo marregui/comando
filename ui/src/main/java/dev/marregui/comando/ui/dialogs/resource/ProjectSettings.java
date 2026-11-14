@@ -6,12 +6,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.HomeDir;
 
 /**
@@ -23,7 +21,6 @@ import dev.marregui.comando.core.model.HomeDir;
  */
 final class ProjectSettings {
 
-    private static final ObjectMapper JSON = JsonMapper.builder().build();
     /** The project's files, the later read over the earlier. */
     private static final List<String> FILES = List.of("settings.json", "settings.local.json");
 
@@ -76,9 +73,9 @@ final class ProjectSettings {
     /** {@code permissions.defaultMode} in {@code file}; empty when it sets none or does not read. */
     private static String modeOf(final Path file) {
         try {
-            final JsonNode root = Mapped.read(file, m -> JSON.readTree(m.stream()));
+            final JsonNode root = Mapped.read(file, m -> Json.readTree(m.stream()));
             return root == null ? "" : root.path("permissions").path("defaultMode").asString("").strip();
-        } catch (final IOException | JacksonException _) {
+        } catch (final IOException | JsonException _) {
             return "";
         }
     }

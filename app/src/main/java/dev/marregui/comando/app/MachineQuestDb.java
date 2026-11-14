@@ -39,13 +39,14 @@ import java.util.stream.Stream;
 
 import io.questdb.ServerMain;
 import org.jetbrains.annotations.TestOnly;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 
 import dev.marregui.comando.claude.QuestDbEndpoint;
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.AtomicFiles;
@@ -498,12 +499,12 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                     return null;
                 }
                 try (final InputStream in = c.getInputStream()) {
-                    return JsonFile.JSON.readTree(in);
+                    return Json.readFirst(in);
                 }
             } finally {
                 c.disconnect();
             }
-        } catch (final IOException | JacksonException _) {
+        } catch (final IOException | JsonException _) {
             return null;
         }
     }
@@ -766,8 +767,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         }
         final JsonNode tree;
         try {
-            tree = Mapped.read(registry, m -> JsonFile.JSON.readTree(m.stream()));
-        } catch (final JacksonException e) {
+            tree = Mapped.read(registry, m -> Json.readFirst(m.stream()));
+        } catch (final JsonException e) {
             LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry is not JSON; no server is known [file="
                     + registry + ']', e);
             return null;
@@ -775,8 +776,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         final int version = tree.path("version").asInt(REGISTRY_VERSION);
         final Entry e;
         try {
-            e = JsonFile.JSON.treeToValue(tree, Entry.class);
-        } catch (final JacksonException ex) {
+            e = JsonFile.BINDER.fromTree(tree, Entry.class);
+        } catch (final JsonException ex) {
             if (version > REGISTRY_VERSION) {
                 throw new IOException("the registry is of version " + version
                         + ", written by a later comando or kit [file=" + registry + ']', ex);
@@ -785,7 +786,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                     + " [file=" + registry + ']', ex);
             return null;
         }
-        return e.ports() == null || e.token() == null || e.owner() == null ? null : e;
+        return e == null || e.ports() == null || e.token() == null || e.owner() == null ? null : e;
     }
 
     /** The registry's entry, or null when there is none or it does not read; one that does not read is logged. */
@@ -833,7 +834,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         final Entry entry = new Entry(REGISTRY_VERSION, pid, owner, name,
                 Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), ports, token,
                 ServerMain.class.getPackage().getImplementationVersion());
-        AtomicFiles.write(registry, JsonFile.JSON.writeValueAsBytes(entry));
+        AtomicFiles.write(registry, JsonFile.pretty(JsonFile.BINDER.toTree(entry)));
         OwnerOnly.narrow(registry);
         LOG.log(System.Logger.Level.INFO, "QuestDB up [pid=" + pid + ", ports=" + ports + ", owner=" + owner + ']');
         return Outcome.of(entry);

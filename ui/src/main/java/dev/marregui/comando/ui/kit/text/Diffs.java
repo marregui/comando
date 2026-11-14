@@ -3,10 +3,7 @@ package dev.marregui.comando.ui.kit.text;
 import java.util.Arrays;
 import java.util.List;
 
-import com.github.difflib.DiffUtils;
-import com.github.difflib.UnifiedDiffUtils;
-import com.github.difflib.patch.Patch;
-import tools.jackson.databind.JsonNode;
+import dev.marregui.comando.core.json.JsonNode;
 
 /** Unified diffs of two texts, three lines of context, and what an edit or write tool's card shows of its input. */
 public final class Diffs {
@@ -67,8 +64,9 @@ public final class Diffs {
     public static List<String> unified(final String path, final String before, final String after) {
         final List<String> a = before.isEmpty() ? List.of() : Arrays.asList(before.split("\n", -1));
         final List<String> b = after.isEmpty() ? List.of() : Arrays.asList(after.split("\n", -1));
-        final Patch<String> patch = DiffUtils.diff(a, b);
-        return UnifiedDiffUtils.generateUnifiedDiff(path.isEmpty() ? "before" : path, path.isEmpty() ? "after" : path, a, patch, 3);
+        final String aName = path.isEmpty() ? "before" : path;
+        final String bName = path.isEmpty() ? "after" : path;
+        return UnifiedDiff.of(aName, bName, a, b, Myers.diff(a, b), 3);
     }
 
     /**

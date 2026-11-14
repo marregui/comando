@@ -14,12 +14,11 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.SessionInfo;
@@ -44,7 +43,6 @@ final class StreamMapper {
     private final String session;
     private final Transcript transcript;
     private final IntentSink sink;
-    private final ObjectMapper json;
     private final Map<String, Integer> toolIndex = new HashMap<>();
     private final Map<String, Integer> streamIndex = new HashMap<>();
     private final Map<String, Integer> closedBlocks = new HashMap<>();
@@ -106,11 +104,10 @@ final class StreamMapper {
      */
     private long lineMillis = Block.UNKNOWN_TIME;
 
-    StreamMapper(final String session, final Transcript transcript, final IntentSink sink, final ObjectMapper json) {
+    StreamMapper(final String session, final Transcript transcript, final IntentSink sink) {
         this.session = session;
         this.transcript = transcript;
         this.sink = sink;
-        this.json = json;
     }
 
     /** Maps one line of the live stream; returns the event type, empty for a line that is not JSON. */
@@ -798,8 +795,8 @@ final class StreamMapper {
         m.put("queued", e.path("queued_turn_count").asInt(0));
         m.put("error", error);
         m.put("subtype", subtype);
-        m.set("usage", e.path("usage").isObject() ? e.path("usage").deepCopy() : m.objectNode());
-        m.set("models", e.path("modelUsage").isObject() ? e.path("modelUsage").deepCopy() : m.objectNode());
+        m.set("usage", e.path("usage").isObject() ? e.path("usage").deepCopy() : Json.object());
+        m.set("models", e.path("modelUsage").isObject() ? e.path("modelUsage").deepCopy() : Json.object());
         m.put("cost_usd", e.path("total_cost_usd").asDouble(0));
         metrics.write(m);
     }
@@ -835,8 +832,8 @@ final class StreamMapper {
 
     private JsonNode parse(final String line) {
         try {
-            return json.readTree(line);
-        } catch (final JacksonException ex) {
+            return Json.readTree(line);
+        } catch (final JsonException ex) {
             LOG.log(System.Logger.Level.WARNING, "not JSON, ignored [session=" + session + ", line=" + clip(line, 200) + ']');
             return null;
         }

@@ -16,13 +16,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
@@ -53,7 +53,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// every route that starts a session; no permission mode nor extra folder; a connection's guards against the agent.
 class ActionToolsTest {
 
-    private final ObjectMapper json = new ObjectMapper();
     private final RecordingSink sink = new RecordingSink();
     private final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
     private McpTools tools;
@@ -178,7 +177,7 @@ class ActionToolsTest {
         assertThat(edge.asked).containsExactly(true);
         assertThat(questDb.asked).containsExactly(false);
         assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("one of [edge, questdb]");
-        final JsonNode servers = json.readTree(tools.stateJson()).path("servers");
+        final JsonNode servers = Json.readTree(tools.stateJson()).path("servers");
         assertThat(servers.findValuesAsString("name")).containsExactly("edge", "questdb");
         assertThat(servers.get(0).path("running").asBoolean()).isTrue();
         assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: server start"));
@@ -204,7 +203,7 @@ class ActionToolsTest {
         assertThat(call("foreman", "panel_rename", "{\"panel\":\"" + state.get().panels().getFirst().title() + "\",\"title\":\"notes\"}").error()).isFalse();
         assertThat(call("foreman", "panel_focus", "{\"panel\":\"no such\"}").text()).contains("panels:");
         assertThat(call("foreman", "session_command", "{\"session\":\"mine\",\"command\":\"compact\"}").text()).contains("slash");
-        final JsonNode s = json.readTree(tools.stateJson());
+        final JsonNode s = Json.readTree(tools.stateJson());
         assertThat(s.path("sessions").findValuesAsString("createdBy")).contains("foreman", "mine");
         assertThat(s.has("approvals")).isTrue();
         assertThat(s.has("closedPanels")).isTrue();
@@ -390,7 +389,7 @@ class ActionToolsTest {
     }
 
     private McpTools.Outcome call(final String caller, final String tool, final String args) throws Exception {
-        return tools.call(caller, tool, json.readTree(args));
+        return tools.call(caller, tool, Json.readTree(args));
     }
 
     /// A server that records the directions asked of it; a stop is refused, as for an Edge another instance started.

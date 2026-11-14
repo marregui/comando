@@ -8,8 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import tools.jackson.databind.JsonNode;
-
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.format.Json;

@@ -54,11 +54,12 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
-import tools.jackson.core.JacksonException;
-
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.HomeDir;
@@ -876,15 +877,22 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     private Entry read() throws IOException {
         final Entry e;
         try {
-            e = Files.isRegularFile(registry) ? Mapped.read(registry, m -> JsonFile.JSON.readValue(m.stream(),
-                    Entry.class)) : null;
-        } catch (final JacksonException ex) {
+            e = Files.isRegularFile(registry) ? Mapped.read(registry, m -> entry(Json.readFirst(m.stream()))) : null;
+        } catch (final JsonException ex) {
             throw new IOException(ex.getMessage(), ex);
         }
         if (e != null && e.version() > REGISTRY_VERSION) {
             throw new IOException("it is of version " + e.version() + ", written by a later comando; this one reads version " + REGISTRY_VERSION);
         }
         return e;
+    }
+
+    /** The entry {@code tree} holds, null for a JSON {@code null}; an empty file holds none and does not read. */
+    private static Entry entry(final JsonNode tree) {
+        if (tree.isMissingNode()) {
+            throw new JsonException("cannot read an empty registry", "");
+        }
+        return JsonFile.BINDER.fromTree(tree, Entry.class);
     }
 
     /** The entry's process when it lives and is the one recorded, not another on its pid. */
@@ -907,7 +915,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
     /** Writes {@code e} unless an entry exists: a temporary file linked into place fails when another came first. */
     private boolean claim(final Entry e) throws IOException {
         final Path tmp = registry.resolveSibling(registry.getFileName() + "." + ProcessHandle.current().pid() + ".tmp");
-        Files.write(tmp, JsonFile.JSON.writeValueAsBytes(e));
+        Files.write(tmp, JsonFile.pretty(JsonFile.BINDER.toTree(e)));
         try {
             Files.createLink(registry, tmp);
             return true;

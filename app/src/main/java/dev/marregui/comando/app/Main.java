@@ -10,9 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import javax.swing.JOptionPane;
 
-import tools.jackson.core.JacksonException;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
 import dev.marregui.comando.core.model.InstanceName;
 
 /** Entry point: configuration, logging, one instance per data root, the application, an exit that closes all once. */
@@ -68,9 +68,9 @@ public final class Main {
             return null;
         }
         try {
-            final String name = Mapped.read(file, m -> JsonFile.JSON.readTree(m.stream())).path("name").asString("");
+            final String name = Mapped.read(file, m -> Json.readFirst(m.stream())).path("name").asString("");
             return name.isBlank() ? null : name;
-        } catch (final IOException | JacksonException _) {
+        } catch (final IOException | JsonException _) {
             return null;
         }
     }
@@ -85,8 +85,8 @@ public final class Main {
             return "";
         }
         try {
-            return Mapped.read(file, m -> JsonFile.JSON.readTree(m.stream())).path("role").asString("").strip();
-        } catch (final IOException | JacksonException _) {
+            return Mapped.read(file, m -> Json.readFirst(m.stream())).path("role").asString("").strip();
+        } catch (final IOException | JsonException _) {
             return "";
         }
     }

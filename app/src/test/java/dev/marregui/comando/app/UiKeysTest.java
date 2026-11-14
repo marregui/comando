@@ -73,13 +73,13 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -200,7 +200,7 @@ class UiKeysTest {
 
     /** A key's value in a window's {@code settings.json}, as text; null when it has none. */
     private static String setting(final Path settings, final String key) throws IOException {
-        final JsonNode v = new ObjectMapper().readTree(settings.toFile()).get(key);
+        final JsonNode v = Json.readTree(Files.readString(settings)).get(key);
         return v == null ? null : v.asString();
     }
 

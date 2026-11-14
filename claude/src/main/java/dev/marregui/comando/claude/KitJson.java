@@ -16,15 +16,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.SerializationFeature;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
@@ -46,8 +43,6 @@ public final class KitJson {
 
     /** The one version of the schema comando reads. */
     static final int VERSION = 1;
-    private static final ObjectMapper JSON = new ObjectMapper();
-    private static final ObjectMapper PRETTY = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
 
     private KitJson() {
     }
@@ -136,8 +131,8 @@ public final class KitJson {
     private static JsonNode tree(final Path file) throws IOException {
         JsonNode root;
         try {
-            root = Mapped.read(file, m -> JSON.readTree(m.stream()));
-        } catch (final JacksonException e) {
+            root = Mapped.read(file, m -> Json.readTree(m.stream()));
+        } catch (final JsonException e) {
             throw new IOException(e.getMessage(), e);
         }
         if (root == null || !root.isObject()) {
@@ -197,7 +192,7 @@ public final class KitJson {
             throw new IOException(file.getFileName() + " changed since its problems were shown; nothing is removed: " + read.problems());
         }
         final ObjectNode root = (ObjectNode) tree(file);
-        final ArrayNode kept = JSON.createArrayNode();
+        final ArrayNode kept = Json.array();
         final List<FolderRoot> passed = new ArrayList<>();
         // the entries read keeps, judged in the same order by the same rules
         for (final JsonNode f : root.path("folders")) {
@@ -210,7 +205,7 @@ public final class KitJson {
         }
         root.set("folders", kept);
         Files.copy(file, backup(file));
-        AtomicFiles.writeString(file, PRETTY.writeValueAsString(root) + "\n");
+        AtomicFiles.writeString(file, Json.pretty(root) + "\n");
         return read.problems();
     }
 

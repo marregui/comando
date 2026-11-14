@@ -6,9 +6,9 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.PlanUsage;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - starts the local command with isolated arguments
 class PlanUsageReaderTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     /** The {@code result} text of {@code claude -p /usage} on a Max plan, Claude Code 2.1.299, cut after the limits. */
     private static final String MAX_PLAN = """
@@ -50,7 +49,7 @@ class PlanUsageReaderTest {
     Path dir;
 
     private static String answer(final String result, final boolean error) {
-        final ObjectNode n = JSON.createObjectNode();
+        final ObjectNode n = Json.object();
         n.put("type", "result");
         n.put("subtype", "success");
         n.put("is_error", error);
@@ -63,7 +62,7 @@ class PlanUsageReaderTest {
     /// the all-models and the one-model weekly forms.
     @Test
     void eachLimitLineBecomesAWindowAndTheRestIsIgnored() {
-        final PlanUsage u = PlanUsageReader.parse(answer(MAX_PLAN, false), 7L, JSON);
+        final PlanUsage u = PlanUsageReader.parse(answer(MAX_PLAN, false), 7L);
         assertThat(u.problem()).isEmpty();
         assertThat(u.readAtMillis()).isEqualTo(7L);
         assertThat(u.windows()).containsExactly(
@@ -76,7 +75,7 @@ class PlanUsageReaderTest {
     /// windows, with no session among them and no problem.
     @Test
     void anAnswerWithoutASessionLineIsAGoodReadOfItsWeeks() {
-        final PlanUsage u = PlanUsageReader.parse(answer(NO_SESSION, false), 7L, JSON);
+        final PlanUsage u = PlanUsageReader.parse(answer(NO_SESSION, false), 7L);
         assertThat(u.problem()).isEmpty();
         assertThat(u.windows()).containsExactly(
                 new PlanUsage.Window("Week", 26, "Nov 12 at 1pm (Europe/Madrid)"),
@@ -87,7 +86,7 @@ class PlanUsageReaderTest {
     /// The input has no session line, so the model-derived name is unambiguous.
     @Test
     void aModelOnlyWeekIsNamedAfterTheModelAndAWindowWithoutAResetKeepsItsShare() {
-        final PlanUsage u = PlanUsageReader.parse(answer("Current week (Sonnet only): 2.6% used\n", false), 1L, JSON);
+        final PlanUsage u = PlanUsageReader.parse(answer("Current week (Sonnet only): 2.6% used\n", false), 1L);
         assertThat(u.windows()).containsExactly(new PlanUsage.Window("Sonnet", 3, ""));
     }
 
@@ -95,11 +94,11 @@ class PlanUsageReaderTest {
     /// API-key prose, command errors, invalid JSON, and empty output cover distinct failure forms.
     @Test
     void anAnswerWithoutLimitsSaysWhy() {
-        assertThat(PlanUsageReader.parse(answer("You are using an API key; plan limits do not apply\n", false), 1L, JSON).problem())
+        assertThat(PlanUsageReader.parse(answer("You are using an API key; plan limits do not apply\n", false), 1L).problem())
                 .isEqualTo("no plan limits in /usage: You are using an API key; plan limits do not apply");
-        assertThat(PlanUsageReader.parse(answer("Not logged in", true), 1L, JSON).problem()).isEqualTo("Not logged in");
-        assertThat(PlanUsageReader.parse("<html>proxy error</html>", 1L, JSON).problem()).isEqualTo("unreadable answer from 'claude -p /usage'");
-        assertThat(PlanUsageReader.parse("", 1L, JSON).windows()).isEmpty();
+        assertThat(PlanUsageReader.parse(answer("Not logged in", true), 1L).problem()).isEqualTo("Not logged in");
+        assertThat(PlanUsageReader.parse("<html>proxy error</html>", 1L).problem()).isEqualTo("unreadable answer from 'claude -p /usage'");
+        assertThat(PlanUsageReader.parse("", 1L).windows()).isEmpty();
     }
 
     /// A local usage read enables safe mode, requests JSON, and disables session persistence.
@@ -108,7 +107,7 @@ class PlanUsageReaderTest {
     void theReadRunsTheLocalCommandInSafeModeWithoutSavingASession() throws Exception {
         final Path args = dir.resolve("args.txt");
         final Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\nprintf '%s' '" + answer(MAX_PLAN, false).replace("'", "'\\''") + "'\n");
-        final PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(10));
+        final PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, Duration.ofSeconds(10));
         assertThat(u.windows()).hasSize(3);
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "/usage", "--no-session-persistence", "--output-format", "json");
     }
@@ -119,7 +118,7 @@ class PlanUsageReaderTest {
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
         final Path exe = script("hang", "exec sleep 30\n");
         final long start = System.nanoTime();
-        final PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofMillis(300));
+        final PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).isEqualTo("'claude -p /usage' did not answer within 300 ms");
@@ -128,7 +127,7 @@ class PlanUsageReaderTest {
     /// A missing executable gives a failed read, not an exception.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
-        final PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(1));
+        final PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, Duration.ofSeconds(1));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).startsWith("cannot run '");
     }

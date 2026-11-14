@@ -27,9 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import tools.jackson.core.type.TypeReference;
-
+import dev.marregui.comando.core.json.bind.TypeRef;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
@@ -72,9 +70,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * comando's own, absent for an open one. {@code content} is written only when the panel's file could not be, and
      * read from a {@code panels.json} written before panels had files; it moves into the file at the next save.
      * {@code side} is true for a panel in the right-hand partition, absent for one of the main tabs, so a file without
-     * it reads as before (records 133, 141).
+     * it reads as before (records 133, 141). Null components are left out of the file ({@link JsonFile#BINDER}).
      */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     record StoredPanel(
             String id,
             String title,
@@ -193,13 +190,13 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     Store(final Path home, final Secrets secrets) {
         this.secrets = secrets;
         // each file's schema and version: record 133
-        connections = new JsonFile<>(home.resolve("connections.json"), "connections", 1, new TypeReference<>() {
+        connections = new JsonFile<>(home.resolve("connections.json"), "connections", 1, new TypeRef<>() {
         });
-        sessions = new JsonFile<>(home.resolve("sessions.json"), "sessions", 1, new TypeReference<>() {
+        sessions = new JsonFile<>(home.resolve("sessions.json"), "sessions", 1, new TypeRef<>() {
         });
-        folders = new JsonFile<>(home.resolve("folders.json"), "folders", 1, new TypeReference<>() {
+        folders = new JsonFile<>(home.resolve("folders.json"), "folders", 1, new TypeRef<>() {
         });
-        panels = new JsonFile<>(home.resolve("panels.json"), "panels", 1, new TypeReference<>() {
+        panels = new JsonFile<>(home.resolve("panels.json"), "panels", 1, new TypeRef<>() {
         });
         kitFolders = home.resolve("kit-folders");
         files = new PanelFiles(home.resolve("panels"), text -> notices.accept(text));

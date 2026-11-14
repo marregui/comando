@@ -20,12 +20,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -59,7 +58,6 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private final ClaudeSettings settings;
     /** How long after a process's exit a child of it may hold its stdout open ({@link ClaudeProcess#DRAIN_MILLIS}). */
     private final Duration drain;
-    private final ObjectMapper json = new ObjectMapper();
     private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
     private final ScheduledExecutorService timer =
             Threads.timedStrand("claude-timer");
@@ -130,8 +128,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         try {
             subagents.execute(() -> {
                 try {
-                    SubagentFiles.find(settings.projectsDir(), event.path("conversation").asString(""), event.path("tool_use_id").asString(""), json)
-                            .ifPresent(f -> event.set("spend", SubagentFiles.spend(f.transcript(), json)));
+                    SubagentFiles.find(settings.projectsDir(), event.path("conversation").asString(""),
+                                    event.path("tool_use_id").asString(""))
+                            .ifPresent(f -> event.set("spend", SubagentFiles.spend(f.transcript())));
                 } catch (final RuntimeException e) {
                     LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend [toolUseId=" + event.path("tool_use_id").asString("") + ']', e);
                 }
@@ -217,7 +216,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         Run current;
         Path workDir;
         String branch = "";
-        final SessionSubjects subjects = new SessionSubjects(settings.projectsDir(), json);
+        final SessionSubjects subjects = new SessionSubjects(settings.projectsDir());
         SessionSubject subject = SessionSubject.NONE;
         /** The last start failed and said so; a prompt sent after it adds no second error. Cleared by a start. */
         boolean startFailed;
@@ -227,11 +226,12 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         Session(final String name) {
             this.name = name;
             this.transcript = transcripts.of(name);
-            this.mapper = new StreamMapper(name, transcript, sink, json);
+            this.mapper = new StreamMapper(name, transcript, sink);
             // the CLI's own settings, beside its projects folder: the base effort the stream does not report
-            this.mapper.effortFrom(model -> BaseEffort.base(settings.projectsDir().resolveSibling("settings.json"), model, json));
+            this.mapper.effortFrom(model ->
+                    BaseEffort.base(settings.projectsDir().resolveSibling("settings.json"), model));
             // what each message ran at, from the transcript the CLI writes a little after the stream's event
-            this.mapper.ranFrom(new RunSettings(settings.projectsDir(), json)::of, retry -> {
+            this.mapper.ranFrom(new RunSettings(settings.projectsDir())::of, retry -> {
                 try {
                     timer.schedule(() -> run(retry), StreamMapper.RAN_RETRY_MILLIS, TimeUnit.MILLISECONDS);
                 } catch (final RejectedExecutionException e) {
@@ -319,7 +319,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     /** Writes one user message to the running process; on the session's strand. */
     private void sendLine(final Session s, final String text) {
-        final ObjectNode line = json.createObjectNode();
+        final ObjectNode line = Json.object();
         line.put("type", "user");
         final ObjectNode message = line.putObject("message");
         message.put("role", "user");
@@ -505,7 +505,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     private void openSubagent(final String name, final String claudeSessionId, final String toolUseId) {
-        final Optional<SubagentFiles.Found> found = SubagentFiles.find(settings.projectsDir(), claudeSessionId, toolUseId, json);
+        final Optional<SubagentFiles.Found> found =
+                SubagentFiles.find(settings.projectsDir(), claudeSessionId, toolUseId);
         if (found.isEmpty()) {
             subagentSays(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": transcript not found for this sub-agent", false));
             return;
@@ -517,12 +518,13 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         final Transcript transcript = transcripts.of(TranscriptRegistry.subagentKey(name, toolUseId));
         transcript.clear();
         final Tail t = new Tail(name, toolUseId, title(description, toolUseId), description,
-                f, new SubagentFiles.Conversation(f.transcript(), json, SubagentFiles.SCAN_BYTES),
-                transcript, new StreamMapper(name, transcript, intent -> { }, json));
+                f, new SubagentFiles.Conversation(f.transcript(), SubagentFiles.SCAN_BYTES),
+                transcript, new StreamMapper(name, transcript, intent -> { }));
         t.size = SubagentFiles.size(f.transcript());
         final Session s = sessions.get(name);
         // a stopped session's sub-agents write no more
-        final boolean follow = s != null && s.live && !s.mapper.agentEnded(toolUseId) && !SubagentFiles.finished(f.meta(), json);
+        final boolean follow = s != null && s.live && !s.mapper.agentEnded(toolUseId)
+                && !SubagentFiles.finished(f.meta());
         if (!readSubagent(t, !follow)) {
             return;
         }
@@ -593,7 +595,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             stopTail(toolUseId, null); // forgotten: its stop is queued behind
             return;
         }
-        if (s.mapper.agentEnded(toolUseId) || SubagentFiles.finished(t.found.meta(), json)) {
+        if (s.mapper.agentEnded(toolUseId) || SubagentFiles.finished(t.found.meta())) {
             stopTail(toolUseId, ENDED); // read once more: its last lines may have landed since the last period
             return;
         }
@@ -830,7 +832,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     private String interruptRequest() {
-        final ObjectNode line = json.createObjectNode();
+        final ObjectNode line = Json.object();
         line.put("type", "control_request");
         line.put("request_id", UUID.randomUUID().toString());
         line.putObject("request").put("subtype", "interrupt");
@@ -843,7 +845,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (ticket == null) {
             return null;
         }
-        final ObjectNode root = json.createObjectNode();
+        final ObjectNode root = Json.object();
         final ObjectNode server = root.putObject("mcpServers").putObject("comando");
         server.put("type", "http");
         server.put("url", ticket.url());
@@ -904,7 +906,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         planUsage.scheduleWithFixedDelay(() -> {
             // an exception escaping a periodic task cancels every later run
             try {
-                final PlanUsage usage = PlanUsageReader.read(settings.executable(), settings.launch(), settings.runDir(), json);
+                final PlanUsage usage =
+                        PlanUsageReader.read(settings.executable(), settings.launch(), settings.runDir());
                 if (stopping()) {
                     // close interrupted the read: nothing to tell, and no Codex read starts after it
                     return;
@@ -914,7 +917,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 }
                 sink.dispatch(new Intent.PlanUsageRead(usage));
                 usageMetrics(usage);
-                final PlanUsage codexUsage = CodexUsageReader.read(codex, json, CodexUsageReader.TIMEOUT, ZoneId.systemDefault());
+                final PlanUsage codexUsage =
+                        CodexUsageReader.read(codex, CodexUsageReader.TIMEOUT, ZoneId.systemDefault());
                 if (stopping()) {
                     return;
                 }

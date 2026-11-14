@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 
 /**
  * The metrics events as the lines QuestDB's line protocol takes (record 146), and the tables they go to: a
@@ -56,11 +56,9 @@ final class MetricsLines {
     private static final Set<String> KNOWN = Set.of("turn", "agent", "usage", "queues", "wait");
 
     private final String instance;
-    private final ObjectMapper json;
 
     /** Lines for the events of the comando instance whose data root is {@code instance}, an absolute path. */
-    MetricsLines(final ObjectMapper json, final String instance) {
-        this.json = json;
+    MetricsLines(final String instance) {
         this.instance = instance;
     }
 
@@ -164,7 +162,7 @@ final class MetricsLines {
                 .longField("web_fetch_requests", usage.path("server_tool_use").path("web_fetch_requests"))
                 .boolField("error", e.path("error"))
                 .doubleField("cost_usd_total", e.path("cost_usd"))
-                .stringField("usage_raw", usage.isObject() ? json.writeValueAsString(usage) : null), ts);
+                .stringField("usage_raw", usage.isObject() ? Json.write(usage) : null), ts);
         final JsonNode models = e.path("models");
         if (!models.isObject()) {
             return;
@@ -185,7 +183,7 @@ final class MetricsLines {
                     .longField("context_window", m.path("contextWindow"))
                     .longField("max_output_tokens", m.path("maxOutputTokens"))
                     .doubleField("cost_usd", m.path("costUSD"))
-                    .stringField("raw", m.isObject() ? json.writeValueAsString(m) : null), ts);
+                    .stringField("raw", m.isObject() ? Json.write(m) : null), ts);
         }
     }
 

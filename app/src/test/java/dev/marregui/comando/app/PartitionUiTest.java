@@ -37,6 +37,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.ViewState;
@@ -250,7 +251,7 @@ class PartitionUiTest {
             until("the panel and both views on the right side", () -> onEdt(() -> indexOf(side, notes) >= 0
                     && titled(side, ViewSpec.Search.TITLE) >= 0 && titled(side, ViewSpec.Changes.TITLE) >= 0));
         }
-        final String kept = JsonFile.JSON.readTree(settings.toFile()).path("sidePane.views").asString("");
+        final String kept = Json.readTree(Files.readString(settings)).path("sidePane.views").asString("");
         assertThat(Arrays.stream(kept.split(",")).map(String::strip)).as("the side views saved by the close")
                 .containsExactlyInAnyOrder("search", "changes");
         try (final App again = start("partition-restart-again")) {

@@ -20,13 +20,11 @@ import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.io.JsonStringEncoder;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import dev.marregui.comando.core.files.ByteScan;
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.SearchHit;
 import dev.marregui.comando.core.model.SearchQuery;
 import dev.marregui.comando.core.port.SearchPort;
@@ -68,7 +66,6 @@ public final class TranscriptSearch implements SearchPort.Source {
             "This session is being continued from a previous conversation");
 
     private final Path projectsDir;
-    private final ObjectMapper json = new ObjectMapper();
 
     public TranscriptSearch(final Path projectsDir) {
         this.projectsDir = projectsDir;
@@ -79,7 +76,7 @@ public final class TranscriptSearch implements SearchPort.Source {
         if (!query.conversations()) {
             return 0;
         }
-        final char[] encoded = JsonStringEncoder.getInstance().quoteAsCharArray(query.text());
+        final char[] encoded = Json.quote(query.text());
         final byte[] needle = ByteScan.needle(new String(encoded));
         final String word = lowerCase(query.text());
         final List<Stored> files = new ArrayList<>();
@@ -336,11 +333,11 @@ public final class TranscriptSearch implements SearchPort.Source {
          */
         private Optional<JsonNode> parsed(final long from, final long to) throws IOException {
             try (final InputStream in = mapped.stream(from, to)) {
-                return Optional.of(json.readTree(in));
-            } catch (final JacksonException _) {
+                return Optional.of(Json.readTree(in));
+            } catch (final JsonException _) {
                 try {
-                    return Optional.of(json.readTree(mapped.text(from, to)));
-                } catch (final JacksonException _) {
+                    return Optional.of(Json.readTree(mapped.text(from, to)));
+                } catch (final JsonException _) {
                     return Optional.empty();
                 }
             }

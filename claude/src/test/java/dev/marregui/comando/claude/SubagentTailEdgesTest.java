@@ -16,7 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Threads;
@@ -42,7 +41,6 @@ class SubagentTailEdgesTest {
 
     @TempDir
     Path tmp;
-    private final ObjectMapper json = new ObjectMapper();
     private final RecordingSink sink = new RecordingSink();
     private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private ClaudeAdapter adapter;
@@ -107,14 +105,14 @@ class SubagentTailEdgesTest {
         final Path f = tmp.resolve("crlf.jsonl");
         Files.writeString(f, first + "\r\n" + second + "\r\n" + third + "\r\n");
         final long afterCrLf = (second + "\r\n" + third + "\r\n").getBytes(StandardCharsets.UTF_8).length;
-        final String md = SubagentFiles.render(f, afterCrLf, json);
+        final String md = SubagentFiles.render(f, afterCrLf);
         assertThat(md).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("SECOND", "THIRD");
 
         // the cut between the \r and the \n ending FIRST: the line from the cut is only "\n"; SECOND is whole
-        final String md2 = SubagentFiles.render(f, afterCrLf + 1, json);
+        final String md2 = SubagentFiles.render(f, afterCrLf + 1);
         assertThat(md2).doesNotContain("FIRST").contains("SECOND", "THIRD");
         // the cut on the \r itself: FIRST is cut
-        final String md3 = SubagentFiles.render(f, afterCrLf + 2, json);
+        final String md3 = SubagentFiles.render(f, afterCrLf + 2);
         assertThat(md3).doesNotContain("FIRST").contains("SECOND", "THIRD");
     }
 
@@ -127,8 +125,9 @@ class SubagentTailEdgesTest {
         final Path f = tmp.resolve("lim.jsonl");
         Files.writeString(f, first + "\r\n" + last + "\r\n");
         final long size = Files.size(f);
-        assertThat(SubagentFiles.render(f, size, json)).doesNotContain("is longer than").contains("FIRST", "LAST");
-        assertThat(SubagentFiles.render(f, size - 1, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
+        assertThat(SubagentFiles.render(f, size)).doesNotContain("is longer than").contains("FIRST", "LAST");
+        assertThat(SubagentFiles.render(f, size - 1)).startsWith("_The conversation is longer than")
+                .doesNotContain("FIRST").contains("LAST");
     }
 
     /// A sub-agent shown while its session is stopped is not followed (`followedSubagents()` is 0); shown again after

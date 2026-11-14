@@ -13,9 +13,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-
 import dev.marregui.comando.claude.ClaudeAdapter;
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.ClaudeTopics;
@@ -32,6 +29,9 @@ import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Queues;
@@ -336,10 +336,10 @@ public final class App implements AutoCloseable {
             return SessionKind.Defaults.NONE;
         }
         try {
-            final JsonNode s = Mapped.read(file, m -> JsonFile.JSON.readTree(m.stream()));
+            final JsonNode s = Mapped.read(file, m -> Json.readFirst(m.stream()));
             return new SessionKind.Defaults(s.path("model").asString(""), s.path("effortLevel").asString(""),
                     s.path("permissions").path("defaultMode").asString(""));
-        } catch (final IOException | JacksonException e) {
+        } catch (final IOException | JsonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the kit's settings [file=" + file + ", cause=" + e.getMessage() + ']');
             return SessionKind.Defaults.NONE;
         }

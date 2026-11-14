@@ -21,11 +21,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.Approval;
@@ -130,7 +129,6 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     /** Ends the requests that have not arrived in time ({@link Deadline}). */
     private final ScheduledExecutorService deadlines = Threads.timedStrand("mcp-deadlines");
-    private final ObjectMapper json = new ObjectMapper();
     private final SecureRandom random = new SecureRandom();
     private final ConcurrentHashMap<String, Caller> callerByToken = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> tokenBySession = new ConcurrentHashMap<>();
@@ -347,8 +345,8 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         arrival.disarm();
         final JsonNode request;
         try {
-            request = json.readTree(body);
-        } catch (final JacksonException e) {
+            request = Json.readTree(body);
+        } catch (final JsonException e) {
             send(ex, place, 400, error(null, -32700, "parse error"));
             return;
         }
@@ -368,9 +366,9 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         final JsonNode params = request.path("params");
         final ObjectNode response = switch (method) {
             case "initialize" -> result(id, initialize(params));
-            case "ping" -> result(id, json.createObjectNode());
+            case "ping" -> result(id, Json.object());
             case "tools/list" -> {
-                final ObjectNode r = json.createObjectNode();
+                final ObjectNode r = Json.object();
                 r.set("tools", tools.definitions());
                 yield result(id, r);
             }
@@ -382,7 +380,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
 
     private ObjectNode initialize(final JsonNode params) {
         final String asked = params.path("protocolVersion").asString("");
-        final ObjectNode r = json.createObjectNode();
+        final ObjectNode r = Json.object();
         r.put("protocolVersion", PROTOCOLS.contains(asked) ? asked : DEFAULT_PROTOCOL);
         r.putObject("capabilities").putObject("tools").put("listChanged", false);
         final ObjectNode info = r.putObject("serverInfo");
@@ -400,8 +398,8 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     private ObjectNode call(final String session, final JsonNode params, final String callKey) {
         final String name = params.path("name").asString("");
         final JsonNode args = params.path("arguments");
-        final McpTools.Outcome out = tools.call(session, name, args.isObject() ? args : json.createObjectNode(), callKey);
-        final ObjectNode r = json.createObjectNode();
+        final McpTools.Outcome out = tools.call(session, name, args.isObject() ? args : Json.object(), callKey);
+        final ObjectNode r = Json.object();
         final ObjectNode text = r.putArray("content").addObject();
         text.put("type", "text");
         text.put("text", out.text());
@@ -412,7 +410,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     private ObjectNode result(final JsonNode id, final JsonNode result) {
-        final ObjectNode r = json.createObjectNode();
+        final ObjectNode r = Json.object();
         r.put("jsonrpc", "2.0");
         r.set("id", id);
         r.set("result", result);
@@ -420,7 +418,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     private ObjectNode error(final JsonNode id, final int code, final String message) {
-        final ObjectNode r = json.createObjectNode();
+        final ObjectNode r = Json.object();
         r.put("jsonrpc", "2.0");
         r.set("id", id);
         final ObjectNode e = r.putObject("error");
@@ -440,7 +438,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
             ex.sendResponseHeaders(status, -1);
             return;
         }
-        final byte[] bytes = json.writeValueAsBytes(body);
+        final byte[] bytes = Json.writeBytes(body);
         ex.getResponseHeaders().set("Content-Type", "application/json");
         ex.sendResponseHeaders(status, bytes.length);
         try (final OutputStream out = ex.getResponseBody()) {

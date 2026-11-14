@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
+import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.KitRoot;
 
@@ -82,7 +82,7 @@ class RootLaunchTest {
 
         final List<String> argv = launch.argv(List.of("claude", "-p", "--settings", "{\"model\":\"haiku\",\"autoMemoryDirectory\":\"/old\"}"));
         assertThat(argv).hasSize(4).startsWith("claude", "-p", "--settings");
-        assertThat(new ObjectMapper().readTree(argv.get(3))).isEqualTo(new ObjectMapper().readTree(
+        assertThat(Json.readTree(argv.get(3))).isEqualTo(Json.readTree(
                 "{\"model\":\"haiku\",\"autoMemoryDirectory\":\"" + user.resolve("kit/BRAIN/MEMORY") + "\"}"));
     }
 

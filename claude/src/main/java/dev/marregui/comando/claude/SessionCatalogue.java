@@ -8,11 +8,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 
 /**
  * Lists the conversations Claude Code stored on disk, {@code <projects>/<project>/<session id>.jsonl}, for
@@ -36,7 +35,6 @@ public final class SessionCatalogue {
     }
 
     private final Path projectsDir;
-    private final ObjectMapper json = new ObjectMapper();
 
     public SessionCatalogue(final Path projectsDir) {
         this.projectsDir = projectsDir;
@@ -142,8 +140,8 @@ public final class SessionCatalogue {
 
     private JsonNode parse(final String line) {
         try {
-            return json.readTree(line);
-        } catch (final JacksonException e) {
+            return Json.readTree(line);
+        } catch (final JsonException e) {
             return null;
         }
     }

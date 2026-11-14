@@ -1,0 +1,22 @@
+{
+  "version" : 1,
+  "folders" : [ {
+    "name" : "Brain",
+    "path" : "/Users/me/.claude/BRAIN",
+    "index" : "00_START_HERE.md",
+    "excludes" : [ "archive", "tmp" ],
+    "icon" : "memory",
+    "deletable" : true,
+    "listedIn" : "INDEX.md",
+    "group" : "Brain"
+  }, {
+    "name" : "Claude",
+    "path" : "/Users/me/.claude",
+    "index" : "CLAUDE.md",
+    "excludes" : [ ],
+    "icon" : "folder",
+    "deletable" : false,
+    "listedIn" : "",
+    "group" : ""
+  } ]
+}

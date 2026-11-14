@@ -9,7 +9,6 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,7 +22,6 @@ class RunSettingsTest {
     @TempDir
     Path projects;
 
-    private final ObjectMapper json = new ObjectMapper();
 
     /// Two lines of one message and a later message: each is found by its id among other records, the per-turn
     /// effort (`high`, after a skill raised it) winning over the session's (`medium`); a line with no per-turn effort
@@ -37,7 +35,7 @@ class RunSettingsTest {
                 {"type":"assistant","effort":"medium","perTurnEffort":"high","message":{"id":"m2","model":"claude-opus-5-5","content":[]}}
                 {"type":"assistant","effort":"low","message":{"id":"m3","model":"claude-sonnet-5-5","content":[]}}
                 """);
-        final RunSettings settings = new RunSettings(projects, json);
+        final RunSettings settings = new RunSettings(projects);
 
         assertThat(settings.of("conv-1", "m1")).contains(new RunSettings.Ran("claude-opus-5-5", "medium"));
         assertThat(settings.of("conv-1", "m2")).contains(new RunSettings.Ran("claude-opus-5-5", "high"));
@@ -52,7 +50,7 @@ class RunSettingsTest {
         final Path file = transcript("conv-2", """
                 {"type":"assistant","perTurnEffort":"low","message":{"id":"m1","model":"claude-opus-5-5","content":[]}}
                 """);
-        final RunSettings settings = new RunSettings(projects, json);
+        final RunSettings settings = new RunSettings(projects);
         assertThat(settings.of("conv-2", "m2")).isEmpty();
 
         Files.writeString(file, Files.readString(file)
@@ -73,7 +71,7 @@ class RunSettingsTest {
         big.append("{\"type\":\"assistant\",\"perTurnEffort\":\"high\",\"message\":{\"id\":\"last\",\"model\":\"claude-opus-5-5\",\"content\":[]}}\n");
         transcript("conv-3", big.toString());
 
-        assertThat(new RunSettings(projects, json).of("conv-3", "last")).contains(new RunSettings.Ran("claude-opus-5-5", "high"));
+        assertThat(new RunSettings(projects).of("conv-3", "last")).contains(new RunSettings.Ran("claude-opus-5-5", "high"));
     }
 
     /// A line among others holding non-ASCII text (which made the old read decode the whole tail to UTF-16) is found,
@@ -86,7 +84,7 @@ class RunSettingsTest {
                 {"type":"user","message":{"role":"user","content":"después — m1 ✓"}}
                 """);
 
-        assertThat(new RunSettings(projects, json).of("conv-4", "m1"))
+        assertThat(new RunSettings(projects).of("conv-4", "m1"))
                 .contains(new RunSettings.Ran("claude-opus-5-5", "max"));
     }
 
@@ -102,7 +100,7 @@ class RunSettingsTest {
             big.append(filler);
         }
         transcript("conv-5", big.toString());
-        final RunSettings settings = new RunSettings(projects, json);
+        final RunSettings settings = new RunSettings(projects);
         settings.of("conv-5", "warm-up");
         final ThreadMXBean threads = (ThreadMXBean) ManagementFactory.getThreadMXBean();
         final long before = threads.getCurrentThreadAllocatedBytes();

@@ -24,15 +24,15 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import org.jetbrains.annotations.TestOnly;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
@@ -125,7 +125,6 @@ public final class McpTools {
     private final AuditLog audit;
     private final Clock clock;
     private final Duration approvalTimeout;
-    private final ObjectMapper json = new ObjectMapper();
     private final ArrayNode definitions;
     /** The first tools' names, from {@code tools.json}; the registry's other actions are {@link ActionTools}'. */
     private final Set<String> builtIn;
@@ -173,7 +172,7 @@ public final class McpTools {
         this.clock = clock;
         this.approvalTimeout = approvalTimeout;
         try (final var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
-            final ArrayNode first = (ArrayNode) json.readTree(in);
+            final ArrayNode first = (ArrayNode) Json.readTree(in);
             final Set<String> names = new LinkedHashSet<>();
             first.forEach(d -> names.add(d.path("name").asString("")));
             builtIn = Set.copyOf(names);
@@ -428,7 +427,7 @@ public final class McpTools {
 
     /** The JSON Claude Code expects back from a permission-prompt tool. */
     String permissionResult(final String session, final String tool, final ObjectNode input, final ApprovalDecision decision) {
-        final ObjectNode r = json.createObjectNode();
+        final ObjectNode r = Json.object();
         switch (decision) {
             case ApprovalDecision.Deny d -> {
                 r.put("behavior", "deny");
@@ -656,7 +655,7 @@ public final class McpTools {
 
     String stateJson() {
         final AppState s = state.get();
-        final ObjectNode root = json.createObjectNode();
+        final ObjectNode root = Json.object();
         final ArrayNode panels = root.putArray("panels");
         for (final PanelState p : s.panels()) {
             final ObjectNode n = panels.addObject();
@@ -740,8 +739,8 @@ public final class McpTools {
         }
         root.put("lowerTab", s.lowerTab().kind().name().toLowerCase(Locale.ROOT));
         try {
-            return json.writerWithDefaultPrettyPrinter().writeValueAsString(root);
-        } catch (final JacksonException e) {
+            return Json.pretty(root);
+        } catch (final JsonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -785,7 +784,7 @@ public final class McpTools {
         }
         final PanelState panel = home.get();
         final String prompt = fromLine(session) + '\n' + text;
-        final ObjectNode input = json.createObjectNode();
+        final ObjectNode input = Json.object();
         input.put("session", to);
         input.put("panel", panel.title());
         input.put("text", prompt);
@@ -847,7 +846,7 @@ public final class McpTools {
             if (spec.prod()) {
                 return Outcome.fail("connection " + spec.name() + " is a production connection; comando refuses statements that are not read-only");
             }
-            final ObjectNode input = json.createObjectNode();
+            final ObjectNode input = Json.object();
             input.put("connection", spec.name());
             input.put("sql", sql);
             final ApprovalDecision d = ask(session, ApprovalKind.SQL_WRITE, "db_run_sql", input.toString(),
@@ -923,7 +922,7 @@ public final class McpTools {
     String resultList() {
         final AppState s = state.get();
         final ResultRegistry registry = results;
-        final ObjectNode root = json.createObjectNode();
+        final ObjectNode root = Json.object();
         final ArrayNode list = root.putArray("results");
         int size = 0;
         int omitted = 0;
@@ -948,7 +947,7 @@ public final class McpTools {
     }
 
     private ObjectNode resultEntry(final PanelState p, final SqlRun r, final ResultView view) {
-        final ObjectNode n = json.createObjectNode();
+        final ObjectNode n = Json.object();
         n.put("id", RESULT_PREFIX + r.requestId());
         n.put("panel", p.title());
         n.put("connection", r.connection());

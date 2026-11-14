@@ -7,7 +7,6 @@ import java.time.ZoneId;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.model.PlanUsage;
 
@@ -21,7 +20,6 @@ import static org.awaitility.Awaitility.await;
 /// - reports process failures and timeouts
 class CodexUsageReaderTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final ZoneId MADRID = ZoneId.of("Europe/Madrid");
     /** 2026-10-27 07:00 UTC. */
     private static final long NOW = 1_793_084_400_000L;
@@ -52,7 +50,7 @@ class CodexUsageReaderTest {
     /// The fixed October timestamps distinguish the five-hour session from the weekly window.
     @Test
     void theSessionWindowAndTheWeekBecomeWindowsWordedAsClaudeCodeWordsItsResets() {
-        final PlanUsage u = CodexUsageReader.answer(answer(4, FIVE_HOURS_ON, 3.4), NOW, JSON, MADRID);
+        final PlanUsage u = CodexUsageReader.answer(answer(4, FIVE_HOURS_ON, 3.4), NOW, MADRID);
         assertThat(u.provider()).isEqualTo(PlanUsage.CODEX);
         assertThat(u.problem()).isEmpty();
         assertThat(u.readAtMillis()).isEqualTo(NOW);
@@ -65,7 +63,7 @@ class CodexUsageReaderTest {
     /// The two resets straddle `NOW` to exercise both branches in one reply.
     @Test
     void aWindowWhoseResetHasPassedIsEmpty() {
-        final PlanUsage u = CodexUsageReader.answer(answer(100, NOW / 1000 - 1, 50), NOW, JSON, MADRID);
+        final PlanUsage u = CodexUsageReader.answer(answer(100, NOW / 1000 - 1, 50), NOW, MADRID);
         assertThat(u.windows()).extracting(PlanUsage.Window::percent).containsExactly(0, 50);
     }
 
@@ -73,12 +71,12 @@ class CodexUsageReaderTest {
     /// Error and empty-limit responses instead retain their diagnostic text.
     @Test
     void otherLinesAreNotTheAnswerAndAnErrorAnswerSaysWhy() {
-        assertThat(CodexUsageReader.answer("{\"id\":1,\"result\":{}}", NOW, JSON, MADRID)).isNull();
-        assertThat(CodexUsageReader.answer("{\"method\":\"account/updated\",\"params\":{}}", NOW, JSON, MADRID)).isNull();
-        assertThat(CodexUsageReader.answer("not json", NOW, JSON, MADRID)).isNull();
-        assertThat(CodexUsageReader.answer("{\"id\":2,\"error\":{\"code\":-32600,\"message\":\"not signed in\"}}", NOW, JSON, MADRID).problem())
+        assertThat(CodexUsageReader.answer("{\"id\":1,\"result\":{}}", NOW, MADRID)).isNull();
+        assertThat(CodexUsageReader.answer("{\"method\":\"account/updated\",\"params\":{}}", NOW, MADRID)).isNull();
+        assertThat(CodexUsageReader.answer("not json", NOW, MADRID)).isNull();
+        assertThat(CodexUsageReader.answer("{\"id\":2,\"error\":{\"code\":-32600,\"message\":\"not signed in\"}}", NOW, MADRID).problem())
                 .isEqualTo("not signed in");
-        assertThat(CodexUsageReader.answer("{\"id\":2,\"result\":{\"rateLimits\":{}}}", NOW, JSON, MADRID).problem())
+        assertThat(CodexUsageReader.answer("{\"id\":2,\"result\":{\"rateLimits\":{}}}", NOW, MADRID).problem())
                 .isEqualTo("no rate limits in Codex's answer");
     }
 
@@ -97,7 +95,7 @@ class CodexUsageReaderTest {
                   esac
                 done
                 """.formatted(requests, answer(4, FAR_RESET, 3, FAR_RESET).replace("'", "'\\''")));
-        final PlanUsage u = CodexUsageReader.read(exe.toString(), JSON, Duration.ofSeconds(10), MADRID);
+        final PlanUsage u = CodexUsageReader.read(exe.toString(), Duration.ofSeconds(10), MADRID);
         assertThat(u.problem()).isEmpty();
         assertThat(u.windows()).extracting(PlanUsage.Window::percent).containsExactly(4, 3);
         assertThat(Files.readAllLines(requests)).hasSize(3).last().asString().contains("account/rateLimits/read");
@@ -111,14 +109,14 @@ class CodexUsageReaderTest {
         final String accountLimits = account.substring(account.indexOf("\"rateLimits\":") + "\"rateLimits\":".length(), account.length() - 2);
         final String line = "{\"id\":2,\"result\":{\"rateLimits\":{\"limitId\":\"premium\",\"primary\":null,\"secondary\":null},"
                 + "\"rateLimitsByLimitId\":{\"codex\":" + accountLimits + "}}}";
-        assertThat(CodexUsageReader.answer(line, NOW, JSON, MADRID).windows()).extracting(PlanUsage.Window::percent).containsExactly(80, 3);
+        assertThat(CodexUsageReader.answer(line, NOW, MADRID).windows()).extracting(PlanUsage.Window::percent).containsExactly(80, 3);
     }
 
     /// A server that exits before answering reports its exit code rather than waiting for the timeout.
     /// The script exits with code 7 without reading stdin.
     @Test
     void aServerThatExitsAtOnceSaysSoNotATimeout() throws Exception {
-        final PlanUsage u = CodexUsageReader.read(script("dead", "exit 7\n").toString(), JSON, Duration.ofSeconds(10), MADRID);
+        final PlanUsage u = CodexUsageReader.read(script("dead", "exit 7\n").toString(), Duration.ofSeconds(10), MADRID);
         assertThat(u.problem()).isEqualTo("'codex app-server' exited with code 7 without answering");
     }
 
@@ -128,7 +126,7 @@ class CodexUsageReaderTest {
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
         final Path exe = script("hang", "exec sleep 30\n");
         final long start = System.nanoTime();
-        final PlanUsage u = CodexUsageReader.read(exe.toString(), JSON, Duration.ofMillis(300), MADRID);
+        final PlanUsage u = CodexUsageReader.read(exe.toString(), Duration.ofMillis(300), MADRID);
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).isEqualTo("'codex app-server' did not answer within 300 ms");
@@ -140,7 +138,7 @@ class CodexUsageReaderTest {
     void aStoppedServerTakesItsChildrenWithIt() throws Exception {
         final Path pid = dir.resolve("child.pid");
         final Path exe = script("parent", "sleep 30 &\necho $! > '" + pid + "'\nwait\n");
-        final PlanUsage u = CodexUsageReader.read(exe.toString(), JSON, Duration.ofMillis(300), MADRID);
+        final PlanUsage u = CodexUsageReader.read(exe.toString(), Duration.ofMillis(300), MADRID);
         assertThat(u.problem()).isEqualTo("'codex app-server' did not answer within 300 ms");
         final long child = Long.parseLong(Files.readString(pid).strip());
         await().atMost(Duration.ofSeconds(5)).until(() -> ProcessHandle.of(child).map(h -> !h.isAlive()).orElse(true));
@@ -149,7 +147,7 @@ class CodexUsageReaderTest {
     /// A missing executable gives a failed read, not an exception.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
-        final PlanUsage u = CodexUsageReader.read(dir.resolve("absent").toString(), JSON, Duration.ofSeconds(1), MADRID);
+        final PlanUsage u = CodexUsageReader.read(dir.resolve("absent").toString(), Duration.ofSeconds(1), MADRID);
         assertThat(u.provider()).isEqualTo(PlanUsage.CODEX);
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).startsWith("cannot run '");

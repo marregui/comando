@@ -19,13 +19,12 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.ByteScan;
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 
 /**
  * The conversations Claude Code stores for a session's sub-agents. Not documented (2.1.302): beside the session's
@@ -62,7 +61,7 @@ final class SubagentFiles {
     }
 
     /** The files of the sub-agent that the Agent call {@code toolUseId} of conversation {@code sessionId} started. */
-    static Optional<Found> find(final Path projectsDir, final String sessionId, final String toolUseId, final ObjectMapper json) {
+    static Optional<Found> find(final Path projectsDir, final String sessionId, final String toolUseId) {
         if (sessionId.isEmpty() || toolUseId.isEmpty() || !Files.isDirectory(projectsDir)) {
             return Optional.empty();
         }
@@ -70,7 +69,7 @@ final class SubagentFiles {
             for (final Path project : projects) {
                 final Path dir = project.resolve(sessionId).resolve("subagents");
                 if (Files.isDirectory(dir)) {
-                    final Optional<Found> found = findIn(dir, toolUseId, json);
+                    final Optional<Found> found = findIn(dir, toolUseId);
                     if (found.isPresent()) {
                         return found;
                     }
@@ -82,10 +81,10 @@ final class SubagentFiles {
         return Optional.empty();
     }
 
-    private static Optional<Found> findIn(final Path dir, final String toolUseId, final ObjectMapper json) throws IOException {
+    private static Optional<Found> findIn(final Path dir, final String toolUseId) throws IOException {
         try (final var metas = Files.newDirectoryStream(dir, "agent-*" + META)) {
             for (final Path meta : metas) {
-                final JsonNode m = readMeta(meta, json);
+                final JsonNode m = readMeta(meta);
                 if (m != null && toolUseId.equals(m.path("toolUseId").asString(""))) {
                     final String name = meta.getFileName().toString();
                     final Path transcript = dir.resolve(name.substring(0, name.length() - META.length()) + ".jsonl");
@@ -97,13 +96,13 @@ final class SubagentFiles {
     }
 
     /** The meta file's content; null when it cannot be read or is too large to be one. */
-    static JsonNode readMeta(final Path meta, final ObjectMapper json) {
+    static JsonNode readMeta(final Path meta) {
         try {
             if (Files.size(meta) > META_BYTES) {
                 return null;
             }
-            return json.readTree(Mapped.bytes(meta));
-        } catch (final IOException | JacksonException e) {
+            return Json.readTree(Mapped.bytes(meta));
+        } catch (final IOException | JsonException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + meta + ']', e);
             return null;
         }
@@ -140,8 +139,8 @@ final class SubagentFiles {
      * once (a message is stored a content block a line, each with the same usage), the tokens by kind, and the models
      * it ran on. An unreadable file gives what was read.
      */
-    static ObjectNode spend(final Path file, final ObjectMapper json) {
-        final ObjectNode out = json.createObjectNode();
+    static ObjectNode spend(final Path file) {
+        final ObjectNode out = Json.object();
         final long[] totals = new long[SPEND_FIELDS.size()];
         final Set<String> seen = new HashSet<>();
         final Set<String> models = new TreeSet<>();
@@ -149,7 +148,7 @@ final class SubagentFiles {
             Mapped.read(file, mapped -> {
                 mapped.lines(bytes -> {
                     if (ByteScan.indexOf(bytes, ASSISTANT, 0L) >= 0L) {
-                        addSpend(parse(Mapped.decode(bytes), json), seen, models, totals);
+                        addSpend(parse(Mapped.decode(bytes)), seen, models, totals);
                     }
                     return true;
                 });
@@ -166,8 +165,8 @@ final class SubagentFiles {
     }
 
     /** True when the meta file says the sub-agent finished; false when it does not say. */
-    static boolean finished(final Path meta, final ObjectMapper json) {
-        final JsonNode m = readMeta(meta, json);
+    static boolean finished(final Path meta) {
+        final JsonNode m = readMeta(meta);
         return m != null && m.path("finished").asBoolean(false);
     }
 
@@ -184,8 +183,8 @@ final class SubagentFiles {
      * The conversation as Markdown, read once: {@link Conversation#render} of a {@link Conversation} that reads at most
      * the last {@code scanBytes} of the file.
      */
-    static String render(final Path file, final long scanBytes, final ObjectMapper json) throws IOException {
-        final Conversation c = new Conversation(file, json, scanBytes);
+    static String render(final Path file, final long scanBytes) throws IOException {
+        final Conversation c = new Conversation(file, scanBytes);
         c.read();
         return c.render("");
     }
@@ -201,7 +200,6 @@ final class SubagentFiles {
     static final class Conversation {
 
         private final Path file;
-        private final ObjectMapper json;
         private final long scanBytes;
         /** The byte the next read starts at, always a line's start; -1 before the first read. */
         private long offset = -1;
@@ -217,9 +215,8 @@ final class SubagentFiles {
         private int tools;
         private int toolsKept;
 
-        Conversation(final Path file, final ObjectMapper json, final long scanBytes) {
+        Conversation(final Path file, final long scanBytes) {
             this.file = file;
-            this.json = json;
             this.scanBytes = scanBytes;
         }
 
@@ -333,7 +330,7 @@ final class SubagentFiles {
             if (!line.isBlank()) {
                 lines.accept(line);
             }
-            final JsonNode n = parse(line, json);
+            final JsonNode n = parse(line);
             final boolean wasFirst = first;
             first = false;
             if (n == null) {
@@ -421,7 +418,7 @@ final class SubagentFiles {
 
         /** The task in a stored first line: its prompt when it is a user line with text, else empty. */
         private String taskOf(final String line) {
-            final JsonNode n = parse(line, json);
+            final JsonNode n = parse(line);
             if (n == null || !n.path("type").asString("").equals("user")) {
                 return "";
             }
@@ -463,13 +460,13 @@ final class SubagentFiles {
     }
 
     /** The line's JSON; null when it is not whole JSON. */
-    private static JsonNode parse(final String line, final ObjectMapper json) {
+    private static JsonNode parse(final String line) {
         if (line.isBlank()) {
             return null;
         }
         try {
-            return json.readTree(line);
-        } catch (final JacksonException _) {
+            return Json.readTree(line);
+        } catch (final JsonException _) {
             return null;
         }
     }

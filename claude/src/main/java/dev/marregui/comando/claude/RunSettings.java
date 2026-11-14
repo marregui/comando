@@ -8,11 +8,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 
 /**
  * The model and effort a session's message ran at, read from the transcript Claude Code writes beside its stream: the
@@ -36,13 +35,11 @@ final class RunSettings {
     private static final byte[] ASSISTANT = "\"assistant\"".getBytes(StandardCharsets.UTF_8);
 
     private final Path projectsDir;
-    private final ObjectMapper json;
     private String conversation = "";
     private Path file;
 
-    RunSettings(final Path projectsDir, final ObjectMapper json) {
+    RunSettings(final Path projectsDir) {
         this.projectsDir = projectsDir;
-        this.json = json;
     }
 
     /**
@@ -75,7 +72,7 @@ final class RunSettings {
                 }
                 final MemorySegment line = tail.asSlice(lineStart, lineEnd - lineStart);
                 if (lastIndexOf(line, ASSISTANT, line.byteSize()) >= 0L) {
-                    final JsonNode e = json.readTree(Mapped.bytes(line));
+                    final JsonNode e = Json.readTree(Mapped.bytes(line));
                     if (e.path("type").asString("").equals("assistant")
                             && e.path("message").path("id").asString("").equals(messageId)) {
                         final String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));
@@ -84,7 +81,7 @@ final class RunSettings {
                 }
                 at = lineStart == 0L ? -1L : lastIndexOf(tail, needle, lineStart - 1L);
             }
-        } catch (final IOException | JacksonException e) {
+        } catch (final IOException | JsonException e) {
             // a line cut by the end of a write, or a file being rewritten: the next message reads again
         } catch (final InternalError e) {
             // the file was cut shorter while mapped: the JDK reports the fault on the mapped page as an InternalError;

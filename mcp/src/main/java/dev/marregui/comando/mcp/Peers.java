@@ -30,13 +30,12 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
@@ -198,7 +197,6 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** How long a question this instance asked waits for its reply before it expires: the answer's bound and margins. */
     private final Duration expireWithin;
     private final String started = Instant.now().toString();
-    private final ObjectMapper json = new ObjectMapper();
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
     private final Map<String, Asked> asked = new ConcurrentHashMap<>();
     /** The questions asked and answered, oldest first, at most {@link InstancesState#CONSULTS}; guarded by itself. */
@@ -280,7 +278,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 return;
             }
             try {
-                final JsonNode root = json.readTree(Mapped.text(seenFile));
+                final JsonNode root = Json.readTree(Mapped.text(seenFile));
                 if (later(root)) {
                     seenRefused = true;
                     LOG.log(System.Logger.Level.WARNING, seenFile + " is of a later version; kept as it is, not written, and the instances seen "
@@ -419,7 +417,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     String presenceJson() {
-        final ObjectNode p = json.createObjectNode();
+        final ObjectNode p = Json.object();
         p.put("schema", PEER_SCHEMA);
         p.put("name", me.name());
         p.put("slug", me.slug());
@@ -518,7 +516,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         try {
-            final Peer p = peer(slug, json.readTree(m.payload()));
+            final Peer p = peer(slug, Json.readTree(m.payload()));
             final Peer before = peers.put(slug, p);
             if (!slug.equals(me.slug()) && (before == null || !sameIdentity(before, p))) {
                 remember(p, 0L);
@@ -536,7 +534,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         JsonNode q;
         try {
-            q = json.readTree(m.payload());
+            q = Json.readTree(m.payload());
         } catch (final RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable question, dropped [cause=" + e.getMessage() + ']');
             return;
@@ -698,7 +696,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     private void send(final String topic, final byte[] correlation, final Reply r) {
-        final ObjectNode p = json.createObjectNode();
+        final ObjectNode p = Json.object();
         p.put("schema", PEER_SCHEMA);
         p.put("status", r.status());
         p.put("text", r.text());
@@ -723,7 +721,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return Optional.empty();
         }
         try {
-            final JsonNode root = json.readTree(Mapped.text(file));
+            final JsonNode root = Json.readTree(Mapped.text(file));
             if (later(root)) {
                 return Optional.of(file + " is of a later version, so its deny list cannot be checked");
             }
@@ -747,7 +745,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         try {
-            final JsonNode r = json.readTree(m.payload());
+            final JsonNode r = Json.readTree(m.payload());
             a.reply().complete(new Reply(r.path("status").asString(ERROR), r.path("text").asString(""), r.path("instance").asString(a.peerName()),
                     r.path("session").asString("")));
         } catch (final RuntimeException e) {
@@ -803,7 +801,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
         a.reply().whenComplete((r, e) -> ended(id, r != null ? r : new Reply(ERROR, e == null ? "no reply" : String.valueOf(e.getMessage()),
                 p.name(), "")));
-        final ObjectNode q = json.createObjectNode();
+        final ObjectNode q = Json.object();
         q.put("schema", PEER_SCHEMA);
         q.put("from", me.slug());
         q.put("name", me.name());
@@ -872,7 +870,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
     /** Asks from the Instances tab: as the user, from no session, on a thread of its own; a notice says how it ended. */
     @Override
     public void ask(final String instance, final String text) {
-        final ObjectNode args = json.createObjectNode();
+        final ObjectNode args = Json.object();
         args.put("instance", instance == null ? "" : instance);
         args.put("text", text == null ? "" : text);
         args.put("wait_seconds", McpTools.MAX_WAIT_SECONDS);
@@ -924,14 +922,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
                 throw new IOException("this instance has no data root");
             }
             final ObjectNode root = Files.isRegularFile(instanceFile)
-                    && json.readTree(Mapped.text(instanceFile)) instanceof ObjectNode o
-                    ? o : json.createObjectNode();
+                    && Json.readTree(Mapped.text(instanceFile)) instanceof ObjectNode o
+                    ? o : Json.object();
             if (later(root)) {
                 throw new IOException("it is of a later version, written by a later comando; it is kept as it is");
             }
             root.put("version", FILE_VERSION);
             root.put("role", r);
-            AtomicFiles.writeString(instanceFile, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
+            AtomicFiles.writeString(instanceFile, Json.pretty(root) + "\n");
             role = r;
             sink.dispatch(new Intent.Notify(Notice.Level.INFO, r.isEmpty() ? "This instance has no role now" : "This instance is for: " + r, false));
         } catch (final IOException | RuntimeException e) {
@@ -967,13 +965,13 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (file == null || seenRefused) {
             return;
         }
-        final ObjectNode root = json.createObjectNode();
+        final ObjectNode root = Json.object();
         root.put("version", FILE_VERSION);
         final ArrayNode list = root.putArray("instances");
         seen.values().forEach(x -> list.addObject().put("slug", x.peer().slug()).put("name", x.peer().name()).put("version", x.peer().version())
                 .put("role", x.peer().role()).put("kit", x.peer().kit()).put("started", x.peer().started()).put("lastSeen", x.lastSeen()));
         try {
-            AtomicFiles.writeString(file, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
+            AtomicFiles.writeString(file, Json.pretty(root) + "\n");
         } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write " + file, e);
         }
@@ -985,8 +983,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             throw new IOException("this instance has no agents.json");
         }
         final ObjectNode root = Files.isRegularFile(agentsFile)
-                && json.readTree(Mapped.text(agentsFile)) instanceof ObjectNode o
-                ? o : json.createObjectNode();
+                && Json.readTree(Mapped.text(agentsFile)) instanceof ObjectNode o
+                ? o : Json.object();
         if (later(root)) {
             throw new IOException("it is of a later version, written by a later comando; it is kept as it is");
         }
@@ -1004,7 +1002,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         final ArrayNode deny = peersNode.putArray("deny");
         list.forEach(deny::add);
-        AtomicFiles.writeString(agentsFile, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
+        AtomicFiles.writeString(agentsFile, Json.pretty(root) + "\n");
     }
 
     /** The instances {@code agents.json} refuses; none when it is missing or unreadable. */
@@ -1014,7 +1012,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         try {
             final List<String> out = new ArrayList<>();
-            json.readTree(Mapped.text(agentsFile)).path("peers").path("deny").forEach(d
+            Json.readTree(Mapped.text(agentsFile)).path("peers").path("deny").forEach(d
                     -> out.add(slug(d.asString(""))));
             return out;
         } catch (final IOException | RuntimeException e) {

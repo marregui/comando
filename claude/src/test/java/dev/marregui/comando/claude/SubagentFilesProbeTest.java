@@ -10,7 +10,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a file at or under the limit renders whole; a last line longer than the limit leaves only the notice
 class SubagentFilesProbeTest {
 
-    private final ObjectMapper json = new ObjectMapper();
     @TempDir
     Path tmp;
 
@@ -62,7 +60,7 @@ class SubagentFilesProbeTest {
                 final String call = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"i\",\"name\":\"T\",\"input\":{}}]}}";
                 Files.writeString(f, call + "\n" + String.format(t, v) + "\n" + sentinel() + "\n");
                 try {
-                    final String md = SubagentFiles.render(f, SubagentFiles.SCAN_BYTES, json);
+                    final String md = SubagentFiles.render(f, SubagentFiles.SCAN_BYTES);
                     if (!md.contains("SENTINEL")) {
                         failures.add(t + " <- " + v + ": sentinel lost");
                     }
@@ -88,9 +86,9 @@ class SubagentFilesProbeTest {
         }
         Files.writeString(dir.resolve("agent-empty.meta.json"), "");
         Files.write(dir.resolve("agent-bin.meta.json"), new byte[]{(byte) 0xC3, (byte) 0x28, 0, (byte) 0xFF});
-        assertThat(SubagentFiles.find(projects, "conv-1", "toolu_none", json)).isEmpty();
-        assertThat(SubagentFiles.finished(dir.resolve("agent-empty.meta.json"), json)).isFalse();
-        assertThat(SubagentFiles.finished(dir.resolve("agent-bin.meta.json"), json)).isFalse();
+        assertThat(SubagentFiles.find(projects, "conv-1", "toolu_none")).isEmpty();
+        assertThat(SubagentFiles.finished(dir.resolve("agent-empty.meta.json"))).isFalse();
+        assertThat(SubagentFiles.finished(dir.resolve("agent-bin.meta.json"))).isFalse();
     }
 
     /// A meta file with the number `7` as `toolUseId` is found for the id `"7"`, and an object `description` reads as
@@ -100,7 +98,7 @@ class SubagentFilesProbeTest {
         final Path projects = tmp.resolve("projects");
         final Path dir = Files.createDirectories(projects.resolve("-w/conv-1/subagents"));
         Files.writeString(dir.resolve("agent-n.meta.json"), "{\"toolUseId\":7,\"description\":{\"x\":1}}");
-        final SubagentFiles.Found f = SubagentFiles.find(projects, "conv-1", "7", json).orElseThrow();
+        final SubagentFiles.Found f = SubagentFiles.find(projects, "conv-1", "7").orElseThrow();
         assertThat(f.description()).isEmpty();
     }
 
@@ -115,8 +113,8 @@ class SubagentFilesProbeTest {
         final String c = "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"i\",\"content\":\"out\"}]}}";
         Files.writeString(lf, a + "\n" + b + "\n" + c + "\n");
         Files.writeString(crlf, a + "\r\n" + b + "\r\n" + c + "\r\n");
-        assertThat(SubagentFiles.render(crlf, SubagentFiles.SCAN_BYTES, json))
-                .isEqualTo(SubagentFiles.render(lf, SubagentFiles.SCAN_BYTES, json));
+        assertThat(SubagentFiles.render(crlf, SubagentFiles.SCAN_BYTES))
+                .isEqualTo(SubagentFiles.render(lf, SubagentFiles.SCAN_BYTES));
     }
 
     /// A cut that falls inside a three-byte character keeps the following lines, `LAST` among them, with no `�` in the
@@ -133,7 +131,7 @@ class SubagentFilesProbeTest {
         final long from = all.length - limit;
         final int prefix = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"".length();
         assertThat((from - prefix) % 3).as("cut inside a character").isNotZero();
-        final String md = SubagentFiles.render(f, limit, json);
+        final String md = SubagentFiles.render(f, limit);
         assertThat(md).contains("LAST").doesNotContain("�");
     }
 
@@ -143,11 +141,12 @@ class SubagentFilesProbeTest {
     void aFileExactlyAtTheLimitIsReadWhole() throws IOException {
         for (final int delta : new int[]{-1, 0}) {
             final Path f = sized(tmp.resolve("at" + delta + ".jsonl"), 4096 + delta);
-            final String md = SubagentFiles.render(f, 4096, json);
+            final String md = SubagentFiles.render(f, 4096);
             assertThat(md).doesNotContain("is longer than").contains("FIRST");
         }
         final Path over = sized(tmp.resolve("over.jsonl"), 4097);
-        assertThat(SubagentFiles.render(over, 4096, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
+        assertThat(SubagentFiles.render(over, 4096)).startsWith("_The conversation is longer than")
+                .doesNotContain("FIRST").contains("LAST");
     }
 
     /// A cut landing exactly at the start of the second line drops the first and shows the second and third whole,
@@ -161,7 +160,7 @@ class SubagentFilesProbeTest {
         Files.writeString(f, first + "\n" + second + "\n" + third + "\n");
         final long limit = (second + "\n" + third + "\n").getBytes(StandardCharsets.UTF_8).length;
 
-        final String md = SubagentFiles.render(f, limit, json);
+        final String md = SubagentFiles.render(f, limit);
 
         assertThat(md).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("THIRD");
         assertThat(md).as("the whole line that starts exactly at the cut").contains("SECOND");
@@ -174,7 +173,7 @@ class SubagentFilesProbeTest {
         final Path f = tmp.resolve("oneline.jsonl");
         final String big = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"" + "z".repeat(5000) + "\"}]}}";
         Files.writeString(f, "{\"type\":\"user\",\"message\":{\"content\":\"task\"}}\n" + big + "\n");
-        final String md = SubagentFiles.render(f, 4096, json);
+        final String md = SubagentFiles.render(f, 4096);
         assertThat(md.strip()).startsWith("> task\n\n_The conversation is longer than").doesNotContain("zzz");
     }
 

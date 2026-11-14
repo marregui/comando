@@ -3,8 +3,7 @@ package dev.marregui.comando.ui.widgets.transcript;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import tools.jackson.databind.JsonNode;
-
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;

@@ -9,7 +9,6 @@ import java.util.Optional;
 
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.BackgroundTask;
@@ -25,7 +24,7 @@ class StreamMapperTest {
 
     private final RecordingSink sink = new RecordingSink();
     private final Transcript transcript = new Transcript();
-    private final StreamMapper mapper = new StreamMapper("work", transcript, sink, new ObjectMapper());
+    private final StreamMapper mapper = new StreamMapper("work", transcript, sink);
 
     private List<Block> blocks() {
         final List<Block> out = new ArrayList<>();
@@ -114,7 +113,7 @@ class StreamMapperTest {
         assertThat(live.getLast().tokens()).isEqualTo(35_134L);
 
         final RecordingSink stored = new RecordingSink();
-        final StreamMapper replay = new StreamMapper("old", new Transcript(), stored, new ObjectMapper());
+        final StreamMapper replay = new StreamMapper("old", new Transcript(), stored);
         replay.acceptHistory("{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"role\":\"assistant\",\"model\":\"m\","
                 + "\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],\"stop_reason\":\"end_turn\","
                 + "\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":100,\"cache_read_input_tokens\":400000}}}");
@@ -123,11 +122,11 @@ class StreamMapperTest {
         assertThat(stored.of(Intent.SessionContext.class)).containsExactly(new Intent.SessionContext("old", 400_110L, 1_000_000L));
 
         final RecordingSink empty = new RecordingSink();
-        final StreamMapper none = new StreamMapper("new", new Transcript(), empty, new ObjectMapper());
+        final StreamMapper none = new StreamMapper("new", new Transcript(), empty);
         none.reportContext(Optional.of(new long[]{588_979L, 1_000_000L}));
         assertThat(empty.of(Intent.SessionContext.class)).as("the metrics' own when the replay had none")
                 .containsExactly(new Intent.SessionContext("new", 588_979L, 1_000_000L));
-        new StreamMapper("unknown", new Transcript(), empty, new ObjectMapper()).reportContext(Optional.empty());
+        new StreamMapper("unknown", new Transcript(), empty).reportContext(Optional.empty());
         assertThat(empty.of(Intent.SessionContext.class)).as("nothing known, nothing sent").hasSize(1);
     }
 

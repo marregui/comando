@@ -1,0 +1,491 @@
+[ {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"port\":\"8812\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"prod\":\"true\",\"sslMode\":\"prefer\"}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=8812, database=d, user=u, password=***, prod=true, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":8812.7,\"prod\":true}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=8812, database=d, user=u, password=***, prod=true, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":null,\"prod\":null}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec`, problem: port out of range [port=0]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\"}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec`, problem: port out of range [port=0]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":5,\"host\":true,\"port\":1,\"database\":1.5,\"user\":\"u\",\"password\":\"p\",\"prod\":false,\"sslMode\":\"prefer\",\"extra\":{\"x\":[1]}}",
+  "outcome" : "ok ConnectionSpec[name=5, host=true, port=1, database=1.5, user=u, password=***, prod=false, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":1,\"prod\":1}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=1, database=d, user=u, password=***, prod=true, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":3000000000}",
+  "outcome" : "error InputCoercionException: Numeric value (3000000000) out of range of `int` (-2147483648 - 2147483647)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":\"x\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `int` from String \"x\": not a valid `int` value"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":{\"a\":1},\"host\":\"h\"}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `java.lang.String` from Object value (token `JsonToken.START_OBJECT`)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":[\"a\"],\"host\":\"h\"}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `java.lang.String` from Array value (token `JsonToken.START_ARRAY`)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "[]",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `dev.marregui.comando.core.model.ConnectionSpec` from Array value (token `JsonToken.START_ARRAY`)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "\"a\"",
+  "outcome" : "error MismatchedInputException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec` (although at least one Creator exists): no String-argument constructor/factory method to deserialize from String value ('a')"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "null",
+  "outcome" : "ok null"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":1e3}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=1000, database=d, user=u, password=***, prod=false, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"name\":\"b\",\"host\":\"h\"}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec`, problem: database"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":\" 12 \"}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=12, database=d, user=u, password=***, prod=false, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":\"\"}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec`, problem: port out of range [port=0]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":\"1.5\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `int` from String \"1.5\": not a valid `int` value"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":true}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `int` from Boolean value (token `JsonToken.VALUE_TRUE`)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":2147483648}",
+  "outcome" : "error InputCoercionException: Numeric value (2147483648) out of range of `int` (-2147483648 - 2147483647)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":-1.5}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec`, problem: port out of range [port=-1]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":1,\"prod\":\"1\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `boolean` from String \"1\": only \"true\"/\"True\"/\"TRUE\" or \"false\"/\"False\"/\"FALSE\" recognized"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":1,\"prod\":\"\"}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=1, database=d, user=u, password=***, prod=false, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"prod\":0.5}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `boolean` from Floating-point value (token `JsonToken.VALUE_NUMBER_FLOAT`)"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":1,\"prod\":\"TRUE\"}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=1, database=d, user=u, password=***, prod=true, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":1,\"user\":null}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.ConnectionSpec`, problem: user"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":\"0x10\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `int` from String \"0x10\": not a valid `int` value"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":\"+5\"}",
+  "outcome" : "ok ConnectionSpec[name=a, host=h, port=5, database=d, user=u, password=***, prod=false, sslMode=prefer]"
+}, {
+  "mapper" : "file",
+  "type" : "ConnectionSpec",
+  "input" : "{\"name\":\"a\",\"host\":\"h\",\"database\":\"d\",\"user\":\"u\",\"password\":\"p\",\"sslMode\":\"prefer\",\"port\":{}}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `int` from Object value (token `JsonToken.START_OBJECT`)"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":1}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.SessionSpec`, problem: startMode RESUME needs a claudeSessionId"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"\"}",
+  "outcome" : "error InvalidFormatException: Cannot coerce empty String (\"\") to `dev.marregui.comando.core.model.StartMode` value (but could if coercion was enabled using `CoercionConfig`)"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"BOGUS\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `dev.marregui.comando.core.model.StartMode` from String \"BOGUS\": not one of the values accepted for Enum class: [NEW, FORK, RESUME]"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"new\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `dev.marregui.comando.core.model.StartMode` from String \"new\": not one of the values accepted for Enum class: [NEW, FORK, RESUME]"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"0\"}",
+  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=0.0, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=0]"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\"}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.SessionSpec`, problem: startMode"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"NEW\",\"budgetUsd\":\"NaN\"}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.SessionSpec`, problem: budgetUsd must be a finite amount, 0 or more [budgetUsd=NaN]"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"NEW\",\"budgetUsd\":\"1.5\",\"unreadMillis\":1.9}",
+  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=1.5, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=1]"
+}, {
+  "mapper" : "file",
+  "type" : "SessionSpec",
+  "input" : "{\"name\":\"s\",\"workDir\":\"/w\",\"model\":\"m\",\"effort\":\"high\",\"claudeSessionId\":\"\",\"startMode\":\"NEW\",\"unreadMillis\":\"12\",\"checkpoint\":null,\"carried\":null}",
+  "outcome" : "ok SessionSpec[name=s, workDir=/w, model=m, effort=high, budgetUsd=0.0, claudeSessionId=, startMode=NEW, checkpoint=/reflect, carried=, createdBy=, family=, unreadMillis=12]"
+}, {
+  "mapper" : "file",
+  "type" : "FolderRoot",
+  "input" : "{\"name\":\"n\",\"path\":\"p\",\"excludes\":\"tmp\"}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `java.util.ArrayList<java.lang.String>` from String value (token `JsonToken.VALUE_STRING`)"
+}, {
+  "mapper" : "file",
+  "type" : "FolderRoot",
+  "input" : "{\"name\":\"n\",\"path\":\"p\",\"excludes\":null}",
+  "outcome" : "ok FolderRoot[name=n, path=p, index=, excludes=[], icon=folder, deletable=false, listedIn=, group=]"
+}, {
+  "mapper" : "file",
+  "type" : "FolderRoot",
+  "input" : "{\"name\":\"n\",\"path\":\"p\",\"excludes\":[null,\" a \"]}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.model.FolderRoot`, problem: `java.lang.NullPointerException`"
+}, {
+  "mapper" : "file",
+  "type" : "FolderRoot",
+  "input" : "{\"name\":\"n\",\"path\":\"p\",\"index\":\"i\",\"excludes\":[1,true,2.5]}",
+  "outcome" : "ok FolderRoot[name=n, path=p, index=i, excludes=[1, true, 2.5], icon=folder, deletable=false, listedIn=, group=]"
+}, {
+  "mapper" : "file",
+  "type" : "FolderRoot",
+  "input" : "{\"name\":\"n\",\"path\":\"p\",\"deletable\":\"yes\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `boolean` from String \"yes\": only \"true\"/\"True\"/\"TRUE\" or \"false\"/\"False\"/\"FALSE\" recognized"
+}, {
+  "mapper" : "file",
+  "type" : "FolderRoot",
+  "input" : "{\"name\":\"n\",\"path\":\"p\",\"deletable\":\"false\"}",
+  "outcome" : "ok FolderRoot[name=n, path=p, index=, excludes=[], icon=folder, deletable=false, listedIn=, group=]"
+}, {
+  "mapper" : "file",
+  "type" : "StoredPanel",
+  "input" : "{\"id\":\"x\",\"closed\":null,\"side\":\"false\"}",
+  "outcome" : "ok StoredPanel[id=x, title=null, connection=null, session=null, file=null, content=null, closed=null, side=false]"
+}, {
+  "mapper" : "file",
+  "type" : "StoredPanel",
+  "input" : "{\"id\":\"x\",\"closed\":0}",
+  "outcome" : "ok StoredPanel[id=x, title=null, connection=null, session=null, file=null, content=null, closed=false, side=null]"
+}, {
+  "mapper" : "file",
+  "type" : "QuestDbEntry",
+  "input" : "{\"version\":1,\"pid\":5,\"ports\":{\"http\":\"9000\"}}",
+  "outcome" : "ok Entry[version=1, pid=5, owner=null, name=null, started=null, ports=Ports[http=9000, httpMin=0, pg=0, ilp=0], token=null, questdb=null]"
+}, {
+  "mapper" : "file",
+  "type" : "QuestDbEntry",
+  "input" : "{\"version\":1,\"ports\":null}",
+  "outcome" : "ok Entry[version=1, pid=0, owner=null, name=null, started=null, ports=null, token=null, questdb=null]"
+}, {
+  "mapper" : "file",
+  "type" : "QuestDbEntry",
+  "input" : "{\"version\":1,\"ports\":[]}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `dev.marregui.comando.app.MachineQuestDb$Ports` from Array value (token `JsonToken.START_ARRAY`)"
+}, {
+  "mapper" : "file",
+  "type" : "QuestDbEntry",
+  "input" : "{}",
+  "outcome" : "ok Entry[version=1, pid=0, owner=null, name=null, started=null, ports=null, token=null, questdb=null]"
+}, {
+  "mapper" : "file",
+  "type" : "QuestDbEntry",
+  "input" : "{\"version\":\"x\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `int` from String \"x\": not a valid `int` value"
+}, {
+  "mapper" : "file",
+  "type" : "EdgeEntry",
+  "input" : "{\"pid\":\"12\",\"ports\":{\"mqtt\":1883,\"bogus\":1}}",
+  "outcome" : "ok Entry[version=1, pid=12, owner=null, name=null, ports=Ports[mqtt=1883, websocket=0, api=0, jmx=0], started=null]"
+}, {
+  "mapper" : "file",
+  "type" : "ListFolderRoot",
+  "input" : "[{\"name\":\"a\",\"path\":\"p\"},null]",
+  "outcome" : "ok [FolderRoot[name=a, path=p, index=, excludes=[], icon=folder, deletable=false, listedIn=, group=], null]"
+}, {
+  "mapper" : "file",
+  "type" : "ListFolderRoot",
+  "input" : "{\"name\":\"a\"}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `java.util.ArrayList<dev.marregui.comando.core.model.FolderRoot>` from Object value (token `JsonToken.START_OBJECT`)"
+}, {
+  "mapper" : "file",
+  "type" : "ListFolderRoot",
+  "input" : "[]",
+  "outcome" : "ok []"
+}, {
+  "mapper" : "file",
+  "type" : "ListFolderRoot",
+  "input" : "null",
+  "outcome" : "ok null"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"some\":null,\"none\":\"y\",\"number\":\"7\",\"path\":\"  /tmp/x  \",\"level\":\"WARN\",\"modes\":[\"FORK\"],\"values\":[1,\"NaN\",\"Infinity\",null],\"nan\":\"NaN\",\"ratio\":\"0.5\",\"big\":\"9\"}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional[y], number=Optional[7], path=/tmp/x, level=WARN, modes=[FORK], values=[1.0, NaN, Infinity, 0.0], nothing=null, box=null, nan=NaN, ratio=0.5, big=9, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"path\":\"file:///tmp/a%20b\"}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=/tmp/a b, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"path\":\"http://x/y\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `java.nio.file.Path` from String \"http://x/y\": scheme 'http' not allowed for Path deserialization (allowed: [\"file\"])"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"path\":\"rel/x\"}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=rel/x, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"path\":\"\"}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"path\":5}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=5, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"values\":\"1\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `double[]` from String \"1\": 'StringNode' method `binaryValue()` cannot coerce value \"1\" to `byte[]`: value type not binary and Base64-decoding failed with: Unexpected end of base64-encoded String: base64 variant 'MIME-NO-LINEFEEDS' expects padding (one or more '=' characters) at the end. This Base64Variant might have been incorrectly configured"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"values\":null}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"map\":{\"a\":null,\"b\":[]},\"withNull\":[null]}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=[null], map={a=null, b=[]}]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"map\":[]}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `java.util.LinkedHashMap<java.lang.String,java.util.List<java.lang.Integer>>` from Array value (token `JsonToken.START_ARRAY`)"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"level\":\"\"}",
+  "outcome" : "error InvalidFormatException: Cannot coerce empty String (\"\") to `dev.marregui.comando.core.state.Notice$Level` value (but could if coercion was enabled using `CoercionConfig`)"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"level\":0}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=INFO, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"box\":null,\"nan\":null,\"ratio\":null,\"big\":null}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"box\":\"x\"}",
+  "outcome" : "error InvalidFormatException: Cannot deserialize value of type `java.lang.Integer` from String \"x\": not a valid `java.lang.Integer` value"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"number\":1.5}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional[1], path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"panel\":\"p1\"}",
+  "outcome" : "error MismatchedInputException: Cannot construct instance of `dev.marregui.comando.core.model.PanelId` (although at least one Creator exists): no String-argument constructor/factory method to deserialize from String value ('p1')"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"panel\":{\"value\":\"p1\",\"x\":1}}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=p1, withNull=null, map=null]"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"modes\":\"NEW\"}",
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `java.util.ArrayList<dev.marregui.comando.core.model.StartMode>` from String value (token `JsonToken.VALUE_STRING`)"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"big\":9223372036854775808}",
+  "outcome" : "error InputCoercionException: Numeric value (9223372036854775808) out of range of `long` (-9223372036854775808 - 9223372036854775807)"
+}, {
+  "mapper" : "file",
+  "type" : "Mixed",
+  "input" : "{\"nan\":1e400}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=Infinity, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Mixed",
+  "input" : "{}",
+  "outcome" : "ok Mixed[some=Optional.empty, none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=null, nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Mixed",
+  "input" : "{\"some\":\"z\",\"values\":[2]}",
+  "outcome" : "ok Mixed[some=Optional[z], none=Optional.empty, number=Optional.empty, path=null, level=null, modes=null, values=[2.0], nothing=null, box=null, nan=0.0, ratio=0.0, big=0, panel=null, withNull=null, map=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Markdown\",\"markdown\":\"m\"}}",
+  "outcome" : "ok Typed[view=Markdown[markdown=m], table=null, views=null, decisions=null, none=null, state=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"markdown\":\"m\",\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Markdown\"}}",
+  "outcome" : "ok Typed[view=Markdown[markdown=m], table=null, views=null, decisions=null, none=null, state=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"markdown\":\"m\"}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve subtype of [simple type, class dev.marregui.comando.core.view.ViewSpec]: missing type id property '@type' (for POJO property 'view')"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"java.lang.String\"}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve type id 'java.lang.String' as a subtype of `dev.marregui.comando.core.view.ViewSpec`: Not a subtype"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"dev.marregui.comando.core.model.PanelId\",\"value\":\"x\"}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve type id 'dev.marregui.comando.core.model.PanelId' as a subtype of `dev.marregui.comando.core.view.ViewSpec`: Not a subtype"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"dev.marregui.comando.core.view.Nope\"}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve type id 'dev.marregui.comando.core.view.Nope' as a subtype of `dev.marregui.comando.core.view.ViewSpec`: no such class found"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":null,\"table\":null,\"views\":null,\"decisions\":null}",
+  "outcome" : "ok Typed[view=null, table=null, views=null, decisions=null, none=null, state=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"table\":{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Table\",\"columns\":[\"c\"],\"rows\":[[\"v\"]]}}",
+  "outcome" : "ok Typed[view=null, table=Table[columns=[c], rows=[[v]]], views=null, decisions=null, none=null, state=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"table\":{\"columns\":[\"c\"],\"rows\":[[\"v\"]]}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve subtype of [simple type, class dev.marregui.comando.core.view.ViewSpec$Table]: missing type id property '@type' (for POJO property 'table')"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"views\":[{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Search\"},null]}",
+  "outcome" : "ok Typed[view=null, table=null, views=[Search[], null], decisions=null, none=null, state=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"decisions\":{\"a\":{\"@type\":\"dev.marregui.comando.core.model.ApprovalDecision$Deny\",\"message\":\"no\"}}}",
+  "outcome" : "ok Typed[view=null, table=null, views=null, decisions={a=Deny[message=no]}, none=null, state=null]"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":5}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve type id '5' as a subtype of `dev.marregui.comando.core.view.ViewSpec`: no such class found"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":\"dev.marregui.comando.core.view.ViewSpec$Markdown\"}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve subtype of [simple type, class dev.marregui.comando.core.view.ViewSpec]: missing type id property '@type' (for POJO property 'view')"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Table\"}}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.view.ViewSpec$Table`, problem: Cannot invoke \"java.util.Collection.isEmpty()\" because \"coll\" is null"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"dev.marregui.comando.core.view.ViewSpec\"}}",
+  "outcome" : "error InvalidDefinitionException: Cannot construct instance of `dev.marregui.comando.core.view.ViewSpec` (no Creators, like default constructor, exist): abstract types either need to be mapped to concrete types, have custom deserializer, or contain additional type information"
+}, {
+  "mapper" : "fields",
+  "type" : "Typed",
+  "input" : "{\"view\":{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Diff\",\"path\":\"p\",\"before\":\"b\",\"after\":\"a\"},\"table\":{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Markdown\",\"markdown\":\"m\"}}",
+  "outcome" : "error InvalidTypeIdException: Could not resolve type id 'dev.marregui.comando.core.view.ViewSpec$Markdown' as a subtype of `dev.marregui.comando.core.view.ViewSpec$Table`: Not a subtype"
+}, {
+  "mapper" : "fields",
+  "type" : "ViewSpec",
+  "input" : "{\"@type\":\"dev.marregui.comando.core.view.ViewSpec$Diff\",\"path\":\"p\",\"before\":\"b\",\"after\":\"a\"}",
+  "outcome" : "ok Diff[path=p, before=b, after=a]"
+}, {
+  "mapper" : "fields",
+  "type" : "ApprovalDecision",
+  "input" : "{\"@type\":\"dev.marregui.comando.core.model.ApprovalDecision$Allow\",\"scope\":\"ONCE\"}",
+  "outcome" : "ok Allow[scope=ONCE]"
+}, {
+  "mapper" : "fields",
+  "type" : "AppState",
+  "input" : "{}",
+  "outcome" : "error ValueInstantiationException: Cannot construct instance of `dev.marregui.comando.core.state.AppState`, problem: Cannot invoke \"java.util.Collection.isEmpty()\" because \"coll\" is null"
+} ]

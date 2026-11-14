@@ -31,9 +31,10 @@ import io.questdb.PropertyKey;
 import io.questdb.ServerMain;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -240,6 +241,18 @@ class MachineQuestDbTest {
                     .isEqualTo("refused: its server.json is of version 2, which this comando uses and does not manage");
             assertThat(machine.resolve("server.json")).hasContent(later);
             assertThat(machine.resolve("bin").resolve("start.sh")).doesNotExist();
+        }
+    }
+
+    /// An empty `server.json`, as a write cut before its first byte leaves it, names no server: a stop finds none
+    /// running.
+    @Test
+    void anEmptyRegistryNamesNoServer(@TempDir final Path dir) throws IOException {
+        final Path machine = Files.createDirectories(dir.resolve("machine"));
+        Files.writeString(machine.resolve("server.json"), "");
+        try (final MachineQuestDb db = new MachineQuestDb(machine, dir.resolve("data"), "", new RecordingSink(),
+                freePorts())) {
+            assertThat(db.want(false)).isEqualTo("QuestDB is not running");
         }
     }
 
@@ -457,7 +470,7 @@ class MachineQuestDbTest {
             final HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).build(),
                     HttpResponse.BodyHandlers.ofString());
             assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
-            return JsonFile.JSON.readTree(r.body());
+            return Json.readTree(r.body());
         }
     }
 
@@ -474,7 +487,7 @@ class MachineQuestDbTest {
     }
 
     private static JsonNode registry(final Path machine) throws IOException {
-        return JsonFile.JSON.readTree(Files.readString(machine.resolve("server.json")));
+        return Json.readTree(Files.readString(machine.resolve("server.json")));
     }
 
     /// The status of a GET of `path` on the server's HTTP port.

@@ -10,8 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.Icon;
 
-import tools.jackson.databind.JsonNode;
-
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Json;

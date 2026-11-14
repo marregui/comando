@@ -1,0 +1,15 @@
+{
+  "version" : 1,
+  "pid" : 4242,
+  "owner" : "Comando",
+  "name" : "Comando Expert",
+  "started" : "2026-11-14T08:00:00Z",
+  "ports" : {
+    "http" : 9000,
+    "httpMin" : 9003,
+    "pg" : 8812,
+    "ilp" : 9009
+  },
+  "token" : "tok-123",
+  "questdb" : "9.3.2"
+}

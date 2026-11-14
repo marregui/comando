@@ -5,11 +5,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -19,8 +18,6 @@ import dev.marregui.comando.core.view.ViewSpec;
  * {@link IllegalArgumentException} with a message Claude can act on; it never reaches the reducer.
  */
 final class ViewSpecs {
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     static final int MAX_ROWS = 100_000;
     static final int MAX_POINTS = 2_000_000;
@@ -103,10 +100,10 @@ final class ViewSpecs {
     static ViewSpec.Plot plot(final JsonNode data) {
         JsonNode series = data.path("series");
         if (series.isMissingNode() && data.has("x") && data.has("y")) {
-            final ObjectNode one = JSON.createObjectNode().put("name", data.path("title").asString("series 1"));
+            final ObjectNode one = Json.object().put("name", data.path("title").asString("series 1"));
             one.set("x", data.get("x"));
             one.set("y", data.get("y"));
-            series = JSON.createArrayNode().add(one);
+            series = Json.array().add(one);
         }
         if (!series.isArray() || series.isEmpty()) {
             throw new IllegalArgumentException("series must be a non-empty array of {name, x, y}, or give x and y for one series");
@@ -129,8 +126,8 @@ final class ViewSpecs {
         JsonNode array = given;
         if (given.isString()) {
             try {
-                array = JSON.readTree(given.asString(""));
-            } catch (final JacksonException e) {
+                array = Json.readTree(given.asString(""));
+            } catch (final JsonException e) {
                 throw new IllegalArgumentException(what + " must be an array of numbers, not text: " + Clip.keepStart(given.asString(""), 40));
             }
         }

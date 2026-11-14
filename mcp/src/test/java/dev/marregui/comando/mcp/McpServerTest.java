@@ -28,12 +28,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
@@ -87,7 +87,6 @@ class McpServerTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);
 
-    private final ObjectMapper json = new ObjectMapper();
     private final HttpClient client = HttpClient.newHttpClient();
     private final RecordingSink sink = new RecordingSink();
     private final TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -167,7 +166,7 @@ class McpServerTest {
     private JsonNode rpc(final String method, final String params) throws Exception {
         final HttpResponse<String> r = post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"" + method + "\",\"params\":" + params + "}", null);
         assertThat(r.statusCode()).isEqualTo(200);
-        return json.readTree(r.body());
+        return Json.readTree(r.body());
     }
 
     private JsonNode tool(final String name, final String args) throws Exception {
@@ -387,7 +386,7 @@ class McpServerTest {
         assertThat(asked.approval().session()).isEqualTo("work");
 
         server.resolve(asked.approval(), new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
-        final JsonNode result = json.readTree(text(call.get()));
+        final JsonNode result = Json.readTree(text(call.get()));
         assertThat(result.path("behavior").asString()).isEqualTo("allow");
         assertThat(result.path("updatedInput").path("command").asString()).isEqualTo("git status");
         final JsonNode update = result.path("updatedPermissions").path(0);
@@ -411,7 +410,7 @@ class McpServerTest {
         });
         final Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
         server.resolve(asked.approval(), new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
-        final JsonNode update = json.readTree(text(call.get())).path("updatedPermissions").path(0);
+        final JsonNode update = Json.readTree(text(call.get())).path("updatedPermissions").path(0);
         assertThat(update.path("destination").asString()).isEqualTo("localSettings");
         assertThat(update.path("rules").path(0).path("toolName").asString()).isEqualTo("WebFetch");
         assertThat(update.path("rules").path(0).path("ruleContent").asString()).isEqualTo("domain:docs.example.org");
@@ -431,7 +430,7 @@ class McpServerTest {
         // the request id 7 is the one rpc() sends; Claude Code cancels it on an interrupt
         assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":7}}", null)
                 .statusCode()).isEqualTo(202);
-        assertThat(json.readTree(text(call.get())).path("behavior").asString()).isEqualTo("deny");
+        assertThat(Json.readTree(text(call.get())).path("behavior").asString()).isEqualTo("deny");
         assertThat(sink.await(Intent.ApprovalWithdrawn.class, WAIT).id()).isEqualTo(asked.approval().id());
         assertThat(waited).extracting(Wait::outcome).containsExactly(WaitLog.Outcome.CANCELLED);
     }
@@ -449,7 +448,7 @@ class McpServerTest {
         final Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
         assertThat(asked.approval().kind()).isEqualTo(ApprovalKind.QUESTION);
         server.resolve(asked.approval(), new ApprovalDecision.Answer(Map.of("Colour?", "Red")));
-        final JsonNode result = json.readTree(text(call.get()));
+        final JsonNode result = Json.readTree(text(call.get()));
         assertThat(result.path("updatedInput").path("answers").path("Colour?").asString()).isEqualTo("Red");
         assertThat(result.path("updatedInput").path("questions").isArray()).isTrue();
         assertThat(waited).singleElement().satisfies(w -> {
@@ -463,7 +462,7 @@ class McpServerTest {
     void unansweredApprovalIsDeniedAtTheDeadlineAndWithdrawn() throws Exception {
         server.close();
         server = start(Duration.ofMillis(300));
-        final JsonNode result = json.readTree(text(tool("approve", "{\"tool_name\":\"Bash\",\"input\":{\"command\":\"rm -rf /\"}}")));
+        final JsonNode result = Json.readTree(text(tool("approve", "{\"tool_name\":\"Bash\",\"input\":{\"command\":\"rm -rf /\"}}")));
         assertThat(result.path("behavior").asString()).isEqualTo("deny");
         sink.await(Intent.ApprovalWithdrawn.class, WAIT);
     }
@@ -478,7 +477,7 @@ class McpServerTest {
         final String questions = "{\"questions\":[{\"question\":\"Which store?\",\"header\":\"Store\","
                 + "\"multiSelect\":false,\"options\":[{\"label\":\"Mapped\",\"description\":\"read in place\"},"
                 + "{\"label\":\"Heap\"}]}]}";
-        final JsonNode result = json.readTree(text(tool("approve",
+        final JsonNode result = Json.readTree(text(tool("approve",
                 "{\"tool_name\":\"AskUserQuestion\",\"input\":" + questions + "}")));
         assertThat(result.path("behavior").asString()).isEqualTo("deny");
         assertThat(result.path("message").asString()).isEqualTo("No answer from the user within 300 ms.");
@@ -517,7 +516,7 @@ class McpServerTest {
         server.close();
         final JsonNode r = call.get();
         if (r != null) { // the response may or may not make it out before the listener stops
-            assertThat(json.readTree(text(r)).path("behavior").asString()).isEqualTo("deny");
+            assertThat(Json.readTree(text(r)).path("behavior").asString()).isEqualTo("deny");
         }
     }
 
@@ -589,7 +588,7 @@ class McpServerTest {
     private JsonNode toolAs(final McpGateway.Ticket t, final String name, final String args) throws Exception {
         final HttpResponse<String> r = post(t.token(), "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\""
                 + name + "\",\"arguments\":" + args + "}}", null);
-        return json.readTree(r.body()).path("result");
+        return Json.readTree(r.body()).path("result");
     }
 
     /// A session bound to no panel gets a tool error for an edit or SQL without a panel name, and nothing is edited or
@@ -649,7 +648,7 @@ class McpServerTest {
     /// a card waits only while its session waits.
     @Test
     void stateDescribesPanelsConnectionsAndSessions() throws Exception {
-        final JsonNode s = json.readTree(text(tool("ui_get_state", "{}")));
+        final JsonNode s = Json.readTree(text(tool("ui_get_state", "{}")));
         assertThat(s.path("panels")).hasSize(2);
         assertThat(s.path("connections").path(0).path("name").asString()).isEqualTo("local");
         assertThat(s.path("sessions").path(0).path("name").asString()).isEqualTo("work");
@@ -842,7 +841,7 @@ class McpServerTest {
         assertThat(waited).extracting(Wait::outcome).containsExactly(WaitLog.Outcome.SESSION_ENDED);
         // a session already gone asks again: no card is shown, and no wait is kept for it
         sink.clear();
-        assertThat(tools.call("work", "approve", json.readTree("{\"tool_name\":\"Bash\",\"input\":{\"command\":\"make\"}}"))
+        assertThat(tools.call("work", "approve", Json.readTree("{\"tool_name\":\"Bash\",\"input\":{\"command\":\"make\"}}"))
                 .text()).contains("The session ended before the user answered");
         assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
         assertThat(waited).hasSize(1);
@@ -1095,7 +1094,7 @@ class McpServerTest {
     @Test
     void resultListNamesTheHeldResultsAndStateLinksThem() throws Exception {
         holdResult(5, RunStatus.DONE);
-        final JsonNode root = json.readTree(text(tool("result_list", "{}")));
+        final JsonNode root = Json.readTree(text(tool("result_list", "{}")));
         assertThat(root.path("omitted").asInt()).isZero();
         final JsonNode list = root.path("results");
         assertThat(list).hasSize(1);
@@ -1105,7 +1104,7 @@ class McpServerTest {
         assertThat(list.get(0).path("status").asString()).isEqualTo("DONE");
         assertThat(list.get(0).path("rows").asInt()).isEqualTo(5);
         assertThat(list.get(0).path("columns").get(1).path("type").asString()).isEqualTo("TEXT");
-        final JsonNode panels = json.readTree(tools.stateJson()).path("panels");
+        final JsonNode panels = Json.readTree(tools.stateJson()).path("panels");
         assertThat(panels.get(0).path("lastRun").path("result").asString()).isEqualTo("r42");
     }
 
@@ -1126,7 +1125,7 @@ class McpServerTest {
         tools.results(registry);
         final String answer = text(tool("result_list", "{}"));
         assertThat(answer.length()).isLessThanOrEqualTo(McpTools.MAX_RESULT_CHARS);
-        final JsonNode root = json.readTree(answer);
+        final JsonNode root = Json.readTree(answer);
         assertThat(root.path("results")).hasSize(1);
         assertThat(root.path("omitted").asInt()).isEqualTo(1);
     }
@@ -1184,7 +1183,7 @@ class McpServerTest {
         final JsonNode gone = tool("result_read", "{\"result\":\"r42\"}");
         assertThat(gone.path("isError").asBoolean()).isTrue();
         assertThat(text(gone)).startsWith("result r42 is not held").contains("result_list");
-        assertThat(json.readTree(text(tool("result_list", "{}"))).path("results")).isEmpty();
+        assertThat(Json.readTree(text(tool("result_list", "{}"))).path("results")).isEmpty();
         assertThat(tool("result_stats", "{\"result\":\"rx\"}").path("isError").asBoolean()).isTrue();
     }
 

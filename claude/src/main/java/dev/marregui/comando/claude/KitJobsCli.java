@@ -10,12 +10,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
@@ -33,7 +32,6 @@ public final class KitJobsCli {
     /** How long one call of {@code kit.py} may take: a reload waits a second per job at most. */
     static final Duration LIMIT = Duration.ofSeconds(60);
     private static final int MAX_OUT = 1 << 20;
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final Path root;
     private final List<String> python;
@@ -95,7 +93,7 @@ public final class KitJobsCli {
 
     /** Hands {@code jobs}, the whole list, to {@code kit.py jobs set}: checked, written to the manifest, reconciled. */
     public Result save(final List<KitJob> jobs) throws IOException {
-        final byte[] in = JSON.writeValueAsBytes(manifestJobs(jobs));
+        final byte[] in = Json.writeBytes(manifestJobs(jobs));
         return result(call(List.of("jobs", "set"), in));
     }
 
@@ -141,8 +139,8 @@ public final class KitJobsCli {
     static KitJobs parse(final String json) throws IOException {
         JsonNode doc;
         try {
-            doc = JSON.readTree(json);
-        } catch (final JacksonException e) {
+            doc = Json.readTree(json);
+        } catch (final JsonException e) {
             throw new IOException(e.getMessage(), e);
         }
         if (doc == null || !doc.path("jobs").isArray()) {
@@ -165,7 +163,7 @@ public final class KitJobsCli {
 
     /** {@code jobs} in the manifest's form, which {@code jobs set} reads: defaults left out. */
     static ArrayNode manifestJobs(final List<KitJob> jobs) {
-        final ArrayNode out = JSON.createArrayNode();
+        final ArrayNode out = Json.array();
         for (final KitJob j : jobs) {
             final ObjectNode o = out.addObject();
             o.put("name", j.name());

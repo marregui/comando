@@ -12,10 +12,9 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -37,16 +36,14 @@ final class SessionSubjects {
     private static final Set<String> WRITES = Set.of("Edit", "MultiEdit", "NotebookEdit", "Write");
 
     private final Path claudeDir;
-    private final ObjectMapper json;
     /** The repositories written to, the latest last. */
     private final LinkedHashSet<Path> repositories = new LinkedHashSet<>();
     /** How many of the transcript's blocks the passes have read. */
     private int scanned;
 
     /** A session of the Claude Code whose stored conversations are in {@code projectsDir}, inside its folder. */
-    SessionSubjects(final Path projectsDir, final ObjectMapper json) {
+    SessionSubjects(final Path projectsDir) {
         this.claudeDir = projectsDir.toAbsolutePath().normalize().getParent();
-        this.json = json;
     }
 
     /** The ticket {@code branch} names, upper case, empty when it names none. */
@@ -129,8 +126,8 @@ final class SessionSubjects {
     private Optional<Path> repositoryOf(final String inputJson, final List<Path> dropped) {
         final JsonNode input;
         try {
-            input = json.readTree(inputJson);
-        } catch (final JacksonException _) {
+            input = Json.readTree(inputJson);
+        } catch (final JsonException _) {
             return Optional.empty();
         }
         for (final String field : PATH_FIELDS) {

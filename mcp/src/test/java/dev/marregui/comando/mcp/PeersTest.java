@@ -21,10 +21,10 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -50,7 +50,6 @@ class PeersTest {
     private static final Duration WAIT = Duration.ofSeconds(10);
     private static final Pattern ID = Pattern.compile("\"id\": \"([^\"]+)\"");
 
-    private final ObjectMapper json = new ObjectMapper();
     private final Bus bus = new Bus();
     private final List<Node> nodes = new ArrayList<>();
     private final ExecutorService callers = Executors.newVirtualThreadPerTaskExecutor();
@@ -390,7 +389,7 @@ class PeersTest {
         assertThat(left.lastSeen()).isPositive();
         assertThat(left.sessions()).isEmpty();
         final Path file = main.home.resolve(Peers.SEEN_FILE);
-        assertThat(json.readTree(Files.readString(file)).path("instances").get(0).path("slug").asString()).isEqualTo("b");
+        assertThat(Json.readTree(Files.readString(file)).path("instances").get(0).path("slug").asString()).isEqualTo("b");
 
         main.peers.close();
         final Node again = node("", Peers.ANSWER_WITHIN);
@@ -400,12 +399,12 @@ class PeersTest {
         });
         again.peers.forget("b");
         assertThat(again.peers.instances().others()).isEmpty();
-        assertThat(json.readTree(Files.readString(file)).path("instances").isEmpty()).isTrue();
+        assertThat(Json.readTree(Files.readString(file)).path("instances").isEmpty()).isTrue();
 
         Files.writeString(again.home.resolve("instance.json"), "{\"name\": \"x\"}");
         final Node c = node("c", Peers.ANSWER_WITHIN);
         again.peers.role("comando specialist");
-        final JsonNode written = json.readTree(Files.readString(again.home.resolve("instance.json")));
+        final JsonNode written = Json.readTree(Files.readString(again.home.resolve("instance.json")));
         assertThat(written.path("name").asString()).isEqualTo("x");
         assertThat(written.path("role").asString()).isEqualTo("comando specialist");
         c.window.recorded.await(Intent.InstancesChanged.class,
@@ -451,14 +450,14 @@ class PeersTest {
         final Node b = node("b", Peers.ANSWER_WITHIN);
         Files.writeString(b.agents, "{\"grants\": {\"foreman\": [\"destructive\"]}}");
         b.peers.deny("main", true);
-        final JsonNode written = json.readTree(Files.readString(b.agents));
+        final JsonNode written = Json.readTree(Files.readString(b.agents));
         assertThat(written.path("grants").path("foreman").get(0).asString()).isEqualTo("destructive");
         assertThat(written.path("peers").path("deny").get(0).asString()).isEqualTo("main");
         b.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().denied().contains("main"), WAIT);
         assertThat(call(main, "instance_ask", "{\"instance\":\"b\",\"text\":\"what is X?\",\"wait_seconds\":10}").text()).startsWith("refused:");
 
         b.peers.deny("main", false);
-        assertThat(json.readTree(Files.readString(b.agents)).path("peers").path("deny").isEmpty()).isTrue();
+        assertThat(Json.readTree(Files.readString(b.agents)).path("peers").path("deny").isEmpty()).isTrue();
         b.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().denied().isEmpty(), WAIT);
     }
 
@@ -467,7 +466,7 @@ class PeersTest {
     }
 
     private McpTools.Outcome call(final Node n, final String session, final String tool, final String args) throws Exception {
-        return n.tools.call(session, tool, json.readTree(args));
+        return n.tools.call(session, tool, Json.readTree(args));
     }
 
     private CompletableFuture<McpTools.Outcome> async(final Node n, final String tool, final String args) {

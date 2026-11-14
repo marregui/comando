@@ -12,18 +12,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntSupplier;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
+import dev.marregui.comando.core.json.bind.Binder;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.port.Clock;
@@ -42,17 +38,14 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(IntentLog.class.getName());
 
-    /** Intent fields typed by an interface carry their record's class name. */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@type")
-    private interface Typed {
-    }
-
-    static final ObjectMapper JSON = JsonFile.filed()
-            .changeDefaultVisibility(v -> v.withVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE)
-                    .withVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY))
-            .addMixIn(ViewSpec.class, Typed.class)
-            .addMixIn(ApprovalDecision.class, Typed.class)
-            .polymorphicTypeValidator(BasicPolymorphicTypeValidator.builder().allowIfSubType("dev.marregui.comando.core.").build())
+    /**
+     * Records by their fields, so an accessor that hides a value from the screen does not hide it from the log;
+     * values typed by an interface carry their record's class name, read back only from comando's own core types.
+     */
+    static final Binder BINDER = Binder.builder()
+            .fields()
+            .typed(ViewSpec.class, ApprovalDecision.class)
+            .allowPrefix("dev.marregui.comando.core.")
             .build();
 
     private final BufferedWriter out;
@@ -148,13 +141,13 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
             OwnerOnly.folder(dir);
             out = Files.newBufferedWriter(dir.resolve("intents-" + Instant.now().toEpochMilli() + ".jsonl"), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE_NEW);
-            final ObjectNode n = JSON.createObjectNode();
+            final ObjectNode n = Json.object();
             n.put("at", Instant.now().toString());
             n.put("type", STATE);
             n.put("version", VERSION);
             n.put("checkpointThreshold", thresholdWritten);
-            n.set("state", redact(JSON.valueToTree(initial)));
-            out.write(JSON.writeValueAsString(n));
+            n.set("state", redact(BINDER.toTree(initial)));
+            out.write(Json.write(n));
             out.write('\n');
         } catch (final IOException e) {
             throw new UncheckedIOException("cannot open the intent log in " + dir, e);
@@ -164,11 +157,11 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     static final String STATE = "@state";
 
     static String line(final Intent intent) throws IOException {
-        final ObjectNode n = JSON.createObjectNode();
+        final ObjectNode n = Json.object();
         n.put("at", Instant.now().toString());
         n.put("type", intent.getClass().getSimpleName());
-        n.set("intent", redact(JSON.valueToTree(intent)));
-        return JSON.writeValueAsString(n);
+        n.set("intent", redact(BINDER.toTree(intent)));
+        return Json.write(n);
     }
 
     /**
@@ -198,8 +191,8 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     /** {@code text} blanked as {@link #redact} does when it is a JSON object or array; else unchanged. */
     private static String redactText(final String text) {
         try {
-            final JsonNode inner = JSON.readTree(text);
-            return inner.isContainer() ? JSON.writeValueAsString(redact(inner)) : text;
+            final JsonNode inner = Json.readFirst(text);
+            return inner.isContainer() ? Json.write(redact(inner)) : text;
         } catch (final RuntimeException e) {
             return text; // not JSON: free text keeps its words
         }
@@ -219,11 +212,11 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
         applied = now;
         try {
             if (now != thresholdWritten) {
-                final ObjectNode t = JSON.createObjectNode();
+                final ObjectNode t = Json.object();
                 t.put("at", Instant.now().toString());
                 t.put("type", THRESHOLD);
                 t.put("percent", now);
-                out.write(JSON.writeValueAsString(t));
+                out.write(Json.write(t));
                 out.write('\n');
                 thresholdWritten = now;
             }
@@ -255,8 +248,8 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
                 }
                 inForce = n.path("checkpointThreshold").asInt(0);
                 try {
-                    initial = JSON.treeToValue(n.path("state"), AppState.class);
-                } catch (final JacksonException e) {
+                    initial = BINDER.fromTree(n.path("state"), AppState.class);
+                } catch (final JsonException e) {
                     throw new IOException(e.getMessage(), e);
                 }
             } else if (type.equals(THRESHOLD)) {
@@ -282,17 +275,17 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
             throw new IOException("unknown intent type " + type, e);
         }
         try {
-            return (Intent) JSON.treeToValue(n.path("intent"), c);
-        } catch (final JacksonException e) {
+            return (Intent) BINDER.fromTree(n.path("intent"), c);
+        } catch (final JsonException e) {
             throw new IOException(e.getMessage(), e);
         }
     }
 
-    /** {@code line} parsed; Jackson's unchecked parse error as the {@code IOException} a reader of a log handles. */
+    /** {@code line} parsed; its unchecked parse error as the {@code IOException} a reader of a log handles. */
     private static JsonNode tree(final String line) throws IOException {
         try {
-            return JSON.readTree(line);
-        } catch (final JacksonException e) {
+            return Json.readFirst(line);
+        } catch (final JsonException e) {
             throw new IOException(e.getMessage(), e);
         }
     }

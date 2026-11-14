@@ -21,12 +21,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 
 import org.jetbrains.annotations.TestOnly;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.JsonNodeFactory;
-import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
@@ -83,7 +82,7 @@ final class MetricsSink implements AutoCloseable {
      */
     private static final Duration SHADOW_WITHIN = Duration.ofMillis(500);
     /** Put on the queue by {@link #close} to wake the errand; carries no event. */
-    private static final ObjectNode WAKE = JsonNodeFactory.instance.objectNode();
+    private static final ObjectNode WAKE = Json.object();
 
     private final AtomicLong dropped = new AtomicLong();
     private final Errands errands = new Errands("metrics-sink");
@@ -91,7 +90,6 @@ final class MetricsSink implements AutoCloseable {
     /** Written by {@link #close} before it wakes the errand; read by the errand and by {@link #offer}. */
     private final AtomicBoolean halt = new AtomicBoolean();
     private final HttpClient http;
-    private final ObjectMapper json;
     private final MetricsLines lines;
     private final LongSupplier nanos;
     private final IntentSink notices;
@@ -130,11 +128,10 @@ final class MetricsSink implements AutoCloseable {
     MetricsSink(
             final QuestDbEndpoint qdb,
             final MetricsLines lines,
-            final ObjectMapper json,
             final LongSupplier nanos,
             final IntentSink notices
     ) {
-        this(qdb, lines, json, nanos, notices, null);
+        this(qdb, lines, nanos, notices, null);
     }
 
     /**
@@ -145,14 +142,12 @@ final class MetricsSink implements AutoCloseable {
     MetricsSink(
             final QuestDbEndpoint qdb,
             final MetricsLines lines,
-            final ObjectMapper json,
             final LongSupplier nanos,
             final IntentSink notices,
             final String shadow
     ) {
         this.qdb = qdb;
         this.lines = lines;
-        this.json = json;
         this.nanos = nanos;
         this.notices = notices;
         this.shadow = shadowOf(shadow);
@@ -220,7 +215,7 @@ final class MetricsSink implements AutoCloseable {
             throw new IOException("QuestDB refused a query [status=" + answer.statusCode() + ", answer="
                     + shortened(answer.body()) + ']');
         }
-        return json.readTree(answer.body());
+        return Json.readTree(answer.body());
     }
 
     /** Lines the server took. */
@@ -541,7 +536,7 @@ final class MetricsSink implements AutoCloseable {
     /** Whether a refused write's answer says a line names a table the server does not have. */
     private boolean missingTable(final String answer) {
         try {
-            return json.readTree(answer).path("message").asString("").contains(MISSING_TABLE);
+            return Json.readTree(answer).path("message").asString("").contains(MISSING_TABLE);
         } catch (final RuntimeException _) {
             return false;
         }

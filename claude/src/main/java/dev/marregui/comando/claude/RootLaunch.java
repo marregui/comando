@@ -6,11 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.KitRoot;
 
 /**
@@ -46,7 +45,6 @@ public final class RootLaunch {
     static final String DATA_ROOT = "COMANDO_HOME";
     static final String BRAIN = KitRoot.BRAIN_ENV;
     static final String COMANDO = "comando";
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     /** The environment comando was started with, and no settings: tests, and tools started without a root. */
     public static final RootLaunch INHERIT = new RootLaunch(null, Optional.empty(), false, Optional.empty(), "", false, null);
@@ -125,14 +123,14 @@ public final class RootLaunch {
 
     /** The settings given, as JSON, with the kit's memory; a value that is no JSON object (a file) is replaced. */
     private String merged(final String given) {
-        ObjectNode settings = JSON.createObjectNode();
+        ObjectNode settings = Json.object();
         if (given.strip().startsWith("{")) {
             try {
-                final JsonNode read = JSON.readTree(given);
+                final JsonNode read = Json.readTree(given);
                 if (read instanceof ObjectNode o) {
                     settings = o;
                 }
-            } catch (final JacksonException e) {
+            } catch (final JsonException e) {
                 // not JSON: the kit's settings alone
             }
         }

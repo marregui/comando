@@ -1,0 +1,20 @@
+{
+  "version" : 1,
+  "panels" : [ {
+    "id" : "p-1",
+    "title" : "Claude",
+    "connection" : "QuestDB",
+    "session" : "Claude",
+    "file" : "Claude.md",
+    "content" : "inline text",
+    "closed" : true,
+    "side" : true
+  }, {
+    "id" : "p-2",
+    "title" : "notes",
+    "file" : "notes.md",
+    "side" : false
+  }, {
+    "id" : "p-3"
+  } ]
+}

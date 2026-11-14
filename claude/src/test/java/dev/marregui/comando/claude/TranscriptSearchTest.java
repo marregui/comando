@@ -19,8 +19,8 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
 
+import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.model.SearchHit;
 import dev.marregui.comando.core.model.SearchQuery;
 
@@ -42,7 +42,6 @@ class TranscriptSearchTest {
 
     @TempDir
     Path projects;
-    private final ObjectMapper json = new ObjectMapper();
     private final List<SearchHit> hits = new ArrayList<>();
     private Path project;
 
@@ -67,12 +66,11 @@ class TranscriptSearchTest {
     /// or one that does not read, names the writer alone.
     @Test
     void aHitsHeadingSaysWhoWroteItAndWhen() throws Exception {
-        final ObjectMapper mapper = new ObjectMapper();
-        assertThat(TranscriptSearch.heading(mapper.readTree(
+        assertThat(TranscriptSearch.heading(Json.readTree(
                 "{\"type\":\"assistant\",\"timestamp\":\"2026-11-07T22:15:30.123Z\"}"), ZoneOffset.UTC))
                 .isEqualTo("Claude · 7 Nov 2026 22:15");
-        assertThat(TranscriptSearch.heading(mapper.readTree("{\"type\":\"user\"}"), ZoneOffset.UTC)).isEqualTo("You");
-        assertThat(TranscriptSearch.heading(mapper.readTree("{\"type\":\"user\",\"timestamp\":\"soon\"}"),
+        assertThat(TranscriptSearch.heading(Json.readTree("{\"type\":\"user\"}"), ZoneOffset.UTC)).isEqualTo("You");
+        assertThat(TranscriptSearch.heading(Json.readTree("{\"type\":\"user\",\"timestamp\":\"soon\"}"),
                 ZoneOffset.UTC)).isEqualTo("You");
         store(ID, line("user", "zebra"));
         search("zebra");
@@ -358,7 +356,7 @@ class TranscriptSearchTest {
 
     /** A line of {@code type} with {@code text} as its message, as Claude Code writes it. */
     private String line(final String type, final String text) {
-        final String encoded = json.writeValueAsString(text);
+        final String encoded = Json.write(Json.text(text));
         return "assistant".equals(type)
                 ? "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":" + encoded + "}]}}\n"
                 : "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":" + encoded + "}}\n";

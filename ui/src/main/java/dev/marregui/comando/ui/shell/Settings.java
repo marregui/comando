@@ -10,14 +10,11 @@ import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import java.util.regex.Pattern;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.SerializationFeature;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
@@ -32,7 +29,6 @@ import dev.marregui.comando.core.model.AtomicFiles;
 final class Settings {
 
     private static final System.Logger LOG = System.getLogger(Settings.class.getName());
-    private static final ObjectMapper JSON = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
     private static final Pattern INT = Pattern.compile("-?\\d{1,9}");
     /** The schema's version this comando reads and writes, and the key that names it. */
     static final int VERSION = 1;
@@ -68,7 +64,7 @@ final class Settings {
     static Settings open(final Path file, final Preferences legacy) {
         if (Files.exists(file)) {
             try {
-                final JsonNode root = Mapped.read(file, m -> JSON.readTree(m.stream()));
+                final JsonNode root = Mapped.read(file, m -> Json.readTree(m.stream()));
                 final int version = root != null && root.isObject() ? root.path(VERSION_KEY).asInt(1) : 1;
                 if (version > VERSION) {
                     final Settings later = new Settings(file, new TreeMap<>());
@@ -80,7 +76,7 @@ final class Settings {
                     return later;
                 }
                 return new Settings(file, read(root));
-            } catch (final IOException | JacksonException e) {
+            } catch (final IOException | JsonException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read the settings, kept aside [file=" + file + ']', e);
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".unreadable"), StandardCopyOption.REPLACE_EXISTING);
@@ -180,7 +176,7 @@ final class Settings {
             dirty = false;
             return;
         }
-        final ObjectNode root = JSON.createObjectNode();
+        final ObjectNode root = Json.object();
         root.put(VERSION_KEY, VERSION);
         values.forEach((k, v) -> {
             switch (v) {
@@ -191,9 +187,9 @@ final class Settings {
         });
         try {
             Files.createDirectories(file.getParent());
-            AtomicFiles.write(file, JSON.writeValueAsBytes(root));
+            AtomicFiles.write(file, Json.prettyBytes(root));
             dirty = false;
-        } catch (final IOException | JacksonException e) {
+        } catch (final IOException | JsonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write the settings [file=" + file + ']', e);
         }
     }

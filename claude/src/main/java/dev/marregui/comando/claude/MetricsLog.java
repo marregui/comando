@@ -12,11 +12,10 @@ import java.util.Optional;
 import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
-
+import dev.marregui.comando.core.json.ArrayNode;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.loop.Queues;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.port.IntentSink;
@@ -36,7 +35,7 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
 
     /** Keeps nothing: tests, comando run with its QuestDB left out, and a window without a data root. */
     public static final MetricsLog NONE =
-            new MetricsLog(new ObjectMapper(), System::currentTimeMillis, null, null, null);
+            new MetricsLog(System::currentTimeMillis, null, null, null);
 
     /**
      * How long the query of {@link #lastContext} waits for QuestDB, its connect included: the contract's bound (record
@@ -47,7 +46,6 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
     /** A conversation id as Claude Code makes them; nothing else is put into a query. */
     private static final Pattern CONVERSATION = Pattern.compile("[0-9a-f-]{8,64}");
 
-    private final ObjectMapper json;
     private final LongSupplier clock;
     private final QuestDbEndpoint qdb;
     private final MetricsSink sink;
@@ -65,40 +63,36 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
      * only, so that no test of the sink or the log inherits it from the shell.
      */
     public MetricsLog(final String instance, final QuestDbEndpoint qdb, final IntentSink notices) {
-        this(new ObjectMapper(), System::currentTimeMillis, instance, qdb, notices,
-                System.getenv(MetricsSink.SHADOW_ENV));
+        this(System::currentTimeMillis, instance, qdb, notices, System.getenv(MetricsSink.SHADOW_ENV));
     }
 
     /** As the public constructor, stamped by {@code clock}, with no shadow; with no {@code qdb}, keeps nothing. */
     MetricsLog(
-            final ObjectMapper json,
             final LongSupplier clock,
             final String instance,
             final QuestDbEndpoint qdb,
             final IntentSink notices
     ) {
-        this(json, clock, instance, qdb, notices, null);
+        this(clock, instance, qdb, notices, null);
     }
 
     /** As above, each batch also sent to {@code shadow}, a base URL, when it is one. */
     MetricsLog(
-            final ObjectMapper json,
             final LongSupplier clock,
             final String instance,
             final QuestDbEndpoint qdb,
             final IntentSink notices,
             final String shadow
     ) {
-        this.json = json;
         this.clock = clock;
         this.qdb = qdb;
-        this.sink = qdb == null ? null : new MetricsSink(qdb, new MetricsLines(json, instance), json, System::nanoTime,
+        this.sink = qdb == null ? null : new MetricsSink(qdb, new MetricsLines(instance), System::nanoTime,
                 notices, shadow);
     }
 
     /** A new event of {@code type}, stamped now; {@link #write} keeps it. */
     ObjectNode event(final String type) {
-        final ObjectNode e = json.createObjectNode();
+        final ObjectNode e = Json.object();
         e.put("ts", Instant.ofEpochMilli(clock.getAsLong()).toString());
         e.put("event", type);
         return e;

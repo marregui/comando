@@ -3,7 +3,7 @@ package dev.marregui.comando.mcp;
 import java.util.Iterator;
 import java.util.Map;
 
-import tools.jackson.databind.JsonNode;
+import dev.marregui.comando.core.json.JsonNode;
 
 /** One line describing a permission request, for cards, lists and notifications. */
 final class Summaries {

@@ -5,7 +5,8 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.ObjectMapper;
+
+import dev.marregui.comando.core.json.Json;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,33 +15,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a skill links its skill file when it exists under the root
 class ToolTextTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     /// A Bash call is titled by its description, its first line when it has several; blank, by its command. Other
     /// tools' descriptions name no title.
     @Test
     void aBashCallIsTitledByItsDescription() {
         final String described = "{\"command\":\"ls\",\"description\":\"List\"}";
-        assertThat(ToolText.title("Bash", JSON.readTree(described))).isEqualTo("List");
-        assertThat(ToolText.title("Bash", JSON.readTree("{\"command\":\"ls\",\"description\":\" a\\nb\"}")))
+        assertThat(ToolText.title("Bash", Json.readTree(described))).isEqualTo("List");
+        assertThat(ToolText.title("Bash", Json.readTree("{\"command\":\"ls\",\"description\":\" a\\nb\"}")))
                 .isEqualTo("a …");
-        assertThat(ToolText.title("Bash", JSON.readTree("{\"command\":\"ls\",\"description\":\" \"}"))).isEqualTo("ls");
-        assertThat(ToolText.title("Bash", JSON.readTree("{\"command\":\"ls\"}"))).isEqualTo("ls");
-        assertThat(ToolText.title("Read", JSON.readTree("{\"file_path\":\"/a\",\"description\":\"x\"}")))
+        assertThat(ToolText.title("Bash", Json.readTree("{\"command\":\"ls\",\"description\":\" \"}"))).isEqualTo("ls");
+        assertThat(ToolText.title("Bash", Json.readTree("{\"command\":\"ls\"}"))).isEqualTo("ls");
+        assertThat(ToolText.title("Read", Json.readTree("{\"file_path\":\"/a\",\"description\":\"x\"}")))
                 .isEqualTo("/a");
-        assertThat(ToolText.summary("Bash", JSON.readTree(described))).isEqualTo("ls");
+        assertThat(ToolText.summary("Bash", Json.readTree(described))).isEqualTo("ls");
     }
 
     /// Read, Write and NotebookEdit link their path, trimmed; WebFetch links an `https` address but not a `javascript:`
     /// one; Bash links nothing.
     @Test
     void aCallsSummaryLinksTheFileOrAddressItWorksOn() throws Exception {
-        assertThat(ToolText.target("Read", JSON.readTree("{\"file_path\":\"/w/a.md\"}"))).isEqualTo("comando-file:/w/a.md");
-        assertThat(ToolText.target("Write", JSON.readTree("{\"file_path\":\" docs/b.md \"}"))).isEqualTo("comando-file:docs/b.md");
-        assertThat(ToolText.target("NotebookEdit", JSON.readTree("{\"notebook_path\":\"/w/n.ipynb\"}"))).isEqualTo("comando-file:/w/n.ipynb");
-        assertThat(ToolText.target("WebFetch", JSON.readTree("{\"url\":\"https://example.org/x\"}"))).isEqualTo("https://example.org/x");
-        assertThat(ToolText.target("WebFetch", JSON.readTree("{\"url\":\"javascript:alert(1)\"}"))).as("only web addresses").isEmpty();
-        assertThat(ToolText.target("Bash", JSON.readTree("{\"command\":\"ls\"}"))).as("a command's links are in its text").isEmpty();
+        assertThat(ToolText.target("Read", Json.readTree("{\"file_path\":\"/w/a.md\"}"))).isEqualTo("comando-file:/w/a.md");
+        assertThat(ToolText.target("Write", Json.readTree("{\"file_path\":\" docs/b.md \"}"))).isEqualTo("comando-file:docs/b.md");
+        assertThat(ToolText.target("NotebookEdit", Json.readTree("{\"notebook_path\":\"/w/n.ipynb\"}"))).isEqualTo("comando-file:/w/n.ipynb");
+        assertThat(ToolText.target("WebFetch", Json.readTree("{\"url\":\"https://example.org/x\"}"))).isEqualTo("https://example.org/x");
+        assertThat(ToolText.target("WebFetch", Json.readTree("{\"url\":\"javascript:alert(1)\"}"))).as("only web addresses").isEmpty();
+        assertThat(ToolText.target("Bash", Json.readTree("{\"command\":\"ls\"}"))).as("a command's links are in its text").isEmpty();
     }
 
     /// [ToolText#skillFile] finds `<name>/SKILL.md`, also with a leading slash, and returns null for a missing skill, a

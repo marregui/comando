@@ -1,0 +1,22 @@
+{
+  "version" : 1,
+  "connections" : [ {
+    "name" : "QuestDB",
+    "host" : "localhost",
+    "port" : 8812,
+    "database" : "qdb",
+    "user" : "admin",
+    "password" : "quest",
+    "prod" : false,
+    "sslMode" : "prefer"
+  }, {
+    "name" : "prod \"eu\"",
+    "host" : "db.example.com",
+    "port" : 5432,
+    "database" : "postgres",
+    "user" : "ops",
+    "password" : "pä$$\n\t\u0001",
+    "prod" : true,
+    "sslMode" : "verify-full"
+  } ]
+}

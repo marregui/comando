@@ -1,9 +1,9 @@
 package dev.marregui.comando.mcp;
 
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,10 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - Missing or nonnumeric series data explains the invalid field.
 class ViewSpecsPlotTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     private static JsonNode json(final String text) throws Exception {
-        return JSON.readTree(text);
+        return Json.readTree(text);
     }
 
     /// [ViewSpecs#plot] reads a `series` array with each series' name and y values.

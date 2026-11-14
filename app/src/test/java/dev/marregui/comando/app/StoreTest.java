@@ -17,10 +17,11 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.ObjectNode;
 
 import dev.marregui.comando.claude.KitJson;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.KitRoot;
@@ -125,7 +126,7 @@ class StoreTest {
             store.load();
             store.savePanels(List.of(main, side, preview), List.of(shut));
         }
-        final JsonNode written = JsonFile.JSON.readTree(home.resolve("panels.json").toFile());
+        final JsonNode written = Json.readTree(Files.readString(home.resolve("panels.json")));
         assertThat(written.path("version").asInt()).isEqualTo(1);
         final List<String> ids = new ArrayList<>();
         final List<Boolean> sides = new ArrayList<>();
@@ -303,7 +304,7 @@ class StoreTest {
         try (final Store store = new Store(home)) {
             store.saveSessions(List.of(SessionSpec.fresh("work", "/tmp")));
         }
-        final JsonNode written = JsonFile.JSON.readTree(home.resolve("sessions.json").toFile());
+        final JsonNode written = Json.readTree(Files.readString(home.resolve("sessions.json")));
         assertThat(written.path("version").asInt()).isEqualTo(1);
         assertThat(written.path("sessions").get(0).path("name").asString()).isEqualTo("work");
         assertThat(written.path("sessions").get(0).has("permissionMode")).as("no permission mode is kept (record 7)").isFalse();
@@ -549,17 +550,19 @@ class StoreTest {
             store.savePanels(List.of(new PanelState(id, "edge", "lab", "edge")), List.of());
             store.changed(id, "SELECT 42;");
         }
-        assertThat(JsonFile.JSON.readTree(home.resolve("panels.json").toFile()).path("panels").get(0).path("session").asString()).isEqualTo("edge");
-        final ObjectNode later = (ObjectNode) JsonFile.JSON.readTree(home.resolve("sessions.json").toFile());
+        assertThat(Json.readTree(Files.readString(home.resolve("panels.json"))).path("panels").get(0).path("session")
+                .asString()).isEqualTo("edge");
+        final ObjectNode later = (ObjectNode) Json.readTree(Files.readString(home.resolve("sessions.json")));
         later.put("version", 2);
-        Files.writeString(home.resolve("sessions.json"), JsonFile.JSON.writeValueAsString(later));
+        Files.writeString(home.resolve("sessions.json"), Json.pretty(later));
 
         final List<String> told = new ArrayList<>();
         try (final Store store = new Store(home)) {
             store.onNotice(told::add);
             store.load();
         }
-        assertThat(JsonFile.JSON.readTree(home.resolve("panels.json").toFile()).path("panels").get(0).path("session").asString())
+        assertThat(Json.readTree(Files.readString(home.resolve("panels.json"))).path("panels").get(0).path("session")
+                .asString())
                 .as("the binding to a session of the later file survives the downgrade").isEqualTo("edge");
         assertThat(told).anyMatch(t -> t.startsWith("panels.json is kept as it is"));
     }

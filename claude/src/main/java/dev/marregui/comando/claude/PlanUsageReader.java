@@ -10,10 +10,9 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.view.Clip;
@@ -38,11 +37,15 @@ final class PlanUsageReader {
     }
 
     /** Runs the read; blocks up to {@link #TIMEOUT}. Call it off the EDT and the reducer. */
-    static PlanUsage read(final String executable, final RootLaunch launch, final Path workDir, final ObjectMapper json) {
-        return read(executable, launch, workDir, json, TIMEOUT);
+    static PlanUsage read(final String executable, final RootLaunch launch, final Path workDir) {
+        return read(executable, launch, workDir, TIMEOUT);
     }
 
-    static PlanUsage read(final String executable, final RootLaunch launch, final Path workDir, final ObjectMapper json, final Duration timeout) {
+    static PlanUsage read(
+            final String executable,
+            final RootLaunch launch,
+            final Path workDir,
+            final Duration timeout) {
         try {
             final Processes.Result r = Processes.run(launch.argv(List.of(executable, "--safe-mode", "-p", "/usage", "--no-session-persistence",
                     "--output-format", "json")), launch::environment, workDir != null && Files.isDirectory(workDir) ? workDir : null, null,
@@ -50,7 +53,7 @@ final class PlanUsageReader {
             if (r.timedOut()) {
                 return PlanUsage.failed("'claude -p /usage' did not answer within " + timeout.toMillis() + " ms", System.currentTimeMillis());
             }
-            return parse(r.out(), System.currentTimeMillis(), json);
+            return parse(r.out(), System.currentTimeMillis());
         } catch (final IOException e) {
             return PlanUsage.failed("cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
         } catch (final InterruptedException e) {
@@ -60,11 +63,11 @@ final class PlanUsageReader {
     }
 
     /** The windows of the command's JSON result, or why there are none. */
-    static PlanUsage parse(final String output, final long readAtMillis, final ObjectMapper json) {
+    static PlanUsage parse(final String output, final long readAtMillis) {
         JsonNode root;
         try {
-            root = json.readTree(output == null ? "" : output.strip());
-        } catch (final JacksonException e) {
+            root = Json.readTree(output == null ? "" : output.strip());
+        } catch (final JsonException e) {
             return PlanUsage.failed("unreadable answer from 'claude -p /usage'", readAtMillis);
         }
         if (root == null || !root.isObject()) {

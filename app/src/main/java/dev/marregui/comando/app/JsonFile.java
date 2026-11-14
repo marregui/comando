@@ -8,18 +8,13 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.Arrays;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.MapperFeature;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.SerializationFeature;
-import tools.jackson.databind.cfg.EnumFeature;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ObjectNode;
-
 import dev.marregui.comando.core.files.Mapped;
+import dev.marregui.comando.core.json.Json;
+import dev.marregui.comando.core.json.JsonException;
+import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.json.ObjectNode;
+import dev.marregui.comando.core.json.bind.Binder;
+import dev.marregui.comando.core.json.bind.TypeRef;
 import dev.marregui.comando.core.model.AtomicFiles;
 
 /**
@@ -35,27 +30,19 @@ import dev.marregui.comando.core.model.AtomicFiles;
 final class JsonFile<T> {
 
     private static final System.Logger LOG = System.getLogger(JsonFile.class.getName());
-    static final ObjectMapper JSON = filed().enable(SerializationFeature.INDENT_OUTPUT).build();
+    /**
+     * The mapping of every file comando keeps, the format its files have always had: records by their accessors, in
+     * declaration order, a null primitive read as its default, enums by name, unknown properties ignored; a stored
+     * panel leaves its null components out.
+     */
+    static final Binder BINDER = Binder.builder().omitNulls(Store.StoredPanel.class).build();
     /** The field every store file names its schema's version in. */
     static final String VERSION = "version";
-
-    /**
-     * A mapper for files comando wrote with Jackson 2, keeping its defaults where Jackson 3 changed them: properties in
-     * declaration order, a null primitive read as its default, enums by name, anything after the value ignored; and
-     * unknown properties ignored.
-     */
-    static JsonMapper.Builder filed() {
-        return JsonMapper.builder()
-                .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
-                .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
-                        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .disable(EnumFeature.READ_ENUMS_USING_TO_STRING, EnumFeature.WRITE_ENUMS_USING_TO_STRING);
-    }
 
     private final Path path;
     private final String key;
     private final int version;
-    private final TypeReference<T> type;
+    private final TypeRef<T> type;
     /** Why the file is neither read nor written: a later version; empty while it is this comando's. */
     private volatile String refused = "";
     /**
@@ -66,7 +53,7 @@ final class JsonFile<T> {
     private volatile Written lastWritten;
 
     /** The file at {@code path}, of schema {@code version}, its list under {@code key}. */
-    JsonFile(final Path path, final String key, final int version, final TypeReference<T> type) {
+    JsonFile(final Path path, final String key, final int version, final TypeRef<T> type) {
         this.path = path;
         this.key = key;
         this.version = version;
@@ -105,8 +92,8 @@ final class JsonFile<T> {
             return null;
         }
         try {
-            return content(Mapped.read(path, m -> JSON.readTree(m.stream())));
-        } catch (final JacksonException e) {
+            return content(Mapped.read(path, m -> Json.readFirst(m.stream())));
+        } catch (final JsonException e) {
             throw new IOException(e.getMessage(), e);
         }
     }
@@ -120,12 +107,12 @@ final class JsonFile<T> {
             return null;
         }
         try {
-            return content(Mapped.read(path, m -> JSON.readTree(m.stream())));
+            return content(Mapped.read(path, m -> Json.readFirst(m.stream())));
         } catch (final LaterVersion e) {
             refused = e.getMessage();
             LOG.log(System.Logger.Level.WARNING, "a store file of a later version, kept and not written [file=" + path + ", " + e.getMessage() + ']');
             return null;
-        } catch (final JacksonException | IOException e) {
+        } catch (final JsonException | IOException e) {
             final Path aside = path.resolveSibling(path.getFileName() + ".corrupt-" + Instant.now().toEpochMilli());
             LOG.log(System.Logger.Level.ERROR, "unreadable store file kept aside [file=" + path + ", aside=" + aside + ']', e);
             try {
@@ -143,7 +130,7 @@ final class JsonFile<T> {
             throw new IOException("empty");
         }
         if (root.isArray()) {
-            return JSON.treeToValue(root, JSON.constructType(type));
+            return bind(root);
         }
         if (!root.isObject()) {
             throw new IOException("neither a JSON object nor a list");
@@ -158,7 +145,18 @@ final class JsonFile<T> {
                     + ". It is kept as it is and nothing is saved to it until a comando that reads it runs");
         }
         final JsonNode list = root.path(key);
-        return list.isMissingNode() || list.isNull() ? null : JSON.treeToValue(list, JSON.constructType(type));
+        return list.isMissingNode() || list.isNull() ? null : bind(list);
+    }
+
+    /** {@code node} as the file's list type. */
+    @SuppressWarnings("unchecked") // the binder builds a value of the type the reference captured, which is T's
+    private T bind(final JsonNode node) {
+        return (T) BINDER.fromTree(node, type.type());
+    }
+
+    /** The UTF-8 bytes of {@code node} as comando writes its files: indented two spaces, no line feed at the end. */
+    static byte[] pretty(final JsonNode node) {
+        return Json.prettyBytes(node);
     }
 
     /**
@@ -172,10 +170,10 @@ final class JsonFile<T> {
         if (!Files.isDirectory(path.getParent())) {
             Files.createDirectories(path.getParent()); // on a folder that exists it throws and catches inside the JDK
         }
-        final ObjectNode root = JSON.createObjectNode();
+        final ObjectNode root = Json.object();
         root.put(VERSION, version);
-        root.set(key, JSON.valueToTree(value));
-        final byte[] bytes = JSON.writeValueAsBytes(root);
+        root.set(key, BINDER.toTree(value));
+        final byte[] bytes = pretty(root);
         final Written last = lastWritten;
         if (last != null && Arrays.equals(last.bytes(), bytes) && last.stamp().equals(stamp())) {
             return; // the file holds these bytes already: rewriting it the same churns the disk and its watchers
