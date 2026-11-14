@@ -30,7 +30,6 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -595,7 +594,6 @@ final class LayoutKeeper {
         parts.sidebar().selectTab(windowLayout.sidebarTab());
         parts.sidebar().manualOrder(windowLayout.manualOrder());
         final NamedTheme theme = windowLayout.theme();
-        Icons.choose(windowLayout.iconSet());
         paintIn(theme);
         parts.workspace().linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());

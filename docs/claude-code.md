@@ -185,7 +185,10 @@ the card and the row's copy.
 
 ## 2. The checkpoint
 
-The checkpoint button (the session bar, or the session's menu) sends the session's checkpoint command. Once that turn
+The session bar and the session's menu split the checkpoint into three actions the user starts one at a time
+([record 156](adr/0156-one-icon-set-and-a-split-checkpoint.md)): **Reflect** sends the session's checkpoint command
+alone, **Compact the conversation** sends `/compact`, **Clear the conversation** sends `/clear`. The automatic checkpoint
+and **Settle** keep the pair: comando sends the checkpoint command and, once that turn
 has finished (nothing runs or is queued, no background work it started is still out), comando sends `/compact` from the
 session's panel, as the palette's "Compact the conversation" does: the same conversation goes on, the Session tab keeps
 it and shows the compaction, and the panel's text stays
@@ -202,7 +205,7 @@ it, the session falls due (the session bar's context and checkpoint turn purple,
 "Continue the work the checkpoint paused, from the summary above: its next step first." (`Reducer.CONTINUE_PROMPT`), so
 the work the checkpoint paused goes on. That carry-on turn is an ordinary one: the session is not locked and the turn
 notifies at its end as any turn does, while the compaction's own turn, followed at once by it, notifies nothing. Only
-the automatic checkpoint carries on; after the Checkpoint button, a typed checkpoint or **Settle** the session waits for
+the automatic checkpoint carries on; after Reflect, a typed checkpoint or **Settle** the session waits for
 the next prompt. The automatic checkpoint runs once per crossing: any checkpoint command sent leaves the session not due
 and disarmed, and a model call that reads below the threshold, a fresh start or `/clear` arms it again. Only a context size a
 model call read arms it: the count Claude Code reports after a compaction (`post_tokens`, `SessionTurnEnded.estimated`)
@@ -243,7 +246,7 @@ An automatic checkpoint asks the user nothing ([record 131](adr/0131-an-automati
 command that knows it writes each decision it would have asked into its task's entry in the scratchpad's `INDEX.md`, as
 a `**Needs you:**` line, instead of raising a card, and the session never waits on the user. The Logbook tab lists those
 tasks ([Workbench §1.4](workbench.md#14-the-sidebar)); its **Ask me its decisions in** prompts a session, which asks them as
-ordinary question cards ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). The Checkpoint button and a
+ordinary question cards ([record 150](adr/0150-a-card-only-when-a-session-cannot-go-on.md)). Reflect and a
 typed command carry no argument and ask as before; answering their cards is what lets the checkpoint finish.
 
 ## 3. MCP tools

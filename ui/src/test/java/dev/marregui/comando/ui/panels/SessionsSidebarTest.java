@@ -6,6 +6,8 @@ import java.awt.Container;
 import java.awt.HeadlessException;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -37,6 +39,7 @@ import javax.swing.ListCellRenderer;
 import javax.swing.LookAndFeel;
 import javax.swing.RepaintManager;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.UIManager;
 import javax.swing.plaf.basic.BasicHTML;
 
@@ -81,6 +84,9 @@ import static org.awaitility.Awaitility.await;
 /// - the column is seven icon tabs in one row and hides to a rail whose buttons show it again
 /// - a folder tab shows one row per folder and opens a file with a double click
 /// - a session row's state icon connects, its name opens, its ⓘ shows the card, its menu holds the session's commands
+/// - several sessions are selected at once: a render keeps them, a right click inside them opens the group's menu, ⇧
+///   and ⌘ presses pick rows and start no drag, ⌘C copies each one's details
+/// - every item of the session, connection and tab menus has an icon
 /// - tab menus add; row menus edit, clone and remove, with no bar of buttons
 /// - sessions list running first, then by name, until a drag orders them; a started row stays put under the pointer
 /// - a row is one line: the state icon, the name dimmed while its own panel is closed, approvals, context and CLI
@@ -258,9 +264,9 @@ class SessionsSidebarTest {
         assertThat(opened).containsExactly(Path.of("/s/2026-10-14/READ-01-X.md"));
     }
 
-    /// A click on the state icon sends `StartSession` and its tooltip says so; the name has no tooltip; a double click
-    /// on the icon binds nothing, on the name it sends `OpenSession` for the focused panel; the model and effort items
-    /// check the current value and send the change.
+    /// A click on the state icon sends `StartSession` and its tooltip says so, a ⇧ or ⌘ click on it sends nothing;
+    /// the name has no tooltip; a double click on the icon binds nothing, on the name it sends `OpenSession` for the
+    /// focused panel; the model and effort items check the current value and send the change.
     @Test
     void aSessionRowConnectsAndChangesModelAndEffort() throws Exception {
         final SessionsSidebar.Dialogs dialogs = new Dialogs();
@@ -290,6 +296,12 @@ class SessionsSidebarTest {
                 .as("over the text no tooltip: the row's card shows there, as a tab's").isNull();
 
         intents.clear();
+        for (final int key : new int[] {MouseEvent.SHIFT_DOWN_MASK, MouseEvent.META_DOWN_MASK}) {
+            SwingUtilities.invokeAndWait(() -> list.dispatchEvent(new MouseEvent(list, MouseEvent.MOUSE_CLICKED, 0, key,
+                    power.x + power.width / 2, power.y + power.height / 2, 1, false, MouseEvent.BUTTON1)));
+        }
+        assertThat(intents).as("a ⇧ or ⌘ click on the icon picks the row and starts nothing").isEmpty();
+
         click(list, power, 2);
         assertThat(intents).as("a double click on a control binds nothing").doesNotHaveAnyElementsOfTypes(Intent.BindSession.class, Intent.OpenSession.class);
         intents.clear();
@@ -369,11 +381,11 @@ class SessionsSidebarTest {
         assertThat(intents).containsExactly(new Intent.RemoveSession("edge"));
     }
 
-    /// A stopped session's menu has no rewrite item; a running one's offers to rewrite its focused panel, sending a
-    /// `RunText` to the session with the panel's whole text, and has no clear item; with focus elsewhere and the first
-    /// panel empty, the item is disabled.
+    /// A stopped session's menu has no rewrite item and no clear item; a running one's offers to rewrite its focused
+    /// panel, sending a `RunText` to the session with the panel's whole text, and to clear the conversation; with focus
+    /// elsewhere and the first panel empty, the rewrite item is disabled.
     @Test
-    void aRunningSessionsMenuHasItsPanelRewrittenAsADocumentAndNoClear() throws Exception {
+    void aRunningSessionsMenuHasItsPanelRewrittenAsADocumentAndClearsItsConversation() throws Exception {
         final List<Intent> intents = new CopyOnWriteArrayList<>();
         final PanelId notes = new PanelId("notes");
         final PanelId strategy = new PanelId("strategy");
@@ -408,7 +420,8 @@ class SessionsSidebarTest {
                 .noneMatch(t -> t.startsWith("Rewrite")).doesNotContain("Clear the conversation");
 
         SwingUtilities.invokeAndWait(() -> sidebar.render(AppState.initial(panels, List.of(), List.of(running)).withPanels(panels, strategy)));
-        assertThat(on(() -> itemTexts(sidebar.sessionMenu(running)))).as("the checkpoint clears").doesNotContain("Clear the conversation");
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(running)))).as("running: a conversation to clear")
+                .contains("Clear the conversation");
         final JMenuItem rewrite = on(() -> menuItem(sidebar.sessionMenu(running), "Rewrite strategy as a document"));
         assertThat(rewrite.isEnabled()).as("the focused panel, the session's").isTrue();
         assertThat(rewrite.getToolTipText()).isEqualTo(EditorPanel.POLISH_TIP);
@@ -729,7 +742,7 @@ class SessionsSidebarTest {
         assertThat(intents).as("dropped where it was: nothing moves").isEmpty();
     }
 
-    /// A running session's menu offers checkpoint, compact, model, effort and copy details and no fresh start; a
+    /// A running session's menu offers reflect, compact, clear, model, effort and copy details and no fresh start; a
     /// stopped one's offers the fresh start and no compact; each item sends its intent or copies the details.
     @Test
     void aSessionsMenuHoldsWhatItsRowHeld() throws Exception {
@@ -746,13 +759,19 @@ class SessionsSidebarTest {
             s[0].render(state);
         });
         final SessionsSidebar sidebar = s[0];
-        assertThat(on(() -> itemTexts(sidebar.sessionMenu(work)))).as("running: compact and the checkpoint, no fresh start")
-                .contains("Checkpoint", "Compact the conversation", "Model: opus", "Effort: high", "Copy details")
-                .doesNotContain("Start a new conversation");
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(work))))
+                .as("running: the bar's three commands, no fresh start")
+                .contains("Reflect", "Compact the conversation", "Clear the conversation", "Model: opus",
+                        "Effort: high", "Copy details")
+                .doesNotContain("Checkpoint", "Start a new conversation");
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Reflect").doClick());
         SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Compact the conversation").doClick());
-        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Checkpoint").doClick());
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Clear the conversation").doClick());
         SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Copy details").doClick());
-        assertThat(intents).containsExactly(new Intent.SessionCommand("work", "/compact"), new Intent.Checkpoint("work"));
+        assertThat(intents).as("each its own command: the reflect alone, no compact after it").containsExactly(
+                new Intent.SessionCommand("work", work.spec().checkpoint()),
+                new Intent.SessionCommand("work", "/compact"),
+                new Intent.SessionCommand("work", "/clear"));
         assertThat(copied).singleElement().asString().startsWith("Session: work\nPath: /w/work\n");
 
         final SessionState stopped = work.withStatus(Status.CLOSED, "");
@@ -762,6 +781,174 @@ class SessionsSidebarTest {
         intents.clear();
         SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(stopped), "Start a new conversation").doClick());
         assertThat(intents).containsExactly(new Intent.StartFresh("work"));
+    }
+
+    /** Three stopped sessions {@code a}, {@code b}, {@code c}, listed by name. */
+    private static AppState threeSessions() {
+        return AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(),
+                List.of(SessionState.closed(SessionSpec.fresh("a", "/w/a")),
+                        SessionState.closed(SessionSpec.fresh("b", "/w/b")),
+                        SessionState.closed(SessionSpec.fresh("c", "/w/c"))));
+    }
+
+    /** The names of the rows selected in {@code list}, then the anchor's and the lead's; on the EDT. */
+    private static List<String> picked(final JList<?> list) {
+        final List<String> out = new ArrayList<>();
+        for (final Object o : list.getSelectedValuesList()) {
+            out.add(((SessionState) o).name());
+        }
+        out.add("anchor " + ((SessionState) list.getModel().getElementAt(list.getAnchorSelectionIndex())).name());
+        out.add("lead " + ((SessionState) list.getModel().getElementAt(list.getLeadSelectionIndex())).name());
+        return out;
+    }
+
+    /// Several rows are selected at once, and a render that moves them keeps every one of them selected wherever it
+    /// went, with the range's anchor and lead; a render that changes nothing changes no selection.
+    @Test
+    void aSelectionOfSeveralSessionsSurvivesARenderThatMovesThem() throws Exception {
+        final AppState state = threeSessions();
+        final SessionsSidebar sidebar = sidebar(state, new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        // b, then ⇧ c
+        SwingUtilities.invokeAndWait(() -> list.setSelectionInterval(1, 2));
+        assertThat(on(() -> picked(list))).containsExactly("b", "c", "anchor b", "lead c");
+
+        final AtomicInteger changes = new AtomicInteger();
+        SwingUtilities.invokeAndWait(() -> list.addListSelectionListener(e -> changes.incrementAndGet()));
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state));
+        assertThat(changes).as("the same rows: the same selection, no event").hasValue(0);
+
+        final List<SessionState> moved = new ArrayList<>(state.sessions());
+        moved.set(2, moved.get(2).withStatus(Status.OPEN, ""));
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(moved)));
+        assertThat(names(list)).as("c runs: first").containsExactly("c", "a", "b");
+        assertThat(on(() -> picked(list))).as("both kept where they went").containsExactly("c", "b", "anchor b",
+                "lead c");
+    }
+
+    /// A right click inside a selection of several keeps it and opens the menu for all of them, which has no session's
+    /// own items; one outside it selects that row alone and opens its session's menu.
+    @Test
+    void aRightClickInsideASelectionOfSeveralOpensTheGroupsMenuAndOneOutsideSelectsThatRowAlone() throws Exception {
+        final SessionsSidebar sidebar = sidebar(threeSessions(), new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        SwingUtilities.invokeAndWait(() -> list.setSelectionInterval(0, 1));
+
+        assertThat(on(() -> itemTexts(sidebar.rowMenu(1)))).as("inside: the group's menu, not b's")
+                .isNotEmpty().doesNotContain("Edit…", "Copy details");
+        assertThat(on(() -> picked(list))).as("the selection kept").startsWith("a", "b").hasSize(4);
+
+        assertThat(on(() -> itemTexts(sidebar.rowMenu(2)))).as("outside: c's own menu")
+                .contains("Edit…", "Copy details");
+        assertThat(on(() -> picked(list))).as("c alone").containsExactly("c", "anchor c", "lead c");
+
+        assertThat(on(() -> itemTexts(sidebar.rowMenu(2)))).as("one selected: its own menu").contains("Edit…");
+    }
+
+    /// A press with ⇧ or ⌘ picks rows: dragging from it moves no session and sends nothing, where a plain press-drag
+    /// reorders.
+    @Test
+    void aPressWithShiftOrCommandPicksRowsAndStartsNoDrag() throws Exception {
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final SessionsSidebar sidebar = sidebar(threeSessions(), intents);
+        final JList<?> list = sessionList(sidebar);
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+        final Rectangle from = cell(list, 2);
+        final Rectangle to = cell(list, 0);
+        for (final int key : new int[] {MouseEvent.SHIFT_DOWN_MASK, MouseEvent.META_DOWN_MASK}) {
+            SwingUtilities.invokeAndWait(() -> {
+                for (final MouseEvent e : List.of(
+                        mouse(list, MouseEvent.MOUSE_PRESSED, from.x + 60, from.y + 6,
+                                MouseEvent.BUTTON1_DOWN_MASK | key),
+                        mouse(list, MouseEvent.MOUSE_DRAGGED, from.x + 60, from.y - 10,
+                                MouseEvent.BUTTON1_DOWN_MASK | key),
+                        mouse(list, MouseEvent.MOUSE_DRAGGED, to.x + 60, to.y + 2, MouseEvent.BUTTON1_DOWN_MASK | key),
+                        mouse(list, MouseEvent.MOUSE_RELEASED, to.x + 60, to.y + 2, key))) {
+                    try {
+                        list.dispatchEvent(e);
+                    } catch (final HeadlessException _) {
+                        // the list's own press and drag handlers ask the toolkit for the menu key;
+                        // the row's saw it first
+                    }
+                }
+            });
+            assertThat(intents).as("no drag from a press with " + MouseEvent.getModifiersExText(key)).isEmpty();
+            assertThat(names(list)).containsExactly("a", "b", "c");
+        }
+    }
+
+    /// The model and effort choices for several sessions check the one they all run, none when they differ, and a
+    /// choice sets it on every one of them.
+    @Test
+    void theChoicesForSeveralSessionsCheckWhatTheyShareAndSetEachOne() throws Exception {
+        final SessionState a = SessionState.closed(SessionSpec.fresh("a", "/w/a").withModel("opus").withEffort("high"));
+        final SessionState b =
+                SessionState.closed(SessionSpec.fresh("b", "/w/b").withModel("sonnet").withEffort("high"));
+        final List<Intent> intents = new CopyOnWriteArrayList<>();
+        final List<JMenuItem> models = on(() -> SessionsSidebar.modelChoices(List.of(a, b), intents::add));
+        final List<JMenuItem> efforts = on(() -> SessionsSidebar.effortChoices(List.of(a, b), intents::add));
+        assertThat(models).as("two models: none checked").noneMatch(AbstractButton::isSelected);
+        assertThat(efforts).filteredOn(AbstractButton::isSelected).extracting(JMenuItem::getText)
+                .containsExactly("high");
+        SwingUtilities.invokeAndWait(() -> models.getFirst().doClick());
+        SwingUtilities.invokeAndWait(() -> efforts.getLast().doClick());
+        assertThat(intents).containsExactly(new Intent.SetSessionModel("a", "fable"),
+                new Intent.SetSessionModel("b", "fable"), new Intent.SetSessionEffort("a", "max"),
+                new Intent.SetSessionEffort("b", "max"));
+    }
+
+    /// ⌘C, through the list's transfer handler, copies the details of every selected session, one block each, in the
+    /// list's order and none of the sessions not selected.
+    @Test
+    void copyTakesTheDetailsOfEverySelectedSessionOneBlockEach() throws Exception {
+        final SessionsSidebar sidebar = sidebar(threeSessions(), new CopyOnWriteArrayList<>());
+        final JList<?> list = sessionList(sidebar);
+        final Clipboard board = new Clipboard("test");
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSelectedIndices(new int[] {0, 2});
+            list.getTransferHandler().exportToClipboard(list, board, TransferHandler.COPY);
+        });
+        final String copied = (String) board.getData(DataFlavor.stringFlavor);
+        assertThat(copied).startsWith("Session: a\nPath: /w/a\n").contains("\n\nSession: c\nPath: /w/c\n")
+                .doesNotContain("Session: b");
+    }
+
+    /// Every item of a session's menu, running or stopped, of a connection's menu and of the Sessions and Connections
+    /// tabs' menus has an icon, the Model and Effort submenus too.
+    @Test
+    void everyItemOfTheSessionConnectionAndTabMenusHasAnIcon() throws Exception {
+        final SessionState stopped = SessionState.closed(SessionSpec.fresh("work", "/w/work").resumable("conv-1"));
+        final SessionState running = stopped.withStatus(Status.OPEN, "");
+        final ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
+        final List<PanelState> panels = List.of(new PanelState(new PanelId("p"), "main", "", "work"));
+        final AppState state = AppState.initial(panels, List.of(local), List.of(running))
+                .withPanels(panels, new PanelId("p"));
+        final SessionsSidebar sidebar = sidebar(state, new CopyOnWriteArrayList<>());
+        final Map<String, JPopupMenu> menus = new LinkedHashMap<>();
+        SwingUtilities.invokeAndWait(() -> {
+            menus.put("running", sidebar.sessionMenu(running));
+            menus.put("stopped", sidebar.sessionMenu(stopped));
+            menus.put("connection", sidebar.connectionMenu(local));
+            menus.put("Sessions tab", sidebar.tabMenu(SessionsSidebar.SESSIONS));
+            menus.put("Connections tab", sidebar.tabMenu(SessionsSidebar.CONNECTIONS));
+        });
+        for (final Map.Entry<String, JPopupMenu> m : menus.entrySet()) {
+            final List<String> bare = on(() -> {
+                final List<String> out = new ArrayList<>();
+                for (final Component c : m.getValue().getComponents()) {
+                    if (c instanceof JMenuItem i && i.getIcon() == null) {
+                        out.add(i.getText());
+                    }
+                }
+                return out;
+            });
+            assertThat(bare).as(m.getKey() + " menu: items with no icon").isEmpty();
+        }
+        assertThat(on(() -> itemTexts(menus.get("running")))).as("the submenus are among them")
+                .anyMatch(x -> x.startsWith("Model: ")).anyMatch(x -> x.startsWith("Effort: "));
     }
 
     /// A session started while the pointer is over the list keeps its place with its new state until the pointer

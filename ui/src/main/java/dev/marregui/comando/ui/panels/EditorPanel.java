@@ -64,6 +64,7 @@ import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Flash;
 import dev.marregui.comando.ui.kit.text.Editors;
@@ -1221,21 +1222,20 @@ public final class EditorPanel extends JPanel {
         };
     }
 
-    private JPopupMenu connectionMenu() {
+    JPopupMenu connectionMenu() {
         final JPopupMenu m = new JPopupMenu();
         for (final ConnectionState c : state.connections()) {
-            final JMenuItem item = new JMenuItem(Plain.text(c.name() + "  " + c.spec().label()), Icons.get("database"));
-            item.addActionListener(e -> intents.dispatch(new Intent.BindConnection(panel.id(), c.name())));
-            m.add(item);
+            m.add(IconMenus.item(Plain.text(c.name() + "  " + c.spec().label()), "database",
+                    () -> intents.dispatch(new Intent.BindConnection(panel.id(), c.name()))));
         }
         if (!panel.connection().isEmpty()) {
             m.addSeparator();
-            final JMenuItem none = new JMenuItem("Unbind");
-            none.addActionListener(e -> intents.dispatch(new Intent.BindConnection(panel.id(), "")));
-            m.add(none);
+            m.add(IconMenus.item("Unbind", "unplug",
+                    () -> intents.dispatch(new Intent.BindConnection(panel.id(), ""))));
         }
         if (state.connections().isEmpty()) {
-            m.add(new JMenuItem("No connections; New connection… in the Connections tab's menu adds one")).setEnabled(false);
+            m.add(new JMenuItem("No connections; New connection… in the Connections tab's menu adds one",
+                    Icons.get("info"))).setEnabled(false);
         }
         return m;
     }

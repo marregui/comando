@@ -116,7 +116,8 @@ val uiTestClasses = listOf(
     "LowerDividerUiTest",
     "OwnLogUiTest",
     "ThemeFadeUiTest",
-    "IconSetUiTest",
+    "OneIconSetUiTest",
+    "PanelMenusIconsUiTest",
     "LayoutKeeperUiTest",
     "FocusRouterUiTest",
     "QuitTeardownUiTest",
@@ -134,6 +135,9 @@ val uiTestClasses = listOf(
     "TranscriptAboveUiTest",
     "TranscriptFollowUiTest",
     "TerminalToolsUiTest",
+    "WidgetMenusIconsUiTest",
+    "SessionsMultiSelectUiTest",
+    "SessionBarButtonsUiTest",
 )
 
 fun uiShard(spec: String, seconds: String, mac: Boolean): List<String> {

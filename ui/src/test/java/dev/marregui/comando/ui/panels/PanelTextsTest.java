@@ -76,19 +76,17 @@ class PanelTextsTest {
         assertThat(SessionRow.details(running.withStatus(Status.CLOSED, ""), started + 60_000, utc, "")).as("stopped").doesNotContain("Uptime");
     }
 
-    /// The checkpoint icon is `checkpoint-due` only past 60% context; its tooltip names what a checkpoint sends and
-    /// says when a summary an earlier checkpoint carried still waits for the next prompt.
+    /// Reflect's menu icon is `checkpoint-due` only once the context has made it due; its tooltip names what it sends
+    /// and says when it is due.
     @Test
-    void theCheckpointButtonIsPurpleOnlyWhenDue() {
+    void theReflectIconIsPurpleOnlyWhenDue() {
         final SessionState x = SessionState.closed(States.WORK);
-        assertThat(SessionBar.checkpointIcon(x)).isEqualTo("checkpoint");
-        assertThat(SessionBar.checkpointTip(x))
-                .isEqualTo("Checkpoint: sends /reflect, then compacts the conversation");
+        assertThat(SessionBar.reflectIconName(x)).isEqualTo("checkpoint");
+        assertThat(SessionBar.reflectTip(x)).isEqualTo("Reflect: sends /reflect");
         final SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L, 40));
-        assertThat(SessionBar.checkpointIcon(due)).isEqualTo("checkpoint-due");
-        assertThat(SessionBar.checkpointTip(due)).isEqualTo("Checkpoint due, the context passed the checkpoint threshold: sends /reflect, then compacts the conversation");
-        assertThat(SessionBar.checkpointTip(x.withSpec(x.spec().withCarried("the summary"))))
-                .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
+        assertThat(SessionBar.reflectIconName(due)).isEqualTo("checkpoint-due");
+        assertThat(SessionBar.reflectTip(due))
+                .isEqualTo("Reflect, due: the context passed the checkpoint threshold; sends /reflect");
     }
 
     /// A session with two turns pending shows "working · turn …" ending with "1 queued"; an idle session shows nothing.

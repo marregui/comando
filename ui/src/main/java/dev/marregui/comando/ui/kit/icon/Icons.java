@@ -1,23 +1,20 @@
 package dev.marregui.comando.ui.kit.icon;
 
 import java.awt.Color;
-import java.awt.Component;
-import java.awt.Graphics;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.swing.Icon;
-import javax.swing.UIManager;
 
-import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 
 import dev.marregui.comando.ui.kit.theme.Theme;
 
-/** The icons: SVGs of the icon set chosen (record 155), scaled for HiDPI and recoloured by the theme. */
+/**
+ * The one icon set, Classic: SVGs under {@code /icons}, scaled for HiDPI and recoloured by the theme. There is no
+ * other set to switch to: an icon carries a behaviour its user has learned, and changing it disrupts that (record 156).
+ */
 public final class Icons {
 
-    private static final ConcurrentHashMap<String, Icon> CACHE = new ConcurrentHashMap<>();
-    /** The SVG for each set, name and size; a missing set SVG is remembered as Classic's SVG. */
-    private static final ConcurrentHashMap<String, FlatSVGIcon> SVGS = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, FlatSVGIcon> CACHE = new ConcurrentHashMap<>();
     /** Icons made of others, by name: a repository's folder with git's mark. */
     private static final ConcurrentHashMap<String, Icon> COMPOSED = new ConcurrentHashMap<>();
     /** Icons painted in code, by name, at any size asked: the tints' swatches. */
@@ -29,11 +26,10 @@ public final class Icons {
      */
     static final int SVG_GOLD = 0xF0BA4C;
     static final int SVG_AMBER = 0xEDA200;
-    static final int SVG_IVORY = 0xE8E2D4;
-    /** Written by the EDT settings action and read by the EDT paint calls. */
-    private static volatile IconSet chosen = IconSet.CLASSIC;
-    /** The Locate button's arrow, 7 by 16, Classic's in every set (record 155). */
-    private static final FlatSVGIcon LOCATE_ARROW = new FlatSVGIcon(IconSet.CLASSIC.path("locate-arrow"), 7, 16);
+    /** The purple of a due checkpoint, drawn as the dark theme's; painted in {@link Theme#THINKING}, by mode. */
+    static final int SVG_PURPLE = 0xB99BF8;
+    /** The Locate button's arrow, 7 by 16. */
+    private static final FlatSVGIcon LOCATE_ARROW = new FlatSVGIcon("icons/locate-arrow.svg", 7, 16);
 
     static {
         FlatSVGIcon.ColorFilter.getInstance().setMapper(Icons::gilded);
@@ -46,35 +42,17 @@ public final class Icons {
         return get(name, 16);
     }
 
-    public static IconSet chosen() {
-        return chosen;
-    }
-
-    /** Paints every icon from {@code set} from the next paint on; the caller repaints the windows. */
-    public static void choose(final IconSet set) {
-        chosen = set;
-    }
-
     /**
-     * {@code c}; the SVGs' gold as the tint chosen, their amber as the attention's gold, a set's ivory as the text
-     * colour on a light theme (record 155), each in {@code c}'s alpha.
+     * {@code c}; the SVGs' gold as the tint chosen, their amber as the attention's gold, their purple as the theme's
+     * own (light or dark), each in {@code c}'s alpha.
      */
     static Color gilded(final Color c) {
-        return gilded(c, chosen, Theme.light(), UIManager.getColor("Label.foreground"));
-    }
-
-    static Color gilded(final Color c, final IconSet set, final boolean light, final Color text) {
-        final int rgb = c.getRGB() & 0xFFFFFF;
-        final Color to;
-        if (rgb == SVG_GOLD) {
-            to = Theme.tint().body;
-        } else if (rgb == SVG_AMBER) {
-            to = Theme.ATTENTION;
-        } else if (rgb == SVG_IVORY && set != IconSet.CLASSIC && light) {
-            to = text;
-        } else {
-            to = null;
-        }
+        final Color to = switch (c.getRGB() & 0xFFFFFF) {
+            case SVG_GOLD -> Theme.tint().body;
+            case SVG_AMBER -> Theme.ATTENTION;
+            case SVG_PURPLE -> Theme.THINKING;
+            default -> null;
+        };
         return to == null ? c : Theme.withAlpha(to, c.getAlpha());
     }
 
@@ -84,12 +62,7 @@ public final class Icons {
         if (painted != null) {
             return painted;
         }
-        return CACHE.computeIfAbsent(name + '@' + size, _ -> new SetIcon(name, size));
-    }
-
-    /** {@code name} at 16 pixels from {@code set}, for a set picker sample. */
-    public static Icon of(final IconSet set, final String name) {
-        return svg(set, name, 16);
+        return CACHE.computeIfAbsent(name + '@' + size, _ -> new FlatSVGIcon("icons/" + name + ".svg", size, size));
     }
 
     /**
@@ -126,57 +99,5 @@ public final class Icons {
     /** Names {@code icon}, painted in code, so that a command can name it as it names an SVG. */
     public static void put(final String name, final Icon icon) {
         PAINTED.put(name, icon);
-    }
-
-    /** {@code set}'s SVG of {@code name}, else Classic's: the fallback is looked up first, outside the map's update. */
-    private static FlatSVGIcon svg(final IconSet set, final String name, final int size) {
-        final String key = set.id() + '@' + name + '@' + size;
-        final FlatSVGIcon known = SVGS.get(key);
-        if (known != null) {
-            return known;
-        }
-        final FlatSVGIcon icon = new FlatSVGIcon(set.path(name), size, size);
-        final FlatSVGIcon chosenOne = set == IconSet.CLASSIC || icon.hasFound() ? icon : svg(IconSet.CLASSIC, name, size);
-        final FlatSVGIcon raced = SVGS.putIfAbsent(key, chosenOne);
-        return raced == null ? chosenOne : raced;
-    }
-
-    /** One icon per name and size, handed out once, that paints the chosen set's SVG; disabled, that SVG's grey. */
-    private static final class SetIcon implements Icon, FlatLaf.DisabledIconProvider {
-
-        private final String name;
-        private final int size;
-        private final boolean disabled;
-
-        SetIcon(final String name, final int size) {
-            this(name, size, false);
-        }
-
-        private SetIcon(final String name, final int size, final boolean disabled) {
-            this.name = name;
-            this.size = size;
-            this.disabled = disabled;
-        }
-
-        @Override
-        public int getIconWidth() {
-            return size;
-        }
-
-        @Override
-        public int getIconHeight() {
-            return size;
-        }
-
-        @Override
-        public void paintIcon(final Component component, final Graphics graphics, final int x, final int y) {
-            final FlatSVGIcon svg = svg(chosen, name, size);
-            (disabled ? svg.getDisabledIcon() : svg).paintIcon(component, graphics, x, y);
-        }
-
-        @Override
-        public Icon getDisabledIcon() {
-            return disabled ? this : new SetIcon(name, size, true);
-        }
     }
 }

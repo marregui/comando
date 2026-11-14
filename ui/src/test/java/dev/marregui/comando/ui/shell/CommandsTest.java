@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [Commands]: the palette's commands, here what they read from what the user types and when they can run.
 /// - the checkpoint threshold takes a whole percentage from 10 to 100, a `%` after it allowed; anything else is refused
 ///   with the reason, and the threshold kept
-/// - the session's commands are off while its checkpoint runs, as on the session bar and in the session's menu, and
-///   Checkpoint is off while the session stops
+/// - the session's commands are off while its checkpoint runs, as on the session bar and in the session's menu;
+///   Reflect is off while the session stops, Compact and Clear while it is not running
 class CommandsTest {
 
     /// A whole percentage from the minimum, 10, to 100 is taken, spaces and a `%` after it allowed; below the minimum
@@ -49,9 +49,9 @@ class CommandsTest {
         }
     }
 
-    /// While a session's checkpoint runs, the palette's Checkpoint, Compact, Start a new conversation, Rewrite and
-    /// Remove are off for it (record 130), and on for the same session free; Checkpoint is off too while the session
-    /// stops, which the reducer refuses.
+    /// While a session's checkpoint runs, the palette's Reflect, Compact, Clear, Start a new conversation, Rewrite and
+    /// Remove are off for it (record 130), and on for the same session free; Reflect is off too while the session
+    /// stops, which the reducer refuses, and Compact and Clear while it is stopped.
     @Test
     void theSessionsCommandsAreOffWhileItsCheckpointRuns() {
         final SessionState open = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
@@ -60,19 +60,23 @@ class CommandsTest {
         final SessionState stopped = SessionState.closed(SessionSpec.imported("old", "/w", "abc"));
         final SessionState stoppedLocked = stopped.withTurns(1, 1L).withCheckpointTurns(1);
 
-        assertThat(SessionBar.canCheckpoint(open)).isTrue();
-        assertThat(Commands.canCompact(open)).isTrue();
+        assertThat(SessionBar.canReflect(open)).isTrue();
+        assertThat(SessionBar.canCompact(open)).isTrue();
+        assertThat(SessionBar.canClear(open)).isTrue();
         assertThat(Commands.canRewrite(open, "notes")).isTrue();
         assertThat(Commands.canRemove(open)).isTrue();
-        assertThat(Commands.canStartFresh(stopped)).isTrue();
+        assertThat(SessionBar.canStartFresh(stopped)).isTrue();
 
-        assertThat(SessionBar.canCheckpoint(locked)).as("checkpoint").isFalse();
-        assertThat(Commands.canCompact(locked)).as("compact").isFalse();
+        assertThat(SessionBar.canReflect(locked)).as("reflect").isFalse();
+        assertThat(SessionBar.canCompact(locked)).as("compact").isFalse();
+        assertThat(SessionBar.canClear(locked)).as("clear").isFalse();
         assertThat(Commands.canRewrite(locked, "notes")).as("rewrite").isFalse();
         assertThat(Commands.canRemove(locked)).as("remove").isFalse();
-        assertThat(Commands.canStartFresh(stoppedLocked)).as("fresh").isFalse();
+        assertThat(SessionBar.canStartFresh(stoppedLocked)).as("fresh").isFalse();
 
-        assertThat(SessionBar.canCheckpoint(open.withStatus(Status.CLOSING, ""))).as("stopping").isFalse();
+        assertThat(SessionBar.canReflect(open.withStatus(Status.CLOSING, ""))).as("stopping").isFalse();
+        assertThat(SessionBar.canCompact(stopped)).as("compact, stopped").isFalse();
+        assertThat(SessionBar.canClear(stopped)).as("clear, stopped").isFalse();
         assertThat(Commands.canRewrite(open, " ")).as("no text").isFalse();
     }
 }

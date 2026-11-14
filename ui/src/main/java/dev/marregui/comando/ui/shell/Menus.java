@@ -9,7 +9,6 @@ import java.util.Map;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
@@ -75,9 +74,12 @@ final class Menus {
             Map.entry("run", "play"),
             Map.entry("run.stop", "stop"),
             Map.entry("panel.new", "add"),
+            Map.entry("panel.reopen", "undo"),
             Map.entry("file.close", "close"),
             Map.entry("session.toggle", "plug"),
-            Map.entry("session.checkpoint", "checkpoint"),
+            Map.entry("session.reflect", "checkpoint"),
+            Map.entry("session.compact", "compact"),
+            Map.entry("session.clearConversation", "clear-conversation"),
             Map.entry("session.fresh", "fresh"),
             Map.entry("session.rewrite", "markdown"),
             Map.entry("session.copyDetails", "copy"),
@@ -130,9 +132,6 @@ final class Menus {
         for (final NamedTheme t : NamedTheme.values()) {
             Icons.put(t.commandId(), new GroundIcon(t));
         }
-        for (final IconSet set : IconSet.values()) {
-            Icons.put(set.commandId(), Icons.of(set, "session"));
-        }
         return areasOf();
     }
 
@@ -141,7 +140,7 @@ final class Menus {
 
     /** The icon of command {@code id}, or null; a theme's command is named as its swatch is. */
     static String icon(final String id) {
-        return id.startsWith("theme.") || id.startsWith("icons.") ? id : ICONS.get(id);
+        return id.startsWith("theme.") ? id : ICONS.get(id);
     }
 
     /** The tooltip of command {@code id}, or null. */
@@ -213,7 +212,8 @@ final class Menus {
         }
         put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle", "terminal.start", "terminal.stop", "terminal.restart");
         put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "transcript.clear", "panel.bindSession", "session.dialog",
-                "session.import", "session.checkpointThreshold", "session.checkpoint", "session.fresh", "session.rewrite", "session.copyDetails",
+                "session.import", "session.checkpointThreshold", "session.reflect", "session.clearConversation",
+                "session.fresh", "session.rewrite", "session.copyDetails",
                 "session.clone", "session.remove");
         for (final TranscriptWidget.Move m : TranscriptWidget.Move.values()) {
             a.put(m.id, "Session");
@@ -234,9 +234,6 @@ final class Menus {
         put(a, "comando", "app.about", "app.quit");
         for (final NamedTheme t : NamedTheme.values()) {
             a.put(t.commandId(), "Theme");
-        }
-        for (final IconSet set : IconSet.values()) {
-            a.put(set.commandId(), "Icons");
         }
         return Map.copyOf(a);
     }

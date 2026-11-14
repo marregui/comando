@@ -1,7 +1,11 @@
 package dev.marregui.comando.ui.kit.text;
 
+import java.awt.Component;
 import java.nio.file.Path;
 import java.util.List;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JSeparator;
 import javax.swing.SwingUtilities;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -19,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Token colours come from the content palette, keywords from the tint, and follow a tint change.
 /// - A file takes the style of its extension in any case, or of its name; a fence takes the style of its language.
 /// - An area it makes runs no caret timer until it is first focused, so an area never focused holds no timer.
+/// - An area's right-click menu has an icon on every item and no Folding submenu, which comando never enables.
 class EditorsTest {
 
     /// Keywords are the tint's body, strings, numbers, annotations and identifiers the palette's, end-of-line comments
@@ -64,6 +69,23 @@ class EditorsTest {
             for (final RSyntaxTextArea a : List.of(Editors.viewer("java"), Editors.command())) {
                 assertThat(a.getCaret().isVisible()).as("caret of an unfocused %s", a.isEditable() ? "editor" : "viewer").isFalse();
                 assertThat(a.getCaret().getBlinkRate()).as("the blink rate is kept for the first focus").isPositive();
+            }
+        });
+    }
+
+    /// The right-click menu of a viewer and of a command editor: seven items (undo to select all), each with an
+    /// icon; no submenu and no separator left at its end.
+    @Test
+    void anAreasMenuHasAnIconOnEveryItemAndNoFoldingSubmenu() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (final RSyntaxTextArea a : List.of(Editors.viewer("java"), Editors.command())) {
+                final List<Component> items = List.of(a.getPopupMenu().getComponents());
+                assertThat(items).noneMatch(c -> c instanceof JMenu);
+                assertThat(items.getLast()).isNotInstanceOf(JSeparator.class);
+                final List<JMenuItem> actions = items.stream().filter(JMenuItem.class::isInstance)
+                        .map(JMenuItem.class::cast).toList();
+                assertThat(actions).hasSize(7)
+                        .allSatisfy(item -> assertThat(item.getIcon()).as(item.getText()).isNotNull());
             }
         });
     }

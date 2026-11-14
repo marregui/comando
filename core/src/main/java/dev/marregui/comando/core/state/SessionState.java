@@ -26,8 +26,8 @@ import dev.marregui.comando.core.model.Status;
  *                          still to come
  * @param startedMillis     when the session's process started, 0 while it does not run
  * @param reflection        whether the session is due its checkpoint
- * @param checkpointCompacts the Checkpoint button's command, or the automatic checkpoint's, runs: when its turn ends,
- *                          the conversation is compacted
+ * @param checkpointCompacts the session_checkpoint tool's command, or the automatic checkpoint's, runs: when its turn
+ *                          ends, the conversation is compacted
  * @param checkpointArmed   a model call has read the context below the checkpoint threshold since the last checkpoint
  *                          command: the next turn that ends at or above it runs the automatic checkpoint
  * @param checkpointTurns   the turns still to end, the session's queue up to and including a checkpoint command or the

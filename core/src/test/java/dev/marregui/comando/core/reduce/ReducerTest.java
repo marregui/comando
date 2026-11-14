@@ -819,7 +819,8 @@ class ReducerTest {
     }
 
     /// After the conversation is cleared, the new conversation id is followed with RESUME, its reflection starts fresh,
-    /// the sessions are saved once, and the notice names the previous conversation as importable.
+    /// its context is unknown again while the window stays known, the sessions are saved once, and the notice names the
+    /// previous conversation as importable.
     @Test
     void aClearedConversationIsFollowedSavedAndNamedAsImportable() {
         apply(new Intent.StartSession("work"));
@@ -837,6 +838,8 @@ class ReducerTest {
         assertThat(x.spec().claudeSessionId()).isEqualTo("conv-2");
         assertThat(x.spec().startMode()).isEqualTo(StartMode.RESUME);
         assertThat(x.reflection()).as("a new conversation has nothing to reflect on").isEqualTo(Reflection.FRESH);
+        assertThat(x.contextTokens()).as("the old conversation's context is gone with it").isZero();
+        assertThat(x.contextWindow()).as("the model's window is the same").isEqualTo(1_000_000L);
         assertThat(effects).singleElement().isInstanceOf(Effect.SaveSessions.class);
         assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again");
     }

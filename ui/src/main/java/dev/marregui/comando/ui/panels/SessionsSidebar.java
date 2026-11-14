@@ -15,6 +15,7 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -24,15 +25,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
+import javax.swing.DefaultListSelectionModel;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -76,6 +82,7 @@ import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.IconMenus;
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.TabStrip;
@@ -101,10 +108,18 @@ import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
  * that has any; within a group they are listed running first, then by name, until the user drags one: from then on in
  * the order the user left them, until the tab menu's Sort. A drag orders a group: a drop in another group is ignored.
  * Each list's band is on the focused panel's row: its session, its connection, or the panel itself
- * among those without a session, and on no row of a list that has none. Hidden, the column collapses to a rail: its
+ * among those without a session, and on no row of a list that has none. The Sessions tab selects several rows as
+ * Finder does, ⇧ for a range and ⌘ for one more: a right click inside a selection of several opens the menu that acts
+ * on all of them ({@link SessionGroupMenu}), one outside it selects that row alone and opens its own menu, and ⌘C
+ * copies the details of every session selected. Hidden, the column collapses to a rail: its
  * first button shows it again at its width, and one button per tab, in the tabs' icons, shows it at that tab.
  */
 public final class SessionsSidebar {
+
+    /** The icon of a session's Model menu and of its choices, in every menu that offers them. */
+    static final String MODEL_ICON = "settings";
+    /** The icon of a session's Effort menu and of its choices. */
+    static final String EFFORT_ICON = "thinking";
 
     /** What the sidebar's buttons open. */
     public interface Dialogs {
@@ -320,7 +335,7 @@ public final class SessionsSidebar {
         this.loosePanels = new PanelsWithoutSession(intents, texts, dialogs::newSession, questions);
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
-        sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        sessions.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sessions.setCellRenderer((list, s, index, selected, focus) -> {
             final SessionRow r = row(s).show(s, state != null && state.homePanel(s.name()).isPresent(),
@@ -334,7 +349,7 @@ public final class SessionsSidebar {
             r.getAccessibleContext().setAccessibleDescription(heading(group));
             return r;
         });
-        // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
+        // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected sessions' details, one block each
         sessions.setTransferHandler(new TransferHandler() {
             @Override
             public int getSourceActions(final JComponent c) {
@@ -343,8 +358,9 @@ public final class SessionsSidebar {
 
             @Override
             protected Transferable createTransferable(final JComponent c) {
-                final SessionState s = sessions.getSelectedValue();
-                return s == null ? null : new StringSelection(details(s));
+                final List<SessionState> selected = sessions.getSelectedValuesList();
+                return selected.isEmpty() ? null
+                        : new StringSelection(String.join("\n", selected.stream().map(s -> details(s)).toList()));
             }
         });
         // one line, as a session's (record 92): the state icon, which connects and disconnects, and the name
@@ -375,6 +391,10 @@ public final class SessionsSidebar {
                     return;
                 }
                 final Optional<SessionRow.Control> control = control(s, e);
+                // a ⇧ or ⌘ click picks the row, wherever on it, as it starts no drag: it never starts, stops or opens
+                if (SessionList.extendsSelection(e)) {
+                    return;
+                }
                 if (control.isPresent()) {
                     if (e.getClickCount() == 1) {
                         act(s, control.get());
@@ -421,8 +441,7 @@ public final class SessionsSidebar {
                 final SessionState s = at(sessions, e);
                 if (e.isPopupTrigger() && s != null) {
                     leaveCard(); // the menu, not the card
-                    sessions.setSelectedValue(s, false);
-                    sessionMenu(s).show(sessions, e.getX(), e.getY());
+                    rowMenu(sessions.locationToIndex(e.getPoint())).show(sessions, e.getX(), e.getY());
                 }
             }
         });
@@ -1068,18 +1087,53 @@ public final class SessionsSidebar {
 
     /** The model menu's items, the sidebar's and the session bar's. */
     static List<JMenuItem> modelItems(final SessionState s, final IntentSink intents) {
-        final String current = SessionRow.modelName(s);
-        return SessionSpec.MODELS.stream().map(m -> choice(m, m.equals(current), () -> intents.dispatch(new Intent.SetSessionModel(s.name(), m)))).toList();
+        return modelChoices(List.of(s), intents);
     }
 
     /** The effort menu's items, the sidebar's and the session bar's. */
     static List<JMenuItem> effortItems(final SessionState s, final IntentSink intents) {
-        final String current = SessionRow.effortName(s);
-        return SessionSpec.EFFORTS.stream().map(e -> choice(e, e.equals(current), () -> intents.dispatch(new Intent.SetSessionEffort(s.name(), e)))).toList();
+        return effortChoices(List.of(s), intents);
     }
 
-    private static JMenuItem choice(final String text, final boolean current, final Runnable r) {
-        final JCheckBoxMenuItem i = new JCheckBoxMenuItem(text, current);
+    /**
+     * One item per model for {@code sessions}, one session's or a selection's: a model is checked when every one of
+     * them runs it, and a choice sets it on each of them that runs another.
+     */
+    static List<JMenuItem> modelChoices(final List<SessionState> sessions, final IntentSink intents) {
+        return choices(SessionSpec.MODELS, MODEL_ICON, sessions, SessionRow::modelName,
+                (s, m) -> new Intent.SetSessionModel(s.name(), m), intents);
+    }
+
+    /**
+     * One item per effort for {@code sessions}, one session's or a selection's: an effort is checked when every one of
+     * them runs at it, and a choice sets it on each of them that runs at another.
+     */
+    static List<JMenuItem> effortChoices(final List<SessionState> sessions, final IntentSink intents) {
+        return choices(SessionSpec.EFFORTS, EFFORT_ICON, sessions, SessionRow::effortName,
+                (s, e) -> new Intent.SetSessionEffort(s.name(), e), intents);
+    }
+
+    private static List<JMenuItem> choices(
+            final List<String> values,
+            final String icon,
+            final List<SessionState> sessions,
+            final Function<SessionState, String> current,
+            final BiFunction<SessionState, String, Intent> set,
+            final IntentSink intents
+    ) {
+        // a session already at the value is left alone: a running one would spend a turn on the same /model or /effort
+        return values.stream().map(v -> choice(v, icon,
+                !sessions.isEmpty() && sessions.stream().allMatch(s -> v.equals(current.apply(s))),
+                () -> sessions.stream().filter(s -> !v.equals(current.apply(s)))
+                        .forEach(s -> intents.dispatch(set.apply(s, v)))))
+                .toList();
+    }
+
+    /**
+     * A choice with its submenu's icon, as every menu item has one (record 156); checked when it is the current one.
+     */
+    private static JMenuItem choice(final String text, final String icon, final boolean current, final Runnable r) {
+        final JCheckBoxMenuItem i = new JCheckBoxMenuItem(text, Icons.get(icon), current);
         i.addActionListener(e -> r.run());
         return i;
     }
@@ -1119,9 +1173,16 @@ public final class SessionsSidebar {
             if (e.getID() == MouseEvent.MOUSE_PRESSED) {
                 dropped = false;
                 final SessionState s = at(this, e);
-                final boolean onText = s != null && SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger() && control(s, e).isEmpty();
+                // a press that extends the selection picks rows: it never starts a drag
+                final boolean onText = s != null && SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger()
+                        && !extendsSelection(e) && control(s, e).isEmpty();
                 pressed = onText ? locationToIndex(e.getPoint()) : -1;
                 pressedAt = e.getPoint();
+                if (e.isPopupTrigger()) {
+                    // the menu decides the selection (rowMenu): the list's own press, a Ctrl-click's on the Mac,
+                    // would select the row alone first
+                    e.consume();
+                }
             } else if (e.getID() == MouseEvent.MOUSE_RELEASED) {
                 final int from = pressed;
                 final int to = gap;
@@ -1152,6 +1213,14 @@ public final class SessionsSidebar {
                 return;
             }
             super.processMouseMotionEvent(e);
+        }
+
+        /**
+         * Whether a press extends the selection rather than replacing it: ⇧ for a range, ⌘ (Ctrl off the Mac) for one
+         * more row. Any of the three keys counts, so the press needs no toolkit to tell which is the menu shortcut.
+         */
+        private static boolean extendsSelection(final MouseEvent e) {
+            return e.isShiftDown() || e.isMetaDown() || e.isControlDown();
         }
 
         private void endDrag() {
@@ -1339,8 +1408,17 @@ public final class SessionsSidebar {
         return following;
     }
 
+    /**
+     * Shows {@code items} in {@code list}, its selection kept by name: every selected row still listed stays selected
+     * wherever it moved, and so do the range's anchor and lead, so a render between two clicks that pick rows drops
+     * none and a ⇧-click still extends from where the range started.
+     */
     private static <T> void sync(final DefaultListModel<T> model, final List<T> items, final JList<T> list) {
-        final T selected = list.getSelectedValue();
+        final ListSelectionModel selection = list.getSelectionModel();
+        final Set<String> selected =
+                Set.copyOf(list.getSelectedValuesList().stream().map(SessionsSidebar::name).toList());
+        final String anchor = nameAt(model, selection.getAnchorSelectionIndex());
+        final String lead = nameAt(model, selection.getLeadSelectionIndex());
         if (model.size() != items.size()) {
             model.clear();
             model.addAll(items);
@@ -1351,18 +1429,56 @@ public final class SessionsSidebar {
                 }
             }
         }
-        if (selected != null) {
-            for (int i = 0; i < model.size(); i++) {
-                if (name(model.get(i)).equals(name(selected))) {
-                    list.setSelectedIndex(i);
-                    break;
-                }
+        final int[] kept =
+                IntStream.range(0, model.size()).filter(i -> selected.contains(name(model.get(i)))).toArray();
+        if (kept.length == 0) {
+            return;
+        }
+        if (!Arrays.equals(kept, list.getSelectedIndices())) {
+            list.setSelectedIndices(kept);
+        }
+        final int a = indexOf(model, anchor);
+        if (a >= 0 && a != selection.getAnchorSelectionIndex()) {
+            selection.setAnchorSelectionIndex(a);
+        }
+        final int l = indexOf(model, lead);
+        if (l >= 0 && l != selection.getLeadSelectionIndex() && selection instanceof DefaultListSelectionModel d) {
+            // moves the lead alone: setLeadSelectionIndex would select or clear the rows from the anchor to it
+            d.moveLeadSelectionIndex(l);
+        }
+    }
+
+    /** The name of {@code model}'s row at {@code index}; null for none, as an anchor or lead of no selection. */
+    private static <T> String nameAt(final DefaultListModel<T> model, final int index) {
+        return index >= 0 && index < model.size() ? name(model.get(index)) : null;
+    }
+
+    /** The index of {@code model}'s row named {@code name}; -1 for none. */
+    private static <T> int indexOf(final DefaultListModel<T> model, final String name) {
+        for (int i = 0; name != null && i < model.size(); i++) {
+            if (name(model.get(i)).equals(name)) {
+                return i;
             }
         }
+        return -1;
     }
 
     private static String name(final Object o) {
         return o instanceof SessionState s ? s.name() : o instanceof ConnectionState c ? c.name() : String.valueOf(o);
+    }
+
+    /**
+     * The menu a right click on row {@code index} opens, as Finder's: inside a selection of several sessions the menu
+     * that acts on all of them, the selection kept; elsewhere that row alone is selected and its session's own menu
+     * opens.
+     */
+    JPopupMenu rowMenu(final int index) {
+        final List<SessionState> selected = sessions.getSelectedValuesList();
+        if (selected.size() > 1 && sessions.isSelectedIndex(index)) {
+            return SessionGroupMenu.menu(selected, state, intents);
+        }
+        sessions.setSelectedIndex(index);
+        return sessionMenu(sessionModel.get(index));
     }
 
     JPopupMenu sessionMenu(final SessionState s) {
@@ -1377,30 +1493,37 @@ public final class SessionsSidebar {
                 m.add(IconMenus.item("Interrupt the turn", "interrupt", () -> intents.dispatch(new Intent.InterruptSession(s.name()))));
             }
         } else {
-            m.add(IconMenus.item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
+            m.add(IconMenus.item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))))
+                    .setEnabled(SessionBar.canStart(s));
         }
         if (SessionBar.showsFresh(s)) {
             m.add(tipped(IconMenus.item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))),
-                    SessionRow.freshTip(s))).setEnabled(free);
+                    SessionRow.freshTip(s))).setEnabled(SessionBar.canStartFresh(s));
         }
-        if (SessionBar.showsCheckpoint(s)) {
-            m.add(tipped(IconMenus.item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", SessionBar.checkpointIcon(s),
-                    () -> intents.dispatch(new Intent.Checkpoint(s.name()))), SessionBar.checkpointTip(s)))
-                    .setEnabled(SessionBar.canCheckpoint(s));
+        // the session bar's three buttons, enabled as there
+        if (SessionBar.showsReflect(s)) {
+            final String reflect = s.reflection().due() ? "Reflect, due" : "Reflect";
+            m.add(tipped(IconMenus.item(reflect, SessionBar.reflectIconName(s),
+                    () -> intents.dispatch(SessionBar.reflectIntent(s))), SessionBar.reflectTip(s)))
+                    .setEnabled(SessionBar.canReflect(s));
         }
         if (s.status().isUsable()) {
-            m.add(tipped(IconMenus.item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),
-                    SessionRow.COMPACT_TIP)).setEnabled(free);
+            m.add(tipped(IconMenus.item("Compact the conversation", "compact",
+                    () -> intents.dispatch(SessionBar.compactIntent(s))), SessionRow.COMPACT_TIP))
+                    .setEnabled(SessionBar.canCompact(s));
+            m.add(tipped(IconMenus.item("Clear the conversation", "clear-conversation",
+                    () -> intents.dispatch(SessionBar.clearIntent(s))), SessionBar.clearTip(s)))
+                    .setEnabled(SessionBar.canClear(s));
             rewriteItem(s).ifPresent(m::add);
         }
         m.addSeparator();
         // the menus name what the session runs at, as the row's chips did (record 89)
-        final JMenu models = new JMenu("Model: " + SessionRow.modelName(s));
+        final JMenu models = IconMenus.submenu("Model: " + SessionRow.modelName(s), MODEL_ICON);
         models.setToolTipText(SessionRow.modelTip(s));
         modelItems(s).forEach(models::add);
         models.setEnabled(free);
         m.add(models);
-        final JMenu efforts = new JMenu("Effort: " + SessionRow.effortName(s));
+        final JMenu efforts = IconMenus.submenu("Effort: " + SessionRow.effortName(s), EFFORT_ICON);
         efforts.setToolTipText(SessionRow.effortTip(s));
         effortItems(s).forEach(efforts::add);
         efforts.setEnabled(free);

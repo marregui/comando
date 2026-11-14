@@ -6,7 +6,6 @@ import java.awt.Desktop;
 import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
 import java.awt.Taskbar;
-import java.awt.Window;
 import java.awt.event.InputEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -85,8 +84,6 @@ import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.IconSet;
-import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.HitMarks;
 import dev.marregui.comando.ui.kit.text.Previews;
@@ -414,7 +411,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         deps.schemas().addListener(schemaListener);
         final LowerPanel lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
         workspace.onThemeChosen(this::themeChosen);
-        workspace.onIconSetChosen(this::iconSetChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         final SidePane side = new SidePane(ctx, widgets);
         // the panels moved to the right side are the partition's, beside its views
@@ -925,15 +921,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         windowLayout.theme(theme);
         // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
         LayoutKeeper.fadeTo(theme, this::render);
-    }
-
-    /** An icon family was chosen: keep it and repaint every window which holds stable icon instances. */
-    void iconSetChosen(final IconSet set) {
-        Icons.choose(set);
-        windowLayout.iconSet(set);
-        for (final Window window : Window.getWindows()) {
-            window.repaint();
-        }
     }
 
     /**

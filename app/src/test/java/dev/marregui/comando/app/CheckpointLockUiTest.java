@@ -32,16 +32,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// A session locks while its checkpoint runs (record 130), in the real window against a stand-in for `claude -p`.
 /// Opens the window, so this runs in `./gradlew :app:uiTest`.
-/// - the Checkpoint button locks the session's panel: not editable; Checkpoint, Fresh and Compact off; Stop on
-/// - Stop interrupts the checkpoint: the panel is editable again and no `/compact` goes out
-/// - a checkpoint left to finish stays locked through its `/compact`, and unlocks when the compaction ends
+/// - the Reflect button locks the session's panel: not editable; Reflect, Compact, Clear and Fresh off; Stop on
+/// - Stop interrupts the reflection: the panel is editable again and no `/compact` goes out
+/// - a reflection left to finish unlocks when its turn ends, with no `/compact` after it
+/// - the checkpoint (`session_checkpoint`'s intent) stays locked through its `/compact`, and unlocks when the
+///   compaction ends
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class CheckpointLockUiTest {
 
     @TempDir
     Path home;
 
-    /// The stand-in holds the first `/reflect` until it is interrupted, the second until `reflect.go` exists, and
+    /// The stand-in holds the first `/reflect` until it is interrupted, every later one until `reflect.go` exists, and
     /// `/compact` until `compact.go` exists, so the locked window can be read at each step; the prompts it received
     /// say what was sent. It answers an interrupt as Claude Code 2.1.316 does, a failed result whose `terminal_reason`
     /// is `aborted_streaming`, which comando reads as the user's interrupt, not as a failed turn.
@@ -125,8 +127,8 @@ class CheckpointLockUiTest {
             assertThat(onEdt(() -> view.editor().area().isEditable() && compact.enabled().getAsBoolean()))
                     .as("unlocked").isTrue();
 
-            // the gesture: a click on the session bar's Checkpoint button; the first /reflect runs until stopped
-            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());
+            // the gesture: a click on the session bar's Reflect button; the first /reflect runs until stopped
+            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Reflect").doClick());
             awaitLocked(loop, view, compact, true);
             // Stop: the panel's own button, which interrupts its session's turn
             SwingUtilities.invokeAndWait(() -> button(view, "Stop").doClick());
@@ -134,13 +136,18 @@ class CheckpointLockUiTest {
             assertThat(prompts(stdin)).as("interrupted: no /compact").containsExactly("hello", "/reflect");
             assertThat(session(loop).lastTurnError()).as("an interrupt, not a failed turn").isEmpty();
 
-            // a checkpoint left to finish: locked through its /compact, unlocked when the compaction ends
-            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());
+            // a reflection left to finish: unlocked when its turn ends, nothing sent after it
+            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Reflect").doClick());
             awaitLocked(loop, view, compact, true);
             Files.writeString(reflectGo, "");
+            awaitLocked(loop, view, compact, false);
+            assertThat(prompts(stdin)).as("Reflect sends no /compact").containsExactly("hello", "/reflect", "/reflect");
+
+            // the checkpoint, as session_checkpoint sends it: locked through its /compact, unlocked when it ends
+            loop.dispatch(new Intent.Checkpoint("work"));
             Awaitility.await("the compaction sent").atMost(Duration.ofSeconds(20))
                     .untilAsserted(() -> assertThat(prompts(stdin))
-                            .containsExactly("hello", "/reflect", "/reflect", "/compact"));
+                            .containsExactly("hello", "/reflect", "/reflect", "/reflect", "/compact"));
             awaitLocked(loop, view, compact, true);
             Files.writeString(compactGo, "");
             awaitLocked(loop, view, compact, false);
@@ -154,7 +161,8 @@ class CheckpointLockUiTest {
 
     /**
      * Waits until the session and its window are {@code locked}, or not: the state's lock, the panel's text, the
-     * session bar's Checkpoint and Fresh, the palette's Compact, all off while locked, with the panel's Stop on.
+     * session bar's Reflect, Compact, Clear and Fresh, the palette's Compact, all off while locked, with the panel's
+     * Stop on.
      */
     private static void awaitLocked(final StateLoop loop, final EditorPanel view, final Command compact,
             final boolean locked) {
@@ -162,11 +170,13 @@ class CheckpointLockUiTest {
             assertThat(session(loop).isCheckpointing()).as("the state").isEqualTo(locked);
             final List<Boolean> window = onEdt(() -> {
                 final Container root = SwingUtilities.getWindowAncestor(view);
-                return List.of(view.locked(), view.editor().area().isEditable(), button(root, "Checkpoint").isEnabled(),
+                return List.of(view.locked(), view.editor().area().isEditable(), button(root, "Reflect").isEnabled(),
+                        button(root, "Compact the conversation").isEnabled(),
+                        button(root, "Clear the conversation").isEnabled(),
                         button(root, "Start a new conversation").isEnabled(), compact.enabled().getAsBoolean());
             });
-            assertThat(window).as("locked, editable, Checkpoint, Fresh, Compact")
-                    .containsExactly(locked, !locked, !locked, false, !locked);
+            assertThat(window).as("locked, editable, Reflect, Compact, Clear, Fresh, the palette's Compact")
+                    .containsExactly(locked, !locked, !locked, !locked, !locked, false, !locked);
             if (locked) {
                 assertThat(onEdt(() -> button(view, "Stop").isEnabled())).as("Stop stays on").isTrue();
             }

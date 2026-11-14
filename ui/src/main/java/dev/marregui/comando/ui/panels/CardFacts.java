@@ -44,7 +44,7 @@ record CardFacts(String title, List<Fact> facts) {
             final String context = SessionRow.contextText(s);
             if (!context.isEmpty()) {
                 add(facts, "Context", context + " · " + Labels.tokens(s.contextTokens()) + " of " + Labels.tokens(s.contextWindow())
-                        + (s.reflection().due() && SessionBar.showsCheckpoint(s) ? " · checkpoint due" : ""));
+                        + (s.reflection().due() && SessionBar.showsReflect(s) ? " · checkpoint due" : ""));
             }
             add(facts, "Folder", Labels.shortPath(s.spec().workDir()) + (s.branch().isEmpty() ? "" : " · " + s.branch()));
             final SessionSubject subject = s.subject();

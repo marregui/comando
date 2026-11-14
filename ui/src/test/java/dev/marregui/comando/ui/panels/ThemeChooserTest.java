@@ -8,18 +8,14 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.swing.JPanel;
-import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -39,21 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The popover lies under the anchor, right-aligned with it, kept on the anchor's screen, above it when there is no
 ///   room below; on no screen it is left where it falls.
 class ThemeChooserTest {
-
-    /// The icon row has a toggle for each family and a click reports that family to the chooser's callback.
-    @Test
-    void theIconRowHasOneTogglePerSetAndReportsItsChoice() throws Exception {
-        final AtomicReference<IconSet> chosen = new AtomicReference<>();
-        final AtomicReference<List<JToggleButton>> toggles = new AtomicReference<>();
-        SwingUtilities.invokeAndWait(() -> {
-            final JPanel row = ThemeChooser.iconSets(chosen::set);
-            toggles.set(Arrays.stream(row.getComponents()).filter(JToggleButton.class::isInstance)
-                    .map(JToggleButton.class::cast).toList());
-            toggles.get().get(IconSet.MONOSPACE.ordinal()).doClick();
-        });
-        assertThat(toggles.get()).hasSize(IconSet.values().length);
-        assertThat(chosen.get()).isEqualTo(IconSet.MONOSPACE);
-    }
 
     /// Slot i of the light themes is the twin of slot i of the dark ones; the two console themes take slots 6 and 7
     /// of the dark mode, which the light mode leaves empty, and the toggle from either takes the light mode's first.

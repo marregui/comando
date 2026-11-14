@@ -138,20 +138,28 @@ Any number of document panels may be attached to a session
   now and keeps it, as the session's menu in the sidebar does; the context ("ctx 412k (41%)"), followed after every
   model call of a turn and, when a stored conversation is loaded, taken from its last call or the metrics its last turn
   left, so a restart keeps it ("ctx –" only while nothing is known;
-  [record 120](adr/0120-the-context-follows-each-model-call.md)); and right after it the checkpoint, shown while the
-  session has a checkpoint command, `/reflect` by default
-  ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)). The context and the checkpoint
-  turn purple together once a turn ended with the context at the checkpoint threshold or more, 40% of the window unless
-  the palette's Checkpoint threshold… set another percentage, from 10 to 100 (a lower or other value is refused with the
-  reason and the threshold kept), and the command was not sent since; after a checkpoint the context has to drop below
-  the threshold and cross it again before the next one is due. At that same turn's end comando runs the checkpoint by
-  itself, and the session carries on with its work after it; what a checkpoint does once its turn has finished is in
-  [Claude Code §2](claude-code.md#2-the-checkpoint). While it runs every control of the bar but the plug is off, and the
-  activity, purple, reads "checkpoint · compacting · 12 s · Stop to carry on"
-  ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). Compact has no button: the palette's "Compact
-  the conversation", the session's menu and `/compact` do it. The palette also holds Start or stop the session,
-  Checkpoint, Start a new conversation, Rewrite the panel as a document, Copy the session's details, Clone the session…
-  and Remove the session…, each acting on the focused panel's session with the session menu's enablement.
+  [record 120](adr/0120-the-context-follows-each-model-call.md)); and right after it three icon buttons
+  ([record 156](adr/0156-one-icon-set-and-a-split-checkpoint.md)). **Reflect**, shown while the session has a
+  checkpoint command (`/reflect` by default, [record 45](adr/0045-fresh-start-and-checkpoint-buttons.md)), sends that
+  command and nothing after it; a stopped session starts to run it. **Compact** sends `/compact` to the running
+  session. **Clear** sends `/clear` to the running session, which goes on in a new conversation, the old one still
+  importable; it is greyed while the session is stopped, where Start a new conversation does the same. The checkpoint
+  threshold is 40% of the window unless the palette's Checkpoint threshold… set another percentage, from 10 to 100 (a
+  lower or other value is refused with the reason and the threshold kept). Reflect's icon goes from grey to the
+  checkpoint's purple as the context grows, in proportion to the context over the threshold's share of the window, and
+  is grey while the context is not known; while the context is two points below the threshold or more (38% at 40%) it blinks,
+  and while the session is due, a compaction since included, until the checkpoint command is sent by any route; after
+  that it blinks again only once a turn has ended below that band and the context has come back into it, or the
+  session is due again. The context turns purple once a turn ended with the context at the threshold or more and the command was not
+  sent since; after a checkpoint the context has to drop below the threshold and cross it again before the next one is
+  due. At that same turn's end comando runs the checkpoint by itself, the checkpoint command with `--auto` and then
+  `/compact`, and the session carries on with its work after it; what a checkpoint does once its turn has finished is in
+  [Claude Code §2](claude-code.md#2-the-checkpoint). While a checkpoint runs, Reflect's turn included, every
+  control of the bar but the plug is off, and the activity is purple; while the automatic checkpoint compacts it reads
+  "checkpoint · compacting · 12 s · Stop to carry on" ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). The palette holds Reflect,
+  Compact the conversation and Clear the conversation too, and Start or stop the session, Start a new conversation,
+  Rewrite the panel as a document, Copy the session's details, Clone the session… and Remove the session…, each acting
+  on the focused panel's session with the session menu's enablement.
   A panel without a session shows only the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
   plans' usage, each under its name, and the work running in every session and query on the right, gold only on what
@@ -290,11 +298,10 @@ the window as an instrument console (below). The choice is kept across restarts.
   ([record 128](adr/0128-a-chooser-of-twelve-themes.md)). The switch is a pill with a knob of polished metal, a moon on
   it in dark and a sun in light. The palette has every theme too ([record 104](adr/0104-the-theme-beside-new-panel.md),
   [record 114](adr/0114-help-menu-and-corner-buttons.md)).
-- **Icon sets.** Under the cards, a row of icon sets: Classic and eight more (Hairline, Gold duotone, Solid glyph,
-  Console, Chevron line, Graphite tile, Signal lamp, Monospace), each shown by its session icon. A click changes every
-  icon in every window at once and is kept, as the theme is; the palette has each as `Icons: <set>`. Every set draws
-  the same icons, coloured by owner: grey the kit, gold the brain, orange Claude; on a light theme a set's ivory
-  paints in the text colour ([record 155](adr/0155-icon-sets-switch-like-themes.md)).
+- **The icons.** comando draws one set of icons, the same under every theme: a theme recolours their gold to its tint
+  and leaves their amber, attention's gold, as it is. Every item of every menu carries one, the menu bar's
+  ([record 59](adr/0059-three-menus-for-what-has-no-key.md)) and every right-click menu's. There is no other set to switch to: an icon carries a behaviour learnt by use, and
+  changing it is a disruption ([record 156](adr/0156-one-icon-set-and-a-split-checkpoint.md)).
 - **The console.** A theme whose file says `"style": "console"` draws the window as the consoles in films are
   drawn, the instrument kind: square corners; a hairline with four corner brackets round the sidebar, the editors,
   the lower panel and the side pane; the tabs' titles and the sidebar's group headers in DIN Condensed (DIN
@@ -442,12 +449,27 @@ Everything else is in the row's menu:
 | Start, Stop | stopped, running | starts or stops the process |
 | Interrupt the turn | while a turn runs | as ⌘⇧. |
 | Start a new conversation | stopped, with a conversation to leave | the next start is a new conversation; the old one stays importable |
-| Checkpoint (Checkpoint, due) | the session has a checkpoint command | as the session bar's ([Claude Code §2](claude-code.md#2-the-checkpoint)) |
+| Reflect (Reflect, due) | the session has a checkpoint command | as the session bar's Reflect: sends the checkpoint command alone |
 | Compact the conversation | running | sends `/compact` from the session's panel |
+| Clear the conversation | running | sends `/clear` from the session's panel: a new conversation, the old one importable |
 | Rewrite ‹panel› as a document | running, with a panel open; off while its text is blank | sends the panel's text to the session with an instruction to rewrite it as a Markdown document and put it in place with `ui_set_editor` ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)) |
 | Model: ‹family› ▸, Effort: ‹level› ▸ | always | each names what the session runs at; a choice saves and, on a running session, sends `/model` or `/effort` |
 | Copy details | always | as ⌘C on the row: name, path, branch, the repository written to with its branch, the ticket, the other repositories, full conversation id, status, uptime and start, context with tokens, model and effort, Claude Code version |
 | Edit…, Clone…, Remove… | always | the session dialog; a copy; removal with its own panel |
+
+**Several sessions at once.** The list selects several rows: ⇧-click adds the rows between, ⌘-click adds or takes out
+one ([record 156](adr/0156-one-icon-set-and-a-split-checkpoint.md)). A right-click inside a selection of several opens
+one menu for all of them; on a single row the row's own menu stays as above. Each item acts on every selected session
+it applies to and leaves the others as they are, so a second click changes nothing; it is off when it applies to none,
+and a session whose checkpoint runs is left out by every item but Stop.
+
+| Item | Acts on |
+|---|---|
+| Open in a panel | each session with no panel open: a new panel for each; a session whose panel is open is left |
+| Start | each stopped session |
+| Stop | each running session |
+| Start a new conversation | each stopped session with a conversation to leave |
+| Model ▸, Effort ▸ | each session not already at the choice, as the row's Model and Effort menus do |
 
 The model and effort shown are what the session runs at, the same in the row, its card and menus, and the session bar.
 While a turn runs, they are its latest message's: a skill's `model` or `effort` lasts the

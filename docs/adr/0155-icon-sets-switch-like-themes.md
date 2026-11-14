@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-12 | accepted; built | Miguel and Claude |
+| 2026-11-12 | replaced by [record 156](0156-one-icon-set-and-a-split-checkpoint.md) | Miguel and Claude |
 
 ## 1. Context
 

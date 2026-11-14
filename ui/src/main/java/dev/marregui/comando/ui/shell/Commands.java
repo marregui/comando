@@ -42,8 +42,6 @@ import dev.marregui.comando.ui.kit.action.CommandPalette;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.IconSet;
-import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.panels.EditorPanel;
@@ -196,19 +194,21 @@ final class Commands {
                 }
             }, () -> focus.capability(TranscriptWidget.class) != null);
         }
-        // as the session's menu in the sidebar: only a running session has a conversation to compact, and not while its
-        // checkpoint runs (record 130)
+        // as the session bar's three buttons and the session's menu, with their enablement and their intents:
+        // Reflect sends the session's checkpoint command alone; Compact and Clear need a running session; none of
+        // them while the checkpoint runs (record 130)
+        cmd("session.reflect", "Reflect", null, () -> focusedSession().ifPresent(x ->
+                        deps.intents().dispatch(SessionBar.reflectIntent(x))),
+                () -> focusedSession().filter(SessionBar::canReflect).isPresent());
         cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
-                        deps.intents().dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))),
-                () -> focusedSession().filter(Commands::canCompact).isPresent());
-        // as the session bar's buttons and the session's menu, with the same enablement: off while the checkpoint runs
-        // (record 130)
-        cmd("session.checkpoint", "Checkpoint", null, () -> focusedSession().ifPresent(x ->
-                        deps.intents().dispatch(new Intent.Checkpoint(x.name()))),
-                () -> focusedSession().filter(SessionBar::canCheckpoint).isPresent());
+                        deps.intents().dispatch(SessionBar.compactIntent(x))),
+                () -> focusedSession().filter(SessionBar::canCompact).isPresent());
+        cmd("session.clearConversation", "Clear the conversation", null, () -> focusedSession().ifPresent(x ->
+                        deps.intents().dispatch(SessionBar.clearIntent(x))),
+                () -> focusedSession().filter(SessionBar::canClear).isPresent());
         cmd("session.fresh", "Start a new conversation", null, () -> focusedSession().ifPresent(x ->
                         deps.intents().dispatch(new Intent.StartFresh(x.name()))),
-                () -> focusedSession().filter(Commands::canStartFresh).isPresent());
+                () -> focusedSession().filter(SessionBar::canStartFresh).isPresent());
         cmd("session.rewrite", "Rewrite the panel as a document", null, this::rewritePanel,
                 () -> focusedSession().filter(x -> canRewrite(x, focusedText())).isPresent());
         // the rest of the session's menu in the sidebar, with its enablement: copy and clone read the session, so they
@@ -372,10 +372,6 @@ final class Commands {
             cmd(t.commandId(), t.label, null, () -> ui.themeChosen(t));
             actions.choice(t.commandId(), () -> NamedTheme.chosen().orElse(null) == t);
         }
-        for (final IconSet set : IconSet.values()) {
-            cmd(set.commandId(), "Icons: " + set.label(), null, () -> ui.iconSetChosen(set));
-            actions.choice(set.commandId(), () -> Icons.chosen() == set);
-        }
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         final boolean mac = Platform.isMac();
         cmd("app.about", "About comando", null, help::showAbout);
@@ -487,19 +483,9 @@ final class Commands {
         return s.connection(s.focusedPanel().connection());
     }
 
-    /** Compact, as the session's menu: a running session, not while its checkpoint runs (record 130). */
-    static boolean canCompact(final SessionState x) {
-        return x.status().isUsable() && !x.isCheckpointing();
-    }
-
-    /** Start a new conversation, as the session bar's button and the session's menu: stopped, with one to leave. */
-    static boolean canStartFresh(final SessionState x) {
-        return SessionBar.showsFresh(x) && !x.isCheckpointing();
-    }
-
     /** Rewrite, as the session's menu: a running session, not while its checkpoint runs, and a panel text to rewrite. */
     static boolean canRewrite(final SessionState x, final String text) {
-        return canCompact(x) && !text.isBlank();
+        return SessionBar.canCompact(x) && !text.isBlank();
     }
 
     /** Remove…, as the session's menu: not while the session's checkpoint runs (record 130). */

@@ -1,12 +1,12 @@
 package dev.marregui.comando.ui.widgets.tree;
 
 import javax.swing.JComponent;
-import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.tree.TreeView;
 import dev.marregui.comando.ui.widget.Widget;
@@ -25,9 +25,9 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
         tree.onMenu((n, e) -> {
             if (!n.link().isEmpty()) {
                 final JPopupMenu menu = new JPopupMenu();
-                final JMenuItem item = new JMenuItem(n.link().startsWith(INSERT) ? "Insert into the editor" : "Open");
-                item.addActionListener(a -> open(context, n));
-                menu.add(item);
+                final boolean insert = n.link().startsWith(INSERT);
+                menu.add(IconMenus.item(insert ? "Insert into the editor" : "Open",
+                        insert ? "insert-text" : "open-file", () -> open(context, n)));
                 menu.show(e.getComponent(), e.getX(), e.getY());
             }
         });

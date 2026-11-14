@@ -32,7 +32,7 @@ class ReflectionTest {
     @Test
     void aCheckpointWaitsForATurnBelowTheThresholdAndACrossingAgain() {
         Reflection r = Reflection.checkpointed();
-        assertThat(r).isEqualTo(new Reflection(false, false));
+        assertThat(r).isEqualTo(new Reflection(false, false, true));
         assertThat(r.afterTurn(460_000L, WINDOW, PERCENT).due()).isFalse();
         r = r.afterTurn(40_000L, WINDOW, PERCENT);
         assertThat(r.armed()).isTrue();
@@ -54,5 +54,32 @@ class ReflectionTest {
         assertThat(Reflection.FRESH.afterTurn(900_000L, 0L, PERCENT)).isEqualTo(Reflection.FRESH);
         assertThat(Reflection.FRESH.afterTurn(900_000L, WINDOW, 0)).isEqualTo(Reflection.FRESH);
         assertThat(Reflection.above(900_000L, 0L, PERCENT)).isFalse();
+    }
+
+    /// Reflect's blink: from 38% at a 40% threshold; a checkpoint sent in the band quiets it while the context stays in
+    /// the band below the threshold, and a turn that ends below 38% lets the next rise into the band blink again.
+    @Test
+    void theBlinkStopsWhenSentAndReturnsOnlyAfterTheContextLeftTheBand() {
+        assertThat(Reflection.FRESH.blinks(379_999L, WINDOW, PERCENT)).as("below the band").isFalse();
+        assertThat(Reflection.FRESH.blinks(380_000L, WINDOW, PERCENT)).as("in the band").isTrue();
+        Reflection r = Reflection.checkpointed().afterTurn(390_000L, WINDOW, PERCENT);
+        assertThat(r.blinks(395_000L, WINDOW, PERCENT)).as("sent at 39%, still in the band").isFalse();
+        r = r.afterTurn(100_000L, WINDOW, PERCENT);
+        assertThat(r.blinks(100_000L, WINDOW, PERCENT)).as("compacted, below the band").isFalse();
+        assertThat(r.afterTurn(385_000L, WINDOW, PERCENT).blinks(385_000L, WINDOW, PERCENT))
+                .as("back in the band").isTrue();
+    }
+
+    /// A due session blinks until its checkpoint command is sent, a compaction out of the band included; one sent in
+    /// the band, the context then crossing the threshold again, is due again and blinks.
+    @Test
+    void aDueSessionBlinksUntilSentAndADueOneAfterAQuietReflectBlinksAgain() {
+        final Reflection due = Reflection.FRESH.afterTurn(420_000L, WINDOW, PERCENT);
+        assertThat(due.afterTurn(100_000L, WINDOW, PERCENT).blinks(100_000L, WINDOW, PERCENT))
+                .as("compacted, due").isTrue();
+        final Reflection again = Reflection.checkpointed().afterTurn(395_000L, WINDOW, PERCENT)
+                .afterTurn(420_000L, WINDOW, PERCENT);
+        assertThat(again.due()).isTrue();
+        assertThat(again.blinks(420_000L, WINDOW, PERCENT)).as("due again after a quiet reflect").isTrue();
     }
 }

@@ -10,7 +10,8 @@ import dev.marregui.comando.ui.kit.theme.Tint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [Icons#gilded] repaints the SVG icons' gold in the chosen [Tint] and their amber as attention.
+/// [Icons#gilded] repaints the SVG icons' gold in the chosen [Tint], their amber as attention and their purple as the
+/// theme's.
 /// - The SVG gold paints as the tint's body, keeping its alpha.
 /// - The SVG amber paints as [Theme#ATTENTION], gold even under silver.
 /// - No other colour changes.
@@ -23,7 +24,7 @@ class GildedIconsTest {
     }
 
     /// Under CHAMPAGNE, SILVER and TREASURE the SVG gold maps to the tint's body with its alpha kept, the amber maps to
-    /// attention (TREASURE's body under SILVER), and a grey is returned unchanged.
+    /// attention (TREASURE's body under SILVER), and a grey or the SVGs' ivory is returned unchanged.
     @Test
     void theSvgsGoldPaintsAsTheTintChosenTheirAmberAsAttentionAndNoOtherColourChanges() {
         Theme.tint(Tint.CHAMPAGNE);
@@ -34,20 +35,11 @@ class GildedIconsTest {
         assertThat(Icons.gilded(new Color(Icons.SVG_GOLD))).as("a new file's dot in silver").isEqualTo(Tint.SILVER.body);
         assertThat(Icons.gilded(new Color(Icons.SVG_AMBER))).as("the warning stays gold").isEqualTo(Tint.TREASURE.body);
         assertThat(Icons.gilded(new Color(0x8C8C8C))).isEqualTo(new Color(0x8C8C8C));
+        assertThat(Icons.gilded(new Color(Icons.SVG_PURPLE)).getRGB()).as("a due checkpoint's purple, the theme's")
+                .isEqualTo(Theme.THINKING.getRGB());
+        assertThat(Icons.gilded(new Color(0xE8E2D4))).as("the ivory Classic draws in").isEqualTo(new Color(0xE8E2D4));
         Theme.tint(Tint.TREASURE);
         assertThat(Icons.gilded(new Color(Icons.SVG_GOLD))).isEqualTo(Tint.TREASURE.body);
-    }
-
-    /// A set's ivory paints as the text colour only on a light theme and only for a set other than Classic, keeping
-    /// its alpha; on a dark theme, or in Classic, it stays ivory.
-    @Test
-    void aSetsIvoryPaintsAsTheTextColourOnALightTheme() {
-        final Color ivory = new Color(Icons.SVG_IVORY);
-        final Color text = new Color(0x2B2B2B);
-        assertThat(Icons.gilded(ivory, IconSet.HAIRLINE, true, text)).isEqualTo(text);
-        assertThat(Icons.gilded(new Color(0xE8, 0xE2, 0xD4, 90), IconSet.MONOSPACE, true, text).getAlpha()).isEqualTo(90);
-        assertThat(Icons.gilded(ivory, IconSet.HAIRLINE, false, text)).as("dark theme").isEqualTo(ivory);
-        assertThat(Icons.gilded(ivory, IconSet.CLASSIC, true, text)).as("Classic").isEqualTo(ivory);
     }
 
     /// [Tint#named] falls back to TREASURE for a name no tint has, and every tint's [Tint#at] gives highlight at 0,

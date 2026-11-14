@@ -19,6 +19,7 @@ import javax.swing.JPopupMenu;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
@@ -28,6 +29,7 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SessionSubject;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.BlendIcon;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -40,9 +42,12 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  * The focused panel's session, under the lower panel (record 105). On the left its chip, the session's state icon, name
  * and branch, whose menu binds, attaches or detaches it; the plug that starts or stops it; the new conversation; then
  * what it does ("working · 12 s"), last, so that its changing width moves nothing. On the right its model and effort,
- * each a menu that changes it, then its context and, beside it, the checkpoint the context makes due, both purple once
- * it is. A panel without a session shows the chip that binds one, and nothing else. While the session runs its
- * checkpoint every control but the plug is off and the activity, purple, says how to carry on (record 130).
+ * each a menu that changes it, then its context and, beside it, Reflect, Compact and Clear: Reflect sends the session's
+ * checkpoint command alone, its bookmark turning from grey to purple as the context fills towards the checkpoint
+ * threshold and blinking from two points below it until the command is sent; Compact and Clear send {@code /compact}
+ * and {@code /clear} to the running session. A panel without a session shows the chip that binds one, and nothing
+ * else. While the session runs its checkpoint every control but the plug is off and the activity, purple, says how to
+ * carry on (record 130).
  */
 public final class SessionBar {
 
@@ -66,10 +71,21 @@ public final class SessionBar {
      */
     private final Gauge contextGauge = new Gauge("CTX");
     /**
-     * Sends the session's checkpoint command; once its turn has finished, the conversation is compacted (record 129).
-     * Beside the context, which makes it due; shown while the session has one.
+     * Sends the session's checkpoint command, and nothing after it; beside the context, which makes it due; shown while
+     * the session has one. Its icon is drawn from grey to purple by the context's share of the threshold.
      */
-    private final JButton checkpoint = EditorPanel.iconButton();
+    private final JButton reflect = EditorPanel.iconButton();
+    /** Reflect's bookmark, drawn the share of the way to the checkpoint's purple that the context has filled. */
+    private final BlendIcon reflectIcon = new BlendIcon("checkpoint", Theme.THINKING);
+    /** Sends {@code /compact} to the running session. */
+    private final JButton compact = EditorPanel.iconButton();
+    /** Sends {@code /clear} to the running session, which goes on in a new conversation. */
+    private final JButton clear = EditorPanel.iconButton();
+    /**
+     * The blink's phase: while Reflect blinks, the shell's one-second tick turns this over and the bookmark is drawn
+     * grey on every other tick; false while it does not blink.
+     */
+    private boolean dim;
     /** Opens the session dialog on a new session with the name given; the shell's. */
     private Consumer<String> newSession = name -> {
     };
@@ -94,8 +110,13 @@ public final class SessionBar {
         model.setForeground(Theme.MUTED);
         effort.setForeground(Theme.MUTED);
         context.getAccessibleContext().setAccessibleName("Context");
-        checkpoint.setIcon(Icons.get("checkpoint"));
-        checkpoint.getAccessibleContext().setAccessibleName("Checkpoint");
+        reflect.setIcon(reflectIcon);
+        reflect.getAccessibleContext().setAccessibleName("Reflect");
+        compact.setIcon(Icons.get("compact"));
+        compact.getAccessibleContext().setAccessibleName("Compact the conversation");
+        compact.setToolTipText(SessionRow.COMPACT_TIP);
+        clear.setIcon(Icons.get("clear-conversation"));
+        clear.getAccessibleContext().setAccessibleName("Clear the conversation");
         // on a narrow window the chip's name and the activity give way, ending in "…"; the buttons stay whole
         final JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, activity)));
         left.add(session);
@@ -103,13 +124,15 @@ public final class SessionBar {
         left.add(fresh);
         left.add(activity);
         activity.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
-        // centred on the chip's line, as the left's row is; the checkpoint right after the context it belongs to
+        // centred on the chip's line, as the left's row is; Reflect right after the context that makes it due
         final JPanel right = new JPanel(new ShrinkingRow(2, 0, Set.of()));
         right.add(model);
         right.add(effort);
         right.add(context);
         right.add(contextGauge);
-        right.add(checkpoint);
+        right.add(reflect);
+        right.add(compact);
+        right.add(clear);
         context.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
         contextGauge.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
         contextGauge.setVisible(false);
@@ -123,7 +146,9 @@ public final class SessionBar {
         toggle.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(x.status().isUsable()
                 ? new Intent.StopSession(x.name()) : new Intent.StartSession(x.name()))));
         fresh.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
-        checkpoint.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
+        reflect.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(reflectIntent(x))));
+        compact.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(compactIntent(x))));
+        clear.addActionListener(e -> shown().ifPresent(x -> intents.dispatch(clearIntent(x))));
         // the console style shows the context as a gauge, in the tint: drawn again on another theme while in a window,
         // whose close stops it
         SidebarLook.whileShown(root, () -> {
@@ -157,6 +182,7 @@ public final class SessionBar {
         return choices(s -> SessionsSidebar.effortItems(s, intents));
     }
 
+    /** The items as the sidebar makes them; one it gives no icon shows {@code icon}, as every popup item has one. */
     private JPopupMenu choices(final Function<SessionState, List<JMenuItem>> items) {
         final JPopupMenu m = new JPopupMenu();
         shown().ifPresent(s -> items.apply(s).forEach(m::add));
@@ -172,7 +198,8 @@ public final class SessionBar {
             session.setIcon(Icons.get("claude-off"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
-            for (final JComponent c : new JComponent[]{toggle, fresh, activity, model, effort, context, contextGauge, checkpoint}) {
+            for (final JComponent c : new JComponent[]{toggle, fresh, activity, model, effort, context, contextGauge,
+                    reflect, compact, clear}) {
                 c.setVisible(false);
             }
             return;
@@ -193,7 +220,7 @@ public final class SessionBar {
         // shown while the session has a conversation to leave behind; a fresh start clears it, which hides the button
         // until the new conversation's id arrives; usable while stopped
         fresh.setVisible(!ss.spec().claudeSessionId().isEmpty());
-        fresh.setEnabled(showsFresh(ss));
+        fresh.setEnabled(canStartFresh(ss));
         fresh.setToolTipText(showsFresh(ss) ? SessionRow.freshTip(ss) : "Start a new conversation; stop the session first");
         final String doing = busyText(ss).strip();
         activity.setVisible(true);
@@ -207,7 +234,7 @@ public final class SessionBar {
         effort.setEnabled(free);
         effort.setText(SessionRow.effortName(ss) + " ▾");
         effort.setToolTipText(SessionRow.effortTip(ss));
-        final boolean due = ss.reflection().due() && showsCheckpoint(ss);
+        final boolean due = ss.reflection().due() && showsReflect(ss);
         final int percent = threshold.getAsInt();
         // a gauge shows a share it knows: before a turn reports the context, or without its window, the label stays
         final boolean gauge = Theme.style() == Style.CONSOLE && !SessionRow.contextText(ss).isEmpty();
@@ -219,18 +246,47 @@ public final class SessionBar {
         if (gauge) {
             contextGauge.show((int) Math.min(100L, ss.contextTokens() * 100L / ss.contextWindow()),
                     due ? Theme.THINKING : Theme.tint().body);
-            contextGauge.tick(showsCheckpoint(ss) ? OptionalInt.of(percent) : OptionalInt.empty());
+            contextGauge.tick(showsReflect(ss) ? OptionalInt.of(percent) : OptionalInt.empty());
             contextGauge.setToolTipText(context.getToolTipText());
         }
-        checkpoint.setVisible(showsCheckpoint(ss));
-        checkpoint.setEnabled(canCheckpoint(ss));
-        checkpoint.setIcon(Icons.get(checkpointIcon(ss)));
-        checkpoint.setToolTipText(checkpointTip(ss));
+        reflect.setVisible(showsReflect(ss));
+        reflect.setEnabled(canReflect(ss));
+        reflect.setToolTipText(reflectTip(ss));
+        shade(ss, percent);
+        compact.setVisible(true);
+        compact.setEnabled(canCompact(ss));
+        clear.setVisible(true);
+        clear.setEnabled(canClear(ss));
+        clear.setToolTipText(clearTip(ss));
     }
 
-    /** Refreshes what changes with time alone: the elapsed time of what the session does, working or waiting. */
+    /**
+     * Refreshes what changes with time alone: the elapsed time of what the session does, working or waiting, and
+     * Reflect's blink, which turns over at each call (the shell's one-second tick).
+     */
     public void tick() {
-        shown().filter(SessionBar::counting).ifPresent(ss -> activity.setText(busyText(ss).strip()));
+        shown().ifPresent(ss -> {
+            if (counting(ss)) {
+                activity.setText(busyText(ss).strip());
+            }
+            final int percent = threshold.getAsInt();
+            if (blinks(ss, percent) || dim) {
+                dim = !dim;
+                shade(ss, percent);
+            }
+        });
+    }
+
+    /**
+     * Draws Reflect's bookmark at the context's share of the threshold, grey in the dim half of a blink; a session that
+     * stops blinking is drawn lit again at once, not left grey until the next tick.
+     */
+    private void shade(final SessionState ss, final int percent) {
+        if (!blinks(ss, percent)) {
+            dim = false;
+        }
+        reflectIcon.share(dim ? 0.0 : reflectShare(ss, percent));
+        reflect.repaint();
     }
 
     /**
@@ -243,12 +299,14 @@ public final class SessionBar {
         final JPopupMenu m = new JPopupMenu();
         if (!panel.session().isEmpty()) {
             if (panel.document()) {
-                final JMenuItem detach = new JMenuItem(Plain.text("Detach from " + panel.session()));
+                final JMenuItem detach = new JMenuItem(Plain.text("Detach from " + panel.session()),
+                        Icons.get("close"));
                 detach.setToolTipText("The document stays open; its selection no longer runs in the session");
                 detach.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
                 m.add(detach);
             } else {
-                m.add(new JMenuItem(Plain.text(panel.session() + "'s own panel: removing either removes both"))).setEnabled(false);
+                m.add(new JMenuItem(Plain.text(panel.session() + "'s own panel: removing either removes both"),
+                        Icons.get("info"))).setEnabled(false);
             }
             return m;
         }
@@ -271,7 +329,8 @@ public final class SessionBar {
             m.add(item);
         }
         if (state.sessions().isEmpty() && p.document()) {
-            m.add(new JMenuItem("No sessions; New session… or Import stored conversations… in the Sessions tab's menu adds one")).setEnabled(false);
+            m.add(new JMenuItem("No sessions; New session… or Import stored conversations… in the Sessions tab's "
+                    + "menu adds one", Icons.get("info"))).setEnabled(false);
         }
         return m;
     }
@@ -349,7 +408,7 @@ public final class SessionBar {
     }
 
     /**
-     * How full the context is and how it relates to the checkpoint beside it, which falls due at {@code percent} of the
+     * How full the context is and how it relates to Reflect beside it, which falls due at {@code percent} of the
      * context window.
      */
     static String contextTip(final SessionState ss, final boolean due, final int percent) {
@@ -357,11 +416,11 @@ public final class SessionBar {
         final String used = ss.contextTokens() <= 0 ? "Context: unknown until a turn ends"
                 : "Context: " + SessionRow.contextText(ss) + " (" + Labels.tokens(ss.contextTokens())
                 + (ss.contextWindow() > 0 ? " of " + Labels.tokens(ss.contextWindow()) : "") + " tokens)";
-        if (!showsCheckpoint(ss)) {
+        if (!showsReflect(ss)) {
             return used;
         }
-        return used + (due ? "; past " + threshold + ", the checkpoint beside it is due"
-                : "; the checkpoint beside it falls due at " + threshold);
+        return used + (due ? "; past " + threshold + ", Reflect beside it is due"
+                : "; Reflect beside it falls due at " + threshold);
     }
 
     /** The fresh-start button works while the session is stopped and has a conversation to leave behind. */
@@ -369,33 +428,100 @@ public final class SessionBar {
         return !ss.status().isUsable() && ss.status() != Status.CLOSING && !ss.spec().claudeSessionId().isEmpty();
     }
 
-    /** The checkpoint button shows for a session with a checkpoint command. */
-    public static boolean showsCheckpoint(final SessionState ss) {
+    /**
+     * Whether Start a new conversation can run, wherever offered: the session bar, the session's menu, the group
+     * menu and the palette; as {@link #showsFresh}, and not while the session runs its checkpoint (record 130).
+     */
+    public static boolean canStartFresh(final SessionState ss) {
+        return showsFresh(ss) && !ss.isCheckpointing();
+    }
+
+    /** Reflect shows for a session with a checkpoint command: on the session bar, the session's menu, the palette. */
+    public static boolean showsReflect(final SessionState ss) {
         return !ss.spec().checkpoint().isEmpty();
     }
 
     /**
-     * Whether Checkpoint can run, the same on the session bar, the session's menu and the palette: the session has a
+     * Whether Reflect can run, the same on the session bar, the session's menu and the palette: the session has a
      * checkpoint command, is not stopping, which the reducer refuses, and does not run its checkpoint already (record
-     * 130).
+     * 130). A stopped session takes it: it starts, then the command is sent, as a prompt would be.
      */
-    public static boolean canCheckpoint(final SessionState ss) {
-        return showsCheckpoint(ss) && ss.status() != Status.CLOSING && !ss.isCheckpointing();
+    public static boolean canReflect(final SessionState ss) {
+        return showsReflect(ss) && ss.status() != Status.CLOSING && !ss.isCheckpointing();
     }
 
-    /** Grey; purple once the checkpoint is due: the context filled past the threshold since the last one. */
-    static String checkpointIcon(final SessionState ss) {
+    /** Whether Start can run, wherever offered: a session not running and not stopping, which the reducer refuses. */
+    public static boolean canStart(final SessionState ss) {
+        return !ss.status().isUsable() && ss.status() != Status.CLOSING;
+    }
+
+    /** Whether Compact can run, wherever offered: a running session, not while its checkpoint runs (record 130). */
+    public static boolean canCompact(final SessionState ss) {
+        return ss.status().isUsable() && !ss.isCheckpointing();
+    }
+
+    /**
+     * Whether Clear can run, wherever it is offered: as Compact, a running session, not while its checkpoint runs; a
+     * stopped session leaves its conversation with "Start a new conversation" instead.
+     */
+    public static boolean canClear(final SessionState ss) {
+        return canCompact(ss);
+    }
+
+    /**
+     * What Reflect dispatches: the session's checkpoint command, alone, which the reducer marks as the checkpoint sent
+     * and runs locked until its turn ends; no compaction follows, Compact is beside it.
+     */
+    public static Intent reflectIntent(final SessionState ss) {
+        return new Intent.SessionCommand(ss.name(), ss.spec().checkpoint());
+    }
+
+    /** What Compact dispatches: {@code /compact} to the session. */
+    public static Intent compactIntent(final SessionState ss) {
+        return new Intent.SessionCommand(ss.name(), SessionSpec.COMPACT_COMMAND);
+    }
+
+    /** What Clear dispatches: {@code /clear} to the session, whose new conversation the reducer then follows. */
+    public static Intent clearIntent(final SessionState ss) {
+        return new Intent.SessionCommand(ss.name(), SessionSpec.CLEAR_COMMAND);
+    }
+
+    /** What Reflect sends, and whether the context has made it due. */
+    public static String reflectTip(final SessionState ss) {
+        final String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40);
+        return ss.reflection().due() ? "Reflect, due: the context passed the checkpoint threshold; " + send
+                : "Reflect: " + send;
+    }
+
+    /** What Clear sends and what it leaves; why it is off while the session is stopped. */
+    public static String clearTip(final SessionState ss) {
+        final String tip = "Clear the conversation: sends " + SessionSpec.CLEAR_COMMAND
+                + "; the session goes on in a new one";
+        return ss.status().isUsable() ? tip : tip + "; start the session first, or start a new conversation";
+    }
+
+    /** The icon a menu shows for Reflect: grey; purple once due, the context past the threshold since the last. */
+    public static String reflectIconName(final SessionState ss) {
         return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
     }
 
     /**
-     * What the checkpoint sends and what follows: the compaction (record 129), or nothing while an earlier checkpoint's
-     * summary still waits.
+     * How far Reflect's bookmark is drawn from grey to purple: the context's share of the threshold, {@code percent} of
+     * the window, at most 1; 0 while the context or its window is unknown.
      */
-    static String checkpointTip(final SessionState ss) {
-        final String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
-                ? ", then compacts the conversation"
-                : "; the last checkpoint's summary still waits for the next prompt");
-        return ss.reflection().due() ? "Checkpoint due, the context passed the checkpoint threshold: " + send : "Checkpoint: " + send;
+    static double reflectShare(final SessionState ss, final int percent) {
+        if (ss.contextTokens() <= 0L || ss.contextWindow() <= 0L || percent <= 0) {
+            return 0.0;
+        }
+        return Math.clamp(ss.contextTokens() * 100.0 / ((double) percent * ss.contextWindow()), 0.0, 1.0);
+    }
+
+    /**
+     * Whether Reflect blinks, as {@link Reflection#blinks} has it: due, or the context within
+     * {@link Reflection#BLINK_POINTS} of the threshold, {@code percent} of the window, and the checkpoint command not
+     * sent since it last came into that band.
+     */
+    static boolean blinks(final SessionState ss, final int percent) {
+        return showsReflect(ss) && ss.reflection().blinks(ss.contextTokens(), ss.contextWindow(), percent);
     }
 }

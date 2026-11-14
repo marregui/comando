@@ -14,9 +14,9 @@ import java.util.Objects;
  * @param effort          effort level ({@code --effort})
  * @param budgetUsd       spend cap per process ({@code --max-budget-usd}); 0 means none
  * @param claudeSessionId Claude Code's session id once known; empty for a session never started
- * @param checkpoint      the prompt the Checkpoint button sends ("/reflect"); empty hides the button
+ * @param checkpoint      the prompt Reflect sends ("/reflect"); empty hides Reflect
  * @param startMode       how the next start reaches the conversation
- * @param carried         what the Checkpoint button carried out of the conversation it cleared: the checkpoint's
+ * @param carried         what a checkpoint carried out of the conversation it cleared: the checkpoint's
  *                        summary, which goes in front of the next prompt; empty when nothing waits
  * @param createdBy       who created the session: empty for the user, else the session or client that called
  *                        {@code session_new} (record 121)
@@ -42,7 +42,7 @@ public record SessionSpec(
         String family,
         long unreadMillis) {
 
-    /** The checkpoint command of a session that never set one: what the Checkpoint button sends. */
+    /** The checkpoint command of a session that never set one: what Reflect sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
     /**
      * The argument the automatic checkpoint adds to the checkpoint command ({@code /reflect --auto}), so the command can
@@ -52,6 +52,8 @@ public record SessionSpec(
     public static final String AUTO_ARGUMENT = "--auto";
     /** Claude Code's command that compacts a conversation, sent by the compact buttons and the palette. */
     public static final String COMPACT_COMMAND = "/compact";
+    /** Claude Code's command that leaves the conversation for a new one, sent by the session's Clear. */
+    public static final String CLEAR_COMMAND = "/clear";
     /** The model families comando offers, in the palette, a session row's chips and the session dialog. */
     public static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
     /** The efforts comando offers, in the same places. */

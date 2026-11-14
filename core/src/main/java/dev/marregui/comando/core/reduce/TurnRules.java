@@ -113,7 +113,7 @@ final class TurnRules {
     }
 
     /**
-     * The Checkpoint button, and the automatic checkpoint at the threshold: the checkpoint command runs from the
+     * The session_checkpoint tool, and the automatic checkpoint at the threshold: the checkpoint command runs from the
      * session's panel and, once its turn has finished, the conversation is compacted (see {@link #turnEnded}). A summary
      * still carried, from a checkpoint that cleared the conversation (record 86), means the conversation has had no
      * prompt since its clear: there is nothing new to compact, and the command runs alone.

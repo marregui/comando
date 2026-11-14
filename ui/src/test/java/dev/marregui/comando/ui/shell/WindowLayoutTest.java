@@ -6,7 +6,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 
@@ -18,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A tab that is gone, or a name no tab has, reads as Sessions.
 /// - Each panel's lower divider is kept, and a save replaces the ones before.
 /// - The Search and Changes views on the right side are kept in their order; other types are left out.
+/// - An icon set kept by an older comando is ignored and left in the settings.
 class WindowLayoutTest {
 
     private final Settings prefs = Settings.inMemory();
@@ -126,16 +126,17 @@ class WindowLayoutTest {
         assertThat(layout.theme()).as("a ground no theme has, then the tint").isEqualTo(NamedTheme.SLATE_SILVER);
     }
 
-    /// The icon family is kept by its id; nothing or an id of a family no longer shipped reads as Classic.
+    /// An icon set an older comando kept (`icons.id`) changes nothing read and stays in the settings when the theme
+    /// is read and written: comando ships one set and no longer reads the key, nor removes it.
     @Test
-    void anIconSetIsKeptByItsIdAndUnknownIdsReadAsClassic() {
+    void anIconSetKeptByAnOlderComandoIsIgnoredAndLeftInTheSettings() {
+        prefs.put("icons.id", "monospace");
+        prefs.put("theme.id", "midnight_blue");
         final WindowLayout layout = new WindowLayout(prefs);
-        assertThat(layout.iconSet()).isEqualTo(IconSet.CLASSIC);
-        layout.iconSet(IconSet.MONOSPACE);
+        assertThat(layout.theme()).isEqualTo(NamedTheme.MIDNIGHT_BLUE);
+        layout.theme(NamedTheme.SLATE_SILVER);
+        assertThat(new WindowLayout(prefs).theme()).isEqualTo(NamedTheme.SLATE_SILVER);
         assertThat(prefs.get("icons.id", null)).isEqualTo("monospace");
-        assertThat(new WindowLayout(prefs).iconSet()).isEqualTo(IconSet.MONOSPACE);
-        prefs.put("icons.id", "removed_since");
-        assertThat(layout.iconSet()).isEqualTo(IconSet.CLASSIC);
     }
 
     /// The types of the views on the right side are read back by a new layout in their order; nothing saved reads as

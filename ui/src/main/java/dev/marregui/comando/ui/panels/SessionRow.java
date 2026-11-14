@@ -289,7 +289,7 @@ final class SessionRow extends IconRow {
         if (olderCli) {
             marks.add(new Mark("↑", Theme.ATTENTION));
         }
-        if (s.reflection().due() && SessionBar.showsCheckpoint(s)) {
+        if (s.reflection().due() && SessionBar.showsReflect(s)) {
             marks.add(new Mark(contextText(s).isEmpty() ? "◆" : contextText(s), Theme.THINKING));
         }
         if (approvals > 0) {

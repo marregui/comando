@@ -127,8 +127,8 @@ class CheckpointLockTest {
         assertThat(lower[0].sessionVeiled()).isFalse();
     }
 
-    /// The session bar keeps the plug, which stops the session, on; the chip, model, effort and Checkpoint are off; the
-    /// activity, purple, says how to carry on. Once the checkpoint ends they are on again.
+    /// The session bar keeps the plug, which stops the session, on; the chip, model, effort, Reflect, Compact and Clear
+    /// are off; the activity, purple, says how to carry on. Once the checkpoint ends they are on again.
     @Test
     void theSessionBarKeepsOnlyThePlugAndSaysHowToCarryOn() throws Exception {
         final SessionBar[] bar = new SessionBar[1];
@@ -136,7 +136,8 @@ class CheckpointLockTest {
             bar[0] = new SessionBar(i -> { });
             bar[0].render(state(true));
         });
-        for (final String name : List.of("Session", "Model", "Effort", "Checkpoint")) {
+        for (final String name : List.of("Session", "Model", "Effort", "Reflect", "Compact the conversation",
+                "Clear the conversation")) {
             assertThat(button(bar[0].component(), name).isEnabled()).as(name).isFalse();
         }
         assertThat(button(bar[0].component(), "Start or stop the session").isEnabled()).as("the plug").isTrue();
@@ -145,7 +146,8 @@ class CheckpointLockTest {
         assertThat(activity.getForeground()).isEqualTo(Theme.THINKING);
 
         SwingUtilities.invokeAndWait(() -> bar[0].render(state(false)));
-        for (final String name : List.of("Session", "Model", "Effort", "Checkpoint")) {
+        for (final String name : List.of("Session", "Model", "Effort", "Reflect", "Compact the conversation",
+                "Clear the conversation")) {
             assertThat(button(bar[0].component(), name).isEnabled()).as(name).isTrue();
         }
         assertThat(label(bar[0].component(), "Activity").getText()).doesNotContain(SessionBar.LOCKED_HINT);
@@ -164,7 +166,7 @@ class CheckpointLockTest {
             menus[0] = s[0].sessionMenu(state(true).session("work").orElseThrow());
             menus[1] = s[0].sessionMenu(state(true).session("other").orElseThrow());
         });
-        final List<String> off = List.of("Checkpoint", "Compact the conversation", "Rewrite work as a document",
+        final List<String> off = List.of("Reflect", "Compact the conversation", "Rewrite work as a document",
                 "Edit…", "Remove…");
         final List<String> on = List.of("Open in a panel", "Stop", "Interrupt the turn", "Copy details", "Clone…");
         for (final String name : off) {
@@ -178,8 +180,8 @@ class CheckpointLockTest {
         assertThat(item(menus[0], "Effort: ").isEnabled()).isFalse();
     }
 
-    /// A session that stops has Checkpoint off in its menu, as on the session bar and in the palette: the reducer
-    /// refuses a checkpoint of a stopping session.
+    /// A session that stops has Checkpoint off in its menu, as Reflect on the session bar and in the palette: the
+    /// reducer refuses a checkpoint of a stopping session.
     @Test
     void theSidebarsCheckpointIsOffWhileTheSessionStops() throws Exception {
         final AppState stopping = state(false).withSession("work", x -> x.withStatus(Status.CLOSING, ""));
@@ -192,8 +194,8 @@ class CheckpointLockTest {
             bar[0] = new SessionBar(i -> { });
             bar[0].render(stopping);
         });
-        assertThat(item(menu[0], "Checkpoint").isEnabled()).as("the menu").isFalse();
-        assertThat(button(bar[0].component(), "Checkpoint").isEnabled()).as("the bar").isFalse();
+        assertThat(item(menu[0], "Reflect").isEnabled()).as("the menu").isFalse();
+        assertThat(button(bar[0].component(), "Reflect").isEnabled()).as("the bar").isFalse();
     }
 
     /**

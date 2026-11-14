@@ -34,12 +34,13 @@ import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// The Checkpoint button in the real window, against a stand-in for `claude -p`. Opens the window, so this runs in
-/// `./gradlew :app:uiTest`.
-/// - once the checkpoint's turn has finished, `/compact` goes out and the conversation is compacted, not cleared
+/// The session bar's Reflect, Compact and Clear in the real window, against a stand-in for `claude -p`. Opens the
+/// window, so this runs in `./gradlew :app:uiTest`.
+/// - Reflect sends the checkpoint command alone; Compact then sends `/compact`, and the conversation is compacted
 /// - the Session tab keeps the conversation and shows the compaction; the panel's text stays
 /// - nothing is carried: the next prompt goes as typed
-/// - an automatic checkpoint, run at the threshold, is compacted the same way and then carries on with one prompt
+/// - Clear sends `/clear`; the session follows the new conversation, its context unknown again
+/// - an automatic checkpoint, run at the threshold, still sends the command, then `/compact`, then carries on
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class CheckpointCompactUiTest {
 
@@ -49,19 +50,21 @@ class CheckpointCompactUiTest {
     @TempDir
     Path home;
 
-    /// After the checkpoint's turn the session has no pending turn, the same conversation (`fake-1`) and nothing
-    /// carried; the stand-in received `hello`, `/reflect`, `/compact`; the Session tab still shows the first turn and
-    /// the summary, with the compaction's note; the panel keeps its text; the next prompt goes out as typed.
+    /// After Reflect's turn the session has no pending turn, the same conversation (`fake-1`), nothing carried and no
+    /// compaction to follow: the stand-in received `hello`, `/reflect` and nothing more. Compact then sends `/compact`;
+    /// the Session tab still shows the first turn and the summary, with the compaction's note; the panel keeps its
+    /// text; the next prompt goes out as typed. Clear sends `/clear`, after which the session is in `fake-2` with its
+    /// context back to unknown.
     @Test
-    void theCheckpointButtonCompactsTheConversationOnceItsTurnHasFinished() throws Exception {
+    void reflectSendsTheCommandAloneAndCompactAndClearFollowWhenClicked() throws Exception {
         final Path stdin = home.resolve("stdin.jsonl");
         final Path claude = home.resolve("fake-claude.sh");
         final String init = "{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fake-1\",\"model\":\"fake\",\"cwd\":\"/tmp\","
                 + "\"claude_code_version\":\"0.0.1\",\"permissionMode\":\"default\",\"capabilities\":[]}";
         Files.writeString(claude, """
                 #!/bin/sh
-                # stands in for claude -p: /reflect answers with a summary, /compact compacts as Claude Code reports it, the
-                # rest pong
+                # stands in for claude -p: /reflect answers with a summary, /compact compacts as Claude Code reports it,
+                # /clear resets the conversation and starts fake-2, as Claude Code does, the rest pong
                 n=0
                 while IFS= read -r line; do
                   printf '%%s\\n' "$line" >> '%s'
@@ -73,6 +76,11 @@ class CheckpointCompactUiTest {
                       printf '%%s\\n' '{"type":"system","subtype":"status","status":null,"compact_result":"success"}'
                       printf '%%s\\n' '%s'
                       printf '%%s\\n' '{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":30,"post_tokens":5}}'
+                      printf '%%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"","total_cost_usd":0,"duration_ms":1,"num_turns":0}'
+                      ;;
+                    *'"content":"/clear"'*)
+                      printf '%%s\\n' '{"type":"conversation_reset","trigger":"clear"}'
+                      printf '%%s\\n' '%s'
                       printf '%%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"","total_cost_usd":0,"duration_ms":1,"num_turns":0}'
                       ;;
                     *'"content":"/reflect"'*)
@@ -88,7 +96,7 @@ class CheckpointCompactUiTest {
                       ;;
                   esac
                 done
-                """.formatted(stdin, init, init, SUMMARY_JSON, SUMMARY_JSON, init));
+                """.formatted(stdin, init, init.replace("fake-1", "fake-2"), init, SUMMARY_JSON, SUMMARY_JSON, init));
         claude.toFile().setExecutable(true);
         try (final App app = new App(new AppConfig(home.resolve("data"), claude.toString(), home.resolve("projects"),
                 false), "checkpoint", () -> {
@@ -113,15 +121,26 @@ class CheckpointCompactUiTest {
                     .until(() -> !session(loop).isBusy() && session(loop).spec().claudeSessionId().equals("fake-1"));
             Awaitility.await("the Session tab shows it").atMost(Duration.ofSeconds(10)).until(() -> transcript().contains("pong 1"));
 
-            // the gesture: a click on the session bar's Checkpoint button, the focused panel's session (record 105)
+            // the gesture: a click on the session bar's Reflect button, the focused panel's session (record 105); a
+            // compaction would have gone out as the turn ended, so none is pending once the turn is over
             final EditorPanel view = editor();
-            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());
-            Awaitility.await("checkpointed, then compacted").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-                assertThat(Files.readAllLines(stdin)).filteredOn(l -> l.contains("\"type\":\"user\""))
-                        .extracting(l -> l.replaceAll(".*\"content\":\"([^\"]*)\".*", "$1")).containsExactly("hello", "/reflect", "/compact");
+            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Reflect").doClick());
+            Awaitility.await("reflected, nothing after").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+                assertThat(prompts(stdin)).containsExactly("hello", "/reflect");
                 final SessionState x = session(loop);
-                assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.spec().carried(), x.checkpointCompacts()))
-                        .as("sent: %s", Files.readAllLines(stdin)).containsExactly(0, "fake-1", "", false);
+                assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.spec().carried(),
+                        x.checkpointCompacts(), x.reflection().due(), x.reflection().armed()))
+                        .as("sent: %s", Files.readAllLines(stdin))
+                        .containsExactly(0, "fake-1", "", false, false, false);
+            });
+            assertThat(prompts(stdin)).as("the turn over, no compaction followed").containsExactly("hello", "/reflect");
+
+            SwingUtilities.invokeAndWait(
+                    () -> button(SwingUtilities.getWindowAncestor(view), "Compact the conversation").doClick());
+            Awaitility.await("compacted").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+                assertThat(prompts(stdin)).containsExactly("hello", "/reflect", "/compact");
+                assertThat(List.of(session(loop).pendingTurns(), session(loop).spec().claudeSessionId()))
+                        .containsExactly(0, "fake-1");
             });
             Awaitility.await("the compaction shown").atMost(Duration.ofSeconds(10)).until(() -> notes(app).contains("Compacted manual: 30 → 5 tokens"));
             Awaitility.await("the Session tab keeps the conversation").atMost(Duration.ofSeconds(10))
@@ -132,6 +151,16 @@ class CheckpointCompactUiTest {
             Awaitility.await("the next turn").atMost(Duration.ofSeconds(20))
                     .until(() -> !session(loop).isBusy() && Files.readAllLines(stdin).getLast().contains("go on"));
             assertThat(Files.readAllLines(stdin).getLast()).as("nothing carried in front of the prompt").doesNotContain("Context carried over");
+            assertThat(session(loop).contextTokens()).as("a context to clear").isPositive();
+
+            SwingUtilities.invokeAndWait(
+                    () -> button(SwingUtilities.getWindowAncestor(view), "Clear the conversation").doClick());
+            Awaitility.await("cleared").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+                assertThat(prompts(stdin)).endsWith("go on", "/clear");
+                final SessionState x = session(loop);
+                assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.contextTokens()))
+                        .as("the new conversation, its context unknown").containsExactly(0, "fake-2", 0L);
+            });
 
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);
@@ -208,6 +237,12 @@ class CheckpointCompactUiTest {
             loop.dispatch(new Intent.StopSession("work"));
             Awaitility.await("stopped").atMost(Duration.ofSeconds(20)).until(() -> session(loop).status() == Status.CLOSED);
         }
+    }
+
+    /** The prompts the stand-in received, in order. */
+    private static List<String> prompts(final Path stdin) throws Exception {
+        return Files.readAllLines(stdin).stream().filter(l -> l.contains("\"type\":\"user\""))
+                .map(l -> l.replaceAll(".*\"content\":\"([^\"]*)\".*", "$1")).toList();
     }
 
     /** The texts of the session's notes, from its transcript. */

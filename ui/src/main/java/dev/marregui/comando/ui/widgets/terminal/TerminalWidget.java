@@ -28,7 +28,9 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -46,6 +48,7 @@ import com.jediterm.terminal.model.SubCharBuffer;
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.TerminalActionPresentation;
+import com.jediterm.terminal.ui.TerminalActionProvider;
 import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
@@ -59,6 +62,7 @@ import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -78,6 +82,14 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     private static final System.Logger LOG = System.getLogger(TerminalWidget.class.getName());
     private static final int GATE_POLL_MILLIS = 50;
+    /** The icon of each item of JediTerm's menu, by the names its settings give them; another gets the terminal's. */
+    private static final Map<String, String> MENU_ICONS = Map.of(
+            "Open as URL", "browser",
+            "Copy", "copy",
+            "Paste", "paste",
+            "Select All", "select-all",
+            "Clear Buffer", "clear",
+            "Find", "search");
     /**
      * How long a closed panel's shell and the processes it started have to end after the SIGTERM before they are
      * killed. Unmeasured, a choice: the same grace as a Claude Code session's ({@code ClaudeAdapter}).
@@ -781,6 +793,16 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
     }
 
+    /** {@code menu} with an icon on each item, by the name JediTerm gives it; one it adds later gets the terminal's. */
+    static JPopupMenu withIcons(final JPopupMenu menu) {
+        for (final Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem item) {
+                item.setIcon(Icons.get(MENU_ICONS.getOrDefault(item.getText(), "terminal")));
+            }
+        }
+        return menu;
+    }
+
     private static final class Panel extends TerminalPanel {
 
         Panel(final SettingsProvider settings, final TerminalTextBuffer buffer, final StyleState style) {
@@ -790,6 +812,12 @@ public final class TerminalWidget implements Zoomable, Searchable {
         /** Reads the font size from the settings again and resizes the grid to the panel. */
         void refont() {
             reinitFontAndResize();
+        }
+
+        /** JediTerm's right-click menu, its items with the icons every comando menu has (record 156). */
+        @Override
+        protected JPopupMenu createPopupMenu(final TerminalActionProvider provider) {
+            return withIcons(super.createPopupMenu(provider));
         }
     }
 

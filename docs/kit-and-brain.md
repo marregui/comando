@@ -613,7 +613,8 @@ the next session recalls more of what matters from fewer bytes, and the KB is tr
 |---|---|
 | the user asks | the user |
 | a session ends | the user, or a kit rule |
-| the Checkpoint button, a typed `/reflect`, **Settle** | comando sends `/reflect` with no argument, then `/compact` |
+| **Settle** | comando sends `/reflect` with no argument, then `/compact` |
+| the Reflect button, a typed `/reflect` | `/reflect` with no argument, nothing after it; Compact and Clear are their own buttons ([record 156](adr/0156-one-icon-set-and-a-split-checkpoint.md)) |
 | the context crosses comando's threshold | comando, at the turn's end: `/reflect --auto`, then `/compact` ([record 129](adr/0129-a-checkpoint-reflects-then-compacts.md), [record 131](adr/0131-an-automatic-checkpoint-asks-nothing.md)); the session runs with `CONTEXT_CHECKPOINT_BY=comando`, so a kit hook that would remind at that size stays silent |
 | a context threshold outside comando | a kit hook reminds |
 

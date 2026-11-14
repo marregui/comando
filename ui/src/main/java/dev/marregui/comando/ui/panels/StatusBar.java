@@ -51,6 +51,7 @@ import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -392,6 +393,12 @@ public final class StatusBar {
      * notice.
      */
     public void showHistory() {
+        final JPopupMenu menu = historyMenu();
+        menu.show(notice, 0, -menu.getPreferredSize().height);
+    }
+
+    /** The menu {@link #showHistory} shows, built on the notices and the theme of now. */
+    JPopupMenu historyMenu() {
         final JPopupMenu menu = new JPopupMenu();
         final List<Notice> recent = history.reversed();
         final DefaultListModel<Notice> model = new DefaultListModel<>();
@@ -428,14 +435,8 @@ public final class StatusBar {
             private void copyMenu(final MouseEvent e) {
                 final int i = list.locationToIndex(e.getPoint());
                 if (e.isPopupTrigger() && i >= 0) {
-                    final Notice n = model.get(i);
                     list.setSelectedIndex(i);
-                    final JPopupMenu copy = new JPopupMenu();
-                    final JMenuItem item = new JMenuItem("Copy");
-                    item.addActionListener(a -> Toolkit.getDefaultToolkit().getSystemClipboard()
-                            .setContents(new StringSelection(KeyText.of(n.text())), null));
-                    copy.add(item);
-                    copy.show(list, e.getX(), e.getY());
+                    noticeMenu(model.get(i)).show(list, e.getX(), e.getY());
                 }
             }
 
@@ -454,7 +455,7 @@ public final class StatusBar {
         final JScrollPane scroll = new JScrollPane(list);
         scroll.setPreferredSize(new Dimension(640, Math.min(360, Math.max(40, recent.size() * 22 + 6))));
         if (recent.isEmpty()) {
-            final JMenuItem none = new JMenuItem("No notices yet");
+            final JMenuItem none = new JMenuItem("No notices yet", Icons.get("info"));
             none.setEnabled(false);
             menu.add(none);
         } else {
@@ -465,11 +466,19 @@ public final class StatusBar {
             menu.add(scroll);
         }
         menu.addSeparator();
-        final JMenuItem dismiss = new JMenuItem("Dismiss");
+        final JMenuItem dismiss = IconMenus.item("Dismiss", "close",
+                () -> intents.dispatch(new Intent.DismissNotice()));
         dismiss.setEnabled(!notice.getText().isBlank());
-        dismiss.addActionListener(e -> intents.dispatch(new Intent.DismissNotice()));
         menu.add(dismiss);
-        menu.show(notice, 0, -menu.getPreferredSize().height);
+        return menu;
+    }
+
+    /** A recent notice's own menu: its full text copied. */
+    static JPopupMenu noticeMenu(final Notice n) {
+        final JPopupMenu m = new JPopupMenu();
+        m.add(IconMenus.item("Copy", "copy", () -> Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new StringSelection(KeyText.of(n.text())), null)));
+        return m;
     }
 
 

@@ -63,6 +63,7 @@ import dev.marregui.comando.core.state.InstancesState.Member;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.UiErrands;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.Tooltips;
@@ -325,31 +326,29 @@ final class InstancesTab {
             return m;
         }
         if (r.self()) {
-            final JMenuItem role = new JMenuItem("Set the role…");
+            final JMenuItem role = IconMenus.item("Set the role…", "edit", () -> setRole(in));
             role.setToolTipText("What this instance is for, as the others see it: instance.json in its data root");
-            role.addActionListener(a -> setRole(in));
             m.add(role);
             m.addSeparator();
         } else if (!in.present()) {
-            final JMenuItem forget = new JMenuItem("Forget " + in.name());
+            final JMenuItem forget = IconMenus.item("Forget " + in.name(), "close", () -> forget(in.slug()));
             forget.setToolTipText("List it no more; it comes back when it is present again");
-            forget.addActionListener(a -> forget(in.slug()));
             m.add(forget);
             m.addSeparator();
         } else {
-            final JMenuItem ask = new JMenuItem("Ask " + in.name() + "…");
-            ask.addActionListener(a -> ask(in));
-            m.add(ask);
+            m.add(IconMenus.item("Ask " + in.name() + "…", "question", () -> ask(in)));
             final boolean denied = shown != null && shown.denied().contains(in.slug());
-            final JCheckBoxMenuItem refuse = new JCheckBoxMenuItem("Refuse questions from " + in.name(), denied);
+            final JCheckBoxMenuItem refuse = new JCheckBoxMenuItem("Refuse questions from " + in.name(),
+                    Icons.get("deny"), denied);
             refuse.setToolTipText("agents.json peers.deny in this instance's data root");
             refuse.addActionListener(a -> deny(in.slug(), refuse.isSelected()));
             m.add(refuse);
             m.addSeparator();
         }
-        final JMenuItem copy = new JMenuItem("Copy the instance id (" + in.slug() + ")");
+        final JMenuItem copy = IconMenus.item("Copy the instance id (" + in.slug() + ")", "copy",
+                () -> Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new StringSelection(in.slug()), null));
         copy.setName("instances-copy-id");
-        copy.addActionListener(a -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(in.slug()), null));
         m.add(copy);
         return m;
     }

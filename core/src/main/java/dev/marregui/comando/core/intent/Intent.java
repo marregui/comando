@@ -336,7 +336,8 @@ public sealed interface Intent {
     }
 
     /**
-     * The Checkpoint button: sends the session's checkpoint command as a prompt from its panel; when that turn has
+     * A checkpoint, from the session_checkpoint tool (the session bar splits it into Reflect and Compact, record 156):
+     * sends the session's checkpoint command as a prompt from its panel; when that turn has
      * finished, {@code /compact} (record 129).
      *
      * @param from the session or client that sent it through an action tool; empty for the user's own gesture. A session

@@ -85,7 +85,8 @@ class EditorPanelHeaderTest {
             p[0] = new EditorPanel(panel, i -> { }, new SchemaRegistry());
             p[0].render(panel, AppState.initial(List.of(panel), List.of(), List.of(running)));
         });
-        for (final String name : List.of("Session", "Start or stop the session", "Start a new conversation", "Checkpoint", "Compact the conversation")) {
+        for (final String name : List.of("Session", "Start or stop the session", "Start a new conversation", "Reflect",
+                "Compact the conversation", "Clear the conversation")) {
             assertThat(button(p[0], name)).as(name + ": in the session bar (record 105)").isNull();
         }
         final List<AbstractButton> named = new ArrayList<>();

@@ -66,7 +66,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
-import dev.marregui.comando.ui.kit.icon.IconSet;
+import dev.marregui.comando.ui.kit.icon.IconMenus;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.tabs.MovableTabs;
@@ -381,9 +381,9 @@ public final class Workspace {
         final JPopupMenu menu = new JPopupMenu();
         menu.add(menuItem("Close", "close", true, () -> closer.accept(clicked)));
         menu.addSeparator();
-        menu.add(menuItem("Close others", null, !others.isEmpty(), () -> closeTabs(clicked, others)));
-        menu.add(menuItem("Close to the right", null, !right.isEmpty(), () -> closeTabs(clicked, right)));
-        menu.add(menuItem("Close to the left", null, !left.isEmpty(), () -> closeTabs(clicked, left)));
+        menu.add(menuItem("Close others", "close", !others.isEmpty(), () -> closeTabs(clicked, others)));
+        menu.add(menuItem("Close to the right", "close", !right.isEmpty(), () -> closeTabs(clicked, right)));
+        menu.add(menuItem("Close to the left", "close", !left.isEmpty(), () -> closeTabs(clicked, left)));
         if (side != null) {
             menu.addSeparator();
             if (strip == side) {
@@ -419,9 +419,8 @@ public final class Workspace {
     }
 
     private static JMenuItem menuItem(final String text, final String icon, final boolean enabled, final Runnable run) {
-        final JMenuItem item = icon == null ? new JMenuItem(text) : new JMenuItem(text, Icons.get(icon));
+        final JMenuItem item = IconMenus.item(text, icon, run);
         item.setEnabled(enabled);
-        item.addActionListener(e -> run.run());
         return item;
     }
 
@@ -565,11 +564,6 @@ public final class Workspace {
     /** {@code chosen} hears the theme picked from the swatch beside New panel. */
     public void onThemeChosen(final Consumer<NamedTheme> chosen) {
         theme.onChosen(chosen);
-    }
-
-    /** {@code chosen} hears an icon family picked beside the themes. */
-    public void onIconSetChosen(final Consumer<IconSet> chosen) {
-        theme.onIconSetChosen(chosen);
     }
 
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */

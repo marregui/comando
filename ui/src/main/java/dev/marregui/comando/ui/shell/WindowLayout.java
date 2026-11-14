@@ -17,7 +17,6 @@ import javax.swing.JFrame;
 import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.Reflection;
-import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
@@ -260,16 +259,6 @@ final class WindowLayout {
         prefs.put("theme.ground", theme.ground.name());
         prefs.put("theme.tint", theme.tint.name());
         prefs.remove("theme.gold");
-        prefs.flush();
-    }
-
-    /** The icon family kept by its stable id; an absent or retired id is Classic. */
-    IconSet iconSet() {
-        return Optional.ofNullable(prefs.get("icons.id", null)).flatMap(IconSet::withId).orElse(IconSet.CLASSIC);
-    }
-
-    void iconSet(final IconSet set) {
-        prefs.put("icons.id", set.id());
         prefs.flush();
     }
 

@@ -8,7 +8,6 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 import dev.marregui.comando.ui.kit.action.MenuEntry;
-import dev.marregui.comando.ui.kit.icon.IconSet;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
@@ -137,14 +136,15 @@ class MenusTest {
         assertThat(Menus.areas()).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
                 .containsEntry("panel.9", "Panels").containsEntry("theme.slate_silver", "Theme").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
         assertThat(Menus.areas()).as("the session bar's and the session menu's acts, in the palette too")
-                .containsEntry("session.checkpoint", "Session").containsEntry("session.fresh", "Session").containsEntry("session.rewrite", "Session")
+                .containsEntry("session.reflect", "Session").containsEntry("session.compact", "Session")
+                .containsEntry("session.clearConversation", "Session").doesNotContainKey("session.checkpoint")
+                .containsEntry("session.fresh", "Session").containsEntry("session.rewrite", "Session")
                 .containsEntry("session.copyDetails", "Session").containsEntry("session.clone", "Session").containsEntry("session.remove", "Session");
         assertThat(Menus.areas()).as("the connection menu's acts, in the palette too")
                 .containsEntry("connection.test", "Connection").containsEntry("connection.copyDetails", "Connection")
                 .containsEntry("connection.clone", "Connection").containsEntry("connection.remove", "Connection");
-        for (final IconSet set : IconSet.values()) {
-            assertThat(Menus.areas()).containsEntry(set.commandId(), "Icons");
-        }
+        assertThat(Menus.areas().keySet()).as("one icon set, no command to choose another")
+                .noneMatch(id -> id.startsWith("icons."));
     }
 
     /// Every menu and submenu is non-empty, starts and ends with an entry, and has no two separators in a row.

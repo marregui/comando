@@ -323,7 +323,10 @@ final class SessionRules {
         if (!id.isEmpty() && (!id.equals(previous) || x.spec().startMode() != StartMode.RESUME)) {
             x = x.withSpec(x.spec().resumable(id));
         }
-        AppState next = s.withSession(cleared ? x.withReflection(Reflection.FRESH).withCheckpointArmed(true) : x);
+        // the new conversation starts empty: its context is known only once its first turn reports it, so nothing
+        // reads the old one's as near the checkpoint
+        AppState next = s.withSession(cleared ? x.withReflection(Reflection.FRESH).withCheckpointArmed(true)
+                .withUsage(x.costUsd(), 0L, x.contextWindow(), clock.millis()) : x);
         if (cleared) {
             final String carried = x.spec().carried().isEmpty() ? "" : "; the checkpoint's summary goes in front of the next prompt";
             next = notice(clock, next, Notice.Level.INFO, "Session " + x.name() + ": new conversation; the previous one (" + previous

@@ -33,9 +33,9 @@ class SessionRowControlsTest {
     /// [SessionSpec#DEFAULT_CHECKPOINT].
     @Test
     void theCheckpointShowsWhileTheSessionHasACommand() {
-        assertThat(SessionBar.showsCheckpoint(closed("", "/reflect"))).isTrue();
-        assertThat(SessionBar.showsCheckpoint(closed("", ""))).isFalse();
-        assertThat(SessionBar.showsCheckpoint(closed("conv", "/reflect").withStatus(Status.OPEN, ""))).isTrue();
+        assertThat(SessionBar.showsReflect(closed("", "/reflect"))).isTrue();
+        assertThat(SessionBar.showsReflect(closed("", ""))).isFalse();
+        assertThat(SessionBar.showsReflect(closed("conv", "/reflect").withStatus(Status.OPEN, ""))).isTrue();
         assertThat(SessionSpec.fresh("s", "/tmp").checkpoint()).isEqualTo(SessionSpec.DEFAULT_CHECKPOINT);
     }
 }

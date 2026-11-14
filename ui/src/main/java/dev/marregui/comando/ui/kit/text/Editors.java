@@ -11,6 +11,10 @@ import java.util.Locale;
 import java.util.Map;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.JSeparator;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.text.DefaultEditorKit;
@@ -21,9 +25,11 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxUtilities;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.SyntaxScheme;
 import org.fife.ui.rtextarea.Gutter;
+import org.fife.ui.rtextarea.RTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -201,7 +207,35 @@ public final class Editors {
         a.setAntiAliasingEnabled(true);
         EditorThemes.apply(a);
         a.setFont(Theme.mono());
+        withIcons(a.getPopupMenu());
         return a;
+    }
+
+    /**
+     * The library's own right-click menu as comando's menus are: an icon on every item (record 156). Its Folding
+     * submenu, and the separator before it, go: comando never turns code folding on, so the submenu could only be
+     * shown disabled.
+     */
+    static void withIcons(final JPopupMenu menu) {
+        final Map<Action, String> icons = Map.of(
+                RTextArea.getAction(RTextArea.UNDO_ACTION), "undo",
+                RTextArea.getAction(RTextArea.REDO_ACTION), "redo",
+                RTextArea.getAction(RTextArea.CUT_ACTION), "cut",
+                RTextArea.getAction(RTextArea.COPY_ACTION), "copy",
+                RTextArea.getAction(RTextArea.PASTE_ACTION), "paste",
+                RTextArea.getAction(RTextArea.DELETE_ACTION), "trash",
+                RTextArea.getAction(RTextArea.SELECT_ALL_ACTION), "select-all");
+        for (final Component c : menu.getComponents()) {
+            if (c instanceof JMenu) {
+                final int at = menu.getComponentIndex(c);
+                menu.remove(at);
+                if (at > 0 && menu.getComponent(at - 1) instanceof JSeparator) {
+                    menu.remove(at - 1);
+                }
+            } else if (c instanceof JMenuItem item && icons.containsKey(item.getAction())) {
+                item.setIcon(Icons.get(icons.get(item.getAction())));
+            }
+        }
     }
 
     /** The editor theme's foreground for token type {@code type}, null for the default. */
