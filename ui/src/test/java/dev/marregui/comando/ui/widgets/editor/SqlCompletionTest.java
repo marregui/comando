@@ -5,12 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JList;
-import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.marregui.comando.core.schema.Schema;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - another schema replaces the words
 /// - a disposed editor leaves no global listener
 /// - completion opens on a statement being typed, not on a prompt
+@ExtendWith(OnEdt.class)
 class SqlCompletionTest {
 
     private static final Schema SCHEMA = new Schema(List.of(
@@ -33,23 +35,24 @@ class SqlCompletionTest {
     void offersKeywordsTablesAndEachColumnOnce() {
         final SqlCompletion c = new SqlCompletion();
         c.setSchema(SCHEMA);
-        assertThat(c.provider().getCompletionByInputText("trades")).hasSize(1);
-        assertThat(c.provider().getCompletionByInputText("ts")).hasSize(1);
-        assertThat(c.provider().getCompletionByInputText("SELECT")).hasSize(1);
+        assertThat(c.words().named("trades")).hasSize(1);
+        assertThat(c.words().named("ts")).hasSize(1);
+        assertThat(c.words().named("SELECT")).hasSize(1);
         assertThat(SqlCompletion.columns(SCHEMA)).containsEntry("ts", "TIMESTAMP in trades, quotes").containsEntry("bid", "DOUBLE in quotes");
     }
 
     /// A table and a column named with HTML tags are shown escaped in the completion list.
     @Test
-    void aTableNamedLikeHtmlIsListedAsText() throws Exception {
+    void aTableNamedLikeHtmlIsListedAsText() {
         final SqlCompletion c = new SqlCompletion();
         c.setSchema(new Schema(List.of(new Schema.Table("<img src=http://h/x.png>", List.of(new Schema.Column("<u>c", "INT"))))));
-        final String[] shown = new String[2];
-        SwingUtilities.invokeAndWait(() -> {
-            final JList<Object> list = new JList<>();
-            shown[0] = text(c.renderer().getListCellRendererComponent(list, c.provider().getCompletionByInputText("<img src=http://h/x.png>").getFirst(), 0, false, false));
-            shown[1] = text(c.renderer().getListCellRendererComponent(list, c.provider().getCompletionByInputText("<u>c").getFirst(), 1, false, false));
-        });
+        final JList<Completion> list = c.popup().list();
+        final String[] shown = {
+            text(list.getCellRenderer().getListCellRendererComponent(
+                    list, c.words().named("<img src=http://h/x.png>").getFirst(), 0, false, false)),
+            text(list.getCellRenderer().getListCellRendererComponent(
+                    list, c.words().named("<u>c").getFirst(), 1, false, false)),
+        };
         assertThat(shown[0]).contains("&lt;img src=http://h/x.png&gt;").doesNotContain("<img");
         assertThat(shown[1]).contains("&lt;u&gt;c").doesNotContain("<u>");
     }
@@ -75,9 +78,10 @@ class SqlCompletionTest {
         final long start = System.nanoTime();
         c.setSchema(new Schema(tables));
         final long millis = (System.nanoTime() - start) / 1_000_000;
-        assertThat(c.provider().getCompletionByInputText("t999")).hasSize(1);
-        assertThat(c.provider().getCompletionByInputText("c999_19")).hasSize(1);
-        assertThat(c.provider().getCompletionByInputText("SELECT")).hasSize(1);
+        assertThat(c.words().named("t999")).hasSize(1);
+        assertThat(c.words().named("c999_19")).hasSize(1);
+        assertThat(c.words().named("SELECT")).hasSize(1);
+        assertThat(c.words().size()).isEqualTo(SqlCompletion.KEYWORDS.size() + 1_000 + 20_000);
         assertThat(millis).as("ms to set 21,000 names").isLessThan(2_000);
     }
 
@@ -87,8 +91,8 @@ class SqlCompletionTest {
         final SqlCompletion c = new SqlCompletion();
         c.setSchema(SCHEMA);
         c.setSchema(Schema.EMPTY);
-        assertThat(c.provider().getCompletionByInputText("trades")).isNull();
-        assertThat(c.provider().getCompletionByInputText("FROM")).hasSize(1);
+        assertThat(c.words().named("trades")).isEmpty();
+        assertThat(c.words().named("FROM")).hasSize(1);
     }
 
     /// A [CommandEditor] adds a `UIManager` listener and removes it on unmount.

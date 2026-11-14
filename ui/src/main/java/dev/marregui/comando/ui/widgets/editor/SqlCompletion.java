@@ -9,27 +9,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
-import javax.swing.JList;
-import javax.swing.ListCellRenderer;
-import javax.swing.text.JTextComponent;
 
-import org.fife.ui.autocomplete.AutoCompletion;
-import org.fife.ui.autocomplete.BasicCompletion;
-import org.fife.ui.autocomplete.Completion;
-import org.fife.ui.autocomplete.CompletionCellRenderer;
-import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.schema.Schema;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 
 /**
  * Completion for the command editor: SQL keywords, then the tables and columns of the bound connection's
  * schema. A column found in several tables is offered once, with the tables it belongs to. It pops up on its
  * own only in a block that reads as SQL or starts like a statement being typed, so prose for Claude seldom opens
- * it; ⌃Space or ⌥⎋ asks anywhere.
+ * it; ⌃Space or ⌥⎋ asks anywhere. EDT only.
  */
 final class SqlCompletion {
 
@@ -45,54 +37,22 @@ final class SqlCompletion {
     private static final List<String> LEADING = List.of("SELECT", "WITH", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP",
             "TRUNCATE", "EXPLAIN", "SHOW");
 
-    private BooleanSupplier inSql = () -> true;
-    private final DefaultCompletionProvider provider = new DefaultCompletionProvider() {
-        @Override
-        public boolean isAutoActivateOkay(final JTextComponent tc, final int offset) {
-            return super.isAutoActivateOkay(tc, offset) && inSql.getAsBoolean();
-        }
-    };
-    private final AutoCompletion auto = new AutoCompletion(provider);
+    private final Completions words = new Completions();
+    private final CompletionPopup popup = new CompletionPopup(words);
     private Schema shown;
 
     SqlCompletion() {
-        provider.setAutoActivationRules(true, null);
-        auto.setAutoActivationEnabled(true);
-        auto.setAutoActivationDelay(400);
-        auto.setAutoCompleteSingleChoices(false);
-        auto.setListCellRenderer(new EscapingRenderer());
         setSchema(Schema.EMPTY);
     }
 
-    /** The completion list's renderer; for tests. */
-    ListCellRenderer<Object> renderer() {
-        return auto.getListCellRenderer();
-    }
-
-    /**
-     * The library's renderer, which builds each row's HTML from a completion's text: a table or column name, which a
-     * database may give any characters, is escaped first.
-     */
-    private static final class EscapingRenderer extends CompletionCellRenderer {
-        @Override
-        protected void prepareForOtherCompletion(final JList<?> list, final Completion c, final int index, final boolean selected, final boolean hasFocus) {
-            final StringBuilder sb = new StringBuilder("<html><nobr>").append(MarkdownHtml.escape(c.getInputText()));
-            if (c instanceof BasicCompletion b && b.getShortDescription() != null) {
-                appendShortDescription(sb, MarkdownHtml.escape(b.getShortDescription()));
-            }
-            setText(sb.toString());
-        }
-    }
-
-    /** Removes the completion and the listeners the library registered globally (look and feel). */
+    /** Removes the completion and its listeners, the global one (look and feel) too; idempotent. */
     void uninstall() {
-        auto.uninstall();
+        popup.uninstall();
     }
 
     /** Installs on {@code area}; {@code inSql} says whether the caret's block reads as SQL. */
     void install(final RSyntaxTextArea area, final BooleanSupplier inSql) {
-        this.inSql = inSql;
-        auto.install(area);
+        popup.install(area, inSql);
     }
 
     /**
@@ -176,29 +136,24 @@ final class SqlCompletion {
         return Classifier.classify("SELECT " + text + "\n;").target() == Target.SQL;
     }
 
-    boolean autoActivates(final JTextComponent tc) {
-        return provider.isAutoActivateOkay(tc, tc.getCaretPosition());
-    }
-
     void setSchema(final Schema schema) {
         if (schema == shown) {
             return;
         }
         shown = schema;
-        provider.clear();
-        // added in one call, which sorts once: one call per name sorts the whole list each time, seconds on the EDT
+        // set in one call, which sorts once: one call per name would sort the whole list each time, seconds on the EDT
         // for a schema of thousands of columns
         final List<Completion> all = new ArrayList<>(KEYWORDS.size() + schema.tables().size());
         for (final String k : KEYWORDS) {
-            all.add(new BasicCompletion(provider, k, "keyword"));
+            all.add(new Completion(k, "keyword"));
         }
         for (final Schema.Table t : schema.tables()) {
-            all.add(new BasicCompletion(provider, t.name(), "table, " + t.columns().size() + " columns"));
+            all.add(new Completion(t.name(), "table, " + t.columns().size() + " columns"));
         }
         for (final Map.Entry<String, String> c : columns(schema).entrySet()) {
-            all.add(new BasicCompletion(provider, c.getKey(), c.getValue()));
+            all.add(new Completion(c.getKey(), c.getValue()));
         }
-        provider.addCompletions(all);
+        words.set(all);
     }
 
     /** Each column name once, described by its type and its tables. */
@@ -212,7 +167,15 @@ final class SqlCompletion {
         return out;
     }
 
-    DefaultCompletionProvider provider() {
-        return provider;
+    /** The words offered. */
+    @TestOnly
+    Completions words() {
+        return words;
+    }
+
+    /** The list that offers them. */
+    @TestOnly
+    CompletionPopup popup() {
+        return popup;
     }
 }
