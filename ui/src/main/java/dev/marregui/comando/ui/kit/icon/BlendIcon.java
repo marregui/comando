@@ -6,7 +6,6 @@ import java.awt.Graphics;
 import javax.swing.Icon;
 
 import com.formdev.flatlaf.FlatLaf;
-import com.formdev.flatlaf.extras.FlatSVGIcon;
 
 import dev.marregui.comando.ui.kit.theme.Tint;
 
@@ -17,15 +16,14 @@ import dev.marregui.comando.ui.kit.theme.Tint;
  */
 public final class BlendIcon implements Icon, FlatLaf.DisabledIconProvider {
 
-    private final FlatSVGIcon svg;
+    private final SvgIcon svg;
     private final Color to;
     private double share;
 
     /** {@code name}'s SVG, 16 pixels, at its own colours until {@link #share} moves it towards {@code to}. */
     public BlendIcon(final String name, final Color to) {
         this.to = to;
-        svg = new FlatSVGIcon("icons/" + name + ".svg", 16, 16);
-        svg.setColorFilter(new FlatSVGIcon.ColorFilter(this::blend));
+        svg = new SvgIcon("icons/" + name + ".svg", 16, 16, this::blend);
     }
 
     /** How far from the SVG's colours to the other: 0 its own, 1 the other's, clamped to that; the caller repaints. */
@@ -53,8 +51,11 @@ public final class BlendIcon implements Icon, FlatLaf.DisabledIconProvider {
         return svg.getDisabledIcon();
     }
 
-    /** Opaque, as the SVGs' fills are; the theme's own mix, since only the theme makes a colour. */
+    /**
+     * Opaque, as the SVGs' fills are; the theme's own mix, since only the theme makes a colour. At no share, the SVG's
+     * colours as every icon of the set paints them ({@link Icons#gilded}).
+     */
     private Color blend(final Color from) {
-        return share <= 0.0 ? from : Tint.over(from, to, (float) share);
+        return share <= 0.0 ? Icons.gilded(from) : Tint.over(from, to, (float) share);
     }
 }

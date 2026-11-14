@@ -478,6 +478,14 @@ public final class Theme {
         });
     }
 
+    /**
+     * The colour packed as ARGB in {@code argb}: a colour derived from another outside the theme, such as an icon's
+     * disabled grey.
+     */
+    public static Color argb(final int argb) {
+        return new Color(argb, true);
+    }
+
     /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement run. */
     public static Color withAlpha(final Color c, final int alpha) {
         return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);

@@ -4,8 +4,6 @@ import java.awt.Color;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.swing.Icon;
 
-import com.formdev.flatlaf.extras.FlatSVGIcon;
-
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 /**
@@ -14,7 +12,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
  */
 public final class Icons {
 
-    private static final ConcurrentHashMap<String, FlatSVGIcon> CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, SvgIcon> CACHE = new ConcurrentHashMap<>();
     /** Icons made of others, by name: a repository's folder with git's mark. */
     private static final ConcurrentHashMap<String, Icon> COMPOSED = new ConcurrentHashMap<>();
     /** Icons painted in code, by name, at any size asked: the tints' swatches. */
@@ -29,11 +27,7 @@ public final class Icons {
     /** The purple of a due checkpoint, drawn as the dark theme's; painted in {@link Theme#THINKING}, by mode. */
     static final int SVG_PURPLE = 0xB99BF8;
     /** The Locate button's arrow, 7 by 16. */
-    private static final FlatSVGIcon LOCATE_ARROW = new FlatSVGIcon("icons/locate-arrow.svg", 7, 16);
-
-    static {
-        FlatSVGIcon.ColorFilter.getInstance().setMapper(Icons::gilded);
-    }
+    private static final SvgIcon LOCATE_ARROW = new SvgIcon("icons/locate-arrow.svg", 7, 16, Icons::gilded);
 
     private Icons() {
     }
@@ -62,7 +56,8 @@ public final class Icons {
         if (painted != null) {
             return painted;
         }
-        return CACHE.computeIfAbsent(name + '@' + size, _ -> new FlatSVGIcon("icons/" + name + ".svg", size, size));
+        return CACHE.computeIfAbsent(name + '@' + size,
+                _ -> new SvgIcon("icons/" + name + ".svg", size, size, Icons::gilded));
     }
 
     /**
