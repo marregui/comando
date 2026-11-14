@@ -89,6 +89,19 @@ class SignaturesTest {
         assertThat(Signatures.returnType("||", List.of(VARCHAR, LONG))).isEqualTo(VARCHAR);
     }
 
+    /// A TIMESTAMP meets a text in either order and in `in` and `between`, as QuestDB reads the text as a timestamp
+    /// (`ts = '2026-11-14T11:00:00+01:00'` is a BOOLEAN); a number meeting a text is still refused here, because the
+    /// binder reads a text constant as the number before the types are checked.
+    @Test
+    void timestampMeetsText() {
+        assertThat(Signatures.returnType("=", List.of(TIMESTAMP, VARCHAR))).isEqualTo(BOOLEAN);
+        assertThat(Signatures.returnType("<", List.of(SYMBOL, TIMESTAMP))).isEqualTo(BOOLEAN);
+        assertThat(Signatures.returnType("in", List.of(TIMESTAMP, VARCHAR, VARCHAR))).isEqualTo(BOOLEAN);
+        assertThat(Signatures.returnType("between", List.of(TIMESTAMP, VARCHAR, TIMESTAMP))).isEqualTo(BOOLEAN);
+        assertThatThrownBy(() -> Signatures.returnType("=", List.of(LONG, VARCHAR))).isInstanceOf(CdbException.class);
+        assertThatThrownBy(() -> Signatures.returnType("=", List.of(VARCHAR, DOUBLE))).isInstanceOf(CdbException.class);
+    }
+
     /// Arguments of the wrong type or number, and an unknown function, are refused.
     @Test
     void mismatchIsRefused() {

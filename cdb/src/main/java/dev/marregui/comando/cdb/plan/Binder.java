@@ -10,7 +10,8 @@ import dev.marregui.comando.cdb.sql.Ast;
 
 /**
  * Binds an expression over a {@link Rel}: names to column indexes, types through {@link Signatures}, string literals
- * compared with a TIMESTAMP to TIMESTAMP constants, NULL to the type of what it meets. A {@code hook} binds first, for
+ * compared with a TIMESTAMP to TIMESTAMP constants and with a LONG or DOUBLE to numbers as QuestDB reads them, NULL
+ * to the type of what it meets. A {@code hook} binds first, for
  * the expressions an aggregate or a window below already computed; it returns null for the rest.
  */
 final class Binder {
@@ -92,7 +93,8 @@ final class Binder {
 
     /**
      * {@code function} over {@code args}, after typing NULLs as the first typed argument and, where a TIMESTAMP meets a
-     * string constant in a comparison or an addition, reading the string as a timestamp.
+     * string constant in a comparison or an addition, reading the string as a timestamp; where a LONG or DOUBLE meets
+     * one in a comparison or {@code in}, reading it as that number ({@link #number}).
      */
     static Bound call(final String function, final List<Bound> args, final int pos) {
         CdbType first = null;
@@ -111,7 +113,120 @@ final class Binder {
             final Bound t = typed(a, nullType);
             out.add(coerce ? toTimestamp(t, pos) : t);
         }
+        if (Signatures.isComparison(function) || "in".equals(function) || "not_in".equals(function)) {
+            textsAsNumbers(function, out, pos);
+        }
         return new Bound.Call(function, List.copyOf(out), type(function, out, pos));
+    }
+
+    /** The string constants of {@code args} replaced by numbers where the first number among {@code args} asks. */
+    private static void textsAsNumbers(final String function, final List<Bound> args, final int pos) {
+        CdbType target = null;
+        for (int i = 0; i < args.size() && !isNumber(target); i++) {
+            target = isNumber(args.get(i).type()) ? args.get(i).type() : null;
+        }
+        if (target == null) {
+            return;
+        }
+        final boolean ordering = "<".equals(function) || "<=".equals(function) || ">".equals(function)
+                || ">=".equals(function);
+        final boolean listed = "in".equals(function) || "not_in".equals(function);
+        for (int i = 0; i < args.size(); i++) {
+            if (args.get(i) instanceof Bound.Constant(final String s, final CdbType _)) {
+                args.set(i, number(s, target, ordering || listed && i > 0, listed && i > 0, pos));
+            }
+        }
+    }
+
+    private static boolean isNumber(final CdbType type) {
+        return type == CdbType.LONG || type == CdbType.DOUBLE;
+    }
+
+    /**
+     * {@code text} as a constant of {@code to}, as QuestDB reads a string literal that meets a number. A LONG reads
+     * {@code ['-']digits}, single underscores between digits and a trailing {@code L} allowed. {@code ''} is 0 and a
+     * one-character literal (a CHAR) its digit, or 0 below {@code '0'} and 9 above {@code '9'}, in an equality; where
+     * {@code strict} (an ordering or an {@code in} list) {@code ''} and a CHAR that is no digit fail, and where
+     * {@code listed} (an {@code in} list) every CHAR does. A DOUBLE reads Java's decimal syntax, and a CHAR only as a
+     * digit. Text that is none of these fails.
+     */
+    static Bound number(
+            final String text,
+            final CdbType to,
+            final boolean strict,
+            final boolean listed,
+            final int pos
+    ) {
+        final int n = text.length();
+        final boolean single = n == 1;
+        final boolean digit = single && text.charAt(0) >= '0' && text.charAt(0) <= '9';
+        if (listed && n <= 1 || n == 0 && (strict || to == CdbType.DOUBLE)) {
+            throw unreadable(text, to, pos);
+        }
+        if (to == CdbType.LONG) {
+            if (n == 0) {
+                return new Bound.Constant(0L, to);
+            }
+            if (single) {
+                if (!digit && strict) {
+                    throw unreadable(text, to, pos);
+                }
+                final char c = text.charAt(0);
+                return new Bound.Constant((long) (digit ? c - '0' : c < '0' ? 0 : 9), to);
+            }
+            return new Bound.Constant(parseLong(text, pos), to);
+        }
+        if (single && !digit) {
+            throw unreadable(text, to, pos);
+        }
+        return new Bound.Constant(parseDouble(text, pos), to);
+    }
+
+    private static long parseLong(final String text, final int pos) {
+        final int n = text.length();
+        final boolean negative = text.charAt(0) == '-';
+        final char last = text.charAt(n - 1);
+        final int end = last == 'l' || last == 'L' ? n - 1 : n;
+        long value = 0;
+        boolean afterDigit = false;
+        int i = negative ? 1 : 0;
+        if (i == end) {
+            throw unreadable(text, CdbType.LONG, pos);
+        }
+        for (; i < end; i++) {
+            final char c = text.charAt(i);
+            if (c == '_') {
+                final boolean beforeDigit = i + 1 < end && text.charAt(i + 1) >= '0' && text.charAt(i + 1) <= '9';
+                if (!afterDigit || !beforeDigit) {
+                    throw unreadable(text, CdbType.LONG, pos);
+                }
+                afterDigit = false;
+                continue;
+            }
+            final int digit = c - '0';
+            // negative accumulation reaches Long.MIN_VALUE, which QuestDB reads as NULL
+            if (digit < 0 || digit > 9 || value < (Long.MIN_VALUE + digit) / 10) {
+                throw unreadable(text, CdbType.LONG, pos);
+            }
+            value = value * 10 - digit;
+            afterDigit = true;
+        }
+        if (!negative && value == Long.MIN_VALUE) {
+            throw unreadable(text, CdbType.LONG, pos);
+        }
+        return negative ? value : -value;
+    }
+
+    private static double parseDouble(final String text, final int pos) {
+        try {
+            return Double.parseDouble(text);
+        } catch (final NumberFormatException e) {
+            throw unreadable(text, CdbType.DOUBLE, pos);
+        }
+    }
+
+    private static CdbException unreadable(final String text, final CdbType to, final int pos) {
+        return new CdbException("cannot read text as number [text=" + text + ", type=" + to + ']', pos);
     }
 
     private static Bound literal(final Object value) {

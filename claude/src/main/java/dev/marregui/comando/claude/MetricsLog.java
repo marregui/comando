@@ -2,6 +2,8 @@ package dev.marregui.comando.claude;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -10,8 +12,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.LongSupplier;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
+import org.jetbrains.annotations.TestOnly;
+
+import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.json.ArrayNode;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
@@ -43,6 +49,18 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
      */
     static final Duration CONTEXT_QUERY_WITHIN = Duration.ofSeconds(2);
 
+    /** The setting that moves the machine's QuestDB folder, as the kit reads it. */
+    private static final String QDB_HOME_ENV = "KIT_QDB_HOME";
+
+    /** The file of the machine's QuestDB folder whose first line is the shadow server's base URL. */
+    private static final String SHADOW_FILE = "shadow";
+
+    /** The machine's QuestDB folder under the user's home, where its server runs (record 146). */
+    private static final String MACHINE_FOLDER = ".comando-questdb";
+
+    /** The most of {@link #SHADOW_FILE} read: a base URL is a few dozen characters, so a larger file is no switch. */
+    private static final int SHADOW_FILE_BYTES = 1024;
+
     /** A conversation id as Claude Code makes them; nothing else is put into a query. */
     private static final Pattern CONVERSATION = Pattern.compile("[0-9a-f-]{8,64}");
 
@@ -59,11 +77,17 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
     /**
      * Events of the comando instance whose data root is {@code instance}, an absolute path, sent to the machine's
      * QuestDB at {@code qdb}; a write QuestDB does not take is told to {@code notices}. Starts the sink's errand, which
-     * {@link #close} ends. Each batch also goes to the shadow server {@link MetricsSink#SHADOW_ENV} names, read here
-     * only, so that no test of the sink or the log inherits it from the shell.
+     * {@link #close} ends. Each batch also goes to {@code shadow}, a base URL, when it is one: the caller reads it with
+     * {@link #machineShadow} where the app builds its log, so that no test of the sink or the log inherits it from the
+     * shell or the machine's folder.
      */
-    public MetricsLog(final String instance, final QuestDbEndpoint qdb, final IntentSink notices) {
-        this(System::currentTimeMillis, instance, qdb, notices, System.getenv(MetricsSink.SHADOW_ENV));
+    public MetricsLog(
+            final String instance,
+            final QuestDbEndpoint qdb,
+            final IntentSink notices,
+            final String shadow
+    ) {
+        this(System::currentTimeMillis, instance, qdb, notices, shadow);
     }
 
     /** As the public constructor, stamped by {@code clock}, with no shadow; with no {@code qdb}, keeps nothing. */
@@ -90,6 +114,38 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
                 notices, shadow);
     }
 
+    /**
+     * The shadow server's base URL as this process's environment and the user's machine folder set it
+     * ({@link #shadowSetting}); reads the user's home, so a test never calls it.
+     */
+    public static String machineShadow() {
+        return shadowSetting(System::getenv, Path.of(System.getProperty("user.home")));
+    }
+
+    /**
+     * The shadow server's base URL as the machine has it set: the value of {@link MetricsSink#SHADOW_ENV} when
+     * {@code env} has it (blank: none), else the first line of {@link #SHADOW_FILE} in the machine's QuestDB folder,
+     * {@link #QDB_HOME_ENV} or else {@code .comando-questdb} under {@code userHome}, the file the kit's writers read.
+     * Null when the file is missing or unreadable: the file is never an error. A file with no line end is one line.
+     */
+    static String shadowSetting(final UnaryOperator<String> env, final Path userHome) {
+        final String named = env.apply(MetricsSink.SHADOW_ENV);
+        if (named != null) {
+            return named;
+        }
+        final String home = env.apply(QDB_HOME_ENV);
+        try {
+            final Path folder = home == null || home.isBlank() ? userHome.resolve(MACHINE_FOLDER) : Path.of(home);
+            final String text = new String(Mapped.head(folder.resolve(SHADOW_FILE), SHADOW_FILE_BYTES),
+                    StandardCharsets.UTF_8);
+            final int end = text.indexOf('\n');
+            return (end < 0 ? text : text.substring(0, end)).strip();
+        } catch (final IOException | RuntimeException _) {
+            // handled: no file, or one that cannot be read, is no shadow
+            return null;
+        }
+    }
+
     /** A new event of {@code type}, stamped now; {@link #write} keeps it. */
     ObjectNode event(final String type) {
         final ObjectNode e = Json.object();
@@ -101,6 +157,12 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
     /** The current time, as the events are stamped. */
     long now() {
         return clock.getAsLong();
+    }
+
+    /** The shadow server each batch also goes to; null with none, and for a log that keeps nothing. */
+    @TestOnly
+    public URI shadow() {
+        return sink == null ? null : sink.shadow();
     }
 
     /**

@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
@@ -41,6 +42,8 @@ import static org.awaitility.Awaitility.await;
 /// - Loses an event QuestDB does not take, tells the user, and makes no file.
 /// - Sends each event as a row of the instance it is built for.
 /// - Takes a conversation's last context from QuestDB, and none when QuestDB has no row or is down.
+/// - Takes the shadow server from the setting, else from the machine folder's `shadow` file, else none.
+/// - Reads no file in a log built for a test.
 class MetricsTest {
 
     @TempDir
@@ -332,6 +335,58 @@ class MetricsTest {
                 endpoint.live.set(null);
                 assertThat(log.lastContext(CONVERSATION)).as("none running").isEmpty();
             }
+        }
+    }
+
+    /// With `COMANDO_QDB_SHADOW` set, that is the shadow, blank meaning none, and no file is read; unset, the first
+    /// line of `shadow` in the folder `KIT_QDB_HOME` names is, else in `.comando-questdb` under the user's home.
+    @Test
+    void theShadowIsTheSettingElseTheMachineFoldersFile() throws Exception {
+        final Path machine = Files.createDirectories(dir.resolve("machine"));
+        Files.writeString(machine.resolve("shadow"), "http://127.0.0.1:9100 \r\nhttp://elsewhere:1\n");
+        final Path userHome = dir.resolve("home");
+        Files.writeString(Files.createDirectories(userHome.resolve(".comando-questdb")).resolve("shadow"),
+                "http://127.0.0.1:9200");
+
+        assertThat(MetricsLog.shadowSetting(Map.of("COMANDO_QDB_SHADOW", "http://127.0.0.1:9300")::get, userHome))
+                .as("the setting wins over the file").isEqualTo("http://127.0.0.1:9300");
+        assertThat(MetricsLog.shadowSetting(
+                Map.of("COMANDO_QDB_SHADOW", "", "KIT_QDB_HOME", machine.toString())::get, userHome))
+                .as("an empty setting is none, the file unread").isEmpty();
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", machine.toString())::get, userHome))
+                .as("the first line of the named folder's file").isEqualTo("http://127.0.0.1:9100");
+        assertThat(MetricsLog.shadowSetting(Map.<String, String>of()::get, userHome))
+                .as("the default folder, no end of line").isEqualTo("http://127.0.0.1:9200");
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", " ")::get, userHome))
+                .as("a blank folder is the default").isEqualTo("http://127.0.0.1:9200");
+    }
+
+    /// With no file, a folder that is not one, or a `shadow` that is a folder, there is no shadow and no failure.
+    @Test
+    void aMissingOrUnreadableShadowFileIsNoShadow() throws Exception {
+        Files.createDirectories(dir.resolve("machine").resolve("shadow"));
+
+        assertThat(MetricsLog.shadowSetting(Map.<String, String>of()::get, dir.resolve("nowhere"))).isNull();
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", dir.resolve("machine").toString())::get, dir))
+                .isNull();
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", "\0")::get, dir)).isNull();
+    }
+
+    /// A log built for a test sends to its server alone, whatever `shadow` files exist: only
+    /// `MetricsLog.machineShadow()`, which the app calls once, reads the file.
+    @Test
+    void aLogBuiltForATestReadsNoFile() throws Exception {
+        try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
+                final MetricsSinkTest.FakeQuestDb shadow = new MetricsSinkTest.FakeQuestDb()) {
+            Files.writeString(Files.createDirectories(dir.resolve(".comando-questdb")).resolve("shadow"),
+                    shadow.uri().toString());
+            assertThat(MetricsLog.shadowSetting(Map.<String, String>of()::get, dir)).isEqualTo(shadow.uri().toString());
+            try (final MetricsLog log = log(server)) {
+                log.queues(List.of(new Queues.Reading("intents", 0, 12)));
+                marked(server, log);
+            }
+            assertThat(shadow.posts.get()).isZero();
+            assertThat(shadow.queries).isEmpty();
         }
     }
 

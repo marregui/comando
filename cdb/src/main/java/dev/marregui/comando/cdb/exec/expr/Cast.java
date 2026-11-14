@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.exec.expr;
 
 import java.util.List;
 
+import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Page;
 import dev.marregui.comando.cdb.exec.Vector;
@@ -23,11 +24,35 @@ final class Cast {
         return coerce(Functions.compile(arg, nowMicros), arg.type(), type);
     }
 
-    /** Each of {@code args} compiled and read as {@code type}. */
-    static VectorFn[] args(final List<Bound> args, final int from, final CdbType type, final long nowMicros) {
+    /**
+     * {@code arg} compiled and read as {@code type} in a comparison: as {@link #arg}, except that a text read as a
+     * TIMESTAMP must be one, as QuestDB fails on {@code Invalid date} where a cast gives NULL.
+     */
+    static VectorFn operand(final Bound arg, final CdbType type, final long nowMicros) {
+        if (type != CdbType.TIMESTAMP || !arg.type().isText()) {
+            return arg(arg, type, nowMicros);
+        }
+        final VectorFn source = Functions.compile(arg, nowMicros);
+        final Vector out = Vector.of(CdbType.TIMESTAMP, Page.CAPACITY);
+        return page -> {
+            final Vector in = source.eval(page);
+            for (int i = 0, n = page.size; i < n; i++) {
+                final String text = in.texts[i];
+                final long micros = text == null ? Vector.NULL_LONG : Civil.parse(text);
+                if (text != null && micros == Vector.NULL_LONG) {
+                    throw new CdbException("cannot read text as timestamp [text=" + text + ']', -1);
+                }
+                out.longs[i] = micros;
+            }
+            return out;
+        };
+    }
+
+    /** Each of {@code args} compiled and read as {@code type} in a comparison, as {@link #operand}. */
+    static VectorFn[] operands(final List<Bound> args, final int from, final CdbType type, final long nowMicros) {
         final VectorFn[] fns = new VectorFn[args.size() - from];
         for (int i = 0; i < fns.length; i++) {
-            fns[i] = arg(args.get(from + i), type, nowMicros);
+            fns[i] = operand(args.get(from + i), type, nowMicros);
         }
         return fns;
     }

@@ -29,6 +29,10 @@ final class PageBuilder {
         current.columns[column].longs[current.size] = value;
     }
 
+    void real(final int column, final double value) {
+        current.columns[column].doubles[current.size] = value;
+    }
+
     void bool(final int column, final boolean value) {
         current.columns[column].booleans[current.size] = value;
     }

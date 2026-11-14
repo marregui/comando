@@ -65,7 +65,8 @@ final class MetricsSink implements AutoCloseable {
     static final long MINUTE_NANOS = TimeUnit.MINUTES.toNanos(1);
     /**
      * The setting naming a second server, by its base URL, that gets every batch as well: a server to compare with the
-     * machine's QuestDB. Unset, nothing else is written.
+     * machine's QuestDB. Unset, the first line of the machine's QuestDB folder's {@code shadow} file is the server,
+     * when there is one ({@link MetricsLog#shadowSetting}); with neither, nothing else is written.
      */
     static final String SHADOW_ENV = "COMANDO_QDB_SHADOW";
     /** The contract's connect bound (record 146, §5): a server on this machine answers a connect at once. */
@@ -122,8 +123,9 @@ final class MetricsSink implements AutoCloseable {
 
     /**
      * Starts the errand that sends the events, as {@code lines} maps them, to {@code qdb}; {@code nanos} times the
-     * once-a-minute bounds, and an outage is told to {@code notices}. No shadow: the environment's is read by
-     * {@code MetricsLog}'s public constructor alone, so a test of the sink never writes to the user's shadow.
+     * once-a-minute bounds, and an outage is told to {@code notices}. No shadow: the environment's and the machine
+     * folder's file are read by {@link MetricsLog#machineShadow} alone, where the app builds its log, so a test of the
+     * sink never writes to the user's shadow.
      */
     MetricsSink(
             final QuestDbEndpoint qdb,
@@ -234,6 +236,12 @@ final class MetricsSink implements AutoCloseable {
     @TestOnly
     long droppedEvents() {
         return dropped.get();
+    }
+
+    /** The shadow server each batch also goes to; null with none. */
+    @TestOnly
+    URI shadow() {
+        return shadow;
     }
 
     /** The base URL in {@code value}; null when it is null, blank, or not an absolute URL, the last one logged. */

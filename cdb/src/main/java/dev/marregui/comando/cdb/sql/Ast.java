@@ -88,8 +88,18 @@ public sealed interface Ast {
     record Limit(Expr lo, Expr hi) {
     }
 
-    /** One column of {@code CREATE TABLE}: its name and type as written, upper case ({@code SYMBOL}, {@code INT}). */
-    record ColumnSpec(String name, String type) {
+    /**
+     * One column of {@code CREATE TABLE}: its name and type as written, upper case ({@code SYMBOL}, {@code INT}), and a
+     * SYMBOL's options as written: {@code CAPACITY n} ({@code capacity}, -1 when absent), {@code NOCACHE}
+     * ({@code noCache}), {@code INDEX} ({@code index}) and its {@code CAPACITY n} ({@code indexCapacity}, -1 when
+     * absent).
+     */
+    record ColumnSpec(String name, String type, long capacity, boolean noCache, boolean index, long indexCapacity) {
+
+        /** A column written without options. */
+        public ColumnSpec(final String name, final String type) {
+            this(name, type, -1, false, false, -1);
+        }
     }
 
     /**

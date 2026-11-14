@@ -10,12 +10,10 @@ import dev.marregui.comando.cdb.plan.Plan;
 import dev.marregui.comando.cdb.store.Store;
 
 /**
- * The table functions and listings: {@code tables()} (QuestDB's columns that comando and the kit read: {@code id},
- * {@code table_name}, {@code designatedTimestamp}, {@code partitionBy}, {@code walEnabled}, {@code dedup},
- * {@code ttlValue}, {@code ttlUnit}, {@code table_row_count}, {@code table_min_timestamp}, {@code table_max_timestamp}),
- * {@code table_columns(t)} and {@code SHOW COLUMNS FROM t} (QuestDB's columns, {@code column}, {@code type},
- * {@code indexed}, {@code indexBlockCapacity}, {@code symbolCached}, {@code symbolCapacity}, {@code designated},
- * {@code upsertKey}), {@code SHOW TABLES}, {@code long_sequence(n)} (column {@code x}, 1 to n) and {@code one_row}.
+ * The table functions and listings: {@code tables()} (QuestDB's 45 columns, its runtime statistics as it reports them
+ * for a table written once), {@code table_columns(t)} and {@code SHOW COLUMNS FROM t} (QuestDB's 11 columns,
+ * {@code column} to {@code indexInclude}), {@code SHOW CREATE TABLE t} (column {@code ddl}), {@code SHOW TABLES},
+ * {@code long_sequence(n)} (column {@code x}, 1 to n) and {@code one_row}.
  */
 public final class Catalog {
 
@@ -36,6 +34,10 @@ public final class Catalog {
             case "show_tables" -> {
                 requireArgs(function, args, 0);
                 yield Listings.SHOW_TABLES;
+            }
+            case "show_create_table" -> {
+                requireArgs(function, args, 1);
+                yield Listings.SHOW_CREATE_TABLE;
             }
             case "long_sequence" -> {
                 sequenceLength(args);
@@ -58,6 +60,7 @@ public final class Catalog {
             case "tables" -> Listings.tables(store);
             case "table_columns", "show_columns" -> Listings.columns(store, args.get(0));
             case "show_tables" -> Listings.showTables(store);
+            case "show_create_table" -> Listings.showCreateTable(store, args.get(0));
             case "long_sequence" -> new SequenceCursor(sequenceLength(args));
             default -> Listings.oneRow();
         };

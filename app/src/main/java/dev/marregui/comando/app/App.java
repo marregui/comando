@@ -213,7 +213,9 @@ public final class App implements AutoCloseable {
             final boolean machineQuestDb = machineQuestDb();
             final MachineQuestDb questDb = new MachineQuestDb(machineQuestDb ? Path.of(System.getProperty("user.home"), ".comando-questdb")
                     : config.home().resolve("machine-questdb"), config.home(), InstanceName.current(), loop);
-            metrics = own(metricsLog(machineQuestDb, config.home(), questDb, loop));
+            // the shadow switch is read here alone, so no log a test builds reads the user's machine folder
+            metrics = own(metricsLog(machineQuestDb, config.home(), questDb, loop,
+                    machineQuestDb ? MetricsLog.machineShadow() : null));
             claude.metrics(metrics);
             mcpTools.waits(metrics);
             claude.checkpointByComando();
@@ -399,16 +401,18 @@ public final class App implements AutoCloseable {
 
     /**
      * The sessions' metrics log: with the machine's QuestDB, its only store, at {@code qdb}, each row naming
-     * {@code home}, an outage told to {@code notices}; without it, as the tests run, {@link MetricsLog#NONE}, which
-     * keeps nothing (record 149).
+     * {@code home}, an outage told to {@code notices}, each batch also sent to {@code shadow} when it is a base URL;
+     * without it, as the tests run, {@link MetricsLog#NONE}, which keeps nothing (record 149).
      */
     static MetricsLog metricsLog(
             final boolean machineQuestDb,
             final Path home,
             final QuestDbEndpoint qdb,
-            final IntentSink notices
+            final IntentSink notices,
+            final String shadow
     ) {
-        return machineQuestDb ? new MetricsLog(home.toAbsolutePath().toString(), qdb, notices) : MetricsLog.NONE;
+        return machineQuestDb ? new MetricsLog(home.toAbsolutePath().toString(), qdb, notices, shadow)
+                : MetricsLog.NONE;
     }
 
     /**

@@ -4,7 +4,9 @@ import java.util.List;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.plan.Bound;
 
@@ -14,6 +16,7 @@ import static dev.marregui.comando.cdb.exec.expr.Exprs.lit;
 import static dev.marregui.comando.cdb.exec.expr.Exprs.nul;
 import static dev.marregui.comando.cdb.exec.expr.Exprs.ts;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Each expression evaluates to what QuestDB returned for it. The expected values were captured from the local
 /// QuestDB with read-only `GET /exec` queries; the comment above each group is the query that was run, and each row
@@ -256,6 +259,45 @@ class FunctionsQuestDbParityTest {
                 row("CAST('2026-11-14T10' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10")),
                         "2026-11-14T10:00:00.000000Z"),
                 row("CAST('...097165123Z' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:49:45.097165123Z")), NOW),
+                // SELECT CAST('2026-11-14T10:00:00+0100' AS TIMESTAMP), CAST('2026-11-14T10:00:00+01' AS TIMESTAMP),
+                // CAST('2026-11-14T10:00:00-0530' AS TIMESTAMP), CAST('2026-11-14T10:00:00+0130' AS TIMESTAMP),
+                // CAST('2026-11-14T10:00:00.5-03:00' AS TIMESTAMP), CAST('2026-11-14T10:00:00+2359' AS TIMESTAMP),
+                // CAST('2026-11-14T10:00:00.' AS TIMESTAMP), CAST('2026-11-14T10:00:00.5Z' AS TIMESTAMP)
+                // -> ["2026-11-14T09:00:00.000000Z", "2026-11-14T09:00:00.000000Z", "2026-11-14T15:30:00.000000Z",
+                // "2026-11-14T08:30:00.000000Z", "2026-11-14T13:00:00.500000Z", "2026-11-13T10:01:00.000000Z",
+                // "2026-11-14T10:00:00.000000Z", "2026-11-14T10:00:00.500000Z"]
+                row("CAST('...10:00:00+0100' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00+0100")),
+                        "2026-11-14T09:00:00.000000Z"),
+                row("CAST('...10:00:00+01' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00+01")),
+                        "2026-11-14T09:00:00.000000Z"),
+                row("CAST('...10:00:00-0530' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00-0530")),
+                        "2026-11-14T15:30:00.000000Z"),
+                row("CAST('...10:00:00+0130' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00+0130")),
+                        "2026-11-14T08:30:00.000000Z"),
+                row("CAST('...10:00:00.5-03:00' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00.5-03:00")),
+                        "2026-11-14T13:00:00.500000Z"),
+                row("CAST('...10:00:00+2359' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00+2359")),
+                        "2026-11-13T10:01:00.000000Z"),
+                row("CAST('...10:00:00.' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00.")),
+                        "2026-11-14T10:00:00.000000Z"),
+                row("CAST('...10:00:00.5Z' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00.5Z")),
+                        "2026-11-14T10:00:00.500000Z"),
+                // SELECT CAST('2026-11-14T10:00+01:00' AS TIMESTAMP), CAST('2026-11-14T10Z' AS TIMESTAMP),
+                // CAST('2026-11-14+01:00' AS TIMESTAMP), CAST('2026-11-14T10:00:00+24' AS TIMESTAMP)
+                // -> [null, null, null, null]: a zone is read only after the seconds field, and +24 is no zone
+                row("CAST('...T10:00+01:00' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00+01:00")), "null"),
+                row("CAST('...T10Z' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10Z")), "null"),
+                row("CAST('2026-11-14+01:00' AS TIMESTAMP)", call("cast", T, lit("2026-11-14+01:00")), "null"),
+                row("CAST('...10:00:00+24' AS TIMESTAMP)", call("cast", T, lit("2026-11-14T10:00:00+24")), "null"),
+                // with ts = '2026-11-14T10:00:00.000000Z'::timestamp: SELECT ts = '2026-11-14T11:00:00+01:00',
+                // ts = '2026-11-14T11:00:00+0100', ts > '2026-11-14T10:30:00-0100', '2026-11-14T11:00:00+01' = ts,
+                // ts != '2026-11-14T11:00:00+01:00', ts = CAST(NULL AS VARCHAR) -> [true, true, false, true, false, false]
+                row("ts = '...11:00:00+01:00'", call("=", B, ts(T10), lit("2026-11-14T11:00:00+01:00")), "true"),
+                row("ts = '...11:00:00+0100'", call("=", B, ts(T10), lit("2026-11-14T11:00:00+0100")), "true"),
+                row("ts > '...10:30:00-0100'", call(">", B, ts(T10), lit("2026-11-14T10:30:00-0100")), "false"),
+                row("'...11:00:00+01' = ts", call("=", B, lit("2026-11-14T11:00:00+01"), ts(T10)), "true"),
+                row("ts != '...11:00:00+01:00'", call("!=", B, ts(T10), lit("2026-11-14T11:00:00+01:00")), "false"),
+                row("ts = NULL VARCHAR", call("=", B, ts(T10), nul(V)), "false"),
                 // SELECT 'a' || 'b', 'a' || CAST(NULL AS VARCHAR), concat('a', ' ', 'b'), concat('a', CAST(NULL AS
                 // VARCHAR), 'b'), 'n' || 5, concat('x', 1.5) -> ["ab", "a", "a b", "ab", "n5", "x1.5"]
                 row("'a' || NULL VARCHAR", call("||", V, lit("a"), nul(V)), "a"),
@@ -455,6 +497,15 @@ class FunctionsQuestDbParityTest {
     @MethodSource("cases")
     void matchesQuestDb(final Case c) {
         assertThat(eval(c.expr())).as(c.sql()).isEqualTo(c.expected());
+    }
+
+    /// A text that is no timestamp fails when it meets a TIMESTAMP in a comparison, as QuestDB's
+    /// `ts = '2026-11-14T10:00:00Tzz'` and `ts = ''` fail with `Invalid date`, and so does `ts < '2026-11-14T11:00+01:00'`
+    /// (a zone before the seconds field).
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"2026-11-14T10:00:00Tzz", "", "2026-11-14T11:00+01:00"})
+    void textThatIsNoTimestampFails(final String text) {
+        assertThatThrownBy(() -> eval(call("=", B, ts(T10), lit(text)))).isInstanceOf(CdbException.class);
     }
 
     private static Case row(final String sql, final Bound expr, final String expected) {

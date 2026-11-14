@@ -284,19 +284,23 @@ public final class Planner {
                 || from == CdbType.LONG && to == CdbType.TIMESTAMP;
     }
 
-    /** {@code SHOW TABLES} and {@code SHOW COLUMNS FROM t}; other listings are not supported. */
+    /** {@code SHOW TABLES}, {@code SHOW COLUMNS FROM t} and {@code SHOW CREATE TABLE t}; others are not supported. */
     private Plan show(final Ast.Show show) {
         return switch (show.what().toLowerCase(Locale.ROOT)) {
             case "tables" -> new Plan.Source("show_tables", List.of(), sourceFields.apply("show_tables", List.of()));
-            case "columns" -> {
-                final TableDef def = tables.apply(show.table());
-                if (def == null) {
-                    throw new CdbException("cannot find table [table=" + show.table() + ']', show.pos());
-                }
-                final List<String> args = List.of(def.name());
-                yield new Plan.Source("show_columns", args, sourceFields.apply("show_columns", args));
-            }
+            case "columns" -> tableListing(show, "show_columns");
+            case "create table" -> tableListing(show, "show_create_table");
             default -> throw new CdbException("cannot show unsupported listing [what=" + show.what() + ']', show.pos());
         };
+    }
+
+    /** The listing {@code function} of the table {@code show} names, which must exist. */
+    private Plan tableListing(final Ast.Show show, final String function) {
+        final TableDef def = tables.apply(show.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + show.table() + ']', show.pos());
+        }
+        final List<String> args = List.of(def.name());
+        return new Plan.Source(function, args, sourceFields.apply(function, args));
     }
 }

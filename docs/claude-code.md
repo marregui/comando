@@ -385,8 +385,11 @@ sends for the same gesture:
   the data root as `instance`. A bounded queue and one thread write them in batches over ILP, starting the server when
   none runs; a batch QuestDB does not take is lost, and the first of an outage is a warning notice. A batch QuestDB
   refuses for some of its lines is sent again in halves, so only the lines it refuses alone are lost; those are logged
-  at most once a minute and are no outage. comando run with `-Dcomando.questdb=false`, as the tests are, keeps no
-  metrics.
+  at most once a minute and are no outage. Each batch also goes to a shadow server, cdb in its trial beside QuestDB
+  ([record 158](adr/0158-cdb-comandos-own-database.md)), when one is set: `COMANDO_QDB_SHADOW`, empty meaning none,
+  else the first line of `shadow` in the machine's QuestDB folder (`~/.comando-questdb`, or `$KIT_QDB_HOME`), the
+  switch the kit's writers read too; it is read once, where the app builds the metrics log, and a shadow write that
+  fails is ignored. comando run with `-Dcomando.questdb=false`, as the tests are, keeps no metrics and reads no shadow.
 
 ## 4. Approvals and safety
 

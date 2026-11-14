@@ -10,7 +10,8 @@ import dev.marregui.comando.cdb.plan.Bound;
 /**
  * Comparisons, {@code in}, {@code not_in} and {@code between}, with QuestDB's NULL rules: two NULLs compare equal, so
  * {@code =}, {@code <=} and {@code >=} are true and the others false; one NULL makes only {@code !=} true. The operands
- * meet in {@link Cast#common}; doubles compare by value, so -0.0 equals 0.0. {@code between} is false when any operand
+ * meet in {@link Cast#common}, a text meeting a TIMESTAMP is read as one and fails when it is none; doubles compare by
+ * value, so -0.0 equals 0.0. {@code between} is false when any operand
  * is NULL and swaps reversed bounds.
  */
 final class Comparison {
@@ -39,8 +40,8 @@ final class Comparison {
 
     static VectorFn compare(final int op, final List<Bound> args, final CdbType type, final long nowMicros) {
         final CdbType domain = Cast.common(args);
-        final VectorFn a = Cast.arg(args.get(0), domain, nowMicros);
-        final VectorFn b = Cast.arg(args.get(1), domain, nowMicros);
+        final VectorFn a = Cast.operand(args.get(0), domain, nowMicros);
+        final VectorFn b = Cast.operand(args.get(1), domain, nowMicros);
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
             final Vector x = a.eval(page);
@@ -55,8 +56,8 @@ final class Comparison {
     /** {@code args[0] in (args[1], ...)} by the equality of {@link #compare}; {@code negated} for {@code not_in}. */
     static VectorFn in(final List<Bound> args, final boolean negated, final CdbType type, final long nowMicros) {
         final CdbType domain = Cast.common(args);
-        final VectorFn operand = Cast.arg(args.get(0), domain, nowMicros);
-        final VectorFn[] values = Cast.args(args, 1, domain, nowMicros);
+        final VectorFn operand = Cast.operand(args.get(0), domain, nowMicros);
+        final VectorFn[] values = Cast.operands(args, 1, domain, nowMicros);
         final Vector[] evaluated = new Vector[values.length];
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
@@ -77,9 +78,9 @@ final class Comparison {
 
     static VectorFn between(final List<Bound> args, final CdbType type, final long nowMicros) {
         final CdbType domain = Cast.common(args);
-        final VectorFn operand = Cast.arg(args.get(0), domain, nowMicros);
-        final VectorFn low = Cast.arg(args.get(1), domain, nowMicros);
-        final VectorFn high = Cast.arg(args.get(2), domain, nowMicros);
+        final VectorFn operand = Cast.operand(args.get(0), domain, nowMicros);
+        final VectorFn low = Cast.operand(args.get(1), domain, nowMicros);
+        final VectorFn high = Cast.operand(args.get(2), domain, nowMicros);
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
             final Vector x = operand.eval(page);

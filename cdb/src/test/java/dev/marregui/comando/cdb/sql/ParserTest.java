@@ -342,17 +342,45 @@ class ParserTest {
                 0));
     }
 
-    /// `CREATE TABLE` with every clause; column options are read and dropped, types and units upper case.
+    /// `CREATE TABLE` with every clause; a SYMBOL's options are kept as written, types and units upper case.
     @Test
     void createTable() {
-        assertThat(Parser.parse("create table if not exists t (ts timestamp, s symbol capacity 256 cache index, "
+        assertThat(Parser.parse("create table if not exists t (ts timestamp, s symbol capacity 300 cache index, "
                 + "v double) timestamp(ts) partition by day ttl 30 days wal dedup upsert keys(ts, s)"))
                 .isEqualTo(new Ast.CreateTable("t", true, List.of(new Ast.ColumnSpec("ts", "TIMESTAMP"),
-                        new Ast.ColumnSpec("s", "SYMBOL"), new Ast.ColumnSpec("v", "DOUBLE")), "ts", "DAY", "30 days",
-                        List.of("ts", "s"), 0));
+                        new Ast.ColumnSpec("s", "SYMBOL", 300, false, true, -1), new Ast.ColumnSpec("v", "DOUBLE")),
+                        "ts", "DAY", "30 days", List.of("ts", "s"), 0));
         assertThat(Parser.parse("CREATE TABLE x (a INT) BYPASS WAL"))
                 .isEqualTo(new Ast.CreateTable("x", false, List.of(new Ast.ColumnSpec("a", "INT")), null, null,
                         null, List.of(), 0));
+    }
+
+    /// A SYMBOL's options in QuestDB's order: `NOCACHE`, `INDEX CAPACITY n`, each one alone, and none.
+    @Test
+    void createTableKeepsSymbolOptions() {
+        assertThat(columns("CREATE TABLE t (a SYMBOL NOCACHE INDEX CAPACITY 512, b SYMBOL INDEX, c SYMBOL CACHE, "
+                + "d SYMBOL, e SYMBOL CAPACITY 4096)")).containsExactly(
+                new Ast.ColumnSpec("a", "SYMBOL", -1, true, true, 512),
+                new Ast.ColumnSpec("b", "SYMBOL", -1, false, true, -1),
+                new Ast.ColumnSpec("c", "SYMBOL", -1, false, false, -1),
+                new Ast.ColumnSpec("d", "SYMBOL", -1, false, false, -1),
+                new Ast.ColumnSpec("e", "SYMBOL", 4096, false, false, -1));
+    }
+
+    /// Options out of QuestDB's order, on a type other than SYMBOL, or with a capacity that is not an integer are
+    /// refused where they stand, as QuestDB refuses them.
+    @Test
+    void createTableRefusesMisplacedColumnOptions() {
+        final String onInt = "CREATE TABLE t (n INT CAPACITY 8)";
+        assertThat(errorPosition(onInt)).isEqualTo(at(onInt, "CAPACITY"));
+        final String onVarchar = "CREATE TABLE t (v VARCHAR INDEX)";
+        assertThat(errorPosition(onVarchar)).isEqualTo(at(onVarchar, "INDEX"));
+        final String cacheAfterIndex = "CREATE TABLE t (s SYMBOL INDEX CAPACITY 8 NOCACHE)";
+        assertThat(errorPosition(cacheAfterIndex)).isEqualTo(at(cacheAfterIndex, "NOCACHE"));
+        final String capacityAfterCache = "CREATE TABLE t (s SYMBOL NOCACHE CAPACITY 8)";
+        assertThat(errorPosition(capacityAfterCache)).isEqualTo(at(capacityAfterCache, "CAPACITY"));
+        final String fraction = "CREATE TABLE t (s SYMBOL CAPACITY 2.5)";
+        assertThat(errorPosition(fraction)).isEqualTo(at(fraction, "2.5"));
     }
 
     /// `UPDATE … SET … WHERE …`.
@@ -399,6 +427,10 @@ class ParserTest {
         final int pos = sql.indexOf(fragment);
         assertThat(pos).as("offset of %s", fragment).isNotNegative();
         return pos;
+    }
+
+    private static List<Ast.ColumnSpec> columns(final String sql) {
+        return ((Ast.CreateTable) Parser.parse(sql)).columns();
     }
 
     private static Ast.Select constant(final String sql, final long value) {

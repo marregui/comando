@@ -15,7 +15,8 @@ import dev.marregui.comando.cdb.sql.Ast;
  * One SELECT, in QuestDB's order: FROM, WHERE (its designated-timestamp bounds also on the scan), LATEST ON, then
  * SAMPLE BY or GROUP BY (implicit: the selected expressions that read a column and hold no aggregate) or window calls,
  * the projection, DISTINCT, ORDER BY (an output name, a position, a selected expression, or any expression of the
- * input, projected and dropped after the sort), LIMIT.
+ * input, projected and dropped after the sort; by the designated timestamp descending over table rows, equal
+ * timestamps last-written first, as QuestDB's backward scan gives them), LIMIT.
  */
 final class SelectPlanner {
 
@@ -349,11 +350,18 @@ final class SelectPlanner {
         if (select.distinct()) {
             plan = new Plan.Distinct(plan);
         }
+        if (scansBackward(stage.rel(), exprs, sort)) {
+            final List<Field> numbered = new ArrayList<>(fields);
+            numbered.add(new Field("$position", CdbType.LONG));
+            plan = new Plan.Window(plan, List.of(new Bound.WindowCall("row_number", List.of(), List.of(), List.of(),
+                    CdbType.LONG)), List.copyOf(numbered));
+            sort.add(new Plan.SortKey(fields.size(), true));
+        }
         if (!sort.isEmpty()) {
             plan = new Plan.Sort(plan, List.copyOf(sort));
         }
         plan = Planner.limit(plan, select.limit());
-        if (!hidden.isEmpty()) {
+        if (plan.fields().size() > names.size()) {
             final List<Bound> keep = new ArrayList<>(names.size());
             for (int i = 0; i < names.size(); i++) {
                 keep.add(new Bound.Column(i, fields.get(i).type()));
@@ -372,6 +380,28 @@ final class SelectPlanner {
             cols.add(new Rel.Col(null, names.get(i), fields.get(i).type()));
         }
         return new Rel(plan, cols, timestamp);
+    }
+
+    /**
+     * True when QuestDB answers this ORDER BY with a backward scan of the table: its one key is the designated
+     * timestamp, descending, over rows still in table order. Rows with equal timestamps then come last-written first,
+     * where a stable sort keeps them first-written first; the caller breaks those ties by table position, descending.
+     */
+    private boolean scansBackward(final Rel in, final List<Bound> exprs, final List<Plan.SortKey> sort) {
+        return !select.distinct() && sort.size() == 1 && sort.getFirst().descending() && in.timestamp() >= 0
+                && exprs.get(sort.getFirst().column()) instanceof Bound.Column(final int index, final CdbType _)
+                && index == in.timestamp() && inTableOrder(in.plan());
+    }
+
+    /** True when the rows of {@code plan} come in the order of the table it scans: a scan, filtered or projected. */
+    private static boolean inTableOrder(final Plan plan) {
+        return switch (plan) {
+            case Plan.Scan _ -> true;
+            case Plan.Filter(final Plan child, final Bound _) -> inTableOrder(child);
+            case Plan.Project(final Plan child, final List<Bound> _, final List<Field> _) -> inTableOrder(child);
+            case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
+                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _ -> false;
+        };
     }
 
     /**

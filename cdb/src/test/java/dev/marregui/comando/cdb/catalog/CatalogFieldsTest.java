@@ -19,7 +19,7 @@ class CatalogFieldsTest {
     private record QuestDbColumn(String name, String type) {
     }
 
-    /// QuestDB's columns of `tables()` that the javadoc lists, with the type the server reports, captured on 2026-11-14:
+    /// QuestDB's 45 columns of `tables()`, with the type the server reports, captured on 2026-11-14:
     /// `curl -sG http://127.0.0.1:9000/exec --data-urlencode "query=tables()"`
     private static final List<QuestDbColumn> QUESTDB_TABLES = List.of(
             new QuestDbColumn("id", "INT"),
@@ -30,13 +30,47 @@ class CatalogFieldsTest {
             new QuestDbColumn("dedup", "BOOLEAN"),
             new QuestDbColumn("ttlValue", "INT"),
             new QuestDbColumn("ttlUnit", "STRING"),
+            new QuestDbColumn("matView", "BOOLEAN"),
+            new QuestDbColumn("directoryName", "STRING"),
+            new QuestDbColumn("maxUncommittedRows", "INT"),
+            new QuestDbColumn("o3MaxLag", "LONG"),
+            new QuestDbColumn("table_suspended", "BOOLEAN"),
+            new QuestDbColumn("table_type", "CHAR"),
             new QuestDbColumn("table_row_count", "LONG"),
             new QuestDbColumn("table_min_timestamp", "TIMESTAMP"),
-            new QuestDbColumn("table_max_timestamp", "TIMESTAMP")
+            new QuestDbColumn("table_max_timestamp", "TIMESTAMP"),
+            new QuestDbColumn("table_last_write_timestamp", "TIMESTAMP"),
+            new QuestDbColumn("table_txn", "LONG"),
+            new QuestDbColumn("table_memory_pressure_level", "INT"),
+            new QuestDbColumn("table_write_amp_count", "LONG"),
+            new QuestDbColumn("table_write_amp_p50", "DOUBLE"),
+            new QuestDbColumn("table_write_amp_p90", "DOUBLE"),
+            new QuestDbColumn("table_write_amp_p99", "DOUBLE"),
+            new QuestDbColumn("table_write_amp_max", "DOUBLE"),
+            new QuestDbColumn("table_merge_rate_count", "LONG"),
+            new QuestDbColumn("table_merge_rate_p50", "LONG"),
+            new QuestDbColumn("table_merge_rate_p90", "LONG"),
+            new QuestDbColumn("table_merge_rate_p99", "LONG"),
+            new QuestDbColumn("table_merge_rate_max", "LONG"),
+            new QuestDbColumn("wal_pending_row_count", "LONG"),
+            new QuestDbColumn("wal_dedup_row_count_since_start", "LONG"),
+            new QuestDbColumn("wal_txn", "LONG"),
+            new QuestDbColumn("wal_max_timestamp", "TIMESTAMP"),
+            new QuestDbColumn("wal_tx_count", "LONG"),
+            new QuestDbColumn("wal_tx_size_p50", "LONG"),
+            new QuestDbColumn("wal_tx_size_p90", "LONG"),
+            new QuestDbColumn("wal_tx_size_p99", "LONG"),
+            new QuestDbColumn("wal_tx_size_max", "LONG"),
+            new QuestDbColumn("replica_batch_count", "LONG"),
+            new QuestDbColumn("replica_batch_size_p50", "LONG"),
+            new QuestDbColumn("replica_batch_size_p90", "LONG"),
+            new QuestDbColumn("replica_batch_size_p99", "LONG"),
+            new QuestDbColumn("replica_batch_size_max", "LONG"),
+            new QuestDbColumn("replica_more_pending", "BOOLEAN")
     );
 
-    /// QuestDB's columns of `table_columns('kit_run')` and of `SHOW COLUMNS FROM kit_run` (the same eleven; the javadoc
-    /// lists these eight), captured on 2026-11-14:
+    /// QuestDB's columns of `table_columns('kit_run')` and of `SHOW COLUMNS FROM kit_run`, the same eleven, captured on
+    /// 2026-11-14:
     /// `curl -sG http://127.0.0.1:9000/exec --data-urlencode "query=table_columns('kit_run')"`
     /// `curl -sG http://127.0.0.1:9000/exec --data-urlencode "query=SHOW COLUMNS FROM kit_run"`
     private static final List<QuestDbColumn> QUESTDB_COLUMNS = List.of(
@@ -46,9 +80,16 @@ class CatalogFieldsTest {
             new QuestDbColumn("indexBlockCapacity", "INT"),
             new QuestDbColumn("symbolCached", "BOOLEAN"),
             new QuestDbColumn("symbolCapacity", "INT"),
+            new QuestDbColumn("symbolTableSize", "INT"),
             new QuestDbColumn("designated", "BOOLEAN"),
-            new QuestDbColumn("upsertKey", "BOOLEAN")
+            new QuestDbColumn("upsertKey", "BOOLEAN"),
+            new QuestDbColumn("indexType", "STRING"),
+            new QuestDbColumn("indexInclude", "STRING")
     );
+
+    /// The column of `SHOW CREATE TABLE kit_run`, captured on 2026-11-14:
+    /// `curl -sG http://127.0.0.1:9000/exec --data-urlencode "query=SHOW CREATE TABLE kit_run"`
+    private static final List<QuestDbColumn> QUESTDB_SHOW_CREATE_TABLE = List.of(new QuestDbColumn("ddl", "VARCHAR"));
 
     /// The column of `SHOW TABLES`, captured on 2026-11-14:
     /// `curl -sG http://127.0.0.1:9000/exec --data-urlencode "query=SHOW TABLES"`
@@ -80,6 +121,15 @@ class CatalogFieldsTest {
     @Test
     void showColumnsFieldsEqualQuestDbs() {
         assertMatchesQuestDb(Catalog.fields("show_columns", List.of("t")), QUESTDB_COLUMNS);
+    }
+
+    /// `SHOW CREATE TABLE t` has QuestDB's single column, and takes the table as its one argument.
+    @Test
+    void showCreateTableFieldEqualsQuestDbs() {
+        assertMatchesQuestDb(Catalog.fields("show_create_table", List.of("t")), QUESTDB_SHOW_CREATE_TABLE);
+        assertThatThrownBy(() -> Catalog.fields("show_create_table", List.of()))
+                .isInstanceOf(CdbException.class)
+                .hasMessage("wrong argument count [function=show_create_table, expected=1, got=0]");
     }
 
     /// `SHOW TABLES` has QuestDB's single column.

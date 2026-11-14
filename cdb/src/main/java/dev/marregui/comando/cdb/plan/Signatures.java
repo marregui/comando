@@ -338,8 +338,10 @@ public final class Signatures {
         return out;
     }
 
+    /** Equal types, two numbers, two texts, or a TIMESTAMP and a text, which is read as a TIMESTAMP. */
     private static boolean comparable(final CdbType a, final CdbType b) {
-        return a == b || isNumeric(a) && isNumeric(b) || a.isText() && b.isText();
+        return a == b || isNumeric(a) && isNumeric(b) || a.isText() && b.isText()
+                || a == CdbType.TIMESTAMP && b.isText() || a.isText() && b == CdbType.TIMESTAMP;
     }
 
     private static boolean isNumeric(final CdbType t) {

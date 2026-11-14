@@ -2,12 +2,14 @@ package dev.marregui.comando.cdb.exec;
 
 import java.util.List;
 
+import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.plan.Plan;
 
 /**
  * The input sorted by its keys, stable; NULLs first ascending, last descending (a descending key reverses the
- * ascending order); text by {@link String#compareTo}. The first {@link #next()} reads the whole input and closes it,
- * then pages are emitted full, the last may be shorter.
+ * ascending order), except a DOUBLE NULL, which QuestDB orders as the largest value (its NaN): last ascending, first
+ * descending; text by {@link String#compareTo}. The first {@link #next()} reads the whole input and closes it, then
+ * pages are emitted full, the last may be shorter.
  */
 final class SortCursor implements Cursor {
 
@@ -17,6 +19,8 @@ final class SortCursor implements Cursor {
     private final Cursor child;
     private final int[] keyColumns;
     private final boolean[] descending;
+    // true for a DOUBLE key, whose NULL sorts above every number
+    private final boolean[] nullLargest;
     private RowsBuffer rows;
     private int[] order;
     private int emitted;
@@ -25,9 +29,12 @@ final class SortCursor implements Cursor {
         this.child = child;
         keyColumns = new int[keys.size()];
         descending = new boolean[keys.size()];
+        nullLargest = new boolean[keys.size()];
+        final List<Field> fields = child.fields();
         for (int k = 0; k < keyColumns.length; k++) {
             keyColumns[k] = keys.get(k).column();
             descending[k] = keys.get(k).descending();
+            nullLargest[k] = fields.get(keyColumns[k]).type() == CdbType.DOUBLE;
         }
     }
 
@@ -125,7 +132,12 @@ final class SortCursor implements Cursor {
         final int ry = y & Rows.ROW_MASK;
         for (int k = 0; k < keyColumns.length; k++) {
             final int c = keyColumns[k];
-            final int r = Rows.compare(px.columns[c], rx, py.columns[c], ry);
+            final Vector vx = px.columns[c];
+            final Vector vy = py.columns[c];
+            int r = Rows.compare(vx, rx, vy, ry);
+            if (r != 0 && nullLargest[k] && (vx.isNull(rx) || vy.isNull(ry))) {
+                r = -r;
+            }
             if (r != 0) {
                 return descending[k] ? -r : r;
             }

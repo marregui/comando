@@ -424,23 +424,26 @@ public final class Parser {
                 pos);
     }
 
-    /** A column's name and type; {@code CAPACITY n}, {@code CACHE}, {@code NOCACHE} and {@code INDEX} are dropped. */
+    /**
+     * A column's name and type and, after a SYMBOL only, QuestDB's options in its order:
+     * {@code [CAPACITY n] [CACHE | NOCACHE] [INDEX [CAPACITY n]]}. Their values are checked when the table is planned.
+     */
     private Ast.ColumnSpec columnSpec() {
         final String name = name();
         final String type = upper(expect(Lexer.Kind.WORD, "column type").text());
-        boolean reading = true;
-        while (reading) {
-            if (acceptWord("capacity")) {
-                expect(Lexer.Kind.NUMBER, "capacity");
-            } else if (acceptWord("index")) {
-                if (acceptWord("capacity")) {
-                    expect(Lexer.Kind.NUMBER, "capacity");
-                }
-            } else {
-                reading = acceptWord("cache") || acceptWord("nocache");
-            }
+        if (!type.equals("SYMBOL")) {
+            return new Ast.ColumnSpec(name, type);
         }
-        return new Ast.ColumnSpec(name, type);
+        final long capacity = acceptWord("capacity") ? integer(expect(Lexer.Kind.NUMBER, "capacity")) : -1;
+        final boolean noCache = acceptWord("nocache");
+        if (!noCache) {
+            acceptWord("cache");
+        }
+        final boolean index = acceptWord("index");
+        final long indexCapacity = index && acceptWord("capacity")
+                ? integer(expect(Lexer.Kind.NUMBER, "capacity"))
+                : -1;
+        return new Ast.ColumnSpec(name, type, capacity, noCache, index, indexCapacity);
     }
 
     /** The {@code TTL} as written, from its number to the end of its unit ({@code 30 DAYS}, {@code 2w}). */

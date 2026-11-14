@@ -18,6 +18,10 @@ final class Civil {
     static final long WEEK_MICROS = 7 * DAY_MICROS;
 
     private static final int EPOCH_YEAR = 1970;
+    // the lengths of a zone suffix: ±HH, ±HHmm, ±HH:mm
+    private static final int ZONE_HOURS = 3;
+    private static final int ZONE_COMPACT = 5;
+    private static final int ZONE_COLON = 6;
     private static final int[] MONTH_DAYS = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
     private Civil() {
@@ -155,9 +159,10 @@ final class Civil {
     }
 
     /**
-     * Micros of {@code text} in the ISO subset QuestDB casts to TIMESTAMP: {@code yyyy[-MM[-dd[(T| )HH[:mm[:ss[.f]]]]]]}
-     * then {@code Z}, {@code ±HH:mm} or nothing (UTC). Fraction digits past the sixth are dropped. NULL when the text
-     * does not match.
+     * Micros of {@code text} in the ISO subset QuestDB casts to TIMESTAMP:
+     * {@code yyyy[-MM[-dd[(T| )HH[:mm[:ss[.f]]]]]]}, a dot without digits allowed, then, only after the seconds,
+     * {@code Z}, {@code ±HH:mm}, {@code ±HHmm}, {@code ±HH} or nothing (UTC). Fraction digits past the sixth are
+     * dropped. NULL when the text does not match.
      */
     static long parse(final CharSequence text) {
         final int n = text.length();
@@ -171,6 +176,7 @@ final class Civil {
         int minute = 0;
         int second = 0;
         long fraction = 0;
+        boolean zoned = false;
         int i = 4;
         if (i < n && text.charAt(i) == '-') {
             month = digits(text, i + 1, 2);
@@ -202,6 +208,7 @@ final class Civil {
                                 return Vector.NULL_LONG;
                             }
                             i += 3;
+                            zoned = true;
                             if (i < n && text.charAt(i) == '.') {
                                 final int start = ++i;
                                 while (i < n && text.charAt(i) >= '0' && text.charAt(i) <= '9') {
@@ -209,9 +216,6 @@ final class Civil {
                                         fraction = fraction * 10 + text.charAt(i) - '0';
                                     }
                                     i++;
-                                }
-                                if (i == start) {
-                                    return Vector.NULL_LONG;
                                 }
                                 for (int k = i - start; k < 6; k++) {
                                     fraction *= 10;
@@ -224,22 +228,36 @@ final class Civil {
         }
         final long local = days(year, month, day) * DAY_MICROS + hour * HOUR_MICROS + minute * MINUTE_MICROS
                 + second * SECOND_MICROS + fraction;
-        final long offset = offset(text, i);
+        final long offset = offset(text, i, zoned);
         return offset == Vector.NULL_LONG ? Vector.NULL_LONG : local - offset;
     }
 
-    /** Micros east of UTC of the zone suffix at {@code i}: none or {@code Z} is 0, else {@code ±HH:mm}; NULL if neither. */
-    private static long offset(final CharSequence text, final int i) {
+    /**
+     * Micros east of UTC of the zone suffix at {@code i}: none is 0; after the seconds ({@code zoned}) {@code Z} is 0
+     * and {@code ±HH:mm}, {@code ±HHmm} or {@code ±HH} the offset; NULL for anything else.
+     */
+    private static long offset(final CharSequence text, final int i, final boolean zoned) {
         final int n = text.length();
-        if (i == n || (i == n - 1 && text.charAt(i) == 'Z')) {
+        if (i == n) {
             return 0;
         }
+        if (!zoned) {
+            return Vector.NULL_LONG;
+        }
         final char sign = text.charAt(i);
-        if ((sign != '+' && sign != '-') || i + 6 != n || text.charAt(i + 3) != ':') {
+        if (sign == 'Z' && i == n - 1) {
+            return 0;
+        }
+        final int left = n - i;
+        if ((sign != '+' && sign != '-') || left != ZONE_HOURS && left != ZONE_COMPACT && left != ZONE_COLON) {
+            return Vector.NULL_LONG;
+        }
+        final boolean colon = left == ZONE_COLON;
+        if (colon && text.charAt(i + 3) != ':') {
             return Vector.NULL_LONG;
         }
         final int hours = digits(text, i + 1, 2);
-        final int minutes = digits(text, i + 4, 2);
+        final int minutes = left == ZONE_HOURS ? 0 : digits(text, colon ? i + 4 : i + 3, 2);
         if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
             return Vector.NULL_LONG;
         }

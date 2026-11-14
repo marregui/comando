@@ -144,6 +144,48 @@ class PlannerTest {
                 """);
     }
 
+    /// ORDER BY the designated timestamp descending over the filtered table, the timestamp not selected: rows with
+    /// equal timestamps are ordered by their table position descending, as QuestDB's backward scan gives them; the
+    /// sort column and the position are dropped after the LIMIT.
+    @Test
+    void orderByTimestampDescendingBreaksTiesByPositionDescending() {
+        final Ast.Select s = where(select(table("comando_usage"), item(id("provider")), item(id("window_name"))),
+                bin("=", id("provider"), lit("Codex")));
+        assertPlan(query(limit(orderBy(s, desc(id("ts"))), lit(4L), null)), """
+                Project [provider:SYMBOL=$0, window_name:SYMBOL=$1]
+                  Limit 0, 4
+                    Sort [$2 desc, $3 desc]
+                      Window [$position:LONG=row_number() over(partition=[] order=[])]
+                        Project [provider:SYMBOL=$1, window_name:SYMBOL=$2, $order0:TIMESTAMP=$0]
+                          Filter =($1, 'Codex')
+                            Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                """);
+    }
+
+    /// ORDER BY the timestamp descending sorts stably, with no position key, wherever QuestDB does not scan the table
+    /// backwards: over SAMPLE BY buckets, over DISTINCT rows, and ascending.
+    @Test
+    void orderByTimestampElsewhereSortsStably() {
+        final Ast.Select sampled = sampleBy(select(table("comando_usage"), item(id("ts")), item(id("window_name")),
+                item(call("last", id("pct")), "pct")), 1, "h");
+        assertPlan(query(orderBy(sampled, desc(id("ts")))), """
+                Sort [$0 desc]
+                  SampleBy 1h ts=$0 keys=[window_name:SYMBOL=$2] aggs=[pct:DOUBLE=last($3)]
+                    Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                """);
+        assertPlan(query(orderBy(distinct(select(table("comando_usage"), item(id("ts")))), desc(id("ts")))), """
+                Sort [$0 desc]
+                  Distinct
+                    Project [ts:TIMESTAMP=$0]
+                      Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                """);
+        assertPlan(query(orderBy(select(table("comando_usage"), item(id("ts"))), asc(id("ts")))), """
+                Sort [$0]
+                  Project [ts:TIMESTAMP=$0]
+                    Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                """);
+    }
+
     /// SAMPLE BY buckets the designated timestamp: the bucket first, then the keys and aggregates, as the corpus's
     /// usage query reads them.
     @Test
