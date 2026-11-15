@@ -24,6 +24,7 @@ import javax.swing.Timer;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
@@ -78,6 +79,8 @@ final class LayoutKeeper {
     private boolean lowerAbove;
     /** The documents whose lower area the user asked for, while they were in front, in this window. */
     private final Set<PanelId> lowerAskedFor = new HashSet<>();
+    /** The main tabs' front panel at the last {@link #lowerFor}: a tab is asked for only on the panel that stayed there. */
+    private PanelId lastFront;
     /** The lower divider while the lower area last showed: where it comes back when a panel has none of its own. */
     private int shownDivider = -1;
     /**
@@ -381,9 +384,11 @@ final class LayoutKeeper {
 
     /**
      * The lower area for the panel in front. A document no session works in, a file opened to read, takes the whole
-     * height and the lower area hides, until it is {@code asked} for while that document is in front (a lower tab
-     * chosen, ⌃1–⌃4, a request waiting in Approvals); then it shows for that document for the rest of the window's
-     * life. Any other panel shows it, at the height it had when that panel was last in front. The panel in front is
+     * height and the lower area hides, until it is {@code asked} for while that document stays in front (a lower tab
+     * chosen, ⌃1–⌃4); then it shows for that document for the rest of the window's life. A tab that changes as another
+     * panel comes to the front is that panel's own, never asked. A request waiting in Approvals shows it while the
+     * Approvals tab is the document's and a request waits, and no longer: back from answering it elsewhere, the
+     * document has its whole height again. Any other panel shows it, at the height it had when that panel was last in front. The panel in front is
      * the main tabs': a panel on the right side, focused or not, sits beside the lower area and leaves it as it is
      * (record 141).
      */
@@ -393,10 +398,12 @@ final class LayoutKeeper {
                 ? parts.workspace().mainFront().flatMap(s::panel).orElse(focused)
                 : focused;
         final boolean reading = front.document() && front.session().isEmpty();
-        if (reading && asked) {
+        if (reading && asked && front.id().equals(lastFront)) {
             lowerAskedFor.add(front.id());
         }
-        final boolean shown = !reading || lowerAskedFor.contains(front.id());
+        lastFront = front.id();
+        final boolean waiting = s.lowerTab().equals(LowerTab.APPROVALS) && !s.approvals().isEmpty();
+        final boolean shown = !reading || waiting || lowerAskedFor.contains(front.id());
         final Component lower = parts.lower().component();
         final boolean wasShown = lower.isVisible();
         if (shown != wasShown) {

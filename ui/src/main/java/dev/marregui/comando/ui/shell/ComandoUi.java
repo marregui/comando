@@ -229,6 +229,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     };
     /** The requests waiting at the last render: one more is a reason to show the lower area. */
     private int renderedApprovals;
+    /** The focused panel at the last render: a tab that changes with the focus is that panel's own, never asked. */
+    private PanelId renderedFocused;
     private boolean tornDown;
     private final Consumer<String> schemaListener = connection -> render.request();
     private final StateLoop.Listener stateListener = (previous, next) -> render.request();
@@ -684,9 +686,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         final AppState s = deps.state().get();
         // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
         focus.beforeRender(s);
+        // a tab chosen on the panel that stayed focused; not one that came with another panel, nor one a request
+        // brought forward or took away as it came or went (record 160)
         final boolean lowerAsked = !s.lowerTab().equals(focus.renderedLowerTab())
-                || s.approvals().size() > renderedApprovals;
+                && s.focused().equals(renderedFocused) && s.approvals().size() == renderedApprovals;
         renderedApprovals = s.approvals().size();
+        renderedFocused = s.focused();
         parts.livePlots().onState(s);
         parts.sidebar().render(s);
         parts.workspace().render(s);

@@ -62,7 +62,7 @@ class SessionBarButtonsUiTest {
     }
 
     /// Under Graphite and gold, a stopped session's bar shows Reflect, Compact and Clear after the context, in that
-    /// order and with their icons; Reflect is on, Compact and Clear wait for the session to run. Reflect's icon at the
+    /// order and with their icons; all three are on, the session starting for them. Reflect's icon at the
     /// threshold is the dark purple; each popup's items have icons and the popup is dark.
     @Test
     void theButtonsAndPopupsFollowADarkTheme() throws Exception {
@@ -220,7 +220,7 @@ class SessionBarButtonsUiTest {
                 assertThat(List.of(visible(bar, "Reflect").isEnabled(),
                         visible(bar, "Compact the conversation").isEnabled(),
                         visible(bar, "Clear the conversation").isEnabled()))
-                        .as("Reflect, Compact, Clear on a stopped session").containsExactly(true, false, false);
+                        .as("Reflect, Compact, Clear on a stopped session").containsExactly(true, true, true);
 
                 final Icon reflect = visible(bar, "Reflect").getIcon();
                 assertThat(reflect).as("Reflect's icon blends").isInstanceOf(BlendIcon.class);

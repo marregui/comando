@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.MonthDay;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.TextStyle;
@@ -35,6 +36,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
 import dev.marregui.comando.core.intent.Intent;
@@ -80,6 +82,11 @@ public final class StatusBar {
     private final JPanel count = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
     private final JLabel work = new JLabel();
     private final JLabel approvals = new JLabel();
+    /**
+     * The time in UTC, the clock every report and ETA is given in, at the bar's right edge at a fixed width: what grows or
+     * shrinks beside it never moves it.
+     */
+    private final JLabel utc = new JLabel("", SwingConstants.RIGHT);
     /** Claude's plan usage, then Codex's, each a label of its own, or under the console style its gauges. */
     private final Usage claudeUsage = new Usage(PlanUsage.CLAUDE, "Claude Code's /usage");
     private final Usage codexUsage = new Usage(PlanUsage.CODEX, "codex app-server");
@@ -136,6 +143,7 @@ public final class StatusBar {
     LongSupplier clock = System::currentTimeMillis;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter UTC_TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC);
 
     public StatusBar(final IntentSink intents) {
         this(intents, n -> Optional.empty());
@@ -180,7 +188,13 @@ public final class StatusBar {
             }
         });
         root.add(notice, BorderLayout.CENTER);
-        root.add(right, BorderLayout.EAST);
+        final JPanel east = new JPanel(new BorderLayout(Theme.PAD * 2, 0));
+        east.add(right, BorderLayout.CENTER);
+        east.add(utc, BorderLayout.EAST);
+        root.add(east, BorderLayout.EAST);
+        utc.getAccessibleContext().setAccessibleName("UTC time");
+        utc.setText(utcText(clock.getAsLong()));
+        sizeClock();
         work.setForeground(Theme.MUTED);
         approvals.setForeground(Theme.ATTENTION);
         approvals.setVisible(false);
@@ -293,13 +307,32 @@ public final class StatusBar {
         return out;
     }
 
+    /** The clock's width: its widest text in its font, so it holds as the digits change; again on a theme's font. */
+    private void sizeClock() {
+        utc.setPreferredSize(null);
+        final int width = utc.getFontMetrics(utc.getFont()).stringWidth("00:00:00 UTC") + Theme.SPACE_S;
+        utc.setPreferredSize(new Dimension(width, utc.getPreferredSize().height));
+        utc.setMinimumSize(utc.getPreferredSize());
+    }
+
     /** Each plan's label or gauges, as the style chosen has it; a theme chosen keeps the reads shown. */
     private void followStyle() {
+        sizeClock();
         final Style style = Theme.style();
         claudeUsage.showStyle(style);
         codexUsage.showStyle(style);
         root.revalidate();
         root.repaint();
+    }
+
+    /** "11:24:05 UTC": the clock the status bar shows. */
+    static String utcText(final long millis) {
+        return UTC_TIME.format(Instant.ofEpochMilli(millis)) + " UTC";
+    }
+
+    /** The UTC clock's label; for tests. */
+    JLabel utcLabel() {
+        return utc;
     }
 
     /** Claude's usage label; for tests. */
@@ -635,6 +668,9 @@ public final class StatusBar {
 
     /** Once a second: a session whose reading turn never came counts as to read with no state change to say so. */
     public void tick() {
+        final long nowMillis = clock.getAsLong();
+        utc.setText(utcText(nowMillis));
+        utc.setToolTipText("UTC; local time " + HOUR_MINUTE.format(Instant.ofEpochMilli(nowMillis)) + " (" + ZoneId.systemDefault().getId() + ")");
         if (state != null) {
             showWork(state);
         }

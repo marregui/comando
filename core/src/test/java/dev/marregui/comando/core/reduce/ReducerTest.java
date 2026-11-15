@@ -1914,8 +1914,9 @@ class ReducerTest {
         assertThat(effects).isEmpty();
     }
 
-    /// An approval request brings the Approvals tab forward; while a card still waits it stays; answering the last
-    /// brings the Session tab forward on the own panel of the session that asked.
+    /// An approval request brings the Approvals tab forward; another panel focused keeps its own tab; while a card
+    /// still waits Approvals stays; answering the last brings the Session tab forward on the own panel of the session
+    /// that asked.
     @Test
     void aRequestBringsTheApprovalsTabForwardAndAnsweringTheLastBringsTheSessionTabOnThePanelThatAsked() {
         // the user is on the Results tab; while the cards wait the user focuses p2, which has no session
@@ -1924,6 +1925,9 @@ class ReducerTest {
         assertThat(state.lowerTab()).as("a session asks: its card in front").isEqualTo(LowerTab.APPROVALS);
         apply(new Intent.ApprovalRequested(new Approval(4L, "work", ApprovalKind.TOOL, "Bash", "{}", "pwd", 1L)));
         apply(new Intent.FocusPanel(P2));
+        assertThat(state.lowerTab()).as("p2 has its own tab: Approvals does not follow").isEqualTo(LowerTab.SESSION);
+        // ⌃2 on p2, to answer there
+        apply(new Intent.SelectLowerTab(LowerTab.APPROVALS));
 
         apply(new Intent.ApprovalAnswered(3L, ApprovalDecision.allowOnce()));
         assertThat(state.lowerTab()).as("a card still waits").isEqualTo(LowerTab.APPROVALS);

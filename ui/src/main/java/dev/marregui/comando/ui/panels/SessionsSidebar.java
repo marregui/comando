@@ -1507,15 +1507,14 @@ public final class SessionsSidebar {
                     () -> intents.dispatch(SessionBar.reflectIntent(s))), SessionBar.reflectTip(s)))
                     .setEnabled(SessionBar.canReflect(s));
         }
-        if (s.status().isUsable()) {
-            m.add(tipped(IconMenus.item("Compact the conversation", "compact",
-                    () -> intents.dispatch(SessionBar.compactIntent(s))), SessionRow.COMPACT_TIP))
-                    .setEnabled(SessionBar.canCompact(s));
-            m.add(tipped(IconMenus.item("Clear the conversation", "clear-conversation",
-                    () -> intents.dispatch(SessionBar.clearIntent(s))), SessionBar.clearTip(s)))
-                    .setEnabled(SessionBar.canClear(s));
-            rewriteItem(s).ifPresent(m::add);
-        }
+        // a stopped session starts for them, as for a prompt; greyed while it stops or runs its checkpoint
+        m.add(tipped(IconMenus.item("Compact the conversation", "compact",
+                () -> intents.dispatch(SessionBar.compactIntent(s))), SessionRow.COMPACT_TIP))
+                .setEnabled(SessionBar.canCompact(s));
+        m.add(tipped(IconMenus.item("Clear the conversation", "clear-conversation",
+                () -> intents.dispatch(SessionBar.clearIntent(s))), SessionBar.clearTip(s)))
+                .setEnabled(SessionBar.canClear(s));
+        rewriteItem(s).ifPresent(m::add);
         m.addSeparator();
         // the menus name what the session runs at, as the row's chips did (record 89)
         final JMenu models = IconMenus.submenu("Model: " + SessionRow.modelName(s), MODEL_ICON);

@@ -18,6 +18,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
+import dev.marregui.comando.core.state.SessionEta;
 import dev.marregui.comando.core.state.SessionState;
 
 import static dev.marregui.comando.core.reduce.Shared.clear;
@@ -405,6 +406,19 @@ final class SessionRules {
 
     static Transition sessionBranch(final AppState s, final Intent.SessionBranch i) {
         return Transition.of(s.withSession(i.name(), x -> x.withBranch(i.branch())));
+    }
+
+    /**
+     * The session's estimate, each part due {@code minutes} from now; a part with no text or no minutes is cleared.
+     * Kept until the next estimate replaces it.
+     */
+    static Transition sessionEta(final Clock clock, final AppState s, final Intent.SessionEta i) {
+        final long nowMillis = clock.millis();
+        final boolean step = !i.step().isBlank() && i.stepMinutes() > 0;
+        final boolean goal = !i.goal().isBlank() && i.goalMinutes() > 0;
+        final SessionEta eta = new SessionEta(step ? i.step().strip() : "", step ? nowMillis + i.stepMinutes() * 60_000L : 0L,
+                goal ? i.goal().strip() : "", goal ? nowMillis + i.goalMinutes() * 60_000L : 0L);
+        return Transition.of(s.withSession(i.name(), x -> x.withEta(eta)));
     }
 
     static Transition sessionSubject(final AppState s, final Intent.SessionSubjectRead i) {

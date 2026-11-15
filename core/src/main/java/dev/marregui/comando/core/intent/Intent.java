@@ -508,6 +508,18 @@ public sealed interface Intent {
     }
 
     /**
+     * Session {@code name}'s estimate of when its work ends: the step under way and the task's goal, each in minutes
+     * from now; 0 minutes clears that part, as an empty text does.
+     */
+    record SessionEta(String name, String step, int stepMinutes, String goal, int goalMinutes) implements Intent {
+        public SessionEta {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(step, "step");
+            Objects.requireNonNull(goal, "goal");
+        }
+    }
+
+    /**
      * How full session {@code name}'s context is now: after each model call of a turn, and when its stored conversation
      * is loaded (record 120). {@code tokens} or {@code window} at 0 or below leave the one known.
      */

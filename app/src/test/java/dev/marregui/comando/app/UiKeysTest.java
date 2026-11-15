@@ -81,6 +81,9 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Topic;
@@ -91,6 +94,7 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -253,8 +257,7 @@ class UiKeysTest {
     }
 
     /// A document no session works in, a file opened to read, takes the whole height: the lower area and its divider
-    /// hide. A lower tab asked for while it is in front (⌃1–⌃4, or Approvals coming forward for a request) shows the
-    /// lower area for that document from then on; a session's panel shows it at the height it had; another document
+    /// hide. A lower tab asked for while it is in front (⌃1–⌃4) shows the lower area for that document from then on; a session's panel shows it at the height it had; another document
     /// opened later hides it again.
     @Test
     void aDocumentToReadTakesTheWholeHeightUntilTheLowerAreaIsAskedFor() throws Exception {
@@ -273,7 +276,7 @@ class UiKeysTest {
                 && !onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
         assertThat(onEdt(split::getDividerSize)).as("no divider to drag").isZero();
 
-        // a request waiting brings Approvals forward, as ⌃2 does
+        // ⌃2
         w.loop().dispatch(new Intent.SelectLowerTab(LowerTab.APPROVALS));
         await("asked for: the lower area shows", () -> onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
         assertThat(onEdt(split::getDividerSize)).isPositive();
@@ -295,6 +298,76 @@ class UiKeysTest {
         w.loop().dispatch(new Intent.FocusPanel(first));
         await("back to the session's panel: shown", () -> onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
         assertThat(onEdt(() -> split.getHeight() - split.getDividerLocation())).isGreaterThan(60);
+    }
+
+    /// Reading a document, a session asks: the lower area shows while the request waits. Answering it takes the window
+    /// to the asking session's panel, where the Session tab comes forward; back on the document it has its whole height
+    /// again, the lower area and its divider hidden, and the Session tab is selected there too, since nothing waits.
+    @Test
+    void aDocumentBackFromAnsweringARequestElsewhereHasItsWholeHeightAgain() throws Exception {
+        final Window w = open("mac");
+        settle(w);
+        final JSplitPane split = await("the lower split", () -> find(w.frame(), JSplitPane.class,
+                sp -> sp.getOrientation() == JSplitPane.VERTICAL_SPLIT).orElse(null), WAIT_MILLIS);
+        final Component lowerArea = onEdt(split::getBottomComponent);
+        final String session = "asker";
+        w.loop().dispatch(new Intent.SaveSession("", SessionSpec.fresh(session, "/tmp")));
+        final PanelId asking = await("the session's own panel", () -> w.loop().state().panelsBoundToSession(session).stream()
+                .map(PanelState::id).findFirst().orElse(null), WAIT_MILLIS);
+
+        final PanelId doc = new PanelId("doc-read");
+        w.loop().dispatch(new Intent.AddPanel(doc, "read.md", true));
+        w.loop().dispatch(new Intent.FocusPanel(doc));
+        await("the document in front, the lower area hidden", () -> doc.equals(w.loop().state().focused())
+                && !onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+
+        w.loop().dispatch(new Intent.ApprovalRequested(new Approval(7L, session, ApprovalKind.TOOL, "Bash",
+                "{}", "ls", 1L, "toolu_7")));
+        await("a request waits: the lower area shows", () -> onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+
+        w.loop().dispatch(new Intent.ApprovalAnswered(7L, new ApprovalDecision.Deny("test")));
+        await("answered: the asking session's panel", () -> asking.equals(w.loop().state().focused()), WAIT_MILLIS);
+        settle(w);
+        assertThat(w.loop().state().lowerTab()).isEqualTo(LowerTab.SESSION);
+
+        w.loop().dispatch(new Intent.FocusPanel(doc));
+        await("the document again", () -> doc.equals(w.loop().state().focused()), WAIT_MILLIS);
+        settle(w);
+        assertThat(onEdt(lowerArea::isVisible)).as("its whole height again").isFalse();
+        assertThat(onEdt(split::getDividerSize)).as("no divider to drag").isZero();
+        assertThat(w.loop().state().lowerTab()).as("nothing waits: Session").isEqualTo(LowerTab.SESSION);
+    }
+
+    /// The asking session's panel sits on the right side, so the document stays the main tabs' front panel throughout:
+    /// the request shows the lower area while it waits; answered, the focus goes to the side panel and the document,
+    /// still in front, hides the lower area again.
+    @Test
+    void aRequestAnsweredBesideADocumentLeavesItItsWholeHeight() throws Exception {
+        final Window w = open("mac");
+        settle(w);
+        final JSplitPane split = await("the lower split", () -> find(w.frame(), JSplitPane.class,
+                sp -> sp.getOrientation() == JSplitPane.VERTICAL_SPLIT).orElse(null), WAIT_MILLIS);
+        final Component lowerArea = onEdt(split::getBottomComponent);
+        final String session = "beside";
+        w.loop().dispatch(new Intent.SaveSession("", SessionSpec.fresh(session, "/tmp")));
+        final PanelId asking = await("the session's own panel", () -> w.loop().state().panelsBoundToSession(session).stream()
+                .map(PanelState::id).findFirst().orElse(null), WAIT_MILLIS);
+        // moved to the side first: a panel placed there takes the focus
+        w.loop().dispatch(new Intent.PlacePanel(asking, true));
+        await("on the side", () -> w.loop().state().panel(asking).map(PanelState::side).orElse(false), WAIT_MILLIS);
+        final PanelId doc = new PanelId("doc-beside");
+        w.loop().dispatch(new Intent.AddPanel(doc, "beside.md", true));
+        w.loop().dispatch(new Intent.FocusPanel(doc));
+        await("the document in front, the lower area hidden", () -> doc.equals(w.loop().state().focused())
+                && !onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+
+        w.loop().dispatch(new Intent.ApprovalRequested(new Approval(17L, session, ApprovalKind.TOOL, "Bash",
+                "{}", "ls", 1L, "toolu_17")));
+        await("a request waits: the lower area shows", () -> onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+        w.loop().dispatch(new Intent.ApprovalAnswered(17L, new ApprovalDecision.Deny("test")));
+        await("answered: the side panel focused", () -> asking.equals(w.loop().state().focused()), WAIT_MILLIS);
+        settle(w);
+        assertThat(onEdt(lowerArea::isVisible)).as("the document in front has its whole height").isFalse();
     }
 
     /// Every act of a session's or a connection's menu in the sidebar is in the palette too: copy details, clone,

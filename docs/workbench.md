@@ -80,8 +80,10 @@ Any number of document panels may be attached to a session
 - **The lower divider is each panel's**: moved while a panel is in front, it goes back there when that panel comes to
   the front again, from a session tab or a file tab; a panel never in front keeps it as it is; kept across restarts for
   the panels open or reopenable ([record 115](adr/0115-the-lower-divider-per-panel.md)). A file opened to read, a
-  document no session works in, takes the whole height: the lower area hides until ⌃1–⌃4, a lower tab or a request
-  waiting in Approvals asks for it while that file is in front, and then stays for that file. A file moved to the right
+  document no session works in, takes the whole height: the lower area hides until ⌃1–⌃4 or a lower tab asks for it
+  while that file stays in front, and then stays for that file. A request waiting in Approvals shows it only while
+  the request waits and Approvals is the file's tab: back from answering it on another panel, the file has its whole
+  height again ([record 160](adr/0160-each-panel-keeps-its-lower-tab.md)). A file moved to the right
   side leaves the lower area as the main tabs' front panel has it, and the side opens at the width a side view does.
 - **Files written** (Window ▸ "Files written by the session", [record 143](adr/0143-a-session-lists-the-files-it-wrote.md)):
   a side-pane view of the files the session with the keyboard wrote (its Write, Edit, MultiEdit and NotebookEdit
@@ -134,16 +136,19 @@ Any number of document panels may be attached to a session
   while that folder is in Claude Code's folder ([record 138](adr/0138-a-session-shows-what-it-writes-to.md)). Its menu is the session chip's menu above; a plug (green when running) that starts or stops it, its tooltip "Running; click to stop
   the session" or "Stopped; click to start it"; a fresh start, shown once the session has a conversation and usable
   while it is stopped (a new conversation starts; the old one stays importable); then what the session does, "working ·
-  12 s", last, so that nothing moves as it changes. On the right: the model and the effort, each a menu that changes it
+  12 s", last, so that nothing moves as it changes, followed by the session's ETA once it has set one with
+  `session_eta`: "step build · ETA 11:40 UTC (8 min) · goal shipped · ETA 11:52 UTC (20 min)", the step under way and
+  the task's end state, each with its time in UTC and the minutes left, gold once a time has passed ("(3 min late)");
+  the estimate stays until the session sets the next one. On the right: the model and the effort, each a menu that changes it
   now and keeps it, as the session's menu in the sidebar does; the context ("ctx 412k (41%)"), followed after every
   model call of a turn and, when a stored conversation is loaded, taken from its last call or the metrics its last turn
   left, so a restart keeps it ("ctx –" only while nothing is known;
   [record 120](adr/0120-the-context-follows-each-model-call.md)); and right after it three icon buttons
   ([record 156](adr/0156-one-icon-set-and-a-split-checkpoint.md)). **Reflect**, shown while the session has a
   checkpoint command (`/reflect` by default, [record 45](adr/0045-fresh-start-and-checkpoint-buttons.md)), sends that
-  command and nothing after it; a stopped session starts to run it. **Compact** sends `/compact` to the running
-  session. **Clear** sends `/clear` to the running session, which goes on in a new conversation, the old one still
-  importable; it is greyed while the session is stopped, where Start a new conversation does the same. The checkpoint
+  command and nothing after it. **Compact** sends `/compact` to the session. **Clear** sends `/clear` to the session,
+  which goes on in a new conversation, the old one still importable. A stopped session starts to run any of the three,
+  as for a prompt; they are greyed only while the session stops or runs its checkpoint. The checkpoint
   threshold is 40% of the window unless the palette's Checkpoint threshold… set another percentage, from 10 to 100 (a
   lower or other value is refused with the reason and the threshold kept). Reflect's icon goes from grey to the
   checkpoint's purple as the context grows, in proportion to the context over the threshold's share of the window, and
@@ -163,7 +168,8 @@ Any number of document panels may be attached to a session
   A panel without a session shows only the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
   plans' usage, each under its name, and the work running in every session and query on the right, gold only on what
-  waits for the user's approval. A plan's session window says when it resets, and its week window the weekday and the
+  waits for the user's approval; at the right edge the time in UTC, "11:24:05 UTC", the clock sessions give their
+  reports and ETAs in, at a fixed width so it never moves as the text beside it grows; its tooltip has the local time. A plan's session window says when it resets, and its week window the weekday and the
   time: "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%", "Codex Session 4% (resets
   12:06) · Week 3% (resets Thu 13:00)" ([record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)). A click on that count lists who needs you,
   whose finished work waits to be read, who works and who waits, each with what it does and for how long; a click on a
@@ -197,7 +203,10 @@ Any number of document panels may be attached to a session
   mark are its To read mark ([§1.4](#14-the-sidebar)), so a new turn clears them too and a restart keeps them; a query's
   are the panel's own ([record 136](adr/0136-finished-work-waits-to-be-read.md)). A waiting request or a failure bounces the Dock while the window is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
-  lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties the
+  lists every session's requests. Each panel keeps its own lower tab: focused again, it selects the tab it had, and
+  Session when it never had one or its tab has nothing left to show (Approvals with nothing waiting, a view closed).
+  A request selects Approvals on the panel in front and on the asking session's panels, and nowhere else
+  ([record 160](adr/0160-each-panel-keeps-its-lower-tab.md)). Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties the
   Session tab once the turn has ended, while the conversation goes on
   ([record 104](adr/0104-the-theme-beside-new-panel.md)). The Session tab holds the whole conversation, with no button
   for earlier blocks; only the part near the view is laid out ([record 24](adr/0024-the-window-belongs-to-the-user.md),
@@ -450,9 +459,9 @@ Everything else is in the row's menu:
 | Interrupt the turn | while a turn runs | as ⌘⇧. |
 | Start a new conversation | stopped, with a conversation to leave | the next start is a new conversation; the old one stays importable |
 | Reflect (Reflect, due) | the session has a checkpoint command | as the session bar's Reflect: sends the checkpoint command alone |
-| Compact the conversation | running | sends `/compact` from the session's panel |
-| Clear the conversation | running | sends `/clear` from the session's panel: a new conversation, the old one importable |
-| Rewrite ‹panel› as a document | running, with a panel open; off while its text is blank | sends the panel's text to the session with an instruction to rewrite it as a Markdown document and put it in place with `ui_set_editor` ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)) |
+| Compact the conversation | always; off while stopping | sends `/compact` from the session's panel; a stopped session starts first |
+| Clear the conversation | always; off while stopping | sends `/clear` from the session's panel: a new conversation, the old one importable; a stopped session starts first |
+| Rewrite ‹panel› as a document | with a panel open; off while stopping or its text is blank | sends the panel's text to the session with an instruction to rewrite it as a Markdown document and put it in place with `ui_set_editor` ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)) |
 | Model: ‹family› ▸, Effort: ‹level› ▸ | always | each names what the session runs at; a choice saves and, on a running session, sends `/model` or `/effort` |
 | Copy details | always | as ⌘C on the row: name, path, branch, the repository written to with its branch, the ticket, the other repositories, full conversation id, status, uptime and start, context with tokens, model and effort, Claude Code version |
 | Edit…, Clone…, Remove… | always | the session dialog; a copy; removal with its own panel |

@@ -253,6 +253,7 @@ class ActionToolsTest {
         calls.put("session_command", "{\"session\":\"work\",\"command\":\"/compact\"}");
         calls.put("session_model", "{\"session\":\"mine\",\"model\":\"opus\"}");
         calls.put("session_effort", "{\"session\":\"mine\",\"effort\":\"high\"}");
+        calls.put("session_eta", "{\"session\":\"mine\",\"step\":\"build\",\"step_minutes\":5,\"goal\":\"done\",\"goal_minutes\":20}");
         calls.put("session_order", "{\"names\":[\"users\",\"foreman\"]}");
         calls.put("session_import", "{\"name\":\"imported\",\"work_dir\":\"" + dir + "\",\"conversation\":\"abc\"}");
         calls.put("session_clear", "{\"session\":\"mine\"}");

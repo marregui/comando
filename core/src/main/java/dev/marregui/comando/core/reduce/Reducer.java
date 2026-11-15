@@ -185,7 +185,7 @@ public final class Reducer {
                     Intent.SetSessionModel _, Intent.SetSessionEffort _, Intent.SessionStarted _, Intent.SessionRanAt _,
                     Intent.SessionInit _, Intent.SessionActivity _, Intent.SessionTasksChanged _,
                     Intent.SessionTurnRunning _, Intent.SessionTurnEnded _, Intent.SessionExited _,
-                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionContext _,
+                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionEta _, Intent.SessionContext _,
                     Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
                     Intent.ShowView _, Intent.CloseView _,
                     Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _, Intent.SessionLayout _,
@@ -261,6 +261,7 @@ public final class Reducer {
             case Intent.SessionExited i -> SessionRules.sessionExited(clock, s, i);
             case Intent.SessionBranch i -> SessionRules.sessionBranch(s, i);
             case Intent.SessionSubjectRead i -> SessionRules.sessionSubject(s, i);
+            case Intent.SessionEta i -> SessionRules.sessionEta(clock, s, i);
             case Intent.SessionContext i -> SessionRules.sessionContext(s, i, threshold());
             case Intent.OpenSubagent i -> SessionRules.openSubagent(clock, s, i);
 

@@ -66,7 +66,8 @@ class LowerDividerUiTest {
             loop.dispatch(new Intent.OpenFile("", two.toString(), 0));
             Awaitility.await("two's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("two.md"));
             Awaitility.await("hidden for two").atMost(WAIT).until(() -> onEdt(() -> !vertical.getBottomComponent().isVisible()));
-            loop.dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
+            // two has its own tab, Session (record 160): asked for by choosing another
+            loop.dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
             Awaitility.await("asked for two").atMost(WAIT).until(() -> onEdt(() -> vertical.getBottomComponent().isVisible()));
             assertThat(onEdt(vertical::getDividerLocation)).as("a panel never in front takes the last height shown").isEqualTo(150);
             onEdt(() -> {
