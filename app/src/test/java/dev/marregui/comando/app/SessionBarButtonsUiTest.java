@@ -81,7 +81,7 @@ class SessionBarButtonsUiTest {
 
     /// The pointer resting on the session bar's ETA opens its card, the card a session's row shows, titled "ETA" and
     /// the session, with the step, the timebox given and the time now, in UTC. A new estimate changes the open card in
-    /// place, a cleared one closes it, and leaving the ETA closes the card.
+    /// place, a cleared one closes it, and leaving the ETA closes the card. A long ETA ends in an ellipsis on the bar.
     @Test
     void theEtaOpensItsCardOnARest() throws Exception {
         try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
@@ -96,6 +96,8 @@ class SessionBarButtonsUiTest {
             loop.dispatch(new Intent.SessionEta("work", "build", 10, "shipped", 25, 30, ""));
             final JLabel eta = Awaitility.await("the ETA on the bar").atMost(WAIT)
                     .until(() -> onEdt(() -> named(bar(), JLabel.class, "ETA")), Objects::nonNull);
+            assertThat(onEdt(() -> eta.getPreferredSize().width < eta.getFontMetrics(eta.getFont()).stringWidth(eta.getText())))
+                    .as("the ETA asks for less width than its whole text, which ends in an ellipsis").isTrue();
             onEdt(() -> {
                 eta.dispatchEvent(new MouseEvent(eta, MouseEvent.MOUSE_ENTERED, System.currentTimeMillis(), 0, 2, 2, 0, false));
                 return null;

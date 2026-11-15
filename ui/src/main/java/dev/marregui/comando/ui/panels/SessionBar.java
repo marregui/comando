@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -75,8 +77,23 @@ public final class SessionBar {
     private final JButton fresh = EditorPanel.iconButton();
     /** What the session does: working, waiting on background work, with the time; muted. */
     private final JLabel activity = new JLabel();
+    /**
+     * The ETA's widest, in widths of the digit zero. Set 2026-11-15 from Miguel's screenshot, where the whole report
+     * filled the bar and cut the session's name: "step post-restart check · ETA 15:01 UTC (4 min)" is 47 characters, so
+     * a step named in up to about 25 reads whole with its ETA; the goal and the timebox then end in an ellipsis, by
+     * intent even with room to spare, and read whole in the card.
+     */
+    static final int ETA_COLUMNS = 56;
     /** When the session says its step and its task's goal end, in UTC, with the time left; muted, attention once late. */
-    private final JLabel eta = new JLabel();
+    private final JLabel eta = new JLabel() {
+        @Override
+        public Dimension getPreferredSize() {
+            final Dimension d = super.getPreferredSize();
+            final Insets in = getInsets();
+            final int widest = getFontMetrics(getFont()).charWidth('0') * ETA_COLUMNS + in.left + in.right;
+            return new Dimension(Math.min(d.width, widest), d.height);
+        }
+    };
     /** The activity's and the ETA's card, the card a panel's tab and a session's row show, in place of a tooltip. */
     private final TabCard card = new TabCard();
     /** Closes the tabs' and the session rows' card, so one card shows at a time; the shell's. */
