@@ -22,9 +22,11 @@ import java.util.regex.Pattern;
  *                them becomes the scheduler that started it
  * @param service whether the scheduler keeps it running ({@code "schedule": {"service": "always"}}) instead of
  *                starting it at a time
+ * @param awake   whether the Mac is kept from sleeping while it runs ({@code "awake": true}, macOS only); no editor
+ *                field sets it, so it is carried through an edit from what {@code kit.py} read
  */
 public record KitJob(String name, String description, List<String> days, String time, List<String> command,
-                     Map<String, String> env, String log, boolean enabled, boolean service) {
+                     Map<String, String> env, String log, boolean enabled, boolean service, boolean awake) {
 
     /** The weekdays in week order, as the manifest writes them. */
     public static final List<String> WEEKDAYS = List.of("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN");
@@ -54,7 +56,14 @@ public record KitJob(String name, String description, List<String> days, String 
     /** A job run at its days and time. */
     public KitJob(final String name, final String description, final List<String> days, final String time,
                   final List<String> command, final Map<String, String> env, final String log, final boolean enabled) {
-        this(name, description, days, time, command, env, log, enabled, false);
+        this(name, description, days, time, command, env, log, enabled, false, false);
+    }
+
+    /** A job run at its days and time, or a service when {@code service}; either lets the Mac sleep while it runs. */
+    public KitJob(final String name, final String description, final List<String> days, final String time,
+                  final List<String> command, final Map<String, String> env, final String log, final boolean enabled,
+                  final boolean service) {
+        this(name, description, days, time, command, env, log, enabled, service, false);
     }
 
     /** Whether it runs every day. */

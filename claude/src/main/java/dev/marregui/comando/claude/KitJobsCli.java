@@ -152,7 +152,7 @@ public final class KitJobsCli {
             final KitJob job = new KitJob(j.path("name").asString(""), j.path("description").asString(""),
                     days.isEmpty() ? KitJob.WEEKDAYS : days, j.path("time").asString(""), strings(j.path("command")),
                     env(j.path("env")), j.path("log").asString(""), j.path("enabled").asBoolean(true),
-                    j.path("schedule").has("service"));
+                    j.path("schedule").has("service"), j.path("awake").asBoolean(false));
             final JsonNode last = j.path("last");
             out.add(new KitJobs.Entry(job, j.path("installed").asBoolean(false), j.path("current").asBoolean(false),
                     j.path("loaded").isBoolean() ? j.path("loaded").asBoolean(false) : null, j.path("running").asBoolean(false),
@@ -190,6 +190,9 @@ public final class KitJobsCli {
             }
             if (!j.enabled()) {
                 o.put("enabled", false);
+            }
+            if (j.awake()) {
+                o.put("awake", true);
             }
         }
         return out;

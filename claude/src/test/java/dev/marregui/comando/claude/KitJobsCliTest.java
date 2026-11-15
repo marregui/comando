@@ -127,6 +127,25 @@ class KitJobsCliTest {
         assertThat(sent.path("schedule").has("daily") || sent.path("schedule").has("weekly")).isFalse();
     }
 
+    /// `"awake": true` from `jobs --json` is read and handed back to `jobs set`, so a save keeps the Mac awake for the
+    /// job; a job without it is handed back without the key.
+    @Test
+    void awakeIsReadAndHandedBack(@TempDir final Path root) throws IOException {
+        fake(root, """
+                {"root": "/r", "platform": "macos", "scheduler": "launchd", "jobs": [
+                  {"name": "dream", "description": "", "schedule": {"daily": "02:00"}, "days": [], "time": "02:00",
+                   "command": ["tools/dream/dream"], "env": {}, "log": "", "logPath": "/r/.kit-jobs/dream.log",
+                   "enabled": true, "awake": true, "installed": true, "current": true, "loaded": true,
+                   "running": false, "pid": null, "last": null, "next": "2026-11-16T02:00+01:00", "files": []}
+                ]}
+                """, 0);
+        final KitJob dream = new KitJobsCli(root).read().jobs().getFirst().job();
+        assertThat(dream.awake()).isTrue();
+        assertThat(KitJobsCli.manifestJobs(List.of(dream)).get(0).path("awake").asBoolean(false)).isTrue();
+        final KitJob asleep = new KitJob("a", "", KitJob.WEEKDAYS, "07:15", List.of("bin/a"), Map.of(), "", true);
+        assertThat(KitJobsCli.manifestJobs(List.of(asleep)).get(0).has("awake")).isFalse();
+    }
+
     /// [KitJobsCli#run] asks `job run <name>` and returns its answer.
     @Test
     void runNamesTheJob(@TempDir final Path root) throws IOException {

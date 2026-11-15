@@ -50,7 +50,11 @@ class JobsEditorTest {
             List.of("bin/daily-brief"), Map.of(), "", false);
 
     private JobsEditor editor() {
-        return new JobsEditor(List.of(entry(DRIFT, false), entry(BRIEF, false)), Path.of("/k"), new JobsEditor.Actions() {
+        return editor(List.of(entry(DRIFT, false), entry(BRIEF, false)));
+    }
+
+    private JobsEditor editor(final List<KitJobs.Entry> entries) {
+        return new JobsEditor(entries, Path.of("/k"), new JobsEditor.Actions() {
             @Override
             public Optional<Path> program(final Component owner, final Path bin) {
                 return Optional.of(bin.resolve("curator"));
@@ -113,6 +117,18 @@ class JobsEditorTest {
         });
         assertThat(e.valid()).isTrue();
         assertThat(e.jobs()).contains(List.of(service));
+    }
+
+    /// A job kept awake stays awake through an edit: the editor has no field for it, and a save must not drop it.
+    @Test
+    void anAwakeJobStaysAwakeThroughAnEdit() {
+        final KitJob dream = new KitJob("dream", "", KitJob.WEEKDAYS, "02:00", List.of("tools/dream/dream"), Map.of(),
+                "", true, false, true);
+        final JobsEditor e = editor(List.of(entry(dream, false)));
+        type(e, KitJob.TIME_FIELD, "03:00");
+        final KitJob edited = e.jobs().orElseThrow().getFirst();
+        assertThat(edited.paddedTime()).isEqualTo("03:00");
+        assertThat(edited.awake()).isTrue();
     }
 
     /// The day toggles, the time, the arguments, the environment and Enabled become the job; setting them back makes

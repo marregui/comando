@@ -375,17 +375,18 @@ writes them to the platform's scheduler (launchd, systemd timers or cron, Task S
 |---|---|
 | `name` | lower-case letters, digits and `-`, from a letter, at most 32; used once |
 | `description` | optional; one line of at most 80 characters |
-| `schedule` | `{"daily": "HH:MM"}` or `{"weekly": "<days> HH:MM"}`, the days `MON` … `SUN`, comma-separated, a run of three or more as a range (`MON-FRI`, `MON,THU`) |
+| `schedule` | `{"daily": "HH:MM"}` or `{"weekly": "<days> HH:MM"}`, the days `MON` … `SUN`, comma-separated, a run of three or more as a range (`MON-FRI`, `MON,THU`); or `{"service": "always"}`, a job the scheduler keeps running, with no days or time |
 | `command` | a list: the program, a path inside the root with `/` and no `..`, then its arguments; `{scheduler}` in any of them becomes the scheduler that started it |
 | `env` | optional; an object of variables, names in capitals, digits and `_` |
 | `log` | optional; a file inside the root for the job's output (otherwise `.kit-jobs/<name>.log`) |
 | `enabled` | optional; `false` pauses the job |
+| `awake` | optional; `true` runs a calendar job on macOS under `caffeinate -i -s`, so the Mac does not sleep while it runs (no effect on Linux or Windows; refused on a service). The jobs window has no field for it and keeps it through an edit |
 
 comando calls the tool with `python3` (`python` on Windows) from the root, three ways, and waits at most 60 seconds:
 
 | Call | Answers |
 |---|---|
-| `install/kit.py jobs --json --root <root>` | exit 0 and `{"jobs": [...]}` on standard output; each job with `name`, `description`, `days` (a list of `MON` … `SUN`), `time` (`HH:MM`), `command` (a list), `env` (an object), `log`, `enabled`, then the scheduler's view: `installed`, `current` (the scheduler holds what the tool would write now), `loaded` (`null` when the tool cannot tell), `running`, `last` (`{"start": <time>, "exit": <code>}`), `next` (a time, empty when paused), `logPath` |
+| `install/kit.py jobs --json --root <root>` | exit 0 and `{"jobs": [...]}` on standard output; each job with `name`, `description`, `days` (a list of `MON` … `SUN`), `time` (`HH:MM`), `command` (a list), `env` (an object), `log`, `enabled`, `awake`, then the scheduler's view: `installed`, `current` (the scheduler holds what the tool would write now), `loaded` (`null` when the tool cannot tell), `running`, `last` (`{"start": <time>, "exit": <code>}`), `next` (a time, empty when paused), `logPath` |
 | `install/kit.py jobs set --root <root>` | the whole list as a JSON array on standard input, in the manifest's form: every job checked first, then only the manifest's `jobs` written, then the scheduler brought to it |
 | `install/kit.py job run <name> --root <root>` | starts the job now through the scheduler, never as a child of the caller |
 
