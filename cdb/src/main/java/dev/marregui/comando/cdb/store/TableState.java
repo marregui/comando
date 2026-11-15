@@ -208,14 +208,15 @@ final class TableState {
 
     /**
      * Queues {@code commit}, answered once this returns; its transaction becomes the logged one. Refused once the table
-     * closed: a writer left open past the store's close must not answer a commit no applier will publish.
+     * closed: a writer left open past the store's close must not answer a commit no applier will publish; the writer
+     * then cuts the commit's record out of the log.
      */
     void enqueue(final Queued commit) {
         lock.lock();
         try {
             if (current == null) {
-                throw new CdbException("refuse commit to closed table, its record is in the log, not answered [table="
-                        + key + ", txn=" + commit.txn() + ']', -1);
+                throw new CdbException("refuse commit to closed table [table=" + key + ", txn=" + commit.txn() + ']',
+                        -1);
             }
             queue.addLast(commit);
             queuedRows += commit.rows().size;

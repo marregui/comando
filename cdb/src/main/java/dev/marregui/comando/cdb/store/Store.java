@@ -534,7 +534,7 @@ public final class Store implements AutoCloseable {
                 final Path partition = dir.resolve(entry.folder());
                 TableFiles.checkName(entry.folder(), "partition");
                 cutToCommitted(partition, def, entry.rows());
-                versions.add(Version.open(partition, def, entry.rows(), state.symbols()));
+                versions.add(Version.open(partition, def, entry.rows(), state.symbols(), entry.columns()));
             }
         } catch (final RuntimeException e) {
             for (final Version v : versions) {

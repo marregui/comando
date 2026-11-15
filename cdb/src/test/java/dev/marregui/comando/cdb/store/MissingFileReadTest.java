@@ -75,6 +75,31 @@ class MissingFileReadTest {
                 .hasMessageContaining("file=note.d");
     }
 
+    /// The data file of the last column, not the designated timestamp, is deleted: `_txn` records that the partition
+    /// had files for every column, so the read fails instead of taking the column for one added later.
+    @Test
+    void aMissingLastColumnFileFailsTheRead(@TempDir final Path root) throws IOException {
+        final Path partition = writeLastValuePartition(root);
+        Files.delete(partition.resolve("value.d"));
+        assertThatThrownBy(() -> readAll(root))
+                .isInstanceOf(CdbException.class)
+                .hasMessageContaining("file=value.d");
+    }
+
+    /// A partition line of a `_txn` written before the column count was recorded keeps the tail rule: a missing file
+    /// of the last column is taken for a column added later and reads NULL.
+    @Test
+    void aTxnWithoutColumnCountsKeepsTheTailRule(@TempDir final Path root) throws IOException {
+        final Path partition = writeLastValuePartition(root);
+        final Path txn = root.resolve("m").resolve(TableFiles.TXN);
+        final String text = Files.readString(txn);
+        final String line = partition.getFileName() + "\t1\t2\n";
+        assertThat(text).contains(line);
+        Files.writeString(txn, text.replace(line, partition.getFileName() + "\t1\n"));
+        Files.delete(partition.resolve("value.d"));
+        assertThat(readAll(root)).containsExactly(TS + "|null");
+    }
+
     /// A column added after the partition was written has no file in it: the partition reads NULL there, before and
     /// after a reopen, and a missing file of a column the partition does have still fails.
     @Test
@@ -93,6 +118,25 @@ class MissingFileReadTest {
         assertThat(readAll(root)).containsExactly("1.0|\"a\"|" + TS + "|null");
         Files.delete(partition.resolve("value.d"));
         assertThatThrownBy(() -> readAll(root)).isInstanceOf(CdbException.class).hasMessageContaining("file=value.d");
+    }
+
+    // a table whose last column is not its designated timestamp, one row in one partition
+    private static Path writeLastValuePartition(final Path root) throws IOException {
+        final TableDef last = new TableDef("m", List.of(
+                new ColumnDef("ts", CdbType.TIMESTAMP),
+                new ColumnDef("value", CdbType.DOUBLE)), 0, PartitionBy.DAY, List.of(), 0L);
+        try (final Store store = Store.open(root)) {
+            store.create(last, false);
+            try (final TableWriter writer = store.writer("m", WAIT_MILLIS)) {
+                writer.newRow(TS);
+                writer.putDouble(1, 1.0);
+                writer.endRow();
+                writer.commit();
+            }
+        }
+        try (final Stream<Path> entries = Files.list(root.resolve("m"))) {
+            return entries.filter(Files::isDirectory).findFirst().orElseThrow();
+        }
     }
 
     private static Path writeOnePartition(final Path root) throws IOException {

@@ -42,6 +42,8 @@ final class Version implements PartitionReader {
 
     final Path dir;
     final String folder;
+    /** The leading columns of the definition that have files in this version; the rest were added later. */
+    final int fileColumns;
     /** Snapshots holding this version; guarded by the owning {@link TableState}'s lock. */
     int refs;
 
@@ -70,10 +72,12 @@ final class Version implements PartitionReader {
             final long lowerBound,
             final long minTimestamp,
             final long maxTimestamp,
-            final long mappedBytes
+            final long mappedBytes,
+            final int fileColumns
     ) {
         this.dir = dir;
         this.folder = dir.getFileName().toString();
+        this.fileColumns = fileColumns;
         this.arena = arena;
         this.types = types;
         this.data = data;
@@ -98,6 +102,16 @@ final class Version implements PartitionReader {
      */
     static Version open(final Path dir, final TableDef def, final long rowCount,
             final List<SymbolTable> symbolsByColumn) {
+        return open(dir, def, rowCount, symbolsByColumn, -1);
+    }
+
+    /**
+     * {@link #open(Path, TableDef, long, List)} of a version known to have the files of its first
+     * {@code fileColumns} columns, as {@code _txn} records them (-1 when unknown): one of those missing is refused,
+     * the file of a last column included, which the tail rule alone would read as a column added later.
+     */
+    static Version open(final Path dir, final TableDef def, final long rowCount,
+            final List<SymbolTable> symbolsByColumn, final int fileColumns) {
         final List<ColumnDef> columns = def.columns();
         final int n = columns.size();
         final CdbType[] types = new CdbType[n];
@@ -150,6 +164,10 @@ final class Version implements PartitionReader {
                     data[c] = committed(d, data[c], expected);
                 }
             }
+            final int present = firstAbsent < 0 ? n : firstAbsent;
+            if (present < Math.min(fileColumns, n)) {
+                throw missing(def, dir, columns.get(present).name() + ".d");
+            }
             final int ts = def.timestampIndex();
             if (rowCount > 0L) {
                 if (data[0] == null) {
@@ -169,7 +187,7 @@ final class Version implements PartitionReader {
                 max = Long.MIN_VALUE;
             }
             final long lower = ts >= 0 ? Retention.floor(min, def.partitionBy()) : Long.MIN_VALUE;
-            return new Version(dir, arena, types, data, index, symbols, rowCount, lower, min, max, mapped);
+            return new Version(dir, arena, types, data, index, symbols, rowCount, lower, min, max, mapped, present);
         } catch (final IOException | RuntimeException e) {
             arena.close();
             if (e instanceof final CdbException cdb) {

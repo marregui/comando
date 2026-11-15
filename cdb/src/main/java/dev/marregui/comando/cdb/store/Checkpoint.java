@@ -75,7 +75,7 @@ final class Checkpoint {
         }
         final List<TableFiles.Entry> partitions = new ArrayList<>(snapshot.partitions().size());
         for (final Version v : snapshot.partitions()) {
-            partitions.add(new TableFiles.Entry(v.folder, v.rowCount()));
+            partitions.add(new TableFiles.Entry(v.folder, v.rowCount(), v.fileColumns));
         }
         store.beforeTxnReplace.run();
         if (!StoreFiles.replaceText(state.dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(new TableFiles.Txn(

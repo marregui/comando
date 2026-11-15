@@ -228,7 +228,22 @@ public final class Planner {
             out = new Plan.Sort(out, List.copyOf(keys), -1);
         }
         out = limit(out, setOp.limit());
-        return Rel.of(out, null, -1);
+        final int timestamp = setOp.orderBy().isEmpty() ? -1
+                : orderedTimestamp(-1, outputIndex(setOp.orderBy().getFirst().expr(), names), combined.fields(),
+                        names.size());
+        return Rel.of(out, null, timestamp);
+    }
+
+    /**
+     * The designated timestamp of rows sorted with {@code first} as their first key, as QuestDB's ORDER BY sets it:
+     * kept when the first key is the designated column ({@code timestamp}), else the first key when it is a selected
+     * TIMESTAMP column, else -1.
+     */
+    static int orderedTimestamp(final int timestamp, final int first, final List<Field> fields, final int width) {
+        if (first == timestamp) {
+            return timestamp;
+        }
+        return first < width && fields.get(first).type() == CdbType.TIMESTAMP ? first : -1;
     }
 
     /** {@code plan} under a projection casting each column to {@code types} and naming it, when any differs. */

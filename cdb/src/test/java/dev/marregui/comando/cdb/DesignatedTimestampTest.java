@@ -28,4 +28,22 @@ class DesignatedTimestampTest {
             assertThat(cdb.run("SELECT count() FROM x").timestampIndex()).isEqualTo(-1);
         }
     }
+
+    /// ORDER BY as QuestDB's: the designated column stays named when it is the first key, in either direction; a
+    /// first key that is another selected TIMESTAMP column becomes the named one; any other first key names none.
+    @Test
+    void orderByNamesTheFirstKeyWhenItIsATimestamp() {
+        try (Cdb cdb = Cdb.open(root)) {
+            cdb.run("CREATE TABLE x (a TIMESTAMP, ts TIMESTAMP, v LONG) TIMESTAMP(ts) PARTITION BY DAY");
+            cdb.run("INSERT INTO x VALUES ('2026-11-15T00:00:00Z', '2026-11-15T01:00:00Z', 1)");
+
+            assertThat(cdb.run("SELECT * FROM x ORDER BY ts DESC").timestampIndex()).isEqualTo(1);
+            assertThat(cdb.run("SELECT * FROM x ORDER BY ts, v").timestampIndex()).isEqualTo(1);
+            assertThat(cdb.run("SELECT * FROM x ORDER BY a").timestampIndex()).isEqualTo(0);
+            assertThat(cdb.run("SELECT * FROM x ORDER BY v").timestampIndex()).isEqualTo(-1);
+            assertThat(cdb.run("SELECT * FROM x ORDER BY v, ts").timestampIndex()).isEqualTo(-1);
+            assertThat(cdb.run("SELECT a, v FROM x ORDER BY a").timestampIndex()).isEqualTo(0);
+            assertThat(cdb.run("SELECT a FROM x UNION ALL SELECT a FROM x ORDER BY a").timestampIndex()).isEqualTo(0);
+        }
+    }
 }

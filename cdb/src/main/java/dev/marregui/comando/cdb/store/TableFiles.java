@@ -19,8 +19,9 @@ import dev.marregui.comando.cdb.CdbType;
  * {@code col=<name>:<TYPE>} per column; from format 2 a SYMBOL column adds {@code :capacity=<n>}, then
  * {@code :nocache} when its dictionary is not cached and {@code :index=<block capacity>} when it is indexed. Format 1
  * is still read, its SYMBOL columns taking QuestDB's defaults. {@code _txn}: the transaction number, then one
- * {@code <folder>\t<rows>} line per partition in time order. Unknown keys, options and other formats are refused, not
- * skipped.
+ * {@code <folder>\t<rows>\t<columns>} line per partition in time order, {@code <columns>} the leading columns with
+ * files in it (a line without it, written before, is read with -1: unknown). Unknown keys, options and other
+ * formats are refused, not skipped.
  */
 final class TableFiles {
 
@@ -38,8 +39,11 @@ final class TableFiles {
     private TableFiles() {
     }
 
-    /** One partition named by {@code _txn}: its version folder and row count. */
-    record Entry(String folder, long rows) {
+    /**
+     * One partition named by {@code _txn}: its version folder, row count and the leading columns of the definition
+     * with files in it, -1 when the line was written without them.
+     */
+    record Entry(String folder, long rows, int columns) {
     }
 
     /**
@@ -145,7 +149,11 @@ final class TableFiles {
         final StringBuilder sb = new StringBuilder(32 + 32 * partitions.size());
         sb.append(number).append('\n');
         for (final Entry entry : partitions) {
-            sb.append(entry.folder()).append('\t').append(entry.rows()).append('\n');
+            sb.append(entry.folder()).append('\t').append(entry.rows());
+            if (entry.columns() >= 0) {
+                sb.append('\t').append(entry.columns());
+            }
+            sb.append('\n');
         }
         return sb.toString();
     }
@@ -212,11 +220,14 @@ final class TableFiles {
                 if (tab <= 0) {
                     throw corrupt(source, lines[i]);
                 }
-                final long rows = Long.parseLong(lines[i].substring(tab + 1));
-                if (rows <= 0L) {
+                final int second = lines[i].indexOf('\t', tab + 1);
+                final long rows = Long.parseLong(second < 0 ? lines[i].substring(tab + 1)
+                        : lines[i].substring(tab + 1, second));
+                final int columnCount = second < 0 ? -1 : Integer.parseInt(lines[i].substring(second + 1));
+                if (rows <= 0L || second >= 0 && columnCount < 0) {
                     throw corrupt(source, lines[i]);
                 }
-                partitions.add(new Entry(lines[i].substring(0, tab), rows));
+                partitions.add(new Entry(lines[i].substring(0, tab), rows, columnCount));
             }
             if (columns < 0) {
                 if (!symbols.isEmpty()) {

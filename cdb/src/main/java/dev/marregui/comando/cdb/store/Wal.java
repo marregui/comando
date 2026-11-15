@@ -51,8 +51,9 @@ final class Wal {
     // by the applier and the status listing without it, so a read never waits for an append's force
     private volatile int records;
     private volatile long bytes;
-    // the last record's transaction, meaningful while records > 0
+    // the last record's transaction and its offset, meaningful while records > 0
     private long lastTxn;
+    private long lastStart;
 
     private Wal(final Path file, final long bytes) {
         this.file = file;
@@ -187,7 +188,24 @@ final class Wal {
         }
         records++;
         lastTxn = txn;
+        lastStart = before;
         bytes = before + length;
+    }
+
+    /**
+     * Cuts the last record, commit {@code txn}, back out of the log and forces the cut: a commit refused after it was
+     * logged, so no replay makes visible a commit its caller saw fail. False, and the log kept, when the last record is
+     * not {@code txn}.
+     */
+    synchronized boolean retract(final long txn) throws IOException {
+        if (records == 0 || lastTxn != txn) {
+            return false;
+        }
+        StoreFiles.truncate(file, lastStart);
+        records--;
+        lastTxn = txn - 1L;
+        bytes = lastStart;
+        return true;
     }
 
     /**

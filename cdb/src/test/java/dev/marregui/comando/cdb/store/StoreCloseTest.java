@@ -97,6 +97,63 @@ class StoreCloseTest {
         }
     }
 
+    /// A commit the closed table refuses after its record was logged is cut out of the log: the store opened next
+    /// replays nothing, so a commit its caller saw fail never becomes visible; a commit answered before the close
+    /// stays.
+    @Test
+    void aRefusedCommitIsNotReplayedAtTheNextOpen(@TempDir final Path root) {
+        try (final Store store = Store.open(root)) {
+            store.closeWaitMillis = 0L;
+            store.create(T, false);
+            final TableWriter w = store.writer("t", 0L);
+            try {
+                row(w, 1L);
+                w.commit();
+                // the close runs between the commit's check of the table and its log append
+                store.beforeWalAppend = () -> {
+                    store.beforeWalAppend = () -> {
+                    };
+                    assertThatThrownBy(store::close).isInstanceOf(CdbException.class);
+                };
+                row(w, 2L);
+                assertThatThrownBy(w::commit).isInstanceOf(CdbException.class);
+            } finally {
+                w.close();
+            }
+        }
+        try (final Store reopened = Store.open(root);
+             TableReader r = reopened.reader("t")) {
+            assertThat(r.rowCount()).isEqualTo(1L);
+        }
+    }
+
+    /// The same refused commit from an interrupted thread: the cut still runs, and the interrupt is kept.
+    @Test
+    void anInterruptedRefusedCommitIsNotReplayed(@TempDir final Path root) {
+        try (final Store store = Store.open(root)) {
+            store.closeWaitMillis = 0L;
+            store.create(T, false);
+            final TableWriter w = store.writer("t", 0L);
+            try {
+                store.beforeWalAppend = () -> {
+                    store.beforeWalAppend = () -> {
+                    };
+                    assertThatThrownBy(store::close).isInstanceOf(CdbException.class);
+                };
+                row(w, 1L);
+                Thread.currentThread().interrupt();
+                assertThatThrownBy(w::commit).isInstanceOf(CdbException.class);
+                assertThat(Thread.interrupted()).isTrue();
+            } finally {
+                w.close();
+            }
+        }
+        try (final Store reopened = Store.open(root);
+             TableReader r = reopened.reader("t")) {
+            assertThat(r.rowCount()).isZero();
+        }
+    }
+
     /// An appender whose writer the close left open is refused its flush with a `CdbException`, and its close releases
     /// the writer so the store's next close releases the lock.
     @Test

@@ -65,8 +65,8 @@ the two below:
 
 ## 2. Storage
 
-A table is a folder: `_meta` (the definition), `_txn` (the checkpointed transaction: per partition its folder and row
-count, the column count, the TTL, and per SYMBOL column the bytes of its symbol file), `_wal` (the commits since that
+A table is a folder: `_meta` (the definition), `_txn` (the checkpointed transaction: per partition its folder, row
+count and how many leading columns have files in it, the column count, the TTL, and per SYMBOL column the bytes of its symbol file), `_wal` (the commits since that
 checkpoint), symbol files, and partition folders `<partition>.<txn>/` with one file per column (fixed width: 8 bytes
 for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR as in 1.2), little-endian
 ([record 161](adr/0161-cdb-write-ahead-log.md)).
@@ -130,7 +130,7 @@ the log's records together say what is committed: a reader maps only the publish
 | a direct commit fails before `_txn` is replaced | the previous transaction, its version folders and files cleaned up as before the log |
 | a commit that fails after appending | the bytes past the committed ends stay while readers may map them; the next commit rewrites that partition instead of appending |
 | forcing the table folder fails after `_txn` was moved | the commit stands (it is visible); the log and the old folders are kept; after a direct commit the table refuses commits until the store reopens, logged at ERROR |
-| a partition folder or a column file `_txn` and `_meta` name is missing | the read fails, naming the table, the partition and the file; a column added after a partition was written has no file there and reads NULL |
+| a partition folder or a column file `_txn` and `_meta` name is missing | the read fails, naming the table, the partition and the file, the last column's file included (`_txn` records how many leading columns each partition has files for); a column added after a partition was written has no file there and reads NULL. A partition line written before that count (two fields) keeps the tail rule: a missing last column reads NULL |
 | a symbol write fails | the dictionary is cut back to its committed length before the next write, and a dictionary shorter than its checkpoint fails the open: a committed symbol never reads NULL |
 | a `/write` body with a malformed or refused line | none of the body's rows is written (`CdbAppender.discard`); the other bodies of its group commit are written |
 | the store closes while a writer is still open after the close's 10 s wait | the close fails naming the tables and keeps the root's `_lock`, so no other store opens the folder under that writer; a later close releases it once the writer is closed |

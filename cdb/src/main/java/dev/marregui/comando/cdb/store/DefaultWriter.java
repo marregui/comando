@@ -244,8 +244,13 @@ final class DefaultWriter implements TableWriter {
         }
         final int n = pending.size;
         final long bytes = heapBytes();
-        state.enqueue(new TableState.Queued(txn, resize(pending, def.columns(), capacity, n), System.nanoTime(),
-                bytes));
+        try {
+            state.enqueue(new TableState.Queued(txn, resize(pending, def.columns(), capacity, n), System.nanoTime(),
+                    bytes));
+        } catch (final CdbException refused) {
+            retract(txn, refused);
+            throw refused;
+        }
         pending.size = 0;
         store.applier().committed(state, bytes);
         // the commit is durable and queued from here: a failure of this hook leaves it to the applier
@@ -416,6 +421,28 @@ final class DefaultWriter implements TableWriter {
     }
 
     /**
+     * Cuts the record of commit {@code txn}, refused by a table the store closed after it was logged, out of the log:
+     * the caller sees the commit fail, so the next open must not replay it. Only this writer appends to its table and the
+     * store's applier has stopped, so the record is the log's last. A failed cut leaves the commit in doubt.
+     */
+    private void retract(final long txn, final CdbException refused) {
+        // an interrupt would close the cut's channel and leave the refused record to a replay: cleared, then restored
+        final boolean interrupted = Thread.interrupted();
+        try {
+            state.wal.retract(txn);
+        } catch (final IOException e) {
+            refused.addSuppressed(e);
+            state.poison();
+            LOG.log(System.Logger.Level.ERROR, "cannot cut refused commit from log, commit in doubt [table="
+                    + def.name() + ", txn=" + txn + ']', e);
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /**
      * True when the pending rows' log record would take at least {@code limit} bytes, counting each text char as 3
      * UTF-8 bytes (the most a UTF-16 char encodes to): such a commit is written as a checkpoint, so its text is not
      * copied twice more into a record.
@@ -518,7 +545,7 @@ final class DefaultWriter implements TableWriter {
             final Version v;
             if (old != null && store.appendInPlace && appendable(old, rows, order[0], ts, keys.length)) {
                 append(old, rows, order);
-                v = Version.open(old.dir, def, old.rowCount() + order.length, state.symbols());
+                v = Version.open(old.dir, def, old.rowCount() + order.length, state.symbols(), old.fileColumns);
                 appended.add(v);
             } else {
                 final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));

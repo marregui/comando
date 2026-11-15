@@ -63,8 +63,8 @@ class TableFilesTest {
     /// A `_txn` written before the log, partitions only, reads back as not checkpointed, naming no definition.
     @Test
     void txnBeforeTheLogRoundTrips() {
-        final List<TableFiles.Entry> partitions = List.of(new TableFiles.Entry("2026-11-14.3", 10L),
-                new TableFiles.Entry("2026-11-15.7", 4L));
+        final List<TableFiles.Entry> partitions = List.of(new TableFiles.Entry("2026-11-14.3", 10L, -1),
+                new TableFiles.Entry("2026-11-15.7", 4L, -1));
         final TableFiles.Txn txn = TableFiles.decodeTxn(TableFiles.encodeTxn(7L, partitions), "_txn");
         assertThat(txn.number()).isEqualTo(7L);
         assertThat(txn.partitions()).isEqualTo(partitions);
@@ -77,11 +77,11 @@ class TableFilesTest {
     /// -1 for the columns that are not SYMBOL; a table with no partitions and no SYMBOL column too.
     @Test
     void checkpointedTxnRoundTripsEveryAtLine() {
-        final List<TableFiles.Entry> partitions = List.of(new TableFiles.Entry("default.12", 3L));
+        final List<TableFiles.Entry> partitions = List.of(new TableFiles.Entry("default.12", 3L, 4));
         final TableFiles.Txn txn = new TableFiles.Txn(12L, partitions, 4, 3_600_000_000L,
                 new long[] {-1L, 0L, -1L, 12_345L});
         final String text = TableFiles.encodeTxn(txn);
-        assertThat(text).isEqualTo("12\ndefault.12\t3\n@columns=4\n@ttl=3600000000\n@sym=1:0\n@sym=3:12345\n");
+        assertThat(text).isEqualTo("12\ndefault.12\t3\t4\n@columns=4\n@ttl=3600000000\n@sym=1:0\n@sym=3:12345\n");
         final TableFiles.Txn read = TableFiles.decodeTxn(text, "_txn");
         assertThat(read.number()).isEqualTo(12L);
         assertThat(read.partitions()).isEqualTo(partitions);

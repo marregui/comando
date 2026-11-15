@@ -411,6 +411,9 @@ final class SelectPlanner {
                 timestamp = i;
             }
         }
+        if (!select.orderBy().isEmpty()) {
+            timestamp = Planner.orderedTimestamp(timestamp, sort.getFirst().column(), fields, names.size());
+        }
         final List<Rel.Col> cols = new ArrayList<>(names.size());
         for (int i = 0; i < names.size(); i++) {
             cols.add(new Rel.Col(null, names.get(i), fields.get(i).type()));
