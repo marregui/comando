@@ -11,8 +11,10 @@ import dev.marregui.comando.cdb.store.Store;
 
 /**
  * The table functions and listings: {@code tables()} (QuestDB's 45 columns, its runtime statistics as it reports them
- * for a table written once), {@code table_columns(t)} and {@code SHOW COLUMNS FROM t} (QuestDB's 11 columns,
- * {@code column} to {@code indexInclude}), {@code SHOW CREATE TABLE t} (column {@code ddl}), {@code SHOW TABLES},
+ * for a table written once), {@code wal_tables()} (QuestDB's 8 columns over the store's log) and
+ * {@code wal_apply_stats()} (cdb's own: every figure of the log and its applier), {@code table_columns(t)} and
+ * {@code SHOW COLUMNS FROM t} (QuestDB's 11 columns, {@code column} to {@code indexInclude}),
+ * {@code SHOW CREATE TABLE t} (column {@code ddl}), {@code SHOW TABLES},
  * {@code long_sequence(n)} (column {@code x}, 1 to n) and {@code one_row}.
  */
 public final class Catalog {
@@ -26,6 +28,14 @@ public final class Catalog {
             case "tables" -> {
                 requireArgs(function, args, 0);
                 yield Listings.TABLES;
+            }
+            case "wal_tables" -> {
+                requireArgs(function, args, 0);
+                yield Listings.WAL_TABLES;
+            }
+            case "wal_apply_stats" -> {
+                requireArgs(function, args, 0);
+                yield Listings.WAL_APPLY_STATS;
             }
             case "table_columns", "show_columns" -> {
                 requireArgs(function, args, 1);
@@ -58,6 +68,8 @@ public final class Catalog {
         fields(function, args);
         return switch (function.toLowerCase(Locale.ROOT)) {
             case "tables" -> Listings.tables(store);
+            case "wal_tables" -> Listings.walTables(store);
+            case "wal_apply_stats" -> Listings.walApplyStats(store);
             case "table_columns", "show_columns" -> Listings.columns(store, args.get(0));
             case "show_tables" -> Listings.showTables(store);
             case "show_create_table" -> Listings.showCreateTable(store, args.get(0));

@@ -52,6 +52,17 @@ dictionary keys.
 | LATEST ON, time order | the best row per key tracked by offset, copied once per page |
 | ORDER BY … LIMIT | a bounded heap that keeps the full sort's order, ties by input sequence |
 
+### 1.4 Listings
+
+Table functions answer from the catalog and the store's status, never from a table's data. `tables()`,
+`table_columns(t)`, `SHOW TABLES`, `SHOW COLUMNS FROM t` and `SHOW CREATE TABLE t` carry QuestDB's columns, with
+the two below:
+
+| Listing | Shows |
+|---|---|
+| `wal_tables()` | QuestDB's eight columns, one row per table: `writerTxn` is the last transaction published to readers, `sequencerTxn` the last one answered, `bufferedTxnSize` the commits logged and not yet applied; no reader of the table is opened |
+| `wal_apply_stats()` | cdb's own, one row per table: every figure of its log and applier (pending commits, rows and bytes, lag and interval in ms, batches and their durations, checkpoints, log size, memory pressure, last error) |
+
 ## 2. Storage
 
 A table is a folder: `_meta` (the definition), `_txn` (the checkpointed transaction: per partition its folder and row
@@ -66,17 +77,37 @@ for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR a
 | every pending row of a partition after its committed rows (or equal to the last, without dedup keys) | the rows appended in place to the partition's current files, from their committed ends |
 | otherwise | the partition rewritten as a new folder: the committed rows and the new, two sorted runs merged and deduplicated on the upsert keys |
 
-The order of a commit: the column files and new version folders written without a force, the symbols interned in
-memory; then the commit point; then the snapshot published, which makes the rows visible and answers the commit.
+| Commit | Its commit point | Then |
+|---|---|---|
+| logged: fewer than 100,000 rows, no definition change, no truncate | one record appended to `_wal` and forced: the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
+| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
 
-| Commit | Its commit point |
+**The applier.** One platform thread per store, `cdb-applier-<root>` (its batches write files, which would pin a
+virtual thread). Per table it takes the queued commits in log order, at most 100,000 rows, and writes them with the
+commit's file code as one commit: one sort, per partition one dedup, one append in place or one rewrite, one mapping,
+one publish, named by the batch's last transaction. That gives the same rows as one commit at a time: dedup keeps the
+last row written and the sort is stable, so the last write of an upsert key wins as before; the TTL's newest timestamp
+only grows, so one expiry at the end drops the same partitions; a truncate or a definition change is never inside a
+batch. A table is due once its oldest queued commit is older than its interval, at once when a reader waits for it or
+the store's queued commits pass half their budget (64 MiB of heap, estimated). The interval starts at 1 s and stays in
+100 ms to 5 s: halved after a batch a reader waited for, doubled after a batch that took more than half of it, else
+drawn a quarter of the way back to 1 s. Over the budget a commit waits for the applier to catch up, at most 10 s, so a
+writer faster than the applier slows to it; past that wait it is answered anyway (it is durable), so the budget holds
+while the applier makes progress. A batch writes no force: the column files are made durable by the
+checkpoint, the commits by their log records.
+
+| Case | What is written |
 |---|---|
-| logged: fewer than 100,000 rows, no definition change, no truncate | one record appended to `_wal` and forced: the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number |
-| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate | a checkpoint, as every commit was before the log |
+| a new partition | a new folder |
+| every row of a batch's partition after its committed rows (or equal to the last, without dedup keys) | the rows appended in place to the partition's current files, from their committed ends |
+| otherwise | the partition rewritten as a new folder: the committed rows and the new, two sorted runs merged and deduplicated on the upsert keys |
 
-A checkpoint runs on the committing thread once the log holds 256 records or 16 MiB, at a direct commit, and when
-the store closes (a clean shutdown leaves every log empty); not when a writer closes, since `/write` group commits and
-statements take a writer each. Its order: the column
+A checkpoint runs on the applier after a batch once 256 commits were applied since the last one, once the log holds
+16 MiB, or 30 s after the last one with anything applied; at a direct commit; and when the store closes (the queue
+applied first: a clean shutdown leaves every log empty); not when a writer closes, since `/write` group commits and
+statements take a writer each. It cuts the log back to its header only when no record follows the transaction it
+names; a commit logged meanwhile keeps the log until the next checkpoint (a scan skips the records at or before
+`_txn`), and a log past 64 MiB is drained and cut under the writer lease. Its order: the column
 files and folders written since the last checkpoint forced, the symbol files appended and forced, `_meta` when the
 definition changed, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
 forced. Only when that folder force holds are the folders the new `_txn` no longer names deleted (those no reader
@@ -85,13 +116,14 @@ the log's records together say what is committed: a reader maps only the publish
 
 | Failure | After it |
 |---|---|
-| a crash or power cut before a commit's record is forced | the previous commit. When the store opens: the folders `_txn` does not name and every `.tmp` file are deleted, each named partition's files cut to their checkpointed sizes and each symbol file to its checkpointed bytes, the log's records replayed through the commit code with their transaction numbers, then one checkpoint |
+| a crash or power cut before a commit's record is forced | the previous commit. When the store opens: the folders `_txn` does not name and every `.tmp` file are deleted, each named partition's files cut to their checkpointed sizes and each symbol file to its checkpointed bytes, the log's records replayed in batches as the applier writes them (a truncate or a definition change a commit of its own), then one checkpoint |
 | a crash or power cut after the record is forced | the commit, replayed when the store opens, answered or not |
 | a crash during a checkpoint, before `_txn` is replaced | the old `_txn` and the log reach the same state: the log is replayed when the store opens |
 | the log's last record torn (a short frame, a bad length, a bad CRC) | cut there and forced: only a commit that was never answered can be torn |
 | a record whose CRC holds but that does not decode, or a gap in the transaction numbers | the store does not open (as for any table it cannot load), the error naming the log file, the offset and the transaction; nothing is cut |
 | forcing the log fails | the log cut back to its length before the append, the commit throws and is not published, and the table refuses commits until the store reopens (after a failed force the page cache cannot be trusted); an interrupt that closed the force's channel is cleared for the cut and restored after; when the cut also fails the commit is in doubt, logged at ERROR |
-| a checkpoint after a logged commit fails | logged at ERROR; the commits stand, they are in the log, and the table refuses commits until the store reopens and replays it (a retry after a failed force could take lost data for durable and cut the log that holds it) |
+| the applier's checkpoint fails | logged at ERROR; the commits stand, they are in the log, and the table refuses commits until the store reopens and replays it (a retry after a failed force could take lost data for durable and cut the log that holds it); the applier still publishes the commits queued before it |
+| a batch fails (a write, a mapping) | nothing published, its written folders deleted and its appended ones rewritten next time, the commits kept queued and in the log; retried with the interval doubled; after 3 failures in a row the table is suspended, logged at ERROR: commits refused, a read that needs a queued commit fails, `wal_tables()` shows it; the store's next open replays the log |
 | a direct commit fails before `_txn` is replaced | the previous transaction, its version folders and files cleaned up as before the log |
 | a commit that fails after appending | the bytes past the committed ends stay while readers may map them; the next commit rewrites that partition instead of appending |
 | forcing the table folder fails after `_txn` was moved | the commit stands (it is visible); the log and the old folders are kept; after a direct commit the table refuses commits until the store reopens, logged at ERROR |
@@ -106,7 +138,8 @@ not name it: a folder the durable `_txn` still names is the data a power cut wou
 
 | Who | Holds | Waits for |
 |---|---|---|
-| a reader (`/exec`, the PG wire's SELECT, `Cdb.run`) | a snapshot, taken without blocking a writer | nothing |
+| a reader (`/exec`, the PG wire's SELECT, `Cdb.run`) | a snapshot, taken without blocking a writer | the applier, only when a commit answered before the read and older than its lag (§3.1) is not yet published: at most 10 s, then the read fails |
+| the applier | per table, the apply lock, which a direct commit, the checkpoint and the close also take | a direct commit of the table in progress; never a logged commit, which takes only the log's monitor |
 | a table's writer | the table's one-writer lease | another writer of the same table |
 | `/write` | nothing while parsing; then its batches go to one queue per table (`serve.CommitQueue`) | the committer of each of its tables |
 
@@ -118,6 +151,22 @@ is written table by table, not atomically across tables, and answers when all ar
 written whole even when one table refuses a row (before, the rows after the refused line were dropped in every table). Bounds: 64 requests in flight, a group of at most 100,000 rows, a wait of at most 30 s. A committer holds one
 table's lease and no other lock while it writes, so committers, the PG wire's INSERT and `Cdb.run` cannot wait on one
 another in a cycle.
+
+### 3.1 Read freshness
+
+By default a read sees every commit answered before it began. A caller may relax that to a lag of at most N
+milliseconds, so a read stops waiting for the applier that writes answered commits into the column files:
+
+| Where | How |
+|---|---|
+| one HTTP query | `/exec?query=...&max_lag_ms=N` |
+| a PG connection | `SET cdb.max_lag_ms = N` (`TO` and a quoted value too); `RESET cdb.max_lag_ms` or `SET cdb.max_lag_ms = DEFAULT` goes back to the default; every later query of the connection runs with it |
+| the launcher | `cdb-serve ... --read-max-lag-ms N` sets the default of every read that names none |
+| in process | `Cdb.run(sql, maxRows, maxLagMillis)`; `Cdb.readMaxLagMillis(n)` for the default |
+
+N is a whole number of milliseconds, 0 or more; anything else is refused (HTTP 400, a PG error, a launcher error). A lag
+means: a read waits for the applier only when a commit older than N ms is not yet published; a commit younger than N ms
+may be missing from the read, and one older never is. N = 0 is the default.
 
 ## 4. Measurements
 
@@ -164,10 +213,31 @@ Measured 2026-11-15 on the same machine, one engine at a time, with the JVM opti
 them; the queries A–F returned the same answers on both and took the same time (within 15 %). The max with the log is
 a commit that ran a checkpoint (one in 256); the reopen replays the log before it answers.
 
+With the applier ([record 162](adr/0162-cdb-applies-commits-from-its-log.md)) a logged commit writes its log record
+alone. Both engines measured back to back on 2026-11-15, same machine and JVM options, one at a time:
+
+| Over HTTP, client time | log, commit writes files (record 161) | log, applier (record 162) |
+|---|---|---|
+| one 1-line commit, single writer, 1,000 in a row: p50 / p99 / max, ms | 5.0 / 7.2 / 56.4 | 4.1 / 7.4 / 41.5 |
+| 1 / 5 / 10 / 20 writers at once, median, ms | 5.0 / 13.5 / 20.8 / 24.7 | 5.0 / 11.6 / 18.6 / 22.5 |
+| 20 writers at once, max, ms | 45.6 | 39.3 |
+| 2 M rows over `/write` | 4.6 s | 4.4 s |
+| reopen after a kill following the 1,000 commits: to the first answer, ms | 345 | 244 |
+| queries A–F, ms | 1.03 / 26.7 / 32.4 / 61.1 / 1.83 / 17.4 | 1.12 / 15.3 / 25.7 / 61.6 / 1.82 / 16.3 |
+
+The queries answered the same on both. The benchmark reads at lag 0 right after its writes, so most of its batches hold
+one commit; on Cosa's live load (2026-11-15, the default lag) a table written by several producers and not read at once
+applied 138 commits in 46 batches, and tables read after each write applied one commit per batch.
+On Cosa the engine with the applier computed the same windows as TimescaleDB and QuestDB: 30 of 30 ten-second windows
+of `analytics_line1_temperature_avg_10s` and `analytics_lines_temperature_spread_10s`, max difference 1.07e-14; its
+container used 78 MiB (98 MiB with the previous engine just before).
+
 ## 5. Where the time still goes
 
 - D: every row's text is looked up in the text cache and hashed for its key; QuestDB reads the same VARCHAR column.
 - F: the scan's term selects about a million rows of 2 M; the count reads no column, so what is left is the selection.
 - Writes: one log force per table per commit, so a body over 5 tables costs 5 forces (a log shared by the store's
-  tables would cost one), and one commit in 256 pays a checkpoint on its own thread (cdb starts no thread).
+  tables would cost one). The checkpoints run on the applier, off the commits' path.
+- Reads at the default lag 0 right after a commit wait for its batch: a client that writes and reads in a loop gets
+  batches of one commit; a lag of a few hundred milliseconds lets the applier batch.
 - Disk: a partition rewritten since the last checkpoint keeps its previous folder until the checkpoint names the new.

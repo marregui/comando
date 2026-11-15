@@ -185,6 +185,15 @@ final class Version implements PartitionReader {
         return rowCount;
     }
 
+    /**
+     * The committed bytes of column {@code column}'s data file: for VARCHAR, its rows' UTF-8 text; 0 for a column
+     * added after this version was written.
+     */
+    long dataBytes(final int column) {
+        final MemorySegment segment = column < data.length ? data[column] : null;
+        return segment == null ? 0L : segment.byteSize();
+    }
+
     @Override
     public void longs(final int column, final long from, final int n, final long[] dst) {
         final MemorySegment segment = segment(column, CdbType.LONG, CdbType.TIMESTAMP);

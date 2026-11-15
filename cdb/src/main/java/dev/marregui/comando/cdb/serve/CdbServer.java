@@ -32,7 +32,9 @@ import dev.marregui.comando.cdb.sql.Parser;
  * {@code dataset}, {@code count}; an error as {@code {"query","error","position"}} with status 400), and
  * {@code POST /write} takes line protocol (204 on success). Started and stopped by its owner; one per Cdb.
  *
- * <p>{@code /exec} takes {@code limit=n} (at most n rows) and accepts and ignores {@code count} and {@code nm}. A
+ * <p>{@code /exec} takes {@code limit=n} (at most n rows) and {@code max_lag_ms=n} (the query's reads may lag the
+ * answered commits by at most n milliseconds; refused when negative or not a number), and accepts and ignores
+ * {@code count} and {@code nm}. A
  * {@code /write} body is parsed whole before its first row reaches the store, so a malformed line (400, with its line
  * and offset) writes nothing; a row the store refuses (400, with its line) leaves the rows of its table before it
  * written. Concurrent bodies for one table are written together in one commit, different tables in parallel
@@ -148,6 +150,7 @@ public final class CdbServer implements AutoCloseable {
         }
         final String query = parameter(exchange, "query");
         final String limit = parameter(exchange, "limit");
+        final String lag = parameter(exchange, "max_lag_ms");
         if (query == null || query.isBlank()) {
             send(exchange, 400, JsonWriter.error("", "missing query", -1));
             return;
@@ -159,7 +162,7 @@ public final class CdbServer implements AutoCloseable {
         }
         final Rows rows;
         try {
-            rows = backend.run(query, maxRows);
+            rows = backend.run(query, maxRows, ReadLag.parse("max_lag_ms", lag));
         } catch (final CdbException e) {
             send(exchange, 400, JsonWriter.error(query, e.getMessage(), e.position()));
             return;
@@ -282,8 +285,11 @@ public final class CdbServer implements AutoCloseable {
     /** What the server serves: cdb's facade, or a fake in tests. */
     interface Backend {
 
-        /** Runs {@code sql}, at most {@code maxRows} rows of a query (no bound when not positive). */
-        Rows run(String sql, int maxRows);
+        /**
+         * Runs {@code sql}, at most {@code maxRows} rows of a query (no bound when not positive); its reads lag the
+         * answered commits by at most {@code maxLagMillis} milliseconds, the store's default when null.
+         */
+        Rows run(String sql, int maxRows, Long maxLagMillis);
 
         /** A line-protocol appender; the caller closes it. */
         CdbAppender appender();
@@ -299,8 +305,9 @@ public final class CdbServer implements AutoCloseable {
         // a statement that changed the store is DDL when it parses as CREATE TABLE; a query's designated timestamp is
         // taken as its first TIMESTAMP column, as the result does not carry it
         @Override
-        public Rows run(final String sql, final int maxRows) {
-            final CdbResult result = cdb.run(sql, maxRows);
+        public Rows run(final String sql, final int maxRows, final Long maxLagMillis) {
+            final CdbResult result = maxLagMillis == null ? cdb.run(sql, maxRows)
+                    : cdb.run(sql, maxRows, maxLagMillis);
             final boolean ddl = result.updateCount() >= 0 && Parser.parse(sql) instanceof Ast.CreateTable;
             int timestamp = -1;
             for (int column = 0; column < result.columnCount() && timestamp < 0; column++) {

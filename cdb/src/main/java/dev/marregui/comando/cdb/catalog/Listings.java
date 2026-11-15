@@ -16,6 +16,7 @@ import dev.marregui.comando.cdb.store.PartitionReader;
 import dev.marregui.comando.cdb.store.Store;
 import dev.marregui.comando.cdb.store.TableDef;
 import dev.marregui.comando.cdb.store.TableReader;
+import dev.marregui.comando.cdb.store.WalStatus;
 
 /**
  * The store-backed listings: their fields, as QuestDB names and types them (QuestDB's INT is LONG here, STRING and CHAR
@@ -71,6 +72,42 @@ final class Listings {
             new Field("replica_more_pending", CdbType.BOOLEAN)
     );
 
+    /** QuestDB's {@code wal_tables()}: eight columns, its INT as LONG and its STRING as VARCHAR. */
+    static final List<Field> WAL_TABLES = List.of(
+            new Field("name", CdbType.VARCHAR),
+            new Field("suspended", CdbType.BOOLEAN),
+            new Field("writerTxn", CdbType.LONG),
+            new Field("bufferedTxnSize", CdbType.LONG),
+            new Field("sequencerTxn", CdbType.LONG),
+            new Field("errorTag", CdbType.VARCHAR),
+            new Field("errorMessage", CdbType.VARCHAR),
+            new Field("memoryPressure", CdbType.LONG)
+    );
+
+    /** cdb's own listing: every component of {@link WalStatus}, in snake case. */
+    static final List<Field> WAL_APPLY_STATS = List.of(
+            new Field("table_name", CdbType.VARCHAR),
+            new Field("suspended", CdbType.BOOLEAN),
+            new Field("applied_txn", CdbType.LONG),
+            new Field("logged_txn", CdbType.LONG),
+            new Field("pending_txns", CdbType.LONG),
+            new Field("pending_rows", CdbType.LONG),
+            new Field("pending_bytes", CdbType.LONG),
+            new Field("lag_ms", CdbType.LONG),
+            new Field("interval_ms", CdbType.LONG),
+            new Field("applies", CdbType.LONG),
+            new Field("demanded_applies", CdbType.LONG),
+            new Field("applied_txns", CdbType.LONG),
+            new Field("applied_rows", CdbType.LONG),
+            new Field("last_apply_us", CdbType.LONG),
+            new Field("apply_us", CdbType.LONG),
+            new Field("checkpoints", CdbType.LONG),
+            new Field("checkpoint_txn", CdbType.LONG),
+            new Field("log_bytes", CdbType.LONG),
+            new Field("memory_pressure", CdbType.LONG),
+            new Field("last_error", CdbType.VARCHAR)
+    );
+
     static final List<Field> COLUMNS = List.of(
             new Field("column", CdbType.VARCHAR),
             new Field("type", CdbType.VARCHAR),
@@ -92,6 +129,9 @@ final class Listings {
     /** QuestDB's {@code cairo.max.uncommitted.rows} and {@code cairo.o3.max.lag}, its defaults (live server). */
     private static final long MAX_UNCOMMITTED_ROWS = 500_000;
     private static final long O3_MAX_LAG_MICROS = 600_000_000;
+
+    /** What {@code errorTag} says of a failure: QuestDB tags the kind of its error, cdb has one kind. */
+    private static final String ERROR_TAG = "ERROR";
 
     /** The index type QuestDB names for an index created without {@code TYPE}. */
     private static final String BITMAP = "BITMAP";
@@ -168,6 +208,59 @@ final class Listings {
             }
         }
         return new PagesCursor(TABLES, rows.finish());
+    }
+
+    /**
+     * {@code wal_tables()}: QuestDB's columns for the store's log, one row per table in name order: {@code writerTxn}
+     * is the last transaction published to readers, {@code sequencerTxn} the last one answered and
+     * {@code bufferedTxnSize} the commits logged and not yet applied. No reader of the table is opened.
+     */
+    static Cursor walTables(final Store store) {
+        final PageBuilder rows = new PageBuilder(WAL_TABLES);
+        for (final WalStatus status : store.walStatus()) {
+            rows.text(0, status.table());
+            rows.bool(1, status.suspended());
+            rows.integer(2, status.appliedTxn());
+            rows.integer(3, status.pendingTxns());
+            rows.integer(4, status.loggedTxn());
+            rows.text(5, status.lastError() == null ? "" : ERROR_TAG);
+            rows.text(6, status.lastError() == null ? "" : status.lastError());
+            rows.integer(7, status.memoryPressure());
+            rows.endRow();
+        }
+        return new PagesCursor(WAL_TABLES, rows.finish());
+    }
+
+    /**
+     * {@code wal_apply_stats()}: one row per table in name order, every component of the table's {@link WalStatus};
+     * {@code last_error} is NULL when there is none. No reader of the table is opened.
+     */
+    static Cursor walApplyStats(final Store store) {
+        final PageBuilder rows = new PageBuilder(WAL_APPLY_STATS);
+        for (final WalStatus status : store.walStatus()) {
+            rows.text(0, status.table());
+            rows.bool(1, status.suspended());
+            rows.integer(2, status.appliedTxn());
+            rows.integer(3, status.loggedTxn());
+            rows.integer(4, status.pendingTxns());
+            rows.integer(5, status.pendingRows());
+            rows.integer(6, status.pendingBytes());
+            rows.integer(7, status.lagMillis());
+            rows.integer(8, status.intervalMillis());
+            rows.integer(9, status.applies());
+            rows.integer(10, status.demandedApplies());
+            rows.integer(11, status.appliedTxns());
+            rows.integer(12, status.appliedRows());
+            rows.integer(13, status.lastApplyMicros());
+            rows.integer(14, status.applyMicros());
+            rows.integer(15, status.checkpoints());
+            rows.integer(16, status.checkpointTxn());
+            rows.integer(17, status.logBytes());
+            rows.integer(18, status.memoryPressure());
+            rows.text(19, status.lastError());
+            rows.endRow();
+        }
+        return new PagesCursor(WAL_APPLY_STATS, rows.finish());
     }
 
     /**

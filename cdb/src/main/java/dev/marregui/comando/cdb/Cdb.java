@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.exec.Executor;
 import dev.marregui.comando.cdb.plan.Plan;
 import dev.marregui.comando.cdb.plan.Planner;
@@ -18,6 +20,10 @@ import dev.marregui.comando.cdb.store.Store;
 public final class Cdb implements AutoCloseable {
 
     private final Store store;
+    // written by a test before it queries, read by the querying threads
+    @TestOnly
+    volatile Runnable beforeQuery = () -> {
+    };
 
     private Cdb(final Store store) {
         this.store = store;
@@ -35,12 +41,32 @@ public final class Cdb implements AutoCloseable {
 
     /** Runs {@code sql}; a query keeps at most {@code maxRows} rows (no bound when not positive). */
     public CdbResult run(final String sql, final int maxRows) {
+        beforeQuery.run();
         final long now = nowMicros();
         final Plan plan = Planner.plan(Parser.parse(sql), store::def, now);
         if (plan instanceof Plan.Change change) {
             return CdbResult.updated(Executor.execute(change, store, now));
         }
         return CdbResult.drain(Executor.open(plan, store, now), maxRows);
+    }
+
+    /**
+     * Runs {@code sql} as {@link #run(String, int)} does, its reads lagging the answered commits by at most
+     * {@code maxLagMillis} milliseconds; negative is refused.
+     */
+    public CdbResult run(final String sql, final int maxRows, final long maxLagMillis) {
+        if (maxLagMillis < 0L) {
+            throw new CdbException("refuse negative read lag [millis=" + maxLagMillis + ']', -1);
+        }
+        return ScopedValue.where(Store.READ_MAX_LAG_MILLIS, maxLagMillis).call(() -> run(sql, maxRows));
+    }
+
+    /**
+     * Sets the most a read may lag the answered commits when its caller names none; 0 by default, negative is
+     * refused.
+     */
+    public void readMaxLagMillis(final long millis) {
+        store.readMaxLagMillis(millis);
     }
 
     /**

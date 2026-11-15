@@ -42,9 +42,11 @@ class ThreadRulesTest {
     /** cdb depends on the JDK alone, so it cannot take the thread kit (record 158): its launcher and its server. */
     private static final String CDB_SERVE = "dev.marregui.comando.cdb.CdbServe";
     private static final String CDB_ADMISSION = "dev.marregui.comando.cdb.serve.CdbServer$Admission";
+    /** cdb's applier: one platform thread per store, whose batches write and force files (record 162). */
+    private static final String CDB_APPLIER = "dev.marregui.comando.cdb.store.Applier";
 
-    /// No class but [StateLoop], [Watchdog], `ClaudeProcess`, [Main] and cdb's launcher (its shutdown hook) calls
-    /// `Thread.ofPlatform` or constructs a `Thread`.
+    /// No class but [StateLoop], [Watchdog], `ClaudeProcess`, [Main], cdb's launcher (its shutdown hook) and cdb's
+    /// applier calls `Thread.ofPlatform` or constructs a `Thread`.
     @Test
     void platformThreadsComeOnlyFromTheKindsThatNeedThem() {
         noClasses().that().doNotHaveFullyQualifiedName(StateLoop.class.getName())
@@ -52,6 +54,7 @@ class ThreadRulesTest {
                 .and().doNotHaveFullyQualifiedName(CLAUDE_PROCESS)
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .and().doNotHaveFullyQualifiedName(CDB_SERVE)
+                .and().doNotHaveFullyQualifiedName(CDB_APPLIER)
                 .should().callMethod(Thread.class, "ofPlatform")
                 .orShould().callConstructorWhere(target(owner(assignableTo(Thread.class))))
                 .check(ComandoClasses.MAIN);

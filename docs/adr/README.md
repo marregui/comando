@@ -181,4 +181,5 @@ row and its record differ, or when a record has no row.
 | [158](0158-cdb-comandos-own-database.md) | cdb, comando's own database | 2026-11-14 | Miguel and Claude | accepted; built, in shadow beside QuestDB; its storage amended by [record 161](0161-cdb-write-ahead-log.md) |
 | [159](0159-a-utc-clock-and-session-etas.md) | A UTC clock, session ETAs, and session buttons that start a stopped session | 2026-11-15 | Miguel and Claude | accepted; built |
 | [160](0160-each-panel-keeps-its-lower-tab.md) | Each panel keeps its lower tab, and a request no longer opens a document's lower area for good | 2026-11-15 | Miguel and Claude | accepted; built |
-| [161](0161-cdb-write-ahead-log.md) | cdb commits through a write-ahead log | 2026-11-15 | Miguel and Claude | accepted; built |
+| [161](0161-cdb-write-ahead-log.md) | cdb commits through a write-ahead log | 2026-11-15 | Miguel and Claude | accepted; built; the commit and checkpoint path amended by [record 162](0162-cdb-applies-commits-from-its-log.md) (commits applied from the log by a thread of cdb's own) |
+| [162](0162-cdb-applies-commits-from-its-log.md) | cdb applies commits from its log, on a thread of its own | 2026-11-15 | Miguel and Claude | accepted; built |

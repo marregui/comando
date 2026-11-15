@@ -79,9 +79,15 @@ class StoreCrashTest {
         final Path table = root.resolve("m");
         final long day1 = Retention.floor(StoreCrashChild.DAY1, PartitionBy.DAY);
         final long day2 = Retention.floor(StoreCrashChild.DAY2, PartitionBy.DAY);
-        assertThat(folders(table)).containsExactlyInAnyOrder(
-                TableFiles.folder(day1, PartitionBy.DAY, 1L),
-                TableFiles.folder(day2, PartitionBy.DAY, 2L));
+        if (kill == StoreCrashChild.Kill.BEFORE_WAL_APPEND || kill == StoreCrashChild.Kill.AFTER_WAL_FORCE) {
+            // a logged commit writes its log record alone; its files are the applier's, after the answer
+            assertThat(folders(table)).as("child output %s", output)
+                    .containsExactly(TableFiles.folder(day1, PartitionBy.DAY, 1L));
+        } else {
+            assertThat(folders(table)).as("child output %s", output).containsExactlyInAnyOrder(
+                    TableFiles.folder(day1, PartitionBy.DAY, 1L),
+                    TableFiles.folder(day2, PartitionBy.DAY, 2L));
+        }
 
         try (final Store store = Store.open(root); final TableReader r = store.reader("m")) {
             assertThat(((DefaultReader) r).txn()).isEqualTo(kill.txn);
@@ -95,8 +101,9 @@ class StoreCrashTest {
         if (kill.txn == 1L) {
             assertThat(named).containsExactly(TableFiles.folder(day1, PartitionBy.DAY, 1L));
         } else {
+            // no checkpoint named transaction 1: the reopen replays both logged commits as one batch, named by its last
             assertThat(named).containsExactlyInAnyOrder(
-                    TableFiles.folder(day1, PartitionBy.DAY, 1L),
+                    TableFiles.folder(day1, PartitionBy.DAY, 2L),
                     TableFiles.folder(day2, PartitionBy.DAY, 2L));
         }
     }

@@ -69,6 +69,43 @@ class CatalogFieldsTest {
             new QuestDbColumn("replica_more_pending", "BOOLEAN")
     );
 
+    /// QuestDB's eight columns of `wal_tables()`, with the type the server reports, captured on 2026-11-15:
+    /// `curl -s 'http://127.0.0.1:9000/exec?query=select%20*%20from%20wal_tables()%20limit%201'`
+    private static final List<QuestDbColumn> QUESTDB_WAL_TABLES = List.of(
+            new QuestDbColumn("name", "STRING"),
+            new QuestDbColumn("suspended", "BOOLEAN"),
+            new QuestDbColumn("writerTxn", "LONG"),
+            new QuestDbColumn("bufferedTxnSize", "LONG"),
+            new QuestDbColumn("sequencerTxn", "LONG"),
+            new QuestDbColumn("errorTag", "STRING"),
+            new QuestDbColumn("errorMessage", "STRING"),
+            new QuestDbColumn("memoryPressure", "INT")
+    );
+
+    /// cdb's own `wal_apply_stats()`: the components of `WalStatus` in snake case, their cdb types.
+    private static final List<QuestDbColumn> WAL_APPLY_STATS = List.of(
+            new QuestDbColumn("table_name", "STRING"),
+            new QuestDbColumn("suspended", "BOOLEAN"),
+            new QuestDbColumn("applied_txn", "LONG"),
+            new QuestDbColumn("logged_txn", "LONG"),
+            new QuestDbColumn("pending_txns", "LONG"),
+            new QuestDbColumn("pending_rows", "LONG"),
+            new QuestDbColumn("pending_bytes", "LONG"),
+            new QuestDbColumn("lag_ms", "LONG"),
+            new QuestDbColumn("interval_ms", "LONG"),
+            new QuestDbColumn("applies", "LONG"),
+            new QuestDbColumn("demanded_applies", "LONG"),
+            new QuestDbColumn("applied_txns", "LONG"),
+            new QuestDbColumn("applied_rows", "LONG"),
+            new QuestDbColumn("last_apply_us", "LONG"),
+            new QuestDbColumn("apply_us", "LONG"),
+            new QuestDbColumn("checkpoints", "LONG"),
+            new QuestDbColumn("checkpoint_txn", "LONG"),
+            new QuestDbColumn("log_bytes", "LONG"),
+            new QuestDbColumn("memory_pressure", "INT"),
+            new QuestDbColumn("last_error", "STRING")
+    );
+
     /// QuestDB's columns of `table_columns('kit_run')` and of `SHOW COLUMNS FROM kit_run`, the same eleven, captured on
     /// 2026-11-14:
     /// `curl -sG http://127.0.0.1:9000/exec --data-urlencode "query=table_columns('kit_run')"`
@@ -109,6 +146,24 @@ class CatalogFieldsTest {
     @Test
     void tablesFieldsEqualQuestDbs() {
         assertMatchesQuestDb(Catalog.fields("tables", List.of()), QUESTDB_TABLES);
+    }
+
+    /// `wal_tables()` has QuestDB's column names and types, in QuestDB's order, and takes no argument.
+    @Test
+    void walTablesFieldsEqualQuestDbs() {
+        assertMatchesQuestDb(Catalog.fields("wal_tables", List.of()), QUESTDB_WAL_TABLES);
+        assertThatThrownBy(() -> Catalog.fields("wal_tables", List.of("t")))
+                .isInstanceOf(CdbException.class)
+                .hasMessage("wrong argument count [function=wal_tables, expected=0, got=1]");
+    }
+
+    /// `wal_apply_stats()` has the twenty columns of `WalStatus`, and takes no argument.
+    @Test
+    void walApplyStatsHasEveryWalStatusComponent() {
+        assertMatchesQuestDb(Catalog.fields("wal_apply_stats", List.of()), WAL_APPLY_STATS);
+        assertThatThrownBy(() -> Catalog.fields("wal_apply_stats", List.of("t")))
+                .isInstanceOf(CdbException.class)
+                .hasMessage("wrong argument count [function=wal_apply_stats, expected=0, got=1]");
     }
 
     /// `table_columns(t)` has QuestDB's column names and types, in QuestDB's order.

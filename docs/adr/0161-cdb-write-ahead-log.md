@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-15 | accepted; built | Miguel and Claude |
+| 2026-11-15 | accepted; built; the commit and checkpoint path amended by [record 162](0162-cdb-applies-commits-from-its-log.md) (commits applied from the log by a thread of cdb's own) | Miguel and Claude |
 
 ## 1. Context
 

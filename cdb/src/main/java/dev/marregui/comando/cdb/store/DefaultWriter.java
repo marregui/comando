@@ -15,16 +15,15 @@ import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 
 /**
- * The writer of one table. Pending rows are held by column in a {@link RowBlock}; a commit orders and deduplicates the
- * rows of each partition they fall in, then appends them in place to the partition's column files when they all come
- * after its committed rows, else rewrites the partition as a new version folder (its committed rows merged with the
- * new), all unforced, its symbols interned in memory. Then its commit point: a commit appends its pending rows to the
- * table's log and forces it, and is visible once that returns; a bulk commit, a definition change or a truncate is
- * named by a {@link Checkpoint} instead, as every commit was before the log. Once the log holds enough, a commit
- * checkpoints the table: what the commits since the last one wrote is forced and {@code _txn} names it; closing the
- * writer does not, the store's close and {@link Store#checkpoint} do. A crash leaves
- * the last checkpoint and the log: the store's next open cuts the bytes appended past the committed ends, deletes the
- * orphan folders and replays the log.
+ * The writer of one table. Pending rows are held by column in a {@link RowBlock}. A commit appends them to the table's
+ * log and forces it, queues them and is answered: the store's {@link Applier} later writes many queued commits at once
+ * into the column files and publishes them. A bulk commit, a definition change or a truncate is direct instead: the
+ * queue is applied first, then the commit is written and named by a {@link Checkpoint}, as every commit was before the
+ * log. Writing a batch (the applier's writer, in replay mode, also the recovery's) orders and deduplicates the rows of
+ * each partition they fall in, then appends them in place to the partition's column files when they all come after its
+ * committed rows, else rewrites the partition as a new version folder (its committed rows merged with the new), all
+ * unforced, its symbols interned in memory. A crash leaves the last checkpoint and the log: the store's next open cuts
+ * the bytes appended past the committed ends, deletes the orphan folders and replays the log.
  */
 final class DefaultWriter implements TableWriter {
 
@@ -33,8 +32,11 @@ final class DefaultWriter implements TableWriter {
 
     private final Store store;
     private final TableState state;
-    // the recovery's writer: applies and publishes the log's commits, never logs nor checkpoints
+    // the applier's and the recovery's writer: writes and publishes logged commits, never logs nor checkpoints, holds
+    // no lease
     private final boolean replay;
+    // replay mode: the transaction the next commit publishes as
+    private long replayTxn;
     private TableDef def;
     private TableDef committedDef;
     private RowBlock pending;
@@ -74,7 +76,13 @@ final class DefaultWriter implements TableWriter {
         pending = resize(pending, def.columns(), capacity, capacity);
         final int c = def.columns().size() - 1;
         fillNull(pending, c, 0, inRow ? pending.size + 1 : pending.size);
-        state.addSymbols(column);
+        // the applier reads the dictionaries of the columns before it
+        state.applyLock.lock();
+        try {
+            state.addSymbols(column);
+        } finally {
+            state.applyLock.unlock();
+        }
         return c;
     }
 
@@ -164,14 +172,138 @@ final class DefaultWriter implements TableWriter {
         if (!truncated && pending.size == 0 && !defChanged) {
             return;
         }
-        if (state.poisoned()) {
+        if (replay) {
+            // the applier publishes the commits a poisoned table answered before its poison: they are in the log
+            write(replayTxn, false);
+            return;
+        }
+        if (state.poisoned() || state.suspended()) {
             throw new CdbException("refuse commit to failed table [table=" + def.name() + ']', -1);
         }
-        final TableState.Snapshot current = state.current();
-        final long txn = current.txn() + 1L;
         // definition changes stay off the log: rare, and a checkpoint writes _meta before the _txn that needs it
-        final boolean direct = !replay && (pending.size >= store.directRows || defChanged || truncated
-                || logBytesAtLeast(store.checkpointBytes));
+        if (pending.size < store.directRows && !defChanged && !truncated && !logBytesAtLeast(store.checkpointBytes)) {
+            logged();
+            return;
+        }
+        // as in log: an interrupt would close a channel mid-write or mid-force
+        final boolean interrupted = Thread.interrupted();
+        state.applyLock.lock();
+        try {
+            // the queued commits come first, so a batch never spans a definition change or a truncate
+            store.applier().applyAllHeld(state, false);
+            write(state.current().txn() + 1L, true);
+        } finally {
+            state.applyLock.unlock();
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /**
+     * Commits the pending rows as transaction {@code txn}, in replay mode, the caller holding the table's apply lock:
+     * the applier's batch of queued commits.
+     */
+    void commitAs(final long txn) {
+        replayTxn = txn;
+        commit();
+    }
+
+    /** Adds {@code rows}, in this writer's columns, after the pending rows: a queued commit of the applier's batch. */
+    void addRows(final RowBlock rows) {
+        checkOpen();
+        final int n = pending.size + rows.size;
+        if (n > capacity) {
+            pending = resize(pending, def.columns(), capacity, Math.max(n, capacity * 2));
+            capacity = Math.max(n, capacity * 2);
+        }
+        for (int c = 0; c < pending.types.length; c++) {
+            switch (pending.types[c]) {
+                case LONG, TIMESTAMP -> System.arraycopy(rows.longs[c], 0, pending.longs[c], pending.size, rows.size);
+                case DOUBLE -> System.arraycopy(rows.doubles[c], 0, pending.doubles[c], pending.size, rows.size);
+                case BOOLEAN -> System.arraycopy(rows.booleans[c], 0, pending.booleans[c], pending.size, rows.size);
+                case SYMBOL, VARCHAR -> System.arraycopy(rows.texts[c], 0, pending.texts[c], pending.size, rows.size);
+            }
+        }
+        pending.size = n;
+    }
+
+    /**
+     * A logged commit: appends the pending rows to the log as the next transaction and forces it, then queues them for
+     * the applier; durable and answered once this returns, visible once applied.
+     */
+    private void logged() {
+        checkApplicable();
+        final long txn = state.loggedTxn() + 1L;
+        try {
+            log(txn);
+        } catch (final IOException e) {
+            throw new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn + ']', e);
+        }
+        final int n = pending.size;
+        final long bytes = heapBytes();
+        state.enqueue(new TableState.Queued(txn, resize(pending, def.columns(), capacity, n), System.nanoTime(),
+                bytes));
+        pending.size = 0;
+        store.applier().committed(bytes);
+        // the commit is durable and queued from here: a failure of this hook leaves it to the applier
+        store.afterWalForce.run();
+        if (store.applyOnCommit) {
+            store.applyNow(state);
+        }
+    }
+
+    /**
+     * Refuses, before it is logged and answered, a commit the applier could refuse: rows over an {@code int} or text
+     * over 2 GB in one partition. Conservative: the largest partition's committed rows and text, plus every queued
+     * commit's (text at 3 UTF-8 bytes a char, bounded by 1.5 times their heap estimate), plus this commit's, as if
+     * all fell in one partition.
+     */
+    private void checkApplicable() {
+        final TableState.Snapshot current = state.current();
+        if (current == null) {
+            // the store closed under the writer; a close racing past this check is refused when the commit queues
+            throw new CdbException("refuse commit to closed table [table=" + def.name() + ']', -1);
+        }
+        final List<ColumnDef> columns = def.columns();
+        final int committedColumns = current.def().columns().size();
+        long rows = 0L;
+        final long[] text = new long[columns.size()];
+        for (final Version v : current.partitions()) {
+            rows = Math.max(rows, v.rowCount());
+            for (int c = 0; c < committedColumns; c++) {
+                if (columns.get(c).type() == CdbType.VARCHAR) {
+                    text[c] = Math.max(text[c], v.dataBytes(c));
+                }
+            }
+        }
+        final long queuedText = state.queuedBytes() * 3L / 2L;
+        rows += state.queuedRows() + pending.size;
+        if (rows > Integer.MAX_VALUE) {
+            throw new CdbException("refuse commit over a partition's row capacity [table=" + def.name() + ", rows="
+                    + rows + ", limit=" + Integer.MAX_VALUE + ']', -1);
+        }
+        for (int c = 0; c < columns.size(); c++) {
+            if (columns.get(c).type() != CdbType.VARCHAR) {
+                continue;
+            }
+            long bytes = text[c] + queuedText;
+            final String[] texts = pending.texts[c];
+            for (int r = 0; r < pending.size; r++) {
+                bytes += texts[r] == null ? 0L : 3L * texts[r].length();
+            }
+            if (bytes >= store.textLimitBytes) {
+                throw new CdbException("refuse commit over a partition's text capacity [table=" + def.name()
+                        + ", column=" + columns.get(c).name() + ", bytes=" + bytes + ", limit=" + store.textLimitBytes
+                        + ']', -1);
+            }
+        }
+    }
+
+    // called with the apply lock held, or by the recovery: writes the pending rows as transaction txn and publishes it,
+    // named by a checkpoint when direct
+    private void write(final long txn, final boolean direct) {
+        final TableState.Snapshot current = state.current();
         // versions in new folders, and versions of a committed folder its rows were appended to
         final List<Version> written = new ArrayList<>();
         final List<Version> appended = new ArrayList<>();
@@ -192,8 +324,6 @@ final class DefaultWriter implements TableWriter {
                     LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force left a commit in"
                             + " doubt [table=" + def.name() + ", txn=" + txn + ']');
                 }
-            } else if (!replay) {
-                log(txn);
             }
         } catch (final IOException | RuntimeException e) {
             final CdbException failure = new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn
@@ -217,18 +347,10 @@ final class DefaultWriter implements TableWriter {
             }
             throw failure;
         }
-        if (!direct && !replay) {
-            // the commit is durable from here: a failure of this hook leaves it to the log's replay
-            store.afterWalForce.run();
-        }
         state.publish(snapshot);
         committedDef = def;
         pending.size = 0;
         truncated = false;
-        if (!direct && !replay && (state.wal.records() >= store.checkpointRecords
-                || state.wal.bytes() >= store.checkpointBytes)) {
-            checkpoint();
-        }
     }
 
     @Override
@@ -247,7 +369,9 @@ final class DefaultWriter implements TableWriter {
         try {
             discard();
         } finally {
-            state.unlease();
+            if (!replay) {
+                state.unlease();
+            }
         }
     }
 
@@ -268,30 +392,6 @@ final class DefaultWriter implements TableWriter {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
-        }
-    }
-
-    /**
-     * Checkpoints the published snapshot. A failure leaves the commits standing, in the log, and refuses the table's
-     * further commits until the store reopens: after a failed force the page cache cannot be trusted, so a retry could
-     * report a force that lost data and then cut the log that still holds it.
-     */
-    private void checkpoint() {
-        final TableState.Snapshot published = state.current();
-        if (published == null) {
-            // the store closed under the writer: its next open replays the log
-            return;
-        }
-        try {
-            if (!runCheckpoint(published)) {
-                state.poison();
-                LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force failed in a checkpoint,"
-                        + " log kept [table=" + def.name() + ", txn=" + published.txn() + ']');
-            }
-        } catch (final IOException | RuntimeException e) {
-            state.poison();
-            LOG.log(System.Logger.Level.ERROR, "refuse further commits, cannot checkpoint table, log kept [table="
-                    + def.name() + ", txn=" + published.txn() + ']', e);
         }
     }
 
@@ -318,6 +418,24 @@ final class DefaultWriter implements TableWriter {
             }
         }
         return false;
+    }
+
+    /** The heap the pending rows take, estimated: 8 bytes a fixed value, 1 a boolean, 48 plus 2 a char a text. */
+    private long heapBytes() {
+        final int n = pending.size;
+        long bytes = 0L;
+        for (int c = 0; c < pending.types.length; c++) {
+            final CdbType type = pending.types[c];
+            if (type == CdbType.SYMBOL || type == CdbType.VARCHAR) {
+                final String[] texts = pending.texts[c];
+                for (int r = 0; r < n; r++) {
+                    bytes += Integer.BYTES + (texts[r] == null ? 0L : 48L + 2L * texts[r].length());
+                }
+            } else {
+                bytes += (long) n * (type == CdbType.BOOLEAN ? 1 : Long.BYTES);
+            }
+        }
+        return bytes;
     }
 
     /**
@@ -634,7 +752,12 @@ final class DefaultWriter implements TableWriter {
             def = committedDef;
             pending = new RowBlock(def.columns(), INITIAL_ROWS);
             capacity = INITIAL_ROWS;
-            state.trimSymbols(def.columns().size());
+            state.applyLock.lock();
+            try {
+                state.trimSymbols(def.columns().size());
+            } finally {
+                state.applyLock.unlock();
+            }
         }
     }
 

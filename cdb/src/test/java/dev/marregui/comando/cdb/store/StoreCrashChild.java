@@ -25,6 +25,8 @@ final class StoreCrashChild {
     static void main(final String[] args) {
         final Kill kill = Kill.valueOf(args[1]);
         final Store store = Store.open(Path.of(args[0]));
+        // the kill points are those of a commit that applies and checkpoints on its own thread
+        store.applyOnCommit = true;
         if (kill == Kill.COMMIT_BEFORE_TXN_REPLACE) {
             // every commit a checkpoint: the kill lands in the commit itself, as before the log
             store.directRows = 0;

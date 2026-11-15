@@ -14,6 +14,8 @@ tasks.named<Test>("test") {
     System.getenv("CDB_POWERCUT_FULL")?.let { systemProperty("cdb.powercut.full", it) }
     // StoreWalTest's differential: CDB_WAL_SEED replays a printed seed
     System.getenv("CDB_WAL_SEED")?.let { systemProperty("cdb.wal.seed", it) }
+    // StoreApplyEquivalenceTest: CDB_APPLY_SEED replays a printed seed
+    System.getenv("CDB_APPLY_SEED")?.let { systemProperty("cdb.apply.seed", it) }
 }
 
 // ./gradlew :cdb:serve -Proot=<folder> -Pport=9100 [-PpgPort=8813] [-Pbind=0.0.0.0]: the shadow server beside QuestDB;

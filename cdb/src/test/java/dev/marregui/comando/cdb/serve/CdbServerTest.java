@@ -171,6 +171,33 @@ class CdbServerTest {
         assertThat(backend.calls).isEmpty();
     }
 
+    /// `max_lag_ms=n` reaches the backend as the query's read lag; a request without it leaves the lag to the store.
+    @Test
+    void execPassesTheReadLagToTheBackend() throws IOException, InterruptedException {
+        backend.answer = FakeRows.query(-1, List.of("n", CdbType.LONG), List.of(List.of(1L)));
+
+        assertThat(http.exec(server.port(), "select 1", "&max_lag_ms=250").statusCode()).isEqualTo(200);
+        assertThat(http.exec(server.port(), "select 2", "&max_lag_ms=0").statusCode()).isEqualTo(200);
+        assertThat(http.exec(server.port(), "select 3", "").statusCode()).isEqualTo(200);
+
+        assertThat(backend.calls).containsExactly("select 1 | maxRows=0 | maxLagMillis=250",
+                "select 2 | maxRows=0 | maxLagMillis=0", "select 3 | maxRows=0");
+    }
+
+    /// A negative, a fractional, a non-numeric and an empty `max_lag_ms` are refused as `limit` is, with QuestDB's
+    /// error shape and the backend never run.
+    @Test
+    void execRefusesABadReadLag() throws IOException, InterruptedException {
+        for (final String bad : List.of("-1", "1.5", "soon", "")) {
+            final HttpResponse<String> response = http.exec(server.port(), "select 1", "&max_lag_ms=" + bad);
+
+            assertThat(response.statusCode()).as(bad).isEqualTo(400);
+            assertThat(response.body()).as(bad).isEqualTo("{\"query\":\"select 1\",\"error\":"
+                    + "\"invalid max_lag_ms [max_lag_ms=" + bad + "]\",\"position\":-1}");
+        }
+        assertThat(backend.calls).isEmpty();
+    }
+
     /// Each endpoint takes one method and its own path only.
     @Test
     void refusesOtherMethodsAndPaths() throws IOException, InterruptedException {
@@ -265,8 +292,8 @@ class CdbServerTest {
         final AtomicInteger mostOpen = new AtomicInteger();
 
         @Override
-        public Rows run(final String sql, final int maxRows) {
-            calls.add(sql + " | maxRows=" + maxRows);
+        public Rows run(final String sql, final int maxRows, final Long maxLagMillis) {
+            calls.add(sql + " | maxRows=" + maxRows + (maxLagMillis == null ? "" : " | maxLagMillis=" + maxLagMillis));
             if (failure != null) {
                 throw failure;
             }

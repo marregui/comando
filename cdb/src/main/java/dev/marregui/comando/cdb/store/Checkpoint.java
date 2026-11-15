@@ -12,7 +12,7 @@ import java.util.List;
  * {@code _txn}, so the log can be cut back to its header. In order: the column files of the folders written that the
  * snapshot names, the entries of those of them created, the symbol dictionaries, {@code _meta} when the definition
  * changed, the table's folder when it holds new partition folders {@code _meta}'s replace did not force, then
- * {@code _txn}. Runs on the lease holder's thread.
+ * {@code _txn}. Runs under the table's apply lock.
  */
 final class Checkpoint {
 
@@ -84,10 +84,12 @@ final class Checkpoint {
             return false;
         }
         state.recordCheckpoint(snapshot);
+        state.written().clear();
+        state.created().clear();
+        state.countCheckpoint(snapshot.txn());
         try {
-            state.wal.reset();
-            state.written().clear();
-            state.created().clear();
+            // a commit logged after the snapshot keeps the log until a checkpoint with none after it
+            state.wal.resetThrough(snapshot.txn());
         } catch (final IOException e) {
             // the records left are at or before _txn's transaction, which a scan skips; the next checkpoint cuts them
             LOG.log(System.Logger.Level.WARNING, "cannot reset log after checkpoint [table=" + def.name() + ", txn="

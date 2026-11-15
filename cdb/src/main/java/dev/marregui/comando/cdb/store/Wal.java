@@ -18,7 +18,8 @@ import dev.marregui.comando.cdb.CdbType;
  * commit since the last checkpoint, each forced before its commit is answered. A frame is its body's length and
  * CRC32C, then the body: the commit's transaction number, whether it truncated the table, the table's definition when
  * the commit changed it, and its pending rows by column, in the order they were written. Symbols are logged as text,
- * so a replay interns them again. The writer of the table is the only user, from one thread at a time.
+ * so a replay interns them again. Its methods hold its monitor: the table's writer appends while the store's applier
+ * cuts the log after a checkpoint.
  * <p>
  * Every number is little-endian. Header: u32 magic {@code CWAL}, u32 version. Frame: u32 body length, u32 CRC32C of
  * the body. Body: u64 txn, u8 flags (bit 0 truncate, bit 1 definition follows), [u32 length and the UTF-8 of the
@@ -97,7 +98,7 @@ final class Wal {
      * its reset, are skipped undecoded: their rows are in the checkpointed files, in columns that may be fewer than
      * {@code def}'s.
      */
-    List<Entry> scan(final long afterTxn, final TableDef def) throws IOException {
+    synchronized List<Entry> scan(final long afterTxn, final TableDef def) throws IOException {
         final List<Entry> entries = new ArrayList<>();
         TableDef current = def;
         long previous = 0L;
@@ -154,11 +155,12 @@ final class Wal {
      * of the definition after the commit. On a failure the log is cut back to its length before the append, when it
      * can be, and the failure thrown; the caller then refuses the table's commits until it reopens.
      */
-    void append(final long txn, final boolean truncate, final TableDef def, final RowBlock rows) throws IOException {
+    synchronized void append(final long txn, final boolean truncate, final TableDef def, final RowBlock rows)
+            throws IOException {
         if (records > 0 && txn != lastTxn + 1L) {
             // a direct commit came between: its checkpoint's _txn, durable, covers the records left when its reset
             // failed; cut, so a scan never meets a gap
-            reset();
+            cut();
         }
         final ByteBuffer frame = encode(txn, truncate, def, rows);
         final int length = frame.remaining();
@@ -186,20 +188,47 @@ final class Wal {
         bytes = before + length;
     }
 
+    /**
+     * Cuts the log back to its header when no record follows transaction {@code txn}, the one a checkpoint just named:
+     * false, and the log kept, when a commit logged after it is still to be applied. A scan skips the records at or
+     * before the checkpoint, so the next checkpoint with nothing after it cuts them.
+     */
+    synchronized boolean resetThrough(final long txn) throws IOException {
+        if (records > 0 && lastTxn > txn) {
+            return false;
+        }
+        cut();
+        return true;
+    }
+
+    /**
+     * Runs {@code drain} holding the log's monitor, so no commit appends meanwhile: the applier's last resort to empty
+     * a log that a stream of commits never let it cut. {@code drain} may call {@link #resetThrough}: a Java monitor
+     * is reentrant by the language (JLS 17.1), not by this class's convention.
+     */
+    synchronized void holdingAppends(final Runnable drain) {
+        drain.run();
+    }
+
     /** Cuts the log back to its header and forces it: every logged commit is in the checkpointed files. */
-    void reset() throws IOException {
+    synchronized void reset() throws IOException {
+        cut();
+    }
+
+    // called with the monitor held
+    private void cut() throws IOException {
         StoreFiles.truncate(file, HEADER);
         records = 0;
         bytes = HEADER;
     }
 
     /** The commits logged since the last reset. */
-    int records() {
+    synchronized int records() {
         return records;
     }
 
     /** The log's size in bytes, its header included. */
-    long bytes() {
+    synchronized long bytes() {
         return bytes;
     }
 

@@ -353,7 +353,7 @@ class CdbServerWritesTest {
         }
 
         @Override
-        public Rows run(final String sql, final int maxRows) {
+        public Rows run(final String sql, final int maxRows, final Long maxLagMillis) {
             throw new UnsupportedOperationException("refuse sql in this test [sql=" + sql + ']');
         }
 

@@ -173,6 +173,7 @@ class StoreAppendTest {
     @Test
     void aRewrittenFolderGoesWithItsLastSnapshot(@TempDir final Path root) {
         try (final Store store = Store.open(root)) {
+            store.applyOnCommit = true;
             store.create(table(List.of()), false);
             try (final TableWriter w = store.writer("m", 1_000L)) {
                 row(w, DAY1 + 10L, "a", 1.0, "one", 1L, true);
@@ -382,6 +383,7 @@ class StoreAppendTest {
     void oneRowIntoALargePartitionAppendsOneRow(@TempDir final Path root) throws IOException {
         final Path partition = root.resolve("m").resolve(TableFiles.folder(DAY1, PartitionBy.DAY, 1L));
         try (final Store store = Store.open(root)) {
+            store.applyOnCommit = true;
             store.create(table(List.of()), false);
             try (final TableWriter w = store.writer("m", 1_000L)) {
                 for (int i = 0; i < DAY_ROWS; i++) {

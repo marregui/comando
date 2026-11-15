@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.store;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,11 +31,51 @@ final class TableState {
 
     final Path dir;
     final String key;
-    // the writer's (the lease holder's), and the opening thread's before it
+    // its own monitor's: the lease holder appends, the applier cuts after a checkpoint
     final Wal wal;
+
+    /**
+     * Held by whoever writes the column files, the dictionaries, {@link #torn}, {@link #written} and {@link #created},
+     * or checkpoints: the applier, a direct commit, the store's checkpoint and close. Taken before {@link #lock}.
+     */
+    final ReentrantLock applyLock = new ReentrantLock();
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition writerFree = lock.newCondition();
+    private final Condition applied = lock.newCondition();
+    // guarded by lock: the commits answered from the log and not yet applied, in transaction order
+    private final ArrayDeque<Queued> queue = new ArrayDeque<>();
+    // guarded by lock
+    private long queuedRows;
+    // guarded by lock
+    private long queuedBytes;
+    // guarded by lock: the bytes of queued commits published and not yet taken by the applier's accounting
+    private long releasedBytes;
+    // guarded by lock: readers waiting for the applier since it last applied the table
+    private int demands;
+    // written by the lease holder once a commit is answered, under lock; read by readers and the applier
+    private volatile long loggedTxn;
+    // written under lock when a snapshot is published; read by readers deciding whether to wait
+    private volatile long appliedTxn;
+    // written by the applier when it gives up on the table; read by commits and readers
+    private volatile boolean suspended;
+    // written by the applier under applyLock, read by the status listing
+    private volatile String lastError;
+    // the applier's, under applyLock; the status listing reads them racily
+    private volatile long applies;
+    private volatile long demandedApplies;
+    private volatile long appliedTxns;
+    private volatile long appliedRows;
+    private volatile long lastApplyMicros;
+    private volatile long applyMicros;
+    private volatile long checkpoints;
+    private volatile long checkpointNanos = System.nanoTime();
+    // the applier thread's alone
+    final ApplySchedule schedule = new ApplySchedule();
+    // the applier thread's alone: batches failed in a row
+    int failures;
+    // the applier thread's alone: when a failed batch is retried, by System.nanoTime()
+    long retryNanos;
     // guarded by lock
     private Snapshot current;
     // guarded by lock: the snapshot the checkpointed _txn names; a folder it names is never deleted
@@ -48,15 +89,20 @@ final class TableState {
     private final Map<String, Integer> holders = new HashMap<>();
     // guarded by lock
     private boolean writerOpen;
-    // the writer's alone, and the opening thread's before it: one dictionary per column index, null for non-SYMBOL
+    // applyLock's, and the opening thread's before it: one dictionary per column index, null for non-SYMBOL
     private final List<SymbolTable> symbols = new ArrayList<>();
-    // the writer's alone: folders a failed commit left bytes in past their committed ends, cut only at the next open
+    // applyLock's: folders a failed apply left bytes in past their committed ends, cut only at the next open
     private final Set<String> torn = new HashSet<>();
-    // the lease holder's: the folders commits wrote to since the last checkpoint, and those of them they created
+    // applyLock's: the folders applies wrote to since the last checkpoint, and those of them they created
     private final Set<String> written = new HashSet<>();
     private final Set<String> created = new HashSet<>();
-    // the lease holder's: set when a log force failed, or a commit's checkpoint left its _txn in doubt; until reopen
-    private boolean poisoned;
+    // written by the lease holder or the applier when a log force failed, or a checkpoint left its _txn in doubt; read
+    // by commits; until reopen
+    private volatile boolean poisoned;
+
+    /** A commit answered from the log, not yet applied: its rows, when it was queued and its rows' heap estimate. */
+    record Queued(long txn, RowBlock rows, long queuedNanos, long bytes) {
+    }
 
     /** A committed transaction: its number, the definition and the partitions in time order. */
     record Snapshot(long txn, TableDef def, List<Version> partitions) {
@@ -120,6 +166,238 @@ final class TableState {
 
     void poison() {
         poisoned = true;
+    }
+
+    /**
+     * True when the applier gave up on the table after repeated failures: its commits are refused and reads that need
+     * the queued ones fail, until the store reopens and replays the log.
+     */
+    boolean suspended() {
+        return suspended;
+    }
+
+    void suspend(final String error) {
+        lastError = error;
+        suspended = true;
+        signalApplied();
+    }
+
+    void failed(final String error) {
+        lastError = error;
+    }
+
+    /** The last transaction answered: logged, or written by a direct commit. */
+    long loggedTxn() {
+        return loggedTxn;
+    }
+
+    /** The last transaction published to readers. */
+    long appliedTxn() {
+        return appliedTxn;
+    }
+
+    /** Records the direct commit {@code txn}, published without the log. */
+    void logged(final long txn) {
+        lock.lock();
+        try {
+            loggedTxn = txn;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Queues {@code commit}, answered once this returns; its transaction becomes the logged one. Refused once the table
+     * closed: a writer left open past the store's close must not answer a commit no applier will publish.
+     */
+    void enqueue(final Queued commit) {
+        lock.lock();
+        try {
+            if (current == null) {
+                throw new CdbException("refuse commit to closed table, its record is in the log, not answered [table="
+                        + key + ", txn=" + commit.txn() + ']', -1);
+            }
+            queue.addLast(commit);
+            queuedRows += commit.rows().size;
+            queuedBytes += commit.bytes();
+            loggedTxn = commit.txn();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** The queued commits from the oldest, as many as fit in {@code maxRows} rows and at least one; empty when none. */
+    List<Queued> peekQueued(final int maxRows) {
+        lock.lock();
+        try {
+            final List<Queued> batch = new ArrayList<>();
+            long rows = 0L;
+            for (final Queued q : queue) {
+                if (!batch.isEmpty() && rows + q.rows().size > maxRows) {
+                    break;
+                }
+                batch.add(q);
+                rows += q.rows().size;
+            }
+            return batch;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** The bytes of the queued commits published since the last call, which {@link #publish} dropped. */
+    long takeReleasedBytes() {
+        lock.lock();
+        try {
+            final long released = releasedBytes;
+            releasedBytes = 0L;
+            return released;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // called with lock held: drops the queued commits up to txn, published with it, so no reader sees them twice
+    private void dequeueThrough(final long txn) {
+        while (!queue.isEmpty() && queue.peekFirst().txn() <= txn) {
+            final Queued q = queue.removeFirst();
+            queuedRows -= q.rows().size;
+            queuedBytes -= q.bytes();
+            releasedBytes += q.bytes();
+        }
+    }
+
+    /** When the oldest queued commit was queued, by {@link System#nanoTime()}; {@code none} when nothing is queued. */
+    long oldestQueuedNanos(final long none) {
+        lock.lock();
+        try {
+            return queue.isEmpty() ? none : queue.peekFirst().queuedNanos();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** The rows of the queued commits. */
+    long queuedRows() {
+        lock.lock();
+        try {
+            return queuedRows;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** The heap estimate of the queued commits. */
+    long queuedBytes() {
+        lock.lock();
+        try {
+            return queuedBytes;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Counts a reader that is about to wait for the applier, before it wakes the applier. */
+    void demand() {
+        lock.lock();
+        try {
+            demands++;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** True when a reader waited for the applier since the last call; clears it. */
+    boolean takeDemand() {
+        lock.lock();
+        try {
+            final boolean demanded = demands > 0;
+            demands = 0;
+            return demanded;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** True when a reader waits for the applier. */
+    boolean demanded() {
+        lock.lock();
+        try {
+            return demands > 0;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Waits up to {@code timeoutNanos} for transaction {@code txn} to be published; false when it was not: the wait
+     * ran out, the table closed or its applier gave up.
+     */
+    boolean awaitApplied(final long txn, final long timeoutNanos) {
+        lock.lock();
+        try {
+            long remainingNanos = timeoutNanos;
+            while (current != null && current.txn() < txn && !suspended) {
+                if (remainingNanos <= 0L) {
+                    return false;
+                }
+                remainingNanos = applied.awaitNanos(remainingNanos);
+            }
+            return current != null && current.txn() >= txn;
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CdbException("cannot read table, interrupted waiting for its commits [table=" + key + ", txn="
+                    + txn + ']', e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Counts a batch the applier published: {@code txns} commits of {@code rows} rows in {@code micros}. */
+    void countApply(final long txns, final long rows, final long micros, final boolean demanded) {
+        applies++;
+        if (demanded) {
+            demandedApplies++;
+        }
+        appliedTxns += txns;
+        appliedRows += rows;
+        lastApplyMicros = micros;
+        applyMicros += micros;
+        lastError = null;
+    }
+
+    /** Counts a checkpoint of transaction {@code txn}. */
+    void countCheckpoint(final long txn) {
+        checkpoints++;
+        checkpointNanos = System.nanoTime();
+    }
+
+    /** When the last checkpoint ran, by {@link System#nanoTime()}, or the table opened. */
+    long checkpointNanos() {
+        return checkpointNanos;
+    }
+
+    /** The table's log and its application now, under the definition's name {@code table}. */
+    WalStatus status(final String table, final long nowNanos, final int memoryPressure) {
+        final long txns;
+        final long rows;
+        final long bytes;
+        final long oldest;
+        lock.lock();
+        try {
+            txns = queue.size();
+            rows = queuedRows;
+            bytes = queuedBytes;
+            oldest = queue.isEmpty() ? nowNanos : queue.peekFirst().queuedNanos();
+        } finally {
+            lock.unlock();
+        }
+        final Snapshot checkpointedSnapshot = checkpointed();
+        return new WalStatus(table, poisoned || suspended, appliedTxn, loggedTxn, txns, rows, bytes,
+                TimeUnit.NANOSECONDS.toMillis(nowNanos - oldest),
+                TimeUnit.NANOSECONDS.toMillis(schedule.intervalNanos()),
+                applies, demandedApplies, appliedTxns, appliedRows, lastApplyMicros, applyMicros, checkpoints,
+                checkpointedSnapshot == null ? 0L : checkpointedSnapshot.txn(), wal.bytes(), memoryPressure, lastError);
     }
 
     /** Records {@code versions}, written by a commit, for the next checkpoint to force; {@code fresh} if it made them. */
@@ -207,6 +485,8 @@ final class TableState {
             current = snapshot;
             named = snapshot;
             latest = snapshot;
+            loggedTxn = snapshot.txn();
+            appliedTxn = snapshot.txn();
         } finally {
             lock.unlock();
         }
@@ -283,6 +563,13 @@ final class TableState {
                     letGo(v, unmap, delete);
                 }
                 current = next;
+                dequeueThrough(next.txn());
+                appliedTxn = next.txn();
+                if (next.txn() > loggedTxn) {
+                    // a direct commit or a replay, published without the queue
+                    loggedTxn = next.txn();
+                }
+                applied.signalAll();
             }
         } finally {
             lock.unlock();
@@ -312,6 +599,20 @@ final class TableState {
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new CdbException("cannot open writer, interrupted [table=" + key + ']', e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Takes the writer lease when nobody holds it; false, without waiting, when somebody does. */
+    boolean tryLease() {
+        lock.lock();
+        try {
+            if (writerOpen || current == null) {
+                return false;
+            }
+            writerOpen = true;
+            return true;
         } finally {
             lock.unlock();
         }
@@ -355,6 +656,7 @@ final class TableState {
         try {
             last = current;
             current = null;
+            applied.signalAll();
             if (leased) {
                 writerOpen = false;
                 writerFree.signalAll();
@@ -364,6 +666,15 @@ final class TableState {
         }
         if (last != null) {
             release(last);
+        }
+    }
+
+    private void signalApplied() {
+        lock.lock();
+        try {
+            applied.signalAll();
+        } finally {
+            lock.unlock();
         }
     }
 

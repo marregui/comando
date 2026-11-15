@@ -57,6 +57,8 @@ final class PgSession {
     private final Map<String, Portal> portals = new HashMap<>();
     private final int processId;
     private final Map<String, Prepared> statements = new HashMap<>();
+    // the session's read lag, set and read on the session's thread; null runs queries with the store's default
+    private Long maxLagMillis;
     private boolean skipping;
     private char transaction = 'I';
 
@@ -200,7 +202,7 @@ final class PgSession {
             answer(local);
             return;
         }
-        final CdbResult result = cdb.run(sql);
+        final CdbResult result = runQuery(sql);
         if (isQuery(result)) {
             description(result, TEXT);
             rows(result, 0, result.rowCount(), TEXT);
@@ -208,6 +210,10 @@ final class PgSession {
         } else {
             complete(tag(sql, result));
         }
+    }
+
+    private CdbResult runQuery(final String sql) {
+        return maxLagMillis == null ? cdb.run(sql) : cdb.run(sql, 0, maxLagMillis);
     }
 
     private void parse(final ByteBuffer body) throws IOException {
@@ -329,7 +335,7 @@ final class PgSession {
             return;
         }
         if (portal.result == null) {
-            portal.result = cdb.run(portal.sql);
+            portal.result = runQuery(portal.sql);
         }
         final CdbResult result = portal.result;
         if (!isQuery(result)) {
@@ -367,6 +373,9 @@ final class PgSession {
             default -> {
                 // the transaction status stays
             }
+        }
+        if (local.lag() != null) {
+            maxLagMillis = local.lag().millis();
         }
         if ("SET".equals(local.tag()) && local.value() != null) {
             status("application_name", local.value());

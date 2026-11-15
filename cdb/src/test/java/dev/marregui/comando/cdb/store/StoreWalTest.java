@@ -47,8 +47,8 @@ class StoreWalTest {
     private static final int STEPS = 60;
     private static final String[] SENSORS = {"a", "b", "c", null};
 
-    /// While a commit's record is forced, a reader on another thread reads the rows before it; once `commit` returns,
-    /// a reader reads them.
+    /// Right before a commit's record is appended and forced, a reader on another thread reads the rows before it;
+    /// once `commit` returns, a reader reads them.
     @Test
     void aCommitIsVisibleOnlyOnceItsRecordIsForced(@TempDir final Path root) throws InterruptedException {
         try (final Store store = Store.open(root)) {
@@ -57,7 +57,7 @@ class StoreWalTest {
             final AtomicInteger seenInForce = new AtomicInteger(-1);
             final AtomicReference<Throwable> failure = new AtomicReference<>();
             final AtomicBoolean joined = new AtomicBoolean();
-            store.afterWalForce = () -> {
+            store.beforeWalAppend = () -> {
                 final CountDownLatch read = new CountDownLatch(1);
                 Thread.ofVirtual().name("cdb-wal-test-reader").start(() -> {
                     try (final TableReader reader = store.reader("m")) {
@@ -196,6 +196,7 @@ class StoreWalTest {
     @Test
     void aFolderGoesOnlyWhenUnheldAndNotCheckpointed(@TempDir final Path root) {
         try (final Store store = Store.open(root)) {
+            store.applyOnCommit = true;
             store.checkpointRecords = 2;
             store.create(table("m", List.of()), false);
             final Path dir = root.resolve("m");
@@ -224,6 +225,7 @@ class StoreWalTest {
     @Test
     void aCheckpointCutsTheLogToItsHeader(@TempDir final Path root) throws IOException {
         try (final Store store = Store.open(root)) {
+            store.applyOnCommit = true;
             store.checkpointRecords = 3;
             store.create(table("m", List.of()), false);
             final Path wal = root.resolve("m").resolve(Wal.FILE);
@@ -376,6 +378,7 @@ class StoreWalTest {
     @Test
     void aFailedCheckpointRefusesTheTableAndKeepsTheLog(@TempDir final Path root) throws IOException {
         try (final Store store = Store.open(root)) {
+            store.applyOnCommit = true;
             store.checkpointRecords = 2;
             store.create(table("m", List.of()), false);
             final AtomicBoolean armed = new AtomicBoolean(true);

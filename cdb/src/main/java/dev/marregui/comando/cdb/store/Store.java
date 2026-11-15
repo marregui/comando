@@ -6,11 +6,13 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import org.jetbrains.annotations.TestOnly;
 
@@ -54,13 +56,13 @@ public final class Store implements AutoCloseable {
     };
 
     /**
-     * A commit checkpoints the table once its log holds this many records: one commit in 256 pays a checkpoint, and a
-     * recovery replays at most 256 commits. Not measured; set for the plan of the log.
+     * The applier checkpoints the table once this many commits were applied since the last checkpoint: a recovery
+     * replays about 256 commits plus those queued. Not measured; set for the plan of the log.
      */
     @TestOnly
     int checkpointRecords = 256;
 
-    /** A commit checkpoints the table once its log holds this many bytes: 16 MiB, as {@link #checkpointRecords}. */
+    /** The applier checkpoints the table once its log holds this many bytes: 16 MiB, as {@link #checkpointRecords}. */
     @TestOnly
     long checkpointBytes = 16L << 20;
 
@@ -72,13 +74,67 @@ public final class Store implements AutoCloseable {
     @TestOnly
     int directRows = 100_000;
 
+    /**
+     * The heap estimate of the commits queued in every table past which a commit waits for the applier: 64 MiB, about
+     * a quarter of the 256 MiB heap cdb's server runs in. Not measured; set for the plan of the applier.
+     */
+    @TestOnly
+    long queuedBudgetBytes = 64L << 20;
+
+    /**
+     * True makes a logged commit apply its own record, and checkpoint when the log holds enough, on its thread before
+     * it returns, as before the applier: the reference of the tests that check files right after a commit.
+     */
+    // written by a test before it commits, read by the committing threads
+    @TestOnly
+    volatile boolean applyOnCommit;
+
+    /**
+     * The applier checkpoints a table whose log holds anything this long after its last checkpoint: 30 s, so a quiet
+     * table's recovery replays little. Not measured; set for the plan of the applier.
+     */
+    @TestOnly
+    long checkpointIdleNanos = TimeUnit.SECONDS.toNanos(30L);
+
+    /**
+     * The longest a read waits for the applier to publish the commits answered before it, and a commit over the queued
+     * budget for it to catch up: 10 s, as the store's wait for an open writer.
+     */
+    // written by a test before it reads, read by readers and by commits over the queued budget
+    @TestOnly
+    volatile long readWaitNanos = TimeUnit.SECONDS.toNanos(10L);
+
+    /** True holds the applier thread back: commits queue and stay queued, the tests' way to build one batch. */
+    // written by a test, read by the applier thread
+    @TestOnly
+    volatile boolean applierPaused;
+
+    /**
+     * The most UTF-8 text one VARCHAR column of one partition takes, as a commit checks before it is answered: the
+     * apply refuses a partition past 2 GB, an {@code int} offset. Lowered by tests only.
+     */
+    // written by a test before it commits, read by the committing threads
+    @TestOnly
+    volatile long textLimitBytes = Integer.MAX_VALUE;
+
+    /**
+     * The most a read may lag the answered commits, in milliseconds, for the reads of the scope it is bound in: 0, a
+     * read sees every commit answered before it began; above 0, a read waits for the applier only when a commit older
+     * than that is not yet applied. Unbound, the store's {@link #readMaxLagMillis(long)} holds.
+     */
+    public static final ScopedValue<Long> READ_MAX_LAG_MILLIS = ScopedValue.newInstance();
+
     private final Path root;
     private final Map<String, TableState> tables = new ConcurrentHashMap<>();
+    // written by the launcher before it serves, read by every reader
+    private volatile long readMaxLagMillis;
     private final Object createLock = new Object();
     // written by the closing thread, read by every caller: once set, no table opens a reader or writer
     private volatile boolean closed;
     // the channel holding the root's exclusive lock: one store per root, across processes; null until open has it
     private FileChannel lock;
+    // started once every table is loaded; null before
+    private Applier applier;
 
     private Store(final Path root) {
         this.root = root;
@@ -101,6 +157,8 @@ public final class Store implements AutoCloseable {
                     }
                 }
             }
+            store.applier = new Applier(store, root.getFileName() == null ? "store" : root.getFileName().toString());
+            store.applier.start();
             return store;
         } catch (final IOException | RuntimeException e) {
             store.close();
@@ -163,10 +221,14 @@ public final class Store implements AutoCloseable {
         }
     }
 
-    /** A snapshot of the table's committed state. */
+    /**
+     * A snapshot of the table's committed state: waits for the applier to publish the commits answered before the call
+     * when one of them is older than the read's lag ({@link #READ_MAX_LAG_MILLIS}), all of them when the lag is 0.
+     */
     public TableReader reader(final String table) {
         checkOpen();
         final TableState state = state(table);
+        awaitFresh(state);
         return new DefaultReader(state, state.acquire());
     }
 
@@ -181,6 +243,73 @@ public final class Store implements AutoCloseable {
             state.unlease();
             throw e;
         }
+    }
+
+    /**
+     * Sets the most a read may lag the answered commits when no {@link #READ_MAX_LAG_MILLIS} is bound; 0, the default,
+     * keeps every read up to date with every answered commit.
+     */
+    public void readMaxLagMillis(final long millis) {
+        if (millis < 0L) {
+            throw new CdbException("refuse negative read lag [millis=" + millis + ']', -1);
+        }
+        readMaxLagMillis = millis;
+    }
+
+    /** Each table's log and its application, by table name. */
+    public List<WalStatus> walStatus() {
+        final List<WalStatus> out = new ArrayList<>(tables.size());
+        for (final TableState state : tables.values()) {
+            final TableState.Snapshot snapshot = state.current();
+            if (snapshot != null) {
+                out.add(state.status(snapshot.def().name(), System.nanoTime(), applier.memoryPressure()));
+            }
+        }
+        out.sort(Comparator.comparing(WalStatus::table));
+        return out;
+    }
+
+    // the read's wait for the queued commits its lag does not allow
+    private void awaitFresh(final TableState state) {
+        final long logged = state.loggedTxn();
+        if (state.appliedTxn() >= logged) {
+            return;
+        }
+        final long lagMillis = READ_MAX_LAG_MILLIS.isBound() ? READ_MAX_LAG_MILLIS.get() : readMaxLagMillis;
+        if (lagMillis > 0L) {
+            final long nowNanos = System.nanoTime();
+            final long oldestNanos = state.oldestQueuedNanos(nowNanos);
+            if (nowNanos - oldestNanos <= TimeUnit.MILLISECONDS.toNanos(lagMillis)) {
+                return;
+            }
+        }
+        // the demand is counted before the wake, so the woken applier sees a reader waiting
+        state.demand();
+        applier.wake();
+        if (!state.awaitApplied(logged, readWaitNanos)) {
+            throw Applier.notApplied(state, logged);
+        }
+    }
+
+    // applyOnCommit's apply, on the committing thread
+    void applyNow(final TableState state) {
+        state.applyLock.lock();
+        try {
+            applier.applyAllHeld(state, false);
+            applier.checkpointIfDue(state);
+        } finally {
+            state.applyLock.unlock();
+        }
+    }
+
+    /** The tables' states, for the applier. */
+    Iterable<TableState> states() {
+        return tables.values();
+    }
+
+    /** The store's applier. */
+    Applier applier() {
+        return applier;
     }
 
     /** A line-protocol appender over this store (tables and columns created on first write). */
@@ -202,8 +331,14 @@ public final class Store implements AutoCloseable {
             if (state.poisoned()) {
                 throw new CdbException("refuse checkpoint of failed table [table=" + table + ']', -1);
             }
-            if (!Checkpoint.run(this, state, state.current())) {
-                throw new CdbException("cannot force folder after checkpoint, log kept [table=" + table + ']', -1);
+            state.applyLock.lock();
+            try {
+                applier.applyAllHeld(state, false);
+                if (!Checkpoint.run(this, state, state.current())) {
+                    throw new CdbException("cannot force folder after checkpoint, log kept [table=" + table + ']', -1);
+                }
+            } finally {
+                state.applyLock.unlock();
             }
         } catch (final IOException e) {
             throw new CdbException("cannot checkpoint table [table=" + table + ']', e);
@@ -219,6 +354,9 @@ public final class Store implements AutoCloseable {
             return;
         }
         closed = true;
+        if (applier != null) {
+            applier.stop();
+        }
         for (final TableState state : tables.values()) {
             final boolean drained = state.leaseForClose(CLOSE_WAIT_MILLIS);
             if (drained) {
@@ -241,20 +379,25 @@ public final class Store implements AutoCloseable {
         }
     }
 
-    // the closing thread holds the lease: a clean shutdown leaves every log empty, else the next open replays it
+    // the closing thread holds the lease: a clean shutdown applies the queued commits and leaves every log empty, else
+    // the next open replays it
     private void checkpointOnClose(final TableState state) {
-        final TableState.Snapshot snapshot = state.current();
-        if (state.poisoned() || snapshot == null || state.wal.records() == 0) {
+        if (state.poisoned() || state.suspended() || state.current() == null || state.wal.records() == 0) {
             return;
         }
+        state.applyLock.lock();
         try {
+            applier.applyAllHeld(state, false);
+            final TableState.Snapshot snapshot = state.current();
             if (!Checkpoint.run(this, state, snapshot)) {
                 LOG.log(System.Logger.Level.WARNING, "cannot force folder after checkpoint, log kept [table="
                         + state.key + ", txn=" + snapshot.txn() + ']');
             }
         } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot checkpoint table on close, log kept [table=" + state.key
-                    + ", txn=" + snapshot.txn() + ']', e);
+                    + ", txn=" + state.loggedTxn() + ']', e);
+        } finally {
+            state.applyLock.unlock();
         }
     }
 
@@ -387,8 +530,9 @@ public final class Store implements AutoCloseable {
     }
 
     /**
-     * Commits the log's {@code entries} again through a writer that neither logs nor checkpoints, each as the
-     * transaction it was logged as, then checkpoints the table once: the log is empty when the store opens.
+     * Commits the log's {@code entries} again through a writer that neither logs nor checkpoints, in batches as the
+     * applier does, each published as the last transaction it holds, then checkpoints the table once: the log is empty
+     * when the store opens.
      */
     private static void replay(final Store store, final TableState state, final List<Wal.Entry> entries)
             throws IOException {
@@ -401,17 +545,42 @@ public final class Store implements AutoCloseable {
             return;
         }
         final String table = state.current().def().name();
+        long last = state.current().txn();
+        int batched = 0;
         try (final DefaultWriter writer = new DefaultWriter(store, state, true)) {
             for (final Wal.Entry entry : entries) {
-                final long expected = state.current().txn() + 1L;
-                if (entry.txn() != expected) {
+                if (entry.txn() != last + 1L) {
                     throw new CdbException("refuse log entry out of order [table=" + table + ", txn=" + entry.txn()
-                            + ", expected=" + expected + ']', -1);
+                            + ", expected=" + (last + 1L) + ']', -1);
                 }
                 try {
-                    apply(writer, entry);
+                    // plain commits in a row are applied as one batch, as the applier does; a truncate or a definition
+                    // change ends it and is a commit of its own
+                    if (entry.truncate() || entry.def() != null) {
+                        if (batched > 0) {
+                            writer.commitAs(last);
+                            batched = 0;
+                        }
+                        apply(writer, entry);
+                        writer.commitAs(entry.txn());
+                    } else {
+                        writer.addRows(entry.rows());
+                        batched += entry.rows().size;
+                        if (batched >= Applier.MAX_BATCH_ROWS) {
+                            writer.commitAs(entry.txn());
+                            batched = 0;
+                        }
+                    }
                 } catch (final RuntimeException e) {
                     throw new CdbException("cannot replay log [table=" + table + ", txn=" + entry.txn() + ']', e);
+                }
+                last = entry.txn();
+            }
+            if (batched > 0) {
+                try {
+                    writer.commitAs(last);
+                } catch (final RuntimeException e) {
+                    throw new CdbException("cannot replay log [table=" + table + ", txn=" + last + ']', e);
                 }
             }
         }
@@ -456,7 +625,6 @@ public final class Store implements AutoCloseable {
             }
             writer.endRow();
         }
-        writer.commit();
     }
 
     /**

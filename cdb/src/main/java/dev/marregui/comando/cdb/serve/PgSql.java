@@ -24,6 +24,11 @@ final class PgSql {
     private static final Pattern APPLICATION_NAME =
             Pattern.compile("(?is)\\s*set\\s+(?:session\\s+)?application_name\\s*(?:=|to)\\s*'((?:[^']|'')*)'\\s*");
 
+    // the session's read lag: SET cdb.max_lag_ms = 100 (quoted or not, TO too), = DEFAULT, or RESET cdb.max_lag_ms
+    private static final Pattern READ_LAG = Pattern.compile(
+            "(?is)\\s*set\\s+(?:session\\s+)?cdb\\.max_lag_ms\\s*(?:=|to)\\s*(?:'([^']*)'|([^\\s']+))\\s*");
+    private static final Pattern RESET_READ_LAG = Pattern.compile("(?is)\\s*reset\\s+cdb\\.max_lag_ms\\s*");
+
     private PgSql() {
     }
 
@@ -126,7 +131,8 @@ final class PgSql {
         final String keyword = keyword(sql);
         return switch (keyword) {
             case "SET" -> set(sql);
-            case "RESET", "DEALLOCATE", "LISTEN", "UNLISTEN" -> Local.command(keyword);
+            case "RESET" -> reset(sql);
+            case "DEALLOCATE", "LISTEN", "UNLISTEN" -> Local.command(keyword);
             case "BEGIN", "START" -> Local.command("BEGIN");
             case "COMMIT", "END" -> Local.command("COMMIT");
             case "ROLLBACK", "ABORT" -> Local.command("ROLLBACK");
@@ -145,10 +151,23 @@ final class PgSql {
         };
     }
 
-    // SET application_name carries the name as the answer's value, to be reported back
+    // SET application_name carries the name as the answer's value, to be reported back; SET cdb.max_lag_ms, its change
     private static Local set(final String sql) {
-        final Matcher m = APPLICATION_NAME.matcher(sql);
-        return m.matches() ? new Local("SET", null, m.group(1).replace("''", "'")) : Local.command("SET");
+        final Matcher name = APPLICATION_NAME.matcher(sql);
+        if (name.matches()) {
+            return new Local("SET", null, name.group(1).replace("''", "'"), null);
+        }
+        final Matcher lag = READ_LAG.matcher(sql);
+        if (lag.matches()) {
+            final boolean unquotedDefault = lag.group(2) != null && lag.group(2).equalsIgnoreCase("default");
+            return Local.lag("SET", unquotedDefault ? null : ReadLag.parse("cdb.max_lag_ms",
+                    lag.group(1) != null ? lag.group(1) : lag.group(2)));
+        }
+        return Local.command("SET");
+    }
+
+    private static Local reset(final String sql) {
+        return RESET_READ_LAG.matcher(sql).matches() ? Local.lag("RESET", null) : Local.command("RESET");
     }
 
     // a session parameter's value; null for any other name, which cdb's own SHOW answers or refuses
@@ -275,20 +294,30 @@ final class PgSql {
     /**
      * A session statement's answer: its command tag, and for {@code SHOW} or a session function one row of one
      * VARCHAR column ({@code column} null for none); a {@code SET application_name} has no row and the name as its
-     * {@code value}.
+     * {@code value}; a {@code SET} or {@code RESET} of {@code cdb.max_lag_ms} carries its {@link ReadLagChange},
+     * null for any other statement.
      */
-    record Local(String tag, String column, String value) {
+    record Local(String tag, String column, String value, ReadLagChange lag) {
 
         static Local command(final String tag) {
-            return new Local(tag, null, null);
+            return new Local(tag, null, null, null);
         }
 
         static Local row(final String column, final String value) {
-            return new Local("SELECT 1", column, value);
+            return new Local("SELECT 1", column, value, null);
+        }
+
+        /** The session's read lag becomes {@code millis}; unset when null. */
+        static Local lag(final String tag, final Long millis) {
+            return new Local(tag, null, null, new ReadLagChange(millis));
         }
 
         boolean hasRow() {
             return column != null;
         }
+    }
+
+    /** The session's new read lag in milliseconds; null unsets it, so queries run with the store's default. */
+    record ReadLagChange(Long millis) {
     }
 }
