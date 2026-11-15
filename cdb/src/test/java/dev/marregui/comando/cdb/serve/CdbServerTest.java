@@ -78,8 +78,8 @@ class CdbServerTest {
         assertThat(backend.calls).containsExactly(query + " | maxRows=2");
     }
 
-    /// `limit=0,n`, the form the kit's `qdb` sends on every query, bounds the rows as `limit=n` does; a row offset
-    /// other than 0 and a negative bound are refused.
+    /// `limit=0,n`, the form the kit's `qdb` sends on every query, bounds the rows as `limit=n` does; `lo,hi` keeps
+    /// QuestDB's rows lo to hi counted from 1; a negative bound is refused.
     @Test
     void execTakesTheRangeLimitFromZero() throws IOException, InterruptedException {
         backend.answer = FakeRows.updated(0);
@@ -87,9 +87,9 @@ class CdbServerTest {
         assertThat(http.exec(server.port(), "select 1", "&limit=0,10000000").statusCode()).isEqualTo(200);
         assertThat(backend.calls).containsExactly("select 1 | maxRows=10000000");
         assertThat(CdbServer.maxRows("0, 5")).isEqualTo(5);
-        assertThat(CdbServer.maxRows("2,4")).isEqualTo(-1);
+        assertThat(CdbServer.maxRows("2,4")).isEqualTo(3);
         assertThat(CdbServer.maxRows("-3")).isEqualTo(-1);
-        assertThat(CdbServer.maxRows("0,x")).isEqualTo(-1);
+        assertThat(CdbServer.maxRows("0,x")).isEqualTo(0);
     }
 
     /// Concurrent `/write` requests commit each table through its own appender, one commit per table at a time, so two
@@ -162,11 +162,12 @@ class CdbServerTest {
         assertThat(http.exec(server.port(), "create table t (x long)", "").body()).isEqualTo("{\"ddl\":\"OK\"}");
     }
 
-    /// No query, a blank one and a limit that is no number are refused before the backend runs.
+    /// No query and a blank one answer 200 with QuestDB's empty-query error; a limit that is no number is refused;
+    /// the backend runs for none of them.
     @Test
     void execRefusesBadParameters() throws IOException, InterruptedException {
-        assertThat(http.get(server.port(), "/exec").statusCode()).isEqualTo(400);
-        assertThat(http.get(server.port(), "/exec?query=%20").statusCode()).isEqualTo(400);
+        assertThat(http.get(server.port(), "/exec").statusCode()).isEqualTo(200);
+        assertThat(http.get(server.port(), "/exec?query=%20").statusCode()).isEqualTo(200);
         assertThat(http.exec(server.port(), "select 1", "&limit=ten").statusCode()).isEqualTo(400);
         assertThat(backend.calls).isEmpty();
     }
@@ -235,7 +236,7 @@ class CdbServerTest {
     }
 
     /// A row the store refuses answers 400 with its line, as a lone parse into that appender names it; the appender is
-    /// closed, and the rows before it stay written.
+    /// closed, and the rows before it are discarded, as QuestDB writes nothing of the body.
     @Test
     void writeRefusedByTheStoreIs400() throws IOException, InterruptedException {
         backend.refuseAt = 2;
@@ -249,7 +250,7 @@ class CdbServerTest {
         assertThat(response.body()).isEqualTo(JsonWriter.writeError(refusal.getMessage(), refusal.line()));
         final RecordingAppender appender = backend.appenders.getFirst();
         assertThat(appender.closes()).isEqualTo(1);
-        assertThat(appender.flushed).startsWith("table(a)", "long(f=1)", "at(1)");
+        assertThat(appender.flushed).doesNotContain("at(1)");
     }
 
     /// A precision QuestDB does not name, and a body over the limit, are refused before any appender exists.

@@ -127,8 +127,8 @@ class CdbServerWritesTest {
     }
 
     /// Among twenty good bodies, one with a malformed line and one whose second row the table refuses: those two
-    /// answer 400 with the same body a lone request gets today, the malformed one writes nothing, the refused one
-    /// keeps its first row, and every good body is written.
+    /// answer 400 with the same body a lone request gets today, neither writes any of its rows,
+    /// and every good body is written.
     @Test
     void aBadBodyAmongGoodOnesFailsAlone() throws Exception {
         assertThat(http.post(server.port(), "/write?precision=u", line("t", 0)).statusCode()).isEqualTo(204);
@@ -142,8 +142,8 @@ class CdbServerWritesTest {
 
         assertThat(outcomes.failures).isEmpty();
         assertThat(outcomes.statuses).filteredOn(s -> s == 204).hasSize(20);
-        assertThat(rows("t")).hasSize(1 + 20 + 1).contains((T0 + 600) + "|w600")
-                .doesNotContain((T0 + 500) + "|m", (T0 + 601) + "|w601");
+        assertThat(rows("t")).hasSize(1 + 20)
+                .doesNotContain((T0 + 500) + "|m", (T0 + 600) + "|w600", (T0 + 601) + "|w601");
         final IlpException malformedAlone = catchThrowableOfType(IlpException.class,
                 () -> IlpParser.parse(malformed, new RecordingAppender(), Precision.MICROS, 0L));
         assertThat(outcomes.answers.get(0)).isEqualTo(

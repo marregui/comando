@@ -84,6 +84,27 @@ public final class Planner {
         };
     }
 
+    /**
+     * A statement's plan and the column of its result that holds the designated timestamp, the one QuestDB's
+     * {@code /exec} names as {@code "timestamp"}: a query's top relation's, -1 for a query without one and for every
+     * other statement.
+     */
+    public record Planned(Plan plan, int timestamp) {
+    }
+
+    /** {@link #plan(Ast.Statement, Function, long)} with the designated timestamp of the result. */
+    public static Planned planned(
+            final Ast.Statement statement,
+            final Function<String, TableDef> tables,
+            final long nowMicros
+    ) {
+        if (statement instanceof Ast.Query(final Ast.QueryBody body)) {
+            final Rel rel = new Planner(tables, nowMicros, Catalog::fields, true).query(body, Map.of());
+            return new Planned(rel.plan(), rel.timestamp());
+        }
+        return new Planned(plan(statement, tables, nowMicros), -1);
+    }
+
     Rel query(final Ast.QueryBody body, final Map<String, Ast.QueryBody> ctes) {
         return switch (body) {
             case Ast.Select select -> new SelectPlanner(this, select, ctes).plan();

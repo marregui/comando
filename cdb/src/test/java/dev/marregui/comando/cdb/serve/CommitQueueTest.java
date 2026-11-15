@@ -78,7 +78,7 @@ class CommitQueueTest {
     }
 
     /// A row the store refuses fails only its own request, with its row in the body; the other batches of the same
-    /// commit are written, and so are the refused batch's rows before it.
+    /// commit are written; the refused batch writes none of its rows.
     @Test
     void aRefusedRowFailsOnlyItsRequest() throws Exception {
         final CountDownLatch release = new CountDownLatch(1);
@@ -105,9 +105,8 @@ class CommitQueueTest {
             assertThat(r.cause()).isInstanceOf(CdbException.class);
         });
         assertThat(appenders.opened.get(1).flushed).containsSubsequence(
-                "table(t)", "symbol(s=w1)", "long(v=1)", "at(1)",
-                "table(t)", "symbol(s=w10)", "long(v=10)", "at(10)");
-        assertThat(appenders.opened.get(1).flushed).doesNotContain("at(11)");
+                "table(t)", "symbol(s=w1)", "long(v=1)", "at(1)");
+        assertThat(appenders.opened.get(1).flushed).doesNotContain("at(10)", "at(11)");
     }
 
     /// Close lets the batches already queued commit, and refuses a batch queued after it.
@@ -249,6 +248,11 @@ class CommitQueueTest {
         @Override
         public void at(final long micros) {
             delegate.at(micros);
+        }
+
+        @Override
+        public void discard() {
+            delegate.discard();
         }
 
         @Override

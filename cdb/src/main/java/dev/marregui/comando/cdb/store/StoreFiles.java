@@ -10,6 +10,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -61,6 +62,10 @@ final class StoreFiles {
 
         /** {@code path}, a file or an empty folder, was deleted. */
         void deleted(Path path);
+
+        /** A delete of {@code path} is about to run, whether or not it exists: the cost of a missing one is an error. */
+        default void deleting(final Path path) {
+        }
     }
 
     private StoreFiles() {
@@ -219,8 +224,11 @@ final class StoreFiles {
 
     /** Deletes {@code path}, a file or an empty folder, when it exists. */
     static void delete(final Path path) throws IOException {
+        final Recorder r = recorder;
+        if (r != null) {
+            r.deleting(path);
+        }
         if (Files.deleteIfExists(path)) {
-            final Recorder r = recorder;
             if (r != null) {
                 r.deleted(path);
             }
@@ -283,8 +291,15 @@ final class StoreFiles {
      */
     static boolean replaceText(final Path file, final String text) throws IOException {
         final Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-        delete(tmp);
-        writeNew(tmp, ByteBuffer.wrap(text.getBytes(StandardCharsets.UTF_8)));
+        final ByteBuffer bytes = ByteBuffer.wrap(text.getBytes(StandardCharsets.UTF_8));
+        try {
+            writeNew(tmp, bytes);
+        } catch (final FileAlreadyExistsException _) {
+            // a crash between the write and the move left it, rare: deleted then, not before every replace, where
+            // the delete of a missing file costs an exception inside the JDK
+            delete(tmp);
+            writeNew(tmp, bytes);
+        }
         Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         final Recorder r = recorder;
         if (r != null) {

@@ -21,7 +21,9 @@ import dev.marregui.comando.cdb.CdbException;
  * read at their snapshot, from any thread.
  * <p>
  * The file holds one entry per key, in key order: the value's UTF-8 length as a little-endian int, then its bytes. A
- * torn last entry, left by a crash during {@link #sync()}, is cut on open: no committed transaction used its key.
+ * torn last entry, left by a crash during {@link #sync()}, is cut on open: no committed transaction used its key. A
+ * {@link #sync()} that failed may leave bytes past the committed ones: the next sync cuts them before it appends, so
+ * the file never holds a torn entry before a later one.
  */
 final class SymbolTable implements AutoCloseable {
 
@@ -61,10 +63,15 @@ final class SymbolTable implements AutoCloseable {
     /**
      * The dictionary in {@code file}, first cut to {@code committedBytes}, its length at the last checkpoint (-1: not
      * recorded, the file taken as it is): bytes past it were appended unforced and may hold anything, zeros included.
+     * A file that holds fewer committed bytes than {@code committedBytes}, or none, lost keys a committed transaction
+     * uses: it is refused, as those keys would read as NULL.
      */
     static SymbolTable open(final Path file, final long committedBytes) {
         try {
             if (!Files.exists(file)) {
+                if (committedBytes > 0L) {
+                    throw lost(file, committedBytes, 0L);
+                }
                 return new SymbolTable(file, new String[INITIAL_CAPACITY], 0, 0L);
             }
             if (committedBytes >= 0L && Files.size(file) > committedBytes) {
@@ -92,6 +99,9 @@ final class SymbolTable implements AutoCloseable {
                     values[count++] = new String(utf8, StandardCharsets.UTF_8);
                     valid += Integer.BYTES + length;
                 }
+            }
+            if (valid < committedBytes) {
+                throw lost(file, committedBytes, valid);
             }
             if (valid < bytes) {
                 StoreFiles.truncate(file, valid);
@@ -193,6 +203,10 @@ final class SymbolTable implements AutoCloseable {
         }
         buffer.flip();
         try {
+            // bytes of an earlier sync that failed after writing part of its keys: cut, or this one lands behind them
+            if (Files.exists(file) && Files.size(file) > syncedBytes) {
+                StoreFiles.truncate(file, syncedBytes);
+            }
             StoreFiles.append(file, buffer);
         } catch (final IOException e) {
             throw new CdbException("cannot sync symbol table [file=" + file + ", keys=" + upTo + ']', e);
@@ -214,6 +228,11 @@ final class SymbolTable implements AutoCloseable {
     /** Holds no file open between syncs: nothing to release. */
     @Override
     public void close() {
+    }
+
+    private static CdbException lost(final Path file, final long committedBytes, final long validBytes) {
+        return new CdbException("refuse symbol file shorter than its committed keys [file=" + file + ", bytes="
+                + validBytes + ", committedBytes=" + committedBytes + ']', -1);
     }
 
     private static int grow(final int length) {

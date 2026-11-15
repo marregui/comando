@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.store;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,7 +17,8 @@ import dev.marregui.comando.cdb.CdbType;
  * or refused whole; the appender keeps each touched table's writer until {@link #close}. A table whose writer the store
  * did not hand over refuses the appender's later rows of it at once, with the same reason, rather than waiting again.
  * {@link #flush} commits each touched table in turn, not atomically across tables: a failed commit leaves the tables
- * before it committed and the ones after it unwritten.
+ * before it committed and the ones from it on rolled back. An {@link Error} in a flush closes the appender, its writers
+ * released.
  */
 final class IlpAppender implements CdbAppender {
 
@@ -129,12 +131,34 @@ final class IlpAppender implements CdbAppender {
     @Override
     public void flush() {
         checkOpen();
+        int committed = 0;
         try {
             for (final TableWriter writer : touched) {
                 writer.commit();
+                committed++;
             }
+        } catch (final RuntimeException e) {
+            // the failed table's rows and those of the tables after it would otherwise ride on a later flush
+            rollBack(touched.subList(committed, touched.size()), e);
+            throw e;
+        } catch (final Error e) {
+            release(e);
+            throw e;
         } finally {
             touched.clear();
+        }
+    }
+
+    /** Rolls back every writer the appender holds and keeps them: a column only a refused row added goes too. */
+    @Override
+    public void discard() {
+        checkOpen();
+        table = null;
+        fields = 0;
+        touched.clear();
+        final RuntimeException failure = rollBack(writers.values(), null);
+        if (failure != null) {
+            throw failure;
         }
     }
 
@@ -143,15 +167,46 @@ final class IlpAppender implements CdbAppender {
         if (closed) {
             return;
         }
-        CdbException failure = null;
+        Throwable failure = null;
         try {
             flush();
-        } catch (final CdbException e) {
+        } catch (final RuntimeException | Error e) {
             failure = e;
         }
+        failure = release(failure);
+        if (failure instanceof final Error e) {
+            throw e;
+        }
+        if (failure != null) {
+            throw (RuntimeException) failure;
+        }
+    }
+
+    // rolls back each of writers; returns primary, or a failure of its own when null, with each rollback failure added
+    private static RuntimeException rollBack(final Collection<TableWriter> writers, final RuntimeException primary) {
+        RuntimeException failure = primary;
+        for (final TableWriter writer : writers) {
+            try {
+                writer.rollback();
+            } catch (final RuntimeException e) {
+                if (failure == null) {
+                    failure = new CdbException("cannot roll back appender's writers", e);
+                } else {
+                    failure.addSuppressed(e);
+                }
+            }
+        }
+        return failure;
+    }
+
+    // closes the appender and every writer it holds; returns primary, or a failure of its own when null, with each
+    // close failure added
+    private Throwable release(final Throwable primary) {
         closed = true;
+        touched.clear();
         final List<TableWriter> open = new ArrayList<>(writers.values());
         writers.clear();
+        Throwable failure = primary;
         for (final TableWriter writer : open) {
             try {
                 writer.close();
@@ -163,9 +218,7 @@ final class IlpAppender implements CdbAppender {
                 }
             }
         }
-        if (failure != null) {
-            throw failure;
-        }
+        return failure;
     }
 
     private IlpAppender add(final String column, final CdbType type) {

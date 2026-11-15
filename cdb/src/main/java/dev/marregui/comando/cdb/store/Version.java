@@ -91,8 +91,10 @@ final class Version implements PartitionReader {
 
     /**
      * Maps the version in {@code dir} of {@code rowCount} rows; a column of {@code def} with no file there (added
-     * later) reads NULL. Every file is checked to hold what the row count needs before a byte of it is read, and is
-     * read through a slice of that length.
+     * later) reads NULL. Columns are only added last, so the columns without a file must be a tail of {@code def}'s,
+     * and a partition holding rows has the files of its first column and of its designated timestamp: a folder or a
+     * file missing otherwise is refused, not read as NULL. Every file is checked to hold what the row count needs
+     * before a byte of it is read, and is read through a slice of that length.
      */
     static Version open(final Path dir, final TableDef def, final long rowCount,
             final List<SymbolTable> symbolsByColumn) {
@@ -104,14 +106,28 @@ final class Version implements PartitionReader {
         final SymbolTable[] symbols = new SymbolTable[n];
         final Arena arena = Arena.ofShared();
         try {
+            if (!Files.isDirectory(dir)) {
+                throw new CdbException("refuse missing partition folder [table=" + def.name() + ", partition="
+                        + dir.getFileName() + ']', -1);
+            }
             long mapped = 0L;
+            int firstAbsent = -1;
             for (int c = 0; c < n; c++) {
                 final ColumnDef column = columns.get(c);
                 types[c] = column.type();
                 symbols[c] = symbolsByColumn.get(c);
                 final Path d = dir.resolve(column.name() + ".d");
                 if (!Files.exists(d)) {
+                    if (firstAbsent < 0) {
+                        firstAbsent = c;
+                    }
+                    if (column.type() == CdbType.VARCHAR && Files.exists(dir.resolve(column.name() + ".i"))) {
+                        throw missing(def, dir, d.getFileName().toString());
+                    }
                     continue;
+                }
+                if (firstAbsent >= 0) {
+                    throw missing(def, dir, columns.get(firstAbsent).name() + ".d");
                 }
                 data[c] = StoreFiles.map(d, arena);
                 mapped += data[c].byteSize();
@@ -135,6 +151,14 @@ final class Version implements PartitionReader {
                 }
             }
             final int ts = def.timestampIndex();
+            if (rowCount > 0L) {
+                if (data[0] == null) {
+                    throw missing(def, dir, columns.get(0).name() + ".d");
+                }
+                if (ts >= 0 && data[ts] == null) {
+                    throw missing(def, dir, columns.get(ts).name() + ".d");
+                }
+            }
             final long min;
             final long max;
             if (ts >= 0 && data[ts] != null && rowCount > 0L) {
@@ -530,6 +554,11 @@ final class Version implements PartitionReader {
                     + type + ", asked=" + a + ']');
         }
         return data[column];
+    }
+
+    private static CdbException missing(final TableDef def, final Path dir, final String file) {
+        return new CdbException("refuse partition with a missing file [table=" + def.name() + ", partition="
+                + dir.getFileName() + ", file=" + file + ']', -1);
     }
 
     /**

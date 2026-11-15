@@ -9,13 +9,14 @@ import dev.marregui.comando.cdb.CdbAppender;
 import dev.marregui.comando.cdb.CdbException;
 
 /// An appender that records each call as text, `table(t)`, `long(n=1)`, `at(5)`, and moves the pending calls to
-/// `flushed` on `flush()` and on `close()`. Refuses the row whose `at` is the `refuseAt`-th, counted from 1 (0: none).
+/// `flushed` on `flush()` and on `close()`, and drops the pending calls on `discard()`. Refuses the row whose `at` is the `refuseAt`-th, counted from 1 (0: none).
 /// One thread writes; the lists and the close count are safe to read from another.
 final class RecordingAppender implements CdbAppender {
 
     final List<String> flushed = Collections.synchronizedList(new ArrayList<>());
     final List<String> pending = Collections.synchronizedList(new ArrayList<>());
     private final AtomicInteger closes = new AtomicInteger();
+    private final AtomicInteger discards = new AtomicInteger();
     private final int refuseAt;
     private final Runnable onClose;
     private int rows;
@@ -37,6 +38,11 @@ final class RecordingAppender implements CdbAppender {
     /// How many times `close()` ran.
     int closes() {
         return closes.get();
+    }
+
+    /// How many times `discard()` ran.
+    int discards() {
+        return discards.get();
     }
 
     @Override
@@ -88,6 +94,12 @@ final class RecordingAppender implements CdbAppender {
             throw new CdbException("refuse row [row=" + rows + ']', -1);
         }
         pending.add("at(" + micros + ')');
+    }
+
+    @Override
+    public void discard() {
+        discards.incrementAndGet();
+        pending.clear();
     }
 
     @Override

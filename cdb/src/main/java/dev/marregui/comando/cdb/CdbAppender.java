@@ -36,6 +36,9 @@ public interface CdbAppender extends AutoCloseable {
     /** Commits every table this appender wrote since the last flush. */
     void flush();
 
+    /** Drops every row written since the last flush, in every table, and the current row; the appender stays open. */
+    void discard();
+
     /** Flushes, then releases the tables' writers. */
     @Override
     void close();

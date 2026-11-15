@@ -20,6 +20,21 @@ public final class Page {
         this.size = size;
     }
 
+    /** Drops the first {@code count} rows, moving the rest to the front of each column; {@code count <= size}. */
+    public void dropFirst(final int count) {
+        final int kept = size - count;
+        for (final Vector column : columns) {
+            final Object values = switch (column.type) {
+                case LONG, TIMESTAMP -> column.longs;
+                case DOUBLE -> column.doubles;
+                case BOOLEAN -> column.booleans;
+                case SYMBOL, VARCHAR -> column.texts;
+            };
+            System.arraycopy(values, count, values, 0, kept);
+        }
+        size = kept;
+    }
+
     /** An empty page with one vector of {@link #CAPACITY} values per field. */
     public static Page allocate(final List<Field> fields) {
         final Vector[] columns = new Vector[fields.size()];

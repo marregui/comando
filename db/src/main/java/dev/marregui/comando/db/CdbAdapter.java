@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 
 import dev.marregui.comando.cdb.Cdb;
+import dev.marregui.comando.cdb.CdbCancel;
 import dev.marregui.comando.cdb.CdbResult;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
@@ -39,8 +40,8 @@ import dev.marregui.comando.core.view.ViewSpec;
  * a strand that runs its work in order, as {@link DbAdapter}'s lanes do; two connections on one folder share one open
  * database. Every method returns at once; outcomes come back as intents, and Claude's queries as futures.
  *
- * <p>cdb has no cancel of a running statement: a cancelled run that has not started never starts, and one already
- * running ends as cancelled when it returns, its rows not kept.</p>
+ * <p>A cancelled run that has not started never starts; one already running has its {@link CdbCancel} cancelled, so
+ * the query gives up at its next page, and ends as cancelled, its rows not kept.</p>
  */
 public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable {
 
@@ -62,6 +63,9 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
     /** Requests queued or running: a cancel is kept only for one of them. */
     private final Set<Long> pending = ConcurrentHashMap.newKeySet();
     private final ResultRegistry results;
+    private final Runner runner;
+    /** The cancel of each request whose query has begun to run; a run takes its id out when it ends. */
+    private final ConcurrentHashMap<Long, CdbCancel> running = new ConcurrentHashMap<>();
     private final SchemaRegistry schemas;
     private final DbSettings settings;
     private final IntentSink sink;
@@ -77,11 +81,25 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
             final DbSettings settings,
             final Path defaultRoot
     ) {
+        this(sink, results, schemas, settings, defaultRoot,
+                (db, sql, maxRows, cancel) -> db.run(sql, 0L, maxRows, cancel));
+    }
+
+    /** As the public constructor, with {@code runner} running each statement of {@link #execute}. */
+    CdbAdapter(
+            final IntentSink sink,
+            final ResultRegistry results,
+            final SchemaRegistry schemas,
+            final DbSettings settings,
+            final Path defaultRoot,
+            final Runner runner
+    ) {
         this.sink = sink;
         this.results = results;
         this.schemas = schemas;
         this.settings = settings;
         this.defaultRoot = defaultRoot.toAbsolutePath().normalize();
+        this.runner = runner;
     }
 
     /** Whether {@code spec} is a cdb connection: its host is {@code cdb} or {@code cdb:<folder>}. */
@@ -133,6 +151,11 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
     public void cancel(final long requestId) {
         if (pending.contains(requestId)) {
             cancelled.add(requestId);
+            // after the flag, as a run registers its cancel before it reads the flag: one of the two sees the other
+            final CdbCancel query = running.get(requestId);
+            if (query != null) {
+                query.cancel();
+            }
         }
     }
 
@@ -380,6 +403,12 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
         boolean queue(Strand strand);
     }
 
+    /** Runs one statement of {@link Strand#execute} on an open database; {@code cancel} stops it at its next page. */
+    @FunctionalInterface
+    interface Runner {
+        CdbResult run(Cdb db, String sql, int maxRows, CdbCancel cancel);
+    }
+
     /** Work against an open database, on its connection's strand. */
     @FunctionalInterface
     private interface DbCall<T> {
@@ -515,6 +544,8 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
 
         private void run(final long requestId, final ConnectionSpec spec, final String sql) {
             final long start = System.nanoTime();
+            final CdbCancel cancel = new CdbCancel();
+            running.put(requestId, cancel);
             try {
                 if (cancelled.remove(requestId)) {
                     sink.dispatch(new Intent.SqlCancelled(requestId));
@@ -531,7 +562,7 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
                 sink.dispatch(new Intent.SqlStarted(requestId));
                 final CdbResult result;
                 try {
-                    result = opened.run(sql, settings.maxRows());
+                    result = runner.run(opened, sql, settings.maxRows(), cancel);
                 } catch (final RuntimeException e) {
                     if (cancelled.remove(requestId)) {
                         sink.dispatch(new Intent.SqlCancelled(requestId));
@@ -557,6 +588,7 @@ public final class CdbAdapter implements DatabasePort, QueryPort, AutoCloseable 
                 sink.dispatch(new Intent.SqlCompleted(requestId, result.rowCount(), -1L, result.truncated(), execMillis,
                         millisSince(fetchStart), total));
             } finally {
+                running.remove(requestId);
                 pending.remove(requestId);
                 cancelled.remove(requestId);
             }

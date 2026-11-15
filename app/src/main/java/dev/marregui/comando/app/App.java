@@ -53,7 +53,9 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.db.CdbAdapter;
 import dev.marregui.comando.db.DbAdapter;
+import dev.marregui.comando.db.DbRouter;
 import dev.marregui.comando.db.DbSettings;
 import dev.marregui.comando.mcp.AuditLog;
 import dev.marregui.comando.mcp.McpServer;
@@ -188,7 +190,8 @@ public final class App implements AutoCloseable {
                 }
             });
 
-            final DbAdapter db = own(new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS));
+            final DbRouter db = own(new DbRouter(new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS),
+                    new CdbAdapter(loop, results, schemas, DbSettings.DEFAULTS, config.home().resolve("cdb"))));
             // the previews draw Mermaid diagrams with mmdc into a cache, once per diagram text
             MermaidDiagrams.install(config.home().resolve("cache").resolve("mermaid"));
             own(MermaidDiagrams::shutdown);

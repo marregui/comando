@@ -189,9 +189,11 @@ final class DefaultWriter implements TableWriter {
         final boolean interrupted = Thread.interrupted();
         state.applyLock.lock();
         try {
+            // a store closed under the writer refuses the commit before its queue is applied
+            committed();
             // the queued commits come first, so a batch never spans a definition change or a truncate
             store.applier().applyAllHeld(state, false);
-            write(state.current().txn() + 1L, true);
+            write(committed().txn() + 1L, true);
         } finally {
             state.applyLock.unlock();
             if (interrupted) {
@@ -245,7 +247,7 @@ final class DefaultWriter implements TableWriter {
         state.enqueue(new TableState.Queued(txn, resize(pending, def.columns(), capacity, n), System.nanoTime(),
                 bytes));
         pending.size = 0;
-        store.applier().committed(bytes);
+        store.applier().committed(state, bytes);
         // the commit is durable and queued from here: a failure of this hook leaves it to the applier
         store.afterWalForce.run();
         if (store.applyOnCommit) {
@@ -260,11 +262,8 @@ final class DefaultWriter implements TableWriter {
      * all fell in one partition.
      */
     private void checkApplicable() {
-        final TableState.Snapshot current = state.current();
-        if (current == null) {
-            // the store closed under the writer; a close racing past this check is refused when the commit queues
-            throw new CdbException("refuse commit to closed table [table=" + def.name() + ']', -1);
-        }
+        // a close racing past this check is refused when the commit queues
+        final TableState.Snapshot current = committed();
         final List<ColumnDef> columns = def.columns();
         final int committedColumns = current.def().columns().size();
         long rows = 0L;
@@ -303,7 +302,7 @@ final class DefaultWriter implements TableWriter {
     // called with the apply lock held, or by the recovery: writes the pending rows as transaction txn and publishes it,
     // named by a checkpoint when direct
     private void write(final long txn, final boolean direct) {
-        final TableState.Snapshot current = state.current();
+        final TableState.Snapshot current = committed();
         // versions in new folders, and versions of a committed folder its rows were appended to
         final List<Version> written = new ArrayList<>();
         final List<Version> appended = new ArrayList<>();
@@ -328,29 +327,50 @@ final class DefaultWriter implements TableWriter {
         } catch (final IOException | RuntimeException e) {
             final CdbException failure = new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn
                     + ']', e);
-            // the appended bytes stay past the committed ends, where no reader looks; the next commit rewrites these
-            for (final Version v : appended) {
-                state.torn().add(v.folder);
-                try {
-                    v.unmap();
-                } catch (final RuntimeException cleanup) {
-                    failure.addSuppressed(cleanup);
-                }
-            }
-            for (final Version v : written) {
-                try {
-                    v.unmap();
-                    StoreFiles.deleteFolder(v.dir);
-                } catch (final IOException | RuntimeException cleanup) {
-                    failure.addSuppressed(cleanup);
-                }
-            }
+            drop(written, appended, failure);
             throw failure;
+        } catch (final Error e) {
+            // the table's state may be half-written: refused until the store is opened again
+            state.poison();
+            LOG.log(System.Logger.Level.ERROR, "refuse further commits, an error stopped a commit [table="
+                    + def.name() + ", txn=" + txn + ']', e);
+            drop(written, appended, e);
+            throw e;
         }
         state.publish(snapshot);
         committedDef = def;
         pending.size = 0;
         truncated = false;
+    }
+
+    // a failed write's versions: unmapped, the new folders deleted; each cleanup failure added to failure
+    private void drop(final List<Version> written, final List<Version> appended, final Throwable failure) {
+        // the appended bytes stay past the committed ends, where no reader looks; the next commit rewrites these
+        for (final Version v : appended) {
+            state.torn().add(v.folder);
+            try {
+                v.unmap();
+            } catch (final RuntimeException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+        }
+        for (final Version v : written) {
+            try {
+                v.unmap();
+                StoreFiles.deleteFolder(v.dir);
+            } catch (final IOException | RuntimeException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+        }
+    }
+
+    // the table's committed snapshot; refused once the store closed under the writer
+    private TableState.Snapshot committed() {
+        final TableState.Snapshot current = state.current();
+        if (current == null) {
+            throw new CdbException("refuse commit to closed table [table=" + def.name() + ']', -1);
+        }
+        return current;
     }
 
     @Override

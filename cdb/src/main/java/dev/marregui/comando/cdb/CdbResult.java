@@ -20,12 +20,15 @@ public final class CdbResult {
     private final int rowCount;
     private final long updateCount;
     private final boolean truncated;
+    private final int timestampIndex;
 
-    private CdbResult(final List<Field> fields, final List<Page> pages, final long updateCount, final boolean truncated) {
+    private CdbResult(final List<Field> fields, final List<Page> pages, final long updateCount, final boolean truncated,
+            final int timestampIndex) {
         this.fields = List.copyOf(fields);
         this.pages = List.copyOf(pages);
         this.updateCount = updateCount;
         this.truncated = truncated;
+        this.timestampIndex = timestampIndex;
         starts = new int[pages.size() + 1];
         for (int i = 0; i < pages.size(); i++) {
             starts[i + 1] = starts[i] + pages.get(i).size;
@@ -35,12 +38,30 @@ public final class CdbResult {
 
     /** Drains {@code cursor} up to {@code maxRows} rows (no bound when not positive), then closes it. */
     static CdbResult drain(final Cursor cursor, final int maxRows) {
+        return drain(cursor, 0L, maxRows, null);
+    }
+
+    /**
+     * Drains {@code cursor} as {@link #drain(Cursor, int)} does after skipping its first {@code offset} rows, and
+     * throws a {@link CdbException} once {@code cancel} is cancelled, checked before each page; {@code cancel} may be
+     * null. {@code maxRows} counts the rows kept after the skipped ones.
+     */
+    static CdbResult drain(final Cursor cursor, final long offset, final int maxRows, final CdbCancel cancel) {
         try (cursor) {
             final List<Page> pages = new ArrayList<>();
+            long skipped = 0L;
             int rows = 0;
             boolean truncated = false;
             Page page;
             while ((page = cursor.next()) != null) {
+                if (cancel != null && cancel.cancelled()) {
+                    throw new CdbException("query cancelled", -1);
+                }
+                if (skipped < offset) {
+                    final int drop = (int) Math.min(offset - skipped, page.size);
+                    skipped += drop;
+                    page.dropFirst(drop);
+                }
                 if (maxRows > 0 && rows + page.size > maxRows) {
                     page.size = maxRows - rows;
                     truncated = true;
@@ -53,18 +74,41 @@ public final class CdbResult {
                     break;
                 }
             }
-            return new CdbResult(cursor.fields(), pages, -1, truncated);
+            return new CdbResult(cursor.fields(), pages, -1, truncated, designated(cursor.fields()));
         }
+    }
+
+    /**
+     * The column that holds the statement's designated timestamp, the one QuestDB's {@code /exec} names as
+     * {@code "timestamp"}; -1 when it has none. A result the planner did not tag (see {@link #withTimestampIndex(int)})
+     * answers its first TIMESTAMP column.
+     */
+    public int timestampIndex() {
+        return timestampIndex;
+    }
+
+    /** This result with {@code index}, a column of the planned query, as its designated timestamp (-1: none). */
+    CdbResult withTimestampIndex(final int index) {
+        return new CdbResult(fields, pages, updateCount, truncated, index);
+    }
+
+    private static int designated(final List<Field> fields) {
+        for (int column = 0; column < fields.size(); column++) {
+            if (fields.get(column).type() == CdbType.TIMESTAMP) {
+                return column;
+            }
+        }
+        return -1;
     }
 
     /** The result of a statement that changed {@code count} rows. */
     static CdbResult updated(final long count) {
-        return new CdbResult(List.of(), List.of(), count, false);
+        return new CdbResult(List.of(), List.of(), count, false, -1);
     }
 
     /** The columns of a statement planned and not run: no rows; -1 as its update count. */
     static CdbResult described(final List<Field> fields) {
-        return new CdbResult(fields, List.of(), -1, false);
+        return new CdbResult(fields, List.of(), -1, false, designated(fields));
     }
 
     public int columnCount() {

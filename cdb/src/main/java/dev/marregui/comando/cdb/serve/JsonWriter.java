@@ -23,6 +23,14 @@ final class JsonWriter {
      * changed rows, else the query's columns and rows.
      */
     static String result(final String query, final Rows rows) {
+        return result(query, rows, 0L);
+    }
+
+    /**
+     * {@link #result(String, Rows)} for rows served after {@code skipped} rows a {@code limit=lo,hi} passed over:
+     * {@code count} is the skipped rows plus the served ones, as QuestDB counts them.
+     */
+    static String result(final String query, final Rows rows, final long skipped) {
         if (rows.isDdl()) {
             return "{\"ddl\":\"OK\"}";
         }
@@ -55,7 +63,7 @@ final class JsonWriter {
             }
             json.append(']');
         }
-        return json.append("],\"count\":").append(count).append('}').toString();
+        return json.append("],\"count\":").append(skipped + count).append('}').toString();
     }
 
     /** A refused or failed query, as QuestDB answers it with status 400; {@code position} is -1 without one. */
@@ -66,6 +74,14 @@ final class JsonWriter {
         json.append(",\"error\":");
         string(json, message);
         return json.append(",\"position\":").append(position).append('}').toString();
+    }
+
+    /** QuestDB's answer, status 200, to a request with no query text: the error key, and the position as text. */
+    static String emptyQuery(final String query) {
+        final StringBuilder json = new StringBuilder(48 + query.length());
+        json.append("{\"error\":\"empty query\",\"query\":");
+        string(json, query);
+        return json.append(",\"position\":\"0\"}").toString();
     }
 
     /** A refused {@code /write} body, in the keys of QuestDB's line-protocol error: code, message and line. */

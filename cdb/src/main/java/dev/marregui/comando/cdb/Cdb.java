@@ -41,13 +41,22 @@ public final class Cdb implements AutoCloseable {
 
     /** Runs {@code sql}; a query keeps at most {@code maxRows} rows (no bound when not positive). */
     public CdbResult run(final String sql, final int maxRows) {
+        return run(sql, 0L, maxRows, null);
+    }
+
+    /**
+     * Runs {@code sql} as {@link #run(String, int)} does, skipping a query's first {@code offset} rows and giving up
+     * with a {@link CdbException} once {@code cancel} is cancelled ({@code cancel} may be null).
+     */
+    public CdbResult run(final String sql, final long offset, final int maxRows, final CdbCancel cancel) {
         beforeQuery.run();
         final long now = nowMicros();
-        final Plan plan = Planner.plan(Parser.parse(sql), store::def, now);
-        if (plan instanceof Plan.Change change) {
+        final Planner.Planned planned = Planner.planned(Parser.parse(sql), store::def, now);
+        if (planned.plan() instanceof Plan.Change change) {
             return CdbResult.updated(Executor.execute(change, store, now));
         }
-        return CdbResult.drain(Executor.open(plan, store, now), maxRows);
+        return CdbResult.drain(Executor.open(planned.plan(), store, now), offset, maxRows, cancel)
+                .withTimestampIndex(planned.timestamp());
     }
 
     /**

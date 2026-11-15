@@ -47,8 +47,10 @@ final class Wal {
     private static final int MAX_COLUMNS = 0xFFFF;
 
     private final Path file;
-    private int records;
-    private long bytes;
+    // records and bytes: written by whoever holds the monitor (a commit's append, the applier's reset, a scan), read
+    // by the applier and the status listing without it, so a read never waits for an append's force
+    private volatile int records;
+    private volatile long bytes;
     // the last record's transaction, meaningful while records > 0
     private long lastTxn;
 
@@ -223,12 +225,12 @@ final class Wal {
     }
 
     /** The commits logged since the last reset. */
-    synchronized int records() {
+    int records() {
         return records;
     }
 
     /** The log's size in bytes, its header included. */
-    synchronized long bytes() {
+    long bytes() {
         return bytes;
     }
 

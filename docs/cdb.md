@@ -88,7 +88,10 @@ commit's file code as one commit: one sort, per partition one dedup, one append 
 one publish, named by the batch's last transaction. That gives the same rows as one commit at a time: dedup keeps the
 last row written and the sort is stable, so the last write of an upsert key wins as before; the TTL's newest timestamp
 only grows, so one expiry at the end drops the same partitions; a truncate or a definition change is never inside a
-batch. A table is due once its oldest queued commit is older than its interval, at once when a reader waits for it or
+batch. A commit puts its table on the applier's queue, once until it is served; a deadline list, kept by the applier
+thread alone, holds each table's next due time (its interval, a retry back-off, an idle checkpoint), and the thread
+parks until the earliest of them or the next commit, so an idle store costs no work. A table is due once its oldest
+queued commit is older than its interval, at once when a reader waits for it or
 the store's queued commits pass half their budget (64 MiB of heap, estimated). The interval starts at 1 s and stays in
 100 ms to 5 s: halved after a batch a reader waited for, doubled after a batch that took more than half of it, else
 drawn a quarter of the way back to 1 s. Over the budget a commit waits for the applier to catch up, at most 10 s, so a
@@ -127,6 +130,11 @@ the log's records together say what is committed: a reader maps only the publish
 | a direct commit fails before `_txn` is replaced | the previous transaction, its version folders and files cleaned up as before the log |
 | a commit that fails after appending | the bytes past the committed ends stay while readers may map them; the next commit rewrites that partition instead of appending |
 | forcing the table folder fails after `_txn` was moved | the commit stands (it is visible); the log and the old folders are kept; after a direct commit the table refuses commits until the store reopens, logged at ERROR |
+| a partition folder or a column file `_txn` and `_meta` name is missing | the read fails, naming the table, the partition and the file; a column added after a partition was written has no file there and reads NULL |
+| a symbol write fails | the dictionary is cut back to its committed length before the next write, and a dictionary shorter than its checkpoint fails the open: a committed symbol never reads NULL |
+| a `/write` body with a malformed or refused line | none of the body's rows is written (`CdbAppender.discard`); the other bodies of its group commit are written |
+| the store closes while a writer is still open after the close's 10 s wait | the close fails naming the tables and keeps the root's `_lock`, so no other store opens the folder under that writer; a later close releases it once the writer is closed |
+| an `Error` while a commit writes its files | the files it wrote unmapped and deleted, its writers released, and the table refusing commits until the store reopens |
 | the previous engine opening a store after a failed or crashed append | it refuses the longer files and opens nothing; opening once with this engine cuts them first |
 | an engine from before the log opening a checkpointed store | it refuses `_txn`'s new lines and opens nothing: the format is one-way |
 
@@ -139,7 +147,7 @@ not name it: a folder the durable `_txn` still names is the data a power cut wou
 | Who | Holds | Waits for |
 |---|---|---|
 | a reader (`/exec`, the PG wire's SELECT, `Cdb.run`) | a snapshot, taken without blocking a writer | the applier, only when a commit answered before the read and older than its lag (§3.1) is not yet published: at most 10 s, then the read fails |
-| the applier | per table, the apply lock, which a direct commit, the checkpoint and the close also take | a direct commit of the table in progress; never a logged commit, which takes only the log's monitor |
+| the applier | per table, the apply lock, which a direct commit, the checkpoint and the close also take | a direct commit of the table in progress; a logged commit's force only at a checkpoint, whose cut and drain of an overgrown log take the log's monitor (its size and record count are read without it) |
 | a table's writer | the table's one-writer lease | another writer of the same table |
 | `/write` | nothing while parsing; then its batches go to one queue per table (`serve.CommitQueue`) | the committer of each of its tables |
 
@@ -167,6 +175,41 @@ milliseconds, so a read stops waiting for the applier that writes answered commi
 N is a whole number of milliseconds, 0 or more; anything else is refused (HTTP 400, a PG error, a launcher error). A lag
 means: a read waits for the applier only when a commit older than N ms is not yet published; a commit younger than N ms
 may be missing from the read, and one older never is. N = 0 is the default.
+
+### 3.2 Threads and locks
+
+Threads:
+
+| Thread | Kind | Owner | May block on |
+|---|---|---|---|
+| `cdb-applier-<root>` | platform, daemon, one per store (its batches force files, which would pin a virtual thread) | `store.Applier`, started by `Store.open`, stopped by `Store.close` (joined up to 10 s) | a table's apply lock (a direct commit of it in progress), the log's monitor when it drains a log past 4 checkpoints' worth, file writes and forces; parks until its earliest deadline or a signal, at most 1 s |
+| `cdb-http-<n>` | virtual, one per request | `serve.CdbServer` | a table's lease and its commit queue, the read wait for the applier (at most 10 s), the socket |
+| a PG connection's thread | virtual, one per connection | `serve.PgServer` | as an HTTP request, and the client's socket |
+| `cdb-serve-shutdown` | platform, the JVM's shutdown hook | `CdbServe` | the launcher's close, at most its close wait |
+
+The applier serves the tables a commit queued (each table at most once in the queue), then the tables whose deadline
+came: the schedule of its queued commits, a failed batch's retry, its idle checkpoint, a paused applier's next look. A
+reader that must wait for it, and a commit over half the queued budget, wake it to serve every table once. An idle
+store's thread makes no pass over its tables.
+
+Locks, in the order they are taken (a thread holding one takes only those below it):
+
+| Lock | Guards | Taken by |
+|---|---|---|
+| a table's lease (`TableState.lease`) | one writer per table | a writer, a `/write` committer, the store's checkpoint and close |
+| a table's apply lock (`TableState.applyLock`) | the column files, dictionaries and checkpoints | the applier, a direct commit, the store's checkpoint and close |
+| a log's monitor (`Wal`) | the log file: append and its force, cut, scan | a logged commit, the applier's checkpoint (its drain of an overgrown log holds it while it applies) |
+| a table's state lock (`TableState.lock`) | the queued commits, the published snapshot, the waiting readers | committers, readers, the applier |
+
+The log's size and record count are read without its monitor (volatile fields written under it), so the applier's
+checkpoint test never waits for a commit's force. `Store`'s create lock serialises the creation of tables and is held
+alone. A commit queue's lock (`serve.CommitQueue`) guards one table's queued batches and is never held while the batch
+is written.
+
+The rule `CdbThreadConfinementTest` enforces: only `CdbServe`, `serve.CdbServer`, `serve.PgServer` and
+`store.Applier` (nested classes and lambdas included) create a thread or an executor (`new Thread`,
+`Thread.ofPlatform`, `Thread.ofVirtual`, `Thread.startVirtualThread`, `Executors.new*`), read from the module's
+bytecode.
 
 ## 4. Measurements
 

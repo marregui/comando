@@ -29,7 +29,7 @@ import dev.marregui.comando.cdb.CdbType;
 public final class Store implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Store.class.getName());
-    // how long close waits for each table's open writer; a writer still open after it fails on its next commit
+    // how long close waits for each table's open writer; past it the close fails and keeps the root's lock
     private static final long CLOSE_WAIT_MILLIS = 10_000L;
     // how long a checkpoint waits for the table's writer; as CLOSE_WAIT_MILLIS
     private static final long CHECKPOINT_WAIT_MILLIS = 10_000L;
@@ -117,6 +117,10 @@ public final class Store implements AutoCloseable {
     @TestOnly
     volatile long textLimitBytes = Integer.MAX_VALUE;
 
+    /** How long close waits for each table's open writer: {@code CLOSE_WAIT_MILLIS}, lowered by tests only. */
+    @TestOnly
+    long closeWaitMillis = CLOSE_WAIT_MILLIS;
+
     /**
      * The most a read may lag the answered commits, in milliseconds, for the reads of the scope it is bound in: 0, a
      * read sees every commit answered before it began; above 0, a read waits for the applier only when a commit older
@@ -129,6 +133,10 @@ public final class Store implements AutoCloseable {
     // written by the launcher before it serves, read by every reader
     private volatile long readMaxLagMillis;
     private final Object createLock = new Object();
+    // serialises close: a close that kept the lock is finished by a later one
+    private final Object closeLock = new Object();
+    // the tables whose writer a close left open, guarded by closeLock: the root's lock is kept while any is
+    private final List<TableState> writerOpenAtClose = new ArrayList<>();
     // written by the closing thread, read by every caller: once set, no table opens a reader or writer
     private volatile boolean closed;
     // the channel holding the root's exclusive lock: one store per root, across processes; null until open has it
@@ -171,9 +179,15 @@ public final class Store implements AutoCloseable {
 
     /** The tables' names, sorted. */
     public List<String> tables() {
+        checkOpen();
         final List<String> names = new ArrayList<>(tables.size());
         for (final TableState state : tables.values()) {
-            names.add(state.current().def().name());
+            final TableState.Snapshot snapshot = state.current();
+            if (snapshot == null) {
+                // a close running past checkOpen
+                throw closedException();
+            }
+            names.add(snapshot.def().name());
         }
         names.sort(null);
         return names;
@@ -181,6 +195,7 @@ public final class Store implements AutoCloseable {
 
     /** The table's committed definition; null when there is no such table (names match without regard to case). */
     public TableDef def(final String table) {
+        checkOpen();
         final TableState state = tables.get(TableState.key(table));
         if (state == null) {
             return null;
@@ -250,6 +265,7 @@ public final class Store implements AutoCloseable {
      * keeps every read up to date with every answered commit.
      */
     public void readMaxLagMillis(final long millis) {
+        checkOpen();
         if (millis < 0L) {
             throw new CdbException("refuse negative read lag [millis=" + millis + ']', -1);
         }
@@ -258,6 +274,7 @@ public final class Store implements AutoCloseable {
 
     /** Each table's log and its application, by table name. */
     public List<WalStatus> walStatus() {
+        checkOpen();
         final List<WalStatus> out = new ArrayList<>(tables.size());
         for (final TableState state : tables.values()) {
             final TableState.Snapshot snapshot = state.current();
@@ -347,34 +364,49 @@ public final class Store implements AutoCloseable {
         }
     }
 
-    /** Waits for open writers to close, then releases every file; idempotent. */
+    /**
+     * Waits for open writers to close, then releases every file; idempotent. A writer still open past the wait may
+     * still replace its table's {@code _txn}, so the close then fails naming its tables and keeps the root's lock: no
+     * store opens the root under that writer. A later close waits for those writers again and, once they are closed,
+     * releases the lock.
+     */
     @Override
     public void close() {
-        if (closed) {
-            return;
-        }
-        closed = true;
-        if (applier != null) {
-            applier.stop();
-        }
-        for (final TableState state : tables.values()) {
-            final boolean drained = state.leaseForClose(CLOSE_WAIT_MILLIS);
-            if (drained) {
-                checkpointOnClose(state);
+        synchronized (closeLock) {
+            if (!closed) {
+                closed = true;
+                if (applier != null) {
+                    applier.stop();
+                }
+                for (final TableState state : tables.values()) {
+                    final boolean drained = state.leaseForClose(closeWaitMillis);
+                    if (drained) {
+                        checkpointOnClose(state);
+                    }
+                    state.close(drained);
+                    if (!drained) {
+                        writerOpenAtClose.add(state);
+                    }
+                }
+            } else {
+                writerOpenAtClose.removeIf(state -> state.leaseForClose(closeWaitMillis));
             }
-            state.close(drained);
-            if (!drained) {
-                LOG.log(System.Logger.Level.WARNING, "closed store with writer still open [table=" + state.key
-                        + ", waitMillis=" + CLOSE_WAIT_MILLIS + ']');
+            if (!writerOpenAtClose.isEmpty()) {
+                final List<String> open = new ArrayList<>(writerOpenAtClose.size());
+                for (final TableState state : writerOpenAtClose) {
+                    open.add(state.key);
+                }
+                throw new CdbException("cannot close store, writer still open, root lock kept [root=" + root
+                        + ", tables=" + open + ", waitMillis=" + closeWaitMillis + ']', -1);
             }
-        }
-        final FileChannel held = lock;
-        lock = null;
-        if (held != null) {
-            try {
-                held.close();
-            } catch (final IOException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot release store lock [root=" + root + ']', e);
+            final FileChannel held = lock;
+            lock = null;
+            if (held != null) {
+                try {
+                    held.close();
+                } catch (final IOException e) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot release store lock [root=" + root + ']', e);
+                }
             }
         }
     }
@@ -411,8 +443,12 @@ public final class Store implements AutoCloseable {
 
     private void checkOpen() {
         if (closed) {
-            throw new CdbException("refuse use of closed store [root=" + root + ']', -1);
+            throw closedException();
         }
+    }
+
+    private CdbException closedException() {
+        return new CdbException("refuse use of closed store [root=" + root + ']', -1);
     }
 
     private static void check(final TableDef def) {

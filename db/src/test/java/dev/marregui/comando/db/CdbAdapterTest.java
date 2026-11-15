@@ -3,15 +3,22 @@ package dev.marregui.comando.db;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.cdb.CdbCancel;
+import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
@@ -31,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - SYMBOL and VARCHAR read as text; the other types as their own kind.
 /// - A folder that cannot hold a database fails the open, the run and Claude's query, and the test says so.
 /// - A connection closed, or the adapter closed, leaves no strand; work after the adapter's close is refused.
+/// - Each run gets a [CdbCancel] of its own, and the adapter's cancel of a running request cancels it.
 class CdbAdapterTest {
 
     private static final Duration WAIT = Duration.ofSeconds(30);
@@ -158,6 +166,69 @@ class CdbAdapterTest {
         assertThat(rows).isCompletedExceptionally();
         assertThat(sink.of(Intent.ConnectionClosed.class)).isEmpty();
         assertThat(cdb.strandCount()).isZero();
+    }
+
+    /// The adapter's cancel of a request whose query is running cancels the [CdbCancel] the query was given; the
+    /// query's failure then ends the request as cancelled, not failed.
+    @Test
+    void aCancelOfARunningRequestCancelsItsQuery() throws Exception {
+        final CountDownLatch running = new CountDownLatch(1);
+        final CountDownLatch go = new CountDownLatch(1);
+        final AtomicReference<CdbCancel> seen = new AtomicReference<>();
+        final CdbAdapter.Runner runner = (db, sql, maxRows, cancel) -> {
+            seen.set(cancel);
+            running.countDown();
+            await(go);
+            throw new CdbException("query cancelled [cancelled=" + cancel.cancelled() + ']', -1);
+        };
+        try (final CdbAdapter own = new CdbAdapter(sink, new ResultRegistry(), new SchemaRegistry(),
+                DbSettings.DEFAULTS, home.resolve("own"), runner)) {
+            own.execute(1L, spec("cdb"), "SELECT 1");
+            assertThat(running.await(WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+            assertThat(seen.get().cancelled()).isFalse();
+
+            own.cancel(1L);
+
+            assertThat(seen.get().cancelled()).isTrue();
+            go.countDown();
+            sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 1L, WAIT);
+            assertThat(sink.of(Intent.SqlFailed.class)).isEmpty();
+        }
+    }
+
+    /// Each run is given a [CdbCancel] of its own that is not cancelled; a cancel of a request that has ended
+    /// reaches nothing.
+    @Test
+    void eachRunGetsItsOwnCancelAndAnEndedRunKeepsNone() {
+        final List<CdbCancel> seen = new CopyOnWriteArrayList<>();
+        final CdbAdapter.Runner runner = (db, sql, maxRows, cancel) -> {
+            seen.add(cancel);
+            throw new CdbException("not run [sql=" + sql + ']', -1);
+        };
+        try (final CdbAdapter own = new CdbAdapter(sink, new ResultRegistry(), new SchemaRegistry(),
+                DbSettings.DEFAULTS, home.resolve("own"), runner)) {
+            own.execute(1L, spec("cdb"), "SELECT 1");
+            sink.await(Intent.SqlFailed.class, f -> f.requestId() == 1L, WAIT);
+            own.execute(2L, spec("cdb"), "SELECT 2");
+            sink.await(Intent.SqlFailed.class, f -> f.requestId() == 2L, WAIT);
+
+            own.cancel(1L);
+
+            assertThat(new ArrayList<>(seen)).hasSize(2).doesNotHaveDuplicates()
+                    .allSatisfy(c -> assertThat(c.cancelled()).isFalse());
+        }
+    }
+
+    private static void await(final CountDownLatch latch) {
+        try {
+            if (!latch.await(WAIT.toSeconds(), TimeUnit.SECONDS)) {
+                throw new IllegalStateException(
+                        "the test did not release the run [waitSeconds=" + WAIT.toSeconds() + ']');
+            }
+        } catch (final InterruptedException _) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while the run waited");
+        }
     }
 
     private static ConnectionSpec spec(final String host) {

@@ -20,11 +20,13 @@ import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.Cdb;
 import dev.marregui.comando.cdb.CdbAppender;
+import dev.marregui.comando.cdb.CdbCancel;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbResult;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.sql.Ast;
 import dev.marregui.comando.cdb.sql.Parser;
+import dev.marregui.comando.cdb.store.Store;
 
 /**
  * cdb over HTTP with QuestDB's wire formats, so the kit's clients work unchanged: {@code GET /exec?query=…} answers
@@ -32,12 +34,12 @@ import dev.marregui.comando.cdb.sql.Parser;
  * {@code dataset}, {@code count}; an error as {@code {"query","error","position"}} with status 400), and
  * {@code POST /write} takes line protocol (204 on success). Started and stopped by its owner; one per Cdb.
  *
- * <p>{@code /exec} takes {@code limit=n} (at most n rows) and {@code max_lag_ms=n} (the query's reads may lag the
+ * <p>{@code /exec} takes {@code limit=n} (at most n rows), {@code limit=lo,hi} (rows lo to hi, counted from 1) and {@code max_lag_ms=n} (the query's reads may lag the
  * answered commits by at most n milliseconds; refused when negative or not a number), and accepts and ignores
  * {@code count} and {@code nm}. A
+ * request with no query text is answered 200 with {@code "error":"empty query"}, as QuestDB answers it. A
  * {@code /write} body is parsed whole before its first row reaches the store, so a malformed line (400, with its line
- * and offset) writes nothing; a row the store refuses (400, with its line) leaves the rows of its table before it
- * written. Concurrent bodies for one table are written together in one commit, different tables in parallel
+ * and offset) writes nothing; a row the store refuses (400, with its line) writes none of its table's rows of the body. Concurrent bodies for one table are written together in one commit, different tables in parallel
  * ({@link CommitQueue}); a body that touches several tables is written table by table, not atomically across them, and
  * answers when every table is done. Each request runs on a virtual thread of its own; past {@link #MAX_REQUESTS} in
  * flight, a new connection is closed unanswered.
@@ -152,7 +154,8 @@ public final class CdbServer implements AutoCloseable {
         final String limit = parameter(exchange, "limit");
         final String lag = parameter(exchange, "max_lag_ms");
         if (query == null || query.isBlank()) {
-            send(exchange, 400, JsonWriter.error("", "missing query", -1));
+            // QuestDB answers a request with no query text 200, the error in the body
+            send(exchange, 200, JsonWriter.emptyQuery(query == null ? "" : query));
             return;
         }
         final int maxRows = maxRows(limit);
@@ -162,17 +165,20 @@ public final class CdbServer implements AutoCloseable {
         }
         final Rows rows;
         try {
-            rows = backend.run(query, maxRows, ReadLag.parse("max_lag_ms", lag));
+            rows = backend.run(query, offset(limit), maxRows, ReadLag.parse("max_lag_ms", lag), null);
         } catch (final CdbException e) {
             send(exchange, 400, JsonWriter.error(query, e.getMessage(), e.position()));
             return;
         }
-        send(exchange, 200, JsonWriter.result(query, rows));
+        send(exchange, 200, JsonWriter.result(query, rows, offset(limit)));
     }
 
     /**
-     * The row bound of QuestDB's {@code limit} parameter: {@code n}, or {@code 0,n} as the kit's {@code qdb} sends it;
-     * 0 when absent; -1 when it is no such form, a row offset other than 0 included (not served yet).
+     * The row bound of QuestDB's {@code limit} parameter, after the rows {@link #offset(String)} skips: {@code n}, or
+     * {@code lo,hi} (rows lo to hi, counted from 1, as QuestDB reads it; {@code 0,n} as the kit's {@code qdb} sends
+     * it); 0 when absent or {@code lo,} with no upper bound or one that is no number; 1 when {@code hi} is below
+     * {@code lo} or 0, as QuestDB serves the first row before it checks the bound; -1 when {@code lo} or a lone
+     * {@code n} is no number or negative.
      */
     static int maxRows(final String limit) {
         if (limit == null) {
@@ -183,11 +189,36 @@ public final class CdbServer implements AutoCloseable {
             if (comma < 0) {
                 return Math.max(-1, Integer.parseInt(limit.strip()));
             }
-            final long offset = Long.parseLong(limit.substring(0, comma).strip());
-            final int hi = Integer.parseInt(limit.substring(comma + 1).strip());
-            return offset == 0 ? Math.max(-1, hi) : -1;
+            final long skipped = Math.max(0L, Long.parseLong(limit.substring(0, comma).strip()) - 1L);
+            final String upper = limit.substring(comma + 1).strip();
+            if (upper.isEmpty()) {
+                return 0;
+            }
+            final int hi;
+            try {
+                hi = Integer.parseInt(upper);
+            } catch (final NumberFormatException _) {
+                return 0;
+            }
+            if (hi < 0) {
+                return -1;
+            }
+            return hi < skipped + 1L ? 1 : (int) (hi - skipped);
         } catch (final NumberFormatException _) {
             return -1;
+        }
+    }
+
+    /** The rows {@code limit=lo,hi} skips: {@code lo - 1}, as QuestDB counts rows from 1; 0 when there is no such form. */
+    static long offset(final String limit) {
+        final int comma = limit == null ? -1 : limit.indexOf(',');
+        if (comma < 0) {
+            return 0L;
+        }
+        try {
+            return Math.max(0L, Long.parseLong(limit.substring(0, comma).strip()) - 1L);
+        } catch (final NumberFormatException _) {
+            return 0L;
         }
     }
 
@@ -291,6 +322,18 @@ public final class CdbServer implements AutoCloseable {
          */
         Rows run(String sql, int maxRows, Long maxLagMillis);
 
+        /**
+         * As {@link #run(String, int, Long)}, a query skipping its first {@code offset} rows and giving up once
+         * {@code cancel} (null: none) is cancelled; a backend that cannot skip refuses a non-zero offset.
+         */
+        default Rows run(final String sql, final long offset, final int maxRows, final Long maxLagMillis,
+                final CdbCancel cancel) {
+            if (offset != 0L) {
+                throw new CdbException("refuse row offset [offset=" + offset + ']', -1);
+            }
+            return run(sql, maxRows, maxLagMillis);
+        }
+
         /** A line-protocol appender; the caller closes it. */
         CdbAppender appender();
     }
@@ -302,20 +345,20 @@ public final class CdbServer implements AutoCloseable {
 
     private record CdbBackend(Cdb cdb) implements Backend {
 
-        // a statement that changed the store is DDL when it parses as CREATE TABLE; a query's designated timestamp is
-        // taken as its first TIMESTAMP column, as the result does not carry it
+        // a statement that changed the store is DDL when it parses as CREATE TABLE
         @Override
         public Rows run(final String sql, final int maxRows, final Long maxLagMillis) {
-            final CdbResult result = maxLagMillis == null ? cdb.run(sql, maxRows)
-                    : cdb.run(sql, maxRows, maxLagMillis);
+            return run(sql, 0L, maxRows, maxLagMillis, null);
+        }
+
+        @Override
+        public Rows run(final String sql, final long offset, final int maxRows, final Long maxLagMillis,
+                final CdbCancel cancel) {
+            final CdbResult result = maxLagMillis == null ? cdb.run(sql, offset, maxRows, cancel)
+                    : ScopedValue.where(Store.READ_MAX_LAG_MILLIS, maxLagMillis)
+                            .call(() -> cdb.run(sql, offset, maxRows, cancel));
             final boolean ddl = result.updateCount() >= 0 && Parser.parse(sql) instanceof Ast.CreateTable;
-            int timestamp = -1;
-            for (int column = 0; column < result.columnCount() && timestamp < 0; column++) {
-                if (result.type(column) == CdbType.TIMESTAMP) {
-                    timestamp = column;
-                }
-            }
-            return new CdbRows(result, ddl, timestamp);
+            return new CdbRows(result, ddl, result.timestampIndex());
         }
 
         @Override
@@ -475,6 +518,11 @@ public final class CdbServer implements AutoCloseable {
         @Override
         public void at(final long micros) {
             // the queue wrote the rows
+        }
+
+        @Override
+        public void discard() {
+            // the queue wrote the rows; nothing is held
         }
 
         @Override

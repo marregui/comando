@@ -25,8 +25,8 @@ import dev.marregui.comando.cdb.CdbType;
  * {@link Batch}; one committer at a time per table, the request thread that finds none running, takes every queued
  * batch of that table, replays them into one appender in arrival order and flushes it once (one table write, one
  * fsync), then completes each request. Different tables commit in parallel. A row the store refuses fails only its own
- * request: the rows of its batch before it stay in the commit, the ones from it on are dropped, and the other batches
- * of the group are written. A body that touches several tables is written table by table, each table in its own
+ * request, and none of that request's rows of the table are written: the store's appender drops its batch, the batches
+ * of the group before it are replayed, and the batches after it are written. A body that touches several tables is written table by table, each table in its own
  * commit, not atomically across tables; it answers when every table is done.
  *
  * <p>A committer holds one table's writer lease and no lock of this class while it writes, and never waits for another
@@ -192,6 +192,13 @@ final class CommitQueue implements AutoCloseable {
         @Override
         public void at(final long micros) {
             current.endRow(micros);
+        }
+
+        @Override
+        public void discard() {
+            batches.clear();
+            current = null;
+            rows = 0;
         }
 
         @Override
@@ -422,9 +429,7 @@ final class CommitQueue implements AutoCloseable {
         // fails every batch of the group it did not refuse
         private void commit(final List<Batch> group) {
             try (CdbAppender appender = appenders.get()) {
-                for (final Batch batch : group) {
-                    batch.replay(appender);
-                }
+                replayAll(appender, group);
                 appender.flush();
             } catch (final RuntimeException e) {
                 LOG.log(Level.WARNING, "could not commit rows [table=" + key + ", batches=" + group.size() + ']', e);
@@ -432,6 +437,24 @@ final class CommitQueue implements AutoCloseable {
             } catch (final Error e) {
                 fail(group, new IllegalStateException("could not commit rows [table=" + key + ']', e));
                 throw e;
+            }
+        }
+
+        // the appender can drop only everything written since its last flush, so a refused batch drops the group's
+        // rows and the batches not refused are written again, in arrival order, without it
+        private static void replayAll(final CdbAppender appender, final List<Batch> group) {
+            final List<Batch> live = new ArrayList<>(group);
+            int next = 0;
+            while (next < live.size()) {
+                final Batch batch = live.get(next);
+                batch.replay(appender);
+                if (batch.refusal == null) {
+                    next++;
+                    continue;
+                }
+                appender.discard();
+                live.remove(next);
+                next = 0;
             }
         }
 
