@@ -474,13 +474,22 @@ class MachineQuestDbTest {
         }
     }
 
-    /// Runs `script` with bash, as a start does, and waits up to 10 s for it to end with 0.
+    /// Runs `script` with bash, as a start does: it ends with 0 within 10 s and prints the pid of the background
+    /// `java`, which is then waited for as long again, since that child opens `stdout.log` for append after the script
+    /// has ended and would put it back while `@TempDir` deletes the folder.
     private static void runScript(final Path script) throws Exception {
         final Process p = new ProcessBuilder("/bin/bash", script.toString()).redirectErrorStream(true).start();
         try {
             assertThat(p.waitFor(10, TimeUnit.SECONDS)).as("start.sh ended").isTrue();
-            assertThat(p.exitValue()).as(new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8))
-                    .isZero();
+            final String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(p.exitValue()).as(out).isZero();
+            final String last = out.strip().lines().toList().getLast();
+            assertThat(last).as(out).matches("\\d+");
+            final long pid = Long.parseLong(last);
+            final Optional<ProcessHandle> child = ProcessHandle.of(pid);
+            if (child.isPresent()) {
+                child.get().onExit().get(10, TimeUnit.SECONDS);
+            }
         } finally {
             p.destroyForcibly();
         }
