@@ -93,23 +93,22 @@ class PanelTextsTest {
     @Test
     void aBusySessionShowsHowLongItWorksAndWhatIsQueued() {
         final SessionState x = SessionState.closed(States.WORK).withTurns(2, System.currentTimeMillis() - 5_000);
-        assertThat(SessionBar.busyText(x)).contains("working · turn ").endsWith(" · 1 queued");
-        assertThat(SessionBar.busyText(SessionState.closed(States.WORK))).isEmpty();
+        assertThat(SessionBar.doingText(x)).contains("working · turn ").endsWith(" · 1 queued");
+        assertThat(SessionBar.doingText(SessionState.closed(States.WORK))).isEmpty();
     }
 
     /// A session waiting on one background task names it with its elapsed seconds; on two it counts them; the chip
-    /// keeps the session's name, and the tick counts a waiting session as it does a working one.
+    /// keeps the session's name.
     @Test
     void aSessionWaitingOnBackgroundWorkSaysOnWhatAndSinceWhen() {
         final long started = System.currentTimeMillis() - 5_000;
         final BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
         final SessionState one = SessionState.closed(States.WORK).withTasks(List.of(agent), started);
-        assertThat(SessionBar.busyText(one)).startsWith("  waiting on review agent · ").endsWith(" s");
+        assertThat(SessionBar.doingText(one)).startsWith("  waiting on review agent · ").endsWith(" s");
         final SessionState two = one.withTasks(List.of(agent, new BackgroundTask("b2", "local_bash", "build in the background", 0L)), started);
-        assertThat(SessionBar.busyText(two)).startsWith("  waiting on 2 background tasks · ");
-        assertThat(SessionBar.chipText(two)).as("the chip keeps still; the activity is a label of its own").isEqualTo("work");
-        assertThat(SessionBar.counting(one)).as("the tick moves a waiting chip's time on, as a working one's").isTrue();
-        assertThat(SessionBar.counting(SessionState.closed(States.WORK))).isFalse();
+        assertThat(SessionBar.doingText(two)).startsWith("  waiting on 2 background tasks · ");
+        assertThat(SessionBar.chipText(two)).as("the chip keeps still; what it does is told elsewhere")
+                .isEqualTo("work");
     }
 
     /// A history line prefixes the notice's time when it has one, cuts a 400-character text to 160, and the full line

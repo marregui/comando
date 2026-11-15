@@ -183,7 +183,7 @@ final class ActionTools {
             case "session_effort" -> send(new Intent.SetSessionEffort(session(s, args).name(), args.path("effort").asString("").strip(), caller));
             case "session_eta" -> send(new Intent.SessionEta(session(s, args).name(), args.path("step").asString("").strip(),
                     args.path("step_minutes").asInt(0), args.path("goal").asString("").strip(), args.path("goal_minutes").asInt(0),
-                    args.path("box_minutes").asInt(0), args.path("box_given_utc").asString("").strip()));
+                    args.path("box_minutes").asInt(0), args.path("box_given_utc").asString("").strip(), args.path("percent").asInt(-1)));
             case "session_order" -> send(new Intent.OrderSessions(strings(args, "names")));
             case "session_import" -> send(new Intent.ImportSessions(List.of(SessionSpec.imported(name(args, "name"), dir(args),
                     text(args, "conversation")).withCreatedBy(caller))));

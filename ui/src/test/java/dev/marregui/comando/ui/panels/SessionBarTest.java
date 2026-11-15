@@ -87,11 +87,11 @@ class SessionBarTest {
             assertThat(button(bar[0], name).isVisible()).as(name).isFalse();
         }
         assertThat(label(bar[0], "Context").isVisible()).isFalse();
-        assertThat(label(bar[0], "Activity").isVisible()).isFalse();
+        assertThat(label(bar[0], "ETA").isVisible()).isFalse();
     }
 
-    /// A session going from idle to three turns busy keeps every always-shown control at the same x, shows the activity
-    /// with the queue count, and greys out the new-conversation button while it runs.
+    /// A session going from idle to three turns busy keeps every always-shown control at the same x, shows its ETA
+    /// line, and greys out the new-conversation button while it runs.
     @Test
     void whatTheSessionDoesChangesNoControlsPlace() throws Exception {
         final SessionState idle = SessionState.closed(SessionSpec.imported("work", "/w", "c1").withCheckpoint("/reflect"))
@@ -108,7 +108,8 @@ class SessionBarTest {
             bar[0].render(AppState.initial(List.of(own), List.of(), List.of(busy)));
             after.addAll(places(bar[0]));
         });
-        assertThat(label(bar[0], "Activity").getText()).startsWith("working · ").endsWith(" · 2 queued");
+        assertThat(label(bar[0], "ETA").getText()).as("the busy stretch runs to its default deadline, no percent yet")
+                .contains(" ▸ due ~").endsWith(" ▸ –%");
         assertThat(after).as("the chip, plug, new conversation, model, effort, Reflect, Compact and Clear stay put")
                 .isEqualTo(before);
         assertThat(button(bar[0], "Start a new conversation").isVisible()).as("it has a conversation").isTrue();

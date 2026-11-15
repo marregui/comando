@@ -81,7 +81,7 @@ class SessionBarButtonsUiTest {
 
     /// The pointer resting on the session bar's ETA opens its card, the card a session's row shows, titled "ETA" and
     /// the session, with the step, the timebox given and the time now, in UTC. A new estimate changes the open card in
-    /// place, a cleared one closes it, and leaving the ETA closes the card. A long ETA ends in an ellipsis on the bar.
+    /// place, a cleared one leaves the card open without its step, and leaving the ETA closes the card.
     @Test
     void theEtaOpensItsCardOnARest() throws Exception {
         try (final App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(),
@@ -93,11 +93,9 @@ class SessionBarButtonsUiTest {
                     .until(() -> loop.state().focused() != null && editor() != null);
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("work", home.toString())));
             Awaitility.await("its own panel").atMost(WAIT).until(() -> loop.state().homePanel("work").isPresent());
-            loop.dispatch(new Intent.SessionEta("work", "build", 10, "shipped", 25, 30, ""));
+            loop.dispatch(new Intent.SessionEta("work", "build", 10, "shipped", 25, 30, "", -1));
             final JLabel eta = Awaitility.await("the ETA on the bar").atMost(WAIT)
                     .until(() -> onEdt(() -> named(bar(), JLabel.class, "ETA")), Objects::nonNull);
-            assertThat(onEdt(() -> eta.getPreferredSize().width < eta.getFontMetrics(eta.getFont()).stringWidth(eta.getText())))
-                    .as("the ETA asks for less width than its whole text, which ends in an ellipsis").isTrue();
             onEdt(() -> {
                 eta.dispatchEvent(new MouseEvent(eta, MouseEvent.MOUSE_ENTERED, System.currentTimeMillis(), 0, 2, 2, 0, false));
                 return null;
@@ -106,20 +104,16 @@ class SessionBarButtonsUiTest {
                     .until(() -> onEdt(() -> first(JLabel.class, l -> l.isShowing() && "ETA · work".equals(l.getText())) != null));
             assertThat(onEdt(() -> first(JLabel.class, l -> l.isShowing() && l.getText() != null && l.getText().startsWith("30 min, given at "))))
                     .as("the timebox's fact").isNotNull();
-            loop.dispatch(new Intent.SessionEta("work", "deploy", 5, "shipped", 25, 30, ""));
+            loop.dispatch(new Intent.SessionEta("work", "deploy", 5, "shipped", 25, 30, "", -1));
             Awaitility.await("the open card, with the new step").atMost(WAIT)
                     .until(() -> onEdt(() -> first(JLabel.class, l -> l.isShowing() && l.getText() != null && l.getText().startsWith("deploy · due ")) != null));
-            loop.dispatch(new Intent.SessionEta("work", "", 0, "", 0, 0, ""));
-            Awaitility.await("closed once the ETA is cleared").atMost(WAIT)
-                    .until(() -> onEdt(() -> first(JLabel.class, l -> l.isShowing() && "ETA · work".equals(l.getText())) == null));
-            loop.dispatch(new Intent.SessionEta("work", "build", 10, "shipped", 25, 30, ""));
-            Awaitility.await("the ETA back on the bar").atMost(WAIT).until(() -> onEdt(eta::isShowing));
-            onEdt(() -> {
-                eta.dispatchEvent(new MouseEvent(eta, MouseEvent.MOUSE_ENTERED, System.currentTimeMillis(), 0, 2, 2, 0, false));
-                return null;
-            });
-            Awaitility.await("the card, after another rest").atMost(WAIT)
-                    .until(() -> onEdt(() -> first(JLabel.class, l -> l.isShowing() && "ETA · work".equals(l.getText())) != null));
+            loop.dispatch(new Intent.SessionEta("work", "", 0, "", 0, 0, "", -1));
+            Awaitility.await("the step gone once the ETA is cleared").atMost(WAIT)
+                    .until(() -> onEdt(() -> first(JLabel.class, l -> l.isShowing() && l.getText() != null
+                            && l.getText().startsWith("deploy · due ")) == null));
+            assertThat(onEdt(() -> first(JLabel.class, l -> l.isShowing() && "ETA · work".equals(l.getText()))))
+                    .as("the card stays: the ETA always has something to say").isNotNull();
+            assertThat(onEdt(eta::isShowing)).as("the line stays on the bar").isTrue();
             onEdt(() -> {
                 eta.dispatchEvent(new MouseEvent(eta, MouseEvent.MOUSE_EXITED, System.currentTimeMillis(), 0, 400, 400, 0, false));
                 return null;

@@ -511,10 +511,11 @@ public sealed interface Intent {
      * Session {@code name}'s estimate of when its work ends: the step under way and the task's goal, each in minutes
      * from now; 0 minutes clears that part, as an empty text does. {@code boxMinutes} is the timebox the user gave the
      * task, 0 for none, and {@code boxGiven} when the user gave it, in UTC: {@code HH:mm} (today's, or yesterday's when
-     * that time is still to come) or an ISO-8601 instant; empty is now.
+     * that time is still to come) or an ISO-8601 instant; empty is now. {@code percent} is how far the task is, 0 to
+     * 100, by the session's own reading, -1 when not given; 100 ends the run.
      */
     record SessionEta(String name, String step, int stepMinutes, String goal, int goalMinutes, int boxMinutes,
-                      String boxGiven) implements Intent {
+                      String boxGiven, int percent) implements Intent {
         public SessionEta {
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(step, "step");

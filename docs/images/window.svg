@@ -100,7 +100,7 @@
 <text x="1020" y="715" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >its terminal, its last result (⌃1–⌃4)</text>
 <line x1="340" y1="808" x2="1540" y2="808" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>
 <circle cx="364" cy="824" r="6" fill="none" stroke="#D98E5F" stroke-width="1.4"/>
-<text x="378" y="829" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >tutor  ⎇ main   ⏻   ↺   working · 12 s</text>
+<text x="378" y="829" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >tutor  ⎇ main   ⏻   ↺   16:02 UTC ▸ 12 min 05 s ▸ due 16:30 UTC ▸ 60% (4 min ago)</text>
 <text x="1524" y="829" text-anchor="end" font-size="12" font-weight="300" fill="#BDBDBD" >haiku ▾   medium ▾   ctx 41k (4%)   checkpoint</text>
 <text x="800" y="829" text-anchor="middle" font-size="10" font-weight="500" fill="#E7C55A" letter-spacing="1.5">SESSION BAR · the focused panel's session</text>
 <line x1="60" y1="840" x2="1540" y2="840" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>

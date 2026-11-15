@@ -578,7 +578,7 @@ public final class StatusBar {
                         s.homePanel(x.name()).map(PanelState::id), x.name()));
             }
             final int asked = s.pendingApprovals(x.name());
-            final String doing = SessionBar.busyText(x).strip();
+            final String doing = SessionBar.doingText(x).strip();
             if (asked > 0 || !doing.isEmpty()) {
                 final String what = asked > 0
                         ? "needs you: " + asked + (asked == 1 ? " request" : " requests")

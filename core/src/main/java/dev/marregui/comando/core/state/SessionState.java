@@ -264,15 +264,27 @@ public record SessionState(
 
     /**
      * The pending turn count; a busy stretch starts its clock when it begins and stops it when it ends, and a turn
-     * that starts clears the last turn's failure.
+     * that starts clears the last turn's failure. A busy stretch that starts runs to the default deadline unless the
+     * session's declared task still runs, which spans turns; one that ends adds its length to the turn history and ends
+     * a run of its own.
      */
     public SessionState withTurns(final int pending, final long at) {
         final boolean starts = pendingTurns == 0 && pending > 0;
+        final boolean ends = pendingTurns > 0 && pending == 0 && turnStartedMillis > 0L;
         final long started = pending == 0 ? 0L : starts ? at : turnStartedMillis;
+        SessionEta nextEta = eta;
+        if (starts && !(eta.run().running() && eta.run().source() != SessionEta.Run.Source.DEFAULT)) {
+            nextEta = eta.withRun(new SessionEta.Run(at, at + eta.defaultTurnMillis(), SessionEta.Run.Source.DEFAULT, -1, 0L, 0L));
+        } else if (ends) {
+            nextEta = eta.withTurn(at - turnStartedMillis);
+            if (nextEta.run().running() && nextEta.run().source() == SessionEta.Run.Source.DEFAULT) {
+                nextEta = nextEta.withRun(nextEta.run().endedAt(at));
+            }
+        }
         return new SessionState(spec, status, error, info, pending, costUsd, contextTokens, contextWindow, at, activity, branch, started,
                 starts ? "" : lastTurnError, tasks, starts ? 0L : returnedMillis, !starts && handedOff, startedMillis,
                         reflection, checkpointCompacts, checkpointArmed, checkpointTurns, checkpointContinues,
-                                carriedOn, subject, eta);
+                                carriedOn, subject, nextEta);
     }
 
     /** How the last turn ended: a message when it failed, empty when it finished or was interrupted. */

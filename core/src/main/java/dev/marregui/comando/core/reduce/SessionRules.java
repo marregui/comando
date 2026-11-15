@@ -419,26 +419,83 @@ final class SessionRules {
 
     /**
      * The session's estimate, each part due {@code minutes} from now; a part with no text or no minutes is cleared.
-     * Kept until the next estimate replaces it. A timebox given at a time {@link #boxGivenAt} cannot read leaves the
-     * state as it is; {@link Reducer#refusal} says why.
+     * Kept until the next estimate replaces it, with the run and the turn history it had; see {@link #estimate}. A timebox
+     * given at a time {@link #boxGivenAt} cannot read, or a percent out of range, leaves the state as it is;
+     * {@link Reducer#refusal} says why.
      */
     static Transition sessionEta(final Clock clock, final AppState s, final Intent.SessionEta i) {
         final long nowMillis = clock.millis();
         final OptionalLong given = boxGivenAt(i, nowMillis);
-        if (given.isEmpty()) {
+        if (given.isEmpty() || i.percent() < -1 || i.percent() > 100) {
             return Transition.of(s);
         }
+        return Transition.of(s.withSession(i.name(), x -> x.withEta(estimate(i, x, given.getAsLong(), nowMillis))));
+    }
+
+    /**
+     * Session {@code x}'s next estimate and run. A task is its timebox's time, else its goal: the same one again goes
+     * on, from its start and with its last percent unless {@code i} gives one; another starts at the timebox's time,
+     * else at the turn's start, with no percent. A timebox repeated with no time keeps the time it was given at. A call
+     * with no goal and no timebox but a percent reports progress on the running task, whose goal and timebox it keeps;
+     * one with neither and no percent ends it. A percent of 100 ends the run; a turn's run goes on to the turn's end.
+     */
+    private static SessionEta estimate(final Intent.SessionEta i, final SessionState x, final long givenMillis,
+                                       final long nowMillis) {
+        final SessionEta prev = x.eta();
+        final SessionEta.Run old = prev.run();
+        final boolean task = old.running() && old.source() != SessionEta.Run.Source.DEFAULT;
         final boolean step = !i.step().isBlank() && i.stepMinutes() > 0;
         final boolean goal = !i.goal().isBlank() && i.goalMinutes() > 0;
         final boolean box = i.boxMinutes() > 0;
-        final SessionEta eta = new SessionEta(step ? i.step().strip() : "", step ? nowMillis + i.stepMinutes() * 60_000L : 0L,
-                goal ? i.goal().strip() : "", goal ? nowMillis + i.goalMinutes() * 60_000L : 0L,
-                box ? i.boxMinutes() : 0, box ? given.getAsLong() : 0L, nowMillis);
-        return Transition.of(s.withSession(i.name(), x -> x.withEta(eta)));
+        final int percent = i.percent();
+        final String stepText = step ? i.step().strip() : "";
+        final long stepAtMillis = step ? nowMillis + i.stepMinutes() * 60_000L : 0L;
+        if (!goal && !box && percent >= 0 && task) {
+            final SessionEta.Run progress = percent == 100 ? old.withPercent(percent, nowMillis).endedAt(nowMillis)
+                    : old.withPercent(percent, nowMillis);
+            return new SessionEta(stepText, stepAtMillis, prev.goal(), prev.goalAtMillis(), prev.boxMinutes(),
+                    prev.boxGivenAtMillis(), nowMillis, progress, prev.turnMillis());
+        }
+        final boolean sameBox = box && task && old.source() == SessionEta.Run.Source.BOX && prev.boxMinutes() == i.boxMinutes()
+                && i.boxGiven().isBlank();
+        final long boxGivenMillis = sameBox ? prev.boxGivenAtMillis() : givenMillis;
+        final SessionEta kept = new SessionEta(stepText, stepAtMillis, goal ? i.goal().strip() : "",
+                goal ? nowMillis + i.goalMinutes() * 60_000L : 0L, box ? i.boxMinutes() : 0, box ? boxGivenMillis : 0L,
+                nowMillis, old, prev.turnMillis());
+        SessionEta.Run next;
+        if (kept.hasTask()) {
+            final boolean same = task && (box ? old.source() == SessionEta.Run.Source.BOX
+                    && kept.boxGivenAtMillis() == prev.boxGivenAtMillis()
+                    : old.source() == SessionEta.Run.Source.ESTIMATE && kept.goal().equals(prev.goal()));
+            final long startedMillis = box ? kept.boxGivenAtMillis()
+                    : same ? old.startedMillis()
+                    : old.running() && old.source() == SessionEta.Run.Source.DEFAULT ? old.startedMillis()
+                    : x.turnStartedMillis() > 0L ? x.turnStartedMillis() : nowMillis;
+            final long deadlineMillis = box ? kept.boxGivenAtMillis() + kept.boxMinutes() * 60_000L : kept.goalAtMillis();
+            final SessionEta.Run.Source source = box ? SessionEta.Run.Source.BOX : SessionEta.Run.Source.ESTIMATE;
+            next = percent >= 0 ? new SessionEta.Run(startedMillis, deadlineMillis, source, percent, nowMillis, 0L)
+                    : same ? new SessionEta.Run(startedMillis, deadlineMillis, source, old.percent(), old.percentAtMillis(), 0L)
+                    : new SessionEta.Run(startedMillis, deadlineMillis, source, -1, 0L, 0L);
+        } else {
+            next = old.running() && percent >= 0 ? old.withPercent(percent, nowMillis) : old;
+            if (task && percent < 0) {
+                next = next.endedAt(nowMillis);
+            }
+        }
+        if (next.running() && percent == 100) {
+            next = next.endedAt(nowMillis);
+        }
+        return kept.withRun(next);
     }
 
-    /** Why {@code i} would leave the estimate as it is: a time its timebox was given at that does not read. */
+    /**
+     * Why {@code i} would leave the estimate as it is: a time its timebox was given at that does not read, or a percent
+     * outside 0 to 100 that is not -1, the value for none given.
+     */
     static Optional<String> etaRefusal(final Intent.SessionEta i) {
+        if (i.percent() < -1 || i.percent() > 100) {
+            return Optional.of("percent must be 0 to 100, or -1 for none [percent=" + i.percent() + "]");
+        }
         // whether the text reads does not depend on the time it is read at: read it at the latest
         return boxGivenAt(i, Long.MAX_VALUE).isPresent() ? Optional.empty()
                 : Optional.of("box_given_utc \"" + i.boxGiven() + "\" is neither HH:mm in UTC nor an ISO-8601 instant");

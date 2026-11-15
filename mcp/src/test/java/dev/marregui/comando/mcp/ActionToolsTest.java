@@ -362,6 +362,17 @@ class ActionToolsTest {
         }
     }
 
+    /// `session_eta` passes the session's percent through, and -1 when the call leaves it out, so the reducer keeps the
+    /// last one.
+    @Test
+    void sessionEtaPassesThePercentAndMinusOneWithoutIt() throws Exception {
+        assertThat(call("foreman", "session_eta", "{\"session\":\"mine\",\"goal\":\"done\",\"goal_minutes\":20,\"percent\":40}").text())
+                .startsWith("sent");
+        assertThat(call("foreman", "session_eta", "{\"session\":\"mine\",\"goal\":\"done\",\"goal_minutes\":20}").text())
+                .startsWith("sent");
+        assertThat(sink.of(Intent.SessionEta.class)).extracting(Intent.SessionEta::percent).containsExactly(40, -1);
+    }
+
     /// An argument the schema requires and the call leaves out, a value outside its choices, or an integer that is none
     /// is refused before anything reads it: no tab moves to the front, no panel unbinds, no run 0 is cancelled.
     @Test

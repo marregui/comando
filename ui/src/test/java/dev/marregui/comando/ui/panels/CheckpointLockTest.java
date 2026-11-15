@@ -128,7 +128,7 @@ class CheckpointLockTest {
     }
 
     /// The session bar keeps the plug, which stops the session, on; the chip, model, effort, Reflect, Compact and Clear
-    /// are off; the activity, purple, says how to carry on. Once the checkpoint ends they are on again.
+    /// are off; the ETA line, purple, ends with how to carry on. Once the checkpoint ends they are on again.
     @Test
     void theSessionBarKeepsOnlyThePlugAndSaysHowToCarryOn() throws Exception {
         final SessionBar[] bar = new SessionBar[1];
@@ -141,17 +141,17 @@ class CheckpointLockTest {
             assertThat(button(bar[0].component(), name).isEnabled()).as(name).isFalse();
         }
         assertThat(button(bar[0].component(), "Start or stop the session").isEnabled()).as("the plug").isTrue();
-        final JLabel activity = label(bar[0].component(), "Activity");
-        assertThat(activity.getText()).startsWith("checkpoint · ").endsWith(" · " + SessionBar.LOCKED_HINT);
-        assertThat(activity.getForeground()).isEqualTo(Theme.THINKING);
+        final JLabel eta = label(bar[0].component(), "ETA");
+        assertThat(eta.getText()).endsWith(" ▸ checkpoint · " + SessionBar.LOCKED_HINT);
+        assertThat(eta.getForeground()).isEqualTo(Theme.THINKING);
 
         SwingUtilities.invokeAndWait(() -> bar[0].render(state(false)));
         for (final String name : List.of("Session", "Model", "Effort", "Reflect", "Compact the conversation",
                 "Clear the conversation")) {
             assertThat(button(bar[0].component(), name).isEnabled()).as(name).isTrue();
         }
-        assertThat(label(bar[0].component(), "Activity").getText()).doesNotContain(SessionBar.LOCKED_HINT);
-        assertThat(label(bar[0].component(), "Activity").getForeground()).isEqualTo(Theme.MUTED);
+        assertThat(label(bar[0].component(), "ETA").getText()).doesNotContain(SessionBar.LOCKED_HINT);
+        assertThat(label(bar[0].component(), "ETA").getForeground()).as("the checkpoint's colour gone").isNotEqualTo(Theme.THINKING);
     }
 
     /// The sidebar's menu for the locked session keeps what leaves it or only reads it, Open, Stop, Interrupt, Copy

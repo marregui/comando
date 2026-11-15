@@ -135,16 +135,19 @@ Any number of document panels may be attached to a session
   short name of the repository the session last wrote to; before any such write, the working folder's ⎇ branch, and none
   while that folder is in Claude Code's folder ([record 138](adr/0138-a-session-shows-what-it-writes-to.md)). Its menu is the session chip's menu above; a plug (green when running) that starts or stops it, its tooltip "Running; click to stop
   the session" or "Stopped; click to start it"; a fresh start, shown once the session has a conversation and usable
-  while it is stopped (a new conversation starts; the old one stays importable); then what the session does, "working ·
-  12 s", last, so that nothing moves as it changes, followed by the session's ETA once it has set one with
-  `session_eta`: "step build · ETA 11:40 UTC (8 min) · goal shipped · ETA 11:52 UTC (20 min)", the step under way and
-  the task's end state, each with its time in UTC and the minutes left, gold once a time has passed ("(3 min late)");
-  then the timebox, "box 30 min · ends 12:52 UTC (20 min)"; the estimate stays until the session sets the next one.
-  The ETA takes at most 56 digit widths, so the session's name keeps its own; a longer one ends in an ellipsis.
-  Resting the pointer on the activity or on the ETA opens its card, the card a session's row shows: the activity's
-  says the state, what the turn does, when it started in UTC and how long ago, the prompts queued or the background
-  work waited on; the ETA's says the step and the goal with when each is due, the timebox with when it was given and
-  when it ends, when the session set it, and the time now, all in UTC. On the right: the model and the effort, each a menu that changes it
+  while it is stopped (a new conversation starts; the old one stays importable); then the ETA, always shown, last, the
+  session's telemetry: one run of work, "16:02 UTC ▸ 12 min 05 s ▸ due 16:30 UTC ▸ 60% (4 min ago)", when it started, how
+  long it has run, its deadline in the same format, and the percent the session last reported with its age ("–%"
+  before any). The run is the task the session declared with `session_eta` (a goal or a timebox; it starts at the
+  timebox's time and spans turns until the session reports 100% or clears it), else the turn under way, due at the
+  median of the session's last 20 turns, 5 minutes before any, marked `~` ("due ~16:07 UTC"). Once late it reads
+  "due 16:30 UTC (+6 min)" in gold; idle, the last run, muted, "15:30 UTC ▸ 27 min 10 s ▸ due 15:58 UTC ▸ done, 1 min
+  early"; before any, "no run yet"; while a checkpoint runs, purple, ending "checkpoint · Stop to carry on". The ETA
+  takes at most 80 digit widths, so the session's name keeps its own; a longer one ends in an ellipsis ([record
+  159](adr/0159-a-utc-clock-and-session-etas.md)). Resting the pointer on it opens its card, the card a session's row
+  shows: the run (task or turn) and where its deadline came from, when it started and its deadline to the second, the
+  progress and when it was said, the step and the goal with when each is due, the timebox with when it was given,
+  what the turn does, the prompts queued or the background work waited on, and the time now, all in UTC. On the right: the model and the effort, each a menu that changes it
   now and keeps it, as the session's menu in the sidebar does; the context ("ctx 412k (41%)"), followed after every
   model call of a turn and, when a stored conversation is loaded, taken from its last call or the metrics its last turn
   left, so a restart keeps it ("ctx –" only while nothing is known;
@@ -165,8 +168,8 @@ Any number of document panels may be attached to a session
   due. At that same turn's end comando runs the checkpoint by itself, the checkpoint command with `--auto` and then
   `/compact`, and the session carries on with its work after it; what a checkpoint does once its turn has finished is in
   [Claude Code §2](claude-code.md#2-the-checkpoint). While a checkpoint runs, Reflect's turn included, every
-  control of the bar but the plug is off, and the activity is purple; while the automatic checkpoint compacts it reads
-  "checkpoint · compacting · 12 s · Stop to carry on" ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). The palette holds Reflect,
+  control of the bar but the plug is off, and the ETA is purple and ends "checkpoint · Stop to carry on"; its card
+  says what the checkpoint does, "compacting" ([record 130](adr/0130-a-session-locks-while-its-checkpoint-runs.md)). The palette holds Reflect,
   Compact the conversation and Clear the conversation too, and Start or stop the session, Start a new conversation,
   Rewrite the panel as a document, Copy the session's details, Clone the session… and Remove the session…, each acting
   on the focused panel's session with the session menu's enablement.

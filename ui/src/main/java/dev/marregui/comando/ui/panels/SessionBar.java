@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -52,12 +53,13 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 /**
  * The focused panel's session, under the lower panel (record 105). On the left its chip, the session's state icon, name
  * and branch, whose menu binds, attaches or detaches it; the plug that starts or stops it; the new conversation; then
- * what it does ("working · 12 s"), last, so that its changing width moves nothing. On the right its model and effort,
+ * its run's ETA ("16:02 UTC ▸ 12 min 00 s ▸ due 16:30 UTC ▸ 60%"), always shown, last, so that its changing width
+ * moves nothing. On the right its model and effort,
  * each a menu that changes it, then its context and, beside it, Reflect, Compact and Clear: Reflect sends the session's
  * checkpoint command alone, its bookmark turning from grey to purple as the context fills towards the checkpoint
  * threshold and blinking from two points below it until the command is sent; Compact and Clear send {@code /compact}
  * and {@code /clear} to the running session. A panel without a session shows the chip that binds one, and nothing
- * else. While the session runs its checkpoint every control but the plug is off and the activity, purple, says how to
+ * else. While the session runs its checkpoint every control but the plug is off and the ETA, purple, ends with how to
  * carry on (record 130).
  */
 public final class SessionBar {
@@ -67,6 +69,8 @@ public final class SessionBar {
     /** The ETA's times, in UTC: the clock the status bar shows. */
     private static final DateTimeFormatter UTC_TIME = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneOffset.UTC);
     private static final long MINUTE_MILLIS = 60_000L;
+    /** Between the parts of the ETA's line. */
+    private static final String HUD_SEPARATOR = " ▸ ";
     /** The cards' times, in UTC to the second. */
     private static final DateTimeFormatter UTC_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC);
     private final IntentSink intents;
@@ -75,16 +79,18 @@ public final class SessionBar {
     private final JButton toggle = EditorPanel.iconButton();
     /** Starts a stopped session on a new conversation; greyed out while it runs, shown once it has a conversation. */
     private final JButton fresh = EditorPanel.iconButton();
-    /** What the session does: working, waiting on background work, with the time; muted. */
-    private final JLabel activity = new JLabel();
     /**
-     * The ETA's widest, in widths of the digit zero. Set 2026-11-15 from Miguel's screenshot, where the whole report
-     * filled the bar and cut the session's name: "step post-restart check · ETA 15:01 UTC (4 min)" is 47 characters, so
-     * a step named in up to about 25 reads whole with its ETA; the goal and the timebox then end in an ellipsis, by
-     * intent even with room to spare, and read whole in the card.
+     * The ETA's widest, in widths of the digit zero. Set 2026-11-15 from Miguel's screenshot, where a whole estimate
+     * filled the bar and cut the session's name; raised the same day to 80 with the always-on line, which took the
+     * activity's place: a late default run with an aged report, "16:02 UTC ▸ 1 h 12 min ▸ due ~16:30 UTC (+42 min)
+     * ▸ 60% (14 min ago)", is 66 characters, most narrower than a digit, so it reads whole; a longer one, the
+     * checkpoint's hint after it, ends in an ellipsis and reads whole in the card.
      */
-    static final int ETA_COLUMNS = 56;
-    /** When the session says its step and its task's goal end, in UTC, with the time left; muted, attention once late. */
+    static final int ETA_COLUMNS = 80;
+    /**
+     * The run's line: when it started, for how long, when it is due and how far the session says it is, in UTC; muted,
+     * attention once late, purple while the checkpoint runs.
+     */
     private final JLabel eta = new JLabel() {
         @Override
         public Dimension getPreferredSize() {
@@ -94,7 +100,7 @@ public final class SessionBar {
             return new Dimension(Math.min(d.width, widest), d.height);
         }
     };
-    /** The activity's and the ETA's card, the card a panel's tab and a session's row show, in place of a tooltip. */
+    /** The ETA's card, the card a panel's tab and a session's row show, in place of a tooltip. */
     private final TabCard card = new TabCard();
     /** Closes the tabs' and the session rows' card, so one card shows at a time; the shell's. */
     private Runnable othersCard = () -> { };
@@ -144,8 +150,6 @@ public final class SessionBar {
         toggle.getAccessibleContext().setAccessibleName("Start or stop the session");
         fresh.setIcon(Icons.get("fresh"));
         fresh.getAccessibleContext().setAccessibleName("Start a new conversation");
-        activity.getAccessibleContext().setAccessibleName("Activity");
-        activity.setForeground(Theme.MUTED);
         model.getAccessibleContext().setAccessibleName("Model");
         effort.getAccessibleContext().setAccessibleName("Effort");
         model.setForeground(Theme.MUTED);
@@ -158,17 +162,15 @@ public final class SessionBar {
         compact.setToolTipText(SessionRow.COMPACT_TIP);
         clear.setIcon(Icons.get("clear-conversation"));
         clear.getAccessibleContext().setAccessibleName("Clear the conversation");
-        // on a narrow window the chip's name and the activity give way, ending in "…"; the buttons stay whole
-        final JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, activity, eta)));
+        // on a narrow window the chip's name and the ETA give way, ending in "…"; the buttons stay whole
+        final JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, eta)));
         left.add(session);
         left.add(toggle);
         left.add(fresh);
-        left.add(activity);
         left.add(eta);
-        activity.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
         eta.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, 0, 0));
         eta.getAccessibleContext().setAccessibleName("ETA");
-        cardOnRest(activity, ACTIVITY_CARD);
+        eta.setForeground(Theme.MUTED);
         cardOnRest(eta, ETA_CARD);
         // centred on the chip's line, as the left's row is; Reflect right after the context that makes it due
         final JPanel right = new JPanel(new ShrinkingRow(2, 0, Set.of()));
@@ -250,7 +252,7 @@ public final class SessionBar {
             session.setIcon(Icons.get("claude-off"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
-            for (final JComponent c : new JComponent[]{toggle, fresh, activity, eta, model, effort, context, contextGauge,
+            for (final JComponent c : new JComponent[]{toggle, fresh, eta, model, effort, context, contextGauge,
                     reflect, compact, clear}) {
                 c.setVisible(false);
             }
@@ -274,10 +276,6 @@ public final class SessionBar {
         fresh.setVisible(!ss.spec().claudeSessionId().isEmpty());
         fresh.setEnabled(canStartFresh(ss));
         fresh.setToolTipText(showsFresh(ss) ? SessionRow.freshTip(ss) : "Start a new conversation; stop the session first");
-        final String doing = busyText(ss).strip();
-        activity.setVisible(true);
-        activity.setText(doing);
-        activity.setForeground(free ? Theme.MUTED : Theme.THINKING);
         showEta(ss);
         model.setVisible(true);
         model.setEnabled(free);
@@ -314,14 +312,11 @@ public final class SessionBar {
     }
 
     /**
-     * Refreshes what changes with time alone: the elapsed time of what the session does, working or waiting, and
+     * Refreshes what changes with time alone: the ETA's elapsed time, lateness and report age, the open card, and
      * Reflect's blink, which turns over at each call (the shell's one-second tick).
      */
     public void tick() {
         shown().ifPresent(ss -> {
-            if (counting(ss)) {
-                activity.setText(busyText(ss).strip());
-            }
             showEta(ss);
             refreshCard();
             final int percent = threshold.getAsInt();
@@ -417,13 +412,11 @@ public final class SessionBar {
     }
 
     /**
-     * "  Bash · turn 12 s" while a turn runs: what it does now and how long the whole turn has taken, which a tool's
-     * card does not say (its time is the tool's); "  waiting on …" while background work runs; the shell's tick moves
-     * it.
-     * While the checkpoint runs, what it does and how to leave it: "  checkpoint · compacting · 12 s · Stop to carry
-     * on".
+     * What the session does, for the status bar's work rows: "  Bash · turn 12 s" while a turn runs, what it does now
+     * and how long the whole turn has taken; "  waiting on …" while background work runs. While the checkpoint runs,
+     * what it does and how to leave it: "  checkpoint · compacting · 12 s · Stop to carry on".
      */
-    static String busyText(final SessionState ss) {
+    static String doingText(final SessionState ss) {
         if (ss.isCheckpointing()) {
             final long since = ss.turnStartedMillis();
             final String elapsed = since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "";
@@ -443,16 +436,14 @@ public final class SessionBar {
                 + (queued > 0 ? " · " + queued + " queued" : "");
     }
 
-    /** The ETA label: shown while the session has an estimate, in attention colour once a part is late. */
+    /** The ETA label: always shown for a session, its colour as {@link #lineColour} has it. */
     private void showEta(final SessionState ss) {
         final long nowMillis = System.currentTimeMillis();
-        final String text = etaText(ss.eta(), nowMillis);
-        eta.setVisible(!text.isEmpty());
-        eta.setText(text);
-        eta.setForeground(late(ss.eta(), nowMillis) ? Theme.ATTENTION : Theme.MUTED);
+        eta.setVisible(true);
+        eta.setText(lineText(ss, nowMillis));
+        eta.setForeground(lineColour(ss, nowMillis));
     }
 
-    private static final String ACTIVITY_CARD = "session-bar:activity";
     private static final String ETA_CARD = "session-bar:eta";
 
     /**
@@ -485,67 +476,48 @@ public final class SessionBar {
         });
     }
 
-    /** What the card {@code key} says of the session shown now; empty without one, or for an ETA it has not set. */
+    /** What the card {@code key} says of the session shown now; empty without one. */
     private Optional<CardText> cardText(final String key) {
         final long nowMillis = System.currentTimeMillis();
-        return shown().flatMap(ss -> key.equals(ETA_CARD) ? etaCard(ss, nowMillis) : Optional.of(activityCard(ss, nowMillis)));
+        return key.equals(ETA_CARD) ? shown().map(ss -> etaCard(ss, nowMillis)) : Optional.empty();
     }
 
     /** The card shown, its facts again: the times in it move with the shell's tick; one with nothing to say closes. */
     private void refreshCard() {
         final String key = card.shown();
-        if (ACTIVITY_CARD.equals(key) || ETA_CARD.equals(key)) {
+        if (ETA_CARD.equals(key)) {
             cardText(key).ifPresentOrElse(c -> card.updateOther(c.head(), c.heading(), c.text()), card::hide);
         }
     }
 
     /**
-     * The activity's card: the session's state; while a turn runs, what it does, when the turn started in UTC and for
-     * how long, and the prompts queued; while background work runs, what it waits on and since when; while the
-     * checkpoint runs, how to carry on.
+     * The ETA's card: the run, where its deadline came from, when it started, for how long, when it is due and the
+     * session's last report; the step, the goal and the timebox the session set; what the session does now (the turn,
+     * its queue, the background work it waits on, how to leave its checkpoint); the time now. All in UTC.
      */
-    static CardText activityCard(final SessionState ss, final long nowMillis) {
-        final List<CardFacts.Fact> facts = new ArrayList<>();
-        facts.add(new CardFacts.Fact("State", stateText(ss)));
-        final String about;
-        if (ss.isCheckpointing()) {
-            facts.add(new CardFacts.Fact("Doing", "checkpoint · " + TabStatus.working(ss)));
-            facts.add(new CardFacts.Fact("To carry on", LOCKED_HINT));
-            about = "The session runs its checkpoint: its views are read-only until the checkpoint and its compaction end.";
-        } else if (ss.isBusy()) {
-            facts.add(new CardFacts.Fact("Doing", TabStatus.working(ss)));
-            if (ss.turnStartedMillis() > 0L) {
-                facts.add(new CardFacts.Fact("Turn started", utcTime(ss.turnStartedMillis()) + " UTC, "
-                        + Labels.elapsed(nowMillis - ss.turnStartedMillis()) + " ago"));
-            }
-            if (ss.pendingTurns() > 1) {
-                facts.add(new CardFacts.Fact("Queued", (ss.pendingTurns() - 1) + " prompt" + (ss.pendingTurns() > 2 ? "s" : "")));
-            }
-            about = "A turn runs: Doing is its step now, a tool's name or the model; the turn's time counts from its first prompt.";
-        } else if (ss.isWaiting()) {
-            facts.add(new CardFacts.Fact("Waiting on", ss.waitingFor()));
-            if (ss.waitingSinceMillis() > 0L) {
-                facts.add(new CardFacts.Fact("Since", utcTime(ss.waitingSinceMillis()) + " UTC, "
-                        + Labels.elapsed(nowMillis - ss.waitingSinceMillis()) + " ago"));
-            }
-            about = "No turn runs: background work the session started is still open, and its answer is still to come.";
-        } else {
-            about = ss.status().isUsable() ? "No turn runs: the session waits for a prompt." : "The session does not run.";
-        }
-        facts.add(new CardFacts.Fact("Now", utcTime(nowMillis) + " UTC"));
-        return new CardText(new CardFacts(ss.name(), facts), "What it means", about);
-    }
-
-    /**
-     * The ETA's card: each part the session set, the step and the goal, with when it is due in UTC and what is left;
-     * the timebox the user gave, when, and when it ends; when the session last set it. Empty without an estimate.
-     */
-    static Optional<CardText> etaCard(final SessionState ss, final long nowMillis) {
+    static CardText etaCard(final SessionState ss, final long nowMillis) {
         final SessionEta e = ss.eta();
-        if (etaText(e, nowMillis).isEmpty()) {
-            return Optional.empty();
-        }
+        final SessionEta.Run r = e.run();
         final List<CardFacts.Fact> facts = new ArrayList<>();
+        if (r.exists()) {
+            facts.add(new CardFacts.Fact("Run", r.source() == SessionEta.Run.Source.DEFAULT ? "turn" : "task"));
+            facts.add(new CardFacts.Fact("Deadline from", deadlineFrom(e)));
+            facts.add(new CardFacts.Fact("Started", utcTime(r.startedMillis()) + " UTC"));
+            if (r.running()) {
+                facts.add(new CardFacts.Fact("Running for", Labels.elapsed(nowMillis - r.startedMillis())));
+            } else {
+                facts.add(new CardFacts.Fact("Took", Labels.elapsed(r.endedMillis() - r.startedMillis())));
+            }
+            if (r.deadlineMillis() > 0L) {
+                facts.add(new CardFacts.Fact("Due", r.running() ? due(r.deadlineMillis(), nowMillis)
+                        : utcTime(r.deadlineMillis()) + " UTC, " + doneText(r)));
+            }
+            facts.add(new CardFacts.Fact("Progress", r.percent() < 0 ? "not reported"
+                    : r.percent() + "%, said " + utcTime(r.percentAtMillis()) + " UTC, "
+                            + Labels.elapsed(nowMillis - r.percentAtMillis()) + " ago"));
+        } else {
+            facts.add(new CardFacts.Fact("Run", "none yet"));
+        }
         if (e.stepAtMillis() > 0L) {
             facts.add(new CardFacts.Fact("Step", e.step() + " · due " + due(e.stepAtMillis(), nowMillis)));
         }
@@ -557,21 +529,51 @@ public final class SessionBar {
             facts.add(new CardFacts.Fact("Timebox", e.boxMinutes() + " min, given at " + utcTime(e.boxGivenAtMillis())
                     + " UTC · ends " + due(endsMillis, nowMillis)));
         }
-        if (e.setAtMillis() > 0L) {
-            facts.add(new CardFacts.Fact("Set", utcTime(e.setAtMillis()) + " UTC, " + Labels.elapsed(nowMillis - e.setAtMillis()) + " ago"));
+        if (ss.isCheckpointing()) {
+            facts.add(new CardFacts.Fact("Doing", "checkpoint · " + TabStatus.working(ss)));
+            facts.add(new CardFacts.Fact("To carry on", LOCKED_HINT));
+        } else if (ss.isBusy()) {
+            facts.add(new CardFacts.Fact("Doing", TabStatus.working(ss)));
+            if (ss.turnStartedMillis() > 0L) {
+                facts.add(new CardFacts.Fact("Turn started", utcTime(ss.turnStartedMillis()) + " UTC, "
+                        + Labels.elapsed(nowMillis - ss.turnStartedMillis()) + " ago"));
+            }
+            if (ss.pendingTurns() > 1) {
+                facts.add(new CardFacts.Fact("Queued", (ss.pendingTurns() - 1) + " prompt" + (ss.pendingTurns() > 2 ? "s" : "")));
+            }
+        } else if (ss.isWaiting()) {
+            facts.add(new CardFacts.Fact("Waiting on", ss.waitingFor()));
+            if (ss.waitingSinceMillis() > 0L) {
+                facts.add(new CardFacts.Fact("Since", utcTime(ss.waitingSinceMillis()) + " UTC, "
+                        + Labels.elapsed(nowMillis - ss.waitingSinceMillis()) + " ago"));
+            }
         }
         facts.add(new CardFacts.Fact("Now", utcTime(nowMillis) + " UTC"));
-        return Optional.of(new CardText(new CardFacts("ETA · " + ss.name(), facts), "What it means",
-                "When the session says its work ends, in UTC. The step is the one under way, the goal the task's end state; "
-                        + "the timebox is the one you gave. The session sets them when a step or the plan starts and "
-                        + "whenever an estimate changes; a time passed turns the bar's text gold."));
+        return new CardText(new CardFacts("ETA · " + ss.name(), facts), "What it means",
+                "The run is the task the session declared, else the turn under way, else the last one. Its deadline "
+                        + "is the timebox you gave, else the session's estimate, else comando's default for a turn, "
+                        + "marked ~ on the bar: the median of the session's last turns. Progress is the session's own "
+                        + "report. Times are in UTC; a run past its deadline turns the bar's text gold, a checkpoint "
+                        + "purple.");
+    }
+
+    /** "timebox 45 min", "session estimate", "default: median of last 7 turns" or "default: 5 min, no turns yet". */
+    private static String deadlineFrom(final SessionEta e) {
+        // the run's own span, not the estimate's: the estimate may have moved on since the run began
+        final SessionEta.Run r = e.run();
+        final long spanMinutes = minutesUp(r.deadlineMillis() - r.startedMillis());
+        return switch (r.source()) {
+            case BOX -> "timebox " + spanMinutes + " min";
+            case ESTIMATE -> "session estimate, " + spanMinutes + " min";
+            case DEFAULT -> "default " + spanMinutes + " min: the median of the session's last turns, 5 min before any";
+        };
     }
 
     /** "12:40:00 UTC, 8 min left", or "12:40:00 UTC, 3 min late" once it has passed. */
     private static String due(final long atMillis, final long nowMillis) {
         final long leftMillis = atMillis - nowMillis;
-        final long minutes = (Math.abs(leftMillis) + MINUTE_MILLIS - 1L) / MINUTE_MILLIS;
-        return utcTime(atMillis) + " UTC, " + minutes + " min " + (leftMillis < 0L ? "late" : "left");
+        return utcTime(atMillis) + " UTC, " + minutesUp(Math.abs(leftMillis)) + " min "
+                + (leftMillis < 0L ? "late" : "left");
     }
 
     private static String utcTime(final long millis) {
@@ -579,40 +581,78 @@ public final class SessionBar {
     }
 
     /**
-     * "step build · ETA 11:40 UTC (8 min) · goal shipped · ETA 11:52 UTC (20 min)": each part the session gave a time,
-     * its time in UTC and what is left, rounded up to the minute; "(3 min late)" once past it. Empty with no estimate.
+     * The run's line, HH:mm in UTC. Running: "16:02 UTC ▸ 12 min 00 s ▸ due 16:30 UTC ▸ 60% (4 min ago)", the
+     * deadline marked "~" when it is comando's default, "(+6 min)" after it once late, rounded up; the percent "–%"
+     * before the session reports one and without its age while the report is under a minute old. Ended: "15:30 UTC ▸
+     * 27 min 00 s ▸ due 15:58 UTC ▸ done, 1 min early". Before any run: "no run yet".
      */
-    static String etaText(final SessionEta e, final long nowMillis) {
-        final StringBuilder sb = new StringBuilder();
-        if (e.stepAtMillis() > 0L) {
-            sb.append("step ").append(e.step()).append(" · ETA ").append(etaAt(e.stepAtMillis(), nowMillis));
+    static String hudText(final SessionEta e, final long nowMillis) {
+        final SessionEta.Run r = e.run();
+        if (!r.exists()) {
+            return "no run yet";
         }
-        if (e.goalAtMillis() > 0L) {
-            sb.append(sb.isEmpty() ? "" : " · ").append("goal ").append(e.goal()).append(" · ETA ").append(etaAt(e.goalAtMillis(), nowMillis));
+        final String deadline = "due " + (r.source() == SessionEta.Run.Source.DEFAULT ? "~" : "")
+                + (r.deadlineMillis() > 0L ? hhmm(r.deadlineMillis()) : "–");
+        if (!r.running()) {
+            return hhmm(r.startedMillis()) + HUD_SEPARATOR + Labels.elapsed(r.endedMillis() - r.startedMillis())
+                    + HUD_SEPARATOR + deadline + HUD_SEPARATOR + doneText(r);
         }
-        if (e.boxMinutes() > 0) {
-            sb.append(sb.isEmpty() ? "" : " · ").append("box ").append(e.boxMinutes()).append(" min · ends ")
-                    .append(etaAt(e.boxGivenAtMillis() + e.boxMinutes() * MINUTE_MILLIS, nowMillis));
-        }
-        return Plain.text(sb.toString());
+        final String late = late(r, nowMillis) ? " (+" + minutesUp(nowMillis - r.deadlineMillis()) + " min)" : "";
+        return hhmm(r.startedMillis()) + HUD_SEPARATOR + Labels.elapsed(nowMillis - r.startedMillis())
+                + HUD_SEPARATOR + deadline + late + HUD_SEPARATOR + percentText(r, nowMillis);
     }
 
-    /** "11:40 UTC (8 min)", or "(3 min late)" once {@code atMillis} has passed. */
-    private static String etaAt(final long atMillis, final long nowMillis) {
-        final long leftMillis = atMillis - nowMillis;
-        final long minutes = (Math.abs(leftMillis) + MINUTE_MILLIS - 1L) / MINUTE_MILLIS;
-        return UTC_TIME.format(Instant.ofEpochMilli(atMillis)) + " UTC (" + minutes + " min" + (leftMillis < 0L ? " late)" : ")");
+    /** The bar's line: {@link #hudText}, then, while the checkpoint runs, "▸ checkpoint · Stop to carry on". */
+    static String lineText(final SessionState ss, final long nowMillis) {
+        final String hint = ss.isCheckpointing() ? HUD_SEPARATOR + "checkpoint · " + LOCKED_HINT : "";
+        return hudText(ss.eta(), nowMillis) + hint;
     }
 
-    /** Whether a part of the estimate has passed. */
-    static boolean late(final SessionEta e, final long nowMillis) {
-        return e.stepAtMillis() > 0L && e.stepAtMillis() < nowMillis || e.goalAtMillis() > 0L && e.goalAtMillis() < nowMillis
-                || e.boxMinutes() > 0 && e.boxGivenAtMillis() + e.boxMinutes() * MINUTE_MILLIS < nowMillis;
+    /** The line's colour: purple while the checkpoint runs, else attention while the run is late, else muted. */
+    static Color lineColour(final SessionState ss, final long nowMillis) {
+        if (ss.isCheckpointing()) {
+            return Theme.THINKING;
+        }
+        return late(ss.eta().run(), nowMillis) ? Theme.ATTENTION : Theme.MUTED;
     }
 
-    /** Whether the activity shows a time that the shell's one-second tick moves on: working, or waiting. */
-    static boolean counting(final SessionState ss) {
-        return ss.isBusy() || ss.isWaiting();
+    /** Whether the run runs past its deadline. */
+    static boolean late(final SessionEta.Run r, final long nowMillis) {
+        return r.running() && r.deadlineMillis() > 0L && nowMillis > r.deadlineMillis();
+    }
+
+    /** "–%" before a report, "60%" while it is under a minute old, "60% (4 min ago)" after, to the minute. */
+    private static String percentText(final SessionEta.Run r, final long nowMillis) {
+        if (r.percent() < 0) {
+            return "–%";
+        }
+        final long ageMillis = nowMillis - r.percentAtMillis();
+        return r.percent() + "%" + (ageMillis < MINUTE_MILLIS ? "" : " (" + Labels.uptime(ageMillis) + " ago)");
+    }
+
+    /**
+     * How an ended run met its deadline: "done, on time" within a minute either way, else "done, 3 min late" or "done,
+     * 1 min early", in whole minutes, so the minute after "on time" reads 1.
+     */
+    private static String doneText(final SessionEta.Run r) {
+        if (r.deadlineMillis() <= 0L) {
+            return "done";
+        }
+        final long overMillis = r.endedMillis() - r.deadlineMillis();
+        if (Math.abs(overMillis) < MINUTE_MILLIS) {
+            return "done, on time";
+        }
+        return "done, " + Math.abs(overMillis) / MINUTE_MILLIS + " min " + (overMillis < 0L ? "early" : "late");
+    }
+
+    /** "16:02 UTC". */
+    private static String hhmm(final long millis) {
+        return UTC_TIME.format(Instant.ofEpochMilli(millis)) + " UTC";
+    }
+
+    /** Whole minutes in {@code millis}, rounded up. */
+    private static long minutesUp(final long millis) {
+        return (millis + MINUTE_MILLIS - 1L) / MINUTE_MILLIS;
     }
 
     /** "ctx 412k (41%)" once a turn has reported the context, "ctx –" before; no cost. */
