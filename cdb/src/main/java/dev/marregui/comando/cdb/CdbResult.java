@@ -62,6 +62,11 @@ public final class CdbResult {
         return new CdbResult(List.of(), List.of(), count, false);
     }
 
+    /** The columns of a statement planned and not run: no rows; -1 as its update count. */
+    static CdbResult described(final List<Field> fields) {
+        return new CdbResult(fields, List.of(), -1, false);
+    }
+
     public int columnCount() {
         return fields.size();
     }

@@ -10,7 +10,7 @@ import java.util.List;
 public sealed interface Ast {
 
     /** A statement {@link Parser#parse} returns. */
-    sealed interface Statement extends Ast permits Query, CreateTable, Update, Show {
+    sealed interface Statement extends Ast permits Query, CreateTable, Update, Show, Insert, AlterTable {
     }
 
     /** A query: a select, a set operation, or a {@code WITH}. */
@@ -123,6 +123,24 @@ public sealed interface Ast {
     }
 
     record Update(String table, List<Assignment> assignments, Expr where, int pos) implements Statement {
+    }
+
+    /**
+     * {@code INSERT INTO t [(c, …)] VALUES (…)[, (…)]} or {@code INSERT INTO t [(c, …)] SELECT …}: {@code columns} empty
+     * when not listed (every column, in table order); exactly one of {@code rows} and {@code query} is set.
+     */
+    record Insert(String table, List<String> columns, List<List<Expr>> rows, QueryBody query, int pos)
+            implements Statement {
+    }
+
+    record AddColumn(ColumnSpec column, boolean ifNotExists) {
+    }
+
+    /**
+     * {@code ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] c type[, …]} ({@code ttl} null) or
+     * {@code ALTER TABLE t SET TTL n UNIT} ({@code addColumns} empty, {@code ttl} as written).
+     */
+    record AlterTable(String table, List<AddColumn> addColumns, String ttl, int pos) implements Statement {
     }
 
     /** {@code SHOW TABLES} has {@code table} null; {@code SHOW COLUMNS FROM t}. */

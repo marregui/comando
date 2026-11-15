@@ -19,9 +19,9 @@ becomes one more vendor comando connects to.
 | Question | Rule | Why |
 |---|---|---|
 | where | module `cdb` in this repository, package `dev.marregui.comando.cdb`, JDK only | no public interface other than comando |
-| its surface | one public facade, `Cdb` (`open`, `run`, `explain`, `appender`, `tables`, `close`), and `CdbServe`, the launcher; only `db.Cdb*` classes reach it, and only the facade, checked by `CdbArchitectureTest` | one way in keeps the inside free to change |
+| its surface | one public facade, `Cdb` (`open`, `run`, `explain`, `describe`, `appender`, `tables`, `close`), and `CdbServe`, the launcher; only `db.Cdb*` classes reach it, and only the facade, checked by `CdbArchitectureTest` | one way in keeps the inside free to change |
 | layers | `sql` (text to syntax tree) → `plan` (names and types resolved; `Signatures` holds every type rule) → `exec` (a tree of cursors over pages of 1,024 rows; `exec/expr` compiles scalars, `exec/agg` holds accumulators) → `store`; beside them `catalog` (`tables()`, `table_columns()`, `SHOW`, `long_sequence`) and `serve` | no package depends upward |
-| SQL | what the 604 shapes use and nothing more: SELECT with WHERE, LATEST ON, SAMPLE BY, implicit or explicit GROUP BY, ORDER BY, the LIMIT forms; UNION, EXCEPT, INTERSECT; WITH; joins; one window shape; CREATE TABLE as QuestDB writes it, UPDATE, SHOW; the 26 functions the corpus calls | a query that needs more fails with a clear error and is added when a real query asks |
+| SQL | what the 604 shapes use and nothing more: SELECT with WHERE, LATEST ON, SAMPLE BY, implicit or explicit GROUP BY, ORDER BY, the LIMIT forms; UNION, EXCEPT, INTERSECT; WITH; joins; one window shape; CREATE TABLE as QuestDB writes it, UPDATE, SHOW; the 26 functions the corpus calls; and for Cosa (2026-11-15): `INSERT … VALUES` and `INSERT … SELECT`, `ALTER TABLE ADD COLUMN` and `SET TTL`, `coalesce`, `percentile_cont(x, p)` | a query that needs more fails with a clear error and is added when a real query asks |
 | types | BOOLEAN, LONG, DOUBLE, TIMESTAMP (µs, UTC), SYMBOL, VARCHAR; INT, SHORT and BYTE are LONG, STRING is VARCHAR, DATE is TIMESTAMP; NULL is `Long.MIN_VALUE`, NaN or a null reference | six types cover every column of the 28 tables |
 | storage | per table `_meta` (format 2: a SYMBOL column keeps its CAPACITY, NOCACHE and INDEX CAPACITY options; format 1 still reads, with the defaults), `_txn` (replaced through `_txn.tmp` and an atomic move), symbol files, and partition folders `<partition>.<txn>/` with one file per column, read through FFM mappings; a commit rewrites each partition it touches, ordered and deduplicated on the upsert keys, then replaces `_txn` | the writes are small; a rewrite per commit is the simple correct protocol, and appending in place can come later behind it |
 | concurrency | one writer per table, any number of snapshot readers counted per version folder; a version folder goes once no reader holds it; one store per root, held by an exclusive file lock | a reader never sees a folder removed under it; two processes never publish over each other |
@@ -34,6 +34,9 @@ becomes one more vendor comando connects to.
   that remain are listed by class in the dream backlog; cutover waits until they are closed.
 - The strict compare on the captured corpus (2026-11-14): 559 queries compared, 495 identical, 64 checked departures,
   0 failing.
-- PG wire is not built: comando reaches cdb in-process through `CdbAdapter`.
+- PostgreSQL wire (2026-11-15, for Cosa): `CdbServe ROOT PORT --pg-port N [--bind ADDR]` adds protocol 3.0 (simple and
+  extended query, text and binary values, QuestDB's type OIDs, trust authentication, no transactions: the status is
+  tracked for the driver only); off unless asked, so the shadow serves HTTP only. comando still reaches cdb in-process
+  through `CdbAdapter`.
 - Known gaps, each named where it is: `/write` keeps the rows before one the store refuses; a missing column file reads
   as NULLs rather than failing; the table folder is not fsynced after a rename.

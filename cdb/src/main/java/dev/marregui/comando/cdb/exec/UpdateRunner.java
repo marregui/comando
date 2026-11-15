@@ -25,10 +25,10 @@ import dev.marregui.comando.cdb.store.TableWriter;
 final class UpdateRunner {
 
     /**
-     * How long an UPDATE waits for another writer of its table to close before it fails. Not measured: long enough for
-     * an append batch to commit, short enough that a stuck writer surfaces as an error.
+     * How long an UPDATE, INSERT or ALTER waits for another writer of its table to close before it fails. Not
+     * measured: long enough for an append batch to commit, short enough that a stuck writer surfaces as an error.
      */
-    private static final long WAIT_MILLIS = 30_000;
+    static final long WAIT_MILLIS = 30_000;
 
     private UpdateRunner() {
     }
@@ -166,7 +166,7 @@ final class UpdateRunner {
     }
 
     /** Writes value {@code row} of {@code v} to {@code column}; NULL is left unset, which reads as NULL. */
-    private static void put(
+    static void put(
             final TableWriter writer,
             final int column,
             final CdbType type,

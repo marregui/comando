@@ -19,7 +19,7 @@ public final class Signatures {
 
     private static final Set<String> AGGREGATES = Set.of(
             "count", "count_distinct", "sum", "avg", "min", "max", "first", "last",
-            "approx_percentile", "approx_median", "percentile_disc"
+            "approx_percentile", "approx_median", "percentile_disc", "percentile_cont"
     );
     private static final Set<String> COMPARISONS = Set.of("=", "!=", "<", "<=", ">", ">=");
     private static final Set<String> WINDOW_ONLY = Set.of("lag", "lead", "row_number", "first_value", "last_value");
@@ -57,6 +57,8 @@ public final class Signatures {
             case "first", "last" -> unary(function, args, null);
             case "approx_percentile" -> approxPercentile(function, args);
             case "percentile_disc" -> percentileDisc(function, args);
+            case "percentile_cont" -> percentileCont(function, args);
+            case "coalesce" -> coalesce(function, args);
             case "now" -> arity(function, args, 0, CdbType.TIMESTAMP);
             case "dateadd" -> dateadd(function, args);
             case "datediff" -> datediff(function, args);
@@ -250,6 +252,33 @@ public final class Signatures {
     private static CdbType percentileDisc(final String function, final List<CdbType> args) {
         numeric(function, args, 2);
         return args.getFirst();
+    }
+
+    /** QuestDB's {@code percentile_cont(x, p)} is DOUBLE over a LONG, DOUBLE or TIMESTAMP {@code x}. */
+    private static CdbType percentileCont(final String function, final List<CdbType> args) {
+        expect(function, args, 2);
+        if (!isNumeric(args.getFirst()) && args.getFirst() != CdbType.TIMESTAMP || !isNumeric(args.getLast())) {
+            throw mismatch(function, args);
+        }
+        return CdbType.DOUBLE;
+    }
+
+    /**
+     * QuestDB's {@code coalesce}: two or more arguments of one family, typed as {@link #unify} types two, text of any
+     * kind VARCHAR (QuestDB's STRING, SYMBOL included); a TIMESTAMP does not mix with text or numbers.
+     */
+    private static CdbType coalesce(final String function, final List<CdbType> args) {
+        if (args.size() < 2) {
+            throw mismatch(function, args);
+        }
+        CdbType out = args.getFirst();
+        for (int i = 1; i < args.size() && out != null; i++) {
+            out = unify(out, args.get(i));
+        }
+        if (out == null) {
+            throw mismatch(function, args);
+        }
+        return out.isText() ? CdbType.VARCHAR : out;
     }
 
     private static CdbType dateadd(final String function, final List<CdbType> args) {

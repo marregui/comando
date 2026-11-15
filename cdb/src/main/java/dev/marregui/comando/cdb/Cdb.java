@@ -37,10 +37,19 @@ public final class Cdb implements AutoCloseable {
     public CdbResult run(final String sql, final int maxRows) {
         final long now = nowMicros();
         final Plan plan = Planner.plan(Parser.parse(sql), store::def, now);
-        if (Executor.changesStore(plan)) {
-            return CdbResult.updated(Executor.execute(plan, store, now));
+        if (plan instanceof Plan.Change change) {
+            return CdbResult.updated(Executor.execute(change, store, now));
         }
         return CdbResult.drain(Executor.open(plan, store, now), maxRows);
+    }
+
+    /**
+     * The columns {@code sql} would answer, planned and not run: a result with those columns and no rows. A statement
+     * that changes the store describes as no columns and changes nothing.
+     */
+    public CdbResult describe(final String sql) {
+        final Plan plan = Planner.plan(Parser.parse(sql), store::def, nowMicros());
+        return CdbResult.described(Executor.changesStore(plan) ? List.of() : plan.fields());
     }
 
     /** The plan of {@code sql}, as text, for tests and the explain command. */

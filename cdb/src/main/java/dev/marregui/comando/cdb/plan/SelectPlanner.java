@@ -400,7 +400,8 @@ final class SelectPlanner {
             case Plan.Filter(final Plan child, final Bound _) -> inTableOrder(child);
             case Plan.Project(final Plan child, final List<Bound> _, final List<Field> _) -> inTableOrder(child);
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
-                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _ -> false;
+                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _, Plan.Insert _,
+                 Plan.AddColumns _, Plan.SetTtl _ -> false;
         };
     }
 

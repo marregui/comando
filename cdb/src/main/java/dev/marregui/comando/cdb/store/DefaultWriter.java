@@ -65,6 +65,12 @@ final class DefaultWriter implements TableWriter {
     }
 
     @Override
+    public void setTtl(final long ttlMicros) {
+        checkOpen();
+        def = def.withTtlMicros(ttlMicros);
+    }
+
+    @Override
     public void newRow(final long micros) {
         checkOpen();
         if (inRow) {

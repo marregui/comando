@@ -96,6 +96,45 @@ final class Ddl {
     }
 
     /**
+     * {@code ALTER TABLE}: SET TTL as a CREATE reads it; ADD COLUMN refuses a column the table has, except under
+     * {@code IF NOT EXISTS} with the same type, which QuestDB skips.
+     */
+    static Plan alterTable(final Ast.AlterTable alter, final Function<String, TableDef> tables) {
+        final int pos = alter.pos();
+        final TableDef def = tables.apply(alter.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + alter.table() + ']', pos);
+        }
+        if (alter.ttl() != null) {
+            return new Plan.SetTtl(def.name(), Times.ttlMicros(alter.ttl(), pos));
+        }
+        final List<ColumnDef> added = new ArrayList<>(alter.addColumns().size());
+        final Set<String> names = new HashSet<>();
+        for (final Ast.AddColumn add : alter.addColumns()) {
+            final Ast.ColumnSpec spec = add.column();
+            final CdbType type = type(spec.type(), pos);
+            final int existing = def.columnIndex(spec.name());
+            if (existing >= 0) {
+                final CdbType current = def.columns().get(existing).type();
+                if (!add.ifNotExists()) {
+                    throw new CdbException("cannot add existing column [table=" + def.name() + ", column="
+                            + spec.name() + ']', pos);
+                }
+                if (current != type) {
+                    throw new CdbException("cannot add existing column of other type [table=" + def.name()
+                            + ", column=" + spec.name() + ", type=" + current + ", requested=" + type + ']', pos);
+                }
+                continue;
+            }
+            if (!names.add(spec.name().toLowerCase(Locale.ROOT))) {
+                throw new CdbException("cannot repeat column name [name=" + spec.name() + ']', pos);
+            }
+            added.add(column(spec, type, pos));
+        }
+        return new Plan.AddColumns(def.name(), List.copyOf(added));
+    }
+
+    /**
      * The column {@code spec} declares, its SYMBOL options checked and rounded as QuestDB does: each capacity within
      * its range and raised to a power of two, a cached dictionary's capacity at most
      * {@link #MAX_SYMBOL_CAPACITY_CACHED}.

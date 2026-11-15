@@ -8,6 +8,8 @@ jsvg = "2.2.0"
 rsyntaxtextarea = "4.0.1"
 commonmark = "0.31.0"
 postgresql = "42.7.14"
+# the pgjdbc Cosa runs against QuestDB; cdb's pg-wire tests connect with it
+postgresql-cosa = "42.7.13"
 questdb = "10.1.0"
 annotations = "26.1.0"
 junit = "6.1.3"
@@ -26,6 +28,7 @@ rsyntaxtextarea = { module = "com.fifesoft:rsyntaxtextarea", version.ref = "rsyn
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 commonmark-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+postgresql-cosa = { module = "org.postgresql:postgresql", version.ref = "postgresql-cosa" }
 questdb = { module = "org.questdb:questdb", version.ref = "questdb" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }

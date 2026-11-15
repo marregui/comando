@@ -135,6 +135,22 @@ final class PlanText {
                 }
                 sink.append('\n');
             }
+            case Plan.Insert(final String table, final int[] columns, final List<Plan> sources) -> {
+                sink.append("Insert ").append(table).append(' ').append(Arrays.toString(columns)).append('\n');
+                for (final Plan source : sources) {
+                    put(sink, source, depth + 1);
+                }
+            }
+            case Plan.AddColumns(final String table, final List<ColumnDef> columns) -> {
+                sink.append("AddColumns ").append(table).append(" (");
+                for (int i = 0; i < columns.size(); i++) {
+                    final ColumnDef c = columns.get(i);
+                    sink.append(i > 0 ? ", " : "").append(c.name()).append(':').append(c.type());
+                }
+                sink.append(")\n");
+            }
+            case Plan.SetTtl(final String table, final long ttlMicros) ->
+                    sink.append("SetTtl ").append(table).append(" ttlMicros=").append(ttlMicros).append('\n');
         }
     }
 

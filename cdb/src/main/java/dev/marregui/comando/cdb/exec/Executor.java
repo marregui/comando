@@ -40,24 +40,29 @@ public final class Executor {
             case Plan.Window w -> new WindowCursor(open(w.child(), store, nowMicros), w, nowMicros);
             case Plan.CreateTable c -> throw new CdbException("cannot query a CREATE TABLE", -1);
             case Plan.Update u -> throw new CdbException("cannot query an UPDATE", -1);
+            case Plan.Insert _ -> throw new CdbException("cannot query an INSERT", -1);
+            case Plan.AddColumns _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
+            case Plan.SetTtl _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
         };
     }
 
     /** Runs {@code plan}, a statement that changes the store; returns the rows it changed (0 for DDL). */
-    public static long execute(final Plan plan, final Store store, final long nowMicros) {
+    public static long execute(final Plan.Change plan, final Store store, final long nowMicros) {
         return switch (plan) {
             case Plan.CreateTable c -> {
                 store.create(c.def(), c.ifNotExists());
                 yield 0;
             }
             case Plan.Update u -> UpdateRunner.run(u, store, nowMicros);
-            default -> throw new CdbException("not a statement that changes the store", -1);
+            case Plan.Insert i -> InsertRunner.run(i, store, nowMicros);
+            case Plan.AddColumns a -> AlterRunner.addColumns(a, store);
+            case Plan.SetTtl t -> AlterRunner.setTtl(t, store);
         };
     }
 
     /** True when {@code plan} changes the store rather than returning rows. */
     public static boolean changesStore(final Plan plan) {
-        return plan instanceof Plan.CreateTable || plan instanceof Plan.Update;
+        return plan instanceof Plan.Change;
     }
 
     /**

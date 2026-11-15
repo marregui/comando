@@ -10,8 +10,8 @@ import dev.marregui.comando.cdb.plan.Bound;
 /**
  * The aggregate functions of the corpus ({@code count}, {@code sum}, {@code avg}, {@code min}, {@code max},
  * {@code first}, {@code last}, {@code count_distinct}, {@code approx_percentile}, {@code percentile_disc},
- * {@code approx_median}, …) as accumulators the grouping operators use; each produces the type its
- * {@code Bound.Agg} carries, which {@link dev.marregui.comando.cdb.plan.Signatures} decided.
+ * {@code percentile_cont}, {@code approx_median}, …) as accumulators the grouping operators use; each produces the type
+ * its {@code Bound.Agg} carries, which {@link dev.marregui.comando.cdb.plan.Signatures} decided.
  */
 public final class Aggregates {
 
@@ -59,6 +59,10 @@ public final class Aggregates {
                     precision(function, args, 2), true);
             case "approx_median" -> percentile(function, in, 0.5, precision(function, args, 1), true);
             case "percentile_disc" -> percentile(function, in, fraction(function, args, 1), DEFAULT_PRECISION, false);
+            case "percentile_cont" -> switch (in) {
+                case LONG, TIMESTAMP, DOUBLE -> new ContinuousPercentileAccumulator(fraction(function, args, 1));
+                default -> throw unsupported(function, in);
+            };
             default -> throw new CdbException("cannot run unknown aggregate [function=" + function + ']', -1);
         };
     }

@@ -39,4 +39,9 @@ public record TableDef(
         more.add(column);
         return new TableDef(name, more, timestampIndex, partitionBy, dedupKeys, ttlMicros);
     }
+
+    /** The same table with its TTL set to {@code ttl}, in microseconds, 0 for none. */
+    public TableDef withTtlMicros(final long ttl) {
+        return new TableDef(name, columns, timestampIndex, partitionBy, dedupKeys, ttl);
+    }
 }

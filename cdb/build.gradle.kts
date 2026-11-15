@@ -1,6 +1,7 @@
 // cdb: comando's own columnar, time-partitioned database. JDK only; one public facade, dev.marregui.comando.cdb.Cdb.
 dependencies {
     testImplementation(libs.archunit)
+    testImplementation(libs.postgresql.cosa)
 }
 
 tasks.named<Test>("test") {
@@ -10,14 +11,17 @@ tasks.named<Test>("test") {
     System.getenv("CDB_CORPUS")?.let { systemProperty("cdb.corpus", it) }
 }
 
-// ./gradlew :cdb:serve -Proot=<folder> -Pport=9100: the shadow server beside QuestDB
+// ./gradlew :cdb:serve -Proot=<folder> -Pport=9100 [-PpgPort=8813] [-Pbind=0.0.0.0]: the shadow server beside QuestDB;
+// pgPort adds the PostgreSQL wire, bind is the address of both (127.0.0.1 unless set)
 tasks.register<JavaExec>("serve") {
     group = "application"
-    description = "Serves a cdb folder over QuestDB's /exec and /write on 127.0.0.1"
+    description = "Serves a cdb folder over QuestDB's /exec and /write, and the PostgreSQL wire when -PpgPort is set"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("dev.marregui.comando.cdb.CdbServe")
     args(
         (findProperty("root") ?: "${System.getProperty("user.home")}/.comando/cdb").toString(),
         (findProperty("port") ?: "9100").toString(),
     )
+    findProperty("pgPort")?.let { args("--pg-port", it.toString()) }
+    findProperty("bind")?.let { args("--bind", it.toString()) }
 }

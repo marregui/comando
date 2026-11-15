@@ -3,6 +3,7 @@ package dev.marregui.comando.cdb.plan;
 import java.util.List;
 
 import dev.marregui.comando.cdb.exec.Field;
+import dev.marregui.comando.cdb.store.ColumnDef;
 import dev.marregui.comando.cdb.store.TableDef;
 
 /**
@@ -111,19 +112,34 @@ public sealed interface Plan {
     record Window(Plan child, List<Bound.WindowCall> calls, List<Field> fields) implements Plan {
     }
 
-    /** DDL: no output rows. */
-    record CreateTable(TableDef def, boolean ifNotExists) implements Plan {
+    /** A statement that changes the store and returns no rows: DDL and DML. */
+    sealed interface Change extends Plan {
         @Override
-        public List<Field> fields() {
+        default List<Field> fields() {
             return List.of();
         }
     }
 
+    /** DDL: no output rows. */
+    record CreateTable(TableDef def, boolean ifNotExists) implements Change {
+    }
+
     /** {@code UPDATE}: {@code values[i]} for column {@code columns[i]} where {@code where} holds (null: every row). */
-    record Update(String table, int[] columns, List<Bound> values, Bound where) implements Plan {
-        @Override
-        public List<Field> fields() {
-            return List.of();
-        }
+    record Update(String table, int[] columns, List<Bound> values, Bound where) implements Change {
+    }
+
+    /**
+     * {@code INSERT}: every row of each source, in order, its field {@code i} written to column {@code columns[i]};
+     * each field already has its column's type. A VALUES list is one source per row, over {@code one_row}.
+     */
+    record Insert(String table, int[] columns, List<Plan> sources) implements Change {
+    }
+
+    /** {@code ALTER TABLE ADD COLUMN}: the columns the table lacks, added last in order. */
+    record AddColumns(String table, List<ColumnDef> columns) implements Change {
+    }
+
+    /** {@code ALTER TABLE SET TTL}: {@code ttlMicros} 0 for none. */
+    record SetTtl(String table, long ttlMicros) implements Change {
     }
 }

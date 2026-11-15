@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.plan;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -60,6 +61,8 @@ public final class Planner {
             case Ast.CreateTable create -> Ddl.createTable(create, tables);
             case Ast.Update update -> planner.update(update);
             case Ast.Show show -> planner.show(show);
+            case Ast.Insert insert -> planner.insert(insert);
+            case Ast.AlterTable alter -> Ddl.alterTable(alter, tables);
         };
     }
 
@@ -277,6 +280,110 @@ public final class Planner {
         }
         final Bound where = update.where() == null ? null : binder.bindValue(update.where());
         return new Plan.Update(def.name(), columns, List.copyOf(values), where);
+    }
+
+    /**
+     * Every row of the VALUES list or of the query, its values cast to the column types; the designated timestamp must
+     * be among the columns, as QuestDB requires.
+     */
+    private Plan insert(final Ast.Insert insert) {
+        final int pos = insert.pos();
+        final TableDef def = tables.apply(insert.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + insert.table() + ']', pos);
+        }
+        final int[] columns = insertColumns(def, insert.columns(), pos);
+        final int timestamp = def.timestampIndex();
+        if (timestamp >= 0 && !Arrays.stream(columns).anyMatch(c -> c == timestamp)) {
+            throw new CdbException("cannot insert without designated timestamp [table=" + def.name() + ", column="
+                    + def.columns().get(timestamp).name() + ']', pos);
+        }
+        final List<Plan> sources = new ArrayList<>();
+        if (insert.query() != null) {
+            final Plan query = query(insert.query(), Map.of()).plan();
+            final List<Field> fields = query.fields();
+            if (fields.size() != columns.length) {
+                throw new CdbException("cannot insert query of other column count [table=" + def.name()
+                        + ", expected=" + columns.length + ", actual=" + fields.size() + ']', pos);
+            }
+            final List<Bound> values = new ArrayList<>(fields.size());
+            for (int i = 0; i < fields.size(); i++) {
+                values.add(new Bound.Column(i, fields.get(i).type()));
+            }
+            sources.add(insertSource(def, columns, query, values, pos));
+        } else {
+            final Rel one = new Rel(new Plan.Source("one_row", List.of(), List.of()), List.of(), -1);
+            final Binder binder = new Binder(one, null);
+            for (final List<Ast.Expr> row : insert.rows()) {
+                if (row.size() != columns.length) {
+                    throw new CdbException("cannot insert row of other value count [table=" + def.name()
+                            + ", expected=" + columns.length + ", actual=" + row.size() + ']', pos);
+                }
+                final List<Bound> values = new ArrayList<>(row.size());
+                for (final Ast.Expr value : row) {
+                    values.add(binder.bind(value));
+                }
+                sources.add(insertSource(def, columns, one.plan(), values, pos));
+            }
+        }
+        return new Plan.Insert(def.name(), columns, List.copyOf(sources));
+    }
+
+    /** The indexes of the columns an INSERT lists, every column in table order when it lists none. */
+    private static int[] insertColumns(final TableDef def, final List<String> names, final int pos) {
+        if (names.isEmpty()) {
+            final int[] all = new int[def.columns().size()];
+            Arrays.setAll(all, i -> i);
+            return all;
+        }
+        final int[] columns = new int[names.size()];
+        for (int i = 0; i < columns.length; i++) {
+            final int c = def.columnIndex(names.get(i));
+            if (c < 0) {
+                throw new CdbException("cannot find column [column=" + names.get(i) + ']', pos);
+            }
+            for (int j = 0; j < i; j++) {
+                if (columns[j] == c) {
+                    throw new CdbException("cannot insert column twice [column=" + names.get(i) + ']', pos);
+                }
+            }
+            columns[i] = c;
+        }
+        return columns;
+    }
+
+    /** {@code values} over {@code input}, each cast to the type of its column; a NULL designated timestamp refused. */
+    private static Plan insertSource(
+            final TableDef def,
+            final int[] columns,
+            final Plan input,
+            final List<Bound> values,
+            final int pos
+    ) {
+        final List<Bound> cast = new ArrayList<>(values.size());
+        final List<Field> fields = new ArrayList<>(values.size());
+        for (int i = 0; i < columns.length; i++) {
+            final ColumnDef column = def.columns().get(columns[i]);
+            final CdbType to = column.type();
+            final Bound value = Binder.cast(values.get(i), to, pos);
+            if (value instanceof Bound.Call(final String function, final List<Bound> args, final CdbType _)
+                    && "cast".equals(function) && !insertable(args.getFirst().type(), to)) {
+                throw new CdbException("cannot insert value of other type [column=" + column.name() + ", type="
+                        + args.getFirst().type() + ", target=" + to + ']', pos);
+            }
+            if (columns[i] == def.timestampIndex() && value instanceof Bound.Constant(final Object v, final CdbType _)
+                    && v == null) {
+                throw new CdbException("cannot insert NULL designated timestamp [column=" + column.name() + ']', pos);
+            }
+            cast.add(value);
+            fields.add(new Field(column.name(), to));
+        }
+        return new Plan.Project(input, List.copyOf(cast), List.copyOf(fields));
+    }
+
+    /** What UPDATE assigns, and text read as a timestamp, as QuestDB's INSERT parses a string into one. */
+    private static boolean insertable(final CdbType from, final CdbType to) {
+        return castable(from, to) || from.isText() && to == CdbType.TIMESTAMP;
     }
 
     private static boolean castable(final CdbType from, final CdbType to) {

@@ -125,6 +125,12 @@ public final class Parser {
         if (isWord("show")) {
             return show();
         }
+        if (isWord("insert")) {
+            return insert();
+        }
+        if (isWord("alter")) {
+            return alterTable();
+        }
         return new Ast.Query(query());
     }
 
@@ -481,6 +487,50 @@ public final class Parser {
         } while (acceptSymbol(","));
         final Ast.Expr where = acceptWord("where") ? expression() : null;
         return new Ast.Update(table, List.copyOf(assignments), where, pos);
+    }
+
+    private Ast.Insert insert() {
+        final int pos = expectWord("insert").start();
+        expectWord("into");
+        final String table = name();
+        List<String> columns = List.of();
+        if (acceptSymbol("(")) {
+            columns = names();
+            expectSymbol(")");
+        }
+        if (!acceptWord("values")) {
+            return new Ast.Insert(table, columns, List.of(), query(), pos);
+        }
+        final List<List<Ast.Expr>> rows = new ArrayList<>();
+        do {
+            expectSymbol("(");
+            rows.add(expressions());
+            expectSymbol(")");
+        } while (acceptSymbol(","));
+        return new Ast.Insert(table, columns, List.copyOf(rows), null, pos);
+    }
+
+    /** QuestDB's form: one optional {@code COLUMN} after {@code ADD}, an optional {@code IF NOT EXISTS} per column. */
+    private Ast.AlterTable alterTable() {
+        final int pos = expectWord("alter").start();
+        expectWord("table");
+        final String table = name();
+        if (acceptWord("set")) {
+            expectWord("ttl");
+            return new Ast.AlterTable(table, List.of(), ttl(), pos);
+        }
+        expectWord("add");
+        acceptWord("column");
+        final List<Ast.AddColumn> columns = new ArrayList<>();
+        do {
+            final boolean ifNotExists = acceptWord("if");
+            if (ifNotExists) {
+                expectWord("not");
+                expectWord("exists");
+            }
+            columns.add(new Ast.AddColumn(columnSpec(), ifNotExists));
+        } while (acceptSymbol(","));
+        return new Ast.AlterTable(table, List.copyOf(columns), null, pos);
     }
 
     private Ast.Show show() {

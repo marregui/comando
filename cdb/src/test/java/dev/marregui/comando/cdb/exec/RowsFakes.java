@@ -325,6 +325,11 @@ final class RowsFakes {
         }
 
         @Override
+        public void setTtl(final long ttlMicros) {
+            throw new UnsupportedOperationException("no TTL is set by an update");
+        }
+
+        @Override
         public void newRow(final long micros) {
             assertThat(row).as("a row is ended before the next starts").isNull();
             row = new Object[def.columns().size()];
