@@ -9,8 +9,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,9 +58,15 @@ public final class Mapped implements AutoCloseable {
 
     /**
      * Maps {@code file} at the size it has now; bytes appended later are not seen. The caller closes it, on this
-     * thread.
+     * thread. Only a regular file, or a link to one, is opened; anything else fails at once as a
+     * {@link FileSystemException}: the open of a FIFO waits for a writer and a device's may never return, and readers
+     * run on virtual threads, where a blocked open holds a carrier.
      */
     public static Mapped open(final Path file) throws IOException {
+        if (!Files.readAttributes(file, BasicFileAttributes.class).isRegularFile()) {
+            // no file given, so the JDK does not prefix the path and the message keeps its shape
+            throw new FileSystemException(null, null, "cannot open what is not a regular file [file=" + file + ']');
+        }
         final Arena arena = Arena.ofConfined();
         try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
             final long size = channel.size();

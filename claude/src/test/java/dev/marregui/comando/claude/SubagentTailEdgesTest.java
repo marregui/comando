@@ -2,15 +2,10 @@ package dev.marregui.comando.claude;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,9 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -34,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a file at the size limit renders whole; one byte over, it is cut with a notice
 /// - a stopped session's sub-agents are not followed; restarted, they are followed again
 /// - a followed sub-agent keeps its title against another with the same description, past the title map's 256 entries
-/// - an open under way when `close()` returns sends nothing afterward
+/// - a FIFO in place of a transcript is refused with a notice, never opened
 class SubagentTailEdgesTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -173,52 +168,22 @@ class SubagentTailEdgesTest {
         assertThat(b.title()).as("B's title while A, titled '%s', is still followed", a.title()).isNotEqualTo(a.title());
     }
 
-    /// With the tail's thread blocked opening a FIFO past the 2 s wait, a `close()` followed by releasing the FIFO
-    /// sends no further intent, neither a late view nor a false failure, and the tail thread ends.
+    /// A FIFO in place of a sub-agent's transcript is refused, not opened: the session is told the transcript cannot be
+    /// read and no view opens. Opened, the FIFO would hold the tail's thread until a writer came, and no notice would.
     @Test
-    void anOpenUnderWayWhenCloseReturnsSendsNothingAfterward() throws Exception {
+    void aFifoInPlaceOfTheTranscriptIsRefusedWithANotice() throws Exception {
         live();
         Files.writeString(subagents.resolve("agent-s.meta.json"), "{\"description\":\"Slow\",\"toolUseId\":\"toolu_s\"}");
         final Path fifo = subagents.resolve("agent-s.jsonl");
         final Process mk = new ProcessBuilder("mkfifo", fifo.toString()).start();
         assertThat(mk.waitFor()).isZero();
+        final int before = sink.intents().size();
 
         adapter.showSubagent("work", "conv-1", "toolu_s");
-        // one sample decides: the tail's thread is virtual, and a virtual thread held in native file I/O does not give
-        // the same stack to every sample
-        final long deadline = System.nanoTime() + WAIT.toNanos();
-        boolean blocked = blockedInOpen();
-        while (!blocked && deadline - System.nanoTime() > 0) {
-            Thread.onSpinWait();
-            blocked = blockedInOpen();
-        }
-        assertThat(blocked).as("tail thread blocked opening the FIFO").isTrue();
 
-        adapter.close();
-        final int before = sink.intents().size();
-        // opened for reading and writing, the FIFO opens at once on Linux and macOS and holds a read end of its own, so
-        // neither the open nor the write can block or break whether or not the tail's reader is gone after close(); the
-        // open releases the tail's blocked one
-        try (final FileChannel both = FileChannel.open(fifo, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-            both.write(ByteBuffer.wrap((text("late") + "\n").getBytes(StandardCharsets.UTF_8)));
-        }
-        // the read released, the tail thread finishes its task and ends
-        final long end = System.nanoTime() + WAIT.toNanos();
-        while (tailThreadAlive() && end - System.nanoTime() > 0) {
-            Thread.onSpinWait();
-        }
-        assertThat(tailThreadAlive()).as("the tail thread ended").isFalse();
-        final List<Intent> after = sink.intents().subList(before, sink.intents().size());
-        assertThat(after).as("intents sent after close() returned").isEmpty();
-    }
-
-    private static boolean tailThreadAlive() {
-        return !Threads.alive("subagent-tail").isEmpty();
-    }
-
-    private static boolean blockedInOpen() {
-        return Threads.alive("subagent-tail").stream()
-                .anyMatch(t -> Arrays.stream(t.getStackTrace()).anyMatch(s -> (s.getClassName().equals("java.io.RandomAccessFile")
-                        || s.getClassName().startsWith("sun.nio.fs.")) && s.getMethodName().startsWith("open")));
+        final Intent.Notify notice = sink.await(Intent.Notify.class, n -> n.text().contains("cannot read the sub-agent"), WAIT);
+        assertThat(notice.level()).isEqualTo(Notice.Level.WARN);
+        assertThat(sink.intents().subList(before, sink.intents().size()))
+                .as("no view opened for the refused transcript").noneMatch(Intent.ShowView.class::isInstance);
     }
 }

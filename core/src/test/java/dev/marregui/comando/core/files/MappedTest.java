@@ -2,15 +2,24 @@ package dev.marregui.comando.core.files;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.FileChannel;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import dev.marregui.comando.core.loop.Threads;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,7 +30,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// - only the slice asked for is decoded, and malformed UTF-8 decodes rather than fails
 /// - the stream reads the mapping from its start to its end
 /// - a file that is not there fails as an `IOException`
+/// - a FIFO or a folder is refused before it is opened
 class MappedTest {
+
+    // a refusal is a stat, under a millisecond; 5 s leaves room for a loaded CI machine
+    private static final Duration WAIT = Duration.ofSeconds(5);
 
     @TempDir
     Path dir;
@@ -115,7 +128,32 @@ class MappedTest {
     /// A file that is not there fails as an `IOException`.
     @Test
     void aFileThatIsNotThereFailsAsAnIoException() {
-        assertThatThrownBy(() -> Mapped.text(dir.resolve("gone.txt"))).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> Mapped.text(dir.resolve("gone.txt"))).isInstanceOf(NoSuchFileException.class);
+    }
+
+    /// A FIFO and a folder are refused before any open: the open of a FIFO with no writer would wait for one, holding
+    /// the reader's thread. The open runs on a fork so that, before the check, the test fails by its bound instead of
+    /// hanging; a read-write open of the FIFO, which never blocks on Linux or macOS, releases a fork still waiting.
+    @Test
+    void aFifoOrAFolderIsRefusedWithoutBeingOpened() throws Exception {
+        final Path fifo = dir.resolve("pipe");
+        assertThat(new ProcessBuilder("mkfifo", fifo.toString()).start().waitFor()).isZero();
+        final CompletableFuture<Throwable> outcome = new CompletableFuture<>();
+        final Thread reader = Threads.fork("mapped-test-fifo", () -> {
+            try (final Mapped _ = Mapped.open(fifo)) {
+                outcome.complete(null);
+            } catch (final IOException e) {
+                outcome.complete(e);
+            }
+        });
+        try {
+            assertThat(outcome.get(WAIT.toMillis(), TimeUnit.MILLISECONDS)).isInstanceOf(FileSystemException.class);
+        } finally {
+            try (final FileChannel _ = FileChannel.open(fifo, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+                assertThat(reader.join(WAIT)).as("the fork ended").isTrue();
+            }
+        }
+        assertThatThrownBy(() -> Mapped.open(dir)).isInstanceOf(FileSystemException.class);
     }
 
     /// A whole-file read refuses malformed UTF-8, as `Files.readString` does: its caller may write the text back, and a
