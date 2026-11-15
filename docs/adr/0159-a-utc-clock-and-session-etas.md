@@ -25,6 +25,13 @@ and Reflect already did so.
    palette); the reducer starts the session and sends the command, as for a prompt. They stay off while the session
    stops or runs its checkpoint (record 130).
 
+4. Amended 2026-11-15 (task 148): `session_eta` also takes the timebox the user gave, `box_minutes`, and when,
+   `box_given_utc` (`HH:mm` in UTC, the last such time at or before now, or an ISO-8601 instant; empty is now; any
+   other text is refused). `SessionEta` keeps them and when the session set the estimate. The activity and the ETA on
+   the session bar open the card a session's row shows, in place of a tooltip, after the same rest: every fact in UTC,
+   moved on each tick while it shows. The kit's `measure phase <task> go --quoted N` prints a line asking the
+   session to call `session_eta` with the box and the go's time.
+
 ## 3. Consequences
 
 - The ETA exists only if the session calls `session_eta`; nothing infers one.

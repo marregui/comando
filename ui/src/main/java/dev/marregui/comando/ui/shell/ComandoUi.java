@@ -465,6 +465,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.onReport(this::showReportOf);
         final SessionBar sessionBar = new SessionBar(deps.intents());
         sessionBar.checkpointThreshold(windowLayout::checkpointThreshold);
+        // one card at a time: the bar's closes the tabs' and the rows'
+        sessionBar.onCard(workspace::hideCard);
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         kit.attach(sidebar::kitRelease);

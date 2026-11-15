@@ -158,6 +158,8 @@ public final class TabCard {
     private final Timer leave = new Timer(LEAVE_GRACE_MILLIS, e -> closeIfLeft());
     /** Where the card's top left corner goes, in the tabs' coordinates: under the tab, at its left edge. */
     private Point anchor;
+    /** The top of what the card hangs under, where a card with no room under it opens above. */
+    private Point anchorTop;
     private JComponent tabs;
     /**
      * A row's card: where it goes beside the rows, in the rows' coordinates, its left edge at x and its top at the
@@ -574,6 +576,7 @@ public final class TabCard {
         }
         tabs = over;
         anchor = new Point(tab.x, tab.y + tab.height + 2);
+        anchorTop = new Point(tab.x, tab.y - 2);
         besideAt = beside < 0 ? null : new Point(beside, tab.y);
         if (card.getParent() != layer) {
             layer.add(card, JLayeredPane.POPUP_LAYER);
@@ -690,6 +693,10 @@ public final class TabCard {
         final int h = card.getPreferredSize().height;
         int x = Math.max(MARGIN, Math.min(at.x, layer.getWidth() - w - MARGIN));
         int y = at.y;
+        if (y + h > layer.getHeight() - MARGIN) {
+            // no room under it, at the window's foot (the session bar's): above it, as a tooltip flips
+            y = Math.max(MARGIN, SwingUtilities.convertPoint(tabs, anchorTop, layer).y - h);
+        }
         if (besideAt != null) {
             // beside the rows when it fits there whole, its top at the row's, raised to stay in the window
             final Point b = SwingUtilities.convertPoint(tabs, besideAt, layer);

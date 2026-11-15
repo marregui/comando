@@ -139,7 +139,11 @@ Any number of document panels may be attached to a session
   12 s", last, so that nothing moves as it changes, followed by the session's ETA once it has set one with
   `session_eta`: "step build · ETA 11:40 UTC (8 min) · goal shipped · ETA 11:52 UTC (20 min)", the step under way and
   the task's end state, each with its time in UTC and the minutes left, gold once a time has passed ("(3 min late)");
-  the estimate stays until the session sets the next one. On the right: the model and the effort, each a menu that changes it
+  with a timebox alone, "box 30 min · ends 12:52 UTC (20 min)"; the estimate stays until the session sets the next one.
+  Resting the pointer on the activity or on the ETA opens its card, the card a session's row shows: the activity's
+  says the state, what the turn does, when it started in UTC and how long ago, the prompts queued or the background
+  work waited on; the ETA's says the step and the goal with when each is due, the timebox with when it was given and
+  when it ends, when the session set it, and the time now, all in UTC. On the right: the model and the effort, each a menu that changes it
   now and keeps it, as the session's menu in the sidebar does; the context ("ctx 412k (41%)"), followed after every
   model call of a turn and, when a stored conversation is loaded, taken from its last call or the metrics its last turn
   left, so a restart keeps it ("ctx –" only while nothing is known;

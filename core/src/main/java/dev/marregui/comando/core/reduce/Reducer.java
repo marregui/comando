@@ -171,6 +171,7 @@ public final class Reducer {
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
             case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
             case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);
+            case Intent.SessionEta i -> SessionRules.etaRefusal(i);
             case Intent.AddPanel _, Intent.PinPanel _, Intent.PlaceView _, Intent.RemovePanel _, Intent.RenamePanel _,
                     Intent.MovePanel _, Intent.ReopenPanel _, Intent.FocusPanel _, Intent.BindConnection _,
                     Intent.BindSession _, Intent.OpenSession _, Intent.RefreshSql _, Intent.RefreshView _,
@@ -185,7 +186,7 @@ public final class Reducer {
                     Intent.SetSessionModel _, Intent.SetSessionEffort _, Intent.SessionStarted _, Intent.SessionRanAt _,
                     Intent.SessionInit _, Intent.SessionActivity _, Intent.SessionTasksChanged _,
                     Intent.SessionTurnRunning _, Intent.SessionTurnEnded _, Intent.SessionExited _,
-                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionEta _, Intent.SessionContext _,
+                    Intent.SessionBranch _, Intent.SessionSubjectRead _, Intent.SessionContext _,
                     Intent.ApprovalRequested _, Intent.ApprovalAnswered _, Intent.ApprovalWithdrawn _,
                     Intent.ShowView _, Intent.CloseView _,
                     Intent.PinView _, Intent.SelectLowerTab _, Intent.Arrange _, Intent.SessionLayout _,

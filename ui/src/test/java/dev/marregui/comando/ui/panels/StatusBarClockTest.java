@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StatusBarClockTest {
 
     /// 2026-11-15 11:24:05 UTC.
-    private static final long AT_MILLIS = 1_763_205_845_000L;
+    private static final long AT_MILLIS = 1_794_741_845_000L;
 
     /// The text is UTC's time, whatever zone the machine is in.
     @Test

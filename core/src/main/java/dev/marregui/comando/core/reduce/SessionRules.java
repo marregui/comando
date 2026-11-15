@@ -1,9 +1,18 @@
 package dev.marregui.comando.core.reduce;
 
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -410,15 +419,65 @@ final class SessionRules {
 
     /**
      * The session's estimate, each part due {@code minutes} from now; a part with no text or no minutes is cleared.
-     * Kept until the next estimate replaces it.
+     * Kept until the next estimate replaces it. A timebox given at a time {@link #boxGivenAt} cannot read leaves the
+     * state as it is; {@link Reducer#refusal} says why.
      */
     static Transition sessionEta(final Clock clock, final AppState s, final Intent.SessionEta i) {
         final long nowMillis = clock.millis();
+        final OptionalLong given = boxGivenAt(i, nowMillis);
+        if (given.isEmpty()) {
+            return Transition.of(s);
+        }
         final boolean step = !i.step().isBlank() && i.stepMinutes() > 0;
         final boolean goal = !i.goal().isBlank() && i.goalMinutes() > 0;
+        final boolean box = i.boxMinutes() > 0;
         final SessionEta eta = new SessionEta(step ? i.step().strip() : "", step ? nowMillis + i.stepMinutes() * 60_000L : 0L,
-                goal ? i.goal().strip() : "", goal ? nowMillis + i.goalMinutes() * 60_000L : 0L);
+                goal ? i.goal().strip() : "", goal ? nowMillis + i.goalMinutes() * 60_000L : 0L,
+                box ? i.boxMinutes() : 0, box ? given.getAsLong() : 0L, nowMillis);
         return Transition.of(s.withSession(i.name(), x -> x.withEta(eta)));
+    }
+
+    /** Why {@code i} would leave the estimate as it is: a time its timebox was given at that does not read. */
+    static Optional<String> etaRefusal(final Intent.SessionEta i) {
+        // whether the text reads does not depend on the time it is read at: read it at the latest
+        return boxGivenAt(i, Long.MAX_VALUE).isPresent() ? Optional.empty()
+                : Optional.of("box_given_utc \"" + i.boxGiven() + "\" is neither HH:mm in UTC nor an ISO-8601 instant");
+    }
+
+    /** The latest instant a timebox reads as: year 9999, far inside a {@code long} of milliseconds. */
+    private static final Instant LATEST = Instant.parse("9999-12-31T23:59:59Z");
+
+    /**
+     * When the timebox was given: now for an empty text, the last {@code HH:mm} in UTC at or before now, or an
+     * ISO-8601 instant from the epoch to year 9999, now when it is still to come; empty for a text that is none of
+     * these.
+     */
+    static OptionalLong boxGivenAt(final Intent.SessionEta i, final long nowMillis) {
+        final String text = i.boxGiven().strip();
+        if (text.isEmpty()) {
+            return OptionalLong.of(nowMillis);
+        }
+        try {
+            final LocalTime at = LocalTime.parse(text, DateTimeFormatter.ofPattern("H:mm"));
+            final ZonedDateTime now = Instant.ofEpochMilli(nowMillis).atZone(ZoneOffset.UTC);
+            ZonedDateTime given = now.with(at).truncatedTo(ChronoUnit.MINUTES);
+            if (given.isAfter(now)) {
+                given = given.minusDays(1);
+            }
+            return OptionalLong.of(given.toInstant().toEpochMilli());
+        } catch (final DateTimeParseException _) {
+            // not a time of day: an instant, or nothing
+        }
+        try {
+            final Instant at = OffsetDateTime.parse(text).toInstant();
+            if (at.isBefore(Instant.EPOCH) || at.isAfter(LATEST)) {
+                return OptionalLong.empty();
+            }
+            // a time still to come is now: the box cannot have been given later than the estimate that names it
+            return OptionalLong.of(Math.min(at.toEpochMilli(), nowMillis));
+        } catch (final DateTimeParseException _) {
+            return OptionalLong.empty();
+        }
     }
 
     static Transition sessionSubject(final AppState s, final Intent.SessionSubjectRead i) {

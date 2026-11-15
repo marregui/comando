@@ -1029,6 +1029,11 @@ public final class Workspace {
         return card;
     }
 
+    /** Closes the tabs' and the session rows' card, when one shows. */
+    public void hideCard() {
+        card.hide();
+    }
+
     /** Whether a card waits for the pointer to rest; for tests. */
     boolean hoverWaiting() {
         return hover.isRunning();
