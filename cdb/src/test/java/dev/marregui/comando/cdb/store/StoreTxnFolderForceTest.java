@@ -14,10 +14,11 @@ import dev.marregui.comando.cdb.CdbType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// A commit whose `_txn` was moved into place stands even when forcing the table folder after the move fails: the
-/// table folder is made unreadable (write and search only), so the folder force cannot open it while the files in it
-/// can still be written and moved. Before, the commit threw and its cleanup deleted the folder `_txn` named (a
-/// rewrite's rows then read back as NULLs) or left appended rows the caller believed failed.
+/// A direct commit (every commit a checkpoint) whose `_txn` was moved into place stands even when forcing the table
+/// folder after the move fails: the table folder is made unreadable (write and search only) right before the move, so
+/// the folder force cannot open it while the files in it can still be written and moved. Before, the commit threw and
+/// its cleanup deleted the folder `_txn` named (a rewrite's rows then read back as NULLs) or left appended rows the
+/// caller believed failed.
 class StoreTxnFolderForceTest {
 
     private static final long DAY1 = StoreRows.micros("2026-11-01T00:00:00Z");
@@ -55,18 +56,22 @@ class StoreTxnFolderForceTest {
     private static List<String> commitWithUnreadableFolder(final Path root, final double[] late) {
         final Path table = root.resolve("m");
         try (Store store = Store.open(root)) {
+            store.directRows = 0;
             store.create(table(), false);
             try (TableWriter w = store.writer("m", 1_000L)) {
                 row(w, DAY1 + 10L, 1.0, "one");
                 row(w, DAY1 + 20L, 2.0, "two");
                 w.commit();
-                permissions(table, "-wx------");
+                // right before the move: the table folder's force ahead of it still holds, the one after cannot open
+                store.beforeTxnReplace = () -> permissions(table, "-wx------");
                 try {
                     for (final double v : late) {
                         row(w, DAY1 + (long) v, v, "late");
                     }
                     w.commit();
                 } finally {
+                    store.beforeTxnReplace = () -> {
+                    };
                     permissions(table, "rwx------");
                 }
             }

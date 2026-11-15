@@ -18,17 +18,23 @@ import dev.marregui.comando.cdb.CdbType;
  * The writer of one table. Pending rows are held by column in a {@link RowBlock}; a commit orders and deduplicates the
  * rows of each partition they fall in, then appends them in place to the partition's column files when they all come
  * after its committed rows, else rewrites the partition as a new version folder (its committed rows merged with the
- * new); then it syncs the symbol dictionaries, rewrites {@code _meta} when columns were added, and last replaces
- * {@code _txn}, whose row counts alone say what is committed. A crash at any step before leaves the previous
- * transaction: the bytes appended past the committed ends are cut and the orphan folders deleted when the store next
- * opens.
+ * new), all unforced, its symbols interned in memory. Then its commit point: a commit appends its pending rows to the
+ * table's log and forces it, and is visible once that returns; a bulk commit, a definition change or a truncate is
+ * named by a {@link Checkpoint} instead, as every commit was before the log. Once the log holds enough, a commit
+ * checkpoints the table: what the commits since the last one wrote is forced and {@code _txn} names it; closing the
+ * writer does not, the store's close and {@link Store#checkpoint} do. A crash leaves
+ * the last checkpoint and the log: the store's next open cuts the bytes appended past the committed ends, deletes the
+ * orphan folders and replays the log.
  */
 final class DefaultWriter implements TableWriter {
 
+    private static final System.Logger LOG = System.getLogger(DefaultWriter.class.getName());
     private static final int INITIAL_ROWS = 1024;
 
     private final Store store;
     private final TableState state;
+    // the recovery's writer: applies and publishes the log's commits, never logs nor checkpoints
+    private final boolean replay;
     private TableDef def;
     private TableDef committedDef;
     private RowBlock pending;
@@ -38,8 +44,13 @@ final class DefaultWriter implements TableWriter {
     private boolean closed;
 
     DefaultWriter(final Store store, final TableState state) {
+        this(store, state, false);
+    }
+
+    DefaultWriter(final Store store, final TableState state, final boolean replay) {
         this.store = store;
         this.state = state;
+        this.replay = replay;
         this.committedDef = state.current().def();
         this.def = committedDef;
         this.pending = new RowBlock(def.columns(), INITIAL_ROWS);
@@ -153,31 +164,37 @@ final class DefaultWriter implements TableWriter {
         if (!truncated && pending.size == 0 && !defChanged) {
             return;
         }
+        if (state.poisoned()) {
+            throw new CdbException("refuse commit to failed table [table=" + def.name() + ']', -1);
+        }
         final TableState.Snapshot current = state.current();
         final long txn = current.txn() + 1L;
+        // definition changes stay off the log: rare, and a checkpoint writes _meta before the _txn that needs it
+        final boolean direct = !replay && (pending.size >= store.directRows || defChanged || truncated
+                || logBytesAtLeast(store.checkpointBytes));
         // versions in new folders, and versions of a committed folder its rows were appended to
         final List<Version> written = new ArrayList<>();
         final List<Version> appended = new ArrayList<>();
         final List<Version> next = new ArrayList<>(truncated ? List.of() : current.partitions());
+        final TableState.Snapshot snapshot;
         try {
             if (pending.size > 0) {
                 writePartitions(txn, next, written, appended);
             }
             expire(next, written, appended);
-            for (final SymbolTable symbols : state.symbols()) {
-                if (symbols != null) {
-                    symbols.sync();
+            state.wrote(written, true);
+            state.wrote(appended, false);
+            snapshot = new TableState.Snapshot(txn, def, next);
+            if (direct) {
+                if (!directCheckpoint(snapshot)) {
+                    // no log record holds this commit: lost if the rename of _txn does not survive a power cut
+                    state.poison();
+                    LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force left a commit in"
+                            + " doubt [table=" + def.name() + ", txn=" + txn + ']');
                 }
+            } else if (!replay) {
+                log(txn);
             }
-            if (defChanged) {
-                StoreFiles.replaceText(state.dir.resolve(TableFiles.META), TableFiles.encodeMeta(def));
-            }
-            final List<TableFiles.Entry> entries = new ArrayList<>(next.size());
-            for (final Version v : next) {
-                entries.add(new TableFiles.Entry(v.folder, v.rowCount()));
-            }
-            store.beforeTxnReplace.run();
-            StoreFiles.replaceText(state.dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(txn, entries));
         } catch (final IOException | RuntimeException e) {
             final CdbException failure = new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn
                     + ']', e);
@@ -200,10 +217,18 @@ final class DefaultWriter implements TableWriter {
             }
             throw failure;
         }
-        state.publish(new TableState.Snapshot(txn, def, next));
+        if (!direct && !replay) {
+            // the commit is durable from here: a failure of this hook leaves it to the log's replay
+            store.afterWalForce.run();
+        }
+        state.publish(snapshot);
         committedDef = def;
         pending.size = 0;
         truncated = false;
+        if (!direct && !replay && (state.wal.records() >= store.checkpointRecords
+                || state.wal.bytes() >= store.checkpointBytes)) {
+            checkpoint();
+        }
     }
 
     @Override
@@ -218,8 +243,107 @@ final class DefaultWriter implements TableWriter {
             return;
         }
         closed = true;
-        discard();
-        state.unlease();
+        // no checkpoint here: a writer per group commit or statement would pay one per commit; the log keeps them
+        try {
+            discard();
+        } finally {
+            state.unlease();
+        }
+    }
+
+    /**
+     * Appends the pending rows to the log as commit {@code txn} and forces it. A failure poisons the table: the log is
+     * cut back or in doubt, and after a failed force the page cache cannot be trusted.
+     */
+    private void log(final long txn) throws IOException {
+        store.beforeWalAppend.run();
+        // an interrupt would close the log's channel mid-force and fail a commit nobody cancelled
+        final boolean interrupted = Thread.interrupted();
+        try {
+            state.wal.append(txn, false, null, pending);
+        } catch (final IOException | RuntimeException e) {
+            state.poison();
+            throw e;
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /**
+     * Checkpoints the published snapshot. A failure leaves the commits standing, in the log, and refuses the table's
+     * further commits until the store reopens: after a failed force the page cache cannot be trusted, so a retry could
+     * report a force that lost data and then cut the log that still holds it.
+     */
+    private void checkpoint() {
+        final TableState.Snapshot published = state.current();
+        if (published == null) {
+            // the store closed under the writer: its next open replays the log
+            return;
+        }
+        try {
+            if (!runCheckpoint(published)) {
+                state.poison();
+                LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force failed in a checkpoint,"
+                        + " log kept [table=" + def.name() + ", txn=" + published.txn() + ']');
+            }
+        } catch (final IOException | RuntimeException e) {
+            state.poison();
+            LOG.log(System.Logger.Level.ERROR, "refuse further commits, cannot checkpoint table, log kept [table="
+                    + def.name() + ", txn=" + published.txn() + ']', e);
+        }
+    }
+
+    /**
+     * True when the pending rows' log record would take at least {@code limit} bytes, counting each text char as 3
+     * UTF-8 bytes (the most a UTF-16 char encodes to): such a commit is written as a checkpoint, so its text is not
+     * copied twice more into a record.
+     */
+    private boolean logBytesAtLeast(final long limit) {
+        final int n = pending.size;
+        long bytes = 0L;
+        for (int c = 0; c < pending.types.length; c++) {
+            final CdbType type = pending.types[c];
+            if (type == CdbType.SYMBOL || type == CdbType.VARCHAR) {
+                final String[] texts = pending.texts[c];
+                for (int r = 0; r < n; r++) {
+                    bytes += Integer.BYTES + (texts[r] == null ? 0L : 3L * texts[r].length());
+                }
+            } else {
+                bytes += (long) n * (type == CdbType.BOOLEAN ? 1 : Long.BYTES);
+            }
+            if (bytes >= limit) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The checkpoint of a direct commit: a failed disk operation refuses the table's further commits, as one after a
+     * logged commit does (a later checkpoint would force again the files of the commits still in the log), and is
+     * thrown for the commit's cleanup.
+     */
+    private boolean directCheckpoint(final TableState.Snapshot snapshot) throws IOException {
+        try {
+            return runCheckpoint(snapshot);
+        } catch (final IOException e) {
+            state.poison();
+            throw e;
+        }
+    }
+
+    private boolean runCheckpoint(final TableState.Snapshot snapshot) throws IOException {
+        // as in log: an interrupt would close a channel mid-force
+        final boolean interrupted = Thread.interrupted();
+        try {
+            return Checkpoint.run(store, state, snapshot);
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     /**
@@ -356,8 +480,8 @@ final class DefaultWriter implements TableWriter {
     }
 
     /**
-     * Writes the rows {@code order} of {@code rows} into {@code old}'s column files from its committed ends, every file
-     * forced.
+     * Writes the rows {@code order} of {@code rows} into {@code old}'s column files from its committed ends, unforced:
+     * the commit's log record, or its checkpoint, makes them durable.
      */
     private void append(final Version old, final RowBlock rows, final int[] order) throws IOException {
         final long committed = old.rowCount();
@@ -372,10 +496,10 @@ final class DefaultWriter implements TableWriter {
                 final Path indexFile = old.dir.resolve(columns.get(c).name() + ".i");
                 final long end = Version.decodeEnd(StoreFiles.readLong(indexFile, (committed - 1L) * Long.BYTES));
                 final Text text = varchar(data, rows.texts[c], order, end);
-                StoreFiles.writeAt(data, end, text.bytes());
-                StoreFiles.writeAt(indexFile, committed * Long.BYTES, text.ends());
+                StoreFiles.writeAt(data, end, text.bytes(), false);
+                StoreFiles.writeAt(indexFile, committed * Long.BYTES, text.ends(), false);
             } else {
-                StoreFiles.writeAt(data, committed * TableFiles.width(rows.types[c]), fixed(rows, c, order));
+                StoreFiles.writeAt(data, committed * TableFiles.width(rows.types[c]), fixed(rows, c, order), false);
             }
         }
     }
@@ -411,20 +535,20 @@ final class DefaultWriter implements TableWriter {
         return merged;
     }
 
-    /** Writes the rows {@code order} of {@code block} as the version folder {@code dir}, every file forced. */
+    /** Writes the rows {@code order} of {@code block} as the version folder {@code dir}, unforced, as {@link #append}. */
     private void writeVersion(final Path dir, final RowBlock block, final int[] order) throws IOException {
         // a folder of this name is an orphan of a commit that crashed before naming it in _txn
         StoreFiles.deleteFolder(dir);
-        Files.createDirectories(dir);
+        StoreFiles.createFolder(dir);
         final List<ColumnDef> columns = def.columns();
         for (int c = 0; c < columns.size(); c++) {
             final Path data = dir.resolve(columns.get(c).name() + ".d");
             if (block.types[c] == CdbType.VARCHAR) {
                 final Text text = varchar(data, block.texts[c], order, 0L);
-                StoreFiles.writeNew(dir.resolve(columns.get(c).name() + ".i"), text.ends());
-                StoreFiles.writeNew(data, text.bytes());
+                StoreFiles.writeNew(dir.resolve(columns.get(c).name() + ".i"), text.ends(), false);
+                StoreFiles.writeNew(data, text.bytes(), false);
             } else {
-                StoreFiles.writeNew(data, fixed(block, c, order));
+                StoreFiles.writeNew(data, fixed(block, c, order), false);
             }
         }
     }

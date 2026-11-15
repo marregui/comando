@@ -43,7 +43,8 @@ class CdbTest {
             assertThatThrownBy(() -> cdb.run("SELECT date_trunc('fortnight', ts) FROM t"))
                     .isInstanceOf(CdbException.class);
             assertThat(cdb.run("UPDATE t SET n = 2").updateCount()).isEqualTo(1);
-            // a version folder no reader holds is deleted once the next one is published: one folder remains
+            // a version folder no reader holds goes once the checkpointed _txn does not name it: no checkpoint ran,
+            // so _txn names no folder and the first one goes as the UPDATE commits; one folder remains
             assertThat(partitionFolders()).containsExactly("2023-11-14.2");
         }
     }

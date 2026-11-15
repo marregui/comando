@@ -178,6 +178,7 @@ row and its record differ, or when a record has no row.
 | [155](0155-icon-sets-switch-like-themes.md) | Icon sets switch like themes | 2026-11-12 | Miguel and Claude | replaced by [record 156](0156-one-icon-set-and-a-split-checkpoint.md) |
 | [156](0156-one-icon-set-and-a-split-checkpoint.md) | One icon set and a split checkpoint | 2026-11-14 | Miguel and Claude | accepted; built |
 | [157](0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md) | comando owns its JSON, MQTT, diff, completion and icons | 2026-11-14 | Miguel and Claude | accepted; built |
-| [158](0158-cdb-comandos-own-database.md) | cdb, comando's own database | 2026-11-14 | Miguel and Claude | accepted; built, in shadow beside QuestDB |
+| [158](0158-cdb-comandos-own-database.md) | cdb, comando's own database | 2026-11-14 | Miguel and Claude | accepted; built, in shadow beside QuestDB; its storage amended by [record 161](0161-cdb-write-ahead-log.md) |
 | [159](0159-a-utc-clock-and-session-etas.md) | A UTC clock, session ETAs, and session buttons that start a stopped session | 2026-11-15 | Miguel and Claude | accepted; built |
 | [160](0160-each-panel-keeps-its-lower-tab.md) | Each panel keeps its lower tab, and a request no longer opens a document's lower area for good | 2026-11-15 | Miguel and Claude | accepted; built |
+| [161](0161-cdb-write-ahead-log.md) | cdb commits through a write-ahead log | 2026-11-15 | Miguel and Claude | accepted; built |

@@ -20,14 +20,17 @@ import dev.marregui.comando.cdb.CdbType;
 
 /**
  * The tables under one root folder: {@code <root>/<table>/} holds {@code _meta} (the {@link TableDef}), {@code _txn}
- * (the committed transaction: each partition's folder name and row count, replaced atomically by rename) and one folder
- * per partition version, {@code <partition>.<txn>/}, with one file per column. Thread-safe.
+ * (the last checkpoint: each partition's folder name and row count, replaced atomically by rename), {@code _wal} (the
+ * {@link Wal} of the commits since) and one folder per partition version, {@code <partition>.<txn>/}, with one file
+ * per column. Opening a table replays its log; closing the store checkpoints every table. Thread-safe.
  */
 public final class Store implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Store.class.getName());
     // how long close waits for each table's open writer; a writer still open after it fails on its next commit
     private static final long CLOSE_WAIT_MILLIS = 10_000L;
+    // how long a checkpoint waits for the table's writer; as CLOSE_WAIT_MILLIS
+    private static final long CHECKPOINT_WAIT_MILLIS = 10_000L;
     // the root's lock file; a store holds it from open to close, so two never write one root
     private static final String LOCK = "_lock";
 
@@ -39,6 +42,35 @@ public final class Store implements AutoCloseable {
     /** False makes every commit rewrite the partitions it touches, never append in place: the tests' reference. */
     @TestOnly
     boolean appendInPlace = true;
+
+    /** Run by a logged commit right before it appends its record to the table's log. */
+    @TestOnly
+    Runnable beforeWalAppend = () -> {
+    };
+
+    /** Run by a logged commit right after its record is forced, before the commit is visible. */
+    @TestOnly
+    Runnable afterWalForce = () -> {
+    };
+
+    /**
+     * A commit checkpoints the table once its log holds this many records: one commit in 256 pays a checkpoint, and a
+     * recovery replays at most 256 commits. Not measured; set for the plan of the log.
+     */
+    @TestOnly
+    int checkpointRecords = 256;
+
+    /** A commit checkpoints the table once its log holds this many bytes: 16 MiB, as {@link #checkpointRecords}. */
+    @TestOnly
+    long checkpointBytes = 16L << 20;
+
+    /**
+     * A commit of at least this many rows is written as a checkpoint, not logged: as {@code CommitQueue}'s largest
+     * group, so a bulk statement is not written twice nor held twice in memory. 0 checkpoints every commit, as before
+     * the log.
+     */
+    @TestOnly
+    int directRows = 100_000;
 
     private final Path root;
     private final Map<String, TableState> tables = new ConcurrentHashMap<>();
@@ -64,7 +96,7 @@ public final class Store implements AutoCloseable {
             try (final DirectoryStream<Path> dirs = Files.newDirectoryStream(root, Files::isDirectory)) {
                 for (final Path dir : dirs) {
                     if (Files.exists(dir.resolve(TableFiles.META))) {
-                        final TableState state = load(dir);
+                        final TableState state = load(store, dir);
                         store.tables.put(state.key, state);
                     }
                 }
@@ -111,15 +143,19 @@ public final class Store implements AutoCloseable {
                 throw new CdbException("refuse to create existing table [table=" + def.name() + ']', -1);
             }
             final Path dir = root.resolve(def.name());
+            final Wal wal;
             try {
-                Files.createDirectories(dir);
+                StoreFiles.createFolder(dir);
                 StoreFiles.replaceText(dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(0L, List.of()));
                 // _meta last: open takes a folder with _meta for a table
                 StoreFiles.replaceText(dir.resolve(TableFiles.META), TableFiles.encodeMeta(def));
+                wal = Wal.open(dir);
+                // the table folder's entry: without it a power cut loses the table
+                StoreFiles.forceFolder(root);
             } catch (final IOException e) {
                 throw new CdbException("cannot create table [table=" + def.name() + ", dir=" + dir + ']', e);
             }
-            final TableState state = new TableState(dir, def);
+            final TableState state = new TableState(dir, def, new long[0], wal);
             state.init(new TableState.Snapshot(0L, def, List.of()));
             tables.put(state.key, state);
             LOG.log(System.Logger.Level.DEBUG, "created table [table=" + def.name() + ", dir=" + dir + ']');
@@ -153,6 +189,29 @@ public final class Store implements AutoCloseable {
         return new IlpAppender(this);
     }
 
+    /**
+     * Checkpoints {@code table}: forces what its commits since the last checkpoint wrote, replaces {@code _txn} and
+     * empties its log. Waits for the table's writer like {@link #writer}.
+     */
+    @TestOnly
+    void checkpoint(final String table) {
+        checkOpen();
+        final TableState state = state(table);
+        state.lease(CHECKPOINT_WAIT_MILLIS);
+        try {
+            if (state.poisoned()) {
+                throw new CdbException("refuse checkpoint of failed table [table=" + table + ']', -1);
+            }
+            if (!Checkpoint.run(this, state, state.current())) {
+                throw new CdbException("cannot force folder after checkpoint, log kept [table=" + table + ']', -1);
+            }
+        } catch (final IOException e) {
+            throw new CdbException("cannot checkpoint table [table=" + table + ']', e);
+        } finally {
+            state.unlease();
+        }
+    }
+
     /** Waits for open writers to close, then releases every file; idempotent. */
     @Override
     public void close() {
@@ -161,7 +220,12 @@ public final class Store implements AutoCloseable {
         }
         closed = true;
         for (final TableState state : tables.values()) {
-            if (!state.close(CLOSE_WAIT_MILLIS)) {
+            final boolean drained = state.leaseForClose(CLOSE_WAIT_MILLIS);
+            if (drained) {
+                checkpointOnClose(state);
+            }
+            state.close(drained);
+            if (!drained) {
                 LOG.log(System.Logger.Level.WARNING, "closed store with writer still open [table=" + state.key
                         + ", waitMillis=" + CLOSE_WAIT_MILLIS + ']');
             }
@@ -174,6 +238,23 @@ public final class Store implements AutoCloseable {
             } catch (final IOException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot release store lock [root=" + root + ']', e);
             }
+        }
+    }
+
+    // the closing thread holds the lease: a clean shutdown leaves every log empty, else the next open replays it
+    private void checkpointOnClose(final TableState state) {
+        final TableState.Snapshot snapshot = state.current();
+        if (state.poisoned() || snapshot == null || state.wal.records() == 0) {
+            return;
+        }
+        try {
+            if (!Checkpoint.run(this, state, snapshot)) {
+                LOG.log(System.Logger.Level.WARNING, "cannot force folder after checkpoint, log kept [table="
+                        + state.key + ", txn=" + snapshot.txn() + ']');
+            }
+        } catch (final IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot checkpoint table on close, log kept [table=" + state.key
+                    + ", txn=" + snapshot.txn() + ']', e);
         }
     }
 
@@ -231,20 +312,27 @@ public final class Store implements AutoCloseable {
     }
 
     /**
-     * Reads a table folder: {@code _meta}, {@code _txn} (none: transaction 0), the versions it names mapped; deletes
-     * the folders and temporary files a crashed commit left that {@code _txn} does not name, and cuts the bytes it
-     * appended past the committed ends of the folders it does.
+     * Reads a table folder: {@code _meta} (trimmed to the definition {@code _txn} names), {@code _txn} (none:
+     * transaction 0), the versions it names mapped; deletes the folders and temporary files a crashed commit left that
+     * {@code _txn} does not name and the symbol files of columns it does not name, cuts the bytes appended past the
+     * committed ends of the folders it does, then replays the log and checkpoints what it replayed.
      */
-    private static TableState load(final Path dir) throws IOException {
+    private static TableState load(final Store store, final Path dir) throws IOException {
         final Path meta = dir.resolve(TableFiles.META);
-        final TableDef def = TableFiles.decodeMeta(StoreFiles.readText(meta), meta.toString());
+        final TableDef stored = TableFiles.decodeMeta(StoreFiles.readText(meta), meta.toString());
         final Path txnFile = dir.resolve(TableFiles.TXN);
         final TableFiles.Txn txn = Files.exists(txnFile)
                 ? TableFiles.decodeTxn(StoreFiles.readText(txnFile), txnFile.toString())
                 : new TableFiles.Txn(0L, List.of());
+        final TableDef def = trim(stored, txn, txnFile);
         final Set<String> named = new HashSet<>();
         for (final TableFiles.Entry entry : txn.partitions()) {
             named.add(entry.folder());
+        }
+        // a column a checkpoint did not reach: its _meta was written, its _txn not, and its log record is the replay's
+        final Set<String> unnamedSymbols = new HashSet<>();
+        for (int c = def.columns().size(); c < stored.columns().size(); c++) {
+            unnamedSymbols.add(stored.columns().get(c).name() + ".sym");
         }
         try (final DirectoryStream<Path> entries = Files.newDirectoryStream(dir)) {
             for (final Path entry : entries) {
@@ -252,12 +340,15 @@ public final class Store implements AutoCloseable {
                 if (Files.isDirectory(entry) && !named.contains(name)) {
                     LOG.log(System.Logger.Level.INFO, "deleted partition of an unfinished commit [dir=" + entry + ']');
                     StoreFiles.deleteFolder(entry);
-                } else if (name.endsWith(".tmp")) {
-                    Files.delete(entry);
+                } else if (name.endsWith(".tmp") || unnamedSymbols.contains(name)) {
+                    StoreFiles.delete(entry);
                 }
             }
         }
-        final TableState state = new TableState(dir, def);
+        // the _txn read here may be a rename a kill left unforced: forced before the log's records it covers are cut
+        StoreFiles.forceFolder(dir);
+        final Wal wal = Wal.open(dir);
+        final TableState state = new TableState(dir, def, txn.symbolBytes(), wal);
         final List<Version> versions = new ArrayList<>(txn.partitions().size());
         try {
             for (final TableFiles.Entry entry : txn.partitions()) {
@@ -273,7 +364,99 @@ public final class Store implements AutoCloseable {
             throw e;
         }
         state.init(new TableState.Snapshot(txn.number(), def, versions));
+        try {
+            replay(store, state, wal.scan(txn.number(), def));
+        } catch (final IOException | RuntimeException e) {
+            state.close(false);
+            throw e;
+        }
         return state;
+    }
+
+    /** {@code stored} as of the checkpoint {@code txn} names: its first columns and its TTL. */
+    private static TableDef trim(final TableDef stored, final TableFiles.Txn txn, final Path txnFile) {
+        if (!txn.checkpointed()) {
+            return stored;
+        }
+        if (txn.columns() > stored.columns().size()) {
+            throw new CdbException("refuse transaction naming more columns than the definition [file=" + txnFile
+                    + ", columns=" + txn.columns() + ", defined=" + stored.columns().size() + ']', -1);
+        }
+        return new TableDef(stored.name(), stored.columns().subList(0, txn.columns()), stored.timestampIndex(),
+                stored.partitionBy(), stored.dedupKeys(), txn.ttlMicros());
+    }
+
+    /**
+     * Commits the log's {@code entries} again through a writer that neither logs nor checkpoints, each as the
+     * transaction it was logged as, then checkpoints the table once: the log is empty when the store opens.
+     */
+    private static void replay(final Store store, final TableState state, final List<Wal.Entry> entries)
+            throws IOException {
+        if (entries.isEmpty()) {
+            if (state.wal.records() > 0) {
+                // records at or before the durable _txn, left by a checkpoint that stopped before its reset: cut, so
+                // the next record follows _txn's transaction
+                state.wal.reset();
+            }
+            return;
+        }
+        final String table = state.current().def().name();
+        try (final DefaultWriter writer = new DefaultWriter(store, state, true)) {
+            for (final Wal.Entry entry : entries) {
+                final long expected = state.current().txn() + 1L;
+                if (entry.txn() != expected) {
+                    throw new CdbException("refuse log entry out of order [table=" + table + ", txn=" + entry.txn()
+                            + ", expected=" + expected + ']', -1);
+                }
+                try {
+                    apply(writer, entry);
+                } catch (final RuntimeException e) {
+                    throw new CdbException("cannot replay log [table=" + table + ", txn=" + entry.txn() + ']', e);
+                }
+            }
+        }
+        final TableState.Snapshot replayed = state.current();
+        if (!Checkpoint.run(store, state, replayed)) {
+            // as after a failed checkpoint of a commit: a retry could take a failed force for good and cut the log
+            state.poison();
+            LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force failed in the checkpoint after"
+                    + " replay, log kept [table=" + table + ", txn=" + replayed.txn() + ']');
+        }
+        LOG.log(System.Logger.Level.INFO, "replayed log [table=" + table + ", entries=" + entries.size() + ", txn="
+                + replayed.txn() + ']');
+    }
+
+    private static void apply(final DefaultWriter writer, final Wal.Entry entry) {
+        if (entry.truncate()) {
+            writer.truncate();
+        }
+        final TableDef logged = entry.def();
+        if (logged != null) {
+            for (int c = writer.def().columns().size(); c < logged.columns().size(); c++) {
+                writer.addColumn(logged.columns().get(c));
+            }
+            if (logged.ttlMicros() != writer.def().ttlMicros()) {
+                writer.setTtl(logged.ttlMicros());
+            }
+        }
+        final RowBlock rows = entry.rows();
+        final int ts = writer.def().timestampIndex();
+        for (int r = 0; r < rows.size; r++) {
+            writer.newRow(ts >= 0 ? rows.longs[ts][r] : Long.MIN_VALUE);
+            for (int c = 0; c < rows.types.length; c++) {
+                if (c == ts) {
+                    continue;
+                }
+                switch (rows.types[c]) {
+                    case LONG, TIMESTAMP -> writer.putLong(c, rows.longs[c][r]);
+                    case DOUBLE -> writer.putDouble(c, rows.doubles[c][r]);
+                    case BOOLEAN -> writer.putBoolean(c, rows.booleans[c][r]);
+                    case SYMBOL, VARCHAR -> writer.putText(c, rows.texts[c][r]);
+                }
+            }
+            writer.endRow();
+        }
+        writer.commit();
     }
 
     /**

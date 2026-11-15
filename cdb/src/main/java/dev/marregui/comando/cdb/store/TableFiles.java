@@ -5,6 +5,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.IsoFields;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -25,6 +26,10 @@ final class TableFiles {
 
     static final String META = "_meta";
     static final String TXN = "_txn";
+    // the lines a checkpoint adds to _txn, after the partitions
+    private static final String COLUMNS = "@columns=";
+    private static final String TTL = "@ttl=";
+    private static final String SYM = "@sym=";
     static final int FORMAT = 2;
 
     /** The format before {@link #FORMAT}, still read: its columns carry no options. */
@@ -37,11 +42,32 @@ final class TableFiles {
     record Entry(String folder, long rows) {
     }
 
-    /** The committed transaction recorded in {@code _txn}. */
-    record Txn(long number, List<Entry> partitions) {
+    /**
+     * The committed transaction recorded in {@code _txn}, as of the last checkpoint: its partitions, the number of
+     * columns and the TTL of the definition it was taken at, and per column the byte length of its symbol file then
+     * (-1 for a column that is not a SYMBOL). A file written before the log names no definition: {@code columns} is -1
+     * and {@code symbolBytes} empty, and the table's {@code _meta} and symbol files are taken as they are.
+     */
+    record Txn(long number, List<Entry> partitions, int columns, long ttlMicros, long[] symbolBytes) {
 
         Txn {
             partitions = List.copyOf(partitions);
+            symbolBytes = symbolBytes.clone();
+        }
+
+        /** A transaction in the format written before the log. */
+        Txn(final long number, final List<Entry> partitions) {
+            this(number, partitions, -1, 0L, new long[0]);
+        }
+
+        /** True when the file named the definition and symbol lengths of its checkpoint. */
+        boolean checkpointed() {
+            return columns >= 0;
+        }
+
+        @Override
+        public long[] symbolBytes() {
+            return symbolBytes.clone();
         }
     }
 
@@ -124,14 +150,63 @@ final class TableFiles {
         return sb.toString();
     }
 
+    /**
+     * {@code txn} as a checkpoint writes it: its partitions, then {@code @columns=}, {@code @ttl=} and one
+     * {@code @sym=<column>:<bytes>} line per SYMBOL column. The {@code @} lines hold no tab, so an engine from before
+     * the log refuses the file rather than open a table whose last commits only its log holds.
+     */
+    static String encodeTxn(final Txn txn) {
+        final StringBuilder sb = new StringBuilder(encodeTxn(txn.number(), txn.partitions()));
+        sb.append(COLUMNS).append(txn.columns()).append('\n');
+        sb.append(TTL).append(txn.ttlMicros()).append('\n');
+        final long[] symbolBytes = txn.symbolBytes();
+        for (int c = 0; c < symbolBytes.length; c++) {
+            if (symbolBytes[c] >= 0L) {
+                sb.append(SYM).append(c).append(':').append(symbolBytes[c]).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
     static Txn decodeTxn(final String text, final String source) {
         final String[] lines = text.split("\n");
         try {
             final long number = Long.parseLong(lines[0]);
             final List<Entry> partitions = new ArrayList<>(lines.length);
+            int columns = -1;
+            long ttl = 0L;
+            final List<long[]> symbols = new ArrayList<>();
             for (int i = 1; i < lines.length; i++) {
                 if (lines[i].isEmpty()) {
                     continue;
+                }
+                if (lines[i].startsWith(COLUMNS)) {
+                    columns = Integer.parseInt(lines[i].substring(COLUMNS.length()));
+                    if (columns < 0) {
+                        throw corrupt(source, lines[i]);
+                    }
+                    continue;
+                }
+                if (lines[i].startsWith(TTL)) {
+                    ttl = Long.parseLong(lines[i].substring(TTL.length()));
+                    continue;
+                }
+                if (lines[i].startsWith(SYM)) {
+                    final String value = lines[i].substring(SYM.length());
+                    final int colon = value.indexOf(':');
+                    if (colon <= 0) {
+                        throw corrupt(source, lines[i]);
+                    }
+                    final long column = Integer.parseInt(value.substring(0, colon));
+                    final long bytes = Long.parseLong(value.substring(colon + 1));
+                    if (column < 0L || bytes < 0L) {
+                        throw corrupt(source, lines[i]);
+                    }
+                    symbols.add(new long[] {column, bytes});
+                    continue;
+                }
+                if (lines[i].startsWith("@")) {
+                    throw corrupt(source, lines[i]);
                 }
                 final int tab = lines[i].indexOf('\t');
                 if (tab <= 0) {
@@ -143,7 +218,21 @@ final class TableFiles {
                 }
                 partitions.add(new Entry(lines[i].substring(0, tab), rows));
             }
-            return new Txn(number, partitions);
+            if (columns < 0) {
+                if (!symbols.isEmpty()) {
+                    throw corrupt(source, "@sym without @columns");
+                }
+                return new Txn(number, partitions);
+            }
+            final long[] symbolBytes = new long[columns];
+            Arrays.fill(symbolBytes, -1L);
+            for (final long[] symbol : symbols) {
+                if (symbol[0] >= columns) {
+                    throw corrupt(source, SYM + symbol[0] + ':' + symbol[1]);
+                }
+                symbolBytes[(int) symbol[0]] = symbol[1];
+            }
+            return new Txn(number, partitions, columns, ttl, symbolBytes);
         } catch (final NumberFormatException e) {
             throw new CdbException("cannot read transaction [file=" + source + ']', e);
         }

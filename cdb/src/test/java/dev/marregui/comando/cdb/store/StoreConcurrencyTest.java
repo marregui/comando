@@ -46,6 +46,8 @@ class StoreConcurrencyTest {
         // counted down after each commit and replaced, so a reader can hold its snapshot across the next commit
         final AtomicReference<CountDownLatch> committed = new AtomicReference<>(new CountDownLatch(1));
         try (final Store store = Store.open(root)) {
+            // 200 commits cross 12 checkpoints, so the folder sweep of each races the readers' held snapshots
+            store.checkpointRecords = 16;
             store.create(new TableDef("m", List.of(
                     new ColumnDef("n", CdbType.LONG),
                     new ColumnDef("s", CdbType.SYMBOL),
@@ -113,6 +115,8 @@ class StoreConcurrencyTest {
                 assertThat(t.join(Duration.ofSeconds(5L))).isTrue();
             }
             final Path table = root.resolve("m");
+            // `_txn` names the checkpointed transaction: the last commits are in the log until a checkpoint
+            store.checkpoint("m");
             final TableFiles.Txn txn = TableFiles.decodeTxn(StoreFiles.readText(table.resolve(TableFiles.TXN)), "_txn");
             assertThat(txn.number()).isEqualTo(COMMITS);
             final Set<String> named = new HashSet<>();

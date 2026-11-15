@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// The `_meta` text of [TableFiles]: format 2 keeps a SYMBOL's options, format 1 still reads with QuestDB's defaults,
-/// and anything else is refused.
+/// and anything else is refused; `_txn` reads in both its formats, with and without a checkpoint's `@` lines.
 class TableFilesTest {
 
     private static final String FORMAT_ONE = "format=1\nname=t\npartitionBy=DAY\ntimestamp=0\nttl=0\ndedup=\n"
@@ -58,6 +58,63 @@ class TableFilesTest {
         assertCorrupt(formatTwo.replace("col=ts:TIMESTAMP", "col=ts:TIMESTAMP:capacity=8"),
                 "col=ts:TIMESTAMP:capacity=8");
         assertCorrupt(formatTwo.replace("col=s:SYMBOL", "col=s:SYMBOL:posting"), "col=s:SYMBOL:posting");
+    }
+
+    /// A `_txn` written before the log, partitions only, reads back as not checkpointed, naming no definition.
+    @Test
+    void txnBeforeTheLogRoundTrips() {
+        final List<TableFiles.Entry> partitions = List.of(new TableFiles.Entry("2026-11-14.3", 10L),
+                new TableFiles.Entry("2026-11-15.7", 4L));
+        final TableFiles.Txn txn = TableFiles.decodeTxn(TableFiles.encodeTxn(7L, partitions), "_txn");
+        assertThat(txn.number()).isEqualTo(7L);
+        assertThat(txn.partitions()).isEqualTo(partitions);
+        assertThat(txn.checkpointed()).isFalse();
+        assertThat(txn.columns()).isEqualTo(-1);
+        assertThat(txn.symbolBytes()).isEmpty();
+    }
+
+    /// A checkpoint's `_txn` keeps every `@` line: the column count, the TTL and each SYMBOL column's file length,
+    /// -1 for the columns that are not SYMBOL; a table with no partitions and no SYMBOL column too.
+    @Test
+    void checkpointedTxnRoundTripsEveryAtLine() {
+        final List<TableFiles.Entry> partitions = List.of(new TableFiles.Entry("default.12", 3L));
+        final TableFiles.Txn txn = new TableFiles.Txn(12L, partitions, 4, 3_600_000_000L,
+                new long[] {-1L, 0L, -1L, 12_345L});
+        final String text = TableFiles.encodeTxn(txn);
+        assertThat(text).isEqualTo("12\ndefault.12\t3\n@columns=4\n@ttl=3600000000\n@sym=1:0\n@sym=3:12345\n");
+        final TableFiles.Txn read = TableFiles.decodeTxn(text, "_txn");
+        assertThat(read.number()).isEqualTo(12L);
+        assertThat(read.partitions()).isEqualTo(partitions);
+        assertThat(read.checkpointed()).isTrue();
+        assertThat(read.columns()).isEqualTo(4);
+        assertThat(read.ttlMicros()).isEqualTo(3_600_000_000L);
+        assertThat(read.symbolBytes()).containsExactly(-1L, 0L, -1L, 12_345L);
+
+        final TableFiles.Txn bare = TableFiles.decodeTxn(TableFiles.encodeTxn(new TableFiles.Txn(1L, List.of(), 2, 0L,
+                new long[] {-1L, -1L})), "_txn");
+        assertThat(bare.partitions()).isEmpty();
+        assertThat(bare.checkpointed()).isTrue();
+        assertThat(bare.ttlMicros()).isZero();
+        assertThat(bare.symbolBytes()).containsExactly(-1L, -1L);
+    }
+
+    /// An `@` line this build does not know is refused, not skipped: it may name state the table needs.
+    @Test
+    void unknownAtLineInTxnIsRefused() {
+        assertThatThrownBy(() -> TableFiles.decodeTxn("3\n@columns=1\n@ttl=0\n@wal=9\n", "_txn"))
+                .isInstanceOf(CdbException.class)
+                .hasMessage("cannot read table file line [file=_txn, line=@wal=9]");
+    }
+
+    /// A `@sym` line for a column at or past `@columns`, or with no `@columns` at all, is refused.
+    @Test
+    void symPastTheColumnsIsRefused() {
+        assertThatThrownBy(() -> TableFiles.decodeTxn("3\n@columns=2\n@ttl=0\n@sym=2:10\n", "_txn"))
+                .isInstanceOf(CdbException.class)
+                .hasMessage("cannot read table file line [file=_txn, line=@sym=2:10]");
+        assertThatThrownBy(() -> TableFiles.decodeTxn("3\n@sym=0:10\n", "_txn"))
+                .isInstanceOf(CdbException.class)
+                .hasMessage("cannot read table file line [file=_txn, line=@sym without @columns]");
     }
 
     private static void assertCorrupt(final String text, final String line) {

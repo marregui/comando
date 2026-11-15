@@ -9,6 +9,11 @@ tasks.named<Test>("test") {
     dependsOn(":db:classes")
     // the corpus of query shapes lives outside the repository; CorpusParseTest skips when it is absent
     System.getenv("CDB_CORPUS")?.let { systemProperty("cdb.corpus", it) }
+    // StorePowerCutTest: CDB_POWERCUT_SEED replays a printed seed, CDB_POWERCUT_FULL=true runs every image it has
+    System.getenv("CDB_POWERCUT_SEED")?.let { systemProperty("cdb.powercut.seed", it) }
+    System.getenv("CDB_POWERCUT_FULL")?.let { systemProperty("cdb.powercut.full", it) }
+    // StoreWalTest's differential: CDB_WAL_SEED replays a printed seed
+    System.getenv("CDB_WAL_SEED")?.let { systemProperty("cdb.wal.seed", it) }
 }
 
 // ./gradlew :cdb:serve -Proot=<folder> -Pport=9100 [-PpgPort=8813] [-Pbind=0.0.0.0]: the shadow server beside QuestDB;

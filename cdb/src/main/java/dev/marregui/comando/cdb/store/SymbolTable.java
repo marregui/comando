@@ -11,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.CdbException;
 
 /**
@@ -35,12 +37,15 @@ final class SymbolTable implements AutoCloseable {
     // the writer's alone: open addressing, key + 1 per slot, 0 empty, power-of-two length
     private int[] slots;
     private int synced;
+    // the writer's alone: the file's length after the last sync, what a checkpoint records in _txn
+    private long syncedBytes;
 
-    private SymbolTable(final Path file, final String[] values, final int size) {
+    private SymbolTable(final Path file, final String[] values, final int size, final long syncedBytes) {
         this.file = file;
         this.values = values;
         this.size = size;
         this.synced = size;
+        this.syncedBytes = syncedBytes;
         this.slots = new int[Integer.highestOneBit(Math.max(INITIAL_CAPACITY, size) * 2) * 2];
         for (int key = 0; key < size; key++) {
             insertSlot(values[key], key);
@@ -48,10 +53,22 @@ final class SymbolTable implements AutoCloseable {
     }
 
     /** The dictionary in {@code file}, created empty when missing. */
+    @TestOnly
     static SymbolTable open(final Path file) {
+        return open(file, -1L);
+    }
+
+    /**
+     * The dictionary in {@code file}, first cut to {@code committedBytes}, its length at the last checkpoint (-1: not
+     * recorded, the file taken as it is): bytes past it were appended unforced and may hold anything, zeros included.
+     */
+    static SymbolTable open(final Path file, final long committedBytes) {
         try {
             if (!Files.exists(file)) {
-                return new SymbolTable(file, new String[INITIAL_CAPACITY], 0);
+                return new SymbolTable(file, new String[INITIAL_CAPACITY], 0, 0L);
+            }
+            if (committedBytes >= 0L && Files.size(file) > committedBytes) {
+                StoreFiles.truncate(file, committedBytes);
             }
             String[] values = new String[INITIAL_CAPACITY];
             int count = 0;
@@ -79,7 +96,7 @@ final class SymbolTable implements AutoCloseable {
             if (valid < bytes) {
                 StoreFiles.truncate(file, valid);
             }
-            return new SymbolTable(file, values, count);
+            return new SymbolTable(file, values, count, valid);
         } catch (final IOException e) {
             throw new CdbException("cannot open symbol table [file=" + file + ']', e);
         }
@@ -181,6 +198,17 @@ final class SymbolTable implements AutoCloseable {
             throw new CdbException("cannot sync symbol table [file=" + file + ", keys=" + upTo + ']', e);
         }
         synced = upTo;
+        syncedBytes += bytes;
+    }
+
+    /** The dictionary's file; missing until the first {@link #sync()} with a key to write. */
+    Path file() {
+        return file;
+    }
+
+    /** The file's length after the last {@link #sync()}: every key below the synced ones, durable. */
+    long syncedBytes() {
+        return syncedBytes;
     }
 
     /** Holds no file open between syncs: nothing to release. */

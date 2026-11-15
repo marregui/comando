@@ -56,4 +56,58 @@ class SymbolTableTest {
             assertThat(last.value(2)).isEqualTo("c");
         }
     }
+
+    /// Bytes appended after the last checkpoint may read back as zeros after a power cut, which parse as empty-string
+    /// keys; open with the checkpoint's length cuts them first, and the next sync appends after the cut.
+    @Test
+    void openCutsAZeroFilledTailToTheCommittedBytes(@TempDir final Path dir) throws IOException {
+        final Path file = dir.resolve("s.sym");
+        final long committed;
+        try (final SymbolTable symbols = SymbolTable.open(file)) {
+            symbols.intern("a");
+            symbols.intern("bb");
+            symbols.sync();
+            committed = symbols.syncedBytes();
+        }
+        Files.write(file, new byte[12], StandardOpenOption.APPEND);
+        try (final SymbolTable asItIs = SymbolTable.open(file, -1L)) {
+            assertThat(asItIs.size()).isEqualTo(5);
+            assertThat(asItIs.value(2)).isEmpty();
+        }
+        Files.write(file, new byte[12], StandardOpenOption.APPEND);
+        try (final SymbolTable cut = SymbolTable.open(file, committed)) {
+            assertThat(cut.size()).isEqualTo(2);
+            assertThat(Files.size(file)).isEqualTo(committed);
+            assertThat(cut.syncedBytes()).isEqualTo(committed);
+            assertThat(cut.intern("c")).isEqualTo(2);
+            cut.sync();
+        }
+        try (final SymbolTable last = SymbolTable.open(file, -1L)) {
+            assertThat(last.size()).isEqualTo(3);
+            assertThat(last.value(2)).isEqualTo("c");
+        }
+    }
+
+    /// The synced length starts at the file's, grows by each sync's entries (a 4-byte length and the UTF-8 bytes),
+    /// stays put on a sync with nothing new, and ignores keys not yet synced.
+    @Test
+    void syncedBytesFollowTheSyncs(@TempDir final Path dir) throws IOException {
+        final Path file = dir.resolve("s.sym");
+        try (final SymbolTable symbols = SymbolTable.open(file)) {
+            assertThat(symbols.syncedBytes()).isZero();
+            symbols.intern("a");
+            symbols.sync();
+            assertThat(symbols.syncedBytes()).isEqualTo(5L);
+            symbols.intern("bb");
+            symbols.intern("é");
+            symbols.sync();
+            assertThat(symbols.syncedBytes()).isEqualTo(5L + 6L + 6L);
+            symbols.sync();
+            symbols.intern("unsynced");
+            assertThat(symbols.syncedBytes()).isEqualTo(17L).isEqualTo(Files.size(file));
+        }
+        try (final SymbolTable reopened = SymbolTable.open(file)) {
+            assertThat(reopened.syncedBytes()).isEqualTo(17L);
+        }
+    }
 }

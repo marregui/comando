@@ -192,12 +192,13 @@ class StoreAppendTest {
         }
     }
 
-    /// A commit that fails after its column writes, before `_txn`, leaves the previous transaction readable; the next
-    /// commit, shorter than the failed one, rewrites the partition the failure left bytes in, and the one after it
-    /// appends again.
+    /// A direct commit (every commit a checkpoint) that fails after its column writes, before `_txn`, leaves the
+    /// previous transaction readable; the next commit, shorter than the failed one, rewrites the partition the failure
+    /// left bytes in, and the one after it appends again.
     @Test
     void aShorterCommitAfterAFailedOneRewritesThenAppends(@TempDir final Path root) {
         try (final Pair pair = Pair.open(root, List.of())) {
+            pair.subject().directRows = 0;
             pair.commit(w -> row(w, DAY1 + 1L, "a", 1.0, "one", 1L, true));
             pair.subject().beforeTxnReplace = () -> {
                 throw new UncheckedIOException(new IOException("injected failure before the txn replace"));
@@ -222,11 +223,13 @@ class StoreAppendTest {
         }
     }
 
-    /// A commit that fails after its column writes, before `_txn`, leaves the previous transaction readable, before
-    /// and after a reopen; the next commit of as many rows and bytes reads correct.
+    /// A direct commit (every commit a checkpoint) that fails after its column writes, before `_txn`, leaves the
+    /// previous transaction readable, before and after a reopen; the next commit of as many rows and bytes reads
+    /// correct.
     @Test
     void aFailedCommitLeavesThePreviousTransactionAndTheNextIsCorrect(@TempDir final Path root) {
         try (final Pair pair = Pair.open(root, List.of())) {
+            pair.subject().directRows = 0;
             pair.commit(w -> row(w, DAY1 + 1L, "a", 1.0, "one", 1L, true));
             pair.subject().beforeTxnReplace = () -> {
                 throw new UncheckedIOException(new IOException("injected failure before the txn replace"));
@@ -252,14 +255,15 @@ class StoreAppendTest {
         }
     }
 
-    /// A store closed after a commit failed before `_txn` (as a crash leaves it: rows appended past the committed
-    /// ends, `_txn` not replaced) reopens at the committed rows, its files cut to them; the next, shorter, commit
-    /// appends from there.
+    /// A store closed after a direct commit (every commit a checkpoint) failed before `_txn` (as a crash leaves it:
+    /// rows appended past the committed ends, `_txn` not replaced) reopens at the committed rows, its files cut to
+    /// them; the next, shorter, commit appends from there.
     @Test
     void aCommitCutShortBeforeTheTxnRecoversToTheCommittedRows(@TempDir final Path root) throws IOException {
         final Path partition = root.resolve("m").resolve(TableFiles.folder(DAY1, PartitionBy.DAY, 1L));
         final long noteBytes;
         try (final Store store = Store.open(root)) {
+            store.directRows = 0;
             store.create(table(List.of()), false);
             try (final TableWriter w = store.writer("m", 1_000L)) {
                 row(w, DAY1 + 1L, "a", 1.0, "one", 1L, true);
