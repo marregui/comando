@@ -14,6 +14,8 @@ class DesignatedTimestampTest {
     @TempDir
     private Path root;
 
+    /// A table whose first TIMESTAMP column is not its designated one: `select *` and a projection that keeps `ts`
+    /// name `ts`; a projection without it and an aggregate name none.
     @Test
     void theDesignatedColumnIsNamedNotTheFirstTimestamp() {
         try (Cdb cdb = Cdb.open(root)) {
