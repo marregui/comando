@@ -101,7 +101,7 @@ class StoreApplyTest {
             store.applierPaused = false;
             assertThat(read(store)).hasSize(13);
             // the counters move right after the publish that woke the read
-            assertEventually(() -> status(store).applies() - before.applies() == 1L, "the batch counted");
+            assertEventually(() -> status(store).appliedTxns() - before.appliedTxns() == 10L, "the batch counted");
             final WalStatus after = status(store);
             assertThat(after.appliedTxn()).isEqualTo(after.loggedTxn()).isEqualTo(13L);
             assertThat(after.pendingTxns()).isZero();

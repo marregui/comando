@@ -462,6 +462,9 @@ class StoreAppendTest {
             final Store subject = Store.open(root.resolve("subject"));
             final Store reference = Store.open(root.resolve("reference"));
             reference.appendInPlace = false;
+            // the folder checks follow each commit: both apply on the committing thread, not when the applier runs
+            subject.applyOnCommit = true;
+            reference.applyOnCommit = true;
             return new Pair(root.resolve("subject").resolve("m"), subject, reference);
         }
 

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -91,6 +92,15 @@ class StoreApplyEquivalenceTest {
                 store.applierPaused = false;
                 assertThat(read(store, T)).as("one batch, table t [%s]", as).isEqualTo(expectedT);
                 assertThat(read(store, P)).as("one batch, table p [%s]", as).isEqualTo(expectedP);
+                // the counters move right after the publish that woke the read, one write each: wait for the last the
+                // assertions read, bounded by 30 s, StoreApplyTest's bound for the applier thread to act
+                final long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(30L);
+                while (store.walStatus().stream().anyMatch(st -> st.appliedTxns() < workload.size())) {
+                    if (System.nanoTime() - deadlineNanos > 0L) {
+                        throw new AssertionError("batch counters not reached [" + as + ']');
+                    }
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1L));
+                }
                 for (final WalStatus status : store.walStatus()) {
                     assertThat(status.applies()).as("batches of table %s [%s]", status.table(), as).isEqualTo(1L);
                     assertThat(status.appliedTxns()).as("commits of table %s [%s]", status.table(), as)
