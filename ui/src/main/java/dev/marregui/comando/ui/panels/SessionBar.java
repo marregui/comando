@@ -162,7 +162,8 @@ public final class SessionBar {
         compact.setToolTipText(SessionRow.COMPACT_TIP);
         clear.setIcon(Icons.get("clear-conversation"));
         clear.getAccessibleContext().setAccessibleName("Clear the conversation");
-        // on a narrow window the chip's name and the ETA give way, ending in "…"; the buttons stay whole
+        // on a narrow window the ETA gives way first, then the chip's name, each ending in "…"; the buttons stay whole,
+        // and a longer ETA while the session runs moves none of them
         final JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, eta)));
         left.add(session);
         left.add(toggle);

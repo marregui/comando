@@ -1060,7 +1060,7 @@ pictures arrive, until the reader scrolls; any other link goes to the pane's own
 | Class | Does |
 |---|---|
 | `TreeView` | the one tree. A double click activates a leaf, Enter the selected node; per node a label colour, an icon and a trailing icon after the name. Optionally one click opens or closes a folder, and a double click's first click can be undone by its caller. `rowsChanged` lays the shown rows out again when a caller's cells change width, as a mark appearing does |
-| `ShrinkingRow` | a row in which chips give up width before buttons |
+| `ShrinkingRow` | a row in which chips give up width before buttons, the last chip first |
 | `TabStrip` | tab headers in one row, icons named by their tooltips; a right click asks for a tab's menu |
 | `MovableTabs` | a tab dragged along the row reports where it lands |
 | `Overlay` | the empty, loading and error states a widget switches between |
