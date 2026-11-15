@@ -145,8 +145,8 @@ three groups (Changed, Untracked, Removed), each by folder.
 
 On the left, the current message: click it to go where it is about (a failure's line in the log, which flashes);
 right-click it for the recent messages. On the right: your Claude plan's usage (the session window, the week, and a
-model's weekly window where the plan has one, each window saying when it resets, the week with its weekday and time: "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%"; read every 20 minutes), then
-Codex's (session, week; "Codex Session 4% (resets 12:06) · Week 3% (resets Thu 13:00)") when Codex is installed, then the queries and sessions working, the requests waiting for
+model's weekly window where the plan has one, each window saying when it resets, the week with its weekday and time, in UTC like the clock: "Claude Session 5% (resets 17:19 UTC) · Week 43% (resets Thu 11:59 UTC) · Fable 17%"; read every 20 minutes), then
+Codex's (session, week; "Codex Session 4% (resets 19:06 UTC) · Week 3% (resets Thu 20:00 UTC)") when Codex is installed, then the queries and sessions working, the requests waiting for
 approval and the sessions with finished work to read. Click that count for the list; a click on a **to read** line
 opens the session at its report. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
 

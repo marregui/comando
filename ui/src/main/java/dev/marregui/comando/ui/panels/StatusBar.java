@@ -10,14 +10,17 @@ import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.MonthDay;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
-import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -233,11 +236,25 @@ public final class StatusBar {
     private static final String WEEK_WINDOW = "Week";
     /** The date in both tools' reset text: "Oct 15" of "Oct 15 at 1:59pm (Europe/Madrid)" and "Oct 15 at 13:00". */
     private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
+    /** The clock in the reset text: Claude Code's "7:19pm" and "1pm", Codex's "13:00". */
+    private static final List<DateTimeFormatter> RESET_CLOCKS = List.of(
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("h:mma").toFormatter(Locale.ENGLISH),
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("ha").toFormatter(Locale.ENGLISH),
+            DateTimeFormatter.ofPattern("H:mm", Locale.ENGLISH));
+    /** A session window's reset on the bar, in UTC like the bar's clock. */
+    private static final DateTimeFormatter RESET_UTC = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneOffset.UTC);
+    /** A week window's reset on the bar: its weekday as well, in UTC. */
+    private static final DateTimeFormatter WEEK_RESET_UTC = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ENGLISH)
+            .withZone(ZoneOffset.UTC);
+    /** A reset in the tooltip, with its date, in UTC. */
+    private static final DateTimeFormatter TIP_RESET_UTC = DateTimeFormatter
+            .ofPattern("EEE MMM d HH:mm", Locale.ENGLISH).withZone(ZoneOffset.UTC);
 
     /**
      * Shows a plan's usage limits, Claude's or Codex's, each on its own label: each window's share used, and when the
      * session window resets; the tooltip has every reset time, and says so when the plan's tool reports no session
-     * window. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, shows nothing.
+     * window. Every time it shows is in UTC, the bar's clock; a reset it cannot read keeps the tool's words in the
+     * tooltip. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, shows nothing.
      * Under the console style the plan shows a gauge per window instead, each coloured by its own share as the label
      * is by the worst, with the label's tooltip (record 151).
      */
@@ -256,17 +273,18 @@ public final class StatusBar {
         u.label.setForeground(usageColour(worst, stale));
         final StringBuilder tip = new StringBuilder();
         for (final PlanUsage.Window w : u.last.windows()) {
-            tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? "" : ", resets " + w.resets())))
-                    .append("<br>");
+            tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? ""
+                    : ", resets " + resetAt(w.resets(), u.last.readAtMillis(), ZoneId.systemDefault())
+                    .map(at -> TIP_RESET_UTC.format(at) + " UTC").orElse(w.resets())))).append("<br>");
         }
         if (u.last.windows().stream().noneMatch(w -> w.name().equals(SESSION_WINDOW))) {
             tip.append(MarkdownHtml.escape(u.source + " reports no session window")).append("<br>");
         }
-        tip.append(MarkdownHtml.escape("Read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(u.last.readAtMillis()))
-                + " from " + u.source + ", every 20 minutes"));
+        tip.append(MarkdownHtml.escape("Read at " + RESET_UTC.format(Instant.ofEpochMilli(u.last.readAtMillis()))
+                + " UTC from " + u.source + ", every 20 minutes"));
         if (stale) {
-            tip.append("<br>").append(MarkdownHtml.escape("The read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(read.readAtMillis()))
-                    + " failed: " + read.problem()));
+            tip.append("<br>").append(MarkdownHtml.escape("The read at "
+                    + RESET_UTC.format(Instant.ofEpochMilli(read.readAtMillis())) + " UTC failed: " + read.problem()));
         }
         u.label.setToolTipText("<html>" + tip + "</html>");
         showGauges(u, stale);
@@ -351,11 +369,17 @@ public final class StatusBar {
     }
 
     /**
-     * "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%": the plan's name, then each
-     * window; the session's reset is the one that comes within hours, the week's comes with its weekday. Codex's reads
-     * the same: "Codex Session 4% (resets 12:06) · Week 3% (resets Thu 13:00)".
+     * "Claude Session 5% (resets 17:19 UTC) · Week 43% (resets Thu 11:59 UTC) · Fable 17%": the plan's name, then
+     * each window; the session's reset is the one that comes within hours, the week's comes with its weekday, both in
+     * UTC, the bar's clock. Codex's reads the same. A reset without a date and time it can read is left off the bar, so
+     * no time on it is in another zone.
      */
     static String usageText(final PlanUsage u) {
+        return usageText(u, ZoneId.systemDefault());
+    }
+
+    /** {@link #usageText(PlanUsage)}, reading a reset that names no zone in {@code local}. */
+    static String usageText(final PlanUsage u, final ZoneId local) {
         final StringBuilder sb = new StringBuilder(u.provider() + " ");
         final int start = sb.length();
         for (final PlanUsage.Window w : u.windows()) {
@@ -363,43 +387,50 @@ public final class StatusBar {
                 sb.append(" · ");
             }
             sb.append(w.name()).append(' ').append(w.percent()).append('%');
-            final String at = w.name().equals(SESSION_WINDOW) ? resetTime(w.resets())
-                    : w.name().equals(WEEK_WINDOW) ? weekReset(w.resets(), u.readAtMillis()) : "";
-            if (!at.isEmpty()) {
-                sb.append(" (resets ").append(at).append(')');
+            final DateTimeFormatter shown = w.name().equals(SESSION_WINDOW) ? RESET_UTC
+                    : w.name().equals(WEEK_WINDOW) ? WEEK_RESET_UTC : null;
+            if (shown != null) {
+                resetAt(w.resets(), u.readAtMillis(), local)
+                        .ifPresent(at -> sb.append(" (resets ").append(shown.format(at)).append(" UTC)"));
             }
         }
         return sb.toString();
     }
 
-    /** The time of day in Claude Code's reset text: "Oct 14 at 7:19pm (Europe/Madrid)" gives "7:19pm". */
-    static String resetTime(final String resets) {
+    /**
+     * When a reset falls, read from its text: Claude Code's "Oct 14 at 7:19pm (Europe/Madrid)" in the zone it names,
+     * Codex's "Oct 14 at 12:06" in {@code local}, the zone comando's reader words it in. The text has no year: the date
+     * is taken in the year that puts it nearest {@code readAtMillis}, so a December read of "Jan 2" is next year's. In
+     * the hour a clock goes back, the reset is the first of the two that is not before the read. Empty when the text
+     * holds no date, time or zone it can read.
+     */
+    static Optional<Instant> resetAt(final String resets, final long readAtMillis, final ZoneId local) {
         final int at = resets.lastIndexOf(" at ");
         if (at < 0) {
-            return "";
+            return Optional.empty();
         }
-        final String t = resets.substring(at + 4);
-        final int paren = t.indexOf(" (");
-        return (paren < 0 ? t : t.substring(0, paren)).strip();
-    }
-
-    /**
-     * The weekday and time of a weekly reset: "Oct 15 at 1:59pm (Europe/Madrid)" read in 2026 gives "Thu 1:59pm". The
-     * text has no year: the date is taken in the year that puts it nearest {@code readAtMillis}, so a December read of
-     * "Jan 2" is next year's. Without a date it is the time alone, without a time empty.
-     */
-    static String weekReset(final String resets, final long readAtMillis) {
-        final String time = resetTime(resets);
-        if (time.isEmpty()) {
-            return "";
+        String clock = resets.substring(at + 4).strip();
+        ZoneId zone = local;
+        final int paren = clock.indexOf(" (");
+        if (paren >= 0 && clock.endsWith(")")) {
+            try {
+                zone = ZoneId.of(clock.substring(paren + 2, clock.length() - 1));
+            } catch (final DateTimeException _) {
+                return Optional.empty();
+            }
+            clock = clock.substring(0, paren).strip();
         }
         final MonthDay day;
         try {
-            day = MonthDay.parse(resets.substring(0, resets.lastIndexOf(" at ")).strip(), MONTH_DAY);
+            day = MonthDay.parse(resets.substring(0, at).strip(), MONTH_DAY);
         } catch (final DateTimeParseException _) {
-            return time;
+            return Optional.empty();
         }
-        final LocalDate read = LocalDate.ofInstant(Instant.ofEpochMilli(readAtMillis), ZoneId.systemDefault());
+        final Optional<LocalTime> time = clockOf(clock);
+        if (time.isEmpty()) {
+            return Optional.empty();
+        }
+        final LocalDate read = LocalDate.ofInstant(Instant.ofEpochMilli(readAtMillis), zone);
         LocalDate nearest = day.atYear(read.getYear());
         for (final int year : new int[]{read.getYear() - 1, read.getYear() + 1}) {
             final LocalDate d = day.atYear(year);
@@ -407,7 +438,22 @@ public final class StatusBar {
                 nearest = d;
             }
         }
-        return nearest.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.ENGLISH) + " " + time;
+        final ZonedDateTime earlier = nearest.atTime(time.get()).atZone(zone);
+        final Instant first = earlier.toInstant();
+        return Optional.of(first.toEpochMilli() < readAtMillis
+                ? earlier.withLaterOffsetAtOverlap().toInstant() : first);
+    }
+
+    /** The time of day in a reset's clock text, in any of {@link #RESET_CLOCKS}' forms. */
+    private static Optional<LocalTime> clockOf(final String clock) {
+        for (final DateTimeFormatter f : RESET_CLOCKS) {
+            try {
+                return Optional.of(LocalTime.parse(clock, f));
+            } catch (final DateTimeParseException _) {
+                // the next form
+            }
+        }
+        return Optional.empty();
     }
 
     /** Goes where {@code n} is about; a notice about nothing to go to opens the recent notices instead. */

@@ -175,8 +175,9 @@ Any number of document panels may be attached to a session
   plans' usage, each under its name, and the work running in every session and query on the right, gold only on what
   waits for the user's approval; at the right edge the time in UTC, "11:24:05 UTC", the clock sessions give their
   reports and ETAs in, at a fixed width so it never moves as the text beside it grows; its tooltip has the local time. A plan's session window says when it resets, and its week window the weekday and the
-  time: "Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%", "Codex Session 4% (resets
-  12:06) · Week 3% (resets Thu 13:00)" ([record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)). A click on that count lists who needs you,
+  time, both in UTC like the clock: "Claude Session 5% (resets 17:19 UTC) · Week 43% (resets Thu 11:59 UTC) · Fable 17%",
+  "Codex Session 4% (resets 19:06 UTC) · Week 3% (resets Thu 20:00 UTC)"; the tooltip gives each reset with its date,
+  in UTC, and a reset the bar cannot read in the tool's own words ([record 152](adr/0152-the-files-tab-splits-into-kit-brain-scratchpad.md)). A click on that count lists who needs you,
   whose finished work waits to be read, who works and who waits, each with what it does and for how long; a click on a
   line goes to its panel ([record 134](adr/0134-the-window-says-who-works-and-gives-room-to-what-is-read.md)), and does
   nothing for a session with no panel open. The count adds "2 to read" while finished work waits; such a line reads

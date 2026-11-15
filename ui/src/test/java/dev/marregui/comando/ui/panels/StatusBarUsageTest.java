@@ -2,9 +2,12 @@ package dev.marregui.comando.ui.panels;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +30,9 @@ import static org.assertj.core.api.Assertions.tuple;
 
 /// [StatusBar]'s plan-usage labels: one per CLI, each window's percentage, coloured by how near its limit.
 /// - the text starts with the plan's name, lists each window and says when the session window resets, and the week's
-///   on which weekday, its year the one nearest the read
+///   on which weekday, its year the one nearest the read, both in UTC, the bar's clock; a reset it cannot read is left
+///   off
+/// - the tooltip gives each reset with its date in UTC, and the read's time in UTC
 /// - a read without a session window says so in the tooltip
 /// - a failed read keeps the last good numbers, muted, and says why in the tooltip
 /// - the second CLI's read has a label of its own after the first, and its failure leaves the first alone
@@ -43,59 +48,84 @@ class StatusBarUsageTest {
             new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm (Europe/Madrid)"),
             new PlanUsage.Window("Week", 43, "Oct 15 at 1:59pm (Europe/Madrid)"),
             new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)")), OCT_14_2026, "");
-    private static final String READ_TEXT = "Claude Session 5% (resets 7:19pm) · Week 43% (resets "
-            + weekday(2026, 10, 15) + " 1:59pm) · Fable 17%";
+    /// Madrid is on summer time (UTC+2) on 2026-10-14 and 15: 7:19pm there is 17:19 UTC, 1:59pm is 11:59 UTC.
+    private static final String READ_TEXT = "Claude Session 5% (resets 17:19 UTC) · Week 43% (resets Thu 11:59 UTC) · "
+            + "Fable 17%";
 
-    /// [StatusBar#usageText] joins the windows with the session's reset time; [StatusBar#resetTime] takes the clock
-    /// time out of a dated reset and returns empty for a relative one.
+    /// [StatusBar#usageText] joins the windows with the session's reset in UTC, whatever zone the reset text names;
+    /// the session window keeps the time alone, the week says its weekday, the model's week says nothing. 2026-10-15 is
+    /// a Thursday by `java.time`.
     @Test
-    void theBarShowsEachWindowAndWhenTheSessionResets() {
-        assertThat(StatusBar.usageText(READ)).isEqualTo(READ_TEXT);
-        assertThat(StatusBar.resetTime("Oct 15 at 1:59pm (Europe/Madrid)")).isEqualTo("1:59pm");
-        assertThat(StatusBar.resetTime("in 3 hours")).isEmpty();
-    }
-
-    /// Claude's week window says the weekday it resets on and the time; the session window keeps the time alone and
-    /// the model's week says nothing. 2026-10-15 is a Thursday by `java.time`.
-    @Test
-    void claudesWeekSaysTheWeekdayItResetsOn() {
+    void theBarShowsEachWindowAndWhenItResetsInUtc() {
         assertThat(weekday(2026, 10, 15)).isEqualTo("Thu");
-        assertThat(StatusBar.usageText(READ))
-                .isEqualTo("Claude Session 5% (resets 7:19pm) · Week 43% (resets Thu 1:59pm) · Fable 17%");
+        assertThat(StatusBar.usageText(READ)).isEqualTo(READ_TEXT);
+        assertThat(StatusBar.usageText(READ, ZoneId.of("Asia/Tokyo")))
+                .as("a reset that names its zone ignores the local one").isEqualTo(READ_TEXT);
     }
 
-    /// Codex's week reset, worded "Oct 15 at 13:00", says the weekday and its 24-hour time.
+    /// [StatusBar#resetAt] reads Claude Code's three clock forms in the zone the text names: "7:19pm", "1pm" and
+    /// "1:30am", the last on the day before in UTC; a text without a date, time or known zone reads as nothing.
     @Test
-    void codexsWeekSaysTheWeekdayItResetsOn() {
+    void aResetIsReadInTheZoneItNames() {
+        final ZoneId local = ZoneId.of("Asia/Tokyo");
+        assertThat(StatusBar.resetAt("Oct 14 at 7:19pm (Europe/Madrid)", OCT_14_2026, local))
+                .contains(Instant.parse("2026-10-14T17:19:00Z"));
+        assertThat(StatusBar.resetAt("Nov 12 at 1pm (Europe/Madrid)", OCT_14_2026, local)).as("winter time, UTC+1")
+                .contains(Instant.parse("2026-11-12T12:00:00Z"));
+        assertThat(StatusBar.resetAt("Oct 15 at 1:30AM (Europe/Madrid)", OCT_14_2026, local))
+                .as("the day before in UTC").contains(Instant.parse("2026-10-14T23:30:00Z"));
+        final PlanUsage early = new PlanUsage(
+                List.of(new PlanUsage.Window("Week", 43, "Oct 15 at 1:30am (Europe/Madrid)")), OCT_14_2026, "");
+        assertThat(StatusBar.usageText(early)).isEqualTo("Claude Week 43% (resets Wed 23:30 UTC)");
+        assertThat(StatusBar.resetAt("soon at 1:59pm (Europe/Madrid)", OCT_14_2026, local)).isEmpty();
+        assertThat(StatusBar.resetAt("Oct 14 at noon (Europe/Madrid)", OCT_14_2026, local)).isEmpty();
+        assertThat(StatusBar.resetAt("Oct 14 at 1pm (Mars/Olympus)", OCT_14_2026, local)).isEmpty();
+        assertThat(StatusBar.resetAt("in 3 hours", OCT_14_2026, local)).isEmpty();
+        // Madrid's clocks go back at 03:00 on 2026-10-25: 02:30 comes twice, at 00:30 and 01:30 UTC
+        final String twice = "Oct 25 at 2:30am (Europe/Madrid)";
+        final long between = Instant.parse("2026-10-25T00:45:00Z").toEpochMilli();
+        assertThat(StatusBar.resetAt(twice, between, local)).as("read between the two, the second")
+                .contains(Instant.parse("2026-10-25T01:30:00Z"));
+        assertThat(StatusBar.resetAt(twice, OCT_14_2026, local)).as("read before both, the first")
+                .contains(Instant.parse("2026-10-25T00:30:00Z"));
+    }
+
+    /// Codex's resets, worded "Oct 14 at 12:06" in the zone comando reads them in, show in UTC: 12:06 in Los Angeles
+    /// (UTC-7 on that day) is 19:06 UTC, and 13:00 on Thursday is 20:00 UTC.
+    @Test
+    void codexsResetsAreReadInTheLocalZone() {
         final PlanUsage codex = new PlanUsage(PlanUsage.CODEX,
                 List.of(new PlanUsage.Window("Session", 4, "Oct 14 at 12:06"),
                         new PlanUsage.Window("Week", 3, "Oct 15 at 13:00")), OCT_14_2026, "");
-        assertThat(StatusBar.usageText(codex)).isEqualTo("Codex Session 4% (resets 12:06) · Week 3% (resets "
-                + weekday(2026, 10, 15) + " 13:00)");
+        assertThat(StatusBar.usageText(codex, ZoneId.of("America/Los_Angeles")))
+                .isEqualTo("Codex Session 4% (resets 19:06 UTC) · Week 3% (resets Thu 20:00 UTC)");
     }
 
     /// The reset text has no year: a December read of "Jan 2" is next year's Jan 2, a January read of "Dec 30" last
-    /// year's, each weekday by `java.time` and different from the same date in the read's own year.
+    /// year's, each different from the same date in the read's own year.
     @Test
     void aResetAcrossTheNewYearTakesTheNearestYear() {
-        assertThat(StatusBar.weekReset("Jan 2 at 1pm (Europe/Madrid)", at(2026, 12, 20)))
-                .isEqualTo(weekday(2027, 1, 2) + " 1pm")
-                .isNotEqualTo(weekday(2026, 1, 2) + " 1pm");
-        assertThat(StatusBar.weekReset("Dec 30 at 13:00", at(2026, 1, 3)))
-                .isEqualTo(weekday(2025, 12, 30) + " 13:00")
-                .isNotEqualTo(weekday(2026, 12, 30) + " 13:00");
+        assertThat(StatusBar.resetAt("Jan 2 at 1pm (Europe/Madrid)", at(2026, 12, 20), ZoneId.systemDefault()))
+                .contains(Instant.parse("2027-01-02T12:00:00Z"));
+        assertThat(StatusBar.resetAt("Dec 30 at 13:00", at(2026, 1, 3), ZoneOffset.UTC))
+                .contains(Instant.parse("2025-12-30T13:00:00Z"));
     }
 
-    /// A week reset without a date it can read shows the time alone; one without a time, or none at all, shows nothing.
+    /// A reset the bar cannot put in UTC is left off it, so the bar never shows a time in another zone; the tooltip
+    /// keeps the tool's words for it.
     @Test
-    void aWeekResetWithoutADateShowsTheTimeAlone() {
-        assertThat(StatusBar.weekReset("soon at 1:59pm (Europe/Madrid)", OCT_14_2026)).isEqualTo("1:59pm");
-        assertThat(StatusBar.weekReset("in 3 hours", OCT_14_2026)).isEmpty();
-        assertThat(StatusBar.usageText(
-                new PlanUsage(List.of(new PlanUsage.Window("Week", 43, "soon at 1:59pm")), OCT_14_2026, "")))
-                .isEqualTo("Claude Week 43% (resets 1:59pm)");
+    void aResetWithoutADateIsLeftOffTheBar() throws Exception {
+        final PlanUsage soon = new PlanUsage(List.of(new PlanUsage.Window("Week", 43, "soon at 1:59pm")),
+                OCT_14_2026, "");
+        assertThat(StatusBar.usageText(soon)).isEqualTo("Claude Week 43%");
         assertThat(StatusBar.usageText(new PlanUsage(List.of(new PlanUsage.Window("Week", 43, "")), OCT_14_2026, "")))
                 .isEqualTo("Claude Week 43%");
+        SwingUtilities.invokeAndWait(() -> {
+            final StatusBar bar = new StatusBar(intent -> {
+            });
+            bar.planUsage(soon);
+            assertThat(bar.usageLabel().getToolTipText()).contains("Week: 43% used, resets soon at 1:59pm");
+        });
     }
 
     /// Claude Code lists no window the server reports no limit for: a read of the weeks alone shows them and the
@@ -110,7 +140,7 @@ class StatusBarUsageTest {
             });
             bar.planUsage(new PlanUsage(weeks, OCT_14_2026, ""));
             assertThat(bar.usageLabel().getText())
-                    .isEqualTo("Claude Week 25% (resets " + weekday(2026, 11, 12) + " 1pm) · Fable 0%");
+                    .isEqualTo("Claude Week 25% (resets Thu 12:00 UTC) · Fable 0%");
             assertThat(bar.usageLabel().getToolTipText()).contains("Claude Code's /usage reports no session window");
 
             bar.planUsage(new PlanUsage(PlanUsage.CODEX, weeks, 1L, ""));
@@ -134,7 +164,8 @@ class StatusBarUsageTest {
         SwingUtilities.invokeAndWait(() -> bar.planUsage(READ));
         assertThat(label.isVisible()).isTrue();
         assertThat(label.getText()).isEqualTo(READ_TEXT);
-        assertThat(label.getToolTipText()).contains("Fable: 17% used, resets Oct 15 at 1:59pm (Europe/Madrid)").doesNotContain("failed");
+        assertThat(label.getToolTipText()).contains("Fable: 17% used, resets Thu Oct 15 11:59 UTC")
+                .contains("Read at " + utc(OCT_14_2026, "HH:mm") + " UTC").doesNotContain("failed");
 
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed("<b>timeout</b>", 3L)));
         assertThat(label.getText()).as("the last good read stays")
@@ -151,8 +182,8 @@ class StatusBarUsageTest {
         });
         final PlanUsage codex = new PlanUsage(PlanUsage.CODEX, List.of(new PlanUsage.Window("Session", 4, "Oct 27 at 12:06"),
                 new PlanUsage.Window("Week", 92, "Nov 2 at 14:15")), OCT_14_2026, "");
-        final String codexText = "Codex Session 4% (resets 12:06) · Week 92% (resets " + weekday(2026, 11, 2)
-                + " 14:15)";
+        final String codexText = "Codex Session 4% (resets " + localUtc(2026, 10, 27, 12, 6, "HH:mm")
+                + " UTC) · Week 92% (resets " + localUtc(2026, 11, 2, 14, 15, "EEE HH:mm") + " UTC)";
         SwingUtilities.invokeAndWait(() -> bar.planUsage(READ));
         SwingUtilities.invokeAndWait(() -> bar.planUsage(codex));
         assertThat(StatusBar.usageText(codex)).isEqualTo(codexText);
@@ -161,7 +192,9 @@ class StatusBarUsageTest {
         assertThat(bar.codexUsageLabel().getAccessibleContext().getAccessibleName()).isEqualTo("Codex plan usage");
         assertThat(bar.codexUsageLabel().getText()).isEqualTo(codexText);
         assertThat(bar.codexUsageLabel().getForeground()).isEqualTo(Theme.DANGER);
-        assertThat(bar.codexUsageLabel().getToolTipText()).contains("Week: 92% used, resets Nov 2 at 14:15").contains("from codex app-server");
+        assertThat(bar.codexUsageLabel().getToolTipText())
+                .contains("Week: 92% used, resets " + localUtc(2026, 11, 2, 14, 15, "EEE MMM d HH:mm") + " UTC")
+                .contains("from codex app-server");
         assertThat(bar.usageLabel().getText()).as("Claude's label keeps its own read")
                 .isEqualTo(READ_TEXT);
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.MUTED);
@@ -296,6 +329,20 @@ class StatusBarUsageTest {
     /// Noon on the given day in the system zone, as epoch milliseconds: the zone [StatusBar] reads a reset's year in.
     private static long at(final int year, final int month, final int day) {
         return LocalDateTime.of(year, month, day, 12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+
+    /// `millis` in UTC by `pattern`.
+    private static String utc(final long millis, final String pattern) {
+        return DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH).withZone(ZoneOffset.UTC)
+                .format(Instant.ofEpochMilli(millis));
+    }
+
+    /// A time of day in the system zone, the zone comando words Codex's resets in, in UTC by `pattern`.
+    private static String localUtc(final int year, final int month, final int day, final int hour, final int minute,
+                                   final String pattern) {
+        final long millis = LocalDateTime.of(year, month, day, hour, minute).atZone(ZoneId.systemDefault()).toInstant()
+                .toEpochMilli();
+        return utc(millis, pattern);
     }
 
     /// The English short weekday of the given date by `java.time`: "Thu".

@@ -105,7 +105,7 @@
 <text x="800" y="829" text-anchor="middle" font-size="10" font-weight="500" fill="#E7C55A" letter-spacing="1.5">SESSION BAR · the focused panel's session</text>
 <line x1="60" y1="840" x2="1540" y2="840" stroke="#2E2E2E" stroke-opacity="1.0" stroke-width="1.0"/>
 <text x="76" y="864" text-anchor="start" font-size="12" font-weight="300" fill="#BDBDBD" >tutor added 4 lines to tutor</text>
-<text x="1524" y="864" text-anchor="end" font-size="12" font-weight="300" fill="#BDBDBD" >Claude Session 12% (resets 7:19pm) · Week 30% (resets Thu 1:59pm)   1 session working · 1 waiting for approval</text>
+<text x="1524" y="864" text-anchor="end" font-size="12" font-weight="300" fill="#BDBDBD" >Claude Session 12% (resets 17:19 UTC) · Week 30% (resets Thu 11:59 UTC)   1 session working · 1 waiting for approval</text>
 <text x="300" y="864" text-anchor="start" font-size="10" font-weight="500" fill="#E7C55A" letter-spacing="1.5">STATUS BAR · the standing notice; plan usage and the work running</text>
 <text x="60" y="940" text-anchor="start" font-size="13" font-weight="300" fill="#BDBDBD" >A drawn mock-up, not a screenshot. Gold capitals name the regions. Copper: the session. Blue: comando and the database.</text>
 <text x="1540" y="940" text-anchor="end" font-size="13" font-weight="300" fill="#8E8E8E" >comando · docs/workbench</text>
