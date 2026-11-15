@@ -44,6 +44,9 @@ class FileReadRulesTest {
 
     // cdb's one class that opens files; package-private, so named rather than referenced
     private static final String CDB_STORE_FILES = "dev.marregui.comando.cdb.store.StoreFiles";
+    // cdb's readers of its own mapped column files, which copy them in bulk; package-private, so named
+    private static final String CDB_VERSION = "dev.marregui.comando.cdb.store.Version";
+    private static final String CDB_TEXT_CACHE = "dev.marregui.comando.cdb.store.TextCache";
 
     /// No class hands a `File` to a JSON reader, or opens a channel on a file but the lock on the data root, the
     /// machine's QuestDB's start lock (record 146), and cdb's store, which owns its column files and depends on the JDK
@@ -64,10 +67,15 @@ class FileReadRulesTest {
     }
 
     /// Bytes leave a mapping through `Mapped` only, byte by byte: a compiled bulk copy that meets a cut file ends the
-    /// JVM.
+    /// JVM. cdb's `Version` and `TextCache` are the departure: they copy only the store's own column files, through
+    /// slices of exactly the committed bytes, and a partition's committed bytes never shrink (a store that opens cuts
+    /// only the bytes past them, which a reader still holding a closed store's snapshot does not map), so no cut meets
+    /// a slice.
     @Test
     void noClassCopiesBytesOffASegmentInBulk() {
-        noClasses().should().callMethodWhere(target(owner(assignableTo(MemorySegment.class)))
+        noClasses().that().doNotHaveFullyQualifiedName(CDB_VERSION)
+                .and().doNotHaveFullyQualifiedName(CDB_TEXT_CACHE)
+                .should().callMethodWhere(target(owner(assignableTo(MemorySegment.class)))
                 .and(target(name("toArray")).or(target(name("copy"))).or(target(name("asByteBuffer")))))
                 .check(ComandoClasses.MAIN);
     }

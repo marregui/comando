@@ -27,7 +27,8 @@ is mapped.
 
 ## 3. Consequences
 
-`FileReadRulesTest` fails on a new read by another route and on a bulk copy off a segment. A byte-wise copy is slower
+`FileReadRulesTest` fails on a new read by another route and on a bulk copy off a segment, but in cdb's store readers
+(2026-11-15): they copy their own column files' committed slices, which no cut reaches ([record 158](0158-cdb-comandos-own-database.md)). A byte-wise copy is slower
 than a bulk one; it runs on the slices decoded and the whole files read, and the scan that decides what to decode reads
 in place either way. A small JSON file is mapped too: no faster than a read, and
 kept for the single rule. Pictures read their header through `MemoryCacheImageInputStream`, so `ImageIO` writes no cache
