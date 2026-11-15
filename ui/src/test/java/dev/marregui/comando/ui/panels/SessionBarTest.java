@@ -230,14 +230,14 @@ class SessionBarTest {
                         button(bar[0], "Clear the conversation").isEnabled()));
             }
         });
-        assertThat(enabled).containsExactly(List.of(true, true, true), List.of(true, false, false),
+        assertThat(enabled).containsExactly(List.of(true, true, true), List.of(true, true, true),
                 List.of(false, false, false), List.of(false, false, false));
         for (final SessionState x : List.of(open, stopped, stopping, locked)) {
             assertThat(List.of(SessionBar.canReflect(x), SessionBar.canCompact(x), SessionBar.canClear(x)))
                     .as("the statics the bar reads")
                     .isEqualTo(enabled.get(List.of(open, stopped, stopping, locked).indexOf(x)));
         }
-        assertThat(SessionBar.clearTip(stopped)).endsWith("start the session first, or start a new conversation");
+        assertThat(SessionBar.clearTip(stopped)).endsWith("the session starts first");
         assertThat(SessionBar.clearTip(open)).doesNotContain("first");
         final SessionState due = open.withReflection(new Reflection(true, false));
         assertThat(SessionBar.reflectTip(due)).startsWith("Reflect, due: ").endsWith("sends /reflect");

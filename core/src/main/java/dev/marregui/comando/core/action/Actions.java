@@ -70,6 +70,17 @@ public final class Actions {
                     List.of(SESSION, Arg.required("model", Type.STRING, "").among(withDefault(SessionSpec.MODELS))), Set.of(Intent.SetSessionModel.class)),
             new Action("session_effort", Kind.ACT, "Sets a session's effort, as its effort chip does.",
                     List.of(SESSION, Arg.required("effort", Type.STRING, "").among(withDefault(SessionSpec.EFFORTS))), Set.of(Intent.SetSessionEffort.class)),
+            new Action("session_eta", Kind.ACT,
+                    "Sets when a session's work ends, shown on its session bar with the time left and in its card: the step under way and the "
+                            + "task's goal (its end state), each in minutes from now, and the timebox the user gave with when it was given. Call it when a step or the plan starts and whenever an estimate changes; "
+                            + "0 minutes or an empty text clears that part.",
+                    List.of(SESSION, Arg.optional("step", Type.STRING, "the step under way, a few words"),
+                            Arg.optional("step_minutes", Type.INTEGER, "minutes until the step ends; 0 clears it"),
+                            Arg.optional("goal", Type.STRING, "the task's end state, a few words"),
+                            Arg.optional("goal_minutes", Type.INTEGER, "minutes until the goal is reached; 0 clears it"),
+                            Arg.optional("box_minutes", Type.INTEGER, "the timebox the user gave the task, in minutes; 0 for none"),
+                            Arg.optional("box_given_utc", Type.STRING, "when the user gave it, in UTC: HH:mm or an ISO-8601 instant; empty is now")),
+                    Set.of(Intent.SessionEta.class)),
             new Action("session_order", Kind.ACT, "Puts the Sessions tab in this order, as dragging the rows does; names left out keep their places after these.",
                     List.of(Arg.required("names", Type.STRINGS, "session names, first to last")), Set.of(Intent.OrderSessions.class)),
             new Action("session_import", Kind.ACT, "Adds a stored Claude Code conversation as a session, as Sessions ▸ Import… does; its first start forks it.",

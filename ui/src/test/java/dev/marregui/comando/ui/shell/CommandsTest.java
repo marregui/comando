@@ -75,8 +75,10 @@ class CommandsTest {
         assertThat(SessionBar.canStartFresh(stoppedLocked)).as("fresh").isFalse();
 
         assertThat(SessionBar.canReflect(open.withStatus(Status.CLOSING, ""))).as("stopping").isFalse();
-        assertThat(SessionBar.canCompact(stopped)).as("compact, stopped").isFalse();
-        assertThat(SessionBar.canClear(stopped)).as("clear, stopped").isFalse();
+        // a stopped session starts for them, as for a prompt
+        assertThat(SessionBar.canCompact(stopped)).as("compact, stopped").isTrue();
+        assertThat(SessionBar.canClear(stopped)).as("clear, stopped").isTrue();
+        assertThat(SessionBar.canCompact(open.withStatus(Status.CLOSING, ""))).as("compact, stopping").isFalse();
         assertThat(Commands.canRewrite(open, " ")).as("no text").isFalse();
     }
 }

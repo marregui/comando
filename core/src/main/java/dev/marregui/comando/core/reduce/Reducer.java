@@ -171,6 +171,7 @@ public final class Reducer {
             case Intent.RunText i -> QueryRules.promptRefusal(s, i);
             case Intent.PlacePanel i -> PanelRules.placeRefusal(s, i);
             case Intent.ClosePanel i -> PanelRules.closeRefusal(s, i);
+            case Intent.SessionEta i -> SessionRules.etaRefusal(i);
             case Intent.AddPanel _, Intent.PinPanel _, Intent.PlaceView _, Intent.RemovePanel _, Intent.RenamePanel _,
                     Intent.MovePanel _, Intent.ReopenPanel _, Intent.FocusPanel _, Intent.BindConnection _,
                     Intent.BindSession _, Intent.OpenSession _, Intent.RefreshSql _, Intent.RefreshView _,
@@ -261,6 +262,7 @@ public final class Reducer {
             case Intent.SessionExited i -> SessionRules.sessionExited(clock, s, i);
             case Intent.SessionBranch i -> SessionRules.sessionBranch(s, i);
             case Intent.SessionSubjectRead i -> SessionRules.sessionSubject(s, i);
+            case Intent.SessionEta i -> SessionRules.sessionEta(clock, s, i);
             case Intent.SessionContext i -> SessionRules.sessionContext(s, i, threshold());
             case Intent.OpenSubagent i -> SessionRules.openSubagent(clock, s, i);
 

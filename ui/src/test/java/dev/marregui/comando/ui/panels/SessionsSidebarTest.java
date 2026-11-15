@@ -416,8 +416,8 @@ class SessionsSidebarTest {
             s[0].render(AppState.initial(panels, List.of(), List.of(stopped)));
         });
         final SessionsSidebar sidebar = s[0];
-        assertThat(on(() -> itemTexts(sidebar.sessionMenu(stopped)))).as("stopped: no session to ask")
-                .noneMatch(t -> t.startsWith("Rewrite")).doesNotContain("Clear the conversation");
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(stopped)))).as("stopped: the session starts to rewrite or clear, as for a prompt")
+                .anyMatch(t -> t.startsWith("Rewrite")).contains("Clear the conversation");
 
         SwingUtilities.invokeAndWait(() -> sidebar.render(AppState.initial(panels, List.of(), List.of(running)).withPanels(panels, strategy)));
         assertThat(on(() -> itemTexts(sidebar.sessionMenu(running)))).as("running: a conversation to clear")
@@ -776,8 +776,8 @@ class SessionsSidebarTest {
 
         final SessionState stopped = work.withStatus(Status.CLOSED, "");
         SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(List.of(stopped))));
-        assertThat(on(() -> itemTexts(sidebar.sessionMenu(stopped)))).as("stopped: a fresh start, nothing to compact")
-                .contains("Start a new conversation").doesNotContain("Compact the conversation");
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(stopped)))).as("stopped: a fresh start, and Compact and Clear, which start it")
+                .contains("Start a new conversation", "Compact the conversation", "Clear the conversation");
         intents.clear();
         SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(stopped), "Start a new conversation").doClick());
         assertThat(intents).containsExactly(new Intent.StartFresh("work"));

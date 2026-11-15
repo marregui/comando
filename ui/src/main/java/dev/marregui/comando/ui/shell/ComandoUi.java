@@ -229,6 +229,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     };
     /** The requests waiting at the last render: one more is a reason to show the lower area. */
     private int renderedApprovals;
+    /** The focused panel at the last render: a tab that changes with the focus is that panel's own, never asked. */
+    private PanelId renderedFocused;
     private boolean tornDown;
     private final Consumer<String> schemaListener = connection -> render.request();
     private final StateLoop.Listener stateListener = (previous, next) -> render.request();
@@ -463,6 +465,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.onReport(this::showReportOf);
         final SessionBar sessionBar = new SessionBar(deps.intents());
         sessionBar.checkpointThreshold(windowLayout::checkpointThreshold);
+        // one card at a time: the bar's closes the tabs' and the rows'
+        sessionBar.onCard(workspace::hideCard);
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         kit.attach(sidebar::kitRelease);
@@ -684,9 +688,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         final AppState s = deps.state().get();
         // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
         focus.beforeRender(s);
+        // a tab chosen on the panel that stayed focused; not one that came with another panel, nor one a request
+        // brought forward or took away as it came or went (record 160)
         final boolean lowerAsked = !s.lowerTab().equals(focus.renderedLowerTab())
-                || s.approvals().size() > renderedApprovals;
+                && s.focused().equals(renderedFocused) && s.approvals().size() == renderedApprovals;
         renderedApprovals = s.approvals().size();
+        renderedFocused = s.focused();
         parts.livePlots().onState(s);
         parts.sidebar().render(s);
         parts.workspace().render(s);

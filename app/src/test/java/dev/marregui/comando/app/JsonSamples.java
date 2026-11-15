@@ -27,6 +27,7 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
+import dev.marregui.comando.core.state.SessionEta;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SessionSubject;
@@ -61,7 +62,8 @@ final class JsonSamples {
                 1_000_000L, 1_700_000_000_500L, "running Bash", "main", 1_700_000_000_400L, "last failed",
                 List.of(new BackgroundTask("t1", "bash", "gradle build", 1_700_000_000_300L)), 1_700_000_000_200L, true,
                 1_700_000_000_100L, new Reflection(true, false, true), true, false, 3, true, true,
-                new SessionSubject("comando", "main", "EDG-1", List.of("other")));
+                new SessionSubject("comando", "main", "EDG-1", List.of("other")),
+                new SessionEta("build", 1_700_000_060_000L, "shipped", 1_700_000_600_000L, 30, 1_699_999_000_000L, 1_700_000_000_000L));
         final SqlRun run = new SqlRun(7L, one, "lab", "SELECT 1", RunStatus.RUNNING, 10, 2L, true, 3L, 4L, 5L, "boom",
                 6L, "a note", true, true);
         final Approval approval = new Approval(9L, "edge", ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 11L,
@@ -111,6 +113,7 @@ final class JsonSamples {
                 logbook,
                 views,
                 LowerTab.view(10L),
+                Map.of("p1", LowerTab.APPROVALS),
                 new Notice(Notice.Level.ERROR, "it failed", 13L, "edge"),
                 List.of(new Notice(Notice.Level.WARN, "careful", 14L),
                         new Notice(Notice.Level.INFO, "fine", 15L, "lab")),

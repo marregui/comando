@@ -195,7 +195,7 @@ final class Commands {
             }, () -> focus.capability(TranscriptWidget.class) != null);
         }
         // as the session bar's three buttons and the session's menu, with their enablement and their intents:
-        // Reflect sends the session's checkpoint command alone; Compact and Clear need a running session; none of
+        // Reflect sends the session's checkpoint command alone; a stopped session starts for any of the three; none of
         // them while the checkpoint runs (record 130)
         cmd("session.reflect", "Reflect", null, () -> focusedSession().ifPresent(x ->
                         deps.intents().dispatch(SessionBar.reflectIntent(x))),
@@ -483,7 +483,7 @@ final class Commands {
         return s.connection(s.focusedPanel().connection());
     }
 
-    /** Rewrite, as the session's menu: a running session, not while its checkpoint runs, and a panel text to rewrite. */
+    /** Rewrite, as the session's menu: as Compact (a stopped session starts for it), and a panel text to rewrite. */
     static boolean canRewrite(final SessionState x, final String text) {
         return SessionBar.canCompact(x) && !text.isBlank();
     }

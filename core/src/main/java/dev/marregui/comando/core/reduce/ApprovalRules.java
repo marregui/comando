@@ -28,8 +28,8 @@ final class ApprovalRules {
     }
 
     /**
-     * A session asks: its card joins the Approvals tab, which comes forward; the keyboard stays where it is, so typing
-     * in the editor goes on. A card asked for again (the same id) changes nothing.
+     * A session asks: its card joins the Approvals tab, which comes forward on the panel in front and on the asking
+     * session's panels, each panel keeping its own tab; the keyboard stays where it is, so typing in the editor goes on. A card asked for again (the same id) changes nothing.
      */
     static Transition approvalRequested(final Clock clock, final AppState s, final Approval a) {
         if (s.approval(a.id()).isPresent()) {
@@ -37,7 +37,12 @@ final class ApprovalRules {
         }
         final List<Approval> approvals = new ArrayList<>(s.approvals());
         approvals.add(a);
-        final AppState next = notice(clock, s.withApprovals(approvals).withLowerTab(LowerTab.APPROVALS), Notice.Level.INFO,
+        // forward on the panel in front, and on the asking session's panels for when the user goes there to answer
+        AppState asked = s.withApprovals(approvals).withLowerTab(LowerTab.APPROVALS);
+        for (final PanelState p : asked.panelsBoundToSession(a.session())) {
+            asked = asked.withTabFor(p.id(), LowerTab.APPROVALS);
+        }
+        final AppState next = notice(clock, asked, Notice.Level.INFO,
                 a.session() + " asks: " + a.summary() + " (⌃2)", Notice.approval(a.id()));
         return new Transition(next, List.of(new Effect.DesktopNotify(a.session() + " needs approval", a.summary())));
     }
