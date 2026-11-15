@@ -123,6 +123,34 @@ final class SymbolTable implements AutoCloseable {
         return values[key];
     }
 
+    /**
+     * The values by key, read only: every key a committed version holds resolves in it, so a reader resolves a run of
+     * keys without a volatile read per key. Safe from any thread: the array is published after its values.
+     */
+    String[] values() {
+        return values;
+    }
+
+    /**
+     * The key of {@code value} for a reader, from any thread, without adding it: -1 when the dictionary does not hold
+     * it, or for null. A linear scan over the keys; a {@link Version} keeps the answer per column, so it runs once per
+     * constant, not per row.
+     */
+    int keyOf(final String value) {
+        if (value == null) {
+            return -1;
+        }
+        // size before values: the array read after it holds every key below it
+        final int upTo = size;
+        final String[] current = values;
+        for (int key = 0; key < upTo; key++) {
+            if (current[key].equals(value)) {
+                return key;
+            }
+        }
+        return -1;
+    }
+
     /** The number of keys. */
     int size() {
         return size;

@@ -69,7 +69,10 @@ final class SelectPlanner {
         return project(stage, items);
     }
 
-    /** The predicate as a filter; on a table scan, its bounds on the designated timestamp also bound the scan. */
+    /**
+     * The predicate as a filter; on a table scan, its bounds on the designated timestamp also bound the scan, and its
+     * comparisons of a column with a constant become the scan's terms.
+     */
     private Rel where(final Rel in) {
         final Bound predicate = new Binder(in, null).bindValue(select.where());
         if (predicate.type() != CdbType.BOOLEAN) {
@@ -78,10 +81,25 @@ final class SelectPlanner {
         }
         Plan child = in.plan();
         if (child instanceof Plan.Scan(final String table, final int[] columns, final long from, final long to,
-                                       final List<Field> fields) && in.timestamp() >= 0) {
+                                       final List<Plan.ScanTerm> terms, final boolean newestFirst,
+                                       final List<Field> fields)) {
             final long[] range = {from, to};
-            Pruning.narrow(range, predicate, in.timestamp(), planner.nowMicros());
-            child = new Plan.Scan(table, columns, range[0], range[1], fields);
+            if (in.timestamp() >= 0) {
+                Pruning.narrow(range, predicate, in.timestamp(), planner.nowMicros());
+            }
+            if (planner.scanShortcuts()) {
+                final List<Plan.ScanTerm> all = new ArrayList<>(terms);
+                all.addAll(ScanTerms.of(predicate, fields, in.timestamp(), planner.nowMicros()));
+                final Plan.Scan scan = new Plan.Scan(table, columns, range[0], range[1], List.copyOf(all), newestFirst,
+                        fields);
+                if (ScanTerms.exact(predicate, fields)) {
+                    // the scan's terms keep exactly the rows the filter would
+                    return new Rel(scan, in.cols(), in.timestamp());
+                }
+                child = scan;
+            } else {
+                child = new Plan.Scan(table, columns, range[0], range[1], terms, newestFirst, fields);
+            }
         }
         return new Rel(new Plan.Filter(child, predicate), in.cols(), in.timestamp());
     }
@@ -97,7 +115,25 @@ final class SelectPlanner {
         for (int i = 0; i < partition.length; i++) {
             partition[i] = in.resolve(List.of(latest.partitionBy().get(i)), select.pos());
         }
-        return new Rel(new Plan.LatestOn(in.plan(), ts, partition), in.cols(), in.timestamp());
+        final Plan newest = ts == in.timestamp() && planner.scanShortcuts() ? newestFirst(in.plan()) : null;
+        return new Rel(new Plan.LatestOn(newest == null ? in.plan() : newest, ts, partition, newest != null),
+                in.cols(), in.timestamp());
+    }
+
+    /** A scan, or a filter of one, read newest first; null for any other plan. */
+    private static Plan newestFirst(final Plan plan) {
+        return switch (plan) {
+            case Plan.Scan(final String table, final int[] columns, final long from, final long to,
+                           final List<Plan.ScanTerm> terms, final boolean _, final List<Field> fields) ->
+                    new Plan.Scan(table, columns, from, to, terms, true, fields);
+            case Plan.Filter(final Plan child, final Bound predicate) -> {
+                final Plan scan = child instanceof Plan.Scan ? newestFirst(child) : null;
+                yield scan == null ? null : new Plan.Filter(scan, predicate);
+            }
+            case Plan.Source _, Plan.Project _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _,
+                 Plan.Sort _, Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _,
+                 Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _ -> null;
+        };
     }
 
     /** The select list, {@code *} and {@code t.*} expanded to the columns they cover. */
@@ -358,7 +394,7 @@ final class SelectPlanner {
             sort.add(new Plan.SortKey(fields.size(), true));
         }
         if (!sort.isEmpty()) {
-            plan = new Plan.Sort(plan, List.copyOf(sort));
+            plan = new Plan.Sort(plan, List.copyOf(sort), -1);
         }
         plan = Planner.limit(plan, select.limit());
         if (plan.fields().size() > names.size()) {

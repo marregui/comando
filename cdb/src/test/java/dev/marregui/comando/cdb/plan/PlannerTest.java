@@ -157,8 +157,7 @@ class PlannerTest {
                     Sort [$2 desc, $3 desc]
                       Window [$position:LONG=row_number() over(partition=[] order=[])]
                         Project [provider:SYMBOL=$1, window_name:SYMBOL=$2, $order0:TIMESTAMP=$0]
-                          Filter =($1, 'Codex')
-                            Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                          Scan comando_usage [0, 1, 2, 3] [-inf, +inf) terms [$1 = 'Codex']
                 """);
     }
 
@@ -194,8 +193,7 @@ class PlannerTest {
                 item(call("last", id("pct")), "pct")), bin("=", id("provider"), lit("claude")));
         assertPlan(query(sampleBy(s, 1, "h")), """
                 SampleBy 1h ts=$0 keys=[window_name:SYMBOL=$2] aggs=[pct:DOUBLE=last($3)]
-                  Filter =($1, 'claude')
-                    Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                  Scan comando_usage [0, 1, 2, 3] [-inf, +inf) terms [$1 = 'claude']
                 """);
     }
 

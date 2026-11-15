@@ -119,7 +119,7 @@ final class UpdateRunner {
             indexes[c] = c;
             fields.add(new Field(columns.get(c).name(), columns.get(c).type()));
         }
-        return new Plan.Scan(table, indexes, Long.MIN_VALUE, Long.MAX_VALUE, fields);
+        return new Plan.Scan(table, indexes, Long.MIN_VALUE, Long.MAX_VALUE, List.of(), false, fields);
     }
 
     /** One compiled value per column of the table, null for a column the update leaves as it is. */

@@ -37,6 +37,43 @@ final class CountAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        if (rows) {
+            counts[group] += to - from;
+            return;
+        }
+        long n = 0;
+        switch (value.type) {
+            case LONG, TIMESTAMP -> {
+                final long[] in = value.longs;
+                for (int i = from; i < to; i++) {
+                    if (in[i] != Vector.NULL_LONG) {
+                        n++;
+                    }
+                }
+            }
+            case DOUBLE -> {
+                final double[] in = value.doubles;
+                for (int i = from; i < to; i++) {
+                    if (!Double.isNaN(in[i])) {
+                        n++;
+                    }
+                }
+            }
+            case BOOLEAN -> n = to - from;
+            case SYMBOL, VARCHAR -> {
+                final String[] in = value.texts;
+                for (int i = from; i < to; i++) {
+                    if (in[i] != null) {
+                        n++;
+                    }
+                }
+            }
+        }
+        counts[group] += n;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > counts.length) {
             counts = Arrays.copyOf(counts, Values.grownCapacity(counts.length, groups));

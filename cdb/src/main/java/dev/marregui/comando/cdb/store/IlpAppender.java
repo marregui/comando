@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.store;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +13,10 @@ import dev.marregui.comando.cdb.CdbType;
 
 /**
  * The store's line-protocol appender. A row's fields are buffered until {@link #at}, so a row is either written whole
- * or refused whole; the appender keeps each touched table's writer until {@link #close}.
+ * or refused whole; the appender keeps each touched table's writer until {@link #close}. A table whose writer the store
+ * did not hand over refuses the appender's later rows of it at once, with the same reason, rather than waiting again.
+ * {@link #flush} commits each touched table in turn, not atomically across tables: a failed commit leaves the tables
+ * before it committed and the ones after it unwritten.
  */
 final class IlpAppender implements CdbAppender {
 
@@ -23,7 +27,10 @@ final class IlpAppender implements CdbAppender {
     private static final int INITIAL_FIELDS = 16;
 
     private final Store store;
+    private final long writerWaitMillis;
     private final Map<String, TableWriter> writers = new LinkedHashMap<>();
+    // a table's writer the store refused, by table key: a group commit's later rows of it would each wait as long
+    private final Map<String, CdbException> unavailable = new HashMap<>();
     private final List<TableWriter> touched = new ArrayList<>();
     private String table;
     private int fields;
@@ -35,7 +42,13 @@ final class IlpAppender implements CdbAppender {
     private boolean closed;
 
     IlpAppender(final Store store) {
+        this(store, WRITER_WAIT_MILLIS);
+    }
+
+    /** As above, waiting at most {@code writerWaitMillis} for a table's writer held by another. */
+    IlpAppender(final Store store, final long writerWaitMillis) {
         this.store = store;
+        this.writerWaitMillis = writerWaitMillis;
     }
 
     @Override
@@ -181,6 +194,10 @@ final class IlpAppender implements CdbAppender {
         if (open != null) {
             return open;
         }
+        final CdbException refused = unavailable.get(key);
+        if (refused != null) {
+            throw new CdbException(refused.getMessage(), refused);
+        }
         if (store.def(name) == null) {
             final List<ColumnDef> columns = new ArrayList<>(fields + 1);
             for (int f = 0; f < fields; f++) {
@@ -198,7 +215,13 @@ final class IlpAppender implements CdbAppender {
             }
             store.create(new TableDef(name, columns, ts, PartitionBy.DAY, List.of(), 0L), true);
         }
-        final TableWriter writer = store.writer(name, WRITER_WAIT_MILLIS);
+        final TableWriter writer;
+        try {
+            writer = store.writer(name, writerWaitMillis);
+        } catch (final CdbException e) {
+            unavailable.put(key, e);
+            throw e;
+        }
         writers.put(key, writer);
         return writer;
     }

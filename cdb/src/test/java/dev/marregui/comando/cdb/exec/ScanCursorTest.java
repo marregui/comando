@@ -30,7 +30,7 @@ class ScanCursorTest {
             final long toMicros,
             final List<Field> fields
     ) {
-        return new Plan.Scan("t", columns, fromMicros, toMicros, fields);
+        return new Plan.Scan("t", columns, fromMicros, toMicros, List.of(), false, fields);
     }
 
     /// One partition of each size comes out whole, in order, in full pages but the last, and the reader is closed.
@@ -59,14 +59,14 @@ class ScanCursorTest {
         assertThat(out.longs()).isEqualTo(range(0, 3000));
     }
 
-    /// A partition is kept when its rows' range meets `[from, to)`: the upper bound is exclusive, the lower inclusive.
+    /// Only the rows inside `[from, to)` are read: the upper bound is exclusive, the lower inclusive, across partitions.
     @Test
-    void keepsThePartitionsThatMeetTheTimeRange() {
+    void readsOnlyTheRowsInsideTheTimeRange() {
         final List<PartitionReader> parts = List.of(partition(0, 10), partition(10, 10), partition(20, 10));
         assertThat(drain(new ScanCursor(scan(new int[] {1}, 10, 20, X), new RowsFakes.FakeReader(table(), parts)))
                 .longs()).isEqualTo(range(10, 20));
         assertThat(drain(new ScanCursor(scan(new int[] {1}, 19, 21, X), new RowsFakes.FakeReader(table(), parts)))
-                .longs()).isEqualTo(range(10, 30));
+                .longs()).isEqualTo(range(19, 21));
         assertThat(drain(new ScanCursor(scan(new int[] {1}, 30, 40, X), new RowsFakes.FakeReader(table(), parts)))
                 .pages()).isEmpty();
     }

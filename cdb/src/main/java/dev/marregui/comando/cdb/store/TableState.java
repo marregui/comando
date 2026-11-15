@@ -3,8 +3,12 @@ package dev.marregui.comando.cdb.store;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -14,7 +18,10 @@ import dev.marregui.comando.cdb.CdbType;
 
 /**
  * One table of a {@link Store}: its folder, its symbol dictionaries, its committed snapshot and the one-writer lease.
- * {@link #lock} guards the snapshot, every {@link Version#refs} of the table and the lease; files are freed outside it.
+ * {@link #lock} guards the snapshot, every {@link Version#refs} of the table, the holders of each folder and the lease;
+ * files are freed outside it. Snapshots may hold several versions of one folder, each at its own row count (a commit
+ * appends in place): a version is unmapped when no snapshot holds it, and its folder deleted when no held version maps
+ * it and {@code _txn} no longer names it.
  */
 final class TableState {
 
@@ -27,10 +34,16 @@ final class TableState {
     private final Condition writerFree = lock.newCondition();
     // guarded by lock
     private Snapshot current;
+    // guarded by lock: the snapshot _txn names, current while the table is open and the last one after close
+    private Snapshot named;
+    // guarded by lock: per folder, the versions mapping it that some snapshot holds
+    private final Map<String, Integer> holders = new HashMap<>();
     // guarded by lock
     private boolean writerOpen;
     // the writer's alone, and the opening thread's before it: one dictionary per column index, null for non-SYMBOL
     private final List<SymbolTable> symbols = new ArrayList<>();
+    // the writer's alone: folders a failed commit left bytes in past their committed ends, cut only at the next open
+    private final Set<String> torn = new HashSet<>();
 
     /** A committed transaction: its number, the definition and the partitions in time order. */
     record Snapshot(long txn, TableDef def, List<Version> partitions) {
@@ -65,6 +78,14 @@ final class TableState {
         return symbols;
     }
 
+    /**
+     * The folders a failed commit appended to: their files run past the committed ends until the store opens again and
+     * cuts them, so a commit rewrites them rather than append, which a shorter append would leave a stale tail in.
+     */
+    Set<String> torn() {
+        return torn;
+    }
+
     /** Adds the dictionary of {@code column}, the next column, opening its file. */
     void addSymbols(final ColumnDef column) {
         symbols.add(column.type() == CdbType.SYMBOL ? SymbolTable.open(dir.resolve(column.name() + ".sym")) : null);
@@ -82,9 +103,10 @@ final class TableState {
         lock.lock();
         try {
             for (final Version v : snapshot.partitions()) {
-                v.refs++;
+                hold(v);
             }
             current = snapshot;
+            named = snapshot;
         } finally {
             lock.unlock();
         }
@@ -108,7 +130,7 @@ final class TableState {
                 throw new CdbException("refuse read of closed table [table=" + key + ']', -1);
             }
             for (final Version v : current.partitions()) {
-                v.refs++;
+                hold(v);
             }
             return current;
         } finally {
@@ -118,18 +140,17 @@ final class TableState {
 
     /** Lets go of a snapshot taken by {@link #acquire}; frees the versions nobody holds any more. */
     void release(final Snapshot snapshot) {
-        final List<Version> free = new ArrayList<>();
+        final List<Version> unmap = new ArrayList<>();
+        final List<Path> delete = new ArrayList<>();
         lock.lock();
         try {
             for (final Version v : snapshot.partitions()) {
-                if (--v.refs == 0) {
-                    free.add(v);
-                }
+                letGo(v, unmap, delete);
             }
         } finally {
             lock.unlock();
         }
-        free(free);
+        free(unmap, delete);
     }
 
     /**
@@ -137,36 +158,37 @@ final class TableState {
      * {@code _txn} names {@code next}.
      */
     void publish(final Snapshot next) {
-        final List<Version> free = new ArrayList<>();
+        final List<Version> unmap = new ArrayList<>();
+        final List<Path> delete = new ArrayList<>();
         final boolean closed;
         lock.lock();
         try {
             closed = current == null;
+            final Snapshot previous = named;
+            named = next;
             if (closed) {
                 // the store closed under the writer: _txn names the new versions, which nothing holds, so they are
-                // unmapped and kept; those carried over from the snapshot close released are its already. Folders
-                // _txn no longer names are the orphans the next open deletes
+                // unmapped and their folders kept; those carried over from the snapshot close released are its
+                // already. A folder _txn no longer names goes with its last holder, or is an orphan the next open
+                // deletes
                 for (final Version v : next.partitions()) {
-                    if (!v.committed) {
-                        v.committed = true;
-                        free.add(v);
+                    if (!previous.partitions().contains(v)) {
+                        unmap.add(v);
                     }
                 }
             } else {
                 for (final Version v : next.partitions()) {
-                    v.refs++;
+                    hold(v);
                 }
                 for (final Version v : current.partitions()) {
-                    if (--v.refs == 0) {
-                        free.add(v);
-                    }
+                    letGo(v, unmap, delete);
                 }
                 current = next;
             }
         } finally {
             lock.unlock();
         }
-        free(free);
+        free(unmap, delete);
         if (closed) {
             throw new CdbException("refuse commit to closed table [table=" + key + ']', -1);
         }
@@ -219,11 +241,6 @@ final class TableState {
             drained = awaitWriterClosed(waitMillis);
             last = current;
             current = null;
-            if (last != null) {
-                for (final Version v : last.partitions()) {
-                    v.committed = true;
-                }
-            }
         } finally {
             lock.unlock();
         }
@@ -246,16 +263,51 @@ final class TableState {
         return !writerOpen;
     }
 
-    // the versions were taken under lock, so their committed flag is read as the lock left it
-    private void free(final List<Version> versions) {
+    // called with lock held
+    private void hold(final Version v) {
+        if (v.refs++ == 0) {
+            holders.merge(v.folder, 1, Integer::sum);
+        }
+    }
+
+    // called with lock held: the version goes to unmap when no snapshot holds it, its folder to delete when no held
+    // version maps it and _txn does not name it
+    private void letGo(final Version v, final List<Version> unmap, final List<Path> delete) {
+        if (--v.refs > 0) {
+            return;
+        }
+        unmap.add(v);
+        if (holders.merge(v.folder, -1, Integer::sum) == 0) {
+            holders.remove(v.folder);
+            if (!names(named, v.folder)) {
+                delete.add(v.dir);
+            }
+        }
+    }
+
+    private static boolean names(final Snapshot snapshot, final String folder) {
+        for (final Version v : snapshot.partitions()) {
+            if (v.folder.equals(folder)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // every version is unmapped before a folder is deleted: a folder to delete is mapped by none of them
+    private void free(final List<Version> versions, final List<Path> folders) {
         for (final Version v : versions) {
             try {
                 v.unmap();
-                if (!v.committed) {
-                    StoreFiles.deleteFolder(v.dir);
-                }
+            } catch (final RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot unmap partition version [dir=" + v.dir + ']', e);
+            }
+        }
+        for (final Path folder : folders) {
+            try {
+                StoreFiles.deleteFolder(folder);
             } catch (final IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot delete partition version [dir=" + v.dir + ']', e);
+                LOG.log(System.Logger.Level.WARNING, "cannot delete partition version [dir=" + folder + ']', e);
             }
         }
     }

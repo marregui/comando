@@ -32,6 +32,22 @@ final class LongSumAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        final long[] in = value.longs;
+        long sum = sums[group];
+        boolean any = false;
+        for (int i = from; i < to; i++) {
+            final long v = in[i];
+            if (v != Vector.NULL_LONG) {
+                sum += v;
+                any = true;
+            }
+        }
+        sums[group] = sum;
+        seen[group] |= any;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > sums.length) {
             final int capacity = Values.grownCapacity(sums.length, groups);

@@ -15,7 +15,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
+
+import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.Cdb;
 import dev.marregui.comando.cdb.CdbAppender;
@@ -33,8 +34,11 @@ import dev.marregui.comando.cdb.sql.Parser;
  *
  * <p>{@code /exec} takes {@code limit=n} (at most n rows) and accepts and ignores {@code count} and {@code nm}. A
  * {@code /write} body is parsed whole before its first row reaches the store, so a malformed line (400, with its line
- * and offset) writes nothing; a row the store refuses (400) leaves the rows before it written. Each request runs on a
- * virtual thread of its own; past {@link #MAX_REQUESTS} in flight, a new connection is closed unanswered.
+ * and offset) writes nothing; a row the store refuses (400, with its line) leaves the rows of its table before it
+ * written. Concurrent bodies for one table are written together in one commit, different tables in parallel
+ * ({@link CommitQueue}); a body that touches several tables is written table by table, not atomically across them, and
+ * answers when every table is done. Each request runs on a virtual thread of its own; past {@link #MAX_REQUESTS} in
+ * flight, a new connection is closed unanswered.
  */
 public final class CdbServer implements AutoCloseable {
 
@@ -46,21 +50,17 @@ public final class CdbServer implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger(CdbServer.class.getName());
     /** Not measured: a query of the corpus runs in milliseconds; one second lets the ones in flight answer. */
     private static final int STOP_DELAY_SECONDS = 1;
-    /**
-     * One {@code /write} body at a time reaches the store: an appender keeps each table's writer it touched until it
-     * closes, so two bodies touching the same tables in opposite orders would each wait on the other's writer. The
-     * writes are small (the machine's metrics and the kit's runs), so serialising them costs nothing measurable.
-     */
-    private static final ReentrantLock WRITES = new ReentrantLock();
 
     private final Admission admission;
+    private final CommitQueue commits;
     private final int port;
     private final HttpServer server;
     private boolean closed;
 
-    private CdbServer(final HttpServer server, final Admission admission) {
+    private CdbServer(final HttpServer server, final Admission admission, final CommitQueue commits) {
         this.server = server;
         this.admission = admission;
+        this.commits = commits;
         this.port = server.getAddress().getPort();
     }
 
@@ -74,7 +74,10 @@ public final class CdbServer implements AutoCloseable {
         return port;
     }
 
-    /** Stops serving; idempotent. Requests in flight get {@link #STOP_DELAY_SECONDS} to answer. */
+    /**
+     * Stops serving; idempotent. Requests in flight get {@link #STOP_DELAY_SECONDS} to answer; the writes already queued
+     * are then committed, a write queued after it is refused (400).
+     */
     @Override
     public synchronized void close() {
         if (closed) {
@@ -84,22 +87,30 @@ public final class CdbServer implements AutoCloseable {
         try {
             server.stop(STOP_DELAY_SECONDS);
         } finally {
+            commits.close();
             admission.close();
         }
         LOG.log(Level.INFO, "stopped serving cdb [port=" + port + ']');
     }
 
+    /** The {@code /write} batches of {@code table} waiting for their commit. */
+    @TestOnly
+    int queued(final String table) {
+        return commits.queued(table);
+    }
+
     static CdbServer start(final Backend backend, final InetSocketAddress address) {
         final Admission admission = new Admission();
+        final CommitQueue commits = new CommitQueue(backend::appender);
         HttpServer server = null;
         try {
             server = HttpServer.create(address, 0);
             server.setExecutor(admission);
             server.createContext("/exec", exchange -> handle(exchange, () -> exec(backend, exchange)));
-            server.createContext("/write", exchange -> handle(exchange, () -> write(backend, exchange)));
+            server.createContext("/write", exchange -> handle(exchange, () -> write(commits, exchange)));
             server.start();
             LOG.log(Level.INFO, "serving cdb [address=" + server.getAddress() + ']');
-            return new CdbServer(server, admission);
+            return new CdbServer(server, admission, commits);
         } catch (final IOException e) {
             abandon(server, admission);
             throw new CdbException("could not serve cdb [address=" + address + ']', e);
@@ -177,7 +188,7 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    private static void write(final Backend backend, final HttpExchange exchange) throws IOException {
+    private static void write(final CommitQueue commits, final HttpExchange exchange) throws IOException {
         if (refused(exchange, "/write", "POST")) {
             return;
         }
@@ -197,13 +208,14 @@ public final class CdbServer implements AutoCloseable {
         final long nowMicros = nowMicros();
         final int rows;
         try {
-            IlpParser.parse(body, DiscardAppender.INSTANCE, precision, nowMicros);
-            WRITES.lock();
-            try (CdbAppender appender = backend.appender()) {
-                rows = IlpParser.parse(body, appender, precision, nowMicros);
-                appender.flush();
-            } finally {
-                WRITES.unlock();
+            final CommitQueue.Body batches = new CommitQueue.Body();
+            rows = IlpParser.parse(body, batches, precision, nowMicros);
+            final CommitQueue.Refusal refusal = commits.write(batches);
+            if (refusal != null) {
+                // the parser names the refused row's line, as when the store refused it during the parse
+                IlpParser.parse(body, new RefusingAppender(refusal), precision, nowMicros);
+                send(exchange, 400, JsonWriter.writeError(refusal.cause().getMessage(), 0));
+                return;
             }
         } catch (final IlpException e) {
             send(exchange, 400, JsonWriter.writeError(e.getMessage(), e.line()));
@@ -405,12 +417,21 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    private static final class DiscardAppender implements CdbAppender {
+    /** Takes a body's rows until the refused one, and refuses it with the store's reason. */
+    private static final class RefusingAppender implements CdbAppender {
 
-        static final DiscardAppender INSTANCE = new DiscardAppender();
+        private final CommitQueue.Refusal refusal;
+        private int rows;
+
+        RefusingAppender(final CommitQueue.Refusal refusal) {
+            this.refusal = refusal;
+        }
 
         @Override
         public CdbAppender table(final String table) {
+            if (rows++ == refusal.row()) {
+                throw refusal.cause();
+            }
             return this;
         }
 
@@ -446,12 +467,12 @@ public final class CdbServer implements AutoCloseable {
 
         @Override
         public void at(final long micros) {
-            // a parse that only validates writes nothing
+            // the queue wrote the rows
         }
 
         @Override
         public void flush() {
-            // nothing was written
+            // nothing is written here
         }
 
         @Override

@@ -10,6 +10,7 @@ import dev.marregui.comando.cdb.exec.Vector;
  */
 final class ContinuousPercentileAccumulator implements Accumulator {
 
+
     private final double fraction;
     private int[] sizes = new int[16];
     private double[][] values = new double[16][];
@@ -38,6 +39,28 @@ final class ContinuousPercentileAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        final double[] list = reserve(group, to - from);
+        int size = sizes[group];
+        if (value.doubles != null) {
+            final double[] in = value.doubles;
+            for (int i = from; i < to; i++) {
+                if (!Double.isNaN(in[i])) {
+                    list[size++] = in[i];
+                }
+            }
+        } else {
+            final long[] in = value.longs;
+            for (int i = from; i < to; i++) {
+                if (in[i] != Vector.NULL_LONG) {
+                    list[size++] = in[i];
+                }
+            }
+        }
+        sizes[group] = size;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > sizes.length) {
             final int capacity = Values.grownCapacity(sizes.length, groups);
@@ -53,23 +76,24 @@ final class ContinuousPercentileAccumulator implements Accumulator {
             Aggregates.writeDouble(Double.NaN, out, row);
             return;
         }
-        final double[] sorted = Arrays.copyOf(values[group], n);
-        Arrays.sort(sorted);
+        final double[] list = values[group];
         final double position = fraction * (n - 1);
         final int lo = (int) Math.floor(position);
         final int hi = (int) Math.ceil(position);
-        Aggregates.writeDouble(sorted[lo] + (position - lo) * (sorted[hi] - sorted[lo]), out, row);
+        // after the selection every value past lo is at least the low one, so the high one is their least
+        final double low = Select.kthDouble(list, n, lo);
+        final double high = hi == lo ? low : Select.minDouble(list, hi, n);
+        Aggregates.writeDouble(low + (position - lo) * (high - low), out, row);
     }
 
     private void append(final int group, final double v) {
-        double[] list = values[group];
-        if (list == null) {
-            list = new double[8];
-            values[group] = list;
-        } else if (sizes[group] == list.length) {
-            list = Arrays.copyOf(list, Values.grownCapacity(list.length, list.length + 1));
-            values[group] = list;
-        }
-        list[sizes[group]++] = v;
+        reserve(group, 1)[sizes[group]++] = v;
+    }
+
+    /** The list of {@code group}, with room for {@code extra} more values. */
+    private double[] reserve(final int group, final int extra) {
+        final double[] list = Values.room(values[group], sizes[group] + extra);
+        values[group] = list;
+        return list;
     }
 }

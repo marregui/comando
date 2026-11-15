@@ -92,10 +92,10 @@ class CdbServerTest {
         assertThat(CdbServer.maxRows("0,x")).isEqualTo(-1);
     }
 
-    /// Concurrent `/write` requests take the store's appender one at a time, so two bodies that touch the same tables
-    /// in opposite orders cannot each hold a writer the other waits for.
+    /// Concurrent `/write` requests commit each table through its own appender, one commit per table at a time, so two
+    /// bodies that touch the same tables in opposite orders cannot each hold a writer the other waits for.
     @Test
-    void writesTakeTheAppenderOneAtATime() throws Exception {
+    void writesHoldOneAppenderPerTableAtATime() throws Exception {
         final StringBuilder body = new StringBuilder();
         for (int i = 0; i < 20_000; i++) {
             body.append("a n=").append(i).append("i\nb n=").append(i).append("i\n");
@@ -119,7 +119,11 @@ class CdbServerTest {
             assertThat(writer.join(Duration.ofSeconds(30))).isTrue();
         }
         assertThat(accepted.get()).isEqualTo(8);
-        assertThat(backend.mostOpen.get()).isEqualTo(1);
+        assertThat(backend.mostOpen.get()).isBetween(1, 2);
+        assertThat(backend.appenders).allSatisfy(a -> assertThat(a.flushed.stream()
+                .filter(c -> c.startsWith("table(")).distinct().count()).isEqualTo(1L));
+        assertThat(backend.appenders.stream().mapToLong(a -> a.flushed.stream()
+                .filter(c -> c.startsWith("at(")).count()).sum()).isEqualTo(8L * 2L * 20_000L);
     }
 
     /// Without `limit` the query runs unbounded.
@@ -177,17 +181,16 @@ class CdbServerTest {
         assertThat(backend.calls).isEmpty();
     }
 
-    /// A good body reaches one appender whole, flushed, and answers 204.
+    /// A good body reaches each of its tables' appenders whole, flushed and closed, and answers 204.
     @Test
     void writeAppliesEveryLineAndAnswers204() throws IOException, InterruptedException {
         final HttpResponse<String> response = http.post(server.port(), "/write?precision=u", "a f=1i 1\nb f=2i 2\n");
 
         assertThat(response.statusCode()).isEqualTo(204);
-        assertThat(backend.appenders).hasSize(1);
-        final RecordingAppender appender = backend.appenders.getFirst();
-        assertThat(appender.flushed).containsExactly(
-                "table(a)", "long(f=1)", "at(1)", "table(b)", "long(f=2)", "at(2)");
-        assertThat(appender.closes()).isEqualTo(1);
+        assertThat(backend.appenders).hasSize(2);
+        assertThat(backend.appenders.stream().map(a -> List.copyOf(a.flushed)).toList()).containsExactlyInAnyOrder(
+                List.of("table(a)", "long(f=1)", "at(1)"), List.of("table(b)", "long(f=2)", "at(2)"));
+        assertThat(backend.appenders).allSatisfy(a -> assertThat(a.closes()).isEqualTo(1));
     }
 
     /// A malformed line refuses the whole body with the parser's error and writes none of it.
@@ -204,14 +207,19 @@ class CdbServerTest {
         assertThat(backend.appenders).isEmpty();
     }
 
-    /// A row the store refuses answers 400; the appender is closed, and the rows before it stay written.
+    /// A row the store refuses answers 400 with its line, as a lone parse into that appender names it; the appender is
+    /// closed, and the rows before it stay written.
     @Test
     void writeRefusedByTheStoreIs400() throws IOException, InterruptedException {
         backend.refuseAt = 2;
+        final String body = "a f=1i 1\na f=2i 2\n";
+        final IlpException refusal = catchThrowableOfType(IlpException.class,
+                () -> IlpParser.parse(body, new RecordingAppender(2), Precision.MICROS, 0L));
 
-        final HttpResponse<String> response = http.post(server.port(), "/write?precision=u", "a f=1i 1\nb f=2i 2\n");
+        final HttpResponse<String> response = http.post(server.port(), "/write?precision=u", body);
 
         assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).isEqualTo(JsonWriter.writeError(refusal.getMessage(), refusal.line()));
         final RecordingAppender appender = backend.appenders.getFirst();
         assertThat(appender.closes()).isEqualTo(1);
         assertThat(appender.flushed).startsWith("table(a)", "long(f=1)", "at(1)");

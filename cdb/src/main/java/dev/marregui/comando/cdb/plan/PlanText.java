@@ -34,14 +34,43 @@ final class PlanText {
         return sink.toString();
     }
 
+    /** A scan's terms, {@code terms [$1 = 'a', $2 >= 5]}; nothing when it has none. */
+    private static void terms(final StringBuilder sink, final List<Plan.ScanTerm> terms) {
+        if (terms.isEmpty()) {
+            return;
+        }
+        sink.append(" terms [");
+        for (int i = 0; i < terms.size(); i++) {
+            final Plan.ScanTerm t = terms.get(i);
+            sink.append(i == 0 ? "" : ", ").append('$').append(t.column()).append(' ').append(switch (t.op()) {
+                case EQ -> "=";
+                case NE -> "!=";
+                case LT -> "<";
+                case LE -> "<=";
+                case GT -> ">";
+                case GE -> ">=";
+            }).append(' ');
+            if (t.textValue() != null) {
+                sink.append('\'').append(t.textValue()).append('\'');
+            } else if (t.longValue() != Long.MIN_VALUE) {
+                sink.append(t.longValue());
+            } else {
+                sink.append(t.doubleValue());
+            }
+        }
+        sink.append(']');
+    }
+
     private static void put(final StringBuilder sink, final Plan plan, final int depth) {
         sink.repeat(' ', depth * 2);
         switch (plan) {
             case Plan.Scan(final String table, final int[] columns, final long from, final long to,
-                           final List<Field> _) -> {
+                           final List<Plan.ScanTerm> terms, final boolean _, final List<Field> _) -> {
                 sink.append("Scan ").append(table).append(' ').append(Arrays.toString(columns));
                 sink.append(" [").append(from == Long.MIN_VALUE ? "-inf" : instant(from)).append(", ");
-                sink.append(to == Long.MAX_VALUE ? "+inf" : instant(to)).append(")\n");
+                sink.append(to == Long.MAX_VALUE ? "+inf" : instant(to)).append(')');
+                terms(sink, terms);
+                sink.append('\n');
             }
             case Plan.Source(final String function, final List<String> args, final List<Field> _) ->
                     sink.append("Source ").append(function).append(args).append('\n');
@@ -75,7 +104,7 @@ final class PlanText {
                 }
                 child(sink, child, depth);
             }
-            case Plan.LatestOn(final Plan child, final int ts, final int[] partition) -> {
+            case Plan.LatestOn(final Plan child, final int ts, final int[] partition, final boolean _) -> {
                 sink.append("LatestOn ts=$").append(ts).append(" partition=").append(Arrays.toString(partition));
                 child(sink, child, depth);
             }
@@ -83,7 +112,7 @@ final class PlanText {
                 sink.append("Distinct");
                 child(sink, child, depth);
             }
-            case Plan.Sort(final Plan child, final List<Plan.SortKey> keys) -> {
+            case Plan.Sort(final Plan child, final List<Plan.SortKey> keys, final long _) -> {
                 sink.append("Sort ");
                 sortKeys(sink, keys);
                 child(sink, child, depth);

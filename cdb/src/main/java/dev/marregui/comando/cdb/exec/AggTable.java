@@ -1,5 +1,6 @@
 package dev.marregui.comando.cdb.exec;
 
+import java.util.Arrays;
 import java.util.List;
 
 import dev.marregui.comando.cdb.CdbType;
@@ -12,11 +13,18 @@ import dev.marregui.comando.cdb.plan.Bound;
 /** Groups by key tuple and the accumulators of each aggregate per group, fed a page at a time. */
 final class AggTable {
 
+    // a page whose runs average fewer rows than this goes to the accumulators row by row: a call per accumulator and
+    // run would cost more than the per-row loop it replaces (not measured)
+    private static final int MIN_MEAN_RUN = 4;
+
     private final Accumulator[] accumulators;
     // the first argument of each aggregate, null for count()
     private final VectorFn[] args;
     private final int[] groupOfRow = new int[Page.CAPACITY];
     private final AggKeys keys;
+    // the group and the first row of each run of the page last added; runStarts ends with the page's size
+    private final int[] runGroups = new int[Page.CAPACITY];
+    private final int[] runStarts = new int[Page.CAPACITY + 1];
 
     AggTable(final List<CdbType> keyTypes, final List<Bound.Agg> aggs, final long nowMicros) {
         keys = new AggKeys(keyTypes);
@@ -29,16 +37,51 @@ final class AggTable {
         }
     }
 
-    /** Adds the rows of {@code page}, whose key columns are {@code keyVectors}. */
+    /**
+     * Adds the rows of {@code page}, whose key columns are {@code keyVectors}. Consecutive rows of one key tuple form a
+     * run whose group is looked up once; when the runs are long enough each goes to an accumulator as one range. A
+     * single LONG or TIMESTAMP key (the bucket of a SAMPLE BY without keys) finds its runs on its {@code long[]}, one
+     * comparison per row. Either way every group receives its rows in input order, so the results do not depend on
+     * the runs.
+     */
     void add(final Page page, final Vector[] keyVectors) {
         final int rows = page.size;
-        for (int i = 0; i < rows; i++) {
-            groupOfRow[i] = keys.groupOf(keyVectors, i);
+        final long[] single = keyVectors.length == 1 && keyVectors[0].longs != null ? keyVectors[0].longs : null;
+        int runs = 0;
+        int start = 0;
+        while (start < rows) {
+            final int group = keys.groupOf(keyVectors, start);
+            int end = start + 1;
+            if (single != null) {
+                final long key = single[start];
+                while (end < rows && single[end] == key) {
+                    end++;
+                }
+            } else {
+                while (end < rows && keys.sameRows(keyVectors, start, end)) {
+                    end++;
+                }
+            }
+            Arrays.fill(groupOfRow, start, end, group);
+            runStarts[runs] = start;
+            runGroups[runs] = group;
+            runs++;
+            start = end;
         }
+        runStarts[runs] = rows;
         final int groups = keys.size();
+        final boolean ranges = (long) runs * MIN_MEAN_RUN <= rows;
         for (int a = 0; a < accumulators.length; a++) {
-            accumulators[a].ensure(groups);
-            accumulators[a].addAll(groupOfRow, args[a] == null ? null : args[a].eval(page), rows);
+            final Accumulator accumulator = accumulators[a];
+            final Vector value = args[a] == null ? null : args[a].eval(page);
+            accumulator.ensure(groups);
+            if (ranges) {
+                for (int r = 0; r < runs; r++) {
+                    accumulator.addRange(runGroups[r], value, runStarts[r], runStarts[r + 1]);
+                }
+            } else {
+                accumulator.addAll(groupOfRow, value, rows);
+            }
         }
     }
 

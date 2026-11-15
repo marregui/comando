@@ -36,6 +36,15 @@ final class AggBuckets {
         };
     }
 
+    /**
+     * The length in microseconds of a fixed stride, so {@link #floor} is {@code Math.floorDiv(ts, s) * s}; 0 for the
+     * calendar units {@code M} and {@code y}, whose buckets differ in length.
+     */
+    static long fixedStride(final long count, final String unit) {
+        checkCount(count, unit);
+        return "M".equals(unit) || "y".equals(unit) ? 0 : stride(count, unit);
+    }
+
     /** Days since 1970-01-01 of a proleptic Gregorian date (H. Hinnant's {@code days_from_civil}). */
     static long daysFromCivil(final long year, final int month, final int day) {
         final long y = month <= 2 ? year - 1 : year;

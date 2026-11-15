@@ -13,6 +13,8 @@ import dev.marregui.comando.cdb.exec.Vector;
 public final class Values {
 
     private static final int INITIAL_CAPACITY = 16;
+    // a percentile group's first value list; a sizing hint
+    private static final int INITIAL_LIST = 8;
     // the largest array the JVM allocates on every collector, with the headroom ArrayList keeps
     private static final int MAX_CAPACITY = Integer.MAX_VALUE - 8;
 
@@ -57,6 +59,44 @@ public final class Values {
         return a.compareTo(b);
     }
 
+    /** True when values {@code a} and {@code b} of {@code v} are equal as {@link #sameAs} decides it. */
+    public static boolean equal(final Vector v, final int a, final int b) {
+        return switch (v.type) {
+            case LONG, TIMESTAMP -> v.longs[a] == v.longs[b];
+            case DOUBLE -> sameDouble(v.doubles[a], v.doubles[b]);
+            case BOOLEAN -> v.booleans[a] == v.booleans[b];
+            case SYMBOL, VARCHAR -> sameText(v.texts[a], v.texts[b]);
+        };
+    }
+
+    /**
+     * {@code list}, or a longer copy when it holds fewer than {@code needed} values; a new one of at least
+     * {@link #INITIAL_LIST} when it is null. A per-group value list of the percentile accumulators.
+     */
+    static double[] room(final double[] list, final int needed) {
+        if (list == null) {
+            return new double[Math.max(INITIAL_LIST, needed)];
+        }
+        return needed > list.length ? Arrays.copyOf(list, grownCapacity(list.length, needed)) : list;
+    }
+
+    /** {@link #room(double[], int)} for LONG values. */
+    static long[] room(final long[] list, final int needed) {
+        if (list == null) {
+            return new long[Math.max(INITIAL_LIST, needed)];
+        }
+        return needed > list.length ? Arrays.copyOf(list, grownCapacity(list.length, needed)) : list;
+    }
+
+    // equality of two values of one type: NaN equals NaN and -0.0 is not 0.0, by their bits; NULL texts equal
+    private static boolean sameDouble(final double a, final double b) {
+        return Double.doubleToLongBits(a) == Double.doubleToLongBits(b);
+    }
+
+    private static boolean sameText(final String a, final String b) {
+        return a == null ? b == null : a.equals(b);
+    }
+
     /** The hash of value {@code row}; equal values (the NULLs of a type among them) hash alike. */
     public static int hash(final Vector v, final int row) {
         return switch (v.type) {
@@ -78,11 +118,9 @@ public final class Values {
     public boolean sameAs(final int index, final Vector source, final int row) {
         return switch (type) {
             case LONG, TIMESTAMP -> longs[index] == source.longs[row];
-            case DOUBLE -> Double.doubleToLongBits(doubles[index]) == Double.doubleToLongBits(source.doubles[row]);
+            case DOUBLE -> sameDouble(doubles[index], source.doubles[row]);
             case BOOLEAN -> booleans[index] == source.booleans[row];
-            case SYMBOL, VARCHAR -> texts[index] == null
-                    ? source.texts[row] == null
-                    : texts[index].equals(source.texts[row]);
+            case SYMBOL, VARCHAR -> sameText(texts[index], source.texts[row]);
         };
     }
 

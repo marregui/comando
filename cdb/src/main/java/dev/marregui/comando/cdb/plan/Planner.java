@@ -29,15 +29,18 @@ public final class Planner {
     private final Function<String, TableDef> tables;
     private final long nowMicros;
     private final BiFunction<String, List<String>, List<Field>> sourceFields;
+    private final boolean scanShortcuts;
 
     private Planner(
             final Function<String, TableDef> tables,
             final long nowMicros,
-            final BiFunction<String, List<String>, List<Field>> sourceFields
+            final BiFunction<String, List<String>, List<Field>> sourceFields,
+            final boolean scanShortcuts
     ) {
         this.tables = tables;
         this.nowMicros = nowMicros;
         this.sourceFields = sourceFields;
+        this.scanShortcuts = scanShortcuts;
     }
 
     /**
@@ -55,7 +58,22 @@ public final class Planner {
             final long nowMicros,
             final BiFunction<String, List<String>, List<Field>> sourceFields
     ) {
-        final Planner planner = new Planner(tables, nowMicros, sourceFields);
+        return plan(statement, tables, nowMicros, sourceFields, true);
+    }
+
+    /**
+     * {@link #plan(Ast.Statement, Function, long, BiFunction)}; {@code scanShortcuts} false plans every scan plainly, as
+     * plans were before scans took shortcuts: no pre-filter terms (so every filter stays) and a LATEST ON's scan in
+     * time order. The plain plan is the reference the shortcuts are tested against.
+     */
+    static Plan plan(
+            final Ast.Statement statement,
+            final Function<String, TableDef> tables,
+            final long nowMicros,
+            final BiFunction<String, List<String>, List<Field>> sourceFields,
+            final boolean scanShortcuts
+    ) {
+        final Planner planner = new Planner(tables, nowMicros, sourceFields, scanShortcuts);
         return switch (statement) {
             case Ast.Query(final Ast.QueryBody body) -> planner.query(body, Map.of()).plan();
             case Ast.CreateTable create -> Ddl.createTable(create, tables);
@@ -122,11 +140,16 @@ public final class Planner {
             final ColumnDef c = def.columns().get(i);
             fields.add(new Field(c.name(), c.type()));
         }
-        return new Plan.Scan(def.name(), columns, Long.MIN_VALUE, Long.MAX_VALUE, List.copyOf(fields));
+        return new Plan.Scan(def.name(), columns, Long.MIN_VALUE, Long.MAX_VALUE, List.of(), false,
+                List.copyOf(fields));
     }
 
     long nowMicros() {
         return nowMicros;
+    }
+
+    boolean scanShortcuts() {
+        return scanShortcuts;
     }
 
     private static Rel join(final Rel left, final Rel right, final String kind, final Ast.Expr on, final int pos) {
@@ -181,7 +204,7 @@ public final class Planner {
             for (final Ast.OrderItem o : setOp.orderBy()) {
                 keys.add(new Plan.SortKey(outputIndex(o.expr(), names), o.descending()));
             }
-            out = new Plan.Sort(out, List.copyOf(keys));
+            out = new Plan.Sort(out, List.copyOf(keys), -1);
         }
         out = limit(out, setOp.limit());
         return Rel.of(out, null, -1);
@@ -234,9 +257,19 @@ public final class Planner {
         final long lo = constantLong(limit.lo());
         if (limit.hi() == null) {
             // the last n rows are (-n, 0): the bounds LimitCursor reads as counted from the end
-            return lo < 0 ? new Plan.Limit(plan, lo, 0) : new Plan.Limit(plan, 0, lo);
+            return lo < 0 ? new Plan.Limit(plan, lo, 0) : new Plan.Limit(sorted(plan, lo), 0, lo);
         }
-        return new Plan.Limit(plan, lo, constantLong(limit.hi()));
+        final long hi = constantLong(limit.hi());
+        // LimitCursor swaps bounds given high to low, so the sort keeps rows up to the larger one
+        return new Plan.Limit(lo >= 0 && hi >= 0 ? sorted(plan, Math.max(lo, hi)) : plan, lo, hi);
+    }
+
+    /** {@code plan}, a sort that has no limit yet told that only its first {@code rows} rows are read. */
+    private static Plan sorted(final Plan plan, final long rows) {
+        if (plan instanceof Plan.Sort(final Plan child, final List<Plan.SortKey> keys, final long limit) && limit < 0) {
+            return new Plan.Sort(child, keys, rows);
+        }
+        return plan;
     }
 
     private static long constantLong(final Ast.Expr expr) {

@@ -51,6 +51,16 @@ final class RowsBuffer {
         return rowCount++;
     }
 
+    /** Overwrites row {@code index}, already added, with row {@code row} of {@code source}. */
+    void set(final int index, final Page source, final int row) {
+        final Vector[] dst = pages[index >>> Rows.PAGE_SHIFT].columns;
+        final Vector[] src = source.columns;
+        final int to = index & Rows.ROW_MASK;
+        for (int c = 0; c < dst.length; c++) {
+            dst[c].copy(src[c], row, to);
+        }
+    }
+
     int rowCount() {
         return rowCount;
     }

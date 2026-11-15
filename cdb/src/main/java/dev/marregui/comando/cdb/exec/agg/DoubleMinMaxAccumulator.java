@@ -29,6 +29,19 @@ final class DoubleMinMaxAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        final double[] in = value.doubles;
+        double current = best[group];
+        for (int i = from; i < to; i++) {
+            final double v = in[i];
+            if (!Double.isNaN(v) && (Double.isNaN(current) || (max ? v > current : v < current))) {
+                current = v;
+            }
+        }
+        best[group] = current;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > best.length) {
             final int old = best.length;

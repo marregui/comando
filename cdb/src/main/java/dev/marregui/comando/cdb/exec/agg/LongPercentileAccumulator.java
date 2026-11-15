@@ -6,13 +6,14 @@ import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.exec.Vector;
 
 /**
- * A percentile of LONG or TIMESTAMP values, NULLs skipped, NULL for no value. Keeps each group's values and sorts them
- * once at {@link #write}. With a precision ({@code approx_percentile}, {@code approx_median}) the result is what
+ * A percentile of LONG or TIMESTAMP values, NULLs skipped, NULL for no value. Keeps each group's values and selects the
+ * k-th in place at {@link #write}. With a precision ({@code approx_percentile}, {@code approx_median}) the result is what
  * QuestDB's HdrHistogram of that many significant digits answers: the highest value equivalent to the k-th smallest,
  * the lowest for percentile 0, values below 0 refused. Without one ({@code percentile_disc}) it is the k-th smallest.
  * Both take k as {@code max(1, ceil(p * n))}.
  */
 final class LongPercentileAccumulator implements Accumulator {
+
 
     private final double fraction;
     // significant digits of the histogram, -1 for the exact value
@@ -44,6 +45,19 @@ final class LongPercentileAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        final long[] list = reserve(group, to - from);
+        final long[] in = value.longs;
+        int size = sizes[group];
+        for (int i = from; i < to; i++) {
+            if (in[i] != Vector.NULL_LONG) {
+                list[size++] = in[i];
+            }
+        }
+        sizes[group] = size;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > sizes.length) {
             final int capacity = Values.grownCapacity(sizes.length, groups);
@@ -59,20 +73,20 @@ final class LongPercentileAccumulator implements Accumulator {
             Aggregates.writeLong(Vector.NULL_LONG, out, row);
             return;
         }
-        final long[] sorted = Arrays.copyOf(values[group], n);
-        Arrays.sort(sorted);
+        final long[] list = values[group];
         if (precision < 0) {
-            Aggregates.writeLong(sorted[rank(fraction, n) - 1], out, row);
+            Aggregates.writeLong(Select.kthLong(list, n, rank(fraction, n) - 1), out, row);
             return;
         }
-        if (sorted[0] < 0) {
-            throw new CdbException("cannot take an approximate percentile of a negative value [value=" + sorted[0]
-                    + ']', -1);
+        final long least = Select.minLong(list, n);
+        if (least < 0) {
+            throw new CdbException("cannot take an approximate percentile of a negative value [value=" + least + ']',
+                    -1);
         }
         final double percent = Math.min(Math.max(Math.nextAfter(fraction * 100.0, Double.NEGATIVE_INFINITY), 0.0),
                 100.0);
         final int k = (int) Math.max(1, Math.ceil(percent / 100.0 * n));
-        final long kth = sorted[k - 1];
+        final long kth = Select.kthLong(list, n, k - 1);
         Aggregates.writeLong(fraction == 0.0 ? lowestEquivalent(kth, precision) : highestEquivalent(kth, precision),
                 out, row);
     }
@@ -104,14 +118,13 @@ final class LongPercentileAccumulator implements Accumulator {
     }
 
     private void append(final int group, final long v) {
-        long[] list = values[group];
-        if (list == null) {
-            list = new long[8];
-            values[group] = list;
-        } else if (sizes[group] == list.length) {
-            list = Arrays.copyOf(list, Values.grownCapacity(list.length, list.length + 1));
-            values[group] = list;
-        }
-        list[sizes[group]++] = v;
+        reserve(group, 1)[sizes[group]++] = v;
+    }
+
+    /** The list of {@code group}, with room for {@code extra} more values. */
+    private long[] reserve(final int group, final int extra) {
+        final long[] list = Values.room(values[group], sizes[group] + extra);
+        values[group] = list;
+        return list;
     }
 }

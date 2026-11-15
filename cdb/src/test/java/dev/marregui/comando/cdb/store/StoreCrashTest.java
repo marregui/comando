@@ -66,7 +66,6 @@ class StoreCrashTest {
         final long day2 = Retention.floor(StoreCrashChild.DAY2, PartitionBy.DAY);
         assertThat(folders(table)).containsExactlyInAnyOrder(
                 TableFiles.folder(day1, PartitionBy.DAY, 1L),
-                TableFiles.folder(day1, PartitionBy.DAY, 2L),
                 TableFiles.folder(day2, PartitionBy.DAY, 2L));
 
         try (final Store store = Store.open(root); final TableReader r = store.reader("m")) {

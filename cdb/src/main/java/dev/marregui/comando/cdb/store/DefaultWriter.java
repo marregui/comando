@@ -15,10 +15,13 @@ import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 
 /**
- * The writer of one table. Pending rows are held by column in a {@link RowBlock}; a commit rewrites each partition
- * the rows fall in as a new version folder (its committed rows merged with the new, ordered and deduplicated), syncs
- * the symbol dictionaries, rewrites {@code _meta} when columns were added, and last replaces {@code _txn}: a crash at
- * any step before leaves the previous transaction, and the orphan folders are deleted when the store next opens.
+ * The writer of one table. Pending rows are held by column in a {@link RowBlock}; a commit orders and deduplicates the
+ * rows of each partition they fall in, then appends them in place to the partition's column files when they all come
+ * after its committed rows, else rewrites the partition as a new version folder (its committed rows merged with the
+ * new); then it syncs the symbol dictionaries, rewrites {@code _meta} when columns were added, and last replaces
+ * {@code _txn}, whose row counts alone say what is committed. A crash at any step before leaves the previous
+ * transaction: the bytes appended past the committed ends are cut and the orphan folders deleted when the store next
+ * opens.
  */
 final class DefaultWriter implements TableWriter {
 
@@ -152,13 +155,15 @@ final class DefaultWriter implements TableWriter {
         }
         final TableState.Snapshot current = state.current();
         final long txn = current.txn() + 1L;
+        // versions in new folders, and versions of a committed folder its rows were appended to
         final List<Version> written = new ArrayList<>();
+        final List<Version> appended = new ArrayList<>();
         final List<Version> next = new ArrayList<>(truncated ? List.of() : current.partitions());
         try {
             if (pending.size > 0) {
-                writePartitions(txn, next, written);
+                writePartitions(txn, next, written, appended);
             }
-            expire(next, written);
+            expire(next, written, appended);
             for (final SymbolTable symbols : state.symbols()) {
                 if (symbols != null) {
                     symbols.sync();
@@ -176,6 +181,15 @@ final class DefaultWriter implements TableWriter {
         } catch (final IOException | RuntimeException e) {
             final CdbException failure = new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn
                     + ']', e);
+            // the appended bytes stay past the committed ends, where no reader looks; the next commit rewrites these
+            for (final Version v : appended) {
+                state.torn().add(v.folder);
+                try {
+                    v.unmap();
+                } catch (final RuntimeException cleanup) {
+                    failure.addSuppressed(cleanup);
+                }
+            }
             for (final Version v : written) {
                 try {
                     v.unmap();
@@ -208,9 +222,12 @@ final class DefaultWriter implements TableWriter {
         state.unlease();
     }
 
-    /** Rewrites every partition the pending rows fall in as version {@code txn}, replacing it in {@code next}. */
-    private void writePartitions(final long txn, final List<Version> next, final List<Version> written)
-            throws IOException {
+    /**
+     * Writes every partition the pending rows fall in, replacing it in {@code next}: appended in place when the rows
+     * come after its committed ones, else rewritten as version {@code txn}.
+     */
+    private void writePartitions(final long txn, final List<Version> next, final List<Version> written,
+            final List<Version> appended) throws IOException {
         final int n = pending.size;
         final int ts = def.timestampIndex();
         final PartitionBy partitionBy = def.partitionBy();
@@ -234,12 +251,26 @@ final class DefaultWriter implements TableWriter {
                     break;
                 }
             }
-            final RowBlock merged = merge(old, byFloor, from, to);
-            final int[] order = Dedup.order(merged, ts, keys);
-            final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));
-            writeVersion(dir, merged, order);
-            final Version v = Version.open(dir, def, order.length, state.symbols());
-            written.add(v);
+            final RowBlock rows = pendingRows(byFloor, from, to);
+            final int[] order = Dedup.order(rows, ts, keys);
+            final Version v;
+            if (old != null && store.appendInPlace && appendable(old, rows, order[0], ts, keys.length)) {
+                append(old, rows, order);
+                v = Version.open(old.dir, def, old.rowCount() + order.length, state.symbols());
+                appended.add(v);
+            } else {
+                final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));
+                if (old == null) {
+                    writeVersion(dir, rows, order);
+                    v = Version.open(dir, def, order.length, state.symbols());
+                } else {
+                    final RowBlock merged = merge(old, rows, order);
+                    final int[] mergedOrder = Dedup.mergeOrder(merged, ts, keys, (int) old.rowCount());
+                    writeVersion(dir, merged, mergedOrder);
+                    v = Version.open(dir, def, mergedOrder.length, state.symbols());
+                }
+                written.add(v);
+            }
             if (old != null) {
                 next.remove(old);
             }
@@ -249,8 +280,12 @@ final class DefaultWriter implements TableWriter {
         next.sort(Comparator.comparingLong(Version::lowerBound));
     }
 
-    /** Drops from {@code next} the partitions the table's TTL expires; a version written by this commit is freed. */
-    private void expire(final List<Version> next, final List<Version> written) throws IOException {
+    /**
+     * Drops from {@code next} the partitions the table's TTL expires; a version written by this commit is freed, its
+     * folder deleted when it is new.
+     */
+    private void expire(final List<Version> next, final List<Version> written, final List<Version> appended)
+            throws IOException {
         if (def.ttlMicros() <= 0L || next.isEmpty()) {
             return;
         }
@@ -264,6 +299,8 @@ final class DefaultWriter implements TableWriter {
                 if (written.remove(v)) {
                     v.unmap();
                     StoreFiles.deleteFolder(v.dir);
+                } else if (appended.remove(v)) {
+                    v.unmap();
                 }
             } else {
                 kept.add(v);
@@ -273,10 +310,80 @@ final class DefaultWriter implements TableWriter {
         next.addAll(kept);
     }
 
-    /** The committed rows of {@code old} (none when null), then the pending rows {@code byFloor[from..to)}. */
-    private RowBlock merge(final Version old, final int[] byFloor, final int from, final int to) {
-        final long oldRows = old == null ? 0L : old.rowCount();
+    /** The pending rows {@code byFloor[from..to)}, in that order. */
+    private RowBlock pendingRows(final int[] byFloor, final int from, final int to) {
         final int k = to - from;
+        final RowBlock rows = new RowBlock(def.columns(), k);
+        for (int c = 0; c < rows.types.length; c++) {
+            for (int i = 0; i < k; i++) {
+                final int r = byFloor[from + i];
+                switch (rows.types[c]) {
+                    case LONG, TIMESTAMP -> rows.longs[c][i] = pending.longs[c][r];
+                    case DOUBLE -> rows.doubles[c][i] = pending.doubles[c][r];
+                    case BOOLEAN -> rows.booleans[c][i] = pending.booleans[c][r];
+                    case SYMBOL, VARCHAR -> rows.texts[c][i] = pending.texts[c][r];
+                }
+            }
+        }
+        rows.size = k;
+        return rows;
+    }
+
+    /**
+     * True when the rows {@code order} of {@code rows}, the first at {@code first}, can go after the committed rows of
+     * {@code old} unchanged: every column has its files there, no failed commit left bytes past their ends, and every
+     * row comes after the committed ones, or at the same timestamp when no dedup key can make it replace one. Without a
+     * designated timestamp rows keep their written order, so they always can.
+     */
+    private boolean appendable(final Version old, final RowBlock rows, final int first, final int ts,
+            final int keyCount) {
+        final List<ColumnDef> columns = def.columns();
+        for (int c = 0; c < columns.size(); c++) {
+            final String name = columns.get(c).name();
+            if (!Files.exists(old.dir.resolve(name + ".d"))
+                    || columns.get(c).type() == CdbType.VARCHAR && !Files.exists(old.dir.resolve(name + ".i"))) {
+                return false;
+            }
+        }
+        if (state.torn().contains(old.folder)) {
+            return false;
+        }
+        if (ts < 0) {
+            return true;
+        }
+        final long min = rows.longs[ts][first];
+        return min > old.maxTimestamp() || min == old.maxTimestamp() && keyCount == 0;
+    }
+
+    /**
+     * Writes the rows {@code order} of {@code rows} into {@code old}'s column files from its committed ends, every file
+     * forced.
+     */
+    private void append(final Version old, final RowBlock rows, final int[] order) throws IOException {
+        final long committed = old.rowCount();
+        if (committed > Integer.MAX_VALUE - order.length) {
+            throw new CdbException("refuse partition over capacity [table=" + def.name() + ", rows="
+                    + (committed + order.length) + ']', -1);
+        }
+        final List<ColumnDef> columns = def.columns();
+        for (int c = 0; c < columns.size(); c++) {
+            final Path data = old.dir.resolve(columns.get(c).name() + ".d");
+            if (rows.types[c] == CdbType.VARCHAR) {
+                final Path indexFile = old.dir.resolve(columns.get(c).name() + ".i");
+                final long end = Version.decodeEnd(StoreFiles.readLong(indexFile, (committed - 1L) * Long.BYTES));
+                final Text text = varchar(data, rows.texts[c], order, end);
+                StoreFiles.writeAt(data, end, text.bytes());
+                StoreFiles.writeAt(indexFile, committed * Long.BYTES, text.ends());
+            } else {
+                StoreFiles.writeAt(data, committed * TableFiles.width(rows.types[c]), fixed(rows, c, order));
+            }
+        }
+    }
+
+    /** The committed rows of {@code old}, then the rows {@code order} of {@code rows}. */
+    private RowBlock merge(final Version old, final RowBlock rows, final int[] order) {
+        final long oldRows = old.rowCount();
+        final int k = order.length;
         if (oldRows > Integer.MAX_VALUE - k) {
             throw new CdbException("refuse partition over capacity [table=" + def.name() + ", rows=" + (oldRows + k)
                     + ']', -1);
@@ -284,21 +391,19 @@ final class DefaultWriter implements TableWriter {
         final int base = (int) oldRows;
         final RowBlock merged = new RowBlock(def.columns(), base + k);
         for (int c = 0; c < merged.types.length; c++) {
-            if (old != null) {
-                switch (merged.types[c]) {
-                    case LONG, TIMESTAMP -> old.longs(c, 0L, base, merged.longs[c]);
-                    case DOUBLE -> old.doubles(c, 0L, base, merged.doubles[c]);
-                    case BOOLEAN -> old.booleans(c, 0L, base, merged.booleans[c]);
-                    case SYMBOL, VARCHAR -> old.texts(c, 0L, base, merged.texts[c]);
-                }
+            switch (merged.types[c]) {
+                case LONG, TIMESTAMP -> old.longs(c, 0L, base, merged.longs[c]);
+                case DOUBLE -> old.doubles(c, 0L, base, merged.doubles[c]);
+                case BOOLEAN -> old.booleans(c, 0L, base, merged.booleans[c]);
+                case SYMBOL, VARCHAR -> old.texts(c, 0L, base, merged.texts[c]);
             }
             for (int i = 0; i < k; i++) {
-                final int r = byFloor[from + i];
+                final int r = order[i];
                 switch (merged.types[c]) {
-                    case LONG, TIMESTAMP -> merged.longs[c][base + i] = pending.longs[c][r];
-                    case DOUBLE -> merged.doubles[c][base + i] = pending.doubles[c][r];
-                    case BOOLEAN -> merged.booleans[c][base + i] = pending.booleans[c][r];
-                    case SYMBOL, VARCHAR -> merged.texts[c][base + i] = pending.texts[c][r];
+                    case LONG, TIMESTAMP -> merged.longs[c][base + i] = rows.longs[c][r];
+                    case DOUBLE -> merged.doubles[c][base + i] = rows.doubles[c][r];
+                    case BOOLEAN -> merged.booleans[c][base + i] = rows.booleans[c][r];
+                    case SYMBOL, VARCHAR -> merged.texts[c][base + i] = rows.texts[c][r];
                 }
             }
         }
@@ -311,50 +416,60 @@ final class DefaultWriter implements TableWriter {
         // a folder of this name is an orphan of a commit that crashed before naming it in _txn
         StoreFiles.deleteFolder(dir);
         Files.createDirectories(dir);
-        final int m = order.length;
         final List<ColumnDef> columns = def.columns();
         for (int c = 0; c < columns.size(); c++) {
             final Path data = dir.resolve(columns.get(c).name() + ".d");
-            switch (block.types[c]) {
-                case LONG, TIMESTAMP -> {
-                    final ByteBuffer buffer = ByteBuffer.allocate(m * Long.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-                    for (final int r : order) {
-                        buffer.putLong(block.longs[c][r]);
-                    }
-                    StoreFiles.writeNew(data, buffer.flip());
-                }
-                case DOUBLE -> {
-                    final ByteBuffer buffer = ByteBuffer.allocate(m * Double.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-                    for (final int r : order) {
-                        buffer.putDouble(block.doubles[c][r]);
-                    }
-                    StoreFiles.writeNew(data, buffer.flip());
-                }
-                case BOOLEAN -> {
-                    final ByteBuffer buffer = ByteBuffer.allocate(m);
-                    for (final int r : order) {
-                        buffer.put(block.booleans[c][r] ? (byte) 1 : (byte) 0);
-                    }
-                    StoreFiles.writeNew(data, buffer.flip());
-                }
-                case SYMBOL -> {
-                    final SymbolTable symbols = state.symbols().get(c);
-                    final ByteBuffer buffer = ByteBuffer.allocate(m * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-                    for (final int r : order) {
-                        buffer.putInt(symbols.intern(block.texts[c][r]));
-                    }
-                    StoreFiles.writeNew(data, buffer.flip());
-                }
-                case VARCHAR -> writeVarchar(dir.resolve(columns.get(c).name() + ".i"), data, block.texts[c], order);
+            if (block.types[c] == CdbType.VARCHAR) {
+                final Text text = varchar(data, block.texts[c], order, 0L);
+                StoreFiles.writeNew(dir.resolve(columns.get(c).name() + ".i"), text.ends());
+                StoreFiles.writeNew(data, text.bytes());
+            } else {
+                StoreFiles.writeNew(data, fixed(block, c, order));
             }
         }
     }
 
-    private static void writeVarchar(final Path indexFile, final Path dataFile, final String[] texts, final int[] order)
-            throws IOException {
+    /** The rows {@code order} of fixed-width column {@code c} of {@code block}, as its file holds them. */
+    private ByteBuffer fixed(final RowBlock block, final int c, final int[] order) {
+        final int m = order.length;
+        final ByteBuffer buffer = ByteBuffer.allocate(m * TableFiles.width(block.types[c]))
+                .order(ByteOrder.LITTLE_ENDIAN);
+        switch (block.types[c]) {
+            case LONG, TIMESTAMP -> {
+                for (final int r : order) {
+                    buffer.putLong(block.longs[c][r]);
+                }
+            }
+            case DOUBLE -> {
+                for (final int r : order) {
+                    buffer.putDouble(block.doubles[c][r]);
+                }
+            }
+            case BOOLEAN -> {
+                for (final int r : order) {
+                    buffer.put(block.booleans[c][r] ? (byte) 1 : (byte) 0);
+                }
+            }
+            case SYMBOL -> {
+                final SymbolTable symbols = state.symbols().get(c);
+                for (final int r : order) {
+                    buffer.putInt(symbols.intern(block.texts[c][r]));
+                }
+            }
+            case VARCHAR -> throw new IllegalArgumentException("refuse VARCHAR as fixed width [column=" + c + ']');
+        }
+        return buffer.flip();
+    }
+
+    /** A VARCHAR column's rows as its files hold them: the {@code .i} end offsets and the {@code .d} UTF-8 bytes. */
+    private record Text(ByteBuffer ends, ByteBuffer bytes) {
+    }
+
+    /** The rows {@code order} of {@code texts}, their end offsets counted from {@code base}, where they will start. */
+    private static Text varchar(final Path dataFile, final String[] texts, final int[] order, final long base) {
         final ByteBuffer ends = ByteBuffer.allocate(order.length * Long.BYTES).order(ByteOrder.LITTLE_ENDIAN);
         final byte[][] encoded = new byte[order.length][];
-        long end = 0L;
+        long end = base;
         for (int i = 0; i < order.length; i++) {
             final String text = texts[order[i]];
             if (text == null) {
@@ -369,14 +484,13 @@ final class DefaultWriter implements TableWriter {
             throw new CdbException("refuse text column over 2 GB in one partition [file=" + dataFile + ", bytes=" + end
                     + ']', -1);
         }
-        final ByteBuffer bytes = ByteBuffer.allocate((int) end);
+        final ByteBuffer bytes = ByteBuffer.allocate((int) (end - base));
         for (final byte[] utf8 : encoded) {
             if (utf8 != null) {
                 bytes.put(utf8);
             }
         }
-        StoreFiles.writeNew(indexFile, ends.flip());
-        StoreFiles.writeNew(dataFile, bytes.flip());
+        return new Text(ends.flip(), bytes.flip());
     }
 
     private int[] keyColumns() {

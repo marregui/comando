@@ -36,6 +36,10 @@ public final class Store implements AutoCloseable {
     Runnable beforeTxnReplace = () -> {
     };
 
+    /** False makes every commit rewrite the partitions it touches, never append in place: the tests' reference. */
+    @TestOnly
+    boolean appendInPlace = true;
+
     private final Path root;
     private final Map<String, TableState> tables = new ConcurrentHashMap<>();
     private final Object createLock = new Object();
@@ -228,7 +232,8 @@ public final class Store implements AutoCloseable {
 
     /**
      * Reads a table folder: {@code _meta}, {@code _txn} (none: transaction 0), the versions it names mapped; deletes
-     * the folders and temporary files a crashed commit left that {@code _txn} does not name.
+     * the folders and temporary files a crashed commit left that {@code _txn} does not name, and cuts the bytes it
+     * appended past the committed ends of the folders it does.
      */
     private static TableState load(final Path dir) throws IOException {
         final Path meta = dir.resolve(TableFiles.META);
@@ -258,6 +263,7 @@ public final class Store implements AutoCloseable {
             for (final TableFiles.Entry entry : txn.partitions()) {
                 final Path partition = dir.resolve(entry.folder());
                 TableFiles.checkName(entry.folder(), "partition");
+                cutToCommitted(partition, def, entry.rows());
                 versions.add(Version.open(partition, def, entry.rows(), state.symbols()));
             }
         } catch (final RuntimeException e) {
@@ -268,5 +274,38 @@ public final class Store implements AutoCloseable {
         }
         state.init(new TableState.Snapshot(txn.number(), def, versions));
         return state;
+    }
+
+    /**
+     * Cuts each column file of the partition folder {@code partition} to what its {@code rows} committed rows take
+     * (VARCHAR {@code .d}: to the end offset of the last committed row): a commit that failed or crashed before
+     * {@code _txn} left its rows past there. Runs before anything maps the files; a file shorter than its rows need
+     * is left for the mapping to refuse.
+     */
+    private static void cutToCommitted(final Path partition, final TableDef def, final long rows) throws IOException {
+        for (final ColumnDef column : def.columns()) {
+            final Path data = partition.resolve(column.name() + ".d");
+            if (!Files.exists(data)) {
+                continue;
+            }
+            if (column.type() == CdbType.VARCHAR) {
+                final Path index = partition.resolve(column.name() + ".i");
+                if (Files.exists(index) && Files.size(index) >= rows * Long.BYTES) {
+                    cut(index, rows * Long.BYTES);
+                    cut(data, Version.decodeEnd(StoreFiles.readLong(index, (rows - 1L) * Long.BYTES)));
+                }
+            } else {
+                cut(data, rows * TableFiles.width(column.type()));
+            }
+        }
+    }
+
+    private static void cut(final Path file, final long committedBytes) throws IOException {
+        final long bytes = Files.size(file);
+        if (bytes > committedBytes) {
+            StoreFiles.truncate(file, committedBytes);
+            LOG.log(System.Logger.Level.INFO, "cut partition file past its committed rows [file=" + file + ", bytes="
+                    + bytes + ", committedBytes=" + committedBytes + ']');
+        }
     }
 }

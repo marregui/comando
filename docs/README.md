@@ -11,6 +11,7 @@ the others link to it.
 | know what every gesture does | [Workbench](workbench.md): the window, panels, themes, the sidebar, running text, the database, instances and the comando Edge, the terminal and Gradle, the Kit, Brain and Scratchpad tabs and git changes, what is kept on disk |
 | know what a session can do and what it must ask | [Claude Code](claude-code.md): the `claude -p` bridge, the checkpoint, the MCP tools, approvals and safety |
 | understand the other two parts of the flow | [Kit and brain](kit-and-brain.md): the kit's parts and what each does in a session, what comando does with a kit, the brain's stores, its flows, `/reflect` and the learning loop, and how an agent creates a default kit and brain or checks one the user brings |
+| know how cdb runs a query and a write, and what each costs | [cdb](cdb.md): the query path, storage and the commit protocol, concurrency, measurements |
 | change the code | [Architecture](architecture.md): modules, state and intents, ports, threads, ownership, then each module's classes, interface, threads and tests |
 | build, test and release it | [Development](development.md): prerequisites, Gradle tasks, CI, configuration, the code rules, quality gates, how these documents and their pictures are kept |
 | know why something is the way it is | [Decisions](adr/README.md): one record per decision, dated, with who decided |

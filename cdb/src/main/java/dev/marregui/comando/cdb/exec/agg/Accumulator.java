@@ -17,6 +17,16 @@ public interface Accumulator {
     /** Adds value {@code i} of {@code value} to group {@code groups[i]}, for {@code i} in {@code [0, size)}. */
     void addAll(int[] groups, Vector value, int size);
 
+    /**
+     * Adds values {@code [from, to)} of {@code value} (null for {@code count()}) to {@code group}: the run of rows of
+     * one group a time-ordered input gives; an accumulator overrides it with a loop free of per-row dispatch.
+     */
+    default void addRange(final int group, final Vector value, final int from, final int to) {
+        for (int row = from; row < to; row++) {
+            add(group, value, row);
+        }
+    }
+
     /** Writes the result of {@code group} to value {@code row} of {@code out}, a vector of the aggregate's type. */
     void write(int group, Vector out, int row);
 }

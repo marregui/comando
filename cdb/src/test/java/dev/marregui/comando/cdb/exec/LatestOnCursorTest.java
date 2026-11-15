@@ -44,7 +44,7 @@ class LatestOnCursorTest {
     }
 
     private static List<List<Object>> run(final List<List<Object>> rows, final int[] partitionColumns) {
-        final Plan.LatestOn spec = new Plan.LatestOn(new Plan.Distinct(null), 0, partitionColumns);
+        final Plan.LatestOn spec = new Plan.LatestOn(new Plan.Distinct(null), 0, partitionColumns, false);
         return AggRows.drain(new LatestOnCursor(AggRows.source(FIELDS, 2, rows), spec));
     }
 }

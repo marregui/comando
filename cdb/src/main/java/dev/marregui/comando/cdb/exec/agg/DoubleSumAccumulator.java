@@ -32,6 +32,23 @@ final class DoubleSumAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        final double[] in = value.doubles;
+        // one addition per value in input order, as add makes them, so the sum rounds alike
+        double sum = sums[group];
+        boolean any = false;
+        for (int i = from; i < to; i++) {
+            final double v = in[i];
+            if (!Double.isNaN(v)) {
+                sum += v;
+                any = true;
+            }
+        }
+        sums[group] = sum;
+        seen[group] |= any;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > sums.length) {
             final int capacity = Values.grownCapacity(sums.length, groups);

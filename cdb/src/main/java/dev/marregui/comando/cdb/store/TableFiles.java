@@ -149,6 +149,16 @@ final class TableFiles {
         }
     }
 
+    /** The bytes a row takes in a column's {@code .d} file of {@code type}; -1 for VARCHAR, whose rows vary. */
+    static int width(final CdbType type) {
+        return switch (type) {
+            case LONG, TIMESTAMP, DOUBLE -> Long.BYTES;
+            case BOOLEAN -> 1;
+            case SYMBOL -> Integer.BYTES;
+            case VARCHAR -> -1;
+        };
+    }
+
     /** The folder of the partition starting at {@code lowerBound}, version {@code txn}, named as QuestDB names it. */
     static String folder(final long lowerBound, final PartitionBy partitionBy, final long txn) {
         if (partitionBy == PartitionBy.NONE) {

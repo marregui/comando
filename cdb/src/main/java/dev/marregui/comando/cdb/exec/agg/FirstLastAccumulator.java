@@ -34,6 +34,14 @@ final class FirstLastAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        if (from < to && (last || !seen[group])) {
+            values.set(group, value, last ? to - 1 : from);
+            seen[group] = true;
+        }
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > seen.length) {
             seen = Arrays.copyOf(seen, Values.grownCapacity(seen.length, groups));

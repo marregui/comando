@@ -51,6 +51,34 @@ final class AvgAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        // one addition per value in input order, as add makes them, so the sum rounds alike
+        double sum = sums[group];
+        long n = 0;
+        if (value.doubles != null) {
+            final double[] in = value.doubles;
+            for (int i = from; i < to; i++) {
+                final double v = in[i];
+                if (!Double.isNaN(v)) {
+                    sum += v;
+                    n++;
+                }
+            }
+        } else {
+            final long[] in = value.longs;
+            for (int i = from; i < to; i++) {
+                final long v = in[i];
+                if (v != Vector.NULL_LONG) {
+                    sum += v;
+                    n++;
+                }
+            }
+        }
+        sums[group] = sum;
+        counts[group] += n;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > sums.length) {
             final int capacity = Values.grownCapacity(sums.length, groups);

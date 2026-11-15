@@ -4,6 +4,7 @@ import java.util.List;
 
 import dev.marregui.comando.cdb.exec.Field;
 import dev.marregui.comando.cdb.store.ColumnDef;
+import dev.marregui.comando.cdb.store.Compare;
 import dev.marregui.comando.cdb.store.TableDef;
 
 /**
@@ -20,11 +21,29 @@ public sealed interface Plan {
     }
 
     /**
-     * The rows of {@code table} in designated-timestamp order, the given columns of its definition; partitions wholly
-     * outside {@code [fromMicros, toMicros)} are skipped (the bounds {@link Long#MIN_VALUE} and {@link Long#MAX_VALUE}
-     * when there is no time filter; rows inside kept partitions are still filtered by a {@link Filter} above).
+     * The rows of {@code table} in designated-timestamp order, the given columns of its definition, with a timestamp in
+     * {@code [fromMicros, toMicros)} (the bounds {@link Long#MIN_VALUE} and {@link Long#MAX_VALUE} when there is no time
+     * filter; a {@link Filter} above still filters). The scan applies {@code terms}: a numeric one also keeps NULL
+     * and NaN rows, for the Filter above to decide; a text one is exact, and a filter made only of text terms is not
+     * planned. {@code newestFirst} reads the rows in descending timestamp order, the newest partition first.
      */
-    record Scan(String table, int[] columns, long fromMicros, long toMicros, List<Field> fields) implements Plan {
+    record Scan(
+            String table,
+            int[] columns,
+            long fromMicros,
+            long toMicros,
+            List<ScanTerm> terms,
+            boolean newestFirst,
+            List<Field> fields
+    ) implements Plan {
+    }
+
+    /**
+     * A top-level AND term of a scan's filter: output column {@code column} (an index into the scan's fields) compared
+     * by {@code op} with a constant of its type: {@code longValue} for LONG and TIMESTAMP, {@code doubleValue} for
+     * DOUBLE, {@code textValue} for SYMBOL and VARCHAR ({@link Compare#EQ} and {@link Compare#NE} only).
+     */
+    record ScanTerm(int column, Compare op, long longValue, double doubleValue, String textValue) {
     }
 
     /**
@@ -66,8 +85,12 @@ public sealed interface Plan {
     ) implements Plan {
     }
 
-    /** For each distinct value of the partition columns, the row with the largest {@code timestampColumn}. */
-    record LatestOn(Plan child, int timestampColumn, int[] partitionColumns) implements Plan {
+    /**
+     * For each distinct value of the partition columns, the row with the largest {@code timestampColumn}. {@code
+     * newestFirst}: the child yields rows in descending timestamp order (a {@link Scan} with {@code newestFirst}, maybe
+     * under a {@link Filter}), so the first row of each key is its latest.
+     */
+    record LatestOn(Plan child, int timestampColumn, int[] partitionColumns, boolean newestFirst) implements Plan {
         @Override
         public List<Field> fields() {
             return child.fields();
@@ -81,7 +104,8 @@ public sealed interface Plan {
         }
     }
 
-    record Sort(Plan child, List<SortKey> keys) implements Plan {
+    /** Rows ordered by {@code keys}, stable; {@code limit} at least 0: only the first {@code limit} rows are needed. */
+    record Sort(Plan child, List<SortKey> keys, long limit) implements Plan {
         @Override
         public List<Field> fields() {
             return child.fields();

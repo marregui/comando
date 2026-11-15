@@ -35,6 +35,8 @@ final class SampleByCursor implements Cursor {
     private final AggKeys keyTable;
     private final Vector[] keyVectors;
     private final Vector[] keysWithBucket;
+    // the bucket length of a fixed stride, 0 for a calendar one
+    private final long strideMicros;
     private final AggTable table;
     private final int timestampColumn;
     private final String unit;
@@ -56,7 +58,7 @@ final class SampleByCursor implements Cursor {
             count = spec.count();
             unit = spec.unit();
             timestampColumn = spec.timestampColumn();
-            AggBuckets.floor(0, count, unit);
+            strideMicros = AggBuckets.fixedStride(count, unit);
             keyFns = new VectorFn[spec.keys().size()];
             keyVectors = new Vector[keyFns.length];
             keysWithBucket = new Vector[keyFns.length + 1];
@@ -156,19 +158,44 @@ final class SampleByCursor implements Cursor {
 
     private void readAll() {
         final Vector buckets = keysWithBucket[0];
+        // the bucket last computed, [bucketStart, bucketEnd): time-ordered rows reuse it with two comparisons in
+        // place of a division per row (the gain not measured)
+        long bucketStart = 0;
+        long bucketEnd = 0;
         Page page;
         while ((page = child.next()) != null) {
             final long[] micros = page.columns[timestampColumn].longs;
-            for (int i = 0; i < page.size; i++) {
-                buckets.longs[i] = micros[i] == Vector.NULL_LONG
-                        ? Vector.NULL_LONG
-                        : AggBuckets.floor(micros[i], count, unit);
+            if (strideMicros > 0) {
+                for (int i = 0; i < page.size; i++) {
+                    final long ts = micros[i];
+                    if (ts == Vector.NULL_LONG) {
+                        buckets.longs[i] = Vector.NULL_LONG;
+                    } else {
+                        if (ts < bucketStart || ts >= bucketEnd) {
+                            bucketStart = Math.floorDiv(ts, strideMicros) * strideMicros;
+                            // a floor below Long.MIN_VALUE wraps above ts, and an end past Long.MAX_VALUE wraps
+                            // below the start: either leaves an empty range, so those rows floor again
+                            bucketEnd = bucketStart > ts ? bucketStart : bucketStart + strideMicros;
+                        }
+                        buckets.longs[i] = bucketStart;
+                    }
+                }
+            } else {
+                for (int i = 0; i < page.size; i++) {
+                    buckets.longs[i] = micros[i] == Vector.NULL_LONG
+                            ? Vector.NULL_LONG
+                            : AggBuckets.floor(micros[i], count, unit);
+                }
             }
             for (int k = 0; k < keyFns.length; k++) {
                 keyVectors[k] = keyFns[k].eval(page);
                 keysWithBucket[k + 1] = keyVectors[k];
             }
             table.add(page, keysWithBucket);
+            if (fill == null) {
+                // the key numbering only lays out a FILL
+                continue;
+            }
             for (int i = 0; i < page.size; i++) {
                 if (buckets.longs[i] != Vector.NULL_LONG) {
                     final int group = table.groupOfRow(i);

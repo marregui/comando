@@ -11,6 +11,7 @@ import dev.marregui.comando.cdb.exec.Vector;
  */
 final class DoublePercentileAccumulator implements Accumulator {
 
+
     private final double fraction;
     private int[] sizes = new int[16];
     private double[][] values = new double[16][];
@@ -38,6 +39,19 @@ final class DoublePercentileAccumulator implements Accumulator {
     }
 
     @Override
+    public void addRange(final int group, final Vector value, final int from, final int to) {
+        final double[] list = reserve(group, to - from);
+        final double[] in = value.doubles;
+        int size = sizes[group];
+        for (int i = from; i < to; i++) {
+            if (!Double.isNaN(in[i])) {
+                list[size++] = in[i];
+            }
+        }
+        sizes[group] = size;
+    }
+
+    @Override
     public void ensure(final int groups) {
         if (groups > sizes.length) {
             final int capacity = Values.grownCapacity(sizes.length, groups);
@@ -53,20 +67,18 @@ final class DoublePercentileAccumulator implements Accumulator {
             Aggregates.writeDouble(Double.NaN, out, row);
             return;
         }
-        final double[] sorted = Arrays.copyOf(values[group], n);
-        Arrays.sort(sorted);
-        Aggregates.writeDouble(sorted[LongPercentileAccumulator.rank(fraction, n) - 1], out, row);
+        Aggregates.writeDouble(Select.kthDouble(values[group], n, LongPercentileAccumulator.rank(fraction, n) - 1),
+                out, row);
     }
 
     private void append(final int group, final double v) {
-        double[] list = values[group];
-        if (list == null) {
-            list = new double[8];
-            values[group] = list;
-        } else if (sizes[group] == list.length) {
-            list = Arrays.copyOf(list, Values.grownCapacity(list.length, list.length + 1));
-            values[group] = list;
-        }
-        list[sizes[group]++] = v;
+        reserve(group, 1)[sizes[group]++] = v;
+    }
+
+    /** The list of {@code group}, with room for {@code extra} more values. */
+    private double[] reserve(final int group, final int extra) {
+        final double[] list = Values.room(values[group], sizes[group] + extra);
+        values[group] = list;
+        return list;
     }
 }

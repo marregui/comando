@@ -29,8 +29,9 @@ final class Pruning {
             final Long lo = fold(args.get(1), nowMicros);
             final Long hi = fold(args.get(2), nowMicros);
             if (isColumn(args.getFirst(), ts) && lo != null && hi != null) {
-                lower(range, lo);
-                upper(range, hi + 1);
+                // BETWEEN swaps reversed bounds, so the range is from the smaller to the larger
+                lower(range, Math.min(lo, hi));
+                upper(range, after(Math.max(lo, hi)));
             }
             return;
         }
@@ -51,17 +52,22 @@ final class Pruning {
             case ">" -> lower(range, value + 1);
             case ">=" -> lower(range, value);
             case "<" -> upper(range, value);
-            case "<=" -> upper(range, value + 1);
+            case "<=" -> upper(range, after(value));
             case "=" -> {
                 lower(range, value);
-                upper(range, value + 1);
+                upper(range, after(value));
             }
             default -> {
             }
         }
     }
 
-    private static String flip(final String op) {
+    /** The exclusive upper bound just past {@code value}; {@link Long#MAX_VALUE}, the open end, stays. */
+    private static long after(final long value) {
+        return value == Long.MAX_VALUE ? value : value + 1;
+    }
+
+    static String flip(final String op) {
         return switch (op) {
             case ">" -> "<";
             case ">=" -> "<=";
@@ -79,12 +85,12 @@ final class Pruning {
         range[1] = Math.min(range[1], value);
     }
 
-    private static boolean isColumn(final Bound b, final int ts) {
+    static boolean isColumn(final Bound b, final int ts) {
         return b instanceof Bound.Column(final int index, final CdbType _) && index == ts;
     }
 
     /** The microseconds {@code b} stands for when it is known at plan time, else null. */
-    private static Long fold(final Bound b, final long nowMicros) {
+    static Long fold(final Bound b, final long nowMicros) {
         return switch (b) {
             case Bound.Constant(final Object value, final CdbType type)
                     when value instanceof final Long l && (type == CdbType.TIMESTAMP || type == CdbType.LONG) -> l;

@@ -59,6 +59,16 @@ final class AggKeys {
         return group;
     }
 
+    /** True when rows {@code a} and {@code b} of {@code keys} hold the same key tuple, so they share a group. */
+    boolean sameRows(final Vector[] keys, final int a, final int b) {
+        for (int k = 0; k < columns.length; k++) {
+            if (!Values.equal(keys[k], a, b)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     int size() {
         return size;
     }
