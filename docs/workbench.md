@@ -853,7 +853,8 @@ replaces the text.
   changes instead and leaves the row open or closed as it was; on a subfolder it does nothing more than its first
   click ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). A text file of at most 2 MB opens in
   a panel bound to it; a larger one (to 4 MB) or a binary one shows in the side pane. Opening a folder opens no file;
-  the first time, its newest date-named folder opens too.
+  the first time, its newest date-named folder opens too. A group's row (KIT, BRAIN, SCRATCHPAD) titles its folders, so
+  it is open when the tab first shows and each time the tab shows again; closed by a click, it stays closed until then.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
   changed. A folder row's: Open ‹index file›. A top-level row's only: Show changes in it (off, as No changes in it, when
   it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's,

@@ -63,6 +63,7 @@ class FilesTabGroupsTest {
         final FilesTab tab = new FilesTab(intents::add, p -> { }, p -> { }, (parent, text, title, options) -> 1);
         tab.render(AppState.initial(List.of(new PanelState(new PanelId("p"), "scratch", "", "")), List.of(), List.of(),
                 List.of(SCRATCHPAD, KB, MEMORY, KIT)));
+        tab.showing();
         tab.onFolderMenu((f, menu) -> {
             extras.add(f.name());
             menu.add(new JMenuItem("backup " + f.name()));
@@ -82,19 +83,20 @@ class FilesTabGroupsTest {
             final FilesTab t = new FilesTab(intents::add, shelf, watch.part(), _ -> { }, _ -> { }, (_, _, _, _) -> 1);
             t.render(AppState.initial(List.of(new PanelState(new PanelId("p"), "scratch", "", "")), List.of(),
                     List.of(), List.of(SCRATCHPAD, KB, MEMORY, KIT)));
+            t.showing();
             tabs.add(t);
         }
         final JTree kit = tabs.get(0).tree().tree();
         final JTree brain = tabs.get(1).tree().tree();
         final JTree pad = tabs.get(2).tree().tree();
-        assertThat(rows(kit)).containsExactly("KIT");
-        brain.expandRow(0);
+        assertThat(rows(kit)).as("a group's row open from the start").containsExactly("KIT", FilesTab.READING);
         assertThat(rows(brain)).as("the brain without its scratchpad").containsExactly("BRAIN", "KB", "Memory");
-        assertThat(rows(pad)).as("a row of its own, named as KIT and BRAIN are").containsExactly("SCRATCHPAD");
+        assertThat(rows(pad)).as("a row of its own, named as KIT and BRAIN are")
+                .containsExactly("SCRATCHPAD", FilesTab.READING);
 
         intents.clear();
+        kit.collapseRow(0);
         brain.expandRow(row(brain, "Memory"));
-        pad.expandRow(0);
         assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "Scratchpad"),
                 Map.of("Memory", List.of(), "Scratchpad", List.of())));
         tabs.get(1).attention(false);
@@ -161,10 +163,11 @@ class FilesTabGroupsTest {
         assertThat(FolderRoot.groupRoots(List.of(SCRATCHPAD, KB, MEMORY, KIT))).containsExactly(BRAIN);
         final FilesTab tab = tab();
         final JTree tree = tab.tree().tree();
-        assertThat(rows(tree)).containsExactly("BRAIN", "KIT");
+        assertThat(rows(tree)).as("each group's row open")
+                .containsExactly("BRAIN", "Scratchpad", "KB", "Memory", "KIT", FilesTab.READING);
 
         intents.clear();
-        tree.expandRow(0);
+        tree.collapseRow(row(tree, "KIT"));
         assertThat(rows(tree)).containsExactly("BRAIN", "Scratchpad", "KB", "Memory", "KIT");
         assertThat(intents).as("BRAIN itself is not read")
                 .noneMatch(i -> i instanceof Intent.WatchFolders w && w.names().contains("BRAIN"));
@@ -232,6 +235,36 @@ class FilesTabGroupsTest {
         assertThat(detail(tree, "KIT")).isEqualTo("c312e98");
     }
 
+    /// A group's row stays closed in a tab never shown, so none of its folders is read; it is open once the tab shows
+    /// and each time the tab shows again: closed by the user, it stays closed through the folders' reads until the tab
+    /// shows again, and opening it watches its folder as a click would.
+    @Test
+    void aGroupsRowOpensEachTimeTheTabShows() {
+        final FilesTab unseen = new FilesTab(intents::add, p -> { }, p -> { }, (parent, text, title, options) -> 1);
+        unseen.render(AppState.initial(List.of(new PanelState(new PanelId("p"), "scratch", "", "")), List.of(), List.of(),
+                List.of(SCRATCHPAD, KB, MEMORY, KIT)));
+        assertThat(rows(unseen.tree().tree())).as("a tab never shown").containsExactly("BRAIN", "KIT");
+        assertThat(intents).as("reads nothing").noneMatch(i -> i instanceof Intent.WatchFolders w && !w.names().isEmpty());
+
+        final FilesTab tab = tab();
+        final JTree tree = tab.tree().tree();
+        assertThat(tree.isExpanded(row(tree, "BRAIN"))).isTrue();
+        assertThat(tree.isExpanded(row(tree, "KIT"))).isTrue();
+        assertThat(intents).as("the kit's folder is read")
+                .anyMatch(i -> i instanceof Intent.WatchFolders w && w.names().contains("Kit"));
+
+        tree.collapseRow(row(tree, "KIT"));
+        tree.collapseRow(row(tree, "BRAIN"));
+        tab.show(KIT, folder("Kit", file("/k/CLAUDE.md")));
+        assertThat(rows(tree)).as("closed by the user, through a read").containsExactly("BRAIN", "KIT");
+
+        intents.clear();
+        tab.showing();
+        assertThat(rows(tree)).as("open again as the tab shows")
+                .containsExactly("BRAIN", "Scratchpad", "KB", "Memory", "KIT", "CLAUDE.md");
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Kit"), Map.of("Kit", List.of())));
+    }
+
     /// Revealing a file in a closed, unread folder inside BRAIN opens BRAIN and the folder, waits for its read, then
     /// opens the subfolder and selects the file; a file in no folder of the tab is said beside the tree.
     @Test
@@ -240,6 +273,8 @@ class FilesTabGroupsTest {
         final FilesTab tab = tab();
         tab.tell((owner, at, text) -> told.add(text));
         final JTree tree = tab.tree().tree();
+        tree.collapseRow(row(tree, "KIT"));
+        tree.collapseRow(0);
         tab.reveal(Path.of("/b/MEMORY/topic/notes.md"));
         assertThat(rows(tree)).as("opened as far as read").containsExactly("BRAIN", "Scratchpad", "KB", "Memory", FilesTab.READING, "KIT");
         assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory"), Map.of("Memory", List.of())));

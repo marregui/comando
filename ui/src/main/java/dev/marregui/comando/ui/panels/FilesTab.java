@@ -76,7 +76,9 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
  * three this component: the folders the tab takes of those the user configured ({@link FolderRoot}) as a navigator
  * of their folders and files. A folder in no group is a top-level row; a group is one top-level row, its name in
  * capitals (record 118): the folder itself for a group of one, such as KIT, else the folder holding the group's
- * folders, such as BRAIN, with only them inside it (record 152). A hairline parts
+ * folders, such as BRAIN, with only them inside it (record 152). A group's row is open when it first appears in a
+ * tab that has shown and each time the tab shows again: it titles its folders, so a row the user closes opens at the
+ * next showing. A hairline parts
  * one group's row from the next. A click selects; a double click (or Enter) opens a file in a panel, and a double
  * click opens or closes a folder; nothing opens a panel but a file asked for. Each kind of file has its icon, and a
  * folder's index file leads it,
@@ -190,6 +192,14 @@ final class FilesTab {
     private final Set<String> partlyRead = new HashSet<>();
     /** Folders whose newest day was opened, the first time their row was open with their tree read; never again. */
     private final Set<String> dayOpened = new HashSet<>();
+    /**
+     * The group rows (KIT, BRAIN, SCRATCHPAD) opened since the tab last showed, by folder name: a group's row is a
+     * title over its folders, so it opens when it first appears and each time the tab shows again; one the user
+     * closes stays closed until then.
+     */
+    private final Set<String> groupsOpened = new HashSet<>();
+    /** Whether the tab has shown: until then no group's row opens, so a tab never shown reads none of its folders. */
+    private boolean shown;
     /** Folders read for the filter and not yet arrived: each is asked for once, not at every keystroke. */
     private final Set<String> requested = new HashSet<>();
     /** The folders the filter's tree shows, so a read that adds one opens it there without resetting the others. */
@@ -351,9 +361,19 @@ final class FilesTab {
                     // the tab lives as long as the window: the listener is never removed
                     KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener("activeWindow", w -> attend());
                 }
+                if (body.isShowing()) {
+                    showing();
+                }
                 attend();
             }
         });
+    }
+
+    /** The tab shows again: every group's row opens, those the user closed included ({@link #groupsOpened}). */
+    void showing() {
+        shown = true;
+        groupsOpened.clear();
+        openGroups();
     }
 
     /** Follows whether the tab shows in an active comando window; see {@link #attended}. */
@@ -443,6 +463,7 @@ final class FilesTab {
         read.keySet().retainAll(keep);
         partlyRead.retainAll(keep);
         dayOpened.retainAll(keep);
+        groupsOpened.retainAll(keep);
         requested.retainAll(keep);
         rebuild();
         restoring = true;
@@ -931,6 +952,23 @@ final class FilesTab {
             }
         } finally {
             restoring = false;
+        }
+        if (shown) {
+            openGroups();
+        }
+    }
+
+    /**
+     * Opens each group's row not opened since the tab last showed ({@link #groupsOpened}), as the user would: its
+     * folder is watched and its newest day opened.
+     */
+    private void openGroups() {
+        final DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
+        for (int i = 0; i < root.getChildCount(); i++) {
+            final DefaultMutableTreeNode c = (DefaultMutableTreeNode) root.getChildAt(i);
+            if (isGroupRow(c) && rowFolder(c).filter(f -> groupsOpened.add(f.name())).isPresent()) {
+                tree.tree().expandPath(new TreePath(root).pathByAddingChild(c));
+            }
         }
     }
 

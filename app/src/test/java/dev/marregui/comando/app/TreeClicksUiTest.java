@@ -89,7 +89,8 @@ class TreeClicksUiTest {
 
     /// comando started on a temporary folder named as `CLAUDE_CONFIG_DIR` would name it puts the kit's Memory, KB and
     /// Skills folders, with the kit's groups, before the user's own, saves them, shows the Brain group as one BRAIN row
-    /// (record 118), and the status bar has no kit label (record 119); no `claude` runs.
+    /// (record 118), open each time the Brain tab comes to the front, and the status bar has no kit label (record 119);
+    /// no `claude` runs.
     @Test
     void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir final Path home) throws Exception {
         final Path root = home.resolve("comando-kit");
@@ -128,6 +129,14 @@ class TreeClicksUiTest {
             assertThat(rows("Kit")).as("in the Kit tab: the folders in no group; no Kit folder here")
                     .startsWith("Skills", "Notes").doesNotContain("BRAIN", "Memory", "KB");
             Awaitility.await("the Brain tab again").atMost(Duration.ofSeconds(10)).until(() -> front("Brain"));
+            assertThat(onEdt(() -> brainTree().isExpanded(0))).as("BRAIN open as the tab shows").isTrue();
+            onEdt(() -> {
+                brainTree().collapseRow(0);
+                return null;
+            });
+            assertThat(front("Kit") && front("Brain")).isTrue();
+            assertThat(onEdt(() -> brainTree().isExpanded(0))).as("closed, then open again once the tab shows again")
+                    .isTrue();
             assertThat(loop.state().folders()).extracting(FolderRoot::group).as("the kit's groups (record 98)")
                     .containsExactly("Brain", "Brain", "", "");
             paintSidebar();
@@ -169,6 +178,11 @@ class TreeClicksUiTest {
         final Path out = Path.of("build/snapshots/sidebar.png");
         Files.createDirectories(out.getParent());
         ImageIO.write(sheet, "png", out.toFile());
+    }
+
+    /** The Brain tab's tree while it shows. */
+    private static JTree brainTree() {
+        return first(JTree.class, t -> "Brain".equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
     }
 
     /** The top rows of folder tab {@code tab} while it shows, top first. */
