@@ -79,6 +79,19 @@ public final class McpTools {
     static final String APPROVE = "approve";
     private static final String BYPASS = "bypassPermissions";
     private static final String PLAN_MODE = "plan";
+    /**
+     * The tools whose card, in a session in bypass, is Claude Code's own check and never a rule the user set (record
+     * 164): the kit's ask rules name MCP tools (Slack and Gmail sends), whose cards still go to the user.
+     */
+    private static final Set<String> SELF_ALLOWED_TOOLS = Set.of("Bash", "Edit", "Write", "MultiEdit", "NotebookEdit");
+    /**
+     * {@code rm} or {@code rmdir} as a word anywhere in a command, a path to either included, {@code git rm} not: the
+     * Bash card of a session in bypass that still goes to the user (record 164), as a removal is the call that cannot
+     * be undone; the word inside a string matches too, which costs one card.
+     */
+    private static final Pattern REMOVES = Pattern.compile("(?<![\\w.-])(?<!\\bgit\\s)(?:\\S*/)?rm(?:dir)?(?![\\w.-])");
+    /** What the audit log says of a call comando allowed itself. */
+    static final String SELF_ALLOWED = "Allow[self: session in bypass]";
     static final int MAX_SQL_ROWS = 200;
     /**
      * The most rows one call returns, {@code db_run_sql}'s {@code max_rows} and {@code result_read}'s {@code limit}:
@@ -300,9 +313,37 @@ public final class McpTools {
             return Outcome.fail("approve takes {tool_name, input}");
         }
         final ApprovalKind kind = ApprovalKind.ofTool(tool);
+        if (allowsItself(session, kind, tool, input)) {
+            audit.record(session, "approval", tool, redacted(input), SELF_ALLOWED);
+            final String call = firstLine(Summaries.of(tool, input));
+            sink.dispatch(new Intent.Notify(Notice.Level.INFO, "Allowed for " + session + ": " + call, false));
+            return Outcome.ok(permissionResult(session, tool, (ObjectNode) input, ApprovalDecision.allowOnce()));
+        }
         final ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asString(""));
         audit.record(session, "approval", tool, redacted(input), decision.toString());
         return Outcome.ok(permissionResult(session, tool, (ObjectNode) input, decision));
+    }
+
+    /**
+     * Whether comando answers Claude Code's card itself, allowing the call once (record 164): a call of a file or
+     * shell tool from a session in bypass (the mode it reported, the kit's before it reported one), where a card is
+     * Claude Code's own check (a command its parser cannot read). An MCP tool, a question, a plan, a session in plan
+     * mode and a command that removes files still go to the user.
+     */
+    private boolean allowsItself(
+            final String session,
+            final ApprovalKind kind,
+            final String tool,
+            final JsonNode input
+    ) {
+        if (kind != ApprovalKind.TOOL || !SELF_ALLOWED_TOOLS.contains(tool)) {
+            return false;
+        }
+        final String reported = state.get().session(session).map(s -> s.info().permissionMode()).orElse("");
+        // unlike a plan's approval, a session in plan mode keeps its cards whatever the kit's mode
+        final String mode = reported.isEmpty() ? SessionKind.INSTANCE.defaults().permissionMode() : reported;
+        final boolean removes = "Bash".equals(tool) && REMOVES.matcher(input.path("command").asString("")).find();
+        return BYPASS.equals(mode) && !removes;
     }
 
     /** Puts a card in the inbox and waits for the user's answer, or denies at the deadline. */

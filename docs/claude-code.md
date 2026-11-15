@@ -396,8 +396,8 @@ sends for the same gesture:
 ### 4.1 Approval cards
 
 `--permission-prompt-tool mcp__comando__approve` makes Claude Code ask comando before each tool call its permission
-rules do not settle. Each request is a card in the Approvals tab; the MCP call waits on a future until the user
-answers.
+rules do not settle. Each request is a card in the Approvals tab, but those comando answers itself for a session in
+bypass (below); the MCP call waits on a future until the user answers.
 
 ![An approval: claude -p calls the approve tool on comando's MCP server with the tool's name, input and id; the server puts a card in the Approvals tab and waits on a future until the user answers, at most 24 hours; the answer goes back as allow or deny with the rules to add; the call and the decision go to the audit log](images/approval.svg)
 
@@ -408,6 +408,12 @@ answers.
 | plan | `ExitPlanMode` | Approve plan (⏎ or A), "Approve, auto-accept edits" (`setMode` `acceptEdits` for the session), Keep planning (D or Esc); in a session running in `bypassPermissions` (the mode it reported; before that, or while it reports `plan`, the kit's), both approvals send `setMode` `bypassPermissions`, since accept edits would ask for more |
 | SQL write | `db_run_sql`, not read-only | Run (⏎ or A), Deny (D or Esc); the card names the connection and statement |
 | connection | `connection_save` clearing `production` or lowering the TLS mode | Allow (⏎ or A), Deny (D or Esc), by the user only: `approval_answer` refuses it for every agent; the card names the connection, what would weaken, and the connection as it would be saved ([§4.2](#42-sql-from-claude)) |
+
+A session in bypass (the mode it reported; before it reports one, the kit's) gets no card for Bash, Edit, Write,
+MultiEdit or NotebookEdit: comando allows the call once, saves no rule, records `Allow[self: session in bypass]` in
+the audit log and names the call in an info notice. An MCP tool (the kit's ask rules name its Slack and Gmail sends),
+a question, a plan, a session that reported `plan`, comando's own cards and a Bash command holding `rm` or `rmdir` as a
+word keep their card ([record 164](adr/0164-comando-allows-claude-codes-own-cards-in-bypass.md)).
 
 "For session" and "Always" return an `addRules` update with destination `session` or `localSettings`. The rules follow
 how Claude Code matches them and never allow more than the command could do (`PermissionRules`):
