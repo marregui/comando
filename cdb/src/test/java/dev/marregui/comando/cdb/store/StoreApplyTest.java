@@ -80,6 +80,8 @@ class StoreApplyTest {
             }
             final List<String> old = read(store);
             assertThat(old).hasSize(3);
+            // the applier counts a batch after publishing it: the read can return before the last one is counted
+            assertEventually(() -> status(store).appliedTxns() == 3L, "the first commits counted");
             final WalStatus before = status(store);
             store.applierPaused = true;
             for (int i = 3; i < 13; i++) {
