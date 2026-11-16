@@ -269,9 +269,10 @@ public final class QueryPool implements AutoCloseable {
         private static final VarHandle NEXT;
         private static final VarHandle RUNNING;
         private static final VarHandle STATE = MethodHandles.arrayElementVarHandle(int[].class);
-        // how long the consumer parks before it looks at its cancel again: a frame's run checks the cancel at each
-        // page and its end wakes the consumer, so this bounds only a missed wake-up; not measured, a human's cancel
-        private static final long WAIT_NANOS = TimeUnit.MILLISECONDS.toNanos(100L);
+        // how long the consumer parks before it looks at its cancel again: a cancel wakes no one, so this bounds how
+        // late a waiting consumer sees it (the cancel's answer within 50 ms, ParallelLifecycleTest); a frame's end
+        // wakes the consumer at once, so the park costs a wake-up per 10 ms of a frame's run, not measured
+        private static final long WAIT_NANOS = TimeUnit.MILLISECONDS.toNanos(10L);
         // the frame of a failure of the consumer's own, its cancel or an interrupt: before every frame
         private static final int CONSUMER = -1;
 
