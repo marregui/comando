@@ -47,6 +47,10 @@ class FileReadRulesTest {
     // cdb's readers of its own mapped column files, which copy them in bulk; package-private, so named
     private static final String CDB_VERSION = "dev.marregui.comando.cdb.store.Version";
     private static final String CDB_TEXT_CACHE = "dev.marregui.comando.cdb.store.TextCache";
+    // a query vector's text, copied only from the slices Version hands it (record 167)
+    private static final String CDB_TEXT_COLUMN = "dev.marregui.comando.cdb.exec.TextColumn";
+    // a commit's rows in native memory of its own arena, never a mapping (record 167)
+    private static final String CDB_ROW_BLOCK = "dev.marregui.comando.cdb.store.RowBlock";
 
     /// No class hands a `File` to a JSON reader, or opens a channel on a file but the lock on the data root, the
     /// machine's QuestDB's start lock (record 146), and cdb's store, which owns its column files and depends on the JDK
@@ -67,7 +71,8 @@ class FileReadRulesTest {
     }
 
     /// Bytes leave a mapping through `Mapped` only, byte by byte: a compiled bulk copy that meets a cut file ends the
-    /// JVM. cdb's `Version` and `TextCache` are the departure: they copy only the store's own column files, through
+    /// JVM. cdb's `Version`, `TextCache` and `exec.TextColumn` (fed by `Version`) are the departure: they copy only the
+    /// store's own column files, through
     /// slices of exactly the committed bytes, and a partition's committed bytes never shrink (a store that opens cuts
     /// only the bytes past them, which a reader still holding a closed store's snapshot does not map), so no cut meets
     /// a slice.
@@ -75,6 +80,8 @@ class FileReadRulesTest {
     void noClassCopiesBytesOffASegmentInBulk() {
         noClasses().that().doNotHaveFullyQualifiedName(CDB_VERSION)
                 .and().doNotHaveFullyQualifiedName(CDB_TEXT_CACHE)
+                .and().doNotHaveFullyQualifiedName(CDB_TEXT_COLUMN)
+                .and().doNotHaveFullyQualifiedName(CDB_ROW_BLOCK)
                 .should().callMethodWhere(target(owner(assignableTo(MemorySegment.class)))
                 .and(target(name("toArray")).or(target(name("copy"))).or(target(name("asByteBuffer")))))
                 .check(ComandoClasses.MAIN);

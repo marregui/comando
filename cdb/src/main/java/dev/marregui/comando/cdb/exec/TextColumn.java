@@ -17,24 +17,31 @@ import java.util.Arrays;
  */
 final class TextColumn {
 
-    private static final int BYTES_PER_VALUE = 8; // sizing hint for the first allocation
+    private static final int MIN_BYTES = 64; // sizing hint for the first allocation
     private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8; // the largest array size every JVM allocates
     private static final byte[] NO_BYTES = {};
     private static final int NULL_LENGTH = -1;
 
-    private final int[] keys; // null for VARCHAR
-    private final int[] lengths;
-    private final int[] starts;
+    // a page is allocated for its full capacity and often holds a few rows: the per-value arrays start small and grow
+    // to the capacity as values are written; an index past them reads NULL
+    private static final int FIRST_VALUES = 16;
+
+    private final int capacity;
+    private int[] keys; // null for VARCHAR
+    private int[] lengths;
+    private int[] starts;
     private byte[] bytes = NO_BYTES;
     private SymbolDictionary dictionary;
     private int used;
 
     TextColumn(final int capacity, final boolean symbol) {
-        lengths = new int[capacity];
-        starts = new int[capacity];
+        this.capacity = capacity;
+        final int first = Math.min(capacity, FIRST_VALUES);
+        lengths = new int[first];
+        starts = new int[first];
         Arrays.fill(lengths, NULL_LENGTH);
         if (symbol) {
-            keys = new int[capacity];
+            keys = new int[first];
             Arrays.fill(keys, Vector.NO_KEY);
         } else {
             keys = null;
@@ -42,12 +49,13 @@ final class TextColumn {
     }
 
     int capacity() {
-        return lengths.length;
+        return capacity;
     }
 
     /** Copies value {@code from} of {@code source}, which may be this column, to index {@code to}. */
     void copy(final TextColumn source, final int from, final int to) {
         if (source == this) {
+            ensure(Math.max(from, to));
             starts[to] = starts[from];
             lengths[to] = lengths[from];
             if (keys != null) {
@@ -55,11 +63,11 @@ final class TextColumn {
             }
             return;
         }
-        final int length = source.lengths[from];
-        if (length == NULL_LENGTH) {
+        if (source.isNull(from)) {
             setNull(to);
             return;
         }
+        final int length = source.lengths[from];
         final int key = source.keyAt(from);
         if (key != Vector.NO_KEY) {
             setSymbol(to, source.dictionary, key);
@@ -75,6 +83,9 @@ final class TextColumn {
     /** Copies {@code n} values of {@code source} from {@code from} to {@code to}; ranges in one column may overlap. */
     void copy(final TextColumn source, final int from, final int to, final int n) {
         if (source == this) {
+            if (n > 0) {
+                ensure(Math.max(from, to) + n - 1);
+            }
             System.arraycopy(starts, from, starts, to, n);
             System.arraycopy(lengths, from, lengths, to, n);
             if (keys != null) {
@@ -89,6 +100,7 @@ final class TextColumn {
 
     /** Exchanges values {@code i} and {@code j}; their bytes stay where they are. */
     void swap(final int i, final int j) {
+        ensure(Math.max(i, j));
         final int start = starts[i];
         starts[i] = starts[j];
         starts[j] = start;
@@ -103,10 +115,11 @@ final class TextColumn {
     }
 
     boolean isNull(final int i) {
-        return lengths[i] == NULL_LENGTH;
+        return i >= lengths.length || lengths[i] == NULL_LENGTH;
     }
 
     void setNull(final int i) {
+        ensure(i);
         lengths[i] = NULL_LENGTH;
         if (keys != null) {
             keys[i] = Vector.NO_KEY;
@@ -120,6 +133,7 @@ final class TextColumn {
     void setSymbol(final int i, final SymbolDictionary symbols, final int key) {
         assert key >= 0 : "a dictionary key is never negative";
         if (keys != null && (dictionary == null || dictionary == symbols)) {
+            ensure(i);
             dictionary = symbols;
             keys[i] = key;
             starts[i] = 0;
@@ -162,10 +176,10 @@ final class TextColumn {
 
     /** Value {@code i} as a String, null when NULL; decodes, so call it at output. */
     String textAt(final int i) {
-        final int length = lengths[i];
-        if (length == NULL_LENGTH) {
+        if (isNull(i)) {
             return null;
         }
+        final int length = lengths[i];
         final int key = keyAt(i);
         if (key != Vector.NO_KEY) {
             return dictionary.valueOf(key);
@@ -440,7 +454,27 @@ final class TextColumn {
     }
 
     private int keyAt(final int i) {
-        return keys == null ? Vector.NO_KEY : keys[i];
+        return keys == null || i >= keys.length ? Vector.NO_KEY : keys[i];
+    }
+
+    // room in the per-value arrays for index i, which is below the capacity; new slots are NULL
+    private void ensure(final int i) {
+        final int had = lengths.length;
+        if (i < had) {
+            return;
+        }
+        if (i >= capacity) {
+            throw new ArrayIndexOutOfBoundsException("text index past the capacity [index=" + i + ", capacity="
+                    + capacity + ']');
+        }
+        final int size = (int) Math.min(capacity, Math.max(i + 1L, 2L * had));
+        lengths = Arrays.copyOf(lengths, size);
+        Arrays.fill(lengths, had, size, NULL_LENGTH);
+        starts = Arrays.copyOf(starts, size);
+        if (keys != null) {
+            keys = Arrays.copyOf(keys, size);
+            Arrays.fill(keys, had, size, Vector.NO_KEY);
+        }
     }
 
     /** Room for {@code needed} more bytes at the returned offset; a full array gives way to one of the live values. */
@@ -460,7 +494,8 @@ final class TextColumn {
                 throw new IllegalStateException(
                     "text column is full [needed=" + needed + ", live=" + live + ", max=" + MAX_ARRAY_SIZE + "]");
             }
-            final long doubled = Math.max((long) bytes.length << 1, (long) lengths.length * BYTES_PER_VALUE);
+            // the first array holds what is asked, at least MIN_BYTES: a page of a few rows keeps a small one
+            final long doubled = Math.max((long) bytes.length << 1, MIN_BYTES);
             final long size = target <= bytes.length >> 1 ? bytes.length : Math.max(doubled, target);
             compact((int) Math.min(size, MAX_ARRAY_SIZE));
         }

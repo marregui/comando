@@ -1,7 +1,6 @@
 package dev.marregui.comando.cdb.store;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -84,7 +83,7 @@ final class Mappings {
     // absent, unreadable or not a positive number: 0, no limit
     private static long readLimit(final Path limitFile) {
         try {
-            final long limit = Long.parseLong(Files.readString(limitFile).strip());
+            final long limit = Long.parseLong(StoreFiles.readText(limitFile).strip());
             return Math.max(0L, limit);
         } catch (final IOException | NumberFormatException _) {
             return 0L;
