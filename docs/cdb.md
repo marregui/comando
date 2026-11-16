@@ -200,11 +200,11 @@ from `/proc/sys/vm/max_map_count` (65,530 by default on Linux; macOS has none an
 logs one WARNING when the count passes 81 % of it, again only after it fell under 76 %.
 
 **Commit memory.** A commit's rows wait for the applier in a row block in native memory (`store.RowBlock`), its bytes
-taken from the current epoch of `store.BlockArenas`: one shared arena serves the blocks opened in 100 ms (or 16 MiB) and
-closes when its last block left, so 10 arena closes a second, each a handshake of every thread, plus one per 16 MiB of
-commits ([record 170](adr/0170-cdb-row-block-epochs.md)): the block that queued them is freed once the applier published
-them, a replay's blocks once the replay ends, the blocks never applied when their table closes. Each table log keeps one
-file channel for its forces, closed with the store.
+taken from the current epoch of `store.BlockArenas`: one shared arena serves the blocks opened in 100 ms (or 16 MiB),
+their segments cut from 1 MiB chunks and closes when its last block left, so 10 arena closes a second, each a handshake
+of every thread, plus one per 16 MiB of commits ([record 170](adr/0170-cdb-row-block-epochs.md)): the block that queued
+them is freed once the applier published them, a replay's blocks once the replay ends, the blocks never applied when
+their table closes. Each table log keeps one file channel for its forces, closed with the store.
 
 ## 3. Concurrency
 

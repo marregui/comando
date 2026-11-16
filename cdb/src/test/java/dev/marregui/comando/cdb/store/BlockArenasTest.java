@@ -23,10 +23,11 @@ class BlockArenasTest {
 
     private static final long SEED = Long.getLong("cdb.arena.seed", System.nanoTime());
     private static final long AGE = 100L;
-    private static final long BYTES = 1_024L;
+    private static final long BYTES = 16_384L;
+    private static final long CHUNK = 4_096L;
 
     private final AtomicLong now = new AtomicLong(1_000L);
-    private final BlockArenas arenas = new BlockArenas(AGE, BYTES, now::get);
+    private final BlockArenas arenas = new BlockArenas(AGE, BYTES, CHUNK, now::get);
 
     /// Blocks joined within one epoch share its arena: ten of them open one arena, and it stays open after they leave
     /// while the epoch is young, so a steady stream of commits reuses it instead of closing one arena per commit.
@@ -57,7 +58,7 @@ class BlockArenasTest {
         assertThat(second).isNotSameAs(first);
         assertThat(arenas.openArenas()).isEqualTo(2L);
         assertThat(held.get(ValueLayout.JAVA_LONG, 0L)).as("held across the rotation").isEqualTo(42L);
-        assertThat(arenas.heldBytes()).isEqualTo(Long.BYTES);
+        assertThat(arenas.heldBytes()).as("one chunk").isEqualTo(CHUNK);
         arenas.leave(first);
         assertThat(arenas.openArenas()).isEqualTo(1L);
         assertThat(held.scope().isAlive()).as("closed with its last block").isFalse();
@@ -77,6 +78,90 @@ class BlockArenasTest {
         arenas.leave(first);
         arenas.leave(second);
         assertThat(arenas.openArenas()).isEqualTo(1L);
+    }
+
+    /// Small segments are cut from one chunk, each aligned as asked and none overlapping the one before; a segment that
+    /// does not fit takes a fresh chunk; one over a quarter of a chunk is allocated alone, and the epoch counts the
+    /// chunks and the lone segments it holds. A slice reads zero until written.
+    @Test
+    void smallSegmentsAreCutFromChunksAndLargeOnesStandAlone() {
+        final BlockArenas.Epoch e = arenas.join();
+        final MemorySegment a = e.allocate(3L, 1L);
+        final MemorySegment b = e.allocate(Long.BYTES, Long.BYTES);
+        final MemorySegment c = e.allocate(Integer.BYTES, Integer.BYTES);
+        assertThat(e.bytes()).isEqualTo(CHUNK);
+        assertThat(b.address() % Long.BYTES).isZero();
+        assertThat(c.address() % Integer.BYTES).isZero();
+        assertThat(b.address()).isGreaterThanOrEqualTo(a.address() + a.byteSize());
+        assertThat(c.address()).isGreaterThanOrEqualTo(b.address() + b.byteSize());
+        assertThat(b.get(ValueLayout.JAVA_LONG, 0L)).isZero();
+        e.allocate(CHUNK / 4L, 1L);
+        e.allocate(CHUNK / 4L, 1L);
+        e.allocate(CHUNK / 4L, 1L);
+        assertThat(e.bytes()).as("three quarters more still fit").isEqualTo(CHUNK);
+        final MemorySegment next = e.allocate(CHUNK / 4L, 1L);
+        assertThat(e.bytes()).as("a fresh chunk").isEqualTo(2L * CHUNK);
+        next.set(ValueLayout.JAVA_BYTE, next.byteSize() - 1L, (byte) 7);
+        e.allocate(CHUNK / 4L + 1L, 1L);
+        assertThat(e.bytes()).as("alone").isEqualTo(2L * CHUNK + CHUNK / 4L + 1L);
+        arenas.leave(e);
+    }
+
+    /// Eight threads cut segments from one epoch's chunks at once, each filling its segment with its own pattern:
+    /// every segment still holds its own pattern after all wrote, so no two slices overlap.
+    @Test
+    void concurrentSlicesNeverOverlap() throws Exception {
+        System.out.println("concurrentSlicesNeverOverlap seed=" + SEED);
+        final int threads = 8;
+        final int each = 500;
+        final BlockArenas.Epoch e = arenas.join();
+        final CyclicBarrier start = new CyclicBarrier(threads + 1);
+        final CountDownLatch done = new CountDownLatch(threads);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+        final List<List<MemorySegment>> cut = new ArrayList<>();
+        final List<Thread> workers = new ArrayList<>();
+        for (int t = 0; t < threads; t++) {
+            final List<MemorySegment> mine = new ArrayList<>();
+            cut.add(mine);
+            final byte pattern = (byte) (t + 1);
+            final long seed = SEED + t;
+            workers.add(Thread.ofPlatform().name("block-arenas-test-slicer-" + t).start(() -> {
+                try {
+                    final Random random = new Random(seed);
+                    start.await(10, TimeUnit.SECONDS);
+                    for (int i = 0; i < each; i++) {
+                        final MemorySegment s = e.allocate(1L + random.nextInt((int) (CHUNK / 4L)), 1L);
+                        s.fill(pattern);
+                        mine.add(s);
+                    }
+                } catch (final Throwable ex) {
+                    failure.compareAndSet(null, ex);
+                } finally {
+                    done.countDown();
+                }
+            }));
+        }
+        start.await(10, TimeUnit.SECONDS);
+        assertThat(done.await(60, TimeUnit.SECONDS)).isTrue();
+        for (final Thread w : workers) {
+            w.join(TimeUnit.SECONDS.toMillis(10));
+        }
+        assertThat(failure.get()).as("seed %d", SEED).isNull();
+        long overwritten = 0L;
+        for (int t = 0; t < threads; t++) {
+            for (final MemorySegment s : cut.get(t)) {
+                for (long i = 0; i < s.byteSize(); i++) {
+                    if (s.get(ValueLayout.JAVA_BYTE, i) != (byte) (t + 1)) {
+                        overwritten++;
+                    }
+                }
+            }
+        }
+        assertThat(overwritten).as("bytes another slice wrote, seed %d", SEED).isZero();
+        arenas.leave(e);
+        now.addAndGet(AGE);
+        arenas.sweep();
+        assertThat(arenas.heldBytes()).isZero();
     }
 
     /// The last block leaving an epoch past its age closes it at once; an epoch whose last block left while young is
@@ -180,7 +265,7 @@ class BlockArenasTest {
         same.allocate(28L, 1L);
         arenas.leave(e);
         arenas.leave(same);
-        assertThat(arenas.heldBytes()).as("young: kept").isEqualTo(128L);
+        assertThat(arenas.heldBytes()).as("young: one chunk kept").isEqualTo(CHUNK);
         now.addAndGet(AGE);
         arenas.sweep();
         assertThat(arenas.heldBytes()).isZero();

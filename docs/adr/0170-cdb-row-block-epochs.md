@@ -18,9 +18,10 @@ timed out (time-correlated, causation unchecked). Creating an arena per block wa
 
 | Part | Rule |
 |---|---|
-| Epochs | `store.BlockArenas`: blocks join the current epoch, one `Arena.ofShared()` tagged as row blocks with its byte count; an epoch takes new blocks until it is 100 ms old or has handed out 16 MiB, then the next join starts a new one |
+| Epochs | `store.BlockArenas`: blocks join the current epoch, one `Arena.ofShared()` tagged as row blocks with its byte count; an epoch takes new blocks until it is 100 ms old or holds 16 MiB, then the next join starts a new one |
 | Close | an epoch's arena closes when it takes no more blocks and its last block left: at that leave, or by the applier's 10 s pass for an idle epoch past its age; so 10 shared-arena closes a second plus one per 16 MiB of commits, and none held while no commit comes |
 | Owners | unchanged from record 167: request threads fill a block, the applier closes it after publish, the replay in a `finally`, a table's close for blocks never applied; a block's close gives its bytes back to the epoch |
+| Chunks | an epoch cuts segments of up to 256 KiB from 1 MiB chunks it allocates (zeroed once), a larger one allocated alone; the epoch's bytes count whole chunks, so a small block holds a whole chunk and 16 MiB counts held memory. A commit-sized block's segments: 127 ns against 313 ns allocated one by one (a timing probe, median of 7 runs of 200,000 blocks, macOS, JDK 25) |
 | After close | a closed block points its columns at a one-byte segment of a closed shared arena, so a read or write throws (`IllegalStateException`, or `IndexOutOfBoundsException` past that byte) instead of reaching bytes still mapped in an open epoch |
 
 ## 3. Consequences
