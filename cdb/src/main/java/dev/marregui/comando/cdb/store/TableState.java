@@ -61,7 +61,8 @@ final class TableState {
     private volatile long appliedTxn;
     // written by the applier when it gives up on the table; read by commits and readers
     private volatile boolean suspended;
-    // written by the applier under applyLock, read by the status listing
+    // the last apply failure, written by the applier under applyLock and cleared by its next apply; read by the status
+    // listing
     private volatile String lastError;
     // the applier's, under applyLock; the status listing reads them racily
     private volatile long applies;
@@ -101,6 +102,9 @@ final class TableState {
     // written by the lease holder or the applier when a log force failed, or a checkpoint left its _txn in doubt; read
     // by commits; until reopen
     private volatile boolean poisoned;
+    // why the table was poisoned: written by the log forcer's thread on a failed timed force and by the applier under
+    // applyLock on a failed checkpoint, read by the status listing; never cleared, so an apply after it does not hide it
+    private volatile String poisonError;
 
     /** A commit answered from the log, not yet applied: its rows, when it was queued and its rows' heap estimate. */
     record Queued(long txn, RowBlock rows, long queuedNanos, long bytes) {
@@ -169,6 +173,12 @@ final class TableState {
     }
 
     void poison() {
+        poisoned = true;
+    }
+
+    /** Poisons the table and keeps {@code error} as its status's last error until reopen, whatever applies after. */
+    void poison(final String error) {
+        poisonError = error;
         poisoned = true;
     }
 
@@ -402,7 +412,8 @@ final class TableState {
                 TimeUnit.NANOSECONDS.toMillis(nowNanos - oldest),
                 TimeUnit.NANOSECONDS.toMillis(schedule.intervalNanos()),
                 applies, demandedApplies, appliedTxns, appliedRows, lastApplyMicros, applyMicros, checkpoints,
-                checkpointedSnapshot == null ? 0L : checkpointedSnapshot.txn(), wal.bytes(), memoryPressure, lastError);
+                checkpointedSnapshot == null ? 0L : checkpointedSnapshot.txn(), wal.bytes(), memoryPressure,
+                poisonError == null ? lastError : poisonError);
     }
 
     /** Records {@code versions}, written by a commit, for the next checkpoint to force; {@code fresh} if it made them. */

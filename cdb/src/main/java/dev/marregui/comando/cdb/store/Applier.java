@@ -404,14 +404,12 @@ final class Applier {
         }
         try {
             if (!Checkpoint.run(store, state, published)) {
-                state.poison();
-                state.failed("folder force failed in a checkpoint");
+                state.poison("folder force failed in a checkpoint");
                 LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force failed in a checkpoint,"
                         + " log kept [table=" + state.key + ", txn=" + published.txn() + ']');
             }
         } catch (final IOException | RuntimeException e) {
-            state.poison();
-            state.failed(e.getMessage());
+            state.poison(e.toString());
             LOG.log(System.Logger.Level.ERROR, "refuse further commits, cannot checkpoint table, log kept [table="
                     + state.key + ", txn=" + published.txn() + ']', e);
         }

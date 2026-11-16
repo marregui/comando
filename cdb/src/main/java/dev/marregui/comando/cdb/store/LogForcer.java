@@ -271,8 +271,7 @@ final class LogForcer implements AutoCloseable {
             forcedTxn = log.forcedTxn;
         }
         final TableState state = log.state;
-        state.poison();
-        state.failed("timed log force failed [cause=" + cause + ']');
+        state.poison("timed log force failed [cause=" + cause + ']');
         // the commits since the last force that held, or the checkpoint, whichever is later, up to the last answered
         final TableState.Snapshot named = state.checkpointed();
         final long fromTxn = Math.max(forcedTxn, named == null ? 0L : named.txn()) + 1L;
