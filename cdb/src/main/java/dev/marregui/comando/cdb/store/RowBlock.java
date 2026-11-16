@@ -12,17 +12,22 @@ import org.jetbrains.annotations.TestOnly;
 import dev.marregui.comando.cdb.CdbType;
 
 /**
- * Rows of one partition held in native memory by column while a commit merges them, NULL as in {@link CdbType};
- * {@link #size} rows are valid. The block owns one shared arena (filled on a request thread, written by the applier),
- * tagged with its table and counted in bytes, freed by {@link #close}; a read after the close throws
- * {@link IllegalStateException}. Fixed-width columns are one segment each; a text column (SYMBOL, VARCHAR) holds the
- * UTF-8 bytes of its values in one segment that grows by doubling, and per row their start, their byte length ({@code
- * -1} for NULL) and their UTF-16 length. Not safe for concurrent writes: one thread writes a block at a time.
+ * Rows of one partition held in native memory by column while a commit merges them, NULL as in {@link CdbType}; {@link
+ * #size} rows are valid. The block's memory comes from the epoch of {@link BlockArenas} it joined (filled on a request
+ * thread, written by the applier), tagged with its table and counted in bytes, and is given back by {@link #close},
+ * which also points every column at a one-byte segment of a closed arena, so a read or write after the close throws
+ * ({@link IllegalStateException}, or {@link IndexOutOfBoundsException} for an offset past that byte) rather than reach
+ * bytes given back, although the epoch's arena may still be open. Fixed-width columns are one segment each; a text
+ * column (SYMBOL, VARCHAR) holds the UTF-8 bytes of its values in one segment that grows by doubling, and per row their
+ * start, their byte length ({@code -1} for NULL) and their UTF-16 length. Not safe for concurrent writes: one thread
+ * writes a block at a time.
  */
 final class RowBlock implements AutoCloseable {
 
     // native bytes of every block not yet closed, across the process
     private static final AtomicLong LIVE_BYTES = new AtomicLong();
+    // a segment whose arena is closed: every access throws IllegalStateException, as the block's own arena's did
+    private static final MemorySegment CLOSED = closedSegment();
     private static final int NULL_LENGTH = -1;
     // the first text segment of a column, per row of capacity; grown by doubling from there
     private static final long TEXT_BYTES_PER_ROW = 8L;
@@ -30,7 +35,7 @@ final class RowBlock implements AutoCloseable {
     final CdbType[] types;
     int size;
     private final String tag;
-    private final Arena arena;
+    private final BlockArenas.Epoch epoch;
     // per column: the values of a fixed-width column, the UTF-8 bytes of a text column
     private final MemorySegment[] values;
     // per text column, per row: start in values (long), UTF-8 length (int), UTF-16 length (int)
@@ -59,7 +64,7 @@ final class RowBlock implements AutoCloseable {
         lengths = new MemorySegment[n];
         chars = new MemorySegment[n];
         used = new long[n];
-        arena = Arena.ofShared();
+        epoch = BlockArenas.shared().join();
         try {
             for (int c = 0; c < n; c++) {
                 final CdbType t = columns.get(c).type();
@@ -227,7 +232,12 @@ final class RowBlock implements AutoCloseable {
         closed = true;
         final long freed = bytes;
         bytes = 0L;
-        arena.close();
+        // detach, then give back: no column reaches the epoch's bytes once the block left it
+        detach(values);
+        detach(starts);
+        detach(lengths);
+        detach(chars);
+        BlockArenas.shared().leave(epoch);
         LIVE_BYTES.addAndGet(-freed);
     }
 
@@ -248,6 +258,10 @@ final class RowBlock implements AutoCloseable {
 
     // the start of length free bytes in text column c's segment, grown by doubling when they do not fit
     private long reserveText(final int c, final int length) {
+        if (closed) {
+            // the columns are detached, but a grow would take memory from an epoch the block left
+            throw new IllegalStateException("refuse a write to a closed row block [tag=" + tag + ']');
+        }
         final long start = used[c];
         final long need = start + length;
         final MemorySegment old = values[c];
@@ -262,8 +276,25 @@ final class RowBlock implements AutoCloseable {
         return start;
     }
 
+    // a shared arena, so an access from any thread throws IllegalStateException; a confined one would throw
+    // WrongThreadException on every thread but the one that loaded this class
+    private static MemorySegment closedSegment() {
+        final Arena arena = Arena.ofShared();
+        final MemorySegment segment = arena.allocate(1L);
+        arena.close();
+        return segment;
+    }
+
+    private static void detach(final MemorySegment[] segments) {
+        for (int c = 0; c < segments.length; c++) {
+            if (segments[c] != null) {
+                segments[c] = CLOSED;
+            }
+        }
+    }
+
     private MemorySegment allocate(final long byteSize, final long alignment) {
-        final MemorySegment segment = arena.allocate(byteSize, alignment);
+        final MemorySegment segment = epoch.allocate(byteSize, alignment);
         bytes += byteSize;
         LIVE_BYTES.addAndGet(byteSize);
         return segment;

@@ -198,10 +198,11 @@ final class Applier {
                 deadlineOf.remove(due.state());
                 turn(due.state());
             }
-            // idle versions' mappings released here, on the applier's own pass: unmapping a few files is short next to
-            // an apply, and the pass comes at least once a second
+            // idle versions' mappings and an idle row-block epoch released here, on the applier's own pass: unmapping
+            // a few files or closing one arena is short next to an apply, and the pass comes at least once a second
             if (!stopped && nowNanos - sweepDueNanos >= 0L) {
                 store.sweepIdle(nowNanos);
+                BlockArenas.shared().sweep();
                 sweepDueNanos = System.nanoTime() + Store.MAP_SWEEP_NANOS;
             }
             if (!signalled && !stopped) {

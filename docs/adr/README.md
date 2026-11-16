@@ -188,3 +188,4 @@ row and its record differ, or when a record has no row.
 | [165](0165-cdb-parallel-queries.md) | cdb runs a query's scan-based operators over frames on a shared pool, merged in frame order | 2026-11-16 | Miguel and Claude | accepted; built in task 166 |
 | [166](0166-cdb-timed-log-force.md) | cdb's timed log force: an opt-in bound on what a power cut loses, with a per-request durable flag | 2026-11-16 | Miguel and Claude | accepted; built in task 166 |
 | [167](0167-cdb-heap-reduction.md) | cdb holds less on the heap: text as bytes, symbols as keys, a late read for ORDER BY LIMIT, mappings made lazily and released, commit blocks off-heap, one channel per log | 2026-11-16 | Miguel and Claude | accepted; built in task 167 |
+| [170](0170-cdb-row-block-epochs.md) | cdb's row blocks share an arena per 100 ms epoch instead of a shared arena each | 2026-11-16 | Miguel and Claude | accepted; built in task 170 |

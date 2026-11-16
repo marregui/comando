@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.store;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -140,18 +141,62 @@ class RowBlockTest {
         assertThat(RowBlock.liveBytes()).isEqualTo(before);
     }
 
-    /// Every read and write after close throws IllegalStateException instead of touching freed memory.
+    /// Every read and write after close throws instead of reaching the bytes the block gave back to its epoch, whose
+    /// arena may still be open: the columns point at a segment of a closed arena (`IllegalStateException`, or
+    /// `IndexOutOfBoundsException` for an offset past its one byte), and a text write is refused before it grows.
     @Test
     void readAfterCloseThrows() {
         final RowBlock block = new RowBlock("t", COLUMNS, 4);
         block.setLong(N, 0, 1L);
         block.setText(V, 0, "kept");
         block.close();
-        assertThatThrownBy(() -> block.getLong(N, 0)).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> block.getDouble(D, 0)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> block.getLong(N, 0)).isInstanceOfAny(IllegalStateException.class,
+                IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> block.getDouble(D, 0)).isInstanceOfAny(IllegalStateException.class,
+                IndexOutOfBoundsException.class);
         assertThatThrownBy(() -> block.getBoolean(B, 0)).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> block.textAt(V, 0)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> block.textAt(V, 0)).isInstanceOfAny(IllegalStateException.class,
+                IndexOutOfBoundsException.class);
         assertThatThrownBy(() -> block.setText(V, 1, "late")).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> block.setLong(N, 1, 2L)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> block.setText(V, 1, null)).isInstanceOfAny(IllegalStateException.class,
+                IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> block.setLong(N, 1, 2L)).isInstanceOfAny(IllegalStateException.class,
+                IndexOutOfBoundsException.class);
+    }
+
+    /// A read after close throws `IllegalStateException` on a thread other than the one that loaded the class too:
+    /// the closed segment's arena is shared, not confined.
+    @Test
+    void readAfterCloseThrowsOnAnyThread() throws InterruptedException {
+        final RowBlock block = new RowBlock("t", COLUMNS, 4);
+        block.close();
+        final AtomicReference<Throwable> thrown = new AtomicReference<>();
+        final Thread reader = Thread.ofPlatform().name("row-block-test-reader").start(() -> {
+            try {
+                block.getBoolean(B, 0);
+            } catch (final Throwable e) {
+                thrown.set(e);
+            }
+        });
+        reader.join(10_000L);
+        assertThat(thrown.get()).isInstanceOf(IllegalStateException.class);
+    }
+
+    /// A block open across an epoch's rotation keeps its values while blocks opened after it come and go.
+    @Test
+    void aBlockKeepsItsValuesWhileOthersComeAndGo() throws InterruptedException {
+        try (RowBlock held = new RowBlock("t", COLUMNS, 2)) {
+            held.setLong(N, 0, 7L);
+            held.setText(V, 0, "held");
+            final long until = System.nanoTime() + 3L * BlockArenas.ROTATE_NANOS;
+            while (System.nanoTime() - until < 0L) {
+                try (RowBlock other = new RowBlock("t", COLUMNS, 2)) {
+                    other.setText(V, 0, "other");
+                }
+                Thread.sleep(5L);
+            }
+            assertThat(held.getLong(N, 0)).isEqualTo(7L);
+            assertThat(held.textAt(V, 0)).isEqualTo("held");
+        }
     }
 }
