@@ -13,6 +13,11 @@ import dev.marregui.comando.cdb.plan.Bound;
 /** Groups by key tuple and the accumulators of each aggregate per group, fed a page at a time. */
 final class AggTable {
 
+    // groups merged between two cancel checks, a power of two: on the 800,000-row GROUP BY of ParallelLifecycleTest
+    // (macOS, 2026-11-16) a frame's merge took up to 60 ms for its 5,000 groups of four aggregates, 12 us a group; 256
+    // groups are then at most 3 ms between checks, all of it in one aggregate
+    private static final int MERGE_CHECK_GROUPS = 256;
+
     // a page whose runs average fewer rows than this goes to the accumulators row by row: a call per accumulator and
     // run would cost more than the per-row loop it replaces (not measured)
     private static final int MIN_MEAN_RUN = 4;
@@ -120,15 +125,20 @@ final class AggTable {
      * Adds {@code partial}, a table of the same keys and aggregates over a later frame's rows: each of its groups is
      * merged into the group of the same keys, a group new here appended in {@code partial}'s first-seen order, so the
      * groups and their order are the serial table's. The empty group of a table without keys merges as any group.
-     * {@code partial} keeps its results and must not be this table.
+     * {@code partial} keeps its results and must not be this table. {@code ctx}'s cancel is checked every
+     * {@value #MERGE_CHECK_GROUPS} groups, of the keys and of each aggregate, so a cancel during a long merge is
+     * answered within it; a merge that throws leaves this table part merged, for the failed query to drop.
      */
-    void merge(final AggTable partial) {
+    void merge(final AggTable partial, final QueryContext ctx) {
         assert partial != this && partial.accumulators.length == accumulators.length
                 : "cannot merge a table of other aggregates";
         final int count = partial.keys.size();
         // the group here of each of the partial's, found or added in the partial's first-seen order
         final int[] into = new int[count];
         for (int g = 0; g < count; g++) {
+            if ((g & (MERGE_CHECK_GROUPS - 1)) == 0) {
+                ctx.check();
+            }
             into[g] = keys.groupOf(partial.keys, g);
         }
         final int groups = keys.size();
@@ -137,6 +147,9 @@ final class AggTable {
             final Accumulator from = partial.accumulators[a];
             accumulator.ensure(groups);
             for (int g = 0; g < count; g++) {
+                if ((g & (MERGE_CHECK_GROUPS - 1)) == 0) {
+                    ctx.check();
+                }
                 accumulator.merge(into[g], from, g);
             }
         }

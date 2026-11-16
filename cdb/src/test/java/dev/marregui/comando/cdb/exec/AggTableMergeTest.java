@@ -9,10 +9,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
+import dev.marregui.comando.cdb.CdbCancel;
+import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.plan.Bound;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// [AggTable#merge]: the rows cut into frames, one table per frame, the tables merged in frame order into an empty
 /// table or into the first frame's answer as one table fed every row: the same groups in the same order, the same keys
@@ -116,6 +119,19 @@ class AggTableMergeTest {
         }
     }
 
+    /// A merge over a cancelled query throws the query's "query cancelled" failure, at its first check.
+    @Test
+    void aCancelledMergeThrows() {
+        final int[] keySet = KEY_SETS[1];
+        final Input input = input(SHORT_ROWS, SHORT_LABELS);
+        final AggTable frame = table(input, keySet, 0, input.rows, false);
+        final AggTable merged = new AggTable(keyTypes(keySet), AGGS, 0);
+        final CdbCancel cancel = new CdbCancel();
+        cancel.cancel();
+        assertThatThrownBy(() -> merged.merge(frame, new QueryContext(cancel, QueryPool.shared())))
+                .isInstanceOf(CdbException.class).hasMessageContaining("query cancelled");
+    }
+
     // the frames [cuts[f], cuts[f + 1]) merged in frame order, against the serial table
     private void check(final Input input, final int[] keySet, final AggTable serial, final int[] cuts) {
         final List<AggTable> frames = new ArrayList<>();
@@ -130,7 +146,7 @@ class AggTableMergeTest {
             before.add(cells(frame, keySet));
         }
         for (int f = intoFirst ? 1 : 0; f < frames.size(); f++) {
-            merged.merge(frames.get(f));
+            merged.merge(frames.get(f), QueryContext.uncancellable());
         }
         if (keySet.length == 0) {
             merged.addEmptyGroup();

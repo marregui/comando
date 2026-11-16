@@ -162,7 +162,7 @@ final class GroupByCursor implements Cursor {
             for (int frame = 0; frame < job.frames(); frame++) {
                 final AggTable partial = job.await(frame);
                 if (partial.groups() > 0) {
-                    table.merge(partial);
+                    table.merge(partial, source.context());
                 }
             }
         }
