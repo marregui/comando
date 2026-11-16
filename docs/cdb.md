@@ -279,18 +279,18 @@ the Cosa comparison of 2026-11-15. The answers of every query are compared with 
 
 Parallel queries (record 165), 2026-11-16: the same 2 M rows loaded over ILP into a fresh store per jar, the jar before
 the record (comando `7619532d`) against the jar with it, a pool of 11 workers on the M2 Max's 12 cores, best of 7, client
-time. Every answer is the same but B's averages, which differ in the last digits (30 of 56 rows, at the 14th
-significant digit). On B the process used 19.7 ms of CPU per 7.6 ms query: at 31 frames and about 10 ms of serial
-work, the hand-offs and the merge cost about as much as the work they spread.
+time, two interleaved runs each. Every answer is the same but B's averages, which differ in the last digits (30 of 56
+rows, at the 14th significant digit). E reads the text column of every row the filter rejects: 42 % of its CPU is the
+text decode (`TextCache.text`, jfrq `hot`), which a late read of the columns not in the filter would save.
 
 | Query | before (ms) | after (ms) |
 |---|---|---|
-| A | 0.8 | 0.9 |
-| B | 10.1 | 8.7 |
-| C | 16.2 | 16.3 |
-| D | 57.3 | 36.6 |
-| E | 22.1 | 29.7 (slower; cause not yet measured: each frame keeps its own 500-row heap, then the runs merge) |
-| F | 14.1 | 10.0 |
+| A | 1.0 / 1.0 | 1.1 / 1.1 |
+| B | 13.1 / 11.7 | 3.2 / 3.8 |
+| C | 17.4 / 16.5 | 12.3 / 11.7 |
+| D | 58.6 / 57.7 | 12.6 / 9.0 |
+| E | 23.0 / 22.1 | 16.7 / 20.4 |
+| F | 14.4 / 14.0 | 3.3 / 3.2 |
 | load of the 2 M rows | 5.5 s | 5.4 s |
 
 The memory figure is with the JVM options the kit's `cdb-serve` and Cosa's cdb image use: G1 with two GC threads and

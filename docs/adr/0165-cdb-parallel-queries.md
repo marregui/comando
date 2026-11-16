@@ -35,9 +35,8 @@ operator over the cores; the same answer every run; one shared pool of cores −
   run gives the same bits.
 - A query's CPU can reach the pool's size: concurrent heavy queries share the pool, and the applier keeps its own
   thread.
-- Measured in task 166 (`docs/cdb.md` §4): on the 2 M-row bench, D 57 → 37 ms, F 14 → 10 ms, B 10 → 8.7 ms, A and C
-  unchanged, E 22 → 30 ms (cause not yet measured); at about 10 ms of serial work the hand-offs cost about as
-  much as the work they spread, so the gain grows with the rows a query reads.
+- Measured in task 166 (`docs/cdb.md` §4), 2 M-row bench, 11 workers: B 12 → 3.5 ms, D 58 → 11 ms, F 14 → 3.2 ms,
+  C 17 → 12 ms, E 22 → 18 ms, A unchanged at 1 ms.
 
 ## 4. Alternatives not taken
 

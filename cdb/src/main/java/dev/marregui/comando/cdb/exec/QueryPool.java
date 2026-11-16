@@ -184,7 +184,7 @@ public final class QueryPool implements AutoCloseable {
                     worker.start();
                 }
             }
-            jobs.removeIf(queued -> !queued.isClaimable());
+            jobs.removeIf(PoolJob::isSpent);
             if (jobs.size() >= MAX_JOBS) {
                 return;
             }
@@ -239,7 +239,10 @@ public final class QueryPool implements AutoCloseable {
                     if (job.isClaimable()) {
                         return job;
                     }
-                    it.remove();
+                    // a job held by its window stays queued: its consumer's next await lets the workers on
+                    if (job.isSpent()) {
+                        it.remove();
+                    }
                 }
                 available.awaitNanos(IDLE_WAIT_NANOS);
             }
@@ -413,7 +416,13 @@ public final class QueryPool implements AutoCloseable {
         // the pool's lock
         boolean isClaimable() {
             final int n = next;
-            return !closed && n < frames && n < awaited + window && n < stopAt();
+            return !isSpent() && n < awaited + window;
+        }
+
+        // no frame left for a worker, whatever the consumer awaits: closed, every frame claimed, or stopped by a failure
+        boolean isSpent() {
+            final int n = next;
+            return closed || n >= frames || n >= stopAt();
         }
 
         // runs a frame its caller entered and claimed; a failure, Error included, is kept and stops the job
