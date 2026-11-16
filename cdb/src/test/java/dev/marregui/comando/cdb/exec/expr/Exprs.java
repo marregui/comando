@@ -72,11 +72,11 @@ final class Exprs {
             return "null";
         }
         return switch (v.type) {
-            case LONG -> Long.toString(v.longs[i]);
-            case TIMESTAMP -> ISO.format(Instant.EPOCH.plus(v.longs[i], ChronoUnit.MICROS));
-            case DOUBLE -> Double.toString(v.doubles[i]);
-            case BOOLEAN -> Boolean.toString(v.booleans[i]);
-            case SYMBOL, VARCHAR -> v.texts[i];
+            case LONG -> Long.toString(v.getLong(i));
+            case TIMESTAMP -> ISO.format(Instant.EPOCH.plus(v.getLong(i), ChronoUnit.MICROS));
+            case DOUBLE -> Double.toString(v.getDouble(i));
+            case BOOLEAN -> Boolean.toString(v.getBoolean(i));
+            case SYMBOL, VARCHAR -> v.textAt(i);
         };
     }
 }

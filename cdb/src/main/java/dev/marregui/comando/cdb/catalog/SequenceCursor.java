@@ -6,6 +6,7 @@ import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Cursor;
 import dev.marregui.comando.cdb.exec.Field;
 import dev.marregui.comando.cdb.exec.Page;
+import dev.marregui.comando.cdb.exec.Vector;
 
 /** {@code long_sequence(n)}: the column {@code x}, 1 to n, a page at a time; nothing is held beyond the counters. */
 final class SequenceCursor implements Cursor {
@@ -31,9 +32,9 @@ final class SequenceCursor implements Cursor {
         }
         final int n = (int) Math.min(Page.CAPACITY, remaining);
         final Page page = Page.allocate(FIELDS);
-        final long[] x = page.columns[0].longs;
+        final Vector x = page.columns[0];
         for (int i = 0; i < n; i++) {
-            x[i] = value++;
+            x.setLong(i, value++);
         }
         page.size = n;
         remaining -= n;

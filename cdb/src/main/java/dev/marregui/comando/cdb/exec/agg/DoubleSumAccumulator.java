@@ -12,7 +12,7 @@ final class DoubleSumAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        final double v = value.doubles[row];
+        final double v = value.getDouble(row);
         if (!Double.isNaN(v)) {
             sums[group] += v;
             seen[group] = true;
@@ -21,9 +21,8 @@ final class DoubleSumAccumulator implements Accumulator {
 
     @Override
     public void addAll(final int[] groups, final Vector value, final int size) {
-        final double[] in = value.doubles;
         for (int i = 0; i < size; i++) {
-            final double v = in[i];
+            final double v = value.getDouble(i);
             if (!Double.isNaN(v)) {
                 sums[groups[i]] += v;
                 seen[groups[i]] = true;
@@ -33,12 +32,11 @@ final class DoubleSumAccumulator implements Accumulator {
 
     @Override
     public void addRange(final int group, final Vector value, final int from, final int to) {
-        final double[] in = value.doubles;
         // one addition per value in input order, as add makes them, so the sum rounds alike
         double sum = sums[group];
         boolean any = false;
         for (int i = from; i < to; i++) {
-            final double v = in[i];
+            final double v = value.getDouble(i);
             if (!Double.isNaN(v)) {
                 sum += v;
                 any = true;

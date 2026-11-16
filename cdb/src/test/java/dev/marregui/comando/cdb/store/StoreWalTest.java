@@ -152,7 +152,20 @@ class StoreWalTest {
                     assertThat(Files.size(root.resolve("subject").resolve(t).resolve(Wal.FILE)))
                             .as("seed=%d", seed).isGreaterThan(HEADER_BYTES);
                 }
-                copyTree(root.resolve("subject"), copy);
+                // every table's apply lock held for the copy, so no apply replaces a folder under it: a crash's files
+                // are one instant's
+                final List<TableState> held = new ArrayList<>();
+                try {
+                    for (final TableState state : subject.states()) {
+                        state.applyLock.lock();
+                        held.add(state);
+                    }
+                    copyTree(root.resolve("subject"), copy);
+                } finally {
+                    for (final TableState state : held) {
+                        state.applyLock.unlock();
+                    }
+                }
             } finally {
                 for (final TableWriter w : writers) {
                     w.close();

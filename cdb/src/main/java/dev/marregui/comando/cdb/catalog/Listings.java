@@ -397,16 +397,16 @@ final class Listings {
     private static long symbolCount(final TableReader reader, final int column) {
         final Set<String> values = new HashSet<>();
         boolean hasNull = false;
-        final String[] chunk = new String[Page.CAPACITY];
+        final Vector chunk = Vector.of(CdbType.SYMBOL, Page.CAPACITY);
         for (final PartitionReader partition : reader.partitions()) {
-            for (long from = 0; from < partition.rowCount(); from += chunk.length) {
-                final int n = (int) Math.min(chunk.length, partition.rowCount() - from);
-                partition.texts(column, from, n, chunk);
+            for (long from = 0; from < partition.rowCount(); from += Page.CAPACITY) {
+                final int n = (int) Math.min(Page.CAPACITY, partition.rowCount() - from);
+                partition.read(column, from, n, chunk, 0);
                 for (int i = 0; i < n; i++) {
-                    if (chunk[i] == null) {
+                    if (chunk.isNull(i)) {
                         hasNull = true;
                     } else {
-                        values.add(chunk[i]);
+                        values.add(chunk.textAt(i));
                     }
                 }
             }

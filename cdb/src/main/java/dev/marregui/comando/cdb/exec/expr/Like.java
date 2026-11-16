@@ -37,13 +37,13 @@ final class Like {
         }
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
-            final String[] texts = text.eval(page).texts;
-            final String[] rowPatterns = patterns == null ? null : patterns.eval(page).texts;
+            final Vector texts = text.eval(page);
+            final Vector rowPatterns = patterns == null ? null : patterns.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
                 if (rowPatterns != null) {
-                    pattern.of(rowPatterns[i], ignoreCase);
+                    pattern.of(rowPatterns.textAt(i), ignoreCase);
                 }
-                out.booleans[i] = texts[i] != null && pattern.matches(texts[i], ignoreCase);
+                out.setBoolean(i, !texts.isNull(i) && pattern.matches(texts.textAt(i), ignoreCase));
             }
             return out;
         }, CdbType.BOOLEAN, type);

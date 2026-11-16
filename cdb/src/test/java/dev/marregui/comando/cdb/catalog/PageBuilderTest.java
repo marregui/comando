@@ -42,7 +42,7 @@ class PageBuilderTest {
     void rowsBeyondOnePageSpillIntoTheNext() {
         final List<Page> pages = build(2500);
         assertThat(pages).extracting(p -> p.size).containsExactly(1024, 1024, 452);
-        assertThat(pages.get(1).columns[0].longs[0]).isEqualTo(1024);
-        assertThat(pages.get(2).columns[1].texts[451]).isEqualTo("r2499");
+        assertThat(pages.get(1).columns[0].getLong(0)).isEqualTo(1024);
+        assertThat(pages.get(2).columns[1].textAt(451)).isEqualTo("r2499");
     }
 }

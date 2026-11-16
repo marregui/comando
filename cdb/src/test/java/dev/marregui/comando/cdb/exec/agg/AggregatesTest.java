@@ -26,12 +26,12 @@ class AggregatesTest {
     void percentileEndsMatchQuestDb() {
         final Vector in = Vector.of(CdbType.LONG, 2500);
         for (int i = 0; i < 2500; i++) {
-            in.longs[i] = i + 1;
+            in.setLong(i, i + 1);
         }
-        assertThat(one(agg("approx_percentile", CdbType.DOUBLE, X, dbl(1.0)), in).doubles[0]).isEqualTo(2559.0);
-        assertThat(one(agg("approx_percentile", CdbType.DOUBLE, X, dbl(0.0)), in).doubles[0]).isEqualTo(1.0);
-        assertThat(one(agg("percentile_disc", CdbType.LONG, X, dbl(0.0)), in).longs[0]).isEqualTo(1L);
-        assertThat(one(agg("percentile_disc", CdbType.LONG, X, dbl(1.0)), in).longs[0]).isEqualTo(2500L);
+        assertThat(one(agg("approx_percentile", CdbType.DOUBLE, X, dbl(1.0)), in).getDouble(0)).isEqualTo(2559.0);
+        assertThat(one(agg("approx_percentile", CdbType.DOUBLE, X, dbl(0.0)), in).getDouble(0)).isEqualTo(1.0);
+        assertThat(one(agg("percentile_disc", CdbType.LONG, X, dbl(0.0)), in).getLong(0)).isEqualTo(1L);
+        assertThat(one(agg("percentile_disc", CdbType.LONG, X, dbl(1.0)), in).getLong(0)).isEqualTo(2500L);
     }
 
     /// QuestDB: `SELECT percentile_disc(x / 3.0, 0.5) FROM long_sequence(2500)`: a DOUBLE percentile is exact.
@@ -39,9 +39,9 @@ class AggregatesTest {
     void aDoublePercentileMatchesQuestDb() {
         final Vector in = Vector.of(CdbType.DOUBLE, 2500);
         for (int i = 0; i < 2500; i++) {
-            in.doubles[i] = (i + 1) / 3.0;
+            in.setDouble(i, (i + 1) / 3.0);
         }
-        assertThat(one(agg("percentile_disc", CdbType.DOUBLE, D, dbl(0.5)), in).doubles[0])
+        assertThat(one(agg("percentile_disc", CdbType.DOUBLE, D, dbl(0.5)), in).getDouble(0))
                 .isEqualTo(416.6666666666667);
     }
 
@@ -51,7 +51,7 @@ class AggregatesTest {
         final Accumulator sum = Aggregates.create(agg("sum", CdbType.LONG, X));
         final Vector in = Vector.of(CdbType.LONG, 6);
         for (int i = 0; i < 6; i++) {
-            in.longs[i] = i + 1;
+            in.setLong(i, i + 1);
         }
         sum.ensure(3);
         sum.addAll(new int[] {0, 1, 0, 1, 0, 1}, in, 6);
@@ -59,8 +59,8 @@ class AggregatesTest {
         for (int g = 0; g < 3; g++) {
             sum.write(g, out, g);
         }
-        assertThat(out.longs[0]).isEqualTo(9L);
-        assertThat(out.longs[1]).isEqualTo(12L);
+        assertThat(out.getLong(0)).isEqualTo(9L);
+        assertThat(out.getLong(1)).isEqualTo(12L);
         assertThat(out.isNull(2)).isTrue();
     }
 
@@ -80,7 +80,7 @@ class AggregatesTest {
     private static Vector one(final Bound.Agg agg, final Vector in) {
         final Accumulator accumulator = Aggregates.create(agg);
         accumulator.ensure(1);
-        final int size = in.longs != null ? in.longs.length : in.doubles.length;
+        final int size = in.capacity();
         for (int i = 0; i < size; i++) {
             accumulator.add(0, in, i);
         }

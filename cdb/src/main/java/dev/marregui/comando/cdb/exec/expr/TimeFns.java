@@ -25,17 +25,17 @@ final class TimeFns {
         final VectorFn timestamps = Cast.arg(args.get(2), CdbType.TIMESTAMP, nowMicros);
         final Vector out = Vector.of(CdbType.TIMESTAMP, Page.CAPACITY);
         return Cast.exact(page -> {
-            final long[] amount = amounts.eval(page).longs;
-            final long[] micros = timestamps.eval(page).longs;
+            final Vector amount = amounts.eval(page);
+            final Vector micros = timestamps.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                if (amount[i] == Vector.NULL_LONG || micros[i] == Vector.NULL_LONG) {
-                    out.longs[i] = Vector.NULL_LONG;
+                if (amount.getLong(i) == Vector.NULL_LONG || micros.getLong(i) == Vector.NULL_LONG) {
+                    out.setLong(i, Vector.NULL_LONG);
                 } else {
-                    out.longs[i] = switch (unit) {
-                        case 'y' -> Civil.addMonths(micros[i], amount[i] * 12);
-                        case 'M' -> Civil.addMonths(micros[i], amount[i]);
-                        default -> micros[i] + amount[i] * fixedMicros(unit);
-                    };
+                    out.setLong(i, switch (unit) {
+                        case 'y' -> Civil.addMonths(micros.getLong(i), amount.getLong(i) * 12);
+                        case 'M' -> Civil.addMonths(micros.getLong(i), amount.getLong(i));
+                        default -> micros.getLong(i) + amount.getLong(i) * fixedMicros(unit);
+                    });
                 }
             }
             return out;
@@ -48,17 +48,17 @@ final class TimeFns {
         final VectorFn right = Cast.arg(args.get(2), CdbType.TIMESTAMP, nowMicros);
         final Vector out = Vector.of(CdbType.LONG, Page.CAPACITY);
         return Cast.exact(page -> {
-            final long[] a = left.eval(page).longs;
-            final long[] b = right.eval(page).longs;
+            final Vector a = left.eval(page);
+            final Vector b = right.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                if (a[i] == Vector.NULL_LONG || b[i] == Vector.NULL_LONG) {
-                    out.longs[i] = Vector.NULL_LONG;
+                if (a.getLong(i) == Vector.NULL_LONG || b.getLong(i) == Vector.NULL_LONG) {
+                    out.setLong(i, Vector.NULL_LONG);
                 } else {
-                    out.longs[i] = switch (unit) {
-                        case 'y' -> Civil.monthsBetween(a[i], b[i]) / 12;
-                        case 'M' -> Civil.monthsBetween(a[i], b[i]);
-                        default -> Math.abs(a[i] - b[i]) / fixedMicros(unit);
-                    };
+                    out.setLong(i, switch (unit) {
+                        case 'y' -> Civil.monthsBetween(a.getLong(i), b.getLong(i)) / 12;
+                        case 'M' -> Civil.monthsBetween(a.getLong(i), b.getLong(i));
+                        default -> Math.abs(a.getLong(i) - b.getLong(i)) / fixedMicros(unit);
+                    });
                 }
             }
             return out;
@@ -94,11 +94,11 @@ final class TimeFns {
         final VectorFn timestamps = Cast.arg(arg, CdbType.TIMESTAMP, nowMicros);
         final Vector out = Vector.of(CdbType.LONG, Page.CAPACITY);
         return Cast.exact(page -> {
-            final long[] micros = timestamps.eval(page).longs;
+            final Vector micros = timestamps.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.longs[i] = micros[i] == Vector.NULL_LONG
+                out.setLong(i, micros.getLong(i) == Vector.NULL_LONG
                         ? Vector.NULL_LONG
-                        : Math.floorMod(micros[i], Civil.DAY_MICROS) / Civil.HOUR_MICROS;
+                        : Math.floorMod(micros.getLong(i), Civil.DAY_MICROS) / Civil.HOUR_MICROS);
             }
             return out;
         }, CdbType.LONG, type);
@@ -107,7 +107,7 @@ final class TimeFns {
     static VectorFn now(final CdbType type, final long nowMicros) {
         final Vector out = Vector.of(CdbType.TIMESTAMP, Page.CAPACITY);
         for (int i = 0; i < Page.CAPACITY; i++) {
-            out.longs[i] = nowMicros;
+            out.setLong(i, nowMicros);
         }
         return Cast.exact(_ -> out, CdbType.TIMESTAMP, type);
     }
@@ -115,18 +115,18 @@ final class TimeFns {
     private static VectorFn floor(final VectorFn timestamps, final char unit, final long stride, final CdbType type) {
         final Vector out = Vector.of(CdbType.TIMESTAMP, Page.CAPACITY);
         return Cast.exact(page -> {
-            final long[] micros = timestamps.eval(page).longs;
+            final Vector micros = timestamps.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                final long t = micros[i];
+                final long t = micros.getLong(i);
                 if (t == Vector.NULL_LONG) {
-                    out.longs[i] = Vector.NULL_LONG;
+                    out.setLong(i, Vector.NULL_LONG);
                 } else {
-                    out.longs[i] = switch (unit) {
+                    out.setLong(i, switch (unit) {
                         case 'M' -> Civil.floorMonths(t, stride);
                         case 'y' -> Civil.floorYears(t, stride);
                         case 'w' -> Civil.floorWeeks(t, stride);
                         default -> Civil.floorFixed(t, stride * fixedMicros(unit));
-                    };
+                    });
                 }
             }
             return out;

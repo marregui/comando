@@ -51,10 +51,10 @@ final class ParallelRows {
                     final Vector v = page.columns[c];
                     for (int i = 0; i < page.size; i++) {
                         switch (v.type) {
-                            case LONG, TIMESTAMP -> bits[c][at + i] = v.longs[i];
-                            case DOUBLE -> bits[c][at + i] = Double.doubleToRawLongBits(v.doubles[i]);
-                            case BOOLEAN -> bits[c][at + i] = v.booleans[i] ? 1L : 0L;
-                            case SYMBOL, VARCHAR -> texts[c][at + i] = v.texts[i];
+                            case LONG, TIMESTAMP -> bits[c][at + i] = v.getLong(i);
+                            case DOUBLE -> bits[c][at + i] = Double.doubleToRawLongBits(v.getDouble(i));
+                            case BOOLEAN -> bits[c][at + i] = v.getBoolean(i) ? 1L : 0L;
+                            case SYMBOL, VARCHAR -> texts[c][at + i] = v.textAt(i);
                         }
                     }
                 }

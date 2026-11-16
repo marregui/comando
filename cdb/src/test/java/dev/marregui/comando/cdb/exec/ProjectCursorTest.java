@@ -26,7 +26,7 @@ class ProjectCursorTest {
         return page -> {
             final Vector x = page.columns[0];
             for (int i = 0; i < page.size; i++) {
-                out.longs[i] = x.isNull(i) ? Vector.NULL_LONG : x.longs[i] * 10;
+                out.setLong(i, x.isNull(i) ? Vector.NULL_LONG : x.getLong(i) * 10);
             }
             return out;
         };

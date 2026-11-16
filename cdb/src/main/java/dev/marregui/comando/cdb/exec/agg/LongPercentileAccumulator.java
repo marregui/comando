@@ -28,7 +28,7 @@ final class LongPercentileAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        final long v = value.longs[row];
+        final long v = value.getLong(row);
         if (v != Vector.NULL_LONG) {
             append(group, v);
         }
@@ -36,10 +36,10 @@ final class LongPercentileAccumulator implements Accumulator {
 
     @Override
     public void addAll(final int[] groups, final Vector value, final int size) {
-        final long[] in = value.longs;
         for (int i = 0; i < size; i++) {
-            if (in[i] != Vector.NULL_LONG) {
-                append(groups[i], in[i]);
+            final long v = value.getLong(i);
+            if (v != Vector.NULL_LONG) {
+                append(groups[i], v);
             }
         }
     }
@@ -47,11 +47,11 @@ final class LongPercentileAccumulator implements Accumulator {
     @Override
     public void addRange(final int group, final Vector value, final int from, final int to) {
         final long[] list = reserve(group, to - from);
-        final long[] in = value.longs;
         int size = sizes[group];
         for (int i = from; i < to; i++) {
-            if (in[i] != Vector.NULL_LONG) {
-                list[size++] = in[i];
+            final long v = value.getLong(i);
+            if (v != Vector.NULL_LONG) {
+                list[size++] = v;
             }
         }
         sizes[group] = size;

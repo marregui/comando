@@ -154,7 +154,7 @@ class WalTimedTest {
         assertThat(wal.forcedSeq()).isEqualTo(3L);
         final List<Wal.Entry> entries = Wal.open(dir).scan(0L, DEF);
         assertThat(entries).extracting(Wal.Entry::txn).containsExactly(1L, 2L);
-        assertThat(entries.get(1).rows().longs[1][0]).isEqualTo(30L);
+        assertThat(entries.get(1).rows().getLong(1, 0)).isEqualTo(30L);
     }
 
     /// A failed force leaves the forced sequence where it was, wakes a waiter past it with "commit in doubt", and
@@ -326,7 +326,7 @@ class WalTimedTest {
         final Wal wal = Wal.open(dir);
         final List<Wal.Entry> entries = wal.scan(0L, DEF);
         assertThat(entries).extracting(Wal.Entry::txn).containsExactly(1L, 2L);
-        assertThat(entries.get(1).rows().longs[1]).startsWith(20L, 21L, 22L);
+        assertThat(longs(entries.get(1).rows(), 1, 3)).containsExactly(20L, 21L, 22L);
         assertThat(wal.bytes()).isEqualTo(size);
         wal.append(3L, false, null, rows(1, 30L));
         assertThat(version(file)).isEqualTo(FORMAT_1);
@@ -339,7 +339,7 @@ class WalTimedTest {
         wal.append(4L, false, null, rows(2, 40L));
         final List<Wal.Entry> after = Wal.open(dir).scan(3L, DEF);
         assertThat(after).extracting(Wal.Entry::txn).containsExactly(4L);
-        assertThat(after.getFirst().rows().longs[1]).startsWith(40L, 41L);
+        assertThat(longs(after.getFirst().rows(), 1, 2)).containsExactly(40L, 41L);
     }
 
     /// After a cut, a power cut can leave a frame of the previous generation past the new frames, whole and with
@@ -372,7 +372,7 @@ class WalTimedTest {
         Files.write(file, stale);
         final List<Wal.Entry> entries = Wal.open(dir).scan(2L, DEF);
         assertThat(entries).extracting(Wal.Entry::txn).containsExactly(3L);
-        assertThat(entries.getFirst().rows().longs[1]).startsWith(30L, 31L);
+        assertThat(longs(entries.getFirst().rows(), 1, 2)).containsExactly(30L, 31L);
         assertThat(Files.size(file)).isEqualTo(current.length);
     }
 
@@ -395,10 +395,19 @@ class WalTimedTest {
         final RowBlock rows = new RowBlock(DEF.columns(), n);
         rows.size = n;
         for (int r = 0; r < n; r++) {
-            rows.longs[0][r] = r;
-            rows.longs[1][r] = first + r;
+            rows.setLong(0, r, r);
+            rows.setLong(1, r, first + r);
         }
         return rows;
+    }
+
+    /// The first `n` values of LONG `column` of `rows`.
+    private static long[] longs(final RowBlock rows, final int column, final int n) {
+        final long[] values = new long[n];
+        for (int r = 0; r < n; r++) {
+            values[r] = rows.getLong(column, r);
+        }
+        return values;
     }
 
     /// The format 1 image of the format 2 log `image`: its 8-byte header, and each frame's CRC of the body alone.

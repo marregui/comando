@@ -37,12 +37,12 @@ final class Cast {
         return page -> {
             final Vector in = source.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                final String text = in.texts[i];
+                final String text = in.textAt(i);
                 final long micros = text == null ? Vector.NULL_LONG : Civil.parse(text);
                 if (text != null && micros == Vector.NULL_LONG) {
                     throw new CdbException("cannot read text as timestamp [text=" + text + ']', -1);
                 }
-                out.longs[i] = micros;
+                out.setLong(i, micros);
             }
             return out;
         };
@@ -75,27 +75,27 @@ final class Cast {
             switch (to) {
                 case LONG -> {
                     for (int i = 0; i < n; i++) {
-                        out.longs[i] = asLong(in, i, false);
+                        out.setLong(i, asLong(in, i, false));
                     }
                 }
                 case TIMESTAMP -> {
                     for (int i = 0; i < n; i++) {
-                        out.longs[i] = asLong(in, i, true);
+                        out.setLong(i, asLong(in, i, true));
                     }
                 }
                 case DOUBLE -> {
                     for (int i = 0; i < n; i++) {
-                        out.doubles[i] = asDouble(in, i);
+                        out.setDouble(i, asDouble(in, i));
                     }
                 }
                 case BOOLEAN -> {
                     for (int i = 0; i < n; i++) {
-                        out.booleans[i] = asBoolean(in, i);
+                        out.setBoolean(i, asBoolean(in, i));
                     }
                 }
                 case SYMBOL, VARCHAR -> {
                     for (int i = 0; i < n; i++) {
-                        out.texts[i] = asText(in, i, sink);
+                        out.setText(i, asText(in, i, sink));
                     }
                 }
             }
@@ -148,11 +148,11 @@ final class Cast {
 
     static long asLong(final Vector in, final int i, final boolean timestamp) {
         return switch (in.type) {
-            case LONG, TIMESTAMP -> in.longs[i];
-            case DOUBLE -> doubleToLong(in.doubles[i]);
-            case BOOLEAN -> in.booleans[i] ? 1 : 0;
+            case LONG, TIMESTAMP -> in.getLong(i);
+            case DOUBLE -> doubleToLong(in.getDouble(i));
+            case BOOLEAN -> in.getBoolean(i) ? 1 : 0;
             case SYMBOL, VARCHAR -> {
-                final String text = in.texts[i];
+                final String text = in.textAt(i);
                 if (text == null) {
                     yield Vector.NULL_LONG;
                 }
@@ -163,37 +163,37 @@ final class Cast {
 
     static double asDouble(final Vector in, final int i) {
         return switch (in.type) {
-            case LONG, TIMESTAMP -> in.longs[i] == Vector.NULL_LONG ? Double.NaN : in.longs[i];
-            case DOUBLE -> in.doubles[i];
-            case BOOLEAN -> in.booleans[i] ? 1 : 0;
-            case SYMBOL, VARCHAR -> parseDouble(in.texts[i]);
+            case LONG, TIMESTAMP -> in.getLong(i) == Vector.NULL_LONG ? Double.NaN : in.getLong(i);
+            case DOUBLE -> in.getDouble(i);
+            case BOOLEAN -> in.getBoolean(i) ? 1 : 0;
+            case SYMBOL, VARCHAR -> parseDouble(in.textAt(i));
         };
     }
 
     static boolean asBoolean(final Vector in, final int i) {
         return switch (in.type) {
-            case LONG, TIMESTAMP -> in.longs[i] != 0 && in.longs[i] != Vector.NULL_LONG;
-            case DOUBLE -> in.doubles[i] != 0 && !Double.isNaN(in.doubles[i]);
-            case BOOLEAN -> in.booleans[i];
-            case SYMBOL, VARCHAR -> "true".equalsIgnoreCase(in.texts[i]);
+            case LONG, TIMESTAMP -> in.getLong(i) != 0 && in.getLong(i) != Vector.NULL_LONG;
+            case DOUBLE -> in.getDouble(i) != 0 && !Double.isNaN(in.getDouble(i));
+            case BOOLEAN -> in.getBoolean(i);
+            case SYMBOL, VARCHAR -> "true".equalsIgnoreCase(in.textAt(i));
         };
     }
 
     /** Value {@code i} as text, NULL as null; {@code sink} is scratch space for timestamps. */
     static String asText(final Vector in, final int i, final StringBuilder sink) {
         return switch (in.type) {
-            case LONG -> in.longs[i] == Vector.NULL_LONG ? null : Long.toString(in.longs[i]);
+            case LONG -> in.getLong(i) == Vector.NULL_LONG ? null : Long.toString(in.getLong(i));
             case TIMESTAMP -> {
-                if (in.longs[i] == Vector.NULL_LONG) {
+                if (in.getLong(i) == Vector.NULL_LONG) {
                     yield null;
                 }
                 sink.setLength(0);
-                Civil.appendIso(sink, in.longs[i]);
+                Civil.appendIso(sink, in.getLong(i));
                 yield sink.toString();
             }
-            case DOUBLE -> Double.isNaN(in.doubles[i]) ? null : Double.toString(in.doubles[i]);
-            case BOOLEAN -> in.booleans[i] ? "true" : "false";
-            case SYMBOL, VARCHAR -> in.texts[i];
+            case DOUBLE -> Double.isNaN(in.getDouble(i)) ? null : Double.toString(in.getDouble(i));
+            case BOOLEAN -> in.getBoolean(i) ? "true" : "false";
+            case SYMBOL, VARCHAR -> in.textAt(i);
         };
     }
 
@@ -201,24 +201,24 @@ final class Cast {
     static void appendText(final StringBuilder sink, final Vector in, final int i) {
         switch (in.type) {
             case LONG -> {
-                if (in.longs[i] != Vector.NULL_LONG) {
-                    sink.append(in.longs[i]);
+                if (in.getLong(i) != Vector.NULL_LONG) {
+                    sink.append(in.getLong(i));
                 }
             }
             case TIMESTAMP -> {
-                if (in.longs[i] != Vector.NULL_LONG) {
-                    Civil.appendIso(sink, in.longs[i]);
+                if (in.getLong(i) != Vector.NULL_LONG) {
+                    Civil.appendIso(sink, in.getLong(i));
                 }
             }
             case DOUBLE -> {
-                if (!Double.isNaN(in.doubles[i])) {
-                    sink.append(in.doubles[i]);
+                if (!Double.isNaN(in.getDouble(i))) {
+                    sink.append(in.getDouble(i));
                 }
             }
-            case BOOLEAN -> sink.append(in.booleans[i]);
+            case BOOLEAN -> sink.append(in.getBoolean(i));
             case SYMBOL, VARCHAR -> {
-                if (in.texts[i] != null) {
-                    sink.append(in.texts[i]);
+                if (!in.isNull(i)) {
+                    sink.append(in.textAt(i));
                 }
             }
         }

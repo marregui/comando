@@ -22,7 +22,7 @@ final class DoublePercentileAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        final double v = value.doubles[row];
+        final double v = value.getDouble(row);
         if (!Double.isNaN(v)) {
             append(group, v);
         }
@@ -30,10 +30,10 @@ final class DoublePercentileAccumulator implements Accumulator {
 
     @Override
     public void addAll(final int[] groups, final Vector value, final int size) {
-        final double[] in = value.doubles;
         for (int i = 0; i < size; i++) {
-            if (!Double.isNaN(in[i])) {
-                append(groups[i], in[i]);
+            final double v = value.getDouble(i);
+            if (!Double.isNaN(v)) {
+                append(groups[i], v);
             }
         }
     }
@@ -41,11 +41,11 @@ final class DoublePercentileAccumulator implements Accumulator {
     @Override
     public void addRange(final int group, final Vector value, final int from, final int to) {
         final double[] list = reserve(group, to - from);
-        final double[] in = value.doubles;
         int size = sizes[group];
         for (int i = from; i < to; i++) {
-            if (!Double.isNaN(in[i])) {
-                list[size++] = in[i];
+            final double v = value.getDouble(i);
+            if (!Double.isNaN(v)) {
+                list[size++] = v;
             }
         }
         sizes[group] = size;

@@ -47,7 +47,7 @@ public final class InsertRunner {
                     Page page;
                     while ((page = cursor.next()) != null) {
                         for (int r = 0; r < page.size; r++) {
-                            writer.newRow(timestamp < 0 ? Vector.NULL_LONG : page.columns[timestamp].longs[r]);
+                            writer.newRow(timestamp < 0 ? Vector.NULL_LONG : page.columns[timestamp].getLong(r));
                             for (int i = 0; i < columns.length; i++) {
                                 if (i != timestamp) {
                                     UpdateRunner.put(writer, columns[i], fields.get(i).type(), page.columns[i], r);

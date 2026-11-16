@@ -39,6 +39,8 @@ final class TableState {
      * or checkpoints: the applier, a direct commit, the store's checkpoint and close. Taken before {@link #lock}.
      */
     final ReentrantLock applyLock = new ReentrantLock();
+    // the store's mappings, shared by every table's versions
+    final Mappings mappings;
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition writerFree = lock.newCondition();
@@ -122,12 +124,14 @@ final class TableState {
 
     /**
      * The table in {@code dir} of definition {@code def}, its log {@code wal}; {@code symbolBytes} holds per column the
-     * length its symbol file had at the last checkpoint, the file cut to it (-1, or past its end: taken as it is).
+     * length its symbol file had at the last checkpoint, the file cut to it (-1, or past its end: taken as it is);
+     * {@code mappings} is the store's.
      */
-    TableState(final Path dir, final TableDef def, final long[] symbolBytes, final Wal wal) {
+    TableState(final Path dir, final TableDef def, final long[] symbolBytes, final Wal wal, final Mappings mappings) {
         this.dir = dir;
         this.key = key(def.name());
         this.wal = wal;
+        this.mappings = mappings;
         final List<ColumnDef> columns = def.columns();
         for (int c = 0; c < columns.size(); c++) {
             addSymbols(columns.get(c), c < symbolBytes.length ? symbolBytes[c] : -1L);
@@ -519,6 +523,34 @@ final class TableState {
         }
     }
 
+    /**
+     * Releases the mappings of the committed snapshot's versions no read used for {@code idleNanos} before
+     * {@code nowNanos}; the next read maps them again. The versions are held meanwhile, so none is unmapped under the
+     * sweep. A closed table is skipped.
+     */
+    void releaseIdle(final long nowNanos, final long idleNanos) {
+        final Snapshot held;
+        lock.lock();
+        try {
+            if (current == null) {
+                return;
+            }
+            held = current;
+            for (final Version v : held.partitions()) {
+                hold(v);
+            }
+        } finally {
+            lock.unlock();
+        }
+        try {
+            for (final Version v : held.partitions()) {
+                v.releaseIfIdle(nowNanos, idleNanos);
+            }
+        } finally {
+            release(held);
+        }
+    }
+
     /** Lets go of a snapshot taken by {@link #acquire}; frees the versions nobody holds any more. */
     void release(final Snapshot snapshot) {
         final List<Version> unmap = new ArrayList<>();
@@ -653,17 +685,32 @@ final class TableState {
      */
     void close(final boolean leased) {
         final Snapshot last;
-        lock.lock();
+        final List<Queued> unapplied;
+        // the apply lock first (the lock order): an apply in progress, the applier's or a direct commit's, still
+        // copies queued blocks, so they are freed only once it ends
+        applyLock.lock();
         try {
-            last = current;
-            current = null;
-            applied.signalAll();
-            if (leased) {
-                writerOpen = false;
-                writerFree.signalAll();
+            lock.lock();
+            try {
+                last = current;
+                current = null;
+                applied.signalAll();
+                if (leased) {
+                    writerOpen = false;
+                    writerFree.signalAll();
+                }
+                // commits the applier never published (it stopped first, or the table was suspended): logged, so the
+                // next open replays them; their blocks are freed here, they have no other owner
+                unapplied = new ArrayList<>(queue);
+                queue.clear();
+            } finally {
+                lock.unlock();
+            }
+            for (final Queued q : unapplied) {
+                q.rows().close();
             }
         } finally {
-            lock.unlock();
+            applyLock.unlock();
         }
         if (last != null) {
             release(last);

@@ -3,16 +3,15 @@ package dev.marregui.comando.cdb.store;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
+import dev.marregui.comando.cdb.exec.Vector;
 
 /**
  * The writer of one table. Pending rows are held by column in a {@link RowBlock}. A commit appends them to the table's
@@ -31,6 +30,8 @@ final class DefaultWriter implements TableWriter {
 
     private static final System.Logger LOG = System.getLogger(DefaultWriter.class.getName());
     private static final int INITIAL_ROWS = 1024;
+    // rows a merge reads of a committed partition at a time
+    private static final int MERGE_CHUNK_ROWS = 1024;
 
     private final Store store;
     private final TableState state;
@@ -59,7 +60,7 @@ final class DefaultWriter implements TableWriter {
         this.replay = replay;
         this.committedDef = state.current().def();
         this.def = committedDef;
-        this.pending = new RowBlock(def.columns(), INITIAL_ROWS);
+        this.pending = new RowBlock(def.name(), def.columns(), INITIAL_ROWS);
         this.capacity = INITIAL_ROWS;
     }
 
@@ -77,7 +78,7 @@ final class DefaultWriter implements TableWriter {
                     -1);
         }
         def = def.withColumn(column);
-        pending = resize(pending, def.columns(), capacity, capacity);
+        replacePending(capacity);
         final int c = def.columns().size() - 1;
         fillNull(pending, c, 0, inRow ? pending.size + 1 : pending.size);
         // the applier reads the dictionaries of the columns before it
@@ -112,14 +113,13 @@ final class DefaultWriter implements TableWriter {
                 throw new CdbException("refuse pending rows over capacity [table=" + def.name() + ", rows=" + row + ']',
                         -1);
             }
-            pending = resize(pending, def.columns(), capacity, row * 2);
-            capacity = row * 2;
+            replacePending(row * 2);
         }
         for (int c = 0; c < pending.types.length; c++) {
             fillNull(pending, c, row, row + 1);
         }
         if (ts >= 0) {
-            pending.longs[ts][row] = micros;
+            pending.setLong(ts, row, micros);
         }
         inRow = true;
     }
@@ -127,25 +127,25 @@ final class DefaultWriter implements TableWriter {
     @Override
     public void putLong(final int column, final long value) {
         check(column, CdbType.LONG, CdbType.TIMESTAMP);
-        pending.longs[column][pending.size] = value;
+        pending.setLong(column, pending.size, value);
     }
 
     @Override
     public void putDouble(final int column, final double value) {
         check(column, CdbType.DOUBLE, CdbType.DOUBLE);
-        pending.doubles[column][pending.size] = value;
+        pending.setDouble(column, pending.size, value);
     }
 
     @Override
     public void putBoolean(final int column, final boolean value) {
         check(column, CdbType.BOOLEAN, CdbType.BOOLEAN);
-        pending.booleans[column][pending.size] = value;
+        pending.setBoolean(column, pending.size, value);
     }
 
     @Override
     public void putText(final int column, final String value) {
         check(column, CdbType.SYMBOL, CdbType.VARCHAR);
-        pending.texts[column][pending.size] = value;
+        pending.setText(column, pending.size, value);
     }
 
     @Override
@@ -217,22 +217,21 @@ final class DefaultWriter implements TableWriter {
         commit();
     }
 
-    /** Adds {@code rows}, in this writer's columns, after the pending rows: a queued commit of the applier's batch. */
+    /**
+     * Adds {@code rows}, in this writer's columns, after the pending rows: a queued commit of the applier's batch. The
+     * rows are copied: {@code rows} stays its caller's to close.
+     */
     void addRows(final RowBlock rows) {
         checkOpen();
         final int n = pending.size + rows.size;
         if (n > capacity) {
-            pending = resize(pending, def.columns(), capacity, Math.max(n, capacity * 2));
-            capacity = Math.max(n, capacity * 2);
-        }
-        for (int c = 0; c < pending.types.length; c++) {
-            switch (pending.types[c]) {
-                case LONG, TIMESTAMP -> System.arraycopy(rows.longs[c], 0, pending.longs[c], pending.size, rows.size);
-                case DOUBLE -> System.arraycopy(rows.doubles[c], 0, pending.doubles[c], pending.size, rows.size);
-                case BOOLEAN -> System.arraycopy(rows.booleans[c], 0, pending.booleans[c], pending.size, rows.size);
-                case SYMBOL, VARCHAR -> System.arraycopy(rows.texts[c], 0, pending.texts[c], pending.size, rows.size);
+            if (capacity > Integer.MAX_VALUE / 2) {
+                throw new CdbException("refuse pending rows over capacity [table=" + def.name() + ", rows=" + n + ']',
+                        -1);
             }
+            replacePending(Math.max(n, capacity * 2));
         }
+        pending.copyRows(rows, 0, pending.size, rows.size);
         pending.size = n;
     }
 
@@ -256,12 +255,17 @@ final class DefaultWriter implements TableWriter {
         }
         final int n = pending.size;
         final long bytes = heapBytes();
+        // the queue owns the copy once enqueued: the applier closes it once its batch is published
+        final RowBlock queued = resize(pending, def.columns(), capacity, n);
         try {
-            state.enqueue(new TableState.Queued(txn, resize(pending, def.columns(), capacity, n), System.nanoTime(),
-                    bytes));
+            state.enqueue(new TableState.Queued(txn, queued, System.nanoTime(), bytes));
         } catch (final CdbException refused) {
+            queued.close();
             retract(txn, refused);
             throw refused;
+        } catch (final RuntimeException | Error e) {
+            queued.close();
+            throw e;
         }
         pending.size = 0;
         ticket = answered;
@@ -305,9 +309,8 @@ final class DefaultWriter implements TableWriter {
                 continue;
             }
             long bytes = text[c] + queuedText;
-            final String[] texts = pending.texts[c];
             for (int r = 0; r < pending.size; r++) {
-                bytes += texts[r] == null ? 0L : 3L * texts[r].length();
+                bytes += 3L * pending.textChars(c, r);
             }
             if (bytes >= store.textLimitBytes) {
                 throw new CdbException("refuse commit over a partition's text capacity [table=" + def.name()
@@ -413,6 +416,7 @@ final class DefaultWriter implements TableWriter {
         try {
             discard();
         } finally {
+            pending.close();
             if (!replay) {
                 state.unlease();
             }
@@ -502,9 +506,8 @@ final class DefaultWriter implements TableWriter {
         for (int c = 0; c < pending.types.length; c++) {
             final CdbType type = pending.types[c];
             if (type == CdbType.SYMBOL || type == CdbType.VARCHAR) {
-                final String[] texts = pending.texts[c];
                 for (int r = 0; r < n; r++) {
-                    bytes += Integer.BYTES + (texts[r] == null ? 0L : 3L * texts[r].length());
+                    bytes += Integer.BYTES + 3L * pending.textChars(c, r);
                 }
             } else {
                 bytes += (long) n * (type == CdbType.BOOLEAN ? 1 : Long.BYTES);
@@ -523,9 +526,8 @@ final class DefaultWriter implements TableWriter {
         for (int c = 0; c < pending.types.length; c++) {
             final CdbType type = pending.types[c];
             if (type == CdbType.SYMBOL || type == CdbType.VARCHAR) {
-                final String[] texts = pending.texts[c];
                 for (int r = 0; r < n; r++) {
-                    bytes += Integer.BYTES + (texts[r] == null ? 0L : 48L + 2L * texts[r].length());
+                    bytes += Integer.BYTES + (pending.textLength(c, r) < 0 ? 0L : 48L + 2L * pending.textChars(c, r));
                 }
             } else {
                 bytes += (long) n * (type == CdbType.BOOLEAN ? 1 : Long.BYTES);
@@ -571,7 +573,7 @@ final class DefaultWriter implements TableWriter {
         final PartitionBy partitionBy = def.partitionBy();
         final long[] floors = new long[n];
         for (int r = 0; r < n; r++) {
-            floors[r] = ts < 0 ? Long.MIN_VALUE : Retention.floor(pending.longs[ts][r], partitionBy);
+            floors[r] = ts < 0 ? Long.MIN_VALUE : Retention.floor(pending.getLong(ts, r), partitionBy);
         }
         final int[] byFloor = Dedup.stableOrder(floors, n);
         final int[] keys = keyColumns();
@@ -589,25 +591,30 @@ final class DefaultWriter implements TableWriter {
                     break;
                 }
             }
-            final RowBlock rows = pendingRows(byFloor, from, to);
-            final int[] order = Dedup.order(rows, ts, keys);
             final Version v;
-            if (old != null && store.appendInPlace && appendable(old, rows, order[0], ts, keys.length)) {
-                append(old, rows, order);
-                v = Version.open(old.dir, def, old.rowCount() + order.length, state.symbols(), old.fileColumns);
-                appended.add(v);
-            } else {
-                final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));
-                if (old == null) {
-                    writeVersion(dir, rows, order);
-                    v = Version.open(dir, def, order.length, state.symbols());
+            try (final RowBlock rows = pendingRows(byFloor, from, to)) {
+                final int[] order = Dedup.order(rows, ts, keys);
+                if (old != null && store.appendInPlace && appendable(old, rows, order[0], ts, keys.length)) {
+                    append(old, rows, order);
+                    v = Version.open(old.dir, def, old.rowCount() + order.length, state.symbols(), old.fileColumns,
+                            state.mappings);
+                    appended.add(v);
                 } else {
-                    final RowBlock merged = merge(old, rows, order);
-                    final int[] mergedOrder = Dedup.mergeOrder(merged, ts, keys, (int) old.rowCount());
-                    writeVersion(dir, merged, mergedOrder);
-                    v = Version.open(dir, def, mergedOrder.length, state.symbols());
+                    final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));
+                    if (old == null) {
+                        writeVersion(dir, rows, order);
+                        v = Version.open(dir, def, order.length, state.symbols(), state.mappings);
+                    } else {
+                        final int mergedRows;
+                        try (final RowBlock merged = merge(old, rows, order)) {
+                            final int[] mergedOrder = Dedup.mergeOrder(merged, ts, keys, (int) old.rowCount());
+                            writeVersion(dir, merged, mergedOrder);
+                            mergedRows = mergedOrder.length;
+                        }
+                        v = Version.open(dir, def, mergedRows, state.symbols(), state.mappings);
+                    }
+                    written.add(v);
                 }
-                written.add(v);
             }
             if (old != null) {
                 next.remove(old);
@@ -651,17 +658,14 @@ final class DefaultWriter implements TableWriter {
     /** The pending rows {@code byFloor[from..to)}, in that order. */
     private RowBlock pendingRows(final int[] byFloor, final int from, final int to) {
         final int k = to - from;
-        final RowBlock rows = new RowBlock(def.columns(), k);
-        for (int c = 0; c < rows.types.length; c++) {
+        final RowBlock rows = new RowBlock(def.name(), def.columns(), k);
+        try {
             for (int i = 0; i < k; i++) {
-                final int r = byFloor[from + i];
-                switch (rows.types[c]) {
-                    case LONG, TIMESTAMP -> rows.longs[c][i] = pending.longs[c][r];
-                    case DOUBLE -> rows.doubles[c][i] = pending.doubles[c][r];
-                    case BOOLEAN -> rows.booleans[c][i] = pending.booleans[c][r];
-                    case SYMBOL, VARCHAR -> rows.texts[c][i] = pending.texts[c][r];
-                }
+                rows.copyRow(pending, byFloor[from + i], i);
             }
+        } catch (final RuntimeException | Error e) {
+            rows.close();
+            throw e;
         }
         rows.size = k;
         return rows;
@@ -689,7 +693,7 @@ final class DefaultWriter implements TableWriter {
         if (ts < 0) {
             return true;
         }
-        final long min = rows.longs[ts][first];
+        final long min = rows.getLong(ts, first);
         return min > old.maxTimestamp() || min == old.maxTimestamp() && keyCount == 0;
     }
 
@@ -709,7 +713,7 @@ final class DefaultWriter implements TableWriter {
             if (rows.types[c] == CdbType.VARCHAR) {
                 final Path indexFile = old.dir.resolve(columns.get(c).name() + ".i");
                 final long end = Version.decodeEnd(StoreFiles.readLong(indexFile, (committed - 1L) * Long.BYTES));
-                final Text text = varchar(data, rows.texts[c], order, end);
+                final Text text = varchar(data, rows, c, order, end);
                 StoreFiles.writeAt(data, end, text.bytes(), false);
                 StoreFiles.writeAt(indexFile, committed * Long.BYTES, text.ends(), false);
             } else {
@@ -727,26 +731,38 @@ final class DefaultWriter implements TableWriter {
                     + ']', -1);
         }
         final int base = (int) oldRows;
-        final RowBlock merged = new RowBlock(def.columns(), base + k);
-        for (int c = 0; c < merged.types.length; c++) {
-            switch (merged.types[c]) {
-                case LONG, TIMESTAMP -> old.longs(c, 0L, base, merged.longs[c]);
-                case DOUBLE -> old.doubles(c, 0L, base, merged.doubles[c]);
-                case BOOLEAN -> old.booleans(c, 0L, base, merged.booleans[c]);
-                case SYMBOL, VARCHAR -> old.texts(c, 0L, base, merged.texts[c]);
+        final RowBlock merged = new RowBlock(def.name(), def.columns(), base + k);
+        try {
+            for (int c = 0; c < merged.types.length; c++) {
+                readCommitted(old, c, base, merged);
             }
             for (int i = 0; i < k; i++) {
-                final int r = order[i];
-                switch (merged.types[c]) {
-                    case LONG, TIMESTAMP -> merged.longs[c][base + i] = rows.longs[c][r];
-                    case DOUBLE -> merged.doubles[c][base + i] = rows.doubles[c][r];
-                    case BOOLEAN -> merged.booleans[c][base + i] = rows.booleans[c][r];
-                    case SYMBOL, VARCHAR -> merged.texts[c][base + i] = rows.texts[c][r];
-                }
+                merged.copyRow(rows, order[i], base + i);
             }
+        } catch (final RuntimeException | Error e) {
+            merged.close();
+            throw e;
         }
         merged.size = base + k;
         return merged;
+    }
+
+    // the first n committed rows of column c of old into rows [0, n) of block, a chunk at a time
+    private static void readCommitted(final Version old, final int c, final int n, final RowBlock block) {
+        final CdbType type = block.types[c];
+        final Vector chunk = Vector.of(type, Math.min(n, MERGE_CHUNK_ROWS));
+        for (int at = 0; at < n; at += MERGE_CHUNK_ROWS) {
+            final int m = Math.min(MERGE_CHUNK_ROWS, n - at);
+            old.read(c, at, m, chunk, 0);
+            for (int i = 0; i < m; i++) {
+                switch (type) {
+                    case LONG, TIMESTAMP -> block.setLong(c, at + i, chunk.getLong(i));
+                    case DOUBLE -> block.setDouble(c, at + i, chunk.getDouble(i));
+                    case BOOLEAN -> block.setBoolean(c, at + i, chunk.getBoolean(i));
+                    case SYMBOL, VARCHAR -> block.setText(c, at + i, chunk.textAt(i));
+                }
+            }
+        }
     }
 
     /** Writes the rows {@code order} of {@code block} as the version folder {@code dir}, unforced, as {@link #append}. */
@@ -758,7 +774,7 @@ final class DefaultWriter implements TableWriter {
         for (int c = 0; c < columns.size(); c++) {
             final Path data = dir.resolve(columns.get(c).name() + ".d");
             if (block.types[c] == CdbType.VARCHAR) {
-                final Text text = varchar(data, block.texts[c], order, 0L);
+                final Text text = varchar(data, block, c, order, 0L);
                 StoreFiles.writeNew(dir.resolve(columns.get(c).name() + ".i"), text.ends(), false);
                 StoreFiles.writeNew(data, text.bytes(), false);
             } else {
@@ -775,23 +791,23 @@ final class DefaultWriter implements TableWriter {
         switch (block.types[c]) {
             case LONG, TIMESTAMP -> {
                 for (final int r : order) {
-                    buffer.putLong(block.longs[c][r]);
+                    buffer.putLong(block.getLong(c, r));
                 }
             }
             case DOUBLE -> {
                 for (final int r : order) {
-                    buffer.putDouble(block.doubles[c][r]);
+                    buffer.putDouble(block.getDouble(c, r));
                 }
             }
             case BOOLEAN -> {
                 for (final int r : order) {
-                    buffer.put(block.booleans[c][r] ? (byte) 1 : (byte) 0);
+                    buffer.put(block.getBoolean(c, r) ? (byte) 1 : (byte) 0);
                 }
             }
             case SYMBOL -> {
                 final SymbolTable symbols = state.symbols().get(c);
                 for (final int r : order) {
-                    buffer.putInt(symbols.intern(block.texts[c][r]));
+                    buffer.putInt(symbols.intern(block.textAt(c, r)));
                 }
             }
             case VARCHAR -> throw new IllegalArgumentException("refuse VARCHAR as fixed width [column=" + c + ']');
@@ -803,18 +819,20 @@ final class DefaultWriter implements TableWriter {
     private record Text(ByteBuffer ends, ByteBuffer bytes) {
     }
 
-    /** The rows {@code order} of {@code texts}, their end offsets counted from {@code base}, where they will start. */
-    private static Text varchar(final Path dataFile, final String[] texts, final int[] order, final long base) {
+    /**
+     * The rows {@code order} of text column {@code c} of {@code block}, their end offsets counted from {@code base},
+     * where they will start; the UTF-8 bytes copied as the block holds them.
+     */
+    private static Text varchar(final Path dataFile, final RowBlock block, final int c, final int[] order,
+            final long base) {
         final ByteBuffer ends = ByteBuffer.allocate(order.length * Long.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-        final byte[][] encoded = new byte[order.length][];
         long end = base;
-        for (int i = 0; i < order.length; i++) {
-            final String text = texts[order[i]];
-            if (text == null) {
+        for (final int r : order) {
+            final int length = block.textLength(c, r);
+            if (length < 0) {
                 ends.putLong(~end);
             } else {
-                encoded[i] = text.getBytes(StandardCharsets.UTF_8);
-                end += encoded[i].length;
+                end += length;
                 ends.putLong(end);
             }
         }
@@ -822,13 +840,16 @@ final class DefaultWriter implements TableWriter {
             throw new CdbException("refuse text column over 2 GB in one partition [file=" + dataFile + ", bytes=" + end
                     + ']', -1);
         }
-        final ByteBuffer bytes = ByteBuffer.allocate((int) (end - base));
-        for (final byte[] utf8 : encoded) {
-            if (utf8 != null) {
-                bytes.put(utf8);
+        final byte[] bytes = new byte[(int) (end - base)];
+        int at = 0;
+        for (final int r : order) {
+            final int length = block.textLength(c, r);
+            if (length > 0) {
+                block.copyText(c, r, bytes, at);
+                at += length;
             }
         }
-        return new Text(ends.flip(), bytes.flip());
+        return new Text(ends.flip(), ByteBuffer.wrap(bytes));
     }
 
     private int[] keyColumns() {
@@ -846,8 +867,10 @@ final class DefaultWriter implements TableWriter {
         truncated = false;
         if (def != committedDef) {
             def = committedDef;
-            pending = new RowBlock(def.columns(), INITIAL_ROWS);
+            final RowBlock old = pending;
+            pending = new RowBlock(def.name(), def.columns(), INITIAL_ROWS);
             capacity = INITIAL_ROWS;
+            old.close();
             state.applyLock.lock();
             try {
                 state.trimSymbols(def.columns().size());
@@ -884,26 +907,34 @@ final class DefaultWriter implements TableWriter {
      */
     private static RowBlock resize(final RowBlock block, final List<ColumnDef> columns, final int oldRows,
             final int rows) {
-        final RowBlock out = new RowBlock(columns, rows);
+        final RowBlock out = new RowBlock(block.tag(), columns, rows);
         final int keep = Math.min(block.size + 1, Math.min(oldRows, rows));
-        for (int c = 0; c < block.types.length; c++) {
-            switch (block.types[c]) {
-                case LONG, TIMESTAMP -> System.arraycopy(block.longs[c], 0, out.longs[c], 0, keep);
-                case DOUBLE -> System.arraycopy(block.doubles[c], 0, out.doubles[c], 0, keep);
-                case BOOLEAN -> System.arraycopy(block.booleans[c], 0, out.booleans[c], 0, keep);
-                case SYMBOL, VARCHAR -> System.arraycopy(block.texts[c], 0, out.texts[c], 0, keep);
-            }
+        try {
+            out.copyRows(block, 0, 0, keep);
+        } catch (final RuntimeException | Error e) {
+            out.close();
+            throw e;
         }
         out.size = block.size;
         return out;
     }
 
+    // the pending rows moved to a new block of rows capacity in the current columns, the old block closed after
+    private void replacePending(final int rows) {
+        final RowBlock old = pending;
+        pending = resize(old, def.columns(), capacity, rows);
+        capacity = rows;
+        old.close();
+    }
+
     private static void fillNull(final RowBlock block, final int c, final int from, final int to) {
-        switch (block.types[c]) {
-            case LONG, TIMESTAMP -> Arrays.fill(block.longs[c], from, to, Long.MIN_VALUE);
-            case DOUBLE -> Arrays.fill(block.doubles[c], from, to, Double.NaN);
-            case BOOLEAN -> Arrays.fill(block.booleans[c], from, to, false);
-            case SYMBOL, VARCHAR -> Arrays.fill(block.texts[c], from, to, null);
+        for (int r = from; r < to; r++) {
+            switch (block.types[c]) {
+                case LONG, TIMESTAMP -> block.setLong(c, r, Long.MIN_VALUE);
+                case DOUBLE -> block.setDouble(c, r, Double.NaN);
+                case BOOLEAN -> block.setBoolean(c, r, false);
+                case SYMBOL, VARCHAR -> block.setText(c, r, null);
+            }
         }
     }
 }

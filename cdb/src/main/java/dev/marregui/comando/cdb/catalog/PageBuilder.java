@@ -22,19 +22,19 @@ final class PageBuilder {
     }
 
     void text(final int column, final String value) {
-        current.columns[column].texts[current.size] = value;
+        current.columns[column].setText(current.size, value);
     }
 
     void integer(final int column, final long value) {
-        current.columns[column].longs[current.size] = value;
+        current.columns[column].setLong(current.size, value);
     }
 
     void real(final int column, final double value) {
-        current.columns[column].doubles[current.size] = value;
+        current.columns[column].setDouble(current.size, value);
     }
 
     void bool(final int column, final boolean value) {
-        current.columns[column].booleans[current.size] = value;
+        current.columns[column].setBoolean(current.size, value);
     }
 
     /** Completes the row being written; a full page is set aside and a new one started. */

@@ -138,13 +138,13 @@ class AccumulatorDifferentialTest {
     @Test
     void approximatePercentileRefusesANegativeValue() {
         final Vector in = Vector.of(CdbType.LONG, 64);
-        for (int i = 0; i < in.longs.length; i++) {
-            in.longs[i] = 1_000 + random.nextInt(1_000);
+        for (int i = 0; i < in.capacity(); i++) {
+            in.setLong(i, 1_000 + random.nextInt(1_000));
         }
-        in.longs[random.nextInt(in.longs.length)] = -7;
+        in.setLong(random.nextInt(in.capacity()), -7);
         final LongPercentileAccumulator accumulator = new LongPercentileAccumulator(0.5, 2);
         accumulator.ensure(1);
-        accumulator.addRange(0, in, 0, in.longs.length);
+        accumulator.addRange(0, in, 0, in.capacity());
         assertThatThrownBy(() -> accumulator.write(0, Vector.of(CdbType.LONG, 1), 0))
                 .isInstanceOf(CdbException.class);
     }
@@ -184,8 +184,8 @@ class AccumulatorDifferentialTest {
         final Vector first = written(accumulator, CdbType.DOUBLE);
         final Vector second = written(accumulator, CdbType.DOUBLE);
         for (int g = 0; g < GROUPS; g++) {
-            assertThat(Double.doubleToRawLongBits(second.doubles[g])).isEqualTo(
-                    Double.doubleToRawLongBits(first.doubles[g]));
+            assertThat(Double.doubleToRawLongBits(second.getDouble(g))).isEqualTo(
+                    Double.doubleToRawLongBits(first.getDouble(g)));
         }
     }
 
@@ -229,10 +229,10 @@ class AccumulatorDifferentialTest {
 
     private static Object cell(final Vector v, final int row) {
         return switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[row];
-            case DOUBLE -> Double.doubleToRawLongBits(v.doubles[row]);
-            case BOOLEAN -> v.booleans[row];
-            case SYMBOL, VARCHAR -> String.valueOf(v.texts[row]);
+            case LONG, TIMESTAMP -> v.getLong(row);
+            case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(row));
+            case BOOLEAN -> v.getBoolean(row);
+            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(row));
         };
     }
 
@@ -319,10 +319,10 @@ class AccumulatorDifferentialTest {
     private void set(final Vector v, final int i, final boolean nonNegative) {
         final int pick = random.nextInt(100);
         switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[i] = pick < 10
+            case LONG, TIMESTAMP -> v.setLong(i, pick < 10
                     ? Vector.NULL_LONG
-                    : pick < 50 ? random.nextInt(20) : nonNegative ? random.nextLong(1L << 40) : random.nextLong();
-            case DOUBLE -> v.doubles[i] = switch (pick) {
+                    : pick < 50 ? random.nextInt(20) : nonNegative ? random.nextLong(1L << 40) : random.nextLong());
+            case DOUBLE -> v.setDouble(i, switch (pick) {
                 case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 -> Double.NaN;
                 case 10, 11, 12, 13, 14 -> -0.0;
                 case 15, 16, 17, 18, 19 -> 0.0;
@@ -330,9 +330,9 @@ class AccumulatorDifferentialTest {
                 case 21 -> Double.NEGATIVE_INFINITY;
                 case 22 -> Double.MIN_VALUE;
                 default -> pick < 60 ? random.nextInt(20) / 4.0 : random.nextGaussian() * 1e6;
-            };
-            case BOOLEAN -> v.booleans[i] = random.nextBoolean();
-            case SYMBOL, VARCHAR -> v.texts[i] = pick < 10 ? null : "s" + random.nextInt(50);
+            });
+            case BOOLEAN -> v.setBoolean(i, random.nextBoolean());
+            case SYMBOL, VARCHAR -> v.setText(i, pick < 10 ? null : "s" + random.nextInt(50));
         }
     }
 
@@ -390,13 +390,13 @@ class AccumulatorDifferentialTest {
 
         @Override
         public void add(final int group, final Vector value, final int row) {
-            if (value.doubles != null) {
-                if (!Double.isNaN(value.doubles[row])) {
-                    values.get(group).add(value.doubles[row]);
+            if (value.type == CdbType.DOUBLE) {
+                if (!Double.isNaN(value.getDouble(row))) {
+                    values.get(group).add(value.getDouble(row));
                 }
-            } else if (value.longs[row] != Vector.NULL_LONG) {
-                values.get(group).add(kind == Kind.CONTINUOUS ? (Number) (double) value.longs[row]
-                        : (Number) value.longs[row]);
+            } else if (value.getLong(row) != Vector.NULL_LONG) {
+                values.get(group).add(kind == Kind.CONTINUOUS ? (Number) (double) value.getLong(row)
+                        : (Number) value.getLong(row));
             }
         }
 

@@ -105,15 +105,19 @@ final class WindowCursor implements Cursor {
             to.copy(from, i, j);
         } else if (from.isNull(i)) {
             to.setNull(j);
-        } else if (to.type == CdbType.DOUBLE && from.longs != null) {
-            to.doubles[j] = from.longs[i];
-        } else if (to.longs != null && from.type == CdbType.DOUBLE) {
-            to.longs[j] = (long) from.doubles[i];
-        } else if (to.longs != null && from.longs != null) {
-            to.longs[j] = from.longs[i];
+        } else if (to.type == CdbType.DOUBLE && isLong(from.type)) {
+            to.setDouble(j, from.getLong(i));
+        } else if (isLong(to.type) && from.type == CdbType.DOUBLE) {
+            to.setLong(j, (long) from.getDouble(i));
+        } else if (isLong(to.type) && isLong(from.type)) {
+            to.setLong(j, from.getLong(i));
         } else {
             throw new CdbException("cannot convert a window value [from=" + from.type + ", to=" + to.type + ']', -1);
         }
+    }
+
+    private static boolean isLong(final CdbType type) {
+        return type == CdbType.LONG || type == CdbType.TIMESTAMP;
     }
 
     private static Vector constant(final Bound arg, final CdbType type) {
@@ -123,10 +127,10 @@ final class WindowCursor implements Cursor {
         }
         switch (value) {
             case null -> v.setNull(0);
-            case Number n when type == CdbType.DOUBLE -> v.doubles[0] = n.doubleValue();
-            case Number n when v.longs != null -> v.longs[0] = n.longValue();
-            case Boolean b when type == CdbType.BOOLEAN -> v.booleans[0] = b;
-            case String s when type.isText() -> v.texts[0] = s;
+            case Number n when type == CdbType.DOUBLE -> v.setDouble(0, n.doubleValue());
+            case Number n when isLong(type) -> v.setLong(0, n.longValue());
+            case Boolean b when type == CdbType.BOOLEAN -> v.setBoolean(0, b);
+            case String s when type.isText() -> v.setText(0, s);
             default -> throw new CdbException("cannot use this window default [value=" + value + ", type=" + type
                     + ']', -1);
         }
@@ -172,7 +176,7 @@ final class WindowCursor implements Cursor {
                 for (int pos = 0; pos < n; pos++) {
                     final int row = order[pos];
                     number = pos > 0 && partition[order[pos - 1]] == partition[row] ? number + 1 : 1;
-                    out.longs[row] = number;
+                    out.setLong(row, number);
                 }
             }
             case "lag" -> lag(call, partition, order(partition, sortColumns, orderBy, n), out, n);
@@ -186,7 +190,7 @@ final class WindowCursor implements Cursor {
      * {@code call}, which has PARTITION BY, one task per partition on the context's pool. The partitions, the sort
      * keys and the argument are read here; a task sorts its partition's rows, in input order, by the call's ORDER BY
      * (stable, as the serial sort's ties) and writes only those rows of the output, so the tasks share no state but
-     * what they read.
+     * what they read. A text output is written by one thread, the consumer: its values share one byte buffer.
      */
     private Vector evaluateByPartition(final Bound.WindowCall call, final int n) {
         final int[] partition = new int[n];
@@ -211,7 +215,7 @@ final class WindowCursor implements Cursor {
             case "row_number" -> p -> {
                 final int[] order = partitionOrder(members, starts[p], starts[p + 1], sortColumns, orderBy);
                 for (int pos = 0; pos < order.length; pos++) {
-                    out.longs[order[pos]] = pos + 1;
+                    out.setLong(order[pos], pos + 1);
                 }
                 return Boolean.TRUE;
             };
@@ -249,7 +253,14 @@ final class WindowCursor implements Cursor {
                 };
             }
         };
-        if (partitions > 0) {
+        if (partitions > 0 && call.type().isText()) {
+            // a text vector appends every value to one byte buffer, so tasks writing rows of it at once would race:
+            // the partitions run here, in order, which gives the same values the pool would
+            for (int p = 0; p < partitions; p++) {
+                ctx.check();
+                task.apply(p);
+            }
+        } else if (partitions > 0) {
             // each await hands over the rows its task wrote on a worker, published by the task's completion
             try (final Job<Boolean> job = ctx.pool().submit(partitions, task, ctx)) {
                 for (int p = 0; p < partitions; p++) {
@@ -363,7 +374,7 @@ final class WindowCursor implements Cursor {
             throw new CdbException("cannot run lag without its argument [function=lag]", -1);
         }
         final Vector value = gather(args.getFirst(), n);
-        final long offset = args.size() > 1 ? constant(args.get(1), CdbType.LONG).longs[0] : 1;
+        final long offset = args.size() > 1 ? constant(args.get(1), CdbType.LONG).getLong(0) : 1;
         if (offset < 0) {
             throw new CdbException("cannot lag by a negative offset [offset=" + offset + ']', -1);
         }

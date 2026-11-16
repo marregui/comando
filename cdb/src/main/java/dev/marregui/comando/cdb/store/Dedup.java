@@ -1,7 +1,5 @@
 package dev.marregui.comando.cdb.store;
 
-import java.util.Objects;
-
 import dev.marregui.comando.cdb.CdbType;
 
 /** Orders a partition's rows for a commit, and drops the rows a later one replaces. */
@@ -24,7 +22,7 @@ final class Dedup {
             }
             return identity;
         }
-        return dropReplaced(block, timestampColumn, keyColumns, stableOrder(block.longs[timestampColumn], n));
+        return dropReplaced(block, timestampColumn, keyColumns, stableOrder(timestamps(block, timestampColumn), n));
     }
 
     /**
@@ -37,7 +35,7 @@ final class Dedup {
             return order(block, timestampColumn, keyColumns);
         }
         final int n = block.size;
-        final long[] ts = block.longs[timestampColumn];
+        final long[] ts = timestamps(block, timestampColumn);
         final int[] merged = new int[n];
         int a = 0;
         int b = base;
@@ -60,7 +58,7 @@ final class Dedup {
         if (keyColumns.length == 0) {
             return sorted;
         }
-        final long[] ts = block.longs[timestampColumn];
+        final long[] ts = timestamps(block, timestampColumn);
         final int n = sorted.length;
         final boolean[] dropped = new boolean[n];
         int dropCount = 0;
@@ -174,14 +172,23 @@ final class Dedup {
         return marked;
     }
 
+    // the designated timestamps of block's rows, copied out of its native memory for the sorts
+    private static long[] timestamps(final RowBlock block, final int timestampColumn) {
+        final long[] ts = new long[block.size];
+        for (int r = 0; r < ts.length; r++) {
+            ts[r] = block.getLong(timestampColumn, r);
+        }
+        return ts;
+    }
+
     private static long hash(final RowBlock block, final int[] keyColumns, final int row) {
         long h = 1L;
         for (final int c : keyColumns) {
             final long v = switch (block.types[c]) {
-                case LONG, TIMESTAMP -> block.longs[c][row];
-                case DOUBLE -> Double.doubleToLongBits(block.doubles[c][row]);
-                case BOOLEAN -> block.booleans[c][row] ? 1L : 0L;
-                case SYMBOL, VARCHAR -> Objects.hashCode(block.texts[c][row]);
+                case LONG, TIMESTAMP -> block.getLong(c, row);
+                case DOUBLE -> Double.doubleToLongBits(block.getDouble(c, row));
+                case BOOLEAN -> block.getBoolean(c, row) ? 1L : 0L;
+                case SYMBOL, VARCHAR -> block.textHash(c, row);
             };
             h = h * 0x9E3779B97F4A7C15L + v;
         }
@@ -192,11 +199,11 @@ final class Dedup {
         for (final int c : keyColumns) {
             final CdbType type = block.types[c];
             final boolean same = switch (type) {
-                case LONG, TIMESTAMP -> block.longs[c][a] == block.longs[c][b];
-                case DOUBLE -> Double.doubleToLongBits(block.doubles[c][a])
-                        == Double.doubleToLongBits(block.doubles[c][b]);
-                case BOOLEAN -> block.booleans[c][a] == block.booleans[c][b];
-                case SYMBOL, VARCHAR -> Objects.equals(block.texts[c][a], block.texts[c][b]);
+                case LONG, TIMESTAMP -> block.getLong(c, a) == block.getLong(c, b);
+                case DOUBLE -> Double.doubleToLongBits(block.getDouble(c, a))
+                        == Double.doubleToLongBits(block.getDouble(c, b));
+                case BOOLEAN -> block.getBoolean(c, a) == block.getBoolean(c, b);
+                case SYMBOL, VARCHAR -> block.textEquals(c, a, b);
             };
             if (!same) {
                 return false;

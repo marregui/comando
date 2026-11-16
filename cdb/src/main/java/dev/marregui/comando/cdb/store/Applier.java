@@ -70,6 +70,8 @@ final class Applier {
     // written by the thread alone, read by tests: its loop's passes and the table turns it served
     private volatile long passes;
     private volatile long turns;
+    // the applier thread's own: when its pass next sweeps idle mappings, by System.nanoTime()
+    private long sweepDueNanos;
 
     Applier(final Store store, final String name) {
         this.store = store;
@@ -171,6 +173,7 @@ final class Applier {
     // serves the queued tables, then the due deadlines, then parks until the earliest deadline or a signal; a wake
     // first serves every table once
     private void run() {
+        sweepDueNanos = System.nanoTime() + Store.MAP_SWEEP_NANOS;
         while (!stopped) {
             passes++;
             signalled = false;
@@ -194,6 +197,12 @@ final class Applier {
                 final Deadline due = deadlines.poll();
                 deadlineOf.remove(due.state());
                 turn(due.state());
+            }
+            // idle versions' mappings released here, on the applier's own pass: unmapping a few files is short next to
+            // an apply, and the pass comes at least once a second
+            if (!stopped && nowNanos - sweepDueNanos >= 0L) {
+                store.sweepIdle(nowNanos);
+                sweepDueNanos = System.nanoTime() + Store.MAP_SWEEP_NANOS;
             }
             if (!signalled && !stopped) {
                 final Deadline next = deadlines.peek();
@@ -331,6 +340,10 @@ final class Applier {
                 rows += q.rows().size;
             }
             writer.commitAs(last);
+        }
+        // published, so dequeued: the queue's blocks are closed by their owner, the batch that applied them
+        for (final TableState.Queued q : batch) {
+            q.rows().close();
         }
         queuedBytes.addAndGet(-state.takeReleasedBytes());
         if (queuedBytes.get() <= store.queuedBudgetBytes / 2L) {

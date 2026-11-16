@@ -121,8 +121,8 @@ class ResultOffsetTest {
             onPage.accept(served++);
             final Page page = Page.allocate(fields);
             for (int i = 0; i < size; i++) {
-                page.columns[0].longs[i] = next;
-                page.columns[1].longs[i] = next;
+                page.columns[0].setLong(i, next);
+                page.columns[1].setLong(i, next);
                 next++;
             }
             page.size = size;

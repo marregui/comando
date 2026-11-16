@@ -49,10 +49,10 @@ final class Rows {
             return null;
         }
         return switch (column.type) {
-            case LONG, TIMESTAMP -> column.longs[row];
-            case DOUBLE -> column.doubles[row];
-            case BOOLEAN -> column.booleans[row];
-            case SYMBOL, VARCHAR -> column.texts[row];
+            case LONG, TIMESTAMP -> column.getLong(row);
+            case DOUBLE -> column.getDouble(row);
+            case BOOLEAN -> column.getBoolean(row);
+            case SYMBOL, VARCHAR -> column.textAt(row);
         };
     }
 

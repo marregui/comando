@@ -24,7 +24,7 @@ class FilterCursorTest {
         final Vector mask = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return page -> {
             for (int i = 0; i < page.size; i++) {
-                mask.booleans[i] = test.test(page.columns[0].longs[i]);
+                mask.setBoolean(i, test.test(page.columns[0].getLong(i)));
             }
             return mask;
         };

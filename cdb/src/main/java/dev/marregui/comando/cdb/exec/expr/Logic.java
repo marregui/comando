@@ -22,10 +22,10 @@ final class Logic {
         final VectorFn b = Cast.arg(args.get(1), CdbType.BOOLEAN, nowMicros);
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
-            final boolean[] x = a.eval(page).booleans;
-            final boolean[] y = b.eval(page).booleans;
+            final Vector x = a.eval(page);
+            final Vector y = b.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.booleans[i] = and ? x[i] && y[i] : x[i] || y[i];
+                out.setBoolean(i, and ? x.getBoolean(i) && y.getBoolean(i) : x.getBoolean(i) || y.getBoolean(i));
             }
             return out;
         }, CdbType.BOOLEAN, type);
@@ -35,9 +35,9 @@ final class Logic {
         final VectorFn a = Cast.arg(arg, CdbType.BOOLEAN, nowMicros);
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
-            final boolean[] x = a.eval(page).booleans;
+            final Vector x = a.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.booleans[i] = !x[i];
+                out.setBoolean(i, !x.getBoolean(i));
             }
             return out;
         }, CdbType.BOOLEAN, type);
@@ -49,7 +49,7 @@ final class Logic {
         return Cast.exact(page -> {
             final Vector x = a.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.booleans[i] = x.isNull(i) != negated;
+                out.setBoolean(i, x.isNull(i) != negated);
             }
             return out;
         }, CdbType.BOOLEAN, type);
@@ -76,7 +76,7 @@ final class Logic {
             final Vector fallback = otherwise == null ? null : otherwise.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
                 int b = 0;
-                while (b < branches && !tests[b].booleans[i]) {
+                while (b < branches && !tests[b].getBoolean(i)) {
                     b++;
                 }
                 if (b < branches) {

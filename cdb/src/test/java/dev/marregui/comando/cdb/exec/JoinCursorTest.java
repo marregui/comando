@@ -67,7 +67,7 @@ class JoinCursorTest {
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return page -> {
             for (int i = 0; i < page.size; i++) {
-                out.booleans[i] = page.columns[0].longs[i] == page.columns[2].longs[i];
+                out.setBoolean(i, page.columns[0].getLong(i) == page.columns[2].getLong(i));
             }
             return out;
         };

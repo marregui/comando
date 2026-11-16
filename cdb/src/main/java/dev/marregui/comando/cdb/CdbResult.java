@@ -145,24 +145,24 @@ public final class CdbResult {
     /** LONG and TIMESTAMP (microseconds); {@link Vector#NULL_LONG} for NULL. */
     public long getLong(final int row, final int column) {
         final int p = pageOf(row);
-        return pages.get(p).columns[column].longs[row - starts[p]];
+        return pages.get(p).columns[column].getLong(row - starts[p]);
     }
 
     /** DOUBLE; NaN for NULL. */
     public double getDouble(final int row, final int column) {
         final int p = pageOf(row);
-        return pages.get(p).columns[column].doubles[row - starts[p]];
+        return pages.get(p).columns[column].getDouble(row - starts[p]);
     }
 
     public boolean getBoolean(final int row, final int column) {
         final int p = pageOf(row);
-        return pages.get(p).columns[column].booleans[row - starts[p]];
+        return pages.get(p).columns[column].getBoolean(row - starts[p]);
     }
 
     /** SYMBOL and VARCHAR; null for NULL. */
     public String getText(final int row, final int column) {
         final int p = pageOf(row);
-        return pages.get(p).columns[column].texts[row - starts[p]];
+        return pages.get(p).columns[column].textAt(row - starts[p]);
     }
 
     // pages are full but the last, as operators fill them to capacity, so the division is right but for short pages

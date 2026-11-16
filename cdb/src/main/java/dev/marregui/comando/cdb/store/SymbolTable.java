@@ -14,6 +14,7 @@ import java.util.Arrays;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.CdbException;
+import dev.marregui.comando.cdb.exec.SymbolDictionary;
 
 /**
  * The dictionary of one SYMBOL column of a table: each distinct value an int key, 0 upward, in first-seen order, kept
@@ -25,7 +26,7 @@ import dev.marregui.comando.cdb.CdbException;
  * {@link #sync()} that failed may leave bytes past the committed ones: the next sync cuts them before it appends, so
  * the file never holds a torn entry before a later one.
  */
-final class SymbolTable implements AutoCloseable {
+final class SymbolTable implements SymbolDictionary, AutoCloseable {
 
     private static final ValueLayout.OfInt INT_LE = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final int INITIAL_CAPACITY = 16;
@@ -147,6 +148,12 @@ final class SymbolTable implements AutoCloseable {
         if (key < 0) {
             return null;
         }
+        return values[key];
+    }
+
+    /** The value of {@code key}, a key a committed version holds; from any thread, as {@link #values()}. */
+    @Override
+    public String valueOf(final int key) {
         return values[key];
     }
 

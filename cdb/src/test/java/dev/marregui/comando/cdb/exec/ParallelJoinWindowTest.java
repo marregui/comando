@@ -395,10 +395,10 @@ class ParallelJoinWindowTest {
         final List<Object> row = new ArrayList<>(page.columns.length);
         for (final Vector v : page.columns) {
             row.add(switch (v.type) {
-                case LONG, TIMESTAMP -> v.longs[r];
-                case DOUBLE -> Double.doubleToRawLongBits(v.doubles[r]);
-                case BOOLEAN -> v.booleans[r];
-                case SYMBOL, VARCHAR -> String.valueOf(v.texts[r]);
+                case LONG, TIMESTAMP -> v.getLong(r);
+                case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(r));
+                case BOOLEAN -> v.getBoolean(r);
+                case SYMBOL, VARCHAR -> String.valueOf(v.textAt(r));
             });
         }
         return row;

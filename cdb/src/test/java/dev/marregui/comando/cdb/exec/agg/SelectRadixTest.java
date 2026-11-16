@@ -67,7 +67,9 @@ class SelectRadixTest {
             final ContinuousPercentileAccumulator accumulator = new ContinuousPercentileAccumulator(0.95);
             accumulator.ensure(1);
             final Vector value = Vector.of(CdbType.DOUBLE, input.length);
-            System.arraycopy(input, 0, value.doubles, 0, input.length);
+            for (int i = 0; i < input.length; i++) {
+                value.setDouble(i, input[i]);
+            }
             accumulator.addRange(0, value, 0, input.length);
             final Vector out = Vector.of(CdbType.DOUBLE, 1);
             accumulator.write(0, out, 0);
@@ -76,7 +78,7 @@ class SelectRadixTest {
             final int lo = (int) Math.floor(position);
             final int hi = (int) Math.ceil(position);
             final double expected = sorted[lo] + (position - lo) * (sorted[hi] - sorted[lo]);
-            assertThat(Double.doubleToRawLongBits(out.doubles[0])).isEqualTo(Double.doubleToRawLongBits(expected));
+            assertThat(Double.doubleToRawLongBits(out.getDouble(0))).isEqualTo(Double.doubleToRawLongBits(expected));
         }
     }
 

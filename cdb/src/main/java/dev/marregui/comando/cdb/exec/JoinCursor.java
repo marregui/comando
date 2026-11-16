@@ -7,6 +7,7 @@ import java.util.List;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.CdbException;
+import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.expr.Functions;
 import dev.marregui.comando.cdb.exec.expr.VectorFn;
 import dev.marregui.comando.cdb.plan.Bound;
@@ -373,10 +374,12 @@ final class JoinCursor implements Cursor {
         }
         probe.size = rp.size;
         final Vector result = on.eval(probe);
-        if (result.booleans == null) {
+        if (result.type != CdbType.BOOLEAN) {
             throw new CdbException("cannot join on a condition that is not BOOLEAN [type=" + result.type + "]", -1);
         }
-        System.arraycopy(result.booleans, 0, matches, 0, rp.size);
+        for (int i = 0, n = rp.size; i < n; i++) {
+            matches[i] = result.getBoolean(i);
+        }
     }
 
     private enum Kind {

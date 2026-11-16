@@ -346,7 +346,7 @@ class ParallelGroupByTest {
                     Page page;
                     while ((page = rows.next()) != null) {
                         for (int r = 0; r < page.size; r++) {
-                            sum += page.columns[column].doubles[r];
+                            sum += page.columns[column].getDouble(r);
                         }
                     }
                 }
@@ -371,10 +371,10 @@ class ParallelGroupByTest {
                     final List<Object> row = new ArrayList<>(page.columns.length);
                     for (final Vector v : page.columns) {
                         row.add(switch (v.type) {
-                            case LONG, TIMESTAMP -> v.longs[r];
-                            case DOUBLE -> bits(v.doubles[r]);
-                            case BOOLEAN -> v.booleans[r];
-                            case SYMBOL, VARCHAR -> v.texts[r] == null ? null : v.texts[r].toString();
+                            case LONG, TIMESTAMP -> v.getLong(r);
+                            case DOUBLE -> bits(v.getDouble(r));
+                            case BOOLEAN -> v.getBoolean(r);
+                            case SYMBOL, VARCHAR -> v.textAt(r) == null ? null : v.textAt(r).toString();
                         });
                     }
                     out.add(row);

@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.exec.agg;
 
 import java.util.Arrays;
 
+import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Vector;
 
 /**
@@ -21,13 +22,16 @@ final class ContinuousPercentileAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        if (value.doubles != null) {
-            final double v = value.doubles[row];
+        if (value.type == CdbType.DOUBLE) {
+            final double v = value.getDouble(row);
             if (!Double.isNaN(v)) {
                 append(group, v);
             }
-        } else if (value.longs[row] != Vector.NULL_LONG) {
-            append(group, value.longs[row]);
+        } else {
+            final long v = value.getLong(row);
+            if (v != Vector.NULL_LONG) {
+                append(group, v);
+            }
         }
     }
 
@@ -42,18 +46,18 @@ final class ContinuousPercentileAccumulator implements Accumulator {
     public void addRange(final int group, final Vector value, final int from, final int to) {
         final double[] list = reserve(group, to - from);
         int size = sizes[group];
-        if (value.doubles != null) {
-            final double[] in = value.doubles;
+        if (value.type == CdbType.DOUBLE) {
             for (int i = from; i < to; i++) {
-                if (!Double.isNaN(in[i])) {
-                    list[size++] = in[i];
+                final double v = value.getDouble(i);
+                if (!Double.isNaN(v)) {
+                    list[size++] = v;
                 }
             }
         } else {
-            final long[] in = value.longs;
             for (int i = from; i < to; i++) {
-                if (in[i] != Vector.NULL_LONG) {
-                    list[size++] = in[i];
+                final long v = value.getLong(i);
+                if (v != Vector.NULL_LONG) {
+                    list[size++] = v;
                 }
             }
         }

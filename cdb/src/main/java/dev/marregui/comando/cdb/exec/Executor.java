@@ -80,6 +80,8 @@ public final class Executor {
             case Plan.Distinct d -> parallel(d.child(), store, nowMicros, reads, ctx,
                     DistinctCursor::parallel,
                     DistinctCursor::new);
+            case Plan.Sort s when LateReadCursor.applies(s, reads) ->
+                    LateReadCursor.open(s, store, nowMicros, reads, ctx);
             case Plan.Sort s -> parallel(s.child(), store, nowMicros, reads, ctx,
                     src -> SortCursor.parallel(src, s.keys(), s.limit()),
                     c -> new SortCursor(c, s.keys(), s.limit()));

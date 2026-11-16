@@ -70,8 +70,8 @@ public final class Aggregates {
     /** Writes {@code value}, LONG's NULL for NULL, to {@code out[row]}, converted to the vector's type. */
     static void writeLong(final long value, final Vector out, final int row) {
         switch (out.type) {
-            case LONG, TIMESTAMP -> out.longs[row] = value;
-            case DOUBLE -> out.doubles[row] = value == Vector.NULL_LONG ? Double.NaN : value;
+            case LONG, TIMESTAMP -> out.setLong(row, value);
+            case DOUBLE -> out.setDouble(row, value == Vector.NULL_LONG ? Double.NaN : value);
             default -> throw new CdbException("cannot write a number as text [type=" + out.type + ']', -1);
         }
     }
@@ -79,8 +79,8 @@ public final class Aggregates {
     /** Writes {@code value}, NaN for NULL, to {@code out[row]}, converted to the vector's type. */
     static void writeDouble(final double value, final Vector out, final int row) {
         switch (out.type) {
-            case DOUBLE -> out.doubles[row] = value;
-            case LONG, TIMESTAMP -> out.longs[row] = Double.isNaN(value) ? Vector.NULL_LONG : (long) value;
+            case DOUBLE -> out.setDouble(row, value);
+            case LONG, TIMESTAMP -> out.setLong(row, Double.isNaN(value) ? Vector.NULL_LONG : (long) value);
             default -> throw new CdbException("cannot write a number as text [type=" + out.type + ']', -1);
         }
     }

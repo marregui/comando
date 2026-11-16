@@ -131,16 +131,6 @@ final class LatestOnCursor implements Cursor {
         }
     }
 
-    private static boolean seen(final String[] values, final int count, final String key) {
-        for (int j = 0; j < count; j++) {
-            final String v = values[j];
-            if (v == key || v != null && v.equals(key)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void readAll() {
         final Vector[] keys = new Vector[partitionColumns.length];
         long seen = 0;
@@ -149,7 +139,7 @@ final class LatestOnCursor implements Cursor {
             for (int k = 0; k < keys.length; k++) {
                 keys[k] = page.columns[partitionColumns[k]];
             }
-            final long[] micros = page.columns[timestampColumn].longs;
+            final Vector micros = page.columns[timestampColumn];
             final int stamp = ++pageCount;
             for (int i = 0; i < page.size; i++) {
                 final int before = partitions.size();
@@ -157,8 +147,9 @@ final class LatestOnCursor implements Cursor {
                 if (group == before) {
                     grow(group + 1);
                 }
-                if (group == before || micros[i] >= bestMicros[group]) {
-                    bestMicros[group] = micros[i];
+                final long at = micros.getLong(i);
+                if (group == before || at >= bestMicros[group]) {
+                    bestMicros[group] = at;
                     sequence[group] = seen;
                     bestRow[group] = i;
                     if (touchedIn[group] != stamp) {
@@ -189,26 +180,21 @@ final class LatestOnCursor implements Cursor {
      */
     private void readNewestFirst() {
         final Vector[] keys = new Vector[partitionColumns.length];
-        // one text key with few values: a row of a key already seen is skipped by a scan of those values, where the
-        // store hands out one String per value, so identity mostly answers; past FEW_KEYS values, the hash lookup
+        // one text key with few values: a row of a key already seen is skipped by a scan of those values, by dictionary
+        // key where both sides carry one of the same dictionary; past FEW_KEYS values, the hash lookup
         final boolean oneText = keys.length == 1 && fields.get(partitionColumns[0]).type().isText();
-        final String[] few = new String[FEW_KEYS];
-        int fewCount = 0;
+        final FewTexts few = new FewTexts(oneText ? fields.get(partitionColumns[0]).type() : CdbType.VARCHAR);
         Page page;
         while ((page = child.next()) != null) {
             for (int k = 0; k < keys.length; k++) {
                 keys[k] = page.columns[partitionColumns[k]];
             }
             for (int i = 0; i < page.size; i++) {
-                if (oneText && fewCount <= FEW_KEYS) {
-                    final String key = keys[0].texts[i];
-                    if (seen(few, fewCount, key)) {
+                if (oneText && few.count <= FEW_KEYS) {
+                    if (few.seen(keys[0], i)) {
                         continue;
                     }
-                    if (fewCount < FEW_KEYS) {
-                        few[fewCount] = key;
-                    }
-                    fewCount++;
+                    few.add(keys[0], i);
                 }
                 final int group = partitions.size();
                 if (partitions.groupOf(keys, i) == group) {
@@ -238,6 +224,39 @@ final class LatestOnCursor implements Cursor {
         }
         for (final Values column : rows) {
             column.ensure(groups);
+        }
+    }
+
+    /**
+     * Up to {@link #FEW_KEYS} text values, each copied out of its page into a vector of their own, so a row is matched
+     * by its bytes (or its dictionary key, for a SYMBOL of the same dictionary) without a String; {@code count} goes one
+     * past FEW_KEYS when a value no longer fits, which ends the scan.
+     */
+    private static final class FewTexts {
+        private final Vector values;
+        private int count;
+
+        FewTexts(final CdbType type) {
+            values = Vector.of(type, FEW_KEYS);
+        }
+
+        void add(final Vector v, final int i) {
+            if (count < FEW_KEYS) {
+                values.copy(v, i, count);
+            }
+            count++;
+        }
+
+        /** True when text value {@code i} of {@code v} is one of the values held; NULL equals NULL. */
+        boolean seen(final Vector v, final int i) {
+            final int n = Math.min(count, FEW_KEYS);
+            final boolean isNull = v.isNull(i);
+            for (int j = 0; j < n; j++) {
+                if (values.isNull(j) ? isNull : !isNull && v.textEquals(i, values, j)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

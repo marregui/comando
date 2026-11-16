@@ -73,8 +73,8 @@ final class FirstLastAccumulator implements Accumulator {
         final Vector one = Vector.of(values.type(), 1);
         values.write(group, one, 0);
         switch (values.type()) {
-            case LONG, TIMESTAMP -> Aggregates.writeLong(one.longs[0], out, row);
-            case DOUBLE -> Aggregates.writeDouble(one.doubles[0], out, row);
+            case LONG, TIMESTAMP -> Aggregates.writeLong(one.getLong(0), out, row);
+            case DOUBLE -> Aggregates.writeDouble(one.getDouble(0), out, row);
             default -> out.copy(one, 0, row);
         }
     }

@@ -46,10 +46,10 @@ final class Arithmetic {
             final VectorFn b = Cast.arg(right, CdbType.DOUBLE, nowMicros);
             final Vector out = Vector.of(CdbType.DOUBLE, Page.CAPACITY);
             return Cast.exact(page -> {
-                final double[] x = a.eval(page).doubles;
-                final double[] y = b.eval(page).doubles;
+                final Vector x = a.eval(page);
+                final Vector y = b.eval(page);
                 for (int i = 0, n = page.size; i < n; i++) {
-                    out.doubles[i] = doubleOp(op, x[i], y[i]);
+                    out.setDouble(i, doubleOp(op, x.getDouble(i), y.getDouble(i)));
                 }
                 return out;
             }, CdbType.DOUBLE, type);
@@ -59,10 +59,10 @@ final class Arithmetic {
         final VectorFn b = Cast.arg(right, CdbType.LONG, nowMicros);
         final Vector out = Vector.of(natural, Page.CAPACITY);
         return Cast.exact(page -> {
-            final long[] x = a.eval(page).longs;
-            final long[] y = b.eval(page).longs;
+            final Vector x = a.eval(page);
+            final Vector y = b.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.longs[i] = longOp(op, x[i], y[i]);
+                out.setLong(i, longOp(op, x.getLong(i), y.getLong(i)));
             }
             return out;
         }, natural, type);
@@ -76,10 +76,10 @@ final class Arithmetic {
             final Vector in = a.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
                 if (natural == CdbType.DOUBLE) {
-                    out.doubles[i] = -in.doubles[i];
+                    out.setDouble(i, -in.getDouble(i));
                 } else {
                     // -MIN_VALUE is MIN_VALUE: NULL stays NULL
-                    out.longs[i] = -in.longs[i];
+                    out.setLong(i, -in.getLong(i));
                 }
             }
             return out;
@@ -94,10 +94,10 @@ final class Arithmetic {
             final Vector in = a.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
                 if (natural == CdbType.DOUBLE) {
-                    out.doubles[i] = Math.abs(in.doubles[i]);
+                    out.setDouble(i, Math.abs(in.getDouble(i)));
                 } else {
                     // Math.abs(MIN_VALUE) is MIN_VALUE: NULL stays NULL
-                    out.longs[i] = Math.abs(in.longs[i]);
+                    out.setLong(i, Math.abs(in.getLong(i)));
                 }
             }
             return out;
@@ -110,10 +110,10 @@ final class Arithmetic {
         final VectorFn s = args.size() > 1 ? Cast.arg(args.get(1), CdbType.LONG, nowMicros) : null;
         final Vector out = Vector.of(CdbType.DOUBLE, Page.CAPACITY);
         return Cast.exact(page -> {
-            final double[] x = a.eval(page).doubles;
-            final long[] scale = s == null ? null : s.eval(page).longs;
+            final Vector x = a.eval(page);
+            final Vector scale = s == null ? null : s.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.doubles[i] = scale == null ? round(x[i]) : roundHalfUp(x[i], scale[i]);
+                out.setDouble(i, scale == null ? round(x.getDouble(i)) : roundHalfUp(x.getDouble(i), scale.getLong(i)));
             }
             return out;
         }, CdbType.DOUBLE, type);

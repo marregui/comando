@@ -64,8 +64,8 @@ class CatalogSourcesTest {
         final Page first = cursor.next();
         final Page second = cursor.next();
         assertThat(first).isNotSameAs(second);
-        assertThat(first.columns[0].longs[0]).isEqualTo(1);
-        assertThat(second.columns[0].longs[0]).isEqualTo(1025);
+        assertThat(first.columns[0].getLong(0)).isEqualTo(1);
+        assertThat(second.columns[0].getLong(0)).isEqualTo(1025);
     }
 
     /// A count that is not a number fails when the source is opened, not when its first page is read.

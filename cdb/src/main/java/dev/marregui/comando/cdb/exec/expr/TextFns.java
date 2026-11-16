@@ -36,7 +36,7 @@ final class TextFns {
                 for (final Vector part : evaluated) {
                     Cast.appendText(sink, part, i);
                 }
-                out.texts[i] = sink.toString();
+                out.setText(i, sink.toString());
             }
             return out;
         }, CdbType.VARCHAR, type);
@@ -48,21 +48,23 @@ final class TextFns {
         final VectorFn count = Cast.arg(args.get(2), CdbType.LONG, nowMicros);
         final Vector out = Vector.of(CdbType.VARCHAR, Page.CAPACITY);
         return Cast.exact(page -> {
-            final String[] texts = text.eval(page).texts;
-            final long[] starts = start.eval(page).longs;
-            final long[] counts = count.eval(page).longs;
+            final Vector texts = text.eval(page);
+            final Vector starts = start.eval(page);
+            final Vector counts = count.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                if (texts[i] == null || starts[i] == Vector.NULL_LONG || counts[i] == Vector.NULL_LONG) {
-                    out.texts[i] = null;
+                final String s = texts.textAt(i);
+                if (s == null || starts.getLong(i) == Vector.NULL_LONG || counts.getLong(i) == Vector.NULL_LONG) {
+                    out.setText(i, null);
                     continue;
                 }
-                if (counts[i] < 0) {
-                    throw new CdbException("negative substring length is not allowed [length=" + counts[i] + "]", -1);
+                final long take = counts.getLong(i);
+                if (take < 0) {
+                    throw new CdbException("negative substring length is not allowed [length=" + take + "]", -1);
                 }
-                final int length = texts[i].length();
-                final long from = Math.clamp(starts[i] - 1, 0, length);
-                final long to = Math.clamp(starts[i] - 1 + counts[i], 0, length);
-                out.texts[i] = to <= from ? "" : texts[i].substring((int) from, (int) to);
+                final int length = s.length();
+                final long from = Math.clamp(starts.getLong(i) - 1, 0, length);
+                final long to = Math.clamp(starts.getLong(i) - 1 + take, 0, length);
+                out.setText(i, to <= from ? "" : s.substring((int) from, (int) to));
             }
             return out;
         }, CdbType.VARCHAR, type);
@@ -74,14 +76,17 @@ final class TextFns {
         final VectorFn replacement = Cast.arg(args.get(2), CdbType.VARCHAR, nowMicros);
         final Vector out = Vector.of(CdbType.VARCHAR, Page.CAPACITY);
         return Cast.exact(page -> {
-            final String[] texts = text.eval(page).texts;
-            final String[] targets = target.eval(page).texts;
-            final String[] replacements = replacement.eval(page).texts;
+            final Vector texts = text.eval(page);
+            final Vector targets = target.eval(page);
+            final Vector replacements = replacement.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                if (texts[i] == null || targets[i] == null || replacements[i] == null) {
-                    out.texts[i] = null;
+                final String s = texts.textAt(i);
+                final String t = targets.textAt(i);
+                final String r = replacements.textAt(i);
+                if (s == null || t == null || r == null) {
+                    out.setText(i, null);
                 } else {
-                    out.texts[i] = targets[i].isEmpty() ? texts[i] : texts[i].replace(targets[i], replacements[i]);
+                    out.setText(i, t.isEmpty() ? s : s.replace(t, r));
                 }
             }
             return out;
@@ -92,9 +97,9 @@ final class TextFns {
         final VectorFn text = Cast.arg(arg, CdbType.VARCHAR, nowMicros);
         final Vector out = Vector.of(CdbType.LONG, Page.CAPACITY);
         return Cast.exact(page -> {
-            final String[] texts = text.eval(page).texts;
+            final Vector texts = text.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                out.longs[i] = texts[i] == null ? -1 : texts[i].length();
+                out.setLong(i, texts.isNull(i) ? -1 : texts.textAt(i).length());
             }
             return out;
         }, CdbType.LONG, type);
@@ -106,15 +111,15 @@ final class TextFns {
         final Vector out = Vector.of(CdbType.VARCHAR, Page.CAPACITY);
         final char[][] buffer = {new char[64]};
         return Cast.exact(page -> {
-            final String[] texts = text.eval(page).texts;
+            final Vector texts = text.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                final String s = texts[i];
+                final String s = texts.textAt(i);
                 int first = 0;
                 while (s != null && first < s.length() && map(s.charAt(first), upper) == s.charAt(first)) {
                     first++;
                 }
                 if (s == null || first == s.length()) {
-                    out.texts[i] = s;
+                    out.setText(i, s);
                     continue;
                 }
                 if (buffer[0].length < s.length()) {
@@ -125,7 +130,7 @@ final class TextFns {
                 for (int k = first; k < s.length(); k++) {
                     chars[k] = map(s.charAt(k), upper);
                 }
-                out.texts[i] = new String(chars, 0, s.length());
+                out.setText(i, new String(chars, 0, s.length()));
             }
             return out;
         }, CdbType.VARCHAR, type);
@@ -138,14 +143,14 @@ final class TextFns {
         final StringBuilder sink = new StringBuilder();
         final Vector out = Vector.of(CdbType.VARCHAR, Page.CAPACITY);
         return Cast.exact(page -> {
-            final long[] micros = timestamps.eval(page).longs;
+            final Vector micros = timestamps.eval(page);
             for (int i = 0, n = page.size; i < n; i++) {
-                if (micros[i] == Vector.NULL_LONG) {
-                    out.texts[i] = null;
+                if (micros.getLong(i) == Vector.NULL_LONG) {
+                    out.setText(i, null);
                 } else {
                     sink.setLength(0);
-                    format.format(sink, micros[i]);
-                    out.texts[i] = sink.toString();
+                    format.format(sink, micros.getLong(i));
+                    out.setText(i, sink.toString());
                 }
             }
             return out;

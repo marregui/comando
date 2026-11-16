@@ -1,5 +1,7 @@
 package dev.marregui.comando.cdb.store;
 
+import dev.marregui.comando.cdb.exec.Vector;
+
 /**
  * One partition of a {@link TableReader}'s snapshot: its rows are in designated-timestamp order and do not change for
  * the life of the reader. A column added after the partition was written reads as NULL. Reads copy {@code n} values
@@ -29,6 +31,55 @@ public interface PartitionReader {
 
     /** SYMBOL (resolved through the table's dictionary) and VARCHAR columns; NULL as a null reference. */
     void texts(int column, long from, int n, String[] dst);
+
+    /**
+     * Copies {@code n} values of {@code column} from row {@code from} into {@code dst} from index {@code at}; {@code dst}
+     * is of the column's type. The vector form of {@link #longs}, {@link #doubles}, {@link #booleans} and {@link #texts}.
+     */
+    default void read(final int column, final long from, final int n, final Vector dst, final int at) {
+        switch (dst.type) {
+            case LONG, TIMESTAMP -> {
+                final long[] values = new long[n];
+                longs(column, from, n, values);
+                for (int i = 0; i < n; i++) {
+                    dst.setLong(at + i, values[i]);
+                }
+            }
+            case DOUBLE -> {
+                final double[] values = new double[n];
+                doubles(column, from, n, values);
+                for (int i = 0; i < n; i++) {
+                    dst.setDouble(at + i, values[i]);
+                }
+            }
+            case BOOLEAN -> {
+                final boolean[] values = new boolean[n];
+                booleans(column, from, n, values);
+                for (int i = 0; i < n; i++) {
+                    dst.setBoolean(at + i, values[i]);
+                }
+            }
+            case SYMBOL, VARCHAR -> {
+                final String[] values = new String[n];
+                texts(column, from, n, values);
+                for (int i = 0; i < n; i++) {
+                    dst.setText(at + i, values[i]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Copies the values of {@code column} at the rows {@code rows[from + k]}, {@code k} in {@code [0, n)}, into
+     * {@code dst} from index {@code at}; the rows are any rows of the partition, in any order (a late read fetches the
+     * rows a sort kept).
+     */
+    default void fetch(final int column, final long[] rows, final int from, final int n, final Vector dst,
+            final int at) {
+        for (int k = 0; k < n; k++) {
+            read(column, rows[from + k], 1, dst, at + k);
+        }
+    }
 
     /**
      * The first row whose designated timestamp, column {@code timestampColumn}, is at least {@code micros}; {@link

@@ -89,8 +89,8 @@ class WalTest {
         assertSameRows(entries.get(1).rows(), widened);
         assertSameRows(entries.get(2).rows(), empty);
         assertSameRows(entries.get(3).rows(), sample(WIDER, 1));
-        assertThat(Double.doubleToRawLongBits(entries.get(0).rows().doubles[2][1])).isEqualTo(NAN_BITS);
-        assertThat(entries.get(0).rows().texts[5]).startsWith("", null, "Grüße, 東京 ✓");
+        assertThat(Double.doubleToRawLongBits(entries.get(0).rows().getDouble(2, 1))).isEqualTo(NAN_BITS);
+        assertThat(texts(entries.get(0).rows(), 5, 3)).containsExactly("", null, "Grüße, 東京 ✓");
         assertThat(reopened.records()).isEqualTo(4);
         assertThat(reopened.bytes()).isEqualTo(wal.bytes());
     }
@@ -288,15 +288,15 @@ class WalTest {
             for (int r = 0; r < n; r++) {
                 final boolean isNull = r == 1;
                 switch (rows.types[c]) {
-                    case LONG, TIMESTAMP -> rows.longs[c][r] = isNull ? Long.MIN_VALUE : Long.MIN_VALUE + 1L + c * r;
-                    case DOUBLE -> rows.doubles[c][r] = isNull ? Double.longBitsToDouble(NAN_BITS) : -0.5 * r;
-                    case BOOLEAN -> rows.booleans[c][r] = !isNull && r % 2 == 0;
-                    case SYMBOL, VARCHAR -> rows.texts[c][r] = switch (r) {
+                    case LONG, TIMESTAMP -> rows.setLong(c, r, isNull ? Long.MIN_VALUE : Long.MIN_VALUE + 1L + c * r);
+                    case DOUBLE -> rows.setDouble(c, r, isNull ? Double.longBitsToDouble(NAN_BITS) : -0.5 * r);
+                    case BOOLEAN -> rows.setBoolean(c, r, !isNull && r % 2 == 0);
+                    case SYMBOL, VARCHAR -> rows.setText(c, r, switch (r) {
                         case 0 -> "";
                         case 1 -> null;
                         case 2 -> "Grüße, 東京 ✓";
                         default -> "v" + c + '.' + r;
-                    };
+                    });
                 }
             }
         }
@@ -309,21 +309,42 @@ class WalTest {
         final int n = expected.size;
         for (int c = 0; c < expected.types.length; c++) {
             switch (expected.types[c]) {
-                case LONG, TIMESTAMP -> assertThat(Arrays.copyOf(actual.longs[c], n))
-                        .containsExactly(Arrays.copyOf(expected.longs[c], n));
-                case DOUBLE -> assertThat(rawBits(actual.doubles[c], n)).containsExactly(rawBits(expected.doubles[c], n));
-                case BOOLEAN -> assertThat(Arrays.copyOf(actual.booleans[c], n))
-                        .containsExactly(Arrays.copyOf(expected.booleans[c], n));
-                case SYMBOL, VARCHAR -> assertThat(Arrays.copyOf(actual.texts[c], n))
-                        .containsExactly(Arrays.copyOf(expected.texts[c], n));
+                case LONG, TIMESTAMP -> assertThat(longs(actual, c, n)).containsExactly(longs(expected, c, n));
+                case DOUBLE -> assertThat(rawBits(actual, c, n)).containsExactly(rawBits(expected, c, n));
+                case BOOLEAN -> assertThat(booleans(actual, c, n)).containsExactly(booleans(expected, c, n));
+                case SYMBOL, VARCHAR -> assertThat(texts(actual, c, n)).containsExactly(texts(expected, c, n));
             }
         }
     }
 
-    private static long[] rawBits(final double[] values, final int n) {
+    private static long[] longs(final RowBlock rows, final int column, final int n) {
+        final long[] values = new long[n];
+        for (int r = 0; r < n; r++) {
+            values[r] = rows.getLong(column, r);
+        }
+        return values;
+    }
+
+    private static boolean[] booleans(final RowBlock rows, final int column, final int n) {
+        final boolean[] values = new boolean[n];
+        for (int r = 0; r < n; r++) {
+            values[r] = rows.getBoolean(column, r);
+        }
+        return values;
+    }
+
+    private static String[] texts(final RowBlock rows, final int column, final int n) {
+        final String[] values = new String[n];
+        for (int r = 0; r < n; r++) {
+            values[r] = rows.textAt(column, r);
+        }
+        return values;
+    }
+
+    private static long[] rawBits(final RowBlock rows, final int column, final int n) {
         final long[] bits = new long[n];
         for (int r = 0; r < n; r++) {
-            bits[r] = Double.doubleToRawLongBits(values[r]);
+            bits[r] = Double.doubleToRawLongBits(rows.getDouble(column, r));
         }
         return bits;
     }

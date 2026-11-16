@@ -16,14 +16,13 @@ final class TextMinMaxAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        accept(group, value.texts[row]);
+        accept(group, value, row);
     }
 
     @Override
     public void addAll(final int[] groups, final Vector value, final int size) {
-        final String[] in = value.texts;
         for (int i = 0; i < size; i++) {
-            accept(groups[i], in[i]);
+            accept(groups[i], value, i);
         }
     }
 
@@ -41,7 +40,17 @@ final class TextMinMaxAccumulator implements Accumulator {
 
     @Override
     public void write(final int group, final Vector out, final int row) {
-        out.texts[row] = best[group];
+        out.setText(row, best[group]);
+    }
+
+    // the value kept is a String copied out of the page, so it outlives the page
+    private void accept(final int group, final Vector value, final int row) {
+        if (!value.isNull(row)) {
+            final String current = best[group];
+            if (current == null || (max ? value.textCompare(row, current) > 0 : value.textCompare(row, current) < 0)) {
+                best[group] = value.textAt(row);
+            }
+        }
     }
 
     private void accept(final int group, final String v) {

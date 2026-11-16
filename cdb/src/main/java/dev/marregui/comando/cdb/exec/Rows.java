@@ -1,7 +1,5 @@
 package dev.marregui.comando.cdb.exec;
 
-import java.util.Objects;
-
 import dev.marregui.comando.cdb.CdbType;
 
 /**
@@ -20,12 +18,7 @@ final class Rows {
 
     /** Copies {@code n} values of {@code src} from {@code from} to {@code dst} at {@code to}; same storage. */
     static void copyRange(final Vector src, final int from, final Vector dst, final int to, final int n) {
-        switch (dst.type) {
-            case LONG, TIMESTAMP -> System.arraycopy(src.longs, from, dst.longs, to, n);
-            case DOUBLE -> System.arraycopy(src.doubles, from, dst.doubles, to, n);
-            case BOOLEAN -> System.arraycopy(src.booleans, from, dst.booleans, to, n);
-            case SYMBOL, VARCHAR -> System.arraycopy(src.texts, from, dst.texts, to, n);
-        }
+        dst.copy(src, from, to, n);
     }
 
     /** True when values of {@code a} and {@code b} are held in the same array kind of a {@link Vector}. */
@@ -45,14 +38,14 @@ final class Rows {
     /** The hash of value {@code i} of {@code v}, consistent with {@link #same(Vector, int, Vector, int)}. */
     static int hash(final Vector v, final int i) {
         return switch (v.type) {
-            case LONG, TIMESTAMP -> Long.hashCode(v.longs[i]);
+            case LONG, TIMESTAMP -> Long.hashCode(v.getLong(i));
             case DOUBLE -> {
-                final double d = v.doubles[i];
+                final double d = v.getDouble(i);
                 // 0.0 and -0.0 are one value; Double.hashCode folds every NaN into one, and NaN is the one NULL
                 yield d == 0.0 ? 0 : Double.hashCode(d);
             }
-            case BOOLEAN -> v.booleans[i] ? 1231 : 1237;
-            case SYMBOL, VARCHAR -> Objects.hashCode(v.texts[i]);
+            case BOOLEAN -> v.getBoolean(i) ? 1231 : 1237;
+            case SYMBOL, VARCHAR -> v.isNull(i) ? 0 : v.textHash(i);
         };
     }
 
@@ -71,14 +64,14 @@ final class Rows {
     /** True when value {@code ia} of {@code a} equals value {@code ib} of {@code b}; NULL equals NULL. */
     static boolean same(final Vector a, final int ia, final Vector b, final int ib) {
         return switch (a.type) {
-            case LONG, TIMESTAMP -> a.longs[ia] == b.longs[ib];
+            case LONG, TIMESTAMP -> a.getLong(ia) == b.getLong(ib);
             case DOUBLE -> {
-                final double x = a.doubles[ia];
-                final double y = b.doubles[ib];
+                final double x = a.getDouble(ia);
+                final double y = b.getDouble(ib);
                 yield x == y || Double.isNaN(x) && Double.isNaN(y);
             }
-            case BOOLEAN -> a.booleans[ia] == b.booleans[ib];
-            case SYMBOL, VARCHAR -> Objects.equals(a.texts[ia], b.texts[ib]);
+            case BOOLEAN -> a.getBoolean(ia) == b.getBoolean(ib);
+            case SYMBOL, VARCHAR -> sameText(a, ia, b, ib);
         };
     }
 
@@ -88,10 +81,10 @@ final class Rows {
      */
     static int compare(final Vector a, final int ia, final Vector b, final int ib) {
         return switch (a.type) {
-            case LONG, TIMESTAMP -> Long.compare(a.longs[ia], b.longs[ib]);
+            case LONG, TIMESTAMP -> Long.compare(a.getLong(ia), b.getLong(ib));
             case DOUBLE -> {
-                final double x = a.doubles[ia];
-                final double y = b.doubles[ib];
+                final double x = a.getDouble(ia);
+                final double y = b.getDouble(ib);
                 if (Double.isNaN(x)) {
                     yield Double.isNaN(y) ? 0 : -1;
                 }
@@ -100,14 +93,12 @@ final class Rows {
                 }
                 yield x < y ? -1 : x > y ? 1 : 0;
             }
-            case BOOLEAN -> Boolean.compare(a.booleans[ia], b.booleans[ib]);
+            case BOOLEAN -> Boolean.compare(a.getBoolean(ia), b.getBoolean(ib));
             case SYMBOL, VARCHAR -> {
-                final String x = a.texts[ia];
-                final String y = b.texts[ib];
-                if (x == null) {
-                    yield y == null ? 0 : -1;
+                if (a.isNull(ia)) {
+                    yield b.isNull(ib) ? 0 : -1;
                 }
-                yield y == null ? 1 : x.compareTo(y);
+                yield b.isNull(ib) ? 1 : a.textCompare(ia, b, ib);
             }
         };
     }
@@ -143,6 +134,26 @@ final class Rows {
         x *= 0xc2b2ae35;
         x ^= x >>> 16;
         return x;
+    }
+
+    /**
+     * True when text value {@code ia} of {@code a} equals text value {@code ib} of {@code b}; NULL equals NULL. Two
+     * values keyed by the same dictionary compare by key, which is equality of value for keys of one dictionary.
+     */
+    private static boolean sameText(final Vector a, final int ia, final Vector b, final int ib) {
+        final boolean nullA = a.isNull(ia);
+        if (nullA || b.isNull(ib)) {
+            return nullA && b.isNull(ib);
+        }
+        final int keyA = a.symbolKey(ia);
+        if (keyA != Vector.NO_KEY) {
+            final SymbolDictionary dictionary = a.symbolDictionary();
+            final int keyB = b.symbolKey(ib);
+            if (keyB != Vector.NO_KEY && dictionary != null && dictionary == b.symbolDictionary()) {
+                return keyA == keyB;
+            }
+        }
+        return a.textEquals(ia, b, ib);
     }
 
     private static int storage(final CdbType type) {

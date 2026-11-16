@@ -78,11 +78,13 @@ final class UpdateRunner {
                     Arrays.fill(hit, 0, size, true);
                 } else {
                     final Vector mask = where.eval(page);
-                    if (mask.booleans == null) {
+                    if (mask.type != CdbType.BOOLEAN) {
                         throw new CdbException("cannot UPDATE where a condition is not BOOLEAN [table="
                                 + update.table() + ", type=" + mask.type + "]", -1);
                     }
-                    System.arraycopy(mask.booleans, 0, hit, 0, size);
+                    for (int r = 0; r < size; r++) {
+                        hit[r] = mask.getBoolean(r);
+                    }
                 }
                 for (int c = 0; c < values.length; c++) {
                     values[c] = assigned[c] == null ? null : assigned[c].eval(page);
@@ -92,7 +94,7 @@ final class UpdateRunner {
                     if (change) {
                         changed++;
                     }
-                    writer.newRow(timestamp < 0 ? Vector.NULL_LONG : page.columns[timestamp].longs[r]);
+                    writer.newRow(timestamp < 0 ? Vector.NULL_LONG : page.columns[timestamp].getLong(r));
                     for (int c = 0; c < values.length; c++) {
                         if (c != timestamp) {
                             put(writer, c, fields.get(c).type(), change && values[c] != null ? values[c]
@@ -177,10 +179,12 @@ final class UpdateRunner {
             return;
         }
         switch (type) {
-            case LONG, TIMESTAMP -> writer.putLong(column, v.longs != null ? v.longs[row] : (long) v.doubles[row]);
-            case DOUBLE -> writer.putDouble(column, v.doubles != null ? v.doubles[row] : (double) v.longs[row]);
-            case BOOLEAN -> writer.putBoolean(column, v.booleans[row]);
-            case SYMBOL, VARCHAR -> writer.putText(column, v.texts[row]);
+            case LONG, TIMESTAMP -> writer.putLong(column, v.type == CdbType.DOUBLE ? (long) v.getDouble(row)
+                    : v.getLong(row));
+            case DOUBLE -> writer.putDouble(column, v.type == CdbType.DOUBLE ? v.getDouble(row)
+                    : (double) v.getLong(row));
+            case BOOLEAN -> writer.putBoolean(column, v.getBoolean(row));
+            case SYMBOL, VARCHAR -> writer.putText(column, v.textAt(row));
         }
     }
 }

@@ -46,18 +46,18 @@ class FunctionsTest {
     @Test
     void likeMatchesAPatternFromAColumn() {
         final Vector patterns = Vector.of(CdbType.VARCHAR, Page.CAPACITY);
-        patterns.texts[0] = "%b%c";
-        patterns.texts[1] = "a%";
-        patterns.texts[2] = "%c";
+        patterns.setText(0, "%b%c");
+        patterns.setText(1, "a%");
+        patterns.setText(2, "%c");
         patterns.setNull(3);
         final Vector texts = Vector.of(CdbType.VARCHAR, Page.CAPACITY);
         for (int i = 0; i < 4; i++) {
-            texts.texts[i] = "abxbyc";
+            texts.setText(i, "abxbyc");
         }
         final Page page = new Page(new Vector[] {texts, patterns}, 4);
         final Vector out = Functions.compile(call("like", CdbType.BOOLEAN, col(0, CdbType.VARCHAR),
                 col(1, CdbType.VARCHAR)), NOW_MICROS).eval(page);
-        assertThat(List.of(out.booleans[0], out.booleans[1], out.booleans[2], out.booleans[3]))
+        assertThat(List.of(out.getBoolean(0), out.getBoolean(1), out.getBoolean(2), out.getBoolean(3)))
                 .containsExactly(true, true, true, false);
     }
 
@@ -66,10 +66,10 @@ class FunctionsTest {
     void reusesItsOutputVector() {
         final VectorFn fn = Functions.compile(call("+", CdbType.LONG, X, lit(1)), NOW_MICROS);
         final Vector first = fn.eval(page(1, 2));
-        assertThat(first.longs[0]).isEqualTo(2);
+        assertThat(first.getLong(0)).isEqualTo(2);
         final Vector second = fn.eval(page(10, 20));
         assertThat(second).isSameAs(first);
-        assertThat(second.longs[1]).isEqualTo(21);
+        assertThat(second.getLong(1)).isEqualTo(21);
     }
 
     /// `now()` is the statement's instant, the same on every row.
@@ -107,7 +107,9 @@ class FunctionsTest {
 
     private static Page page(final long... values) {
         final Vector x = Vector.of(CdbType.LONG, Page.CAPACITY);
-        System.arraycopy(values, 0, x.longs, 0, values.length);
+        for (int i = 0; i < values.length; i++) {
+            x.setLong(i, values[i]);
+        }
         return new Page(new Vector[] {x}, values.length);
     }
 }

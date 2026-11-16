@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.exec.agg;
 
 import java.util.Arrays;
 
+import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Vector;
 
 /**
@@ -29,27 +30,29 @@ final class LongCountDistinctAccumulator implements Accumulator {
     public void add(final int group, final Vector value, final int row) {
         switch (value.type) {
             case LONG, TIMESTAMP -> {
-                if (value.longs[row] != Vector.NULL_LONG) {
-                    insert(group, value.longs[row]);
+                final long v = value.getLong(row);
+                if (v != Vector.NULL_LONG) {
+                    insert(group, v);
                 }
             }
             case DOUBLE -> {
-                if (!Double.isNaN(value.doubles[row])) {
-                    insert(group, Double.doubleToLongBits(value.doubles[row]));
+                final double v = value.getDouble(row);
+                if (!Double.isNaN(v)) {
+                    insert(group, Double.doubleToLongBits(v));
                 }
             }
-            case BOOLEAN -> insert(group, value.booleans[row] ? 1 : 0);
+            case BOOLEAN -> insert(group, value.getBoolean(row) ? 1 : 0);
             case SYMBOL, VARCHAR -> throw new IllegalStateException("cannot count text values as numbers");
         }
     }
 
     @Override
     public void addAll(final int[] groupOfRow, final Vector value, final int rows) {
-        if (value.longs != null) {
-            final long[] in = value.longs;
+        if (value.type == CdbType.LONG || value.type == CdbType.TIMESTAMP) {
             for (int i = 0; i < rows; i++) {
-                if (in[i] != Vector.NULL_LONG) {
-                    insert(groupOfRow[i], in[i]);
+                final long v = value.getLong(i);
+                if (v != Vector.NULL_LONG) {
+                    insert(groupOfRow[i], v);
                 }
             }
         } else {

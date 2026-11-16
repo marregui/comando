@@ -131,10 +131,10 @@ public final class Functions {
                 v.setNull(i);
             } else {
                 switch (k.type()) {
-                    case LONG, TIMESTAMP -> v.longs[i] = (Long) value;
-                    case DOUBLE -> v.doubles[i] = (Double) value;
-                    case BOOLEAN -> v.booleans[i] = (Boolean) value;
-                    case SYMBOL, VARCHAR -> v.texts[i] = (String) value;
+                    case LONG, TIMESTAMP -> v.setLong(i, (Long) value);
+                    case DOUBLE -> v.setDouble(i, (Double) value);
+                    case BOOLEAN -> v.setBoolean(i, (Boolean) value);
+                    case SYMBOL, VARCHAR -> v.setText(i, (String) value);
                 }
             }
         }

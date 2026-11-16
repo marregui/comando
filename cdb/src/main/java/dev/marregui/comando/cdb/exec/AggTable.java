@@ -40,21 +40,23 @@ final class AggTable {
     /**
      * Adds the rows of {@code page}, whose key columns are {@code keyVectors}. Consecutive rows of one key tuple form a
      * run whose group is looked up once; when the runs are long enough each goes to an accumulator as one range. A
-     * single LONG or TIMESTAMP key (the bucket of a SAMPLE BY without keys) finds its runs on its {@code long[]}, one
+     * single LONG or TIMESTAMP key (the bucket of a SAMPLE BY without keys) finds its runs on its values, one
      * comparison per row. Either way every group receives its rows in input order, so the results do not depend on
      * the runs.
      */
     void add(final Page page, final Vector[] keyVectors) {
         final int rows = page.size;
-        final long[] single = keyVectors.length == 1 && keyVectors[0].longs != null ? keyVectors[0].longs : null;
+        final boolean longKey = keyVectors.length == 1
+                && (keyVectors[0].type == CdbType.LONG || keyVectors[0].type == CdbType.TIMESTAMP);
+        final Vector single = longKey ? keyVectors[0] : null;
         int runs = 0;
         int start = 0;
         while (start < rows) {
             final int group = keys.groupOf(keyVectors, start);
             int end = start + 1;
             if (single != null) {
-                final long key = single[start];
-                while (end < rows && single[end] == key) {
+                final long key = single.getLong(start);
+                while (end < rows && single.getLong(end) == key) {
                     end++;
                 }
             } else {

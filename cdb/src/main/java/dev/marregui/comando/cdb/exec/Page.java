@@ -24,13 +24,7 @@ public final class Page {
     public void dropFirst(final int count) {
         final int kept = size - count;
         for (final Vector column : columns) {
-            final Object values = switch (column.type) {
-                case LONG, TIMESTAMP -> column.longs;
-                case DOUBLE -> column.doubles;
-                case BOOLEAN -> column.booleans;
-                case SYMBOL, VARCHAR -> column.texts;
-            };
-            System.arraycopy(values, count, values, 0, kept);
+            column.copy(column, count, 0, kept);
         }
         size = kept;
     }

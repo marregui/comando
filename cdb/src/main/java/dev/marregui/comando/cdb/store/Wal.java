@@ -3,6 +3,7 @@ package dev.marregui.comando.cdb.store;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -90,18 +91,27 @@ final class Wal {
     private Throwable failure;
     private long failedFromSeq;
     private long failedToSeq;
+    // guards the force channel's swaps: a reopen after an interrupt closed it, and the close; taken alone
+    private final Object channelLock = new Object();
+    // the channel every force of the log goes through, opened with the log: written under channelLock by a reopen and
+    // by close, read without it by every force (the timed forcer's, a cut's), so a force never waits for a swap
+    private volatile FileChannel channel;
+    // written under channelLock by close, before the channel is detached; read by a force and a cut without it
+    private volatile boolean closed;
 
-    private Wal(final Path file, final long bytes, final byte[] salt) {
+    private Wal(final Path file, final long bytes, final byte[] salt, final FileChannel channel) {
         this.file = file;
         this.bytes = bytes;
         this.header = salt == null ? UNSALTED_HEADER : HEADER;
         this.salt = salt;
+        this.channel = channel;
     }
 
     /**
      * Opens the log of the table folder {@code dir}, creating it with its header and a new salt, forced with its
      * folder, when it is missing or shorter than its header (its creation cut by a crash). Reads format 2 and format
-     * 1; refuses a header of an unknown magic or version.
+     * 1; refuses a header of an unknown magic or version. The log holds a channel on its file for its forces, opened
+     * last: its owner {@link #close closes} it.
      */
     static Wal open(final Path dir) throws IOException {
         final Path file = dir.resolve(FILE);
@@ -112,7 +122,7 @@ final class Wal {
             final byte[] salt = newSalt(null);
             StoreFiles.writeNew(file, headerOf(salt), true);
             StoreFiles.forceFolder(dir);
-            return new Wal(file, HEADER, salt);
+            return new Wal(file, HEADER, salt, StoreFiles.openForForce(file));
         }
         final long size = Files.size(file);
         final long head = StoreFiles.readLong(file, 0L);
@@ -122,12 +132,9 @@ final class Wal {
             throw new CdbException("refuse log of unknown format [file=" + file + ", magic=0x"
                     + Integer.toHexString(magic) + ", version=" + version + ']', -1);
         }
-        if (version == UNSALTED) {
-            return new Wal(file, size, null);
-        }
-        final byte[] salt = ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN)
-                .putLong(StoreFiles.readLong(file, UNSALTED_HEADER)).array();
-        return new Wal(file, size, salt);
+        final byte[] salt = version == UNSALTED ? null : ByteBuffer.allocate(Long.BYTES)
+                .order(ByteOrder.LITTLE_ENDIAN).putLong(StoreFiles.readLong(file, UNSALTED_HEADER)).array();
+        return new Wal(file, size, salt, StoreFiles.openForForce(file));
     }
 
     /**
@@ -174,10 +181,24 @@ final class Wal {
      * decode, or a transaction that does not follow the previous one, is refused as corruption, nothing cut. Called
      * once, on open, before any append. Frames at or below {@code afterTxn}, left by a checkpoint that crashed before
      * its reset, are skipped undecoded: their rows are in the checkpointed files, in columns that may be fewer than
-     * {@code def}'s.
+     * {@code def}'s. The entries' row blocks are the caller's, to close once their rows are applied; on a throw the
+     * scan closes those it decoded.
      */
     synchronized List<Entry> scan(final long afterTxn, final TableDef def) throws IOException {
         final List<Entry> entries = new ArrayList<>();
+        try {
+            return scanInto(afterTxn, def, entries);
+        } catch (final Throwable t) {
+            for (final Entry entry : entries) {
+                entry.rows().close();
+            }
+            throw t;
+        }
+    }
+
+    // called with the monitor held: scan's body, each decoded entry added to entries as it is read
+    private List<Entry> scanInto(final long afterTxn, final TableDef def, final List<Entry> entries)
+            throws IOException {
         TableDef current = def;
         long previous = 0L;
         int frames = 0;
@@ -243,7 +264,8 @@ final class Wal {
      * it. A failure is thrown and {@link #forcedSeq()} does not move: the records since the last force are in doubt,
      * every later {@link #awaitForced} past them throws, and every later force throws without forcing, since a force
      * that holds after a failed one does not prove the pages the failure dropped. An interrupt is cleared for the
-     * force, which it would fail by closing its channel, and restored after.
+     * force, which it would fail by closing its channel, and restored after. After {@link #close} a force with records
+     * to cover throws without recording a failure: the records stay unforced, not in doubt.
      */
     void force() throws IOException {
         final long target = writtenSeq;
@@ -256,9 +278,12 @@ final class Wal {
                         + forcedSeq + ", writtenSeq=" + target + ']', failure);
             }
         }
+        if (closed) {
+            throw closedLog("force");
+        }
         final boolean interrupted = Thread.interrupted();
         try {
-            StoreFiles.force(file);
+            StoreFiles.force(channel(), file);
         } catch (final Throwable t) {
             // an Error is a failed force too: whether the pages reached the disk is unknown after either
             failed(t, target);
@@ -269,6 +294,57 @@ final class Wal {
             }
         }
         forcedThrough(target, false);
+    }
+
+    /**
+     * The channel the forces go through, opened again when an interrupt closed it during a force, a force that failed
+     * and was recorded: a cut still forces the log after it, as it did on a channel of its own. Throws once closed.
+     */
+    private FileChannel channel() throws IOException {
+        final FileChannel open = channel;
+        if (open != null && open.isOpen()) {
+            return open;
+        }
+        synchronized (channelLock) {
+            if (closed) {
+                throw closedLog("force");
+            }
+            final FileChannel current = channel;
+            if (current != null && current.isOpen()) {
+                return current;
+            }
+            final FileChannel reopened = StoreFiles.openForForce(file);
+            channel = reopened;
+            return reopened;
+        }
+    }
+
+    /**
+     * Closes the log's force channel; idempotent. Its owner calls it once no force runs or follows: the timed forcer
+     * stopped and the table's writer closed. A force after it throws, a force in flight fails as a failed force.
+     */
+    void close() {
+        final FileChannel open;
+        synchronized (channelLock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            open = channel;
+            channel = null;
+        }
+        if (open != null) {
+            try {
+                open.close();
+            } catch (final IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot close log channel [file=" + file + ']', e);
+            }
+        }
+    }
+
+    private IOException closedLog(final String operation) {
+        return new IOException("refuse " + operation + " of closed log [file=" + file + ", forcedSeq=" + forcedSeq
+                + ", writtenSeq=" + writtenSeq + ']');
     }
 
     // records the first failed force, the records after forcedSeq up to target in doubt, and wakes the durable waiters
@@ -421,8 +497,12 @@ final class Wal {
      * failed force after the write leaves the new header in the page cache, where the next frames follow it: the disk
      * may hold the old salt, so that failure is the log's failed force, and every later force and append is refused.
      * Once the truncate holds every record written is covered: the records left were in the checkpointed files.
+     * Refused, nothing cut, once the log is closed.
      */
     private void cut() throws IOException {
+        if (closed) {
+            throw closedLog("cut");
+        }
         StoreFiles.truncate(file, header);
         records = 0;
         bytes = header;
@@ -434,7 +514,7 @@ final class Wal {
         // the truncate was forced: the records left are the checkpoint's, durable whatever the header's force does
         forcedThrough(writtenSeq, true);
         try {
-            StoreFiles.force(file);
+            StoreFiles.force(channel(), file);
         } catch (final Throwable t) {
             failed(t, writtenSeq);
             throw t;
@@ -479,7 +559,7 @@ final class Wal {
             if (type.isText()) {
                 final byte[][] utf8 = new byte[n][];
                 for (int r = 0; r < n; r++) {
-                    final String value = rows.texts[c][r];
+                    final String value = rows.textAt(c, r);
                     if (value != null) {
                         utf8[r] = value.getBytes(StandardCharsets.UTF_8);
                         length += utf8[r].length;
@@ -506,21 +586,18 @@ final class Wal {
         for (int c = 0; c < columns; c++) {
             switch (rows.types[c]) {
                 case LONG, TIMESTAMP -> {
-                    final long[] values = rows.longs[c];
                     for (int r = 0; r < n; r++) {
-                        frame.putLong(values[r]);
+                        frame.putLong(rows.getLong(c, r));
                     }
                 }
                 case DOUBLE -> {
-                    final double[] values = rows.doubles[c];
                     for (int r = 0; r < n; r++) {
-                        frame.putLong(Double.doubleToRawLongBits(values[r]));
+                        frame.putLong(Double.doubleToRawLongBits(rows.getDouble(c, r)));
                     }
                 }
                 case BOOLEAN -> {
-                    final boolean[] values = rows.booleans[c];
                     for (int r = 0; r < n; r++) {
-                        frame.put((byte) (values[r] ? 1 : 0));
+                        frame.put((byte) (rows.getBoolean(c, r) ? 1 : 0));
                     }
                 }
                 case SYMBOL, VARCHAR -> {
@@ -579,33 +656,42 @@ final class Wal {
         }
         final int size = (int) n;
         final RowBlock rows = new RowBlock(inForce.columns(), size);
-        rows.size = size;
+        try {
+            rows.size = size;
+            decodeRows(body, rows, offset, txn);
+        } catch (final Throwable t) {
+            rows.close();
+            throw t;
+        }
+        return new Entry(txn, (flags & TRUNCATE) != 0, logged, rows);
+    }
+
+    /** Fills {@code rows}, {@code rows.size} rows, from {@code body}, then checks no byte is left past them. */
+    private void decodeRows(final ByteBuffer body, final RowBlock rows, final long offset, final long txn) {
+        final int columns = rows.types.length;
+        final int size = rows.size;
         for (int c = 0; c < columns; c++) {
             switch (rows.types[c]) {
                 case LONG, TIMESTAMP -> {
-                    final long[] values = rows.longs[c];
                     for (int r = 0; r < size; r++) {
-                        values[r] = body.getLong();
+                        rows.setLong(c, r, body.getLong());
                     }
                 }
                 case DOUBLE -> {
-                    final double[] values = rows.doubles[c];
                     for (int r = 0; r < size; r++) {
-                        values[r] = Double.longBitsToDouble(body.getLong());
+                        rows.setDouble(c, r, Double.longBitsToDouble(body.getLong()));
                     }
                 }
                 case BOOLEAN -> {
-                    final boolean[] values = rows.booleans[c];
                     for (int r = 0; r < size; r++) {
                         final byte b = body.get();
                         if (b != 0 && b != 1) {
                             throw undecodable("boolean other than 0 or 1", offset, txn, b);
                         }
-                        values[r] = b == 1;
+                        rows.setBoolean(c, r, b == 1);
                     }
                 }
                 case SYMBOL, VARCHAR -> {
-                    final String[] values = rows.texts[c];
                     for (int r = 0; r < size; r++) {
                         final int length = textLength(body, offset, txn);
                         if (length < -1) {
@@ -614,7 +700,7 @@ final class Wal {
                         if (length >= 0) {
                             final byte[] utf8 = new byte[length];
                             body.get(utf8);
-                            values[r] = new String(utf8, StandardCharsets.UTF_8);
+                            rows.setText(c, r, new String(utf8, StandardCharsets.UTF_8));
                         }
                     }
                 }
@@ -623,7 +709,6 @@ final class Wal {
         if (body.hasRemaining()) {
             throw undecodable("bytes past the rows", offset, txn, body.remaining());
         }
-        return new Entry(txn, (flags & TRUNCATE) != 0, logged, rows);
     }
 
     /** A text's i32 length, checked against the bytes left in {@code body}; -1 for NULL. */
@@ -645,7 +730,8 @@ final class Wal {
 
     /**
      * One logged commit: {@code def} is the table's definition after it when the commit changed it, else null;
-     * {@code rows} holds its pending rows, {@code rows.size} of them, in the columns of that definition.
+     * {@code rows} holds its pending rows, {@code rows.size} of them, in the columns of that definition; whoever holds
+     * the entry closes {@code rows} once they are applied.
      */
     record Entry(long txn, boolean truncate, TableDef def, RowBlock rows) {
     }

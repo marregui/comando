@@ -55,10 +55,10 @@ class ScanDifferentialTest {
                     final List<Object> row = new ArrayList<>(page.columns.length);
                     for (final Vector v : page.columns) {
                         row.add(switch (v.type) {
-                            case LONG, TIMESTAMP -> v.longs[r];
-                            case DOUBLE -> v.doubles[r];
-                            case BOOLEAN -> v.booleans[r];
-                            case SYMBOL, VARCHAR -> String.valueOf(v.texts[r]);
+                            case LONG, TIMESTAMP -> v.getLong(r);
+                            case DOUBLE -> v.getDouble(r);
+                            case BOOLEAN -> v.getBoolean(r);
+                            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(r));
                         });
                     }
                     out.add(row);

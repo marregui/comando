@@ -171,8 +171,8 @@ final class SampleByCursor implements Cursor {
 
     private static void writeNumber(final double value, final Vector out, final int row) {
         switch (out.type) {
-            case LONG, TIMESTAMP -> out.longs[row] = (long) value;
-            case DOUBLE -> out.doubles[row] = value;
+            case LONG, TIMESTAMP -> out.setLong(row, (long) value);
+            case DOUBLE -> out.setDouble(row, value);
             default -> out.setNull(row);
         }
     }
@@ -221,7 +221,7 @@ final class SampleByCursor implements Cursor {
         int withBucket = 0;
         for (int g = 0; g < groups; g++) {
             table.writeKey(g, 0, one, 0);
-            groupBucket[g] = one.longs[0];
+            groupBucket[g] = one.getLong(0);
             if (groupBucket[g] != Vector.NULL_LONG) {
                 withBucket++;
             }
@@ -313,7 +313,7 @@ final class SampleByCursor implements Cursor {
     private void writeCell(final int cell, final Page out, final int row) {
         final int bucket = cell / keys;
         final int key = cell % keys;
-        out.columns[0].longs[row] = bucketStarts[bucket];
+        out.columns[0].setLong(row, bucketStarts[bucket]);
         final int keyColumns = tableTypes.size() - 1;
         for (int k = 0; k < keyColumns; k++) {
             keyTable.write(key, k, out.columns[k + 1], row);
@@ -370,9 +370,9 @@ final class SampleByCursor implements Cursor {
         final long dx = after / keys - x0;
         final long x = cell / keys - x0;
         if (column.type == CdbType.DOUBLE) {
-            column.doubles[row] = y.doubles[0] + (y.doubles[1] - y.doubles[0]) * x / dx;
+            column.setDouble(row, y.getDouble(0) + (y.getDouble(1) - y.getDouble(0)) * x / dx);
         } else {
-            column.longs[row] = y.longs[0] + (y.longs[1] - y.longs[0]) * x / dx;
+            column.setLong(row, y.getLong(0) + (y.getLong(1) - y.getLong(0)) * x / dx);
         }
     }
 
@@ -404,12 +404,12 @@ final class SampleByCursor implements Cursor {
 
         void add(final Page page) {
             final Vector buckets = keysWithBucket[0];
-            final long[] micros = page.columns[timestampColumn].longs;
+            final Vector micros = page.columns[timestampColumn];
             if (strideMicros > 0) {
                 for (int i = 0; i < page.size; i++) {
-                    final long ts = micros[i];
+                    final long ts = micros.getLong(i);
                     if (ts == Vector.NULL_LONG) {
-                        buckets.longs[i] = Vector.NULL_LONG;
+                        buckets.setLong(i, Vector.NULL_LONG);
                     } else {
                         if (ts < bucketStart || ts >= bucketEnd) {
                             bucketStart = Math.floorDiv(ts, strideMicros) * strideMicros;
@@ -417,14 +417,15 @@ final class SampleByCursor implements Cursor {
                             // below the start: either leaves an empty range, so those rows floor again
                             bucketEnd = bucketStart > ts ? bucketStart : bucketStart + strideMicros;
                         }
-                        buckets.longs[i] = bucketStart;
+                        buckets.setLong(i, bucketStart);
                     }
                 }
             } else {
                 for (int i = 0; i < page.size; i++) {
-                    buckets.longs[i] = micros[i] == Vector.NULL_LONG
+                    final long ts = micros.getLong(i);
+                    buckets.setLong(i, ts == Vector.NULL_LONG
                             ? Vector.NULL_LONG
-                            : AggBuckets.floor(micros[i], count, unit);
+                            : AggBuckets.floor(ts, count, unit));
                 }
             }
             for (int k = 0; k < keyFns.length; k++) {

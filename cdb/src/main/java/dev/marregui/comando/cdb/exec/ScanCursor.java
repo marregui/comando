@@ -22,6 +22,12 @@ import dev.marregui.comando.cdb.store.TableReader;
  */
 final class ScanCursor implements Cursor {
 
+    /**
+     * A scan column index that reads no store column but each row's position, {@link LateReadCursor#position} of its
+     * partition in the reader's snapshot and its row there, as a LONG.
+     */
+    static final int POSITION = -1;
+
     private final List<Field> fields;
     private final int[] columns;
     private final CdbType[] types;
@@ -35,6 +41,10 @@ final class ScanCursor implements Cursor {
     private final boolean ownsReader;
     private final int[] sel;
     private final int[] other;
+    // the rows of the chunk sel keeps, for a gather
+    private final long[] rows;
+    // per range, its partition's index in the reader's snapshot
+    private final int[] partitionIndexes;
     private TableReader reader;
     private Page scratch;
     private int partition;
@@ -83,6 +93,7 @@ final class ScanCursor implements Cursor {
             newestFirst = scan.newestFirst();
             sel = terms.length == 0 ? null : new int[Page.CAPACITY];
             other = terms.length < 2 ? null : new int[Page.CAPACITY];
+            rows = terms.length == 0 ? null : new long[Page.CAPACITY];
             final List<Frames.Frame> ranges;
             if (frame != null) {
                 ranges = frame.fromRow() < frame.toRow() ? List.of(frame) : List.of();
@@ -94,11 +105,13 @@ final class ScanCursor implements Cursor {
             final List<PartitionReader> kept = new ArrayList<>(ranges.size());
             starts = new long[ranges.size()];
             ends = new long[ranges.size()];
+            partitionIndexes = new int[ranges.size()];
             for (int i = 0; i < starts.length; i++) {
                 final Frames.Frame range = ranges.get(i);
                 kept.add(snapshot.get(range.partition()));
                 starts[i] = range.fromRow();
                 ends[i] = range.toRow();
+                partitionIndexes[i] = range.partition();
             }
             partitions = kept;
             enter();
@@ -139,7 +152,7 @@ final class ScanCursor implements Cursor {
             }
             if (newestFirst) {
                 for (final int c : live) {
-                    reverse(out.columns[c], out.size, n);
+                    out.columns[c].reverse(out.size, n);
                 }
             }
             out.size += n;
@@ -272,52 +285,30 @@ final class ScanCursor implements Cursor {
     private void read(final PartitionReader p, final long from, final int n, final Page dst) {
         for (final int c : live) {
             final Vector v = dst.columns[c];
-            switch (types[c]) {
-                case LONG, TIMESTAMP -> p.longs(columns[c], from, n, v.longs);
-                case DOUBLE -> p.doubles(columns[c], from, n, v.doubles);
-                case BOOLEAN -> p.booleans(columns[c], from, n, v.booleans);
-                case SYMBOL, VARCHAR -> p.texts(columns[c], from, n, v.texts);
+            if (columns[c] == POSITION) {
+                for (int i = 0; i < n; i++) {
+                    v.setLong(i, LateReadCursor.position(partitionIndexes[partition], from + i));
+                }
+            } else {
+                p.read(columns[c], from, n, v, 0);
             }
         }
     }
 
     private void gather(final PartitionReader p, final long from, final int count, final Page dst) {
+        for (int i = 0; i < count; i++) {
+            rows[i] = from + sel[i];
+        }
         for (final int c : live) {
             final Vector v = dst.columns[c];
-            switch (types[c]) {
-                case LONG, TIMESTAMP -> p.longsAt(columns[c], from, sel, count, v.longs);
-                case DOUBLE -> p.doublesAt(columns[c], from, sel, count, v.doubles);
-                case BOOLEAN -> p.booleansAt(columns[c], from, sel, count, v.booleans);
-                case SYMBOL, VARCHAR -> p.textsAt(columns[c], from, sel, count, v.texts);
+            if (columns[c] == POSITION) {
+                for (int i = 0; i < count; i++) {
+                    v.setLong(i, LateReadCursor.position(partitionIndexes[partition], rows[i]));
+                }
+            } else {
+                p.fetch(columns[c], rows, 0, count, v, 0);
             }
         }
     }
 
-    /** Values {@code [at, at + n)} of {@code v} in reverse order. */
-    private static void reverse(final Vector v, final int at, final int n) {
-        for (int i = at, j = at + n - 1; i < j; i++, j--) {
-            switch (v.type) {
-                case LONG, TIMESTAMP -> {
-                    final long t = v.longs[i];
-                    v.longs[i] = v.longs[j];
-                    v.longs[j] = t;
-                }
-                case DOUBLE -> {
-                    final double t = v.doubles[i];
-                    v.doubles[i] = v.doubles[j];
-                    v.doubles[j] = t;
-                }
-                case BOOLEAN -> {
-                    final boolean t = v.booleans[i];
-                    v.booleans[i] = v.booleans[j];
-                    v.booleans[j] = t;
-                }
-                case SYMBOL, VARCHAR -> {
-                    final String t = v.texts[i];
-                    v.texts[i] = v.texts[j];
-                    v.texts[j] = t;
-                }
-            }
-        }
-    }
 }

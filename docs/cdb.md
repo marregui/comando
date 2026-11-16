@@ -11,7 +11,7 @@ This document says how a query and a write run, what each step costs, and how th
 | parse | `sql` | text to a syntax tree |
 | plan | `plan` | names and types resolved; the time range of the designated timestamp narrowed from WHERE (`Pruning`); the WHERE's top-level AND comparisons of a column with a constant become the scan's terms (`ScanTerms`); `LATEST ON` over a scan reads it newest first; `ORDER BY … LIMIT` tells the sort how many rows are read |
 | prune | `plan.ColumnUse` | from the root down, each node asks its child for the columns it reads; a scan reads only those |
-| execute | `exec` | a tree of cursors over pages of 1,024 rows, one primitive array per column (`String[]` for text); a page belongs to its caller |
+| execute | `exec` | a tree of cursors over pages of 1,024 rows, a page belonging to its caller; a column (`Vector`) is read and written only through its accessors: a primitive array for fixed width, text as UTF-8 bytes (`TextColumn`), SYMBOL as its dictionary key ([record 167](adr/0167-cdb-heap-reduction.md)) |
 | read | `store` | a snapshot of the table: per partition a `Version`, its column files mapped through FFM |
 
 ### 1.1 The scan
@@ -35,11 +35,22 @@ numeric select skips a block whose range cannot hold the constant; a block holdi
 
 ### 1.2 Text
 
-VARCHAR is stored as 8-byte end offsets (`.i`) and UTF-8 bytes (`.d`). A version keeps a text cache per column: up to
+VARCHAR is stored as 8-byte end offsets (`.i`) and UTF-8 bytes (`.d`). For the reads that return Strings
+(`PartitionReader.texts`, no longer on the query path), a version keeps a text cache per column: up to
 1,024 values of up to 128 bytes, keyed by their bytes compared in full, shared by every reader thread without a lock;
 a row whose value is cached costs a hash and a compare instead of a decode and a String. A text term compares bytes:
 the length from the offsets first, then eight bytes at a time and the tail in one masked word. SYMBOL compares 4-byte
 dictionary keys.
+
+In a page, a VARCHAR value is its UTF-8 bytes, copied from the mapped file into one byte array per vector without a
+String, and a SYMBOL value read from a table is its dictionary key; text is decoded only where a String is the answer:
+the result (`CdbResult`, JSON, PG) and the functions that build text (`concat`, `substring`, `upper`, `lower`,
+`replace`, casts) or read its chars (`like`, `length`). Comparison is `String.compareTo`'s order and hashing
+`String.hashCode`'s, computed from the bytes (UTF-8 byte order differs from UTF-16 order between U+E000–U+FFFF and
+supplementary chars, which the compare handles), so answers and the output order of hash-based operators are the
+same as with Strings. Two SYMBOL values of one dictionary compare by key. An unpaired surrogate (half a pair, from
+`substring`) is held as the 3 bytes of its code unit, so it reads back as itself; the column files still store it as
+`?`, as before.
 
 ### 1.3 Operators
 
@@ -50,7 +61,7 @@ dictionary keys.
 | `percentile_cont`, percentiles | per group a growable primitive array; the rank selected in place (radix passes for 4,096 values or more, then quickselect, insertion sort under 16), ordered as `Arrays.sort` orders, so the result is bit-identical to a full sort |
 | LATEST ON, newest first | the first row of each key is its answer: copied once; a later row of a seen key costs one hash lookup, or, for one text key with at most 16 values, a scan of those values |
 | LATEST ON, time order | the best row per key tracked by offset, copied once per page |
-| ORDER BY … LIMIT | a bounded heap that keeps the full sort's order, ties by input sequence |
+| ORDER BY … LIMIT | a bounded heap that keeps the full sort's order, ties by input sequence; over a scan with n at most 10,000 (`LateReadCursor`), the scan reads only the filter's and the sort's columns plus each row's position, and the other columns are read for the n rows kept |
 
 **Parallel operators** ([record 165](adr/0165-cdb-parallel-queries.md)). A segment, a scan under only filters and
 projections whose expressions read the current row, is cut into frames: per partition in the scan's range, its rows at
@@ -108,7 +119,7 @@ batch. A commit puts its table on the applier's queue, once until it is served; 
 thread alone, holds each table's next due time (its interval, a retry back-off, an idle checkpoint), and the thread
 parks until the earliest of them or the next commit, so an idle store costs no work. A table is due once its oldest
 queued commit is older than its interval, at once when a reader waits for it or
-the store's queued commits pass half their budget (64 MiB of heap, estimated). The interval starts at 1 s and stays in
+the store's queued commits pass half their budget (64 MiB of native memory, estimated). The interval starts at 1 s and stays in
 100 ms to 5 s: halved after a batch a reader waited for, doubled after a batch that took more than half of it, else
 drawn a quarter of the way back to 1 s. Over the budget a commit waits for the applier to catch up, at most 10 s, so a
 writer faster than the applier slows to it; past that wait it is answered anyway (it is durable), so the budget holds
@@ -182,6 +193,17 @@ Snapshots: a reader holds a version per partition; several snapshots may share a
 table counts holders per folder and deletes a folder only when no snapshot holds it and the checkpointed `_txn` does
 not name it: a folder the durable `_txn` still names is the data a power cut would come back to.
 
+**Mappings** ([record 167](adr/0167-cdb-heap-reduction.md)). A version maps a column's files on the first read of
+the column, not at open. The applier's pass releases, every 10 s, the mappings of the versions no read used for 60 s;
+the next read maps them again. A store counts its mappings (`store.Mappings`) against the process's limit, read once
+from `/proc/sys/vm/max_map_count` (65,530 by default on Linux; macOS has none and is not counted against one), and
+logs one WARNING when the count passes 81 % of it, again only after it fell under 76 %.
+
+**Commit memory.** A commit's rows wait for the applier in a row block in native memory (`store.RowBlock`, one shared
+arena per block, its bytes counted): the block that queued them is freed once the applier published them, a replay's
+blocks once the replay ends, the blocks never applied when their table closes. Each table log keeps one file channel
+for its forces, closed with the store.
+
 ## 3. Concurrency
 
 | Who | Holds | Waits for |
@@ -222,7 +244,7 @@ Threads:
 
 | Thread | Kind | Owner | May block on |
 |---|---|---|---|
-| `cdb-applier-<root>` | platform, daemon, one per store (its batches force files, which would pin a virtual thread) | `store.Applier`, started by `Store.open`, stopped by `Store.close` (joined up to 10 s) | a table's apply lock (a direct commit of it in progress), the log's monitor when it drains a log past 4 checkpoints' worth, file writes and forces; parks until its earliest deadline or a signal, at most 1 s |
+| `cdb-applier-<root>` | platform, daemon, one per store (its batches force files, which would pin a virtual thread); also releases idle versions' mappings every 10 s | `store.Applier`, started by `Store.open`, stopped by `Store.close` (joined up to 10 s) | a table's apply lock (a direct commit of it in progress), the log's monitor when it drains a log past 4 checkpoints' worth, file writes and forces; parks until its earliest deadline or a signal, at most 1 s |
 | `cdb-query-<n>` | platform, daemon, cores − 1 by default (`CdbServe --query-threads N`), one pool per process shared by every store (CPU-bound frames) | `exec.QueryPool`, started at the first submit; the shared pool's threads end with the process | a frame's reads (mapped files), a nested job's frames, which it runs itself rather than wait; parks idle at most 1 s |
 | `cdb-log-force-<root>` | platform, daemon, one per store opened with the timed force (a force blocks in the file system) | `store.LogForcer`, started by `Store.open`, stopped by `Store.close` after a last force of every dirty log (joined up to 10 s) | a log's force; parks until the earliest deadline or a signal, at most 1 s |
 | `cdb-http-<n>` | virtual, one per request | `serve.CdbServer` | a table's lease and its commit queue, the read wait for the applier (at most 10 s), the socket |
@@ -292,6 +314,20 @@ text decode (`TextCache.text`, jfrq `hot`), which a late read of the columns not
 | E | 23.0 / 22.1 | 16.7 / 20.4 |
 | F | 14.4 / 14.0 | 3.3 / 3.2 |
 | load of the 2 M rows | 5.5 s | 5.4 s |
+
+Heap reduction (record 167), 2026-11-16: the same bench, the jar of `96b0bba3` against the jar with record 167,
+interleaved runs on a fresh store per jar, best of 7, client time on the M2 Max. Every answer is the same. E reads
+the text of its 500 rows only; D's newest-first scan reverses pages in place. Allocation was not measured again.
+
+| Query | before (ms) | after (ms) |
+|---|---|---|
+| A | 1.2 / 1.0 | 1.2 / 1.0 |
+| B | 3.4 / 3.3 | 3.5 / 3.4 |
+| C | 11.3 / 12.1 | 12.2 / 13.6 |
+| D | 9.1 / 10.7 | 11.1 |
+| E | 7.6 / 24.7 | 5.8 / 5.5 |
+| F | 3.1 / 3.0 | 3.4 / 3.2 |
+| load of the 2 M rows | 5.6 s | 5.8 s |
 
 The memory figure is with the JVM options the kit's `cdb-serve` and Cosa's cdb image use: G1 with two GC threads and
 a collection every 10 s when idle, compact object headers, a heap of 16 to 256 MB kept 10–20 % free (before: `-Xmx1g`).

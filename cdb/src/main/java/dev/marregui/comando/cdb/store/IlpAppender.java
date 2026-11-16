@@ -70,37 +70,43 @@ final class IlpAppender implements CdbAppender {
 
     @Override
     public CdbAppender symbol(final String column, final String value) {
-        add(column, CdbType.SYMBOL).texts[fields - 1] = value;
+        add(column, CdbType.SYMBOL);
+        texts[fields - 1] = value;
         return this;
     }
 
     @Override
     public CdbAppender stringColumn(final String column, final String value) {
-        add(column, CdbType.VARCHAR).texts[fields - 1] = value;
+        add(column, CdbType.VARCHAR);
+        texts[fields - 1] = value;
         return this;
     }
 
     @Override
     public CdbAppender longColumn(final String column, final long value) {
-        add(column, CdbType.LONG).longs[fields - 1] = value;
+        add(column, CdbType.LONG);
+        longs[fields - 1] = value;
         return this;
     }
 
     @Override
     public CdbAppender doubleColumn(final String column, final double value) {
-        add(column, CdbType.DOUBLE).doubles[fields - 1] = value;
+        add(column, CdbType.DOUBLE);
+        doubles[fields - 1] = value;
         return this;
     }
 
     @Override
     public CdbAppender booleanColumn(final String column, final boolean value) {
-        add(column, CdbType.BOOLEAN).longs[fields - 1] = value ? 1L : 0L;
+        add(column, CdbType.BOOLEAN);
+        longs[fields - 1] = value ? 1L : 0L;
         return this;
     }
 
     @Override
     public CdbAppender timestampColumn(final String column, final long micros) {
-        add(column, CdbType.TIMESTAMP).longs[fields - 1] = micros;
+        add(column, CdbType.TIMESTAMP);
+        longs[fields - 1] = micros;
         return this;
     }
 
@@ -249,7 +255,7 @@ final class IlpAppender implements CdbAppender {
         return failure;
     }
 
-    private IlpAppender add(final String column, final CdbType type) {
+    private void add(final String column, final CdbType type) {
         checkOpen();
         if (table == null) {
             throw new CdbException("refuse field before table [column=" + column + ']', -1);
@@ -266,7 +272,6 @@ final class IlpAppender implements CdbAppender {
         names[fields] = column;
         types[fields] = type;
         fields++;
-        return this;
     }
 
     private TableWriter writer(final String name) {

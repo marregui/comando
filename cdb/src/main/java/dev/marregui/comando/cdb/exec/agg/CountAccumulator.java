@@ -45,26 +45,23 @@ final class CountAccumulator implements Accumulator {
         long n = 0;
         switch (value.type) {
             case LONG, TIMESTAMP -> {
-                final long[] in = value.longs;
                 for (int i = from; i < to; i++) {
-                    if (in[i] != Vector.NULL_LONG) {
+                    if (value.getLong(i) != Vector.NULL_LONG) {
                         n++;
                     }
                 }
             }
             case DOUBLE -> {
-                final double[] in = value.doubles;
                 for (int i = from; i < to; i++) {
-                    if (!Double.isNaN(in[i])) {
+                    if (!Double.isNaN(value.getDouble(i))) {
                         n++;
                     }
                 }
             }
             case BOOLEAN -> n = to - from;
             case SYMBOL, VARCHAR -> {
-                final String[] in = value.texts;
                 for (int i = from; i < to; i++) {
-                    if (in[i] != null) {
+                    if (!value.isNull(i)) {
                         n++;
                     }
                 }

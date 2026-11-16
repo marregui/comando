@@ -290,7 +290,9 @@ class AccumulatorMergeTest {
             for (int r = cuts[f]; r < cuts[f + 1]; r++) {
                 if (!input.values.isNull(r)) {
                     final int g = input.groupOfRow[r];
-                    sums[g] += input.values.doubles != null ? input.values.doubles[r] : input.values.longs[r];
+                    sums[g] += input.values.type == CdbType.DOUBLE
+                            ? input.values.getDouble(r)
+                            : input.values.getLong(r);
                     counts[g]++;
                 }
             }
@@ -300,17 +302,17 @@ class AccumulatorMergeTest {
         }
         final Vector out = Vector.of(c.out, input.groups);
         for (int g = 0; g < input.groups; g++) {
-            out.doubles[g] = counts[g] == 0 ? Double.NaN : c.kind == Kind.AVG ? totals[g] / counts[g] : totals[g];
+            out.setDouble(g, counts[g] == 0 ? Double.NaN : c.kind == Kind.AVG ? totals[g] / counts[g] : totals[g]);
         }
         return out;
     }
 
     private static Object cell(final Vector v, final int row) {
         return switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[row];
-            case DOUBLE -> Double.doubleToRawLongBits(v.doubles[row]);
-            case BOOLEAN -> v.booleans[row];
-            case SYMBOL, VARCHAR -> String.valueOf(v.texts[row]);
+            case LONG, TIMESTAMP -> v.getLong(row);
+            case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(row));
+            case BOOLEAN -> v.getBoolean(row);
+            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(row));
         };
     }
 
@@ -349,7 +351,7 @@ class AccumulatorMergeTest {
     private void set(final Vector v, final int i, final boolean nullsOnly, final boolean nonNegative) {
         if (nullsOnly) {
             if (v.type == CdbType.BOOLEAN) {
-                v.booleans[i] = random.nextBoolean();
+                v.setBoolean(i, random.nextBoolean());
             } else {
                 v.setNull(i);
             }
@@ -357,10 +359,10 @@ class AccumulatorMergeTest {
         }
         final int pick = random.nextInt(100);
         switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[i] = pick < 10
+            case LONG, TIMESTAMP -> v.setLong(i, pick < 10
                     ? Vector.NULL_LONG
-                    : pick < 50 ? random.nextInt(20) : nonNegative ? random.nextLong(1L << 40) : random.nextLong();
-            case DOUBLE -> v.doubles[i] = switch (pick) {
+                    : pick < 50 ? random.nextInt(20) : nonNegative ? random.nextLong(1L << 40) : random.nextLong());
+            case DOUBLE -> v.setDouble(i, switch (pick) {
                 case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 -> Double.NaN;
                 case 10, 11, 12, 13, 14 -> -0.0;
                 case 15, 16, 17, 18, 19 -> 0.0;
@@ -368,9 +370,9 @@ class AccumulatorMergeTest {
                 case 21 -> Double.NEGATIVE_INFINITY;
                 case 22 -> Double.MIN_VALUE;
                 default -> pick < 60 ? random.nextInt(20) / 4.0 : random.nextGaussian() * 1e6;
-            };
-            case BOOLEAN -> v.booleans[i] = random.nextBoolean();
-            case SYMBOL, VARCHAR -> v.texts[i] = pick < 10 ? null : "s" + random.nextInt(12);
+            });
+            case BOOLEAN -> v.setBoolean(i, random.nextBoolean());
+            case SYMBOL, VARCHAR -> v.setText(i, pick < 10 ? null : "s" + random.nextInt(12));
         }
     }
 

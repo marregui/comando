@@ -12,7 +12,7 @@ final class LongSumAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        final long v = value.longs[row];
+        final long v = value.getLong(row);
         if (v != Vector.NULL_LONG) {
             sums[group] += v;
             seen[group] = true;
@@ -21,9 +21,8 @@ final class LongSumAccumulator implements Accumulator {
 
     @Override
     public void addAll(final int[] groups, final Vector value, final int size) {
-        final long[] in = value.longs;
         for (int i = 0; i < size; i++) {
-            final long v = in[i];
+            final long v = value.getLong(i);
             if (v != Vector.NULL_LONG) {
                 sums[groups[i]] += v;
                 seen[groups[i]] = true;
@@ -33,11 +32,10 @@ final class LongSumAccumulator implements Accumulator {
 
     @Override
     public void addRange(final int group, final Vector value, final int from, final int to) {
-        final long[] in = value.longs;
         long sum = sums[group];
         boolean any = false;
         for (int i = from; i < to; i++) {
-            final long v = in[i];
+            final long v = value.getLong(i);
             if (v != Vector.NULL_LONG) {
                 sum += v;
                 any = true;

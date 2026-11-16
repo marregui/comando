@@ -31,6 +31,8 @@ public final class FrameSource implements AutoCloseable {
     private final QueryContext ctx;
     private final TableReader reader;
     private final List<Frames.Frame> frames;
+    // false when the reader is borrowed and its lender closes it
+    private final boolean ownsReader;
     private boolean closed;
 
     private FrameSource(
@@ -39,9 +41,11 @@ public final class FrameSource implements AutoCloseable {
             final int frameRows,
             final long nowMicros,
             final Map<Plan.Scan, boolean[]> reads,
-            final QueryContext ctx
+            final QueryContext ctx,
+            final boolean ownsReader
     ) {
         this.segment = segment;
+        this.ownsReader = ownsReader;
         this.nowMicros = nowMicros;
         this.reads = reads;
         this.ctx = ctx;
@@ -66,7 +70,8 @@ public final class FrameSource implements AutoCloseable {
         if (!isSegment(plan)) {
             return null;
         }
-        return new FrameSource(plan, store.reader(scan(plan).table()), Frames.FRAME_ROWS, nowMicros, reads, ctx);
+        return new FrameSource(plan, store.reader(scan(plan).table()), Frames.FRAME_ROWS, nowMicros, reads, ctx,
+                true);
     }
 
     /**
@@ -75,7 +80,21 @@ public final class FrameSource implements AutoCloseable {
      */
     @TestOnly
     static FrameSource of(final Plan plan, final TableReader reader, final int frameRows, final QueryContext ctx) {
-        return new FrameSource(plan, reader, frameRows, 0L, Map.of(), ctx);
+        return new FrameSource(plan, reader, frameRows, 0L, Map.of(), ctx, true);
+    }
+
+    /**
+     * The source of segment {@code plan} over {@code reader}, which stays its caller's: {@link #close()} leaves it
+     * open, so the caller may read the snapshot after the frames are done.
+     */
+    static FrameSource borrowing(
+            final Plan plan,
+            final TableReader reader,
+            final long nowMicros,
+            final Map<Plan.Scan, boolean[]> reads,
+            final QueryContext ctx
+    ) {
+        return new FrameSource(plan, reader, Frames.FRAME_ROWS, nowMicros, reads, ctx, false);
     }
 
     /**
@@ -129,12 +148,17 @@ public final class FrameSource implements AutoCloseable {
         return ctx.pool().submit(frames(), work, ctx);
     }
 
-    /** Releases the snapshot; idempotent. Called by the consumer once no frame of the source runs. */
+    /**
+     * Releases the snapshot when the source owns it; idempotent. Called by the consumer once no frame of the source
+     * runs.
+     */
     @Override
     public void close() {
         if (!closed) {
             closed = true;
-            reader.close();
+            if (ownsReader) {
+                reader.close();
+            }
         }
     }
 

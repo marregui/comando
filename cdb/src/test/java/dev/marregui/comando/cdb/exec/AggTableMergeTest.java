@@ -195,10 +195,10 @@ class AggTableMergeTest {
 
     private static Object cell(final Vector v) {
         return switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[0];
-            case DOUBLE -> Double.doubleToRawLongBits(v.doubles[0]);
-            case BOOLEAN -> v.booleans[0];
-            case SYMBOL, VARCHAR -> String.valueOf(v.texts[0]);
+            case LONG, TIMESTAMP -> v.getLong(0);
+            case DOUBLE -> Double.doubleToRawLongBits(v.getDouble(0));
+            case BOOLEAN -> v.getBoolean(0);
+            case SYMBOL, VARCHAR -> String.valueOf(v.textAt(0));
         };
     }
 
@@ -238,33 +238,33 @@ class AggTableMergeTest {
     // above 1 hashes as the even one below it, so the merge meets equal hashes of different keys
     private void key(final Vector v, final int label) {
         switch (v.type) {
-            case LONG -> v.longs[label] = label == 1
+            case LONG -> v.setLong(label, label == 1
                     ? Vector.NULL_LONG
-                    : label % 2 == 1 ? (1L << 32) | ((label - 1) ^ 1) : label;
-            case TIMESTAMP -> v.longs[label] = label % 7 == 3 ? Vector.NULL_LONG : -label * 1_000_000L;
-            case DOUBLE -> v.doubles[label] = switch (label % 4) {
+                    : label % 2 == 1 ? (1L << 32) | ((label - 1) ^ 1) : label);
+            case TIMESTAMP -> v.setLong(label, label % 7 == 3 ? Vector.NULL_LONG : -label * 1_000_000L);
+            case DOUBLE -> v.setDouble(label, switch (label % 4) {
                 case 0 -> Double.NaN;
                 case 1 -> -0.0;
                 case 2 -> 0.0;
                 default -> label / 4 * 0.5;
-            };
-            case BOOLEAN -> v.booleans[label] = random.nextBoolean();
-            case VARCHAR -> v.texts[label] = label / 4 == 1 ? null : "k" + label / 4;
-            case SYMBOL -> v.texts[label] = label == 2 ? null : "s" + label;
+            });
+            case BOOLEAN -> v.setBoolean(label, random.nextBoolean());
+            case VARCHAR -> v.setText(label, label / 4 == 1 ? null : "k" + label / 4);
+            case SYMBOL -> v.setText(label, label == 2 ? null : "s" + label);
         }
     }
 
     // x a small LONG or NULL, d a quarter, NaN or a zero of either sign, t a short text or NULL
     private void value(final Input input, final int row) {
         final int pick = random.nextInt(100);
-        input.columns[0].longs[row] = pick < 10 ? Vector.NULL_LONG : random.nextInt(1_000);
-        input.columns[1].doubles[row] = switch (pick % 10) {
+        input.columns[0].setLong(row, pick < 10 ? Vector.NULL_LONG : random.nextInt(1_000));
+        input.columns[1].setDouble(row, switch (pick % 10) {
             case 0 -> Double.NaN;
             case 1 -> -0.0;
             case 2 -> 0.0;
             default -> (random.nextInt(400) - 200) / 4.0;
-        };
-        input.columns[2].texts[row] = pick % 9 == 0 ? null : "t" + random.nextInt(15);
+        });
+        input.columns[2].setText(row, pick % 9 == 0 ? null : "t" + random.nextInt(15));
     }
 
     private static Bound.Agg agg(final String function, final CdbType type, final Bound... args) {

@@ -246,7 +246,7 @@ class ParallelRowOpsTest {
             final AtomicInteger releases = new AtomicInteger();
             final Cursor cursor = new DistinctCursor(frames(XS, rows, 3, 2, pool, frame -> {
                 final List<Page> pages = DistinctCursor.partial(frame);
-                if (pages.getFirst().columns[1].longs[0] == 9L) {
+                if (pages.getFirst().columns[1].getLong(0) == 9L) {
                     throw failure;
                 }
                 return pages;
@@ -349,7 +349,7 @@ class ParallelRowOpsTest {
         for (final String sql : List.of("SELECT count() FROM t WHERE ts < '1970-01-01T01:00:00Z'",
                 "SELECT count() FROM t WHERE ts >= '1970-01-01T01:00:00Z'")) {
             try (Cursor cursor = Executor.open(Planner.plan(Parser.parse(sql), store::def, NOW), store, NOW)) {
-                counts.add(String.valueOf(cursor.next().columns[0].longs[0]));
+                counts.add(String.valueOf(cursor.next().columns[0].getLong(0)));
             }
         }
         assertThat(counts).containsExactly("215999", "84001");

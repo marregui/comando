@@ -66,6 +66,10 @@ final class StoreFiles {
         /** A delete of {@code path} is about to run, whether or not it exists: the cost of a missing one is an error. */
         default void deleting(final Path path) {
         }
+
+        /** A channel on {@code path}, a file or a folder, is about to be opened; it changes nothing on the disk. */
+        default void opening(final Path path) {
+        }
     }
 
     private StoreFiles() {
@@ -76,7 +80,7 @@ final class StoreFiles {
      * process, or another channel in this JVM, holds it. The lock goes when the channel closes, or the process ends.
      */
     static FileChannel lockExclusively(final Path file) throws IOException {
-        final FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        final FileChannel channel = open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         try {
             if (channel.tryLock() != null) {
                 return channel;
@@ -93,7 +97,7 @@ final class StoreFiles {
 
     /** Maps {@code file} read-only into {@code arena}; an empty file is an empty segment. */
     static MemorySegment map(final Path file, final Arena arena) throws IOException {
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+        try (final FileChannel channel = open(file, StandardOpenOption.READ)) {
             final long size = channel.size();
             return size == 0L ? MemorySegment.NULL : channel.map(FileChannel.MapMode.READ_ONLY, 0L, size, arena);
         }
@@ -122,7 +126,7 @@ final class StoreFiles {
 
     /** Writes {@code bytes} to the new file {@code file}, forced to the device when {@code force}. */
     static void writeNew(final Path file, final ByteBuffer bytes, final boolean force) throws IOException {
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE_NEW,
+        try (final FileChannel channel = open(file, StandardOpenOption.CREATE_NEW,
                 StandardOpenOption.WRITE)) {
             final Recorder r = recorder;
             if (r != null) {
@@ -149,7 +153,7 @@ final class StoreFiles {
     /** Appends {@code bytes} to {@code file}, created when missing, forced to the device when {@code force}. */
     static void append(final Path file, final ByteBuffer bytes, final boolean force) throws IOException {
         final boolean existed = Files.exists(file);
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+        try (final FileChannel channel = open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 StandardOpenOption.APPEND)) {
             final Recorder r = recorder;
             if (r != null && !existed) {
@@ -184,7 +188,7 @@ final class StoreFiles {
      */
     static void writeAt(final Path file, final long position, final ByteBuffer bytes, final boolean force)
             throws IOException {
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
+        try (final FileChannel channel = open(file, StandardOpenOption.WRITE)) {
             final ByteBuffer written = bytes.duplicate();
             long at = position;
             while (bytes.hasRemaining()) {
@@ -202,9 +206,17 @@ final class StoreFiles {
 
     /** Forces the data of the existing {@code file} to the device. */
     static void force(final Path file) throws IOException {
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
+        try (final FileChannel channel = open(file, StandardOpenOption.WRITE)) {
             force(channel, file);
         }
+    }
+
+    /**
+     * A channel on the existing {@code file} for {@link #force(FileChannel, Path)}, kept open by an owner that forces
+     * the file often, so no force opens it; the owner closes it. An interrupt during a force through it closes it.
+     */
+    static FileChannel openForForce(final Path file) throws IOException {
+        return open(file, StandardOpenOption.WRITE);
     }
 
     /**
@@ -237,7 +249,7 @@ final class StoreFiles {
 
     /** The whole of {@code file}, read into the heap; refuses a file over 2 GB. */
     static ByteBuffer readAll(final Path file) throws IOException {
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+        try (final FileChannel channel = open(file, StandardOpenOption.READ)) {
             final long size = channel.size();
             if (size > Integer.MAX_VALUE) {
                 throw new IOException("refuse file over 2 GB [file=" + file + ", bytes=" + size + ']');
@@ -255,7 +267,7 @@ final class StoreFiles {
     /** The little-endian long at {@code position} of {@code file}. */
     static long readLong(final Path file, final long position) throws IOException {
         final ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+        try (final FileChannel channel = open(file, StandardOpenOption.READ)) {
             long at = position;
             while (buffer.hasRemaining()) {
                 final int read = channel.read(buffer, at);
@@ -271,7 +283,7 @@ final class StoreFiles {
 
     /** Cuts {@code file} to {@code size} bytes; used on open, before anything maps it. */
     static void truncate(final Path file, final long size) throws IOException {
-        try (final FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
+        try (final FileChannel channel = open(file, StandardOpenOption.WRITE)) {
             channel.truncate(size);
             final Recorder r = recorder;
             if (r != null) {
@@ -321,17 +333,26 @@ final class StoreFiles {
         if (r != null) {
             r.folderForcing(folder);
         }
-        try (final FileChannel channel = FileChannel.open(folder, StandardOpenOption.READ)) {
+        try (final FileChannel channel = open(folder, StandardOpenOption.READ)) {
             channel.force(true);
         }
     }
 
-    private static void force(final FileChannel channel, final Path file) throws IOException {
+    /** Forces the data of {@code file} to the device through {@code channel}, a channel on it. */
+    static void force(final FileChannel channel, final Path file) throws IOException {
         final Recorder r = recorder;
         if (r != null) {
             r.forcing(file);
         }
         channel.force(true);
+    }
+
+    private static FileChannel open(final Path path, final StandardOpenOption... options) throws IOException {
+        final Recorder r = recorder;
+        if (r != null) {
+            r.opening(path);
+        }
+        return FileChannel.open(path, options);
     }
 
     /** Deletes {@code folder} and the files in it (a partition version holds no folders). */

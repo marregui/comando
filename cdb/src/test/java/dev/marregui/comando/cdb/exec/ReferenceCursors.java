@@ -97,7 +97,7 @@ final class ReferenceCursors {
             for (int k = 0; k < keys.length; k++) {
                 keys[k] = page.columns[partitionColumns[k]];
             }
-            final long[] micros = page.columns[timestampColumn].longs;
+            final Vector micros = page.columns[timestampColumn];
             for (int i = 0; i < page.size; i++) {
                 final int before = partitions.size();
                 final int group = partitions.groupOf(keys, i);
@@ -110,8 +110,8 @@ final class ReferenceCursors {
                         column.ensure(group + 1);
                     }
                 }
-                if (group == before || micros[i] >= bestMicros[group]) {
-                    bestMicros[group] = micros[i];
+                if (group == before || micros.getLong(i) >= bestMicros[group]) {
+                    bestMicros[group] = micros.getLong(i);
                     sequence[group] = seen;
                     for (int c = 0; c < rows.length; c++) {
                         rows[c].set(group, page.columns[c], i);

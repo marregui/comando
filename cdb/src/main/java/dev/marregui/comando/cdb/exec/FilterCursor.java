@@ -3,6 +3,7 @@ package dev.marregui.comando.cdb.exec;
 import java.util.List;
 
 import dev.marregui.comando.cdb.CdbException;
+import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.expr.VectorFn;
 
 /**
@@ -84,14 +85,13 @@ final class FilterCursor implements Cursor {
                 return null;
             }
             final Vector mask = predicate.eval(in);
-            if (mask.booleans == null) {
+            if (mask.type != CdbType.BOOLEAN) {
                 throw new CdbException("cannot filter on a predicate that is not BOOLEAN [type=" + mask.type + "]", -1);
             }
-            final boolean[] values = mask.booleans;
             final int size = in.size;
             int count = 0;
             for (int i = 0; i < size; i++) {
-                final boolean k = values[i];
+                final boolean k = mask.getBoolean(i);
                 keep[i] = k;
                 if (k) {
                     count++;

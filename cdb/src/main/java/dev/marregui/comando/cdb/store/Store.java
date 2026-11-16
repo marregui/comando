@@ -35,6 +35,14 @@ public final class Store implements AutoCloseable {
     private static final long CHECKPOINT_WAIT_MILLIS = 10_000L;
     // the root's lock file; a store holds it from open to close, so two never write one root
     private static final String LOCK = "_lock";
+    // the process's limit on memory mappings, on Linux; absent elsewhere, so no limit is watched
+    private static final Path MAX_MAP_COUNT = Path.of("/proc/sys/vm/max_map_count");
+    // a partition version no read used this long has its mappings released, the next read maps it again: 60 s, set
+    // with the lazy mapping and not measured, long enough that a dashboard refreshing each minute keeps its maps
+    private static final long MAP_IDLE_NANOS = TimeUnit.SECONDS.toNanos(60L);
+    // how often the applier looks for idle versions: 10 s, set with MAP_IDLE_NANOS, so a version is released at most
+    // 70 s after its last read
+    static final long MAP_SWEEP_NANOS = TimeUnit.SECONDS.toNanos(10L);
 
     /** Run by a commit right before it replaces {@code _txn}: a crash test stops the process there. */
     @TestOnly
@@ -138,8 +146,11 @@ public final class Store implements AutoCloseable {
     private final Object closeLock = new Object();
     // the tables whose writer a close left open, guarded by closeLock: the root's lock is kept while any is
     private final List<TableState> writerOpenAtClose = new ArrayList<>();
-    // written by the closing thread, read by every caller: once set, no table opens a reader or writer
+    // written by the closing thread, read by every caller and the applier's sweep: once set, no table opens a reader
+    // or writer, and a sweep in progress stops
     private volatile boolean closed;
+    // the mappings of every table's versions, counted against the process's limit
+    private final Mappings mappings;
     // the channel holding the root's exclusive lock: one store per root, across processes; null until open has it
     private FileChannel lock;
     // started once every table is loaded; null before
@@ -150,6 +161,7 @@ public final class Store implements AutoCloseable {
     private Store(final Path root, final StoreOptions options) {
         this.root = root;
         this.options = options;
+        this.mappings = new Mappings(MAX_MAP_COUNT, root.toString());
     }
 
     /** Opens the store at {@code root}, creating the folder when it is missing, forcing each commit. */
@@ -233,7 +245,7 @@ public final class Store implements AutoCloseable {
                 throw new CdbException("refuse to create existing table [table=" + def.name() + ']', -1);
             }
             final Path dir = root.resolve(def.name());
-            final Wal wal;
+            Wal wal = null;
             try {
                 StoreFiles.createFolder(dir);
                 StoreFiles.replaceText(dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(0L, List.of()));
@@ -243,9 +255,12 @@ public final class Store implements AutoCloseable {
                 // the table folder's entry: without it a power cut loses the table
                 StoreFiles.forceFolder(root);
             } catch (final IOException e) {
+                if (wal != null) {
+                    wal.close();
+                }
                 throw new CdbException("cannot create table [table=" + def.name() + ", dir=" + dir + ']', e);
             }
-            final TableState state = new TableState(dir, def, new long[0], wal);
+            final TableState state = new TableState(dir, def, new long[0], wal, mappings);
             state.init(new TableState.Snapshot(0L, def, List.of()));
             tables.put(state.key, state);
             LOG.log(System.Logger.Level.DEBUG, "created table [table=" + def.name() + ", dir=" + dir + ']');
@@ -416,12 +431,14 @@ public final class Store implements AutoCloseable {
                         checkpointOnClose(state);
                     }
                     state.close(drained);
-                    if (!drained) {
+                    if (drained) {
+                        state.wal.close();
+                    } else {
                         writerOpenAtClose.add(state);
                     }
                 }
             } else {
-                writerOpenAtClose.removeIf(state -> state.leaseForClose(closeWaitMillis));
+                writerOpenAtClose.removeIf(this::leaseAndCloseLog);
             }
             if (!writerOpenAtClose.isEmpty()) {
                 final List<String> open = new ArrayList<>(writerOpenAtClose.size());
@@ -441,6 +458,31 @@ public final class Store implements AutoCloseable {
                 }
             }
         }
+    }
+
+    /**
+     * Releases, in every open table, the mappings of the versions no read used for {@code MAP_IDLE_NANOS} before
+     * {@code nowNanos} (a {@link System#nanoTime()} reading): the applier's sweep every {@code MAP_SWEEP_NANOS}, which
+     * a test drives with its own clock. A table that fails is logged and the others swept.
+     */
+    void sweepIdle(final long nowNanos) {
+        for (final TableState state : tables.values()) {
+            if (closed) {
+                return;
+            }
+            try {
+                state.releaseIdle(nowNanos, MAP_IDLE_NANOS);
+            } catch (final RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot release idle mappings [root=" + root + ", table="
+                        + state.key + ']', e);
+            }
+        }
+    }
+
+    /** The mappings of every table's versions. */
+    @TestOnly
+    Mappings mappings() {
+        return mappings;
     }
 
     // the closing thread holds the lease: a clean shutdown applies the queued commits and leaves every log empty, else
@@ -559,19 +601,21 @@ public final class Store implements AutoCloseable {
         // the _txn read here may be a rename a kill left unforced: forced before the log's records it covers are cut
         StoreFiles.forceFolder(dir);
         final Wal wal = Wal.open(dir);
-        final TableState state = new TableState(dir, def, txn.symbolBytes(), wal);
+        final TableState state = new TableState(dir, def, txn.symbolBytes(), wal, store.mappings);
         final List<Version> versions = new ArrayList<>(txn.partitions().size());
         try {
             for (final TableFiles.Entry entry : txn.partitions()) {
                 final Path partition = dir.resolve(entry.folder());
                 TableFiles.checkName(entry.folder(), "partition");
                 cutToCommitted(partition, def, entry.rows());
-                versions.add(Version.open(partition, def, entry.rows(), state.symbols(), entry.columns()));
+                versions.add(Version.open(partition, def, entry.rows(), state.symbols(), entry.columns(),
+                        state.mappings));
             }
         } catch (final RuntimeException e) {
             for (final Version v : versions) {
                 v.unmap();
             }
+            wal.close();
             throw e;
         }
         state.init(new TableState.Snapshot(txn.number(), def, versions));
@@ -579,9 +623,19 @@ public final class Store implements AutoCloseable {
             replay(store, state, wal.scan(txn.number(), def));
         } catch (final IOException | RuntimeException e) {
             state.close(false);
+            wal.close();
             throw e;
         }
         return state;
+    }
+
+    /** Closes the log of a table whose writer was open at the store's close, once the writer is closed. */
+    private boolean leaseAndCloseLog(final TableState state) {
+        if (!state.leaseForClose(closeWaitMillis)) {
+            return false;
+        }
+        state.wal.close();
+        return true;
     }
 
     /** {@code stored} as of the checkpoint {@code txn} names: its first columns and its TTL. */
@@ -615,40 +669,50 @@ public final class Store implements AutoCloseable {
         final String table = state.current().def().name();
         long last = state.current().txn();
         int batched = 0;
-        try (final DefaultWriter writer = new DefaultWriter(store, state, true)) {
-            for (final Wal.Entry entry : entries) {
-                if (entry.txn() != last + 1L) {
-                    throw new CdbException("refuse log entry out of order [table=" + table + ", txn=" + entry.txn()
-                            + ", expected=" + (last + 1L) + ']', -1);
-                }
-                try {
-                    // plain commits in a row are applied as one batch, as the applier does; a truncate or a definition
-                    // change ends it and is a commit of its own
-                    if (entry.truncate() || entry.def() != null) {
-                        if (batched > 0) {
-                            writer.commitAs(last);
-                            batched = 0;
-                        }
-                        apply(writer, entry);
-                        writer.commitAs(entry.txn());
-                    } else {
-                        writer.addRows(entry.rows());
-                        batched += entry.rows().size;
-                        if (batched >= Applier.MAX_BATCH_ROWS) {
-                            writer.commitAs(entry.txn());
-                            batched = 0;
-                        }
+        try {
+            try (final DefaultWriter writer = new DefaultWriter(store, state, true)) {
+                for (final Wal.Entry entry : entries) {
+                    if (entry.txn() != last + 1L) {
+                        throw new CdbException("refuse log entry out of order [table=" + table + ", txn="
+                                + entry.txn() + ", expected=" + (last + 1L) + ']', -1);
                     }
-                } catch (final RuntimeException e) {
-                    throw new CdbException("cannot replay log [table=" + table + ", txn=" + entry.txn() + ']', e);
+                    try {
+                        // plain commits in a row are applied as one batch, as the applier does; a truncate or a
+                        // definition change ends it and is a commit of its own
+                        if (entry.truncate() || entry.def() != null) {
+                            if (batched > 0) {
+                                writer.commitAs(last);
+                                batched = 0;
+                            }
+                            apply(writer, entry);
+                            writer.commitAs(entry.txn());
+                        } else {
+                            writer.addRows(entry.rows());
+                            batched += entry.rows().size;
+                            if (batched >= Applier.MAX_BATCH_ROWS) {
+                                writer.commitAs(entry.txn());
+                                batched = 0;
+                            }
+                        }
+                    } catch (final RuntimeException e) {
+                        throw new CdbException("cannot replay log [table=" + table + ", txn=" + entry.txn() + ']',
+                                e);
+                    }
+                    last = entry.txn();
                 }
-                last = entry.txn();
+                if (batched > 0) {
+                    try {
+                        writer.commitAs(last);
+                    } catch (final RuntimeException e) {
+                        throw new CdbException("cannot replay log [table=" + table + ", txn=" + last + ']', e);
+                    }
+                }
             }
-            if (batched > 0) {
-                try {
-                    writer.commitAs(last);
-                } catch (final RuntimeException e) {
-                    throw new CdbException("cannot replay log [table=" + table + ", txn=" + last + ']', e);
+        } finally {
+            // the scan's blocks, copied into the writer: freed here, on a failure too
+            for (final Wal.Entry entry : entries) {
+                if (entry.rows() != null) {
+                    entry.rows().close();
                 }
             }
         }
@@ -679,16 +743,16 @@ public final class Store implements AutoCloseable {
         final RowBlock rows = entry.rows();
         final int ts = writer.def().timestampIndex();
         for (int r = 0; r < rows.size; r++) {
-            writer.newRow(ts >= 0 ? rows.longs[ts][r] : Long.MIN_VALUE);
+            writer.newRow(ts >= 0 ? rows.getLong(ts, r) : Long.MIN_VALUE);
             for (int c = 0; c < rows.types.length; c++) {
                 if (c == ts) {
                     continue;
                 }
                 switch (rows.types[c]) {
-                    case LONG, TIMESTAMP -> writer.putLong(c, rows.longs[c][r]);
-                    case DOUBLE -> writer.putDouble(c, rows.doubles[c][r]);
-                    case BOOLEAN -> writer.putBoolean(c, rows.booleans[c][r]);
-                    case SYMBOL, VARCHAR -> writer.putText(c, rows.texts[c][r]);
+                    case LONG, TIMESTAMP -> writer.putLong(c, rows.getLong(c, r));
+                    case DOUBLE -> writer.putDouble(c, rows.getDouble(c, r));
+                    case BOOLEAN -> writer.putBoolean(c, rows.getBoolean(c, r));
+                    case SYMBOL, VARCHAR -> writer.putText(c, rows.textAt(c, r));
                 }
             }
             writer.endRow();

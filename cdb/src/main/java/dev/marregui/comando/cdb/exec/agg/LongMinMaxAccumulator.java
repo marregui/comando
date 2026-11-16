@@ -17,23 +17,21 @@ final class LongMinMaxAccumulator implements Accumulator {
 
     @Override
     public void add(final int group, final Vector value, final int row) {
-        accept(group, value.longs[row]);
+        accept(group, value.getLong(row));
     }
 
     @Override
     public void addAll(final int[] groups, final Vector value, final int size) {
-        final long[] in = value.longs;
         for (int i = 0; i < size; i++) {
-            accept(groups[i], in[i]);
+            accept(groups[i], value.getLong(i));
         }
     }
 
     @Override
     public void addRange(final int group, final Vector value, final int from, final int to) {
-        final long[] in = value.longs;
         long current = best[group];
         for (int i = from; i < to; i++) {
-            final long v = in[i];
+            final long v = value.getLong(i);
             if (v != Vector.NULL_LONG && (current == Vector.NULL_LONG || (max ? v > current : v < current))) {
                 current = v;
             }

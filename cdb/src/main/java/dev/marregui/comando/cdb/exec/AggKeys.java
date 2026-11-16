@@ -10,22 +10,34 @@ import dev.marregui.comando.cdb.exec.agg.Values;
 /**
  * The distinct key tuples seen, numbered from 0 in first-seen order: an open-addressing table of group numbers over
  * one {@link Values} column per key. NULL equals NULL, so NULL keys form one group. With no key column every row is
- * group 0.
+ * group 0. A SYMBOL key whose vector carries keys in the dictionary the table saw first is compared by key, without
+ * decoding; any other by its text. The hash of a text is its {@link String#hashCode} either way.
  */
 final class AggKeys {
 
+    private static final int INITIAL_GROUPS = 16;
     private static final int INITIAL_SLOTS = 64;
 
     private final Values[] columns;
-    private int[] hashes = new int[16];
+    // per key column the dictionary of the first vector seen that carries keys, null until one is seen
+    private final SymbolDictionary[] dictionaries;
+    // per SYMBOL key column, per group the key of its value in that column's dictionary or Vector.NO_KEY; null for
+    // other columns
+    private final int[][] symbolKeys;
+    private int[] hashes = new int[INITIAL_GROUPS];
     private int size;
     // group + 1 per slot, 0 for an empty slot
     private int[] slots = new int[INITIAL_SLOTS];
 
     AggKeys(final List<CdbType> types) {
         columns = new Values[types.size()];
+        dictionaries = new SymbolDictionary[columns.length];
+        symbolKeys = new int[columns.length][];
         for (int k = 0; k < columns.length; k++) {
             columns[k] = new Values(types.get(k));
+            if (types.get(k) == CdbType.SYMBOL) {
+                symbolKeys[k] = new int[INITIAL_GROUPS];
+            }
         }
     }
 
@@ -45,6 +57,9 @@ final class AggKeys {
         for (int k = 0; k < columns.length; k++) {
             columns[k].ensure(group + 1);
             columns[k].set(group, keys[k], row);
+            if (symbolKeys[k] != null) {
+                setSymbolKey(k, group, keyOf(k, keys[k], row));
+            }
         }
         return added(i, hash);
     }
@@ -69,6 +84,14 @@ final class AggKeys {
         for (int k = 0; k < columns.length; k++) {
             columns[k].ensure(group + 1);
             columns[k].set(group, other.columns[k], otherGroup);
+            if (symbolKeys[k] != null) {
+                if (dictionaries[k] == null) {
+                    dictionaries[k] = other.dictionaries[k];
+                }
+                setSymbolKey(k, group, other.dictionaries[k] == dictionaries[k]
+                        ? other.symbolKeys[k][otherGroup]
+                        : Vector.NO_KEY);
+            }
         }
         return added(i, hash);
     }
@@ -76,6 +99,17 @@ final class AggKeys {
     /** True when rows {@code a} and {@code b} of {@code keys} hold the same key tuple, so they share a group. */
     boolean sameRows(final Vector[] keys, final int a, final int b) {
         for (int k = 0; k < columns.length; k++) {
+            if (symbolKeys[k] != null) {
+                // two keys of one vector are of one dictionary
+                final int keyA = keys[k].symbolKey(a);
+                final int keyB = keys[k].symbolKey(b);
+                if (keyA != Vector.NO_KEY && keyB != Vector.NO_KEY) {
+                    if (keyA != keyB) {
+                        return false;
+                    }
+                    continue;
+                }
+            }
             if (!Values.equal(keys[k], a, b)) {
                 return false;
             }
@@ -124,6 +158,19 @@ final class AggKeys {
         return mix(h);
     }
 
+    // the key of value row of vector in key column k's dictionary, Vector.NO_KEY when the vector carries none of it;
+    // the first vector that carries keys gives the column its dictionary
+    private int keyOf(final int k, final Vector vector, final int row) {
+        final SymbolDictionary carried = vector.symbolDictionary();
+        if (carried == null || vector.isNull(row)) {
+            return Vector.NO_KEY;
+        }
+        if (dictionaries[k] == null) {
+            dictionaries[k] = carried;
+        }
+        return carried == dictionaries[k] ? vector.symbolKey(row) : Vector.NO_KEY;
+    }
+
     private void rehash() {
         final int capacity = slots.length * 2;
         if (capacity <= 0) {
@@ -142,6 +189,16 @@ final class AggKeys {
 
     private boolean same(final int group, final AggKeys other, final int otherGroup) {
         for (int k = 0; k < columns.length; k++) {
+            if (symbolKeys[k] != null && other.dictionaries[k] == dictionaries[k]) {
+                final int key = other.symbolKeys[k][otherGroup];
+                final int mine = symbolKeys[k][group];
+                if (key != Vector.NO_KEY && mine != Vector.NO_KEY) {
+                    if (key != mine) {
+                        return false;
+                    }
+                    continue;
+                }
+            }
             if (!columns[k].sameAs(group, other.columns[k], otherGroup)) {
                 return false;
             }
@@ -151,10 +208,27 @@ final class AggKeys {
 
     private boolean same(final int group, final Vector[] keys, final int row) {
         for (int k = 0; k < columns.length; k++) {
+            if (symbolKeys[k] != null && keys[k].symbolDictionary() == dictionaries[k]) {
+                final int key = keys[k].symbolKey(row);
+                final int mine = symbolKeys[k][group];
+                if (key != Vector.NO_KEY && mine != Vector.NO_KEY) {
+                    if (key != mine) {
+                        return false;
+                    }
+                    continue;
+                }
+            }
             if (!columns[k].sameAs(group, keys[k], row)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private void setSymbolKey(final int k, final int group, final int key) {
+        if (group == symbolKeys[k].length) {
+            symbolKeys[k] = Arrays.copyOf(symbolKeys[k], Math.max(symbolKeys[k].length * 2, group + 1));
+        }
+        symbolKeys[k][group] = key;
     }
 }

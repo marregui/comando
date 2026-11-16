@@ -263,7 +263,7 @@ class CatalogIntegrationTest {
                 new Plan.Source("tables", List.of(), Catalog.fields("tables", List.of())), store
         );
         final Vector minimum = cursor.next().columns[15];
-        assertThat(minimum.longs[0]).isEqualTo(Vector.NULL_LONG);
+        assertThat(minimum.getLong(0)).isEqualTo(Vector.NULL_LONG);
         cursor.close();
     }
 }

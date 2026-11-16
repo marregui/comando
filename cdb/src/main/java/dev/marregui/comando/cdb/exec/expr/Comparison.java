@@ -12,7 +12,8 @@ import dev.marregui.comando.cdb.plan.Bound;
  * {@code =}, {@code <=} and {@code >=} are true and the others false; one NULL makes only {@code !=} true. The operands
  * meet in {@link Cast#common}, a text meeting a TIMESTAMP is read as one and fails when it is none; doubles compare by
  * value, so -0.0 equals 0.0. {@code between} is false when any operand
- * is NULL and swaps reversed bounds.
+ * is NULL and swaps reversed bounds. A text constant meeting a text column is matched against each row's value in
+ * place, without decoding the row.
  */
 final class Comparison {
 
@@ -42,12 +43,27 @@ final class Comparison {
         final CdbType domain = Cast.common(args);
         final VectorFn a = Cast.operand(args.get(0), domain, nowMicros);
         final VectorFn b = Cast.operand(args.get(1), domain, nowMicros);
+        final String right = textConstant(args.get(1), domain);
+        final String left = right == null ? textConstant(args.get(0), domain) : null;
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
-            final Vector x = a.eval(page);
-            final Vector y = b.eval(page);
-            for (int i = 0, n = page.size; i < n; i++) {
-                out.booleans[i] = outcome(op, order(x, y, i));
+            final int n = page.size;
+            if (right != null) {
+                final Vector x = a.eval(page);
+                for (int i = 0; i < n; i++) {
+                    out.setBoolean(i, outcome(op, order(x, i, right)));
+                }
+            } else if (left != null) {
+                final Vector y = b.eval(page);
+                for (int i = 0; i < n; i++) {
+                    out.setBoolean(i, outcome(op, reversed(order(y, i, left))));
+                }
+            } else {
+                final Vector x = a.eval(page);
+                final Vector y = b.eval(page);
+                for (int i = 0; i < n; i++) {
+                    out.setBoolean(i, outcome(op, order(x, y, i)));
+                }
             }
             return out;
         }, CdbType.BOOLEAN, type);
@@ -58,19 +74,25 @@ final class Comparison {
         final CdbType domain = Cast.common(args);
         final VectorFn operand = Cast.operand(args.get(0), domain, nowMicros);
         final VectorFn[] values = Cast.operands(args, 1, domain, nowMicros);
+        final String[] constants = new String[values.length];
+        for (int j = 0; j < constants.length; j++) {
+            constants[j] = textConstant(args.get(1 + j), domain);
+        }
         final Vector[] evaluated = new Vector[values.length];
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
             final Vector x = operand.eval(page);
             for (int j = 0; j < values.length; j++) {
-                evaluated[j] = values[j].eval(page);
+                evaluated[j] = constants[j] == null ? values[j].eval(page) : null;
             }
             for (int i = 0, n = page.size; i < n; i++) {
                 boolean found = false;
                 for (int j = 0; j < evaluated.length && !found; j++) {
-                    found = outcome(EQ, order(x, evaluated[j], i));
+                    found = constants[j] == null
+                            ? outcome(EQ, order(x, evaluated[j], i))
+                            : !x.isNull(i) && x.textEquals(i, constants[j]);
                 }
-                out.booleans[i] = found != negated;
+                out.setBoolean(i, found != negated);
             }
             return out;
         }, CdbType.BOOLEAN, type);
@@ -91,11 +113,11 @@ final class Comparison {
                 final int toHigh = order(x, hi, i);
                 final int bounds = order(lo, hi, i);
                 if (toLow > 1 || toHigh > 1 || bounds > 1) {
-                    out.booleans[i] = false;
+                    out.setBoolean(i, false);
                 } else if (bounds > 0) {
-                    out.booleans[i] = toHigh >= 0 && toLow <= 0;
+                    out.setBoolean(i, toHigh >= 0 && toLow <= 0);
                 } else {
-                    out.booleans[i] = toLow >= 0 && toHigh <= 0;
+                    out.setBoolean(i, toLow >= 0 && toHigh <= 0);
                 }
             }
             return out;
@@ -118,10 +140,27 @@ final class Comparison {
             return aNull && bNull ? BOTH_NULL : ONE_NULL;
         }
         return switch (a.type) {
-            case LONG, TIMESTAMP -> Long.compare(a.longs[i], b.longs[i]);
-            case DOUBLE -> a.doubles[i] < b.doubles[i] ? -1 : a.doubles[i] == b.doubles[i] ? 0 : 1;
-            case BOOLEAN -> Boolean.compare(a.booleans[i], b.booleans[i]);
-            case SYMBOL, VARCHAR -> Integer.signum(a.texts[i].compareTo(b.texts[i]));
+            case LONG, TIMESTAMP -> Long.compare(a.getLong(i), b.getLong(i));
+            case DOUBLE -> a.getDouble(i) < b.getDouble(i) ? -1 : a.getDouble(i) == b.getDouble(i) ? 0 : 1;
+            case BOOLEAN -> Boolean.compare(a.getBoolean(i), b.getBoolean(i));
+            case SYMBOL, VARCHAR -> Integer.signum(a.textCompare(i, b, i));
         };
+    }
+
+    /** {@link #order} of text value {@code i} of {@code a} against the non-null {@code value}. */
+    private static int order(final Vector a, final int i, final String value) {
+        return a.isNull(i) ? ONE_NULL : Integer.signum(a.textCompare(i, value));
+    }
+
+    /** {@code order} with its two sides swapped; a NULL code is symmetric. */
+    private static int reversed(final int order) {
+        return order > 1 ? order : -order;
+    }
+
+    /** The text of {@code arg} when it is a non-NULL text constant read in the text {@code domain}, else null. */
+    private static String textConstant(final Bound arg, final CdbType domain) {
+        return domain.isText() && arg instanceof Bound.Constant(Object value, CdbType _) && value instanceof String s
+                ? s
+                : null;
     }
 }

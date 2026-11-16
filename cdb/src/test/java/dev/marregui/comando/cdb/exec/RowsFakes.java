@@ -73,10 +73,10 @@ final class RowsFakes {
             return;
         }
         switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[i] = (Long) value;
-            case DOUBLE -> v.doubles[i] = (Double) value;
-            case BOOLEAN -> v.booleans[i] = (Boolean) value;
-            case SYMBOL, VARCHAR -> v.texts[i] = (String) value;
+            case LONG, TIMESTAMP -> v.setLong(i, (Long) value);
+            case DOUBLE -> v.setDouble(i, (Double) value);
+            case BOOLEAN -> v.setBoolean(i, (Boolean) value);
+            case SYMBOL, VARCHAR -> v.setText(i, (String) value);
         }
     }
 
@@ -85,10 +85,10 @@ final class RowsFakes {
             return null;
         }
         return switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[i];
-            case DOUBLE -> v.doubles[i];
-            case BOOLEAN -> v.booleans[i];
-            case SYMBOL, VARCHAR -> v.texts[i];
+            case LONG, TIMESTAMP -> v.getLong(i);
+            case DOUBLE -> v.getDouble(i);
+            case BOOLEAN -> v.getBoolean(i);
+            case SYMBOL, VARCHAR -> v.textAt(i);
         };
     }
 

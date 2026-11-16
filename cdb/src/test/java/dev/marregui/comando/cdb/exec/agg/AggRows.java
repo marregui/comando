@@ -55,10 +55,10 @@ public final class AggRows {
             return null;
         }
         return switch (v.type) {
-            case LONG, TIMESTAMP -> v.longs[i];
-            case DOUBLE -> v.doubles[i];
-            case BOOLEAN -> v.booleans[i];
-            case SYMBOL, VARCHAR -> v.texts[i];
+            case LONG, TIMESTAMP -> v.getLong(i);
+            case DOUBLE -> v.getDouble(i);
+            case BOOLEAN -> v.getBoolean(i);
+            case SYMBOL, VARCHAR -> v.textAt(i);
         };
     }
 
@@ -111,11 +111,11 @@ public final class AggRows {
         private static void set(final Vector v, final int i, final Object value) {
             switch (value) {
                 case null -> v.setNull(i);
-                case Long l when v.type == CdbType.DOUBLE -> v.doubles[i] = l;
-                case Long l -> v.longs[i] = l;
-                case Double d -> v.doubles[i] = d;
-                case Boolean b -> v.booleans[i] = b;
-                case String s -> v.texts[i] = s;
+                case Long l when v.type == CdbType.DOUBLE -> v.setDouble(i, l);
+                case Long l -> v.setLong(i, l);
+                case Double d -> v.setDouble(i, d);
+                case Boolean b -> v.setBoolean(i, b);
+                case String s -> v.setText(i, s);
                 default -> throw new IllegalArgumentException("cannot hold this value [value=" + value + ']');
             }
         }
