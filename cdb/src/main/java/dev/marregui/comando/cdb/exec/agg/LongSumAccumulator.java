@@ -57,6 +57,14 @@ final class LongSumAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        final LongSumAccumulator other = (LongSumAccumulator) from;
+        // wraps as the per-row additions do: addition modulo 2^64 is associative, so the sum is the serial one
+        sums[group] += other.sums[fromGroup];
+        seen[group] |= other.seen[fromGroup];
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeLong(seen[group] ? sums[group] : Vector.NULL_LONG, out, row);
     }

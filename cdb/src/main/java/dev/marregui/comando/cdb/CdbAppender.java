@@ -39,6 +39,15 @@ public interface CdbAppender extends AutoCloseable {
     /** Drops every row written since the last flush, in every table, and the current row; the appender stays open. */
     void discard();
 
+    /**
+     * Waits at most {@code timeoutMillis} until every row flushed so far is durable, for a request that asked for it;
+     * true once it is. Under the force per commit a flushed row already is. Fails with a {@link CdbException} when a
+     * force failed and the rows are in doubt.
+     */
+    default boolean awaitDurable(final long timeoutMillis) throws InterruptedException {
+        return true;
+    }
+
     /** Flushes, then releases the tables' writers. */
     @Override
     void close();

@@ -61,6 +61,16 @@ final class DoublePercentileAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        final DoublePercentileAccumulator other = (DoublePercentileAccumulator) from;
+        final int n = other.sizes[fromGroup];
+        if (n > 0) {
+            System.arraycopy(other.values[fromGroup], 0, reserve(group, n), sizes[group], n);
+            sizes[group] += n;
+        }
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         final int n = sizes[group];
         if (n == 0) {

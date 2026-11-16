@@ -33,6 +33,30 @@ public final class Functions {
         };
     }
 
+    /**
+     * True when {@code expr}'s value at a row depends only on that row and the statement ({@code now()} is the
+     * statement's), so the rows may be computed in any split and order with the same result. Every scalar function
+     * {@link #compile} knows is; an aggregate or a window call reads other rows. A function that reads other rows, or
+     * is not deterministic (a random value, a row number, state kept across pages), returns false here.
+     */
+    public static boolean rowLocal(final Bound expr) {
+        return switch (expr) {
+            case Bound.Column _, Bound.Constant _ -> true;
+            case Bound.Call c -> rowLocal(c.args());
+            case Bound.Agg _, Bound.WindowCall _ -> false;
+        };
+    }
+
+    /** True when every one of {@code exprs} is {@link #rowLocal(Bound)}. */
+    public static boolean rowLocal(final List<Bound> exprs) {
+        for (final Bound e : exprs) {
+            if (!rowLocal(e)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** The text of a constant argument (a unit, a pattern, a format); an error when it is not a non-NULL constant. */
     static String constantText(final Bound arg, final String function) {
         if (arg instanceof Bound.Constant(Object value, CdbType _) && value != null) {

@@ -35,6 +35,11 @@ final class TextMinMaxAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        accept(group, ((TextMinMaxAccumulator) from).best[fromGroup]);
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         out.texts[row] = best[group];
     }

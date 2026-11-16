@@ -42,7 +42,7 @@ class StoreWalTest {
     private static final long DAY1 = micros("2026-11-01T00:00:00Z");
     private static final long HOUR_MICROS = Retention.DAY_MICROS / 24L;
     // the log's header: magic and format version
-    private static final long HEADER_BYTES = 8L;
+    private static final long HEADER_BYTES = Wal.HEADER;
     // commits of the differential, a few checkpoints at three records each and the scheduled changes among them
     private static final int STEPS = 60;
     private static final String[] SENSORS = {"a", "b", "c", null};

@@ -185,3 +185,5 @@ row and its record differ, or when a record has no row.
 | [162](0162-cdb-applies-commits-from-its-log.md) | cdb applies commits from its log, on a thread of its own | 2026-11-15 | Miguel and Claude | accepted; built |
 | [163](0163-cdb-threads.md) | cdb's threads: one owner per kind of work, virtual for sockets, platform for file work | 2026-11-15 | Miguel and Claude | accepted; built in task 155 (lock-free log counters, the applier's work queue, thread confinement) |
 | [164](0164-comando-allows-claude-codes-own-cards-in-bypass.md) | comando allows Claude Code's own cards in a session in bypass | 2026-11-15 | Miguel and Claude | accepted; built |
+| [165](0165-cdb-parallel-queries.md) | cdb runs a query's scan-based operators over frames on a shared pool, merged in frame order | 2026-11-16 | Miguel and Claude | accepted; built in task 166 |
+| [166](0166-cdb-timed-log-force.md) | cdb's timed log force: an opt-in bound on what a power cut loses, with a per-request durable flag | 2026-11-16 | Miguel and Claude | accepted; built in task 166 |

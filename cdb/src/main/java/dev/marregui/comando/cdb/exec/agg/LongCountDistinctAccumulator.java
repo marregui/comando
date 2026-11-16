@@ -13,7 +13,13 @@ final class LongCountDistinctAccumulator implements Accumulator {
     // a slot whose group is EMPTY holds no pair; groups are indexes, never negative
     private static final int EMPTY = -1;
     private static final int INITIAL_SLOTS = 64;
+    // the end of a chain of slots
+    private static final int NO_SLOT = -1;
 
+    // per group its first slot, per slot the next slot of its group: the pairs of one group without a pass over the
+    // whole table, built when this table is first merged from, dropped when it gains a pair
+    private int[] chainHeads;
+    private int[] chainNext;
     private long[] counts = new long[16];
     private int[] groups = emptySlots(INITIAL_SLOTS);
     private long[] keys = new long[INITIAL_SLOTS];
@@ -61,6 +67,19 @@ final class LongCountDistinctAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        assert from != this : "cannot merge an accumulator into itself";
+        final LongCountDistinctAccumulator other = (LongCountDistinctAccumulator) from;
+        if (other.counts[fromGroup] == 0) {
+            return;
+        }
+        other.chain();
+        for (int i = other.chainHeads[fromGroup]; i != NO_SLOT; i = other.chainNext[i]) {
+            insert(group, other.keys[i]);
+        }
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeLong(counts[group], out, row);
     }
@@ -79,6 +98,23 @@ final class LongCountDistinctAccumulator implements Accumulator {
         return (int) h & mask;
     }
 
+    private void chain() {
+        if (chainHeads != null) {
+            return;
+        }
+        final int[] heads = new int[counts.length];
+        Arrays.fill(heads, NO_SLOT);
+        final int[] next = new int[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            if (groups[i] != EMPTY) {
+                next[i] = heads[groups[i]];
+                heads[groups[i]] = i;
+            }
+        }
+        chainHeads = heads;
+        chainNext = next;
+    }
+
     private void insert(final int group, final long key) {
         final int mask = keys.length - 1;
         int i = slot(group, key, mask);
@@ -91,6 +127,8 @@ final class LongCountDistinctAccumulator implements Accumulator {
         groups[i] = group;
         keys[i] = key;
         counts[group]++;
+        chainHeads = null;
+        chainNext = null;
         // a load factor of at most one half keeps probe runs short
         if (++size > keys.length >>> 1) {
             rehash();

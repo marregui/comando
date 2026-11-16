@@ -7,8 +7,8 @@ import dev.marregui.comando.cdb.CdbException;
 
 /**
  * Rows held in memory as packed pages, every page full but the last, so row {@code i} is row
- * {@code i & Rows.ROW_MASK} of page {@code i >>> Rows.PAGE_SHIFT}. Its pages stay its own: an operator reads them but
- * never hands them out.
+ * {@code i & Rows.ROW_MASK} of page {@code i >>> Rows.PAGE_SHIFT}. Its pages stay its own while it is used: an operator
+ * reads them, and hands them out only when it is done with the buffer ({@code RowsSet.rows()}).
  */
 final class RowsBuffer {
 

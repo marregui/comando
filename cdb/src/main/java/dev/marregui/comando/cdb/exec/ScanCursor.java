@@ -17,7 +17,8 @@ import dev.marregui.comando.cdb.store.TableReader;
  * numeric term keeps for its NULL or NaN may still fail it, so the filter above decides (text terms are exact). Pages are full across partition ends, the last may be shorter.
  * Only the positions {@code reads} marks are read from the store (all when it is null); the others' values in a page are
  * left unset, as nothing above reads them ({@code plan.ColumnUse}).
- * The cursor owns the reader and closes it after the last page, or on {@link #close()}.
+ * The whole-scan cursor owns the reader and closes it after the last page, or on {@link #close()}; a frame's cursor
+ * reads only that frame's rows, in the same order, and leaves the reader to its owner.
  */
 final class ScanCursor implements Cursor {
 
@@ -31,6 +32,7 @@ final class ScanCursor implements Cursor {
     private final long[] ends;
     private final Plan.ScanTerm[] terms;
     private final boolean newestFirst;
+    private final boolean ownsReader;
     private final int[] sel;
     private final int[] other;
     private TableReader reader;
@@ -44,7 +46,24 @@ final class ScanCursor implements Cursor {
     }
 
     ScanCursor(final Plan.Scan scan, final TableReader reader, final boolean[] reads) {
+        this(scan, reader, reads, null, true);
+    }
+
+    /** The rows of {@code frame} alone, in scan order; the cursor does not close {@code reader}. */
+    ScanCursor(final Plan.Scan scan, final TableReader reader, final boolean[] reads, final Frames.Frame frame) {
+        this(scan, reader, reads, frame, false);
+    }
+
+    // frame null: every partition's rows in range
+    private ScanCursor(
+            final Plan.Scan scan,
+            final TableReader reader,
+            final boolean[] reads,
+            final Frames.Frame frame,
+            final boolean ownsReader
+    ) {
         this.reader = reader;
+        this.ownsReader = ownsReader;
         try {
             fields = scan.fields();
             columns = scan.columns().clone();
@@ -64,32 +83,24 @@ final class ScanCursor implements Cursor {
             newestFirst = scan.newestFirst();
             sel = terms.length == 0 ? null : new int[Page.CAPACITY];
             other = terms.length < 2 ? null : new int[Page.CAPACITY];
-            final int ts = reader.def().timestampIndex();
-            final long from = scan.fromMicros();
-            final long to = scan.toMicros();
-            final List<PartitionReader> kept = new ArrayList<>();
-            final List<long[]> bounds = new ArrayList<>();
-            // Long.MAX_VALUE is the plan's "no upper bound", so a row stamped with it is in range
-            final boolean bounded = to != Long.MAX_VALUE;
-            for (final PartitionReader p : reader.partitions()) {
-                if (p.rowCount() <= 0 || p.maxTimestamp() < from || bounded && p.minTimestamp() >= to) {
-                    continue;
-                }
-                final long start = ts < 0 || p.minTimestamp() >= from ? 0 : p.rowAtOrAfter(ts, from);
-                final long end = ts < 0 || !bounded || p.maxTimestamp() < to ? p.rowCount() : p.rowAtOrAfter(ts, to);
-                if (start < end) {
-                    kept.add(p);
-                    bounds.add(new long[] {start, end});
-                }
+            final List<Frames.Frame> ranges;
+            if (frame != null) {
+                ranges = frame.fromRow() < frame.toRow() ? List.of(frame) : List.of();
+            } else {
+                final List<Frames.Frame> all = Frames.ranges(scan, reader);
+                ranges = newestFirst ? all.reversed() : all;
             }
-            partitions = newestFirst ? kept.reversed() : kept;
-            final List<long[]> ordered = newestFirst ? bounds.reversed() : bounds;
-            starts = new long[ordered.size()];
-            ends = new long[ordered.size()];
+            final List<PartitionReader> snapshot = reader.partitions();
+            final List<PartitionReader> kept = new ArrayList<>(ranges.size());
+            starts = new long[ranges.size()];
+            ends = new long[ranges.size()];
             for (int i = 0; i < starts.length; i++) {
-                starts[i] = ordered.get(i)[0];
-                ends[i] = ordered.get(i)[1];
+                final Frames.Frame range = ranges.get(i);
+                kept.add(snapshot.get(range.partition()));
+                starts[i] = range.fromRow();
+                ends[i] = range.toRow();
             }
+            partitions = kept;
             enter();
         } catch (final RuntimeException | Error e) {
             close();
@@ -145,7 +156,7 @@ final class ScanCursor implements Cursor {
         final TableReader r = reader;
         reader = null;
         scratch = null;
-        if (r != null) {
+        if (r != null && ownsReader) {
             r.close();
         }
     }

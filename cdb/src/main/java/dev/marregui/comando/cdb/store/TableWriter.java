@@ -32,6 +32,14 @@ public interface TableWriter extends AutoCloseable {
     /** Ends the row started by {@link #newRow}. */
     void endRow();
 
+    /**
+     * The durability of this writer's last answered commit ({@link ForceTicket#DONE} before any): what a durable
+     * request waits on. Correct as a default for a store that forces each commit.
+     */
+    default ForceTicket ticket() {
+        return ForceTicket.DONE;
+    }
+
     /** Drops every row, committed and pending, at the next commit: with appends after it, a rewrite of the table. */
     void truncate();
 

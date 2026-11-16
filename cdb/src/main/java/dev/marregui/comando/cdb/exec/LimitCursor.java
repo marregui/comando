@@ -10,8 +10,8 @@ import dev.marregui.comando.cdb.CdbException;
  * {@code (0, n)}, {@code LIMIT -n} is {@code (-n, 0)} (the last n rows; a {@code hi} of 0 after a negative {@code lo}
  * is the end), {@code LIMIT a, b} with {@code a > b} and both bounds non-negative or both negative is {@code (b, a)},
  * {@code LIMIT a, -b} ends b rows before the end, and a negative {@code lo} with a positive {@code hi} is refused.
- * With non-negative bounds the input is pulled only until row {@code hi}, then closed; otherwise it is read to its
- * end, keeping only the pages the window can still reach.
+ * With non-negative bounds the input is pulled only until row {@code hi} and closed as soon as the page holding it is
+ * pulled; otherwise it is read to its end, keeping only the pages the window can still reach.
  */
 final class LimitCursor implements Cursor {
 
@@ -52,6 +52,17 @@ final class LimitCursor implements Cursor {
         resolved = !fromEnd;
     }
 
+    /**
+     * LIMIT over {@code source}'s frames: their pages in frame order through an {@link ExchangeCursor}, which runs the
+     * frames ahead of the one read on the pool within its bounded window. With non-negative bounds the exchange is
+     * closed as soon as the page holding row {@code hi} is pulled, so no later frame is started; bounds from the end
+     * read every frame. The answer is the serial operator's, the same bits whatever the pool's size. Owns and closes
+     * the source.
+     */
+    static Cursor parallel(final FrameSource source, final long lo, final long hi) {
+        return new LimitCursor(new ExchangeCursor(source), lo, hi);
+    }
+
     @Override
     public List<Field> fields() {
         return child.fields();
@@ -85,6 +96,10 @@ final class LimitCursor implements Cursor {
             }
             final long start = base;
             base += in.size;
+            if (!fromEnd && base >= hi) {
+                // the window ends in this page: close the input now, not at the next call, so its work stops here
+                finishInput();
+            }
             final long from = Math.max(lo, start);
             final long to = Math.min(hi, base);
             if (from < to) {

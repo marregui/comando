@@ -269,10 +269,10 @@ class WalTest {
         assertThatThrownBy(() -> Wal.open(dir))
                 .isInstanceOf(CdbException.class)
                 .hasMessage("refuse log of unknown format [file=" + file + ", magic=0x4c415744, version=1]");
-        Files.write(file, header(0x4C415743, 2));
+        Files.write(file, header(0x4C415743, 3));
         assertThatThrownBy(() -> Wal.open(dir))
                 .isInstanceOf(CdbException.class)
-                .hasMessage("refuse log of unknown format [file=" + file + ", magic=0x4c415743, version=2]");
+                .hasMessage("refuse log of unknown format [file=" + file + ", magic=0x4c415743, version=3]");
     }
 
     private static byte[] header(final int magic, final int version) {

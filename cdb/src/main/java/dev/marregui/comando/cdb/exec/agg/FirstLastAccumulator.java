@@ -50,6 +50,15 @@ final class FirstLastAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        final FirstLastAccumulator other = (FirstLastAccumulator) from;
+        if (other.seen[fromGroup] && (last || !seen[group])) {
+            values.set(group, other.values, fromGroup);
+            seen[group] = true;
+        }
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         if (!seen[group]) {
             out.setNull(row);

@@ -42,21 +42,35 @@ final class AggKeys {
             i = (i + 1) & mask;
         }
         final int group = size;
-        if (group == hashes.length) {
-            hashes = Arrays.copyOf(hashes, Math.max(hashes.length * 2, group + 1));
-        }
         for (int k = 0; k < columns.length; k++) {
             columns[k].ensure(group + 1);
             columns[k].set(group, keys[k], row);
         }
-        hashes[group] = hash;
-        slots[i] = group + 1;
-        size++;
-        // a load factor of at most one half keeps probe runs short
-        if (size > slots.length >>> 1) {
-            rehash();
+        return added(i, hash);
+    }
+
+    /**
+     * The group of the key tuple of group {@code otherGroup} of {@code other}, a table of the same key types, added
+     * when new.
+     */
+    int groupOf(final AggKeys other, final int otherGroup) {
+        // both tables hash a tuple alike, so the other's hash is this one's
+        final int hash = other.hashes[otherGroup];
+        final int mask = slots.length - 1;
+        int i = hash & mask;
+        while (slots[i] != 0) {
+            final int group = slots[i] - 1;
+            if (hashes[group] == hash && same(group, other, otherGroup)) {
+                return group;
+            }
+            i = (i + 1) & mask;
         }
-        return group;
+        final int group = size;
+        for (int k = 0; k < columns.length; k++) {
+            columns[k].ensure(group + 1);
+            columns[k].set(group, other.columns[k], otherGroup);
+        }
+        return added(i, hash);
     }
 
     /** True when rows {@code a} and {@code b} of {@code keys} hold the same key tuple, so they share a group. */
@@ -86,6 +100,22 @@ final class AggKeys {
         return x;
     }
 
+    // numbers the next group, whose key columns are set: its hash kept, its slot taken, the table grown when due
+    private int added(final int slot, final int hash) {
+        final int group = size;
+        if (group == hashes.length) {
+            hashes = Arrays.copyOf(hashes, Math.max(hashes.length * 2, group + 1));
+        }
+        hashes[group] = hash;
+        slots[slot] = group + 1;
+        size++;
+        // a load factor of at most one half keeps probe runs short
+        if (size > slots.length >>> 1) {
+            rehash();
+        }
+        return group;
+    }
+
     private int hash(final Vector[] keys, final int row) {
         int h = 1;
         for (int k = 0; k < columns.length; k++) {
@@ -108,6 +138,15 @@ final class AggKeys {
             }
             slots[i] = group + 1;
         }
+    }
+
+    private boolean same(final int group, final AggKeys other, final int otherGroup) {
+        for (int k = 0; k < columns.length; k++) {
+            if (!columns[k].sameAs(group, other.columns[k], otherGroup)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean same(final int group, final Vector[] keys, final int row) {

@@ -26,6 +26,8 @@ final class LatestOnCursor implements Cursor {
 
     private final Cursor child;
     private final List<Field> fields;
+    // newest first, emit the keys in first-seen order: a frame's partial, which the merge reads newest first again
+    private final boolean firstSeenOrder;
     private final boolean newestFirst;
     private final AggKeys partitions;
     private final int[] partitionColumns;
@@ -45,7 +47,12 @@ final class LatestOnCursor implements Cursor {
     private int[] touchedIn = new int[16];
 
     LatestOnCursor(final Cursor child, final Plan.LatestOn spec) {
+        this(child, spec, false);
+    }
+
+    private LatestOnCursor(final Cursor child, final Plan.LatestOn spec, final boolean firstSeenOrder) {
         this.child = child;
+        this.firstSeenOrder = firstSeenOrder;
         try {
             fields = child.fields();
             timestampColumn = spec.timestampColumn();
@@ -64,6 +71,26 @@ final class LatestOnCursor implements Cursor {
             child.close();
             throw e;
         }
+    }
+
+    /**
+     * LATEST ON over {@code source}'s frames: each frame's latest row per key ({@link #partial}), the frame order
+     * deciding ties. The answer is the serial operator's, the same bits whatever the pool's size: the partials read in
+     * frame order are an input this operator answers as it answers the whole. In time order a key's later frame wins a
+     * timestamp tie, as the later row does, and the winners sort by (timestamp, position among the partials), which
+     * orders them as their rows' input positions do; newest first a key's earliest frame wins. Owns and closes the
+     * source.
+     */
+    static Cursor parallel(final FrameSource source, final Plan.LatestOn spec) {
+        return new LatestOnCursor(DistinctCursor.FramePartials.of(source, frame -> partial(frame, spec)), spec);
+    }
+
+    /**
+     * A frame's partial: its latest row per key, in timestamp order (ties in input order) or, newest first, in the
+     * keys' first-seen order, so the partial is itself newest first. Closes {@code frame}.
+     */
+    static List<Page> partial(final Cursor frame, final Plan.LatestOn spec) {
+        return DistinctCursor.FramePartials.drain(new LatestOnCursor(frame, spec, true));
     }
 
     @Override
@@ -195,7 +222,7 @@ final class LatestOnCursor implements Cursor {
         final int n = partitions.size();
         order = new int[n];
         for (int i = 0; i < n; i++) {
-            order[i] = n - 1 - i;
+            order[i] = firstSeenOrder ? i : n - 1 - i;
         }
     }
 

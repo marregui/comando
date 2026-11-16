@@ -1,7 +1,9 @@
 package dev.marregui.comando.cdb.exec;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.IntFunction;
 
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
@@ -25,6 +27,8 @@ final class WindowCursor implements Cursor {
     private final Cursor child;
     private final List<Field> fields;
     private final long nowMicros;
+    /** Where a call with PARTITION BY computes its partitions; null computes every call on the calling thread. */
+    private final QueryContext ctx;
     private final List<Page> pages = new ArrayList<>();
     private boolean closed;
     private int emitted;
@@ -32,7 +36,12 @@ final class WindowCursor implements Cursor {
     private Vector[] results;
 
     WindowCursor(final Cursor child, final Plan.Window spec, final long nowMicros) {
+        this(child, spec, nowMicros, null);
+    }
+
+    private WindowCursor(final Cursor child, final Plan.Window spec, final long nowMicros, final QueryContext ctx) {
         this.child = child;
+        this.ctx = ctx;
         try {
             fields = spec.fields();
             calls = spec.calls().toArray(new Bound.WindowCall[0]);
@@ -41,6 +50,16 @@ final class WindowCursor implements Cursor {
             child.close();
             throw e;
         }
+    }
+
+    /**
+     * Window functions over {@code source}'s frames: the input read per frame through the exchange; a call with
+     * PARTITION BY computes each partition as its own task on the source's pool, one without it on the consumer in one
+     * ordered pass. The answer is the serial operator's, the same bits whatever the pool's size: a partition's rows are
+     * taken in the order the serial operator takes them. Owns and closes the source.
+     */
+    static Cursor parallel(final FrameSource source, final Plan.Window spec, final long nowMicros) {
+        return new WindowCursor(new ExchangeCursor(source), spec, nowMicros, source.context());
     }
 
     @Override
@@ -133,7 +152,9 @@ final class WindowCursor implements Cursor {
         }
         final Vector[] computed = new Vector[calls.length];
         for (int c = 0; c < calls.length; c++) {
-            computed[c] = evaluate(calls[c], n);
+            computed[c] = ctx != null && !calls[c].partitionBy().isEmpty()
+                    ? evaluateByPartition(calls[c], n)
+                    : evaluate(calls[c], n);
         }
         results = computed;
     }
@@ -142,11 +163,7 @@ final class WindowCursor implements Cursor {
         final int[] partition = new int[n];
         final int partitions = partition(call.partitionBy(), partition);
         final List<Plan.SortKey> orderBy = call.orderBy();
-        final Vector[] sortColumns = new Vector[orderBy.size()];
-        for (int k = 0; k < sortColumns.length; k++) {
-            final int column = orderBy.get(k).column();
-            sortColumns[k] = gather(new Bound.Column(column, fields.get(column).type()), n);
-        }
+        final Vector[] sortColumns = sortColumns(orderBy, n);
         final Vector out = Vector.of(call.type(), Math.max(n, 1));
         switch (call.function()) {
             case "row_number" -> {
@@ -163,6 +180,122 @@ final class WindowCursor implements Cursor {
                     : order(partition, sortColumns, orderBy, n), out, n);
         }
         return out;
+    }
+
+    /**
+     * {@code call}, which has PARTITION BY, one task per partition on the context's pool. The partitions, the sort
+     * keys and the argument are read here; a task sorts its partition's rows, in input order, by the call's ORDER BY
+     * (stable, as the serial sort's ties) and writes only those rows of the output, so the tasks share no state but
+     * what they read.
+     */
+    private Vector evaluateByPartition(final Bound.WindowCall call, final int n) {
+        final int[] partition = new int[n];
+        final int partitions = partition(call.partitionBy(), partition);
+        // members[starts[p] .. starts[p + 1]) are partition p's rows in input order
+        final int[] starts = new int[partitions + 1];
+        for (int row = 0; row < n; row++) {
+            starts[partition[row] + 1]++;
+        }
+        for (int p = 0; p < partitions; p++) {
+            starts[p + 1] += starts[p];
+        }
+        final int[] members = new int[n];
+        final int[] fill = Arrays.copyOf(starts, partitions);
+        for (int row = 0; row < n; row++) {
+            members[fill[partition[row]]++] = row;
+        }
+        final List<Plan.SortKey> orderBy = call.orderBy();
+        final Vector[] sortColumns = sortColumns(orderBy, n);
+        final Vector out = Vector.of(call.type(), Math.max(n, 1));
+        final IntFunction<Boolean> task = switch (call.function()) {
+            case "row_number" -> p -> {
+                final int[] order = partitionOrder(members, starts[p], starts[p + 1], sortColumns, orderBy);
+                for (int pos = 0; pos < order.length; pos++) {
+                    out.longs[order[pos]] = pos + 1;
+                }
+                return Boolean.TRUE;
+            };
+            case "lag" -> {
+                final Lag lag = lag(call, n);
+                yield p -> {
+                    final int[] order = partitionOrder(members, starts[p], starts[p + 1], sortColumns, orderBy);
+                    lag.write(order, 0, order.length, out);
+                    return Boolean.TRUE;
+                };
+            }
+            default -> {
+                final Bound.Agg agg = new Bound.Agg(call.function(), call.args(), false, call.type());
+                // created here once so an unknown function fails on this thread before any task, as the serial one
+                Aggregates.create(agg);
+                final Vector value = call.args().isEmpty() ? null : gather(call.args().getFirst(), n);
+                yield p -> {
+                    final Accumulator accumulator = Aggregates.create(agg);
+                    accumulator.ensure(1);
+                    final int[] order = partitionOrder(members, starts[p], starts[p + 1], sortColumns, orderBy);
+                    if (!orderBy.isEmpty()) {
+                        for (final int row : order) {
+                            accumulator.add(0, value, row);
+                            accumulator.write(0, out, row);
+                        }
+                        return Boolean.TRUE;
+                    }
+                    for (final int row : order) {
+                        accumulator.add(0, value, row);
+                    }
+                    for (final int row : order) {
+                        accumulator.write(0, out, row);
+                    }
+                    return Boolean.TRUE;
+                };
+            }
+        };
+        if (partitions > 0) {
+            // each await hands over the rows its task wrote on a worker, published by the task's completion
+            try (final Job<Boolean> job = ctx.pool().submit(partitions, task, ctx)) {
+                for (int p = 0; p < partitions; p++) {
+                    job.await(p);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The rows {@code members[from .. to)}, in input order, sorted by {@code keys}; ties keep input order. */
+    private static int[] partitionOrder(
+            final int[] members,
+            final int from,
+            final int to,
+            final Vector[] columns,
+            final List<Plan.SortKey> keys
+    ) {
+        if (keys.isEmpty()) {
+            return Arrays.copyOfRange(members, from, to);
+        }
+        final int[] index = AggSort.sorted(to - from,
+                (a, b) -> compareKeys(columns, keys, members[from + a], members[from + b]));
+        for (int i = 0; i < index.length; i++) {
+            index[i] = members[from + index[i]];
+        }
+        return index;
+    }
+
+    private static int compareKeys(final Vector[] columns, final List<Plan.SortKey> keys, final int a, final int b) {
+        for (int k = 0; k < columns.length; k++) {
+            final int c = Values.compare(columns[k], a, b);
+            if (c != 0) {
+                return keys.get(k).descending() ? -c : c;
+            }
+        }
+        return 0;
+    }
+
+    private Vector[] sortColumns(final List<Plan.SortKey> orderBy, final int n) {
+        final Vector[] columns = new Vector[orderBy.size()];
+        for (int k = 0; k < columns.length; k++) {
+            final int column = orderBy.get(k).column();
+            columns[k] = gather(new Bound.Column(column, fields.get(column).type()), n);
+        }
+        return columns;
     }
 
     private void aggregate(
@@ -213,6 +346,18 @@ final class WindowCursor implements Cursor {
             final Vector out,
             final int n
     ) {
+        final Lag lag = lag(call, n);
+        int runStart = 0;
+        for (int pos = 1; pos <= n; pos++) {
+            if (pos == n || partition[order[pos - 1]] != partition[order[pos]]) {
+                lag.write(order, runStart, pos, out);
+                runStart = pos;
+            }
+        }
+    }
+
+    /** {@code lag}'s argument read, its offset and default checked, on this thread. */
+    private Lag lag(final Bound.WindowCall call, final int n) {
         final List<Bound> args = call.args();
         if (args.isEmpty()) {
             throw new CdbException("cannot run lag without its argument [function=lag]", -1);
@@ -223,33 +368,13 @@ final class WindowCursor implements Cursor {
             throw new CdbException("cannot lag by a negative offset [offset=" + offset + ']', -1);
         }
         final Vector fallback = args.size() > 2 ? constant(args.get(2), call.type()) : nullOf(call.type());
-        int runStart = 0;
-        for (int pos = 0; pos < n; pos++) {
-            final int row = order[pos];
-            if (pos > 0 && partition[order[pos - 1]] != partition[row]) {
-                runStart = pos;
-            }
-            if (pos - runStart >= offset) {
-                convert(value, order[(int) (pos - offset)], out, row);
-            } else {
-                out.copy(fallback, 0, row);
-            }
-        }
+        return new Lag(value, offset, fallback);
     }
 
     private int[] order(final int[] partition, final Vector[] columns, final List<Plan.SortKey> keys, final int n) {
         return AggSort.sorted(n, (a, b) -> {
             final int byPartition = Integer.compare(partition[a], partition[b]);
-            if (byPartition != 0) {
-                return byPartition;
-            }
-            for (int k = 0; k < columns.length; k++) {
-                final int c = Values.compare(columns[k], a, b);
-                if (c != 0) {
-                    return keys.get(k).descending() ? -c : c;
-                }
-            }
-            return 0;
+            return byPartition != 0 ? byPartition : compareKeys(columns, keys, a, b);
         });
     }
 
@@ -276,5 +401,21 @@ final class WindowCursor implements Cursor {
             }
         }
         return keys.size();
+    }
+
+    /** {@code lag}'s argument over every row, its offset and its default; only read once built. */
+    private record Lag(Vector value, long offset, Vector fallback) {
+
+        /** Writes the rows {@code order[from .. to)}, one partition walked in its order. */
+        void write(final int[] order, final int from, final int to, final Vector out) {
+            for (int pos = from; pos < to; pos++) {
+                final int row = order[pos];
+                if (pos - from >= offset) {
+                    convert(value, order[(int) (pos - offset)], out, row);
+                } else {
+                    out.copy(fallback, 0, row);
+                }
+            }
+        }
     }
 }

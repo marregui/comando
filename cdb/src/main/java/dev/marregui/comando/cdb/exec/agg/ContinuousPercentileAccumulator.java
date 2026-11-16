@@ -70,6 +70,16 @@ final class ContinuousPercentileAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        final ContinuousPercentileAccumulator other = (ContinuousPercentileAccumulator) from;
+        final int n = other.sizes[fromGroup];
+        if (n > 0) {
+            System.arraycopy(other.values[fromGroup], 0, reserve(group, n), sizes[group], n);
+            sizes[group] += n;
+        }
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         final int n = sizes[group];
         if (n == 0) {

@@ -19,9 +19,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Only the classes that own threads create them: the launcher's shutdown hook, the HTTP and PostgreSQL servers'
-/// connection threads, and each store's applier. Read from the bytecode of every main class of the module, nested and
-/// lambda bodies included: a `new Thread`, a `Thread.ofPlatform`, `Thread.ofVirtual` or `Thread.startVirtualThread`
-/// call, or any `Executors.new*` factory, anywhere else fails the test.
+/// connection threads, each store's applier and log forcer, and the query pool's workers. Read from the bytecode of
+/// every main class of the module, nested and lambda bodies included: a `new Thread`, a `Thread.ofPlatform`,
+/// `Thread.ofVirtual` or `Thread.startVirtualThread` call, or any `Executors.new*` factory, anywhere else fails the
+/// test.
 class CdbThreadConfinementTest {
 
     // a class and its nested classes, by binary name prefix
@@ -29,9 +30,12 @@ class CdbThreadConfinementTest {
             "dev/marregui/comando/cdb/CdbServe",
             "dev/marregui/comando/cdb/serve/CdbServer",
             "dev/marregui/comando/cdb/serve/PgServer",
-            "dev/marregui/comando/cdb/store/Applier");
+            "dev/marregui/comando/cdb/store/Applier",
+            "dev/marregui/comando/cdb/store/LogForcer",
+            "dev/marregui/comando/cdb/exec/QueryPool");
 
-    /// No main class outside the four owners creates a thread or an executor, and the four owners are found.
+    /// No main class outside the six owners creates a thread or an executor, and the owners' thread creation is
+    /// found.
     @Test
     void onlyTheOwnersCreateThreads() throws IOException, URISyntaxException {
         final Path classes = Path.of(Cdb.class.getProtectionDomain().getCodeSource().getLocation().toURI());

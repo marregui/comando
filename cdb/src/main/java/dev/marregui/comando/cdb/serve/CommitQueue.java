@@ -1,5 +1,6 @@
 package dev.marregui.comando.cdb.serve;
 
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import org.jetbrains.annotations.TestOnly;
 import dev.marregui.comando.cdb.CdbAppender;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
+import dev.marregui.comando.cdb.exec.InsertRunner;
 
 /**
  * Group commit of {@code /write} bodies, one queue per table. A request queues its body's rows of each table as a
@@ -36,6 +38,14 @@ import dev.marregui.comando.cdb.CdbType;
  * <p>Bounded by the server's admission: at most {@link CdbServer#MAX_REQUESTS} requests in flight, each with at most
  * one batch per table. A batch waits at most {@link #WAIT_MILLIS} for a committer to take it, then its request is
  * refused. After {@link #close()} a new batch is refused; those already queued are still committed by their requests.
+ *
+ * <p>A durable body is answered only once its rows are durable. The committer closes its appender, marks the group done
+ * and lets the table go as for any group, then hands the closed appender to the group's durable batches: each of their
+ * requests waits on its own thread, holding no lock of this class, at most {@link InsertRunner#DURABLE_WAIT_MILLIS} in
+ * all for the store's force ({@link CdbAppender#awaitDurable}, which answers after the close for the rows the appender
+ * flushed). A batch without the flag and the table's next group never wait for that force. Under the force per commit
+ * the wait returns at once. A wait that runs out, or a force that failed, answers the request with a
+ * {@link NotDurableException}: its rows are written either way.
  */
 final class CommitQueue implements AutoCloseable {
 
@@ -59,19 +69,26 @@ final class CommitQueue implements AutoCloseable {
         this.appenders = appenders;
     }
 
-    /**
-     * Writes every row of {@code body}, waiting until each of its tables committed. Returns null when every row was
-     * written, else the refusal of the body's first refused row; throws the failure of a commit that wrote the rows of
-     * none of its refusals.
-     */
+    /** As {@link #write(Body, boolean)}, not durable. */
+    @TestOnly
     Refusal write(final Body body) {
+        return write(body, false);
+    }
+
+    /**
+     * Writes every row of {@code body}, waiting until each of its tables committed, and when {@code durable} until
+     * those commits are durable. Returns null when every row was written, else the refusal of the body's first refused
+     * row; throws the failure of a commit that wrote the rows of none of its refusals, then a
+     * {@link NotDurableException} when every row was written but not every one is known durable.
+     */
+    Refusal write(final Body body, final boolean durable) {
         final List<Batch> batches = body.batches();
         final List<Table> held = new ArrayList<>(batches.size());
         try {
             for (final Batch batch : batches) {
                 final Table table = acquire(batch.key);
                 held.add(table);
-                table.enqueue(batch);
+                table.enqueue(batch, durable);
             }
             for (int i = 0; i < batches.size(); i++) {
                 held.get(i).await(batches.get(i));
@@ -91,13 +108,38 @@ final class CommitQueue implements AutoCloseable {
                 failure = batch.failure;
             }
         }
-        if (first != null || failure == null) {
+        if (first != null) {
             return first;
+        }
+        if (failure == null) {
+            final NotDurableException notDurable = durable ? awaitDurable(batches) : null;
+            if (notDurable != null) {
+                throw notDurable;
+            }
+            return null;
         }
         if (failure instanceof final CdbException cdb) {
             throw cdb;
         }
         throw new IllegalStateException("cannot write rows [tables=" + batches.size() + ']', failure);
+    }
+
+    // on the request thread, its tables let go: waits for each table's force, at most DURABLE_WAIT_MILLIS in all; null
+    // once every one held. A force that failed outweighs a wait that ran out: those rows may be lost, the others are
+    // on their way
+    private static NotDurableException awaitDurable(final List<Batch> batches) {
+        final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(InsertRunner.DURABLE_WAIT_MILLIS);
+        NotDurableException outcome = null;
+        for (final Batch batch : batches) {
+            if (batch.durability == null) {
+                continue;
+            }
+            final NotDurableException next = batch.durability.await(deadlineNanos);
+            if (next != null && (outcome == null || next.isInDoubt() && !outcome.isInDoubt())) {
+                outcome = next;
+            }
+        }
+        return outcome;
     }
 
     /** Stops queueing: a batch queued after it is refused; the batches already queued are still committed. */
@@ -134,6 +176,90 @@ final class CommitQueue implements AutoCloseable {
 
     /** A refused row: its row number in the body, counted from 0, and why the store refused it. */
     record Refusal(int row, CdbException cause) {
+    }
+
+    /**
+     * A durable write whose rows are written and visible but not known durable: {@link #isInDoubt()} when the store's
+     * force failed, so the rows may be lost; else the wait for the force ran out.
+     */
+    static final class NotDurableException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final boolean inDoubt;
+
+        NotDurableException(final String message, final boolean inDoubt, final Throwable cause) {
+            super(message, cause);
+            this.inDoubt = inDoubt;
+        }
+
+        boolean isInDoubt() {
+            return inDoubt;
+        }
+    }
+
+    /**
+     * The durability of one group's commit of a table: the store's appender after its close. The group's durable
+     * requests wait on it one at a time, as an appender is not safe for concurrent use; a wait that held settles it for
+     * the ones after, as does a force that failed, while a wait that ran out leaves the next its own try.
+     */
+    private static final class Durability {
+
+        private final String table;
+        private final CdbAppender appender;
+        // a leaf: held only across the appender's wait, which takes no lock of this class and calls nothing back
+        private final ReentrantLock lock = new ReentrantLock();
+        // the two below: guarded by lock
+        private boolean held;
+        private NotDurableException inDoubt;
+
+        Durability(final String table, final CdbAppender appender) {
+            this.table = table;
+            this.appender = appender;
+        }
+
+        // waits until deadlineNanos (System.nanoTime) at most; null once the rows are durable, else why they are not
+        NotDurableException await(final long deadlineNanos) {
+            boolean locked = false;
+            try {
+                locked = lock.tryLock(Math.max(0L, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
+                if (!locked) {
+                    return notYet();
+                }
+                if (held || inDoubt != null) {
+                    return inDoubt;
+                }
+                if (appender.awaitDurable(
+                        TimeUnit.NANOSECONDS.toMillis(Math.max(0L, deadlineNanos - System.nanoTime())))) {
+                    held = true;
+                    return null;
+                }
+                return notYet();
+            } catch (final InterruptedException _) {
+                Thread.currentThread().interrupt();
+                return new NotDurableException("wrote rows, not yet durable, wait interrupted [table=" + table + ']',
+                        false, null);
+            } catch (final RuntimeException e) {
+                // only the appender's wait throws, with the lock held
+                LOG.log(Level.WARNING, "commit in doubt [table=" + table + ']', e);
+                inDoubt = new NotDurableException("commit in doubt [table=" + table + ", error=" + e.getMessage() + ']',
+                        true, e);
+                return inDoubt;
+            } finally {
+                if (locked) {
+                    lock.unlock();
+                }
+            }
+        }
+
+        // the wait ran out: the rows are written and on their way to the device
+        private NotDurableException notYet() {
+            final long waitMillis = InsertRunner.DURABLE_WAIT_MILLIS;
+            LOG.log(Level.WARNING, "wrote rows, not yet durable [table=" + table + ", waitMillis=" + waitMillis + ']');
+            return new NotDurableException("wrote rows, not yet durable [table=" + table + ", waitMillis=" + waitMillis
+                    + ']', false, null);
+        }
     }
 
     /**
@@ -239,11 +365,14 @@ final class CommitQueue implements AutoCloseable {
         private long[] longs = new long[INITIAL_FIELDS];
         private double[] doubles = new double[INITIAL_FIELDS];
         private String[] texts = new String[INITIAL_FIELDS];
-        // the four below: guarded by the lock of the batch's table
+        // the six below: guarded by the lock of the batch's table
+        private boolean durable;
         private boolean taken;
         private boolean done;
         private Refusal refusal;
         private RuntimeException failure;
+        // set for a durable batch the commit wrote; its request waits on it after the batch is done
+        private Durability durability;
 
         Batch(final String key) {
             this.key = key;
@@ -347,9 +476,10 @@ final class CommitQueue implements AutoCloseable {
         }
 
         // a batch queued after close is refused at once, as a closed store refuses its appender
-        void enqueue(final Batch batch) {
+        void enqueue(final Batch batch, final boolean durable) {
             lock.lock();
             try {
+                batch.durable = durable;
                 if (closed) {
                     batch.failure = new CdbException("refuse write after close [table=" + batch.rowTables[0] + ']', -1);
                     batch.done = true;
@@ -426,17 +556,30 @@ final class CommitQueue implements AutoCloseable {
         }
 
         // runs on the committer without lock: the group's rows into one appender, then one flush; a failed commit
-        // fails every batch of the group it did not refuse
+        // fails every batch of the group it did not refuse. The closed appender then goes to the durable batches the
+        // commit wrote, whose requests wait for its force once the group is done and the table's writer let go
         private void commit(final List<Batch> group) {
+            final CdbAppender flushed;
             try (CdbAppender appender = appenders.get()) {
                 replayAll(appender, group);
                 appender.flush();
+                flushed = appender;
             } catch (final RuntimeException e) {
                 LOG.log(Level.WARNING, "could not commit rows [table=" + key + ", batches=" + group.size() + ']', e);
                 fail(group, e);
+                return;
             } catch (final Error e) {
                 fail(group, new IllegalStateException("could not commit rows [table=" + key + ']', e));
                 throw e;
+            }
+            Durability durability = null;
+            for (final Batch batch : group) {
+                if (batch.durable && batch.refusal == null) {
+                    if (durability == null) {
+                        durability = new Durability(key, flushed);
+                    }
+                    batch.durability = durability;
+                }
             }
         }
 

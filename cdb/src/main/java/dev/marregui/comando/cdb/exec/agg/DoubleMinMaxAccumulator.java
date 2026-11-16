@@ -51,6 +51,12 @@ final class DoubleMinMaxAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        // a tie keeps this group's value, the one seen first, as accept does per row
+        accept(group, ((DoubleMinMaxAccumulator) from).best[fromGroup]);
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeDouble(best[group], out, row);
     }

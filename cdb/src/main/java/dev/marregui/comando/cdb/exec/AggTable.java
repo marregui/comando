@@ -113,4 +113,30 @@ final class AggTable {
     void writeKey(final int group, final int key, final Vector out, final int row) {
         keys.write(group, key, out, row);
     }
+
+    /**
+     * Adds {@code partial}, a table of the same keys and aggregates over a later frame's rows: each of its groups is
+     * merged into the group of the same keys, a group new here appended in {@code partial}'s first-seen order, so the
+     * groups and their order are the serial table's. The empty group of a table without keys merges as any group.
+     * {@code partial} keeps its results and must not be this table.
+     */
+    void merge(final AggTable partial) {
+        assert partial != this && partial.accumulators.length == accumulators.length
+                : "cannot merge a table of other aggregates";
+        final int count = partial.keys.size();
+        // the group here of each of the partial's, found or added in the partial's first-seen order
+        final int[] into = new int[count];
+        for (int g = 0; g < count; g++) {
+            into[g] = keys.groupOf(partial.keys, g);
+        }
+        final int groups = keys.size();
+        for (int a = 0; a < accumulators.length; a++) {
+            final Accumulator accumulator = accumulators[a];
+            final Accumulator from = partial.accumulators[a];
+            accumulator.ensure(groups);
+            for (int g = 0; g < count; g++) {
+                accumulator.merge(into[g], from, g);
+            }
+        }
+    }
 }

@@ -17,13 +17,15 @@ import dev.marregui.comando.cdb.CdbType;
 /**
  * The writer of one table. Pending rows are held by column in a {@link RowBlock}. A commit appends them to the table's
  * log and forces it, queues them and is answered: the store's {@link Applier} later writes many queued commits at once
- * into the column files and publishes them. A bulk commit, a definition change or a truncate is direct instead: the
- * queue is applied first, then the commit is written and named by a {@link Checkpoint}, as every commit was before the
- * log. Writing a batch (the applier's writer, in replay mode, also the recovery's) orders and deduplicates the rows of
- * each partition they fall in, then appends them in place to the partition's column files when they all come after its
- * committed rows, else rewrites the partition as a new version folder (its committed rows merged with the new), all
- * unforced, its symbols interned in memory. A crash leaves the last checkpoint and the log: the store's next open cuts
- * the bytes appended past the committed ends, deletes the orphan folders and replays the log.
+ * into the column files and publishes them. In a store with a {@link LogForcer} the record is written unforced and
+ * the commit answered before its force, which {@link #ticket()} waits for. A bulk commit, a definition change or a
+ * truncate is direct instead: the queue is applied first, then the commit is written and named by a
+ * {@link Checkpoint}, as every commit was before the log. Writing a batch (the applier's writer, in replay mode, also
+ * the recovery's) orders and deduplicates the rows of each partition they fall in, then appends them in place to the
+ * partition's column files when they all come after its committed rows, else rewrites the partition as a new version
+ * folder (its committed rows merged with the new), all unforced, its symbols interned in memory. A crash leaves the
+ * last checkpoint and the log: the store's next open cuts the bytes appended past the committed ends, deletes the
+ * orphan folders and replays the log.
  */
 final class DefaultWriter implements TableWriter {
 
@@ -44,6 +46,8 @@ final class DefaultWriter implements TableWriter {
     private boolean truncated;
     private boolean inRow;
     private boolean closed;
+    // the durability of the last answered commit: a logged commit's under the timed force, else done
+    private ForceTicket ticket = ForceTicket.DONE;
 
     DefaultWriter(final Store store, final TableState state) {
         this(store, state, false);
@@ -193,7 +197,9 @@ final class DefaultWriter implements TableWriter {
             committed();
             // the queued commits come first, so a batch never spans a definition change or a truncate
             store.applier().applyAllHeld(state, false);
-            write(committed().txn() + 1L, true);
+            final long txn = committed().txn() + 1L;
+            // a checkpoint that held made it durable; one whose folder force failed left it in doubt
+            ticket = write(txn, true) ? ForceTicket.DONE : inDoubt(def.name(), txn);
         } finally {
             state.applyLock.unlock();
             if (interrupted) {
@@ -231,16 +237,22 @@ final class DefaultWriter implements TableWriter {
     }
 
     /**
-     * A logged commit: appends the pending rows to the log as the next transaction and forces it, then queues them for
-     * the applier; durable and answered once this returns, visible once applied.
+     * A logged commit: appends the pending rows to the log as the next transaction, then queues them for the applier;
+     * answered once this returns, visible once applied. Durable by then under the force per commit; under the timed
+     * force the record is written unforced, the forcer told, and {@link #ticket()} waits for its force.
      */
     private void logged() {
         checkApplicable();
         final long txn = state.loggedTxn() + 1L;
+        final LogForcer forcer = store.forcer();
+        final ForceTicket answered;
         try {
-            log(txn);
+            answered = log(txn, forcer);
         } catch (final IOException e) {
             throw new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn + ']', e);
+        }
+        if (forcer != null) {
+            forcer.dirty(state);
         }
         final int n = pending.size;
         final long bytes = heapBytes();
@@ -252,8 +264,9 @@ final class DefaultWriter implements TableWriter {
             throw refused;
         }
         pending.size = 0;
+        ticket = answered;
         store.applier().committed(state, bytes);
-        // the commit is durable and queued from here: a failure of this hook leaves it to the applier
+        // the commit is logged and queued from here: a failure of this hook leaves it to the applier
         store.afterWalForce.run();
         if (store.applyOnCommit) {
             store.applyNow(state);
@@ -305,14 +318,15 @@ final class DefaultWriter implements TableWriter {
     }
 
     // called with the apply lock held, or by the recovery: writes the pending rows as transaction txn and publishes it,
-    // named by a checkpoint when direct
-    private void write(final long txn, final boolean direct) {
+    // named by a checkpoint when direct; false when that checkpoint left the commit in doubt
+    private boolean write(final long txn, final boolean direct) {
         final TableState.Snapshot current = committed();
         // versions in new folders, and versions of a committed folder its rows were appended to
         final List<Version> written = new ArrayList<>();
         final List<Version> appended = new ArrayList<>();
         final List<Version> next = new ArrayList<>(truncated ? List.of() : current.partitions());
         final TableState.Snapshot snapshot;
+        final boolean held;
         try {
             if (pending.size > 0) {
                 writePartitions(txn, next, written, appended);
@@ -321,13 +335,12 @@ final class DefaultWriter implements TableWriter {
             state.wrote(written, true);
             state.wrote(appended, false);
             snapshot = new TableState.Snapshot(txn, def, next);
-            if (direct) {
-                if (!directCheckpoint(snapshot)) {
-                    // no log record holds this commit: lost if the rename of _txn does not survive a power cut
-                    state.poison();
-                    LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force left a commit in"
-                            + " doubt [table=" + def.name() + ", txn=" + txn + ']');
-                }
+            held = !direct || directCheckpoint(snapshot);
+            if (!held) {
+                // no log record holds this commit: lost if the rename of _txn does not survive a power cut
+                state.poison();
+                LOG.log(System.Logger.Level.ERROR, "refuse further commits, a folder force left a commit in"
+                        + " doubt [table=" + def.name() + ", txn=" + txn + ']');
             }
         } catch (final IOException | RuntimeException e) {
             final CdbException failure = new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn
@@ -346,6 +359,7 @@ final class DefaultWriter implements TableWriter {
         committedDef = def;
         pending.size = 0;
         truncated = false;
+        return held;
     }
 
     // a failed write's versions: unmapped, the new folders deleted; each cleanup failure added to failure
@@ -379,6 +393,11 @@ final class DefaultWriter implements TableWriter {
     }
 
     @Override
+    public ForceTicket ticket() {
+        return ticket;
+    }
+
+    @Override
     public void rollback() {
         checkOpen();
         discard();
@@ -401,15 +420,20 @@ final class DefaultWriter implements TableWriter {
     }
 
     /**
-     * Appends the pending rows to the log as commit {@code txn} and forces it. A failure poisons the table: the log is
-     * cut back or in doubt, and after a failed force the page cache cannot be trusted.
+     * Appends the pending rows to the log as commit {@code txn}, forced when {@code forcer} is null, else written
+     * unforced for {@code forcer} to force; returns the durability of the record. A failure poisons the table: the log
+     * is cut back or in doubt, and after a failed force the page cache cannot be trusted.
      */
-    private void log(final long txn) throws IOException {
+    private ForceTicket log(final long txn, final LogForcer forcer) throws IOException {
         store.beforeWalAppend.run();
-        // an interrupt would close the log's channel mid-force and fail a commit nobody cancelled
+        // an interrupt would close the log's channel mid-write or mid-force and fail a commit nobody cancelled
         final boolean interrupted = Thread.interrupted();
         try {
-            state.wal.append(txn, false, null, pending);
+            if (forcer == null) {
+                state.wal.append(txn, false, null, pending);
+                return ForceTicket.DONE;
+            }
+            return new Ticket(forcer, state, state.wal.write(txn, false, null, pending));
         } catch (final IOException | RuntimeException e) {
             state.poison();
             throw e;
@@ -418,6 +442,31 @@ final class DefaultWriter implements TableWriter {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /**
+     * The force covering record {@code seq} of {@code state}'s log, written unforced by a commit under the timed force:
+     * a wait asks {@code forcer} to force the log now rather than at its deadline. Safe to wait on from any thread.
+     */
+    private record Ticket(LogForcer forcer, TableState state, long seq) implements ForceTicket {
+
+        @Override
+        public boolean await(final long timeoutNanos) throws InterruptedException {
+            // a record a force already covered costs the forcer no force of its own
+            if (state.wal.forcedSeq() >= seq) {
+                return true;
+            }
+            forcer.urgent(state);
+            return state.wal.awaitForced(seq, timeoutNanos);
+        }
+    }
+
+    // the durability of direct commit txn of table, whose checkpoint's folder force failed: no force can settle it
+    private static ForceTicket inDoubt(final String table, final long txn) {
+        return _ -> {
+            throw new CdbException("refuse durable commit, commit in doubt after failed checkpoint [table=" + table
+                    + ", txn=" + txn + ']', -1);
+        };
     }
 
     /**

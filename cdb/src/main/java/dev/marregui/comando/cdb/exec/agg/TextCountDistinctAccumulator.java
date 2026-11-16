@@ -8,7 +8,13 @@ import dev.marregui.comando.cdb.exec.Vector;
 final class TextCountDistinctAccumulator implements Accumulator {
 
     private static final int INITIAL_SLOTS = 64;
+    // the end of a chain of slots
+    private static final int NO_SLOT = -1;
 
+    // per group its first slot, per slot the next slot of its group: the pairs of one group without a pass over the
+    // whole table, built when this table is first merged from, dropped when it gains a pair
+    private int[] chainHeads;
+    private int[] chainNext;
     private long[] counts = new long[16];
     // group + 1 per slot, 0 for an empty slot
     private int[] groups = new int[INITIAL_SLOTS];
@@ -42,6 +48,19 @@ final class TextCountDistinctAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        assert from != this : "cannot merge an accumulator into itself";
+        final TextCountDistinctAccumulator other = (TextCountDistinctAccumulator) from;
+        if (other.counts[fromGroup] == 0) {
+            return;
+        }
+        other.chain();
+        for (int i = other.chainHeads[fromGroup]; i != NO_SLOT; i = other.chainNext[i]) {
+            insert(group, other.texts[i]);
+        }
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeLong(counts[group], out, row);
     }
@@ -52,6 +71,23 @@ final class TextCountDistinctAccumulator implements Accumulator {
         h *= 0x85EBCA6B;
         h ^= h >>> 13;
         return h;
+    }
+
+    private void chain() {
+        if (chainHeads != null) {
+            return;
+        }
+        final int[] heads = new int[counts.length];
+        Arrays.fill(heads, NO_SLOT);
+        final int[] next = new int[texts.length];
+        for (int i = 0; i < texts.length; i++) {
+            if (groups[i] != 0) {
+                next[i] = heads[groups[i] - 1];
+                heads[groups[i] - 1] = i;
+            }
+        }
+        chainHeads = heads;
+        chainNext = next;
     }
 
     private void insert(final int group, final String text) {
@@ -68,6 +104,8 @@ final class TextCountDistinctAccumulator implements Accumulator {
         hashes[i] = hash;
         texts[i] = text;
         counts[group]++;
+        chainHeads = null;
+        chainNext = null;
         // a load factor of at most one half keeps probe runs short
         if (++size > texts.length >>> 1) {
             rehash();

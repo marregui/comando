@@ -52,6 +52,22 @@ dictionary keys.
 | LATEST ON, time order | the best row per key tracked by offset, copied once per page |
 | ORDER BY … LIMIT | a bounded heap that keeps the full sort's order, ties by input sequence |
 
+**Parallel operators** ([record 165](adr/0165-cdb-parallel-queries.md)). A segment, a scan under only filters and
+projections whose expressions read the current row, is cut into frames: per partition in the scan's range, its rows at
+multiples of 65,536 counted from the partition's first row, so the frames depend on the snapshot and the query, never
+on the pool. Each operator over a segment runs one job of its frames on the shared query pool (`exec.QueryPool`) and
+merges the partials on the consumer in frame order: GROUP BY and SAMPLE BY a partial table per frame (`AggTable.merge`
+appends a partial's new groups in its first-seen order), LATEST ON the latest row per key per frame, DISTINCT
+deduplicated again in frame order, ORDER BY a stable sort per frame k-way merged with ties by frame, LIMIT frames in
+order with the rest not started once met, set operations the right side read once, joins the right side built once and
+the left probed per frame (a frame past 64 pages joined again on the consumer page by page), window functions per
+frame or per partition. A streaming input reads its frames' pages through `exec.ExchangeCursor`. The workers run at
+most the pool's threads + 1 frames past the one awaited. A frame's failure stops the frames after it; the frames before
+it run, so the failure met is the lowest failed frame's, as in a serial run. The answer is the serial operator's, bit
+for bit, at every pool size, except a double sum or average, whose additions are grouped by frame: the same bits on
+every run, and usually the serial value but for the last digits (1, 1e17, -1e17 sums to 0 serially, 1 when a frame
+ends after the 1). A cancel is checked before each frame and at each page.
+
 ### 1.4 Listings
 
 Table functions answer from the catalog and the store's status, never from a table's data. `tables()`,
@@ -79,7 +95,7 @@ for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR a
 
 | Commit | Its commit point | Then |
 |---|---|---|
-| logged: fewer than 100,000 rows, no definition change, no truncate | one record appended to `_wal` and forced: the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
+| logged: fewer than 100,000 rows, no definition change, no truncate | one record appended to `_wal` and forced (or, under the timed force below, written and forced within the interval): the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
 | direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
 
 **The applier.** One platform thread per store, `cdb-applier-<root>` (its batches write files, which would pin a
@@ -114,7 +130,7 @@ names; a commit logged meanwhile keeps the log until the next checkpoint (a scan
 files and folders written since the last checkpoint forced, the symbol files appended and forced, `_meta` when the
 definition changed, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
 forced. Only when that folder force holds are the folders the new `_txn` no longer names deleted (those no reader
-holds) and the log cut back to its 8-byte header. `Store.create` forces the root after the table folder. `_txn` and
+holds) and the log cut back to its header, a new salt written in it and forced. `Store.create` forces the root after the table folder. `_txn` and
 the log's records together say what is committed: a reader maps only the published rows, and a file may run past them.
 
 | Failure | After it |
@@ -137,6 +153,30 @@ the log's records together say what is committed: a reader maps only the publish
 | an `Error` while a commit writes its files | the files it wrote unmapped and deleted, its writers released, and the table refusing commits until the store reopens |
 | the previous engine opening a store after a failed or crashed append | it refuses the longer files and opens nothing; opening once with this engine cuts them first |
 | an engine from before the log opening a checkpointed store | it refuses `_txn`'s new lines and opens nothing: the format is one-way |
+
+**The log's format** ([record 166](adr/0166-cdb-timed-log-force.md)). Format 2: a 16-byte header (magic `CWAL`, u32
+version 2, a u64 salt drawn anew at the log's creation and at every cut), then per record its length and a CRC32C of
+the salt's 8 bytes then the body, so a frame of an earlier generation that a power cut left past the header fails its
+CRC and is cut. A format 1 log (an 8-byte header, unsalted CRCs) still reads and becomes format 2 at its first cut;
+the format is one-way: a cdb before record 166 cannot open a format 2 log.
+
+**The timed force** (record 166). A store opened with `StoreOptions(logForceMillis > 0)` (`CdbServe --log-force-ms N`)
+answers a logged commit once its record is written, without its force; its thread `cdb-log-force-<root>` forces each
+table's log at most N ms after the first record written since the last force, so a power cut loses at most the last N
+ms of answered commits, one force per table per interval instead of one per commit. A request that must survive a
+power cut asks for it: `/write?durable=true`, or `SET cdb.durable = true` on a PG connection; its answer waits for a
+force covering its commit (the forcer asked to force that log at once), outside the committer, so plain writes queue
+on. A failed timed force poisons the table, as a failed force per commit does: no retry, its commits refused until the
+store reopens, the commits since the last force that held logged at ERROR as in doubt, and every durable waiter on
+them failed with "commit in doubt". A cut whose new header's force fails counts as a failed force. The store's close
+forces every dirty log once more; a record written after the forcer closed is forced on its writer's thread. Default
+0: a force per commit, as before.
+
+| Timed force: known limits | Effect |
+|---|---|
+| a retract (a commit refused after it was logged) gives its txn back without a new salt | a disk block still holding the retracted frame could pass its CRC at the next open after a power cut |
+| a scan's cut of a torn tail at open keeps the salt | the same exposure for the frame cut |
+| the forcer's figures (`forcedTxn`, the most a force ran late) | kept per log, not yet in `wal_tables()` |
 
 Snapshots: a reader holds a version per partition; several snapshots may share a folder at different row counts. The
 table counts holders per folder and deletes a folder only when no snapshot holds it and the checkpointed `_txn` does
@@ -183,6 +223,8 @@ Threads:
 | Thread | Kind | Owner | May block on |
 |---|---|---|---|
 | `cdb-applier-<root>` | platform, daemon, one per store (its batches force files, which would pin a virtual thread) | `store.Applier`, started by `Store.open`, stopped by `Store.close` (joined up to 10 s) | a table's apply lock (a direct commit of it in progress), the log's monitor when it drains a log past 4 checkpoints' worth, file writes and forces; parks until its earliest deadline or a signal, at most 1 s |
+| `cdb-query-<n>` | platform, daemon, cores − 1 by default (`CdbServe --query-threads N`), one pool per process shared by every store (CPU-bound frames) | `exec.QueryPool`, started at the first submit; the shared pool's threads end with the process | a frame's reads (mapped files), a nested job's frames, which it runs itself rather than wait; parks idle at most 1 s |
+| `cdb-log-force-<root>` | platform, daemon, one per store opened with the timed force (a force blocks in the file system) | `store.LogForcer`, started by `Store.open`, stopped by `Store.close` after a last force of every dirty log (joined up to 10 s) | a log's force; parks until the earliest deadline or a signal, at most 1 s |
 | `cdb-http-<n>` | virtual, one per request | `serve.CdbServer` | a table's lease and its commit queue, the read wait for the applier (at most 10 s), the socket |
 | a PG connection's thread | virtual, one per connection | `serve.PgServer` | as an HTTP request, and the client's socket |
 | `cdb-serve-shutdown` | platform, the JVM's shutdown hook | `CdbServe` | the launcher's close, at most its close wait |
@@ -198,7 +240,8 @@ Locks, in the order they are taken (a thread holding one takes only those below 
 |---|---|---|
 | a table's lease (`TableState.lease`) | one writer per table | a writer, a `/write` committer, the store's checkpoint and close |
 | a table's apply lock (`TableState.applyLock`) | the column files, dictionaries and checkpoints | the applier, a direct commit, the store's checkpoint and close |
-| a log's monitor (`Wal`) | the log file: append and its force, cut, scan | a logged commit, the applier's checkpoint (its drain of an overgrown log holds it while it applies) |
+| a log's monitor (`Wal`) | the log file: append and its force, write, cut, scan | a logged commit, the applier's checkpoint (its drain of an overgrown log holds it while it applies); not the timed force, which reads the last record's number without it and forces outside it |
+| a log's force monitor (`Wal.forced`) | the forced sequence number, the first failed force, the durable waiters | taken inside the log's monitor or alone, never the other way round |
 | a table's state lock (`TableState.lock`) | the queued commits, the published snapshot, the waiting readers | committers, readers, the applier |
 
 The log's size and record count are read without its monitor (volatile fields written under it), so the applier's
@@ -206,8 +249,8 @@ checkpoint test never waits for a commit's force. `Store`'s create lock serialis
 alone. A commit queue's lock (`serve.CommitQueue`) guards one table's queued batches and is never held while the batch
 is written.
 
-The rule `CdbThreadConfinementTest` enforces: only `CdbServe`, `serve.CdbServer`, `serve.PgServer` and
-`store.Applier` (nested classes and lambdas included) create a thread or an executor (`new Thread`,
+The rule `CdbThreadConfinementTest` enforces: only `CdbServe`, `serve.CdbServer`, `serve.PgServer`,
+`store.Applier`, `exec.QueryPool` and `store.LogForcer` (nested classes and lambdas included) create a thread or an executor (`new Thread`,
 `Thread.ofPlatform`, `Thread.ofVirtual`, `Thread.startVirtualThread`, `Executors.new*`), read from the module's
 bytecode.
 
@@ -233,6 +276,22 @@ the Cosa comparison of 2026-11-15. The answers of every query are compared with 
 | 20 concurrent 1-line writes over 5 tables, median / max | 891 / 1,543 ms | 147 / 185 ms |
 | `INSERT INTO … SELECT` of the 2 M rows | 0.90 s | 0.70 s |
 | memory of Cosa's cdb container at Cosa's rate (`docker stats`; TimescaleDB 148 MiB, QuestDB 1.05 GiB) | 244–378 MiB | 111–112 MiB |
+
+Parallel queries (record 165), 2026-11-16: the same 2 M rows loaded over ILP into a fresh store per jar, the jar before
+the record (comando `7619532d`) against the jar with it, a pool of 11 workers on the M2 Max's 12 cores, best of 7, client
+time. Every answer is the same but B's averages, which differ in the last digits (30 of 56 rows, at the 14th
+significant digit). On B the process used 19.7 ms of CPU per 7.6 ms query: at 31 frames and about 10 ms of serial
+work, the hand-offs and the merge cost about as much as the work they spread.
+
+| Query | before (ms) | after (ms) |
+|---|---|---|
+| A | 0.8 | 0.9 |
+| B | 10.1 | 8.7 |
+| C | 16.2 | 16.3 |
+| D | 57.3 | 36.6 |
+| E | 22.1 | 29.7 (slower; cause not yet measured: each frame keeps its own 500-row heap, then the runs merge) |
+| F | 14.1 | 10.0 |
+| load of the 2 M rows | 5.5 s | 5.4 s |
 
 The memory figure is with the JVM options the kit's `cdb-serve` and Cosa's cdb image use: G1 with two GC threads and
 a collection every 10 s when idle, compact object headers, a heap of 16 to 256 MB kept 10–20 % free (before: `-Xmx1g`).

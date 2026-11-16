@@ -14,6 +14,7 @@ import java.util.Map;
 import dev.marregui.comando.cdb.Cdb;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbResult;
+import dev.marregui.comando.cdb.exec.InsertRunner;
 
 /**
  * One PostgreSQL wire (protocol 3.0) connection to a cdb, as QuestDB's port 8812 serves one: any user and password
@@ -59,6 +60,8 @@ final class PgSession {
     private final Map<String, Prepared> statements = new HashMap<>();
     // the session's read lag, set and read on the session's thread; null runs queries with the store's default
     private Long maxLagMillis;
+    // whether the session's writes wait to be durable (SET cdb.durable), set and read on the session's thread
+    private boolean durable;
     private boolean skipping;
     private char transaction = 'I';
 
@@ -212,7 +215,12 @@ final class PgSession {
         }
     }
 
+    // a durable session binds its setting for the statement, which runs on this thread, for its INSERT to read
     private CdbResult runQuery(final String sql) {
+        return durable ? ScopedValue.where(InsertRunner.DURABLE, Boolean.TRUE).call(() -> run(sql)) : run(sql);
+    }
+
+    private CdbResult run(final String sql) {
         return maxLagMillis == null ? cdb.run(sql) : cdb.run(sql, 0, maxLagMillis);
     }
 
@@ -376,6 +384,9 @@ final class PgSession {
         }
         if (local.lag() != null) {
             maxLagMillis = local.lag().millis();
+        }
+        if (local.durable() != null) {
+            durable = local.durable().on();
         }
         if ("SET".equals(local.tag()) && local.value() != null) {
             status("application_name", local.value());

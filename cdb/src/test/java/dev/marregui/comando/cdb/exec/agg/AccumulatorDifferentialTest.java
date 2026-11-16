@@ -415,6 +415,14 @@ class AccumulatorDifferentialTest {
         }
 
         @Override
+        public void merge(final int group, final Accumulator from, final int fromGroup) {
+            if (!(from instanceof final SortedPercentile other)) {
+                throw new IllegalArgumentException("refuse merge of another kind [from=" + from + ']');
+            }
+            values.get(group).addAll(other.values.get(fromGroup));
+        }
+
+        @Override
         public void write(final int group, final Vector out, final int row) {
             final List<Number> list = values.get(group);
             final int n = list.size();

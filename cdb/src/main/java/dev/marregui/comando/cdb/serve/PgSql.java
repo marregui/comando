@@ -28,6 +28,10 @@ final class PgSql {
     private static final Pattern READ_LAG = Pattern.compile(
             "(?is)\\s*set\\s+(?:session\\s+)?cdb\\.max_lag_ms\\s*(?:=|to)\\s*(?:'([^']*)'|([^\\s']+))\\s*");
     private static final Pattern RESET_READ_LAG = Pattern.compile("(?is)\\s*reset\\s+cdb\\.max_lag_ms\\s*");
+    // the session's durability: SET cdb.durable = on or off (quoted or not, TO too), = DEFAULT, or RESET cdb.durable
+    private static final Pattern DURABLE = Pattern.compile(
+            "(?is)\\s*set\\s+(?:session\\s+)?cdb\\.durable\\s*(?:=|to)\\s*(?:'([^']*)'|([^\\s']+))\\s*");
+    private static final Pattern RESET_DURABLE = Pattern.compile("(?is)\\s*reset\\s+cdb\\.durable\\s*");
 
     private PgSql() {
     }
@@ -151,11 +155,18 @@ final class PgSql {
         };
     }
 
-    // SET application_name carries the name as the answer's value, to be reported back; SET cdb.max_lag_ms, its change
+    // SET application_name carries the name as the answer's value, to be reported back; SET cdb.max_lag_ms and
+    // SET cdb.durable, their change
     private static Local set(final String sql) {
         final Matcher name = APPLICATION_NAME.matcher(sql);
         if (name.matches()) {
-            return new Local("SET", null, name.group(1).replace("''", "'"), null);
+            return new Local("SET", null, name.group(1).replace("''", "'"), null, null);
+        }
+        final Matcher durable = DURABLE.matcher(sql);
+        if (durable.matches()) {
+            final boolean unquotedDefault = durable.group(2) != null && durable.group(2).equalsIgnoreCase("default");
+            return Local.durable("SET", !unquotedDefault && on(durable.group(1) != null ? durable.group(1)
+                    : durable.group(2)));
         }
         final Matcher lag = READ_LAG.matcher(sql);
         if (lag.matches()) {
@@ -167,7 +178,19 @@ final class PgSql {
     }
 
     private static Local reset(final String sql) {
+        if (RESET_DURABLE.matcher(sql).matches()) {
+            return Local.durable("RESET", false);
+        }
         return RESET_READ_LAG.matcher(sql).matches() ? Local.lag("RESET", null) : Local.command("RESET");
+    }
+
+    // PostgreSQL's boolean setting words a driver sends; any other is refused, so a typo does not silently mean off
+    private static boolean on(final String value) {
+        return switch (value.strip().toLowerCase(Locale.ROOT)) {
+            case "on", "true" -> true;
+            case "off", "false" -> false;
+            default -> throw new CdbException("invalid cdb.durable [cdb.durable=" + value + ']', -1);
+        };
     }
 
     // a session parameter's value; null for any other name, which cdb's own SHOW answers or refuses
@@ -294,22 +317,26 @@ final class PgSql {
     /**
      * A session statement's answer: its command tag, and for {@code SHOW} or a session function one row of one
      * VARCHAR column ({@code column} null for none); a {@code SET application_name} has no row and the name as its
-     * {@code value}; a {@code SET} or {@code RESET} of {@code cdb.max_lag_ms} carries its {@link ReadLagChange},
-     * null for any other statement.
+     * {@code value}; a {@code SET} or {@code RESET} of {@code cdb.max_lag_ms} carries its {@link ReadLagChange}, and
+     * of {@code cdb.durable} its {@link DurableChange}, each null for any other statement.
      */
-    record Local(String tag, String column, String value, ReadLagChange lag) {
+    record Local(String tag, String column, String value, ReadLagChange lag, DurableChange durable) {
 
         static Local command(final String tag) {
-            return new Local(tag, null, null, null);
+            return new Local(tag, null, null, null, null);
         }
 
         static Local row(final String column, final String value) {
-            return new Local("SELECT 1", column, value, null);
+            return new Local("SELECT 1", column, value, null, null);
         }
 
         /** The session's read lag becomes {@code millis}; unset when null. */
         static Local lag(final String tag, final Long millis) {
-            return new Local(tag, null, null, new ReadLagChange(millis));
+            return new Local(tag, null, null, new ReadLagChange(millis), null);
+        }
+
+        static Local durable(final String tag, final boolean on) {
+            return new Local(tag, null, null, null, new DurableChange(on));
         }
 
         boolean hasRow() {
@@ -319,5 +346,9 @@ final class PgSql {
 
     /** The session's new read lag in milliseconds; null unsets it, so queries run with the store's default. */
     record ReadLagChange(Long millis) {
+    }
+
+    /** Whether the session's statements now wait for their writes to be durable; off is the default. */
+    record DurableChange(boolean on) {
     }
 }

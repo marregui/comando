@@ -81,6 +81,11 @@ final class CountAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        counts[group] += ((CountAccumulator) from).counts[fromGroup];
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeLong(counts[group], out, row);
     }

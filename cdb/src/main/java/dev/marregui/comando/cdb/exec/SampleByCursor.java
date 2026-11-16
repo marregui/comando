@@ -25,26 +25,31 @@ final class SampleByCursor implements Cursor {
     // a mistyped stride, at about 16 bytes of bookkeeping per output row
     private static final long MAX_FILL_ROWS = 10_000_000L;
 
+    // the input of the serial operator, null over frames
     private final Cursor child;
     private final long count;
     private final List<Field> fields;
     // the fill per aggregate; null when the query has no FILL (or FILL(NONE))
     private final Fill[] fill;
     private final double[] fillValues;
-    private final VectorFn[] keyFns;
     private final AggKeys keyTable;
-    private final Vector[] keyVectors;
-    private final Vector[] keysWithBucket;
+    private final long nowMicros;
+    // the serial operator's; over frames each frame has its own
+    private final Accumulation serial;
+    // the input over frames, null for the serial operator
+    private final FrameSource source;
+    private final Plan.SampleBy spec;
     // the bucket length of a fixed stride, 0 for a calendar one
     private final long strideMicros;
     private final AggTable table;
+    // the bucket's start, then the keys
+    private final List<CdbType> tableTypes;
     private final int timestampColumn;
     private final String unit;
     private long[] bucketStarts;
     private int[] cells;
     private boolean closed;
     private int emitted;
-    private int[] keyOfGroup = new int[16];
     private int keys;
     private int[] nextCell;
     private int[] order;
@@ -52,34 +57,50 @@ final class SampleByCursor implements Cursor {
     private int rows = -1;
 
     SampleByCursor(final Cursor child, final Plan.SampleBy spec, final long nowMicros) {
+        this(child, null, spec, nowMicros);
+    }
+
+    // exactly one of child and source is not null; a failure closes it
+    private SampleByCursor(
+            final Cursor child,
+            final FrameSource source,
+            final Plan.SampleBy spec,
+            final long nowMicros
+    ) {
         this.child = child;
+        this.source = source;
+        this.spec = spec;
+        this.nowMicros = nowMicros;
         try {
             fields = spec.fields();
             count = spec.count();
             unit = spec.unit();
             timestampColumn = spec.timestampColumn();
             strideMicros = AggBuckets.fixedStride(count, unit);
-            keyFns = new VectorFn[spec.keys().size()];
-            keyVectors = new Vector[keyFns.length];
-            keysWithBucket = new Vector[keyFns.length + 1];
-            keysWithBucket[0] = Vector.of(CdbType.TIMESTAMP, Page.CAPACITY);
             final List<CdbType> keyTypes = new ArrayList<>();
-            final List<CdbType> tableTypes = new ArrayList<>();
+            tableTypes = new ArrayList<>();
             tableTypes.add(CdbType.TIMESTAMP);
-            for (int k = 0; k < keyFns.length; k++) {
-                final Bound key = spec.keys().get(k);
-                keyFns[k] = Functions.compile(key, nowMicros);
+            for (final Bound key : spec.keys()) {
                 keyTypes.add(key.type());
                 tableTypes.add(key.type());
             }
             keyTable = new AggKeys(keyTypes);
             table = new AggTable(tableTypes, spec.aggs(), nowMicros);
+            serial = new Accumulation(table);
             fillValues = new double[spec.aggs().size()];
             fill = parseFill(spec.fill(), fillValues);
         } catch (final RuntimeException e) {
-            child.close();
+            closeInput();
             throw e;
         }
+    }
+
+    /**
+     * SAMPLE BY over {@code source}'s frames: a partial bucket and key table per frame, merged in frame order, then
+     * FILL. The answer is the serial operator's, the same bits whatever the pool's size. Owns and closes the source.
+     */
+    static Cursor parallel(final FrameSource source, final Plan.SampleBy spec, final long nowMicros) {
+        return new SampleByCursor(null, source, spec, nowMicros);
     }
 
     @Override
@@ -114,7 +135,7 @@ final class SampleByCursor implements Cursor {
     public void close() {
         if (!closed) {
             closed = true;
-            child.close();
+            closeInput();
         }
     }
 
@@ -156,53 +177,41 @@ final class SampleByCursor implements Cursor {
         }
     }
 
+    private void closeInput() {
+        if (source != null) {
+            source.close();
+        } else {
+            child.close();
+        }
+    }
+
+    // a frame's partial, on a pool worker or the consuming thread: its accumulation and table are its own
+    private AggTable partial(final int frame) {
+        final Accumulation partial = new Accumulation(new AggTable(tableTypes, spec.aggs(), nowMicros));
+        try (Cursor rows = source.open(frame)) {
+            Page page;
+            while ((page = rows.next()) != null) {
+                source.context().check();
+                partial.add(page);
+            }
+        }
+        return partial.table;
+    }
+
     private void readAll() {
-        final Vector buckets = keysWithBucket[0];
-        // the bucket last computed, [bucketStart, bucketEnd): time-ordered rows reuse it with two comparisons in
-        // place of a division per row (the gain not measured)
-        long bucketStart = 0;
-        long bucketEnd = 0;
-        Page page;
-        while ((page = child.next()) != null) {
-            final long[] micros = page.columns[timestampColumn].longs;
-            if (strideMicros > 0) {
-                for (int i = 0; i < page.size; i++) {
-                    final long ts = micros[i];
-                    if (ts == Vector.NULL_LONG) {
-                        buckets.longs[i] = Vector.NULL_LONG;
-                    } else {
-                        if (ts < bucketStart || ts >= bucketEnd) {
-                            bucketStart = Math.floorDiv(ts, strideMicros) * strideMicros;
-                            // a floor below Long.MIN_VALUE wraps above ts, and an end past Long.MAX_VALUE wraps
-                            // below the start: either leaves an empty range, so those rows floor again
-                            bucketEnd = bucketStart > ts ? bucketStart : bucketStart + strideMicros;
-                        }
-                        buckets.longs[i] = bucketStart;
+        if (source == null) {
+            Page page;
+            while ((page = child.next()) != null) {
+                serial.add(page);
+            }
+        } else {
+            // frame order, never completion order: the groups' order and every sum's rounding follow the frames
+            try (final Job<AggTable> job = source.submit(this::partial)) {
+                for (int frame = 0; frame < job.frames(); frame++) {
+                    final AggTable partial = job.await(frame);
+                    if (partial.groups() > 0) {
+                        table.merge(partial);
                     }
-                }
-            } else {
-                for (int i = 0; i < page.size; i++) {
-                    buckets.longs[i] = micros[i] == Vector.NULL_LONG
-                            ? Vector.NULL_LONG
-                            : AggBuckets.floor(micros[i], count, unit);
-                }
-            }
-            for (int k = 0; k < keyFns.length; k++) {
-                keyVectors[k] = keyFns[k].eval(page);
-                keysWithBucket[k + 1] = keyVectors[k];
-            }
-            table.add(page, keysWithBucket);
-            if (fill == null) {
-                // the key numbering only lays out a FILL
-                continue;
-            }
-            for (int i = 0; i < page.size; i++) {
-                if (buckets.longs[i] != Vector.NULL_LONG) {
-                    final int group = table.groupOfRow(i);
-                    if (group >= keyOfGroup.length) {
-                        keyOfGroup = Arrays.copyOf(keyOfGroup, Math.max(keyOfGroup.length * 2, group + 1));
-                    }
-                    keyOfGroup[group] = keyTable.groupOf(keyVectors, i);
                 }
             }
         }
@@ -228,6 +237,21 @@ final class SampleByCursor implements Cursor {
     }
 
     private void layOutFill(final int groups, final long[] groupBucket, final int withBucket) {
+        // the keys numbered in first-seen order over the rows with a bucket: a key's first row opens its first group,
+        // so walking the groups in order numbers the keys as the rows would, from the table alone
+        final int[] keyOfGroup = new int[groups];
+        final Vector[] keyRow = new Vector[tableTypes.size() - 1];
+        for (int k = 0; k < keyRow.length; k++) {
+            keyRow[k] = Vector.of(tableTypes.get(k + 1), 1);
+        }
+        for (int g = 0; g < groups; g++) {
+            if (groupBucket[g] != Vector.NULL_LONG) {
+                for (int k = 0; k < keyRow.length; k++) {
+                    table.writeKey(g, k + 1, keyRow[k], 0);
+                }
+                keyOfGroup[g] = keyTable.groupOf(keyRow, 0);
+            }
+        }
         keys = keyTable.size();
         if (withBucket == 0) {
             rows = 0;
@@ -290,11 +314,12 @@ final class SampleByCursor implements Cursor {
         final int bucket = cell / keys;
         final int key = cell % keys;
         out.columns[0].longs[row] = bucketStarts[bucket];
-        for (int k = 0; k < keyFns.length; k++) {
+        final int keyColumns = tableTypes.size() - 1;
+        for (int k = 0; k < keyColumns; k++) {
             keyTable.write(key, k, out.columns[k + 1], row);
         }
         final int group = cells[cell];
-        final int offset = keyFns.length + 1;
+        final int offset = keyColumns + 1;
         for (int a = 0; a < fill.length; a++) {
             final Vector column = out.columns[offset + a];
             if (group >= 0) {
@@ -317,10 +342,11 @@ final class SampleByCursor implements Cursor {
     }
 
     private void writeGroup(final int group, final Page out, final int row) {
-        for (int k = 0; k <= keyFns.length; k++) {
+        final int columns = tableTypes.size();
+        for (int k = 0; k < columns; k++) {
             table.writeKey(group, k, out.columns[k], row);
         }
-        final int offset = keyFns.length + 1;
+        final int offset = columns;
         for (int a = 0; a < table.aggregates(); a++) {
             table.writeAggregate(group, a, out.columns[offset + a], row);
         }
@@ -347,6 +373,64 @@ final class SampleByCursor implements Cursor {
             column.doubles[row] = y.doubles[0] + (y.doubles[1] - y.doubles[0]) * x / dx;
         } else {
             column.longs[row] = y.longs[0] + (y.longs[1] - y.longs[0]) * x / dx;
+        }
+    }
+
+    /**
+     * One input's rows into one table: its own key functions and bucket vector, as a compiled function reuses its
+     * output vector, so frames on several threads share nothing but the cursor's final fields.
+     */
+    private final class Accumulation {
+
+        private final VectorFn[] keyFns;
+        // the bucket, then the keys' vectors of the page being added
+        private final Vector[] keysWithBucket;
+        private final AggTable table;
+        // the bucket last computed, [bucketStart, bucketEnd): time-ordered rows reuse it with two comparisons in
+        // place of a division per row (the gain not measured)
+        private long bucketEnd;
+        private long bucketStart;
+
+        Accumulation(final AggTable table) {
+            this.table = table;
+            final List<Bound> keys = spec.keys();
+            keyFns = new VectorFn[keys.size()];
+            for (int k = 0; k < keyFns.length; k++) {
+                keyFns[k] = Functions.compile(keys.get(k), nowMicros);
+            }
+            keysWithBucket = new Vector[keyFns.length + 1];
+            keysWithBucket[0] = Vector.of(CdbType.TIMESTAMP, Page.CAPACITY);
+        }
+
+        void add(final Page page) {
+            final Vector buckets = keysWithBucket[0];
+            final long[] micros = page.columns[timestampColumn].longs;
+            if (strideMicros > 0) {
+                for (int i = 0; i < page.size; i++) {
+                    final long ts = micros[i];
+                    if (ts == Vector.NULL_LONG) {
+                        buckets.longs[i] = Vector.NULL_LONG;
+                    } else {
+                        if (ts < bucketStart || ts >= bucketEnd) {
+                            bucketStart = Math.floorDiv(ts, strideMicros) * strideMicros;
+                            // a floor below Long.MIN_VALUE wraps above ts, and an end past Long.MAX_VALUE wraps
+                            // below the start: either leaves an empty range, so those rows floor again
+                            bucketEnd = bucketStart > ts ? bucketStart : bucketStart + strideMicros;
+                        }
+                        buckets.longs[i] = bucketStart;
+                    }
+                }
+            } else {
+                for (int i = 0; i < page.size; i++) {
+                    buckets.longs[i] = micros[i] == Vector.NULL_LONG
+                            ? Vector.NULL_LONG
+                            : AggBuckets.floor(micros[i], count, unit);
+                }
+            }
+            for (int k = 0; k < keyFns.length; k++) {
+                keysWithBucket[k + 1] = keyFns[k].eval(page);
+            }
+            table.add(page, keysWithBucket);
         }
     }
 

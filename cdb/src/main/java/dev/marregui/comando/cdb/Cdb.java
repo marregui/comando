@@ -7,10 +7,13 @@ import java.util.List;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.exec.Executor;
+import dev.marregui.comando.cdb.exec.QueryContext;
+import dev.marregui.comando.cdb.exec.QueryPool;
 import dev.marregui.comando.cdb.plan.Plan;
 import dev.marregui.comando.cdb.plan.Planner;
 import dev.marregui.comando.cdb.sql.Parser;
 import dev.marregui.comando.cdb.store.Store;
+import dev.marregui.comando.cdb.store.StoreOptions;
 
 /**
  * comando's database: columnar, partitioned by time, the SQL its own and the kit's queries use, QuestDB's syntax and
@@ -34,6 +37,14 @@ public final class Cdb implements AutoCloseable {
         return new Cdb(Store.open(root));
     }
 
+    /**
+     * The database under {@code root}, created when the folder is missing, its commits made durable as {@code options}
+     * says.
+     */
+    public static Cdb open(final Path root, final StoreOptions options) {
+        return new Cdb(Store.open(root, options));
+    }
+
     /** Runs {@code sql}, every row of a query. */
     public CdbResult run(final String sql) {
         return run(sql, 0);
@@ -55,7 +66,8 @@ public final class Cdb implements AutoCloseable {
         if (planned.plan() instanceof Plan.Change change) {
             return CdbResult.updated(Executor.execute(change, store, now));
         }
-        return CdbResult.drain(Executor.open(planned.plan(), store, now), offset, maxRows, cancel)
+        return CdbResult.drain(Executor.open(planned.plan(), store, now, new QueryContext(cancel, QueryPool.shared())),
+                        offset, maxRows, cancel)
                 .withTimestampIndex(planned.timestamp());
     }
 

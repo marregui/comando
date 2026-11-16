@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.catalog.Catalog;
 import dev.marregui.comando.cdb.exec.expr.Functions;
@@ -25,40 +27,122 @@ public final class Executor {
      * it reads ({@link ColumnUse}).
      */
     public static Cursor open(final Plan plan, final Store store, final long nowMicros) {
-        return build(plan, store, nowMicros, ColumnUse.of(plan));
+        return open(plan, store, nowMicros, QueryContext.uncancellable());
+    }
+
+    /**
+     * As {@link #open(Plan, Store, long)}, the query's frames running in {@code ctx}: on its pool, given up once its
+     * cancel is cancelled. An operator whose input is a segment ({@link FrameSource#isSegment}) works per frame; over
+     * any other input it runs as before, on the calling thread.
+     */
+    public static Cursor open(final Plan plan, final Store store, final long nowMicros, final QueryContext ctx) {
+        return build(plan, store, nowMicros, ColumnUse.of(plan), ctx);
+    }
+
+    /**
+     * The rows of segment {@code segment} read frame after frame on the calling thread, in serial scan order: the input
+     * a test gives a serial operator to compare with the operator's parallel answer.
+     */
+    @TestOnly
+    static Cursor serialSegment(
+            final Plan segment,
+            final Store store,
+            final long nowMicros,
+            final Map<Plan.Scan, boolean[]> reads
+    ) {
+        return new ExchangeCursor(FrameSource.of(segment, store, nowMicros, reads, new QueryContext(null,
+                QueryPool.of(0))));
     }
 
     private static Cursor build(
             final Plan plan,
             final Store store,
             final long nowMicros,
-            final Map<Plan.Scan, boolean[]> reads
+            final Map<Plan.Scan, boolean[]> reads,
+            final QueryContext ctx
     ) {
         return switch (plan) {
-            case Plan.Scan s -> new ScanCursor(s, store.reader(s.table()), reads.get(s));
+            case Plan.Scan s -> exchange(s, store, nowMicros, reads, ctx);
+            case Plan.Filter f when FrameSource.isSegment(f) -> exchange(f, store, nowMicros, reads, ctx);
+            case Plan.Project p when FrameSource.isSegment(p) -> exchange(p, store, nowMicros, reads, ctx);
             case Plan.Source s -> Catalog.open(s, store);
-            case Plan.Filter f -> over(build(f.child(), store, nowMicros, reads),
-                    c -> new FilterCursor(c, Functions.compile(f.predicate(), nowMicros)));
-            case Plan.Project p -> over(build(p.child(), store, nowMicros, reads),
-                    c -> new ProjectCursor(c, compileAll(p.exprs(), nowMicros), p.fields()));
-            case Plan.Aggregate a -> new GroupByCursor(build(a.child(), store, nowMicros, reads), a, nowMicros);
-            case Plan.SampleBy s -> new SampleByCursor(build(s.child(), store, nowMicros, reads), s, nowMicros);
-            case Plan.LatestOn l -> new LatestOnCursor(build(l.child(), store, nowMicros, reads), l);
-            case Plan.Distinct d -> new DistinctCursor(build(d.child(), store, nowMicros, reads));
-            case Plan.Sort s -> new SortCursor(build(s.child(), store, nowMicros, reads), s.keys(), s.limit());
-            case Plan.Limit l -> new LimitCursor(build(l.child(), store, nowMicros, reads), l.lo(), l.hi());
-            case Plan.SetOp s -> over(build(s.left(), store, nowMicros, reads),
-                    l -> over(build(s.right(), store, nowMicros, reads), r -> new SetOpCursor(s.op(), l, r)));
-            case Plan.Join j -> over(build(j.left(), store, nowMicros, reads),
-                    l -> over(build(j.right(), store, nowMicros, reads),
-                            r -> JoinCursor.open(l, r, j.kind(), j.on(), nowMicros, j.fields())));
-            case Plan.Window w -> new WindowCursor(build(w.child(), store, nowMicros, reads), w, nowMicros);
+            case Plan.Filter f -> over(build(f.child(), store, nowMicros, reads, ctx), c -> filter(f, c, nowMicros));
+            case Plan.Project p -> over(build(p.child(), store, nowMicros, reads, ctx), c -> project(p, c, nowMicros));
+            case Plan.Aggregate a -> parallel(a.child(), store, nowMicros, reads, ctx,
+                    src -> GroupByCursor.parallel(src, a, nowMicros),
+                    c -> new GroupByCursor(c, a, nowMicros));
+            case Plan.SampleBy s -> parallel(s.child(), store, nowMicros, reads, ctx,
+                    src -> SampleByCursor.parallel(src, s, nowMicros),
+                    c -> new SampleByCursor(c, s, nowMicros));
+            case Plan.LatestOn l -> parallel(l.child(), store, nowMicros, reads, ctx,
+                    src -> LatestOnCursor.parallel(src, l),
+                    c -> new LatestOnCursor(c, l));
+            case Plan.Distinct d -> parallel(d.child(), store, nowMicros, reads, ctx,
+                    DistinctCursor::parallel,
+                    DistinctCursor::new);
+            case Plan.Sort s -> parallel(s.child(), store, nowMicros, reads, ctx,
+                    src -> SortCursor.parallel(src, s.keys(), s.limit()),
+                    c -> new SortCursor(c, s.keys(), s.limit()));
+            case Plan.Limit l -> parallel(l.child(), store, nowMicros, reads, ctx,
+                    src -> LimitCursor.parallel(src, l.lo(), l.hi()),
+                    c -> new LimitCursor(c, l.lo(), l.hi()));
+            case Plan.SetOp s -> over(build(s.right(), store, nowMicros, reads, ctx),
+                    r -> parallel(s.left(), store, nowMicros, reads, ctx,
+                            src -> SetOpCursor.parallel(s.op(), src, r),
+                            l -> new SetOpCursor(s.op(), l, r)));
+            case Plan.Join j -> over(build(j.right(), store, nowMicros, reads, ctx),
+                    r -> parallel(j.left(), store, nowMicros, reads, ctx,
+                            src -> JoinCursor.parallel(src, r, j.kind(), j.on(), nowMicros, j.fields()),
+                            l -> JoinCursor.open(l, r, j.kind(), j.on(), nowMicros, j.fields())));
+            case Plan.Window w -> parallel(w.child(), store, nowMicros, reads, ctx,
+                    src -> WindowCursor.parallel(src, w, nowMicros),
+                    c -> new WindowCursor(c, w, nowMicros));
             case Plan.CreateTable c -> throw new CdbException("cannot query a CREATE TABLE", -1);
             case Plan.Update u -> throw new CdbException("cannot query an UPDATE", -1);
             case Plan.Insert _ -> throw new CdbException("cannot query an INSERT", -1);
             case Plan.AddColumns _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
             case Plan.SetTtl _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
         };
+    }
+
+    /** Segment {@code segment}'s rows, frame after frame, the frames ahead of the one read running on the pool. */
+    private static Cursor exchange(
+            final Plan segment,
+            final Store store,
+            final long nowMicros,
+            final Map<Plan.Scan, boolean[]> reads,
+            final QueryContext ctx
+    ) {
+        return new ExchangeCursor(FrameSource.of(segment, store, nowMicros, reads, ctx));
+    }
+
+    /**
+     * The operator over {@code child}: built by {@code perFrame} from a {@link FrameSource} when {@code child} is a
+     * segment, else by {@code serial} over the child's cursor. A failure to build closes what was opened below.
+     */
+    private static Cursor parallel(
+            final Plan child,
+            final Store store,
+            final long nowMicros,
+            final Map<Plan.Scan, boolean[]> reads,
+            final QueryContext ctx,
+            final Function<FrameSource, Cursor> perFrame,
+            final Function<Cursor, Cursor> serial
+    ) {
+        if (FrameSource.isSegment(child)) {
+            final FrameSource source = FrameSource.of(child, store, nowMicros, reads, ctx);
+            try {
+                return perFrame.apply(source);
+            } catch (final RuntimeException | Error e) {
+                try {
+                    source.close();
+                } catch (final RuntimeException closeFailure) {
+                    e.addSuppressed(closeFailure);
+                }
+                throw e;
+            }
+        }
+        return over(build(child, store, nowMicros, reads, ctx), serial);
     }
 
     /** Runs {@code plan}, a statement that changes the store; returns the rows it changed (0 for DDL). */
@@ -84,7 +168,7 @@ public final class Executor {
      * The cursor {@code build} makes over {@code child}; when building fails, {@code child} is closed before the
      * failure propagates, so a table reader opened below never outlives a query that could not be planned to the end.
      */
-    private static Cursor over(final Cursor child, final Function<Cursor, Cursor> build) {
+    static Cursor over(final Cursor child, final Function<Cursor, Cursor> build) {
         try {
             return build.apply(child);
         } catch (final RuntimeException | Error e) {
@@ -95,6 +179,16 @@ public final class Executor {
             }
             throw e;
         }
+    }
+
+    /** {@code filter} over {@code child}, its predicate compiled for this cursor alone. */
+    static Cursor filter(final Plan.Filter filter, final Cursor child, final long nowMicros) {
+        return new FilterCursor(child, Functions.compile(filter.predicate(), nowMicros));
+    }
+
+    /** {@code project} over {@code child}, its expressions compiled for this cursor alone. */
+    static Cursor project(final Plan.Project project, final Cursor child, final long nowMicros) {
+        return new ProjectCursor(child, compileAll(project.exprs(), nowMicros), project.fields());
     }
 
     private static List<VectorFn> compileAll(final List<Bound> exprs, final long nowMicros) {

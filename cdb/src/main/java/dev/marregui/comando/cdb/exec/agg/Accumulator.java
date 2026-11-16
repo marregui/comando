@@ -27,6 +27,14 @@ public interface Accumulator {
         }
     }
 
+    /**
+     * Adds the state of group {@code fromGroup} of {@code from}, an accumulator of the same aggregate that saw a later
+     * frame's rows, to {@code group}: the result is the one this accumulator would give had it seen both frames' rows
+     * in frame order (first keeps its own value when it has one, last takes {@code from}'s when it has one). Call
+     * {@link #ensure} first. {@code from} keeps its results and must not be this accumulator.
+     */
+    void merge(int group, Accumulator from, int fromGroup);
+
     /** Writes the result of {@code group} to value {@code row} of {@code out}, a vector of the aggregate's type. */
     void write(int group, Vector out, int row);
 }

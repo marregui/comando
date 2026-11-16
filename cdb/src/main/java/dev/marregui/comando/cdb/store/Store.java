@@ -129,6 +129,7 @@ public final class Store implements AutoCloseable {
     public static final ScopedValue<Long> READ_MAX_LAG_MILLIS = ScopedValue.newInstance();
 
     private final Path root;
+    private final StoreOptions options;
     private final Map<String, TableState> tables = new ConcurrentHashMap<>();
     // written by the launcher before it serves, read by every reader
     private volatile long readMaxLagMillis;
@@ -143,14 +144,25 @@ public final class Store implements AutoCloseable {
     private FileChannel lock;
     // started once every table is loaded; null before
     private Applier applier;
+    // started after the applier when options are timed; null before, and for a store that forces each commit
+    private LogForcer forcer;
 
-    private Store(final Path root) {
+    private Store(final Path root, final StoreOptions options) {
         this.root = root;
+        this.options = options;
     }
 
-    /** Opens the store at {@code root}, creating the folder when it is missing. */
+    /** Opens the store at {@code root}, creating the folder when it is missing, forcing each commit. */
     public static Store open(final Path root) {
-        final Store store = new Store(root);
+        return open(root, StoreOptions.DEFAULT);
+    }
+
+    /**
+     * Opens the store at {@code root} as {@link #open(Path)} does, its commits made durable as {@code options} says:
+     * timed, a {@link LogForcer} thread forces each table's log within the interval, started after the applier.
+     */
+    public static Store open(final Path root, final StoreOptions options) {
+        final Store store = new Store(root, options);
         try {
             Files.createDirectories(root);
             store.lock = StoreFiles.lockExclusively(root.resolve(LOCK));
@@ -165,8 +177,13 @@ public final class Store implements AutoCloseable {
                     }
                 }
             }
-            store.applier = new Applier(store, root.getFileName() == null ? "store" : root.getFileName().toString());
+            final String name = root.getFileName() == null ? "store" : root.getFileName().toString();
+            store.applier = new Applier(store, name);
             store.applier.start();
+            if (options.isTimed()) {
+                store.forcer = new LogForcer(name, options.logForceMillis());
+                store.forcer.start();
+            }
             return store;
         } catch (final IOException | RuntimeException e) {
             store.close();
@@ -324,6 +341,17 @@ public final class Store implements AutoCloseable {
         return tables.values();
     }
 
+    /** The timed force, null for a store that forces each commit. */
+    LogForcer forcer() {
+        return forcer;
+    }
+
+    /** How the store makes its commits durable. */
+    @TestOnly
+    StoreOptions options() {
+        return options;
+    }
+
     /** The store's applier. */
     Applier applier() {
         return applier;
@@ -377,6 +405,10 @@ public final class Store implements AutoCloseable {
                 closed = true;
                 if (applier != null) {
                     applier.stop();
+                }
+                if (forcer != null) {
+                    // a last force of every dirty log; a commit of a writer still open is forced on its own thread
+                    forcer.close();
                 }
                 for (final TableState state : tables.values()) {
                     final boolean drained = state.leaseForClose(closeWaitMillis);

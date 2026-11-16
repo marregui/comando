@@ -6,39 +6,56 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32C;
 
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 
 /**
- * The write-ahead log of one table, {@code <table>/_wal}: an 8-byte header (magic, format version), then one frame per
- * commit since the last checkpoint, each forced before its commit is answered. A frame is its body's length and
- * CRC32C, then the body: the commit's transaction number, whether it truncated the table, the table's definition when
- * the commit changed it, and its pending rows by column, in the order they were written. Symbols are logged as text,
- * so a replay interns them again. Its methods hold its monitor: the table's writer appends while the store's applier
- * cuts the log after a checkpoint.
+ * The write-ahead log of one table, {@code <table>/_wal}: a header (magic, format version, salt), then one frame per
+ * commit since the last checkpoint. A frame is its body's length and CRC32C, then the body: the commit's transaction
+ * number, whether it truncated the table, the table's definition when the commit changed it, and its pending rows by
+ * column, in the order they were written. Symbols are logged as text, so a replay interns them again. A commit is
+ * durable once its frame is forced: by {@link #append} itself, or by a later {@link #force} that covers the sequence
+ * number {@link #write} gave it. The writes, the cuts and the scan hold its monitor: the table's writer appends while
+ * the store's applier cuts the log after a checkpoint; {@link #force} holds it only to read the last sequence number,
+ * and a durable waiter never takes it.
  * <p>
- * Every number is little-endian. Header: u32 magic {@code CWAL}, u32 version. Frame: u32 body length, u32 CRC32C of
- * the body. Body: u64 txn, u8 flags (bit 0 truncate, bit 1 definition follows), [u32 length and the UTF-8 of the
- * definition as {@code _meta} holds it], u32 rows, u16 columns, then each column's values: LONG and TIMESTAMP i64,
- * DOUBLE its raw bits as i64, BOOLEAN u8, SYMBOL and VARCHAR an i32 length (-1 for NULL) and the UTF-8 bytes.
+ * Every number is little-endian. Header: u32 magic {@code CWAL}, u32 version, u64 salt. Frame: u32 body length, u32
+ * CRC32C of the salt's 8 bytes then the body. Body: u64 txn, u8 flags (bit 0 truncate, bit 1 definition follows), [u32
+ * length and the UTF-8 of the definition as {@code _meta} holds it], u32 rows, u16 columns, then each column's
+ * values: LONG and TIMESTAMP i64, DOUBLE its raw bits as i64, BOOLEAN u8, SYMBOL and VARCHAR an i32 length (-1 for
+ * NULL) and the UTF-8 bytes.
+ * <p>
+ * The salt is drawn anew when the log is created and at every cut, and forced with the header before a frame follows
+ * it: after a power cut, bytes of an earlier generation that a new frame did not overwrite fail their CRC, so the scan
+ * cuts there rather than reading them as a commit. Format 1, the previous one, has an 8-byte header (magic, version)
+ * and CRCs of the body alone; such a log is read and appended to as it is, and written as format 2 at its next cut.
  */
 final class Wal {
 
     /** The log's file name in the table's folder. */
     static final String FILE = "_wal";
     private static final System.Logger LOG = System.getLogger(Wal.class.getName());
-    /** The header's bytes: magic and version. */
-    static final int HEADER = 8;
+    /** The header's bytes in format 2: magic, version and salt. */
+    static final int HEADER = 16;
     /** The bytes before a frame's body: its length and CRC. */
     static final int FRAME = 8;
 
     // "CWAL" read as a little-endian int
     private static final int MAGIC = 0x4C415743;
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
+    // the format before the salt: an 8-byte header, magic and version
+    private static final int UNSALTED = 1;
+    private static final int UNSALTED_HEADER = 8;
+    // a salt only tells one generation of the log from the next, but two stores' generations must not repeat each
+    // other's, so it comes from the system's entropy rather than a seeded generator
+    private static final SecureRandom SALTS = new SecureRandom();
     private static final int TRUNCATE = 1;
     private static final int DEF = 2;
     // txn, flags, rows, columns
@@ -53,43 +70,101 @@ final class Wal {
     private volatile long bytes;
     // the last record's transaction and its offset, meaningful while records > 0
     private long lastTxn;
+    // the sequence number of the last record written, never reused (a retract reuses a txn): written under this
+    // after its frame is in the file, read by a force without the monitor, so a force never waits for a drain that
+    // holds it, and covers every record its read counts
+    private volatile long writtenSeq;
     private long lastStart;
+    // guarded by this: the header's bytes in the file's format, and the salt its frames' CRCs start from, its 8 bytes
+    // as the header holds them (null in format 1)
+    private int header;
+    private byte[] salt;
+    // the durable waiters' monitor, taken inside this one (a write, a cut) or alone (a force, a waiter), never the
+    // other way round, so a waiter never queues behind a drain or a force-per-commit append holding the log's monitor
+    private final Object forced = new Object();
+    // written under forced by a force that held, a cut and an append; read by durable waiters and the forcer, the
+    // fast path without the lock
+    private volatile long forcedSeq;
+    // guarded by forced: the first failed force (a cut's included), and the sequence numbers it left in doubt; null
+    // while none failed
+    private Throwable failure;
+    private long failedFromSeq;
+    private long failedToSeq;
 
-    private Wal(final Path file, final long bytes) {
+    private Wal(final Path file, final long bytes, final byte[] salt) {
         this.file = file;
         this.bytes = bytes;
+        this.header = salt == null ? UNSALTED_HEADER : HEADER;
+        this.salt = salt;
     }
 
     /**
-     * Opens the log of the table folder {@code dir}, creating it with its header, forced with its folder, when it is
-     * missing or shorter than its header (its creation cut by a crash). Refuses a header of an unknown magic or
-     * version.
+     * Opens the log of the table folder {@code dir}, creating it with its header and a new salt, forced with its
+     * folder, when it is missing or shorter than its header (its creation cut by a crash). Reads format 2 and format
+     * 1; refuses a header of an unknown magic or version.
      */
     static Wal open(final Path dir) throws IOException {
         final Path file = dir.resolve(FILE);
-        // shorter than its header only when a crash cut its creation: no commit was logged in it yet
-        if (Files.exists(file) && Files.size(file) < HEADER) {
+        if (Files.exists(file) && isCutHeader(file)) {
             StoreFiles.delete(file);
         }
         if (!Files.exists(file)) {
-            final ByteBuffer header = ByteBuffer.allocate(HEADER).order(ByteOrder.LITTLE_ENDIAN);
-            header.putInt(MAGIC).putInt(VERSION).flip();
-            StoreFiles.writeNew(file, header, true);
+            final byte[] salt = newSalt(null);
+            StoreFiles.writeNew(file, headerOf(salt), true);
             StoreFiles.forceFolder(dir);
-            return new Wal(file, HEADER);
+            return new Wal(file, HEADER, salt);
         }
         final long size = Files.size(file);
-        if (size < HEADER) {
-            throw new CdbException("refuse log of unknown format [file=" + file + ", bytes=" + size + ']', -1);
-        }
-        final long header = StoreFiles.readLong(file, 0L);
-        final int magic = (int) header;
-        final int version = (int) (header >>> Integer.SIZE);
-        if (magic != MAGIC || version != VERSION) {
+        final long head = StoreFiles.readLong(file, 0L);
+        final int magic = (int) head;
+        final int version = (int) (head >>> Integer.SIZE);
+        if (magic != MAGIC || (version != VERSION && version != UNSALTED)) {
             throw new CdbException("refuse log of unknown format [file=" + file + ", magic=0x"
                     + Integer.toHexString(magic) + ", version=" + version + ']', -1);
         }
-        return new Wal(file, size);
+        if (version == UNSALTED) {
+            return new Wal(file, size, null);
+        }
+        final byte[] salt = ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN)
+                .putLong(StoreFiles.readLong(file, UNSALTED_HEADER)).array();
+        return new Wal(file, size, salt);
+    }
+
+    /**
+     * Whether {@code file} is shorter than its header: only when a crash cut its creation, or the rewrite of a format
+     * 1 header at a cut that had already emptied the log, so no commit is left in it to replay.
+     */
+    private static boolean isCutHeader(final Path file) throws IOException {
+        final long size = Files.size(file);
+        if (size < UNSALTED_HEADER) {
+            return true;
+        }
+        return size < HEADER && StoreFiles.readLong(file, 0L) == ((long) VERSION << Integer.SIZE | MAGIC);
+    }
+
+    /** A format 2 header holding {@code salt}, ready to write. */
+    private static ByteBuffer headerOf(final byte[] salt) {
+        return ByteBuffer.allocate(HEADER).order(ByteOrder.LITTLE_ENDIAN).putInt(MAGIC).putInt(VERSION).put(salt)
+                .flip();
+    }
+
+    /** A random salt other than {@code previous}, the salt of the generation it follows (null for none). */
+    private static byte[] newSalt(final byte[] previous) {
+        final byte[] salt = new byte[Long.BYTES];
+        do {
+            SALTS.nextBytes(salt);
+        } while (Arrays.equals(salt, previous));
+        return salt;
+    }
+
+    /** The CRC32C a frame of this log carries for {@code body}: seeded with the salt in format 2. */
+    private int checksum(final ByteBuffer body) {
+        final CRC32C crc = new CRC32C();
+        if (salt != null) {
+            crc.update(salt);
+        }
+        crc.update(body.duplicate());
+        return (int) crc.getValue();
     }
 
     /**
@@ -106,7 +181,7 @@ final class Wal {
         TableDef current = def;
         long previous = 0L;
         int frames = 0;
-        long end = HEADER;
+        long end = header;
         // read into the heap, not mapped: the scan cuts a torn tail, and a cut under a mapping ends the JVM
         final ByteBuffer log = StoreFiles.readAll(file).order(ByteOrder.LITTLE_ENDIAN);
         final long size = log.limit();
@@ -117,9 +192,7 @@ final class Wal {
                 break;
             }
             final ByteBuffer body = log.slice((int) end + FRAME, (int) length).order(ByteOrder.LITTLE_ENDIAN);
-            final CRC32C check = new CRC32C();
-            check.update(body.duplicate());
-            if ((int) check.getValue() != crc) {
+            if (checksum(body) != crc) {
                 break;
             }
             final long txn = body.getLong();
@@ -153,13 +226,119 @@ final class Wal {
     }
 
     /**
+     * Writes the commit {@code txn} as {@link #append} does, without the force, and returns its record's sequence
+     * number, one past the last record's and never reused (a retract gives its txn back, not its sequence number): the
+     * commit is durable once {@link #forcedSeq()} reaches that number. On a failure the log is cut back as
+     * {@link #append} does.
+     */
+    synchronized long write(final long txn, final boolean truncate, final TableDef def, final RowBlock rows)
+            throws IOException {
+        frame(txn, truncate, def, rows, false);
+        writtenSeq++;
+        return writtenSeq;
+    }
+
+    /**
+     * Forces every record written so far; the force itself runs outside the log's monitor, so writes go on during
+     * it. A failure is thrown and {@link #forcedSeq()} does not move: the records since the last force are in doubt,
+     * every later {@link #awaitForced} past them throws, and every later force throws without forcing, since a force
+     * that holds after a failed one does not prove the pages the failure dropped. An interrupt is cleared for the
+     * force, which it would fail by closing its channel, and restored after.
+     */
+    void force() throws IOException {
+        final long target = writtenSeq;
+        synchronized (forced) {
+            if (target <= forcedSeq) {
+                return;
+            }
+            if (failure != null) {
+                throw new IOException("refuse force of log after failed force [file=" + file + ", forcedSeq="
+                        + forcedSeq + ", writtenSeq=" + target + ']', failure);
+            }
+        }
+        final boolean interrupted = Thread.interrupted();
+        try {
+            StoreFiles.force(file);
+        } catch (final Throwable t) {
+            // an Error is a failed force too: whether the pages reached the disk is unknown after either
+            failed(t, target);
+            throw t;
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        forcedThrough(target, false);
+    }
+
+    // records the first failed force, the records after forcedSeq up to target in doubt, and wakes the durable waiters
+    // past forcedSeq, which fail now rather than at their timeout
+    private void failed(final Throwable t, final long target) {
+        synchronized (forced) {
+            if (failure == null) {
+                failure = t;
+                failedFromSeq = forcedSeq + 1L;
+                failedToSeq = target;
+            }
+            forced.notifyAll();
+        }
+    }
+
+    /**
+     * Waits at most {@code timeoutNanos} until a force covers record {@code seq}; true once one has, false when the
+     * time ran out first. Throws the "commit in doubt" failure once a force of this log failed with {@code seq} not
+     * covered, and {@link InterruptedException} when the thread is interrupted while it waits.
+     */
+    boolean awaitForced(final long seq, final long timeoutNanos) throws InterruptedException {
+        if (forcedSeq >= seq) {
+            return true;
+        }
+        final long startNanos = System.nanoTime();
+        synchronized (forced) {
+            while (forcedSeq < seq) {
+                if (failure != null) {
+                    throw new CdbException("refuse durable commit, commit in doubt after failed log force [table="
+                            + file.getParent().getFileName() + ", seq=" + seq + ", fromSeq=" + failedFromSeq
+                            + ", toSeq=" + failedToSeq + ']', failure);
+                }
+                final long leftNanos = timeoutNanos - (System.nanoTime() - startNanos);
+                if (leftNanos <= 0L) {
+                    return false;
+                }
+                TimeUnit.NANOSECONDS.timedWait(forced, leftNanos);
+            }
+            return true;
+        }
+    }
+
+    /** The sequence number of the last record a force covered. */
+    long forcedSeq() {
+        return forcedSeq;
+    }
+
+    /**
      * Appends the commit {@code txn} and forces the log: once this returns the commit is durable. {@code def} is the
      * definition after the commit when it changed, else null; {@code rows} holds {@code rows.size} rows in the columns
      * of the definition after the commit. On a failure the log is cut back to its length before the append, when it
-     * can be, and the failure thrown; the caller then refuses the table's commits until it reopens.
+     * can be, and the failure thrown; the caller then refuses the table's commits until it reopens. Refused once a
+     * force of the log failed, a cut's included: a force that holds after it does not prove the header.
      */
     synchronized void append(final long txn, final boolean truncate, final TableDef def, final RowBlock rows)
             throws IOException {
+        synchronized (forced) {
+            if (failure != null) {
+                throw new IOException("refuse append to log after failed force [file=" + file + ", txn=" + txn + ']',
+                        failure);
+            }
+        }
+        frame(txn, truncate, def, rows, true);
+        writtenSeq++;
+        forcedThrough(writtenSeq, false);
+    }
+
+    // called with the monitor held: appends the commit's frame, forced when force, cut back on a failure
+    private void frame(final long txn, final boolean truncate, final TableDef def, final RowBlock rows,
+                       final boolean force) throws IOException {
         if (records > 0 && txn != lastTxn + 1L) {
             // a direct commit came between: its checkpoint's _txn, durable, covers the records left when its reset
             // failed; cut, so a scan never meets a gap
@@ -169,7 +348,7 @@ final class Wal {
         final int length = frame.remaining();
         final long before = bytes;
         try {
-            StoreFiles.append(file, frame, true);
+            StoreFiles.append(file, frame, force);
         } catch (final IOException e) {
             // an interrupt that closed the force's channel would close the cut's too: cleared for the cut, restored
             final boolean interrupted = Thread.interrupted();
@@ -195,7 +374,7 @@ final class Wal {
     /**
      * Cuts the last record, commit {@code txn}, back out of the log and forces the cut: a commit refused after it was
      * logged, so no replay makes visible a commit its caller saw fail. False, and the log kept, when the last record is
-     * not {@code txn}.
+     * not {@code txn}. The record's sequence number is not given back.
      */
     synchronized boolean retract(final long txn) throws IOException {
         if (records == 0 || lastTxn != txn) {
@@ -235,11 +414,44 @@ final class Wal {
         cut();
     }
 
-    // called with the monitor held
+    /**
+     * Called with the monitor held: cuts the log back to its header, forced, then writes a format 2 header with a new
+     * salt over it, forced before any frame follows. In that order every failure leaves the file and this object
+     * agreeing: a failed cut changes nothing, a failed header write leaves the cut log in its old generation, and a
+     * failed force after the write leaves the new header in the page cache, where the next frames follow it: the disk
+     * may hold the old salt, so that failure is the log's failed force, and every later force and append is refused.
+     * Once the truncate holds every record written is covered: the records left were in the checkpointed files.
+     */
     private void cut() throws IOException {
-        StoreFiles.truncate(file, HEADER);
+        StoreFiles.truncate(file, header);
         records = 0;
+        bytes = header;
+        final byte[] next = newSalt(salt);
+        StoreFiles.writeAt(file, 0L, headerOf(next), false);
+        header = HEADER;
+        salt = next;
         bytes = HEADER;
+        // the truncate was forced: the records left are the checkpoint's, durable whatever the header's force does
+        forcedThrough(writtenSeq, true);
+        try {
+            StoreFiles.force(file);
+        } catch (final Throwable t) {
+            failed(t, writtenSeq);
+            throw t;
+        }
+    }
+
+    /**
+     * Moves {@link #forcedSeq} up to {@code seq} and wakes the durable waiters; after a failed force only for a cut
+     * ({@code byCut}), whose records the checkpoint made durable, not the log's force.
+     */
+    private void forcedThrough(final long seq, final boolean byCut) {
+        synchronized (forced) {
+            if ((byCut || failure == null) && seq > forcedSeq) {
+                forcedSeq = seq;
+                forced.notifyAll();
+            }
+        }
     }
 
     /** The commits logged since the last reset. */
@@ -322,9 +534,7 @@ final class Wal {
                 }
             }
         }
-        final CRC32C crc = new CRC32C();
-        crc.update(frame.array(), FRAME, (int) length);
-        frame.putInt(Integer.BYTES, (int) crc.getValue());
+        frame.putInt(Integer.BYTES, checksum(frame.slice(FRAME, (int) length)));
         return frame.flip();
     }
 

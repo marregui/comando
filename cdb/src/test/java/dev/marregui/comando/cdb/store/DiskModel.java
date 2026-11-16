@@ -37,12 +37,22 @@ import java.util.function.Predicate;
 ///   probability 1/2, in order; plus, per file, the first `m` of its writes and truncations since its last force, `m`
 ///   uniform in `0..n`; when `m < n` and the next one is a write, a uniform prefix of its bytes lands too, and with
 ///   probability 1/2 the file's size reaches the write's end, the bytes not landed reading as zeros.
+/// - reordered (seeded): the folders as adversarial; per file, its size after the first `m` of its writes and
+///   truncations since its last force, `m` uniform in `0..n`, and each of its 512-byte blocks holding the bytes after
+///   a uniform prefix of its own, drawn apart from the others: a later write can land where an earlier one was
+///   dropped. A byte past the end of its block's version reads zero.
+/// - stale (seeded): as reordered, but a byte past the end of its block's version reads what the file last held
+///   durably at that offset, before a cut shortened it (an earlier generation of the file), zero where it never held
+///   any. Only the file's own earlier bytes: a file created anew starts with none.
 /// - kill: the volatile state, which a process kill leaves.
 ///
-/// Every operation is kept in order, so [#at] rebuilds the state after any prefix of them: the cut points. A test can
-/// also make `forcing` fail ([#failForce]). Thread-safe.
+/// Every operation is kept in order, so [#at] rebuilds the state after any prefix of them: the cut points; [#lastWrite]
+/// and [#firstForce] find a file's operations among them. A test can also make `forcing` fail ([#failForce]).
+/// Thread-safe.
 final class DiskModel implements StoreFiles.Recorder {
 
+    // the unit a device writes whole: a disk sector, small, so the few kilobytes of a test's log span several blocks
+    private static final int BLOCK = 512;
     private static final byte[] EMPTY = new byte[0];
 
     private final Predicate<Path> entriesDurableAtOnce;
@@ -138,9 +148,51 @@ final class DiskModel implements StoreFiles.Recorder {
         failForce = files;
     }
 
+    /// A strict model of `root` whose durable state is `image`, once written there: what a reboot after a power cut
+    /// finds. Each file's bytes in `image` are also what it held durably before, for a later stale image.
+    static DiskModel of(final Path root, final SortedMap<String, byte[]> image) {
+        final FolderNode start = new FolderNode();
+        for (final Map.Entry<String, byte[]> entry : image.entrySet()) {
+            final String[] names = entry.getKey().split("/");
+            FolderNode folder = start;
+            for (int i = 0; i < names.length - 1; i++) {
+                folder = folder.child(names[i]);
+            }
+            if (entry.getValue() == null) {
+                folder.child(names[names.length - 1]);
+            } else {
+                folder.live.put(names[names.length - 1], FileNode.of(entry.getValue()));
+            }
+        }
+        return new DiskModel(root, _ -> false, start);
+    }
+
     /// How many operations were recorded.
     synchronized int operations() {
         return operations.size();
+    }
+
+    /// The index of the last write to `file` (an absolute path) among the operations from `from` to `to`, `to`
+    /// excluded; -1 when there is none.
+    synchronized int lastWrite(final Path file, final int from, final int to) {
+        final Path relative = relative(file);
+        for (int i = Math.min(to, operations.size()) - 1; i >= from; i--) {
+            if (operations.get(i) instanceof Wrote(Path written, _, _) && written.equals(relative)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// The index of the first force of `file` (an absolute path) from operation `from` on; -1 when there is none.
+    synchronized int firstForce(final Path file, final int from) {
+        final Path relative = relative(file);
+        for (int i = from; i < operations.size(); i++) {
+            if (operations.get(i) instanceof Forced(Path forced) && forced.equals(relative)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /// Operation `k` (from 0), for a failure message.
@@ -205,6 +257,17 @@ final class DiskModel implements StoreFiles.Recorder {
     /// The durable state and a random part of what was not forced, chosen from `seed`.
     synchronized SortedMap<String, byte[]> adversarialImage(final long seed) {
         return image(Image.ADVERSARIAL, new Random(seed));
+    }
+
+    /// The durable state and, chosen from `seed`, a part of what was not forced, each file's blocks landed out of
+    /// order.
+    synchronized SortedMap<String, byte[]> reorderedImage(final long seed) {
+        return image(Image.REORDERED, new Random(seed));
+    }
+
+    /// As [#reorderedImage], the bytes no landed write covers reading the file's earlier generation.
+    synchronized SortedMap<String, byte[]> staleImage(final long seed) {
+        return image(Image.STALE, new Random(seed));
     }
 
     /// The volatile state.
@@ -324,6 +387,8 @@ final class DiskModel implements StoreFiles.Recorder {
     private enum Image {
         STRICT,
         ADVERSARIAL,
+        REORDERED,
+        STALE,
         KILL
     }
 
@@ -387,11 +452,19 @@ final class DiskModel implements StoreFiles.Recorder {
             unforced.clear();
         }
 
+        // the folder name names in this one's live map, made when missing; for building a model from an image
+        FolderNode child(final String name) {
+            if (live.computeIfAbsent(name, _ -> new FolderNode()) instanceof FolderNode folder) {
+                return folder;
+            }
+            throw new IllegalStateException("refuse folder over a file in an image [name=" + name + ']');
+        }
+
         Map<String, Node> entries(final Image image, final Random random) {
             return switch (image) {
                 case STRICT -> durable;
                 case KILL -> live;
-                case ADVERSARIAL -> {
+                case ADVERSARIAL, REORDERED, STALE -> {
                     final Map<String, Node> entries = new TreeMap<>(durable);
                     for (final Change change : unforced) {
                         if (random.nextBoolean()) {
@@ -409,10 +482,13 @@ final class DiskModel implements StoreFiles.Recorder {
         private final Bytes live = new Bytes(EMPTY);
         private final List<DataOp> unforced = new ArrayList<>();
         private byte[] durable = EMPTY;
+        // at each offset, the last byte forced there, kept when a cut shortens the file: its earlier generations
+        private byte[] earlier = EMPTY;
 
         static FileNode of(final byte[] bytes) {
             final FileNode file = new FileNode();
             file.durable = bytes;
+            file.earlier = bytes;
             file.live.write(0L, bytes, bytes.length);
             return file;
         }
@@ -425,6 +501,10 @@ final class DiskModel implements StoreFiles.Recorder {
         void force() {
             durable = live.toArray();
             unforced.clear();
+            if (earlier.length < durable.length) {
+                earlier = Arrays.copyOf(earlier, durable.length);
+            }
+            System.arraycopy(durable, 0, earlier, 0, durable.length);
         }
 
         byte[] liveBytes() {
@@ -450,7 +530,34 @@ final class DiskModel implements StoreFiles.Recorder {
                     }
                     yield landed.toArray();
                 }
+                case REORDERED -> reordered(random, false);
+                case STALE -> reordered(random, true);
             };
+        }
+
+        // the size after a uniform prefix of the unforced operations, each block after a prefix of its own
+        private byte[] reordered(final Random random, final boolean stale) {
+            final int n = unforced.size();
+            final byte[][] versions = new byte[n + 1][];
+            versions[0] = durable;
+            final Bytes bytes = new Bytes(durable);
+            for (int m = 0; m < n; m++) {
+                Bytes.apply(bytes, unforced.get(m));
+                versions[m + 1] = bytes.toArray();
+            }
+            final byte[] landed = new byte[versions[random.nextInt(n + 1)].length];
+            for (int start = 0; start < landed.length; start += BLOCK) {
+                final byte[] version = versions[random.nextInt(n + 1)];
+                final int end = Math.min(landed.length, start + BLOCK);
+                for (int i = start; i < end; i++) {
+                    if (i < version.length) {
+                        landed[i] = version[i];
+                    } else if (stale && i < earlier.length) {
+                        landed[i] = earlier[i];
+                    }
+                }
+            }
+            return landed;
         }
     }
 

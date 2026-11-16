@@ -41,8 +41,10 @@ import dev.marregui.comando.cdb.store.Store;
  * {@code /write} body is parsed whole before its first row reaches the store, so a malformed line (400, with its line
  * and offset) writes nothing; a row the store refuses (400, with its line) writes none of its table's rows of the body. Concurrent bodies for one table are written together in one commit, different tables in parallel
  * ({@link CommitQueue}); a body that touches several tables is written table by table, not atomically across them, and
- * answers when every table is done. Each request runs on a virtual thread of its own; past {@link #MAX_REQUESTS} in
- * flight, a new connection is closed unanswered.
+ * answers when every table is done. {@code /write?durable=true} answers 204 only once its rows are durable, waiting
+ * a bounded time for the store's log force: 503 when the wait runs out and 500 ("commit in doubt") when the force
+ * failed, the rows written either way; {@code durable=false} or none answers once they are committed. Each request
+ * runs on a virtual thread of its own; past {@link #MAX_REQUESTS} in flight, a new connection is closed unanswered.
  */
 public final class CdbServer implements AutoCloseable {
 
@@ -233,6 +235,12 @@ public final class CdbServer implements AutoCloseable {
             send(exchange, 400, JsonWriter.writeError(e.getMessage(), 0));
             return;
         }
+        final String durableValue = parameter(exchange, "durable");
+        if (durableValue != null && !durableValue.equals("true") && !durableValue.equals("false")) {
+            send(exchange, 400, JsonWriter.writeError("invalid durable [durable=" + durableValue + ']', 0));
+            return;
+        }
+        final boolean durable = "true".equals(durableValue);
         final byte[] bytes = exchange.getRequestBody().readNBytes(MAX_BODY_BYTES + 1);
         if (bytes.length > MAX_BODY_BYTES) {
             send(exchange, 413, JsonWriter.writeError("refuse body over the limit [limit=" + MAX_BODY_BYTES + ']', 0));
@@ -244,7 +252,7 @@ public final class CdbServer implements AutoCloseable {
         try {
             final CommitQueue.Body batches = new CommitQueue.Body();
             rows = IlpParser.parse(body, batches, precision, nowMicros);
-            final CommitQueue.Refusal refusal = commits.write(batches);
+            final CommitQueue.Refusal refusal = commits.write(batches, durable);
             if (refusal != null) {
                 // the parser names the refused row's line, as when the store refused it during the parse
                 IlpParser.parse(body, new RefusingAppender(refusal), precision, nowMicros);
@@ -257,8 +265,13 @@ public final class CdbServer implements AutoCloseable {
         } catch (final CdbException e) {
             send(exchange, 400, JsonWriter.writeError(e.getMessage(), 0));
             return;
+        } catch (final CommitQueue.NotDurableException e) {
+            // the rows are written and visible: a retry writes them again, so the client learns which case it is in
+            send(exchange, e.isInDoubt() ? 500 : 503, JsonWriter.writeError(e.getMessage(), 0));
+            return;
         }
-        LOG.log(Level.DEBUG, () -> "wrote rows [rows=" + rows + ", bytes=" + bytes.length + ']');
+        LOG.log(Level.DEBUG, () -> "wrote rows [rows=" + rows + ", bytes=" + bytes.length + ", durable=" + durable
+                + ']');
         exchange.sendResponseHeaders(204, -1);
     }
 

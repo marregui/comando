@@ -51,6 +51,11 @@ final class LongMinMaxAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        accept(group, ((LongMinMaxAccumulator) from).best[fromGroup]);
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeLong(best[group], out, row);
     }

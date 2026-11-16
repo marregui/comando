@@ -124,6 +124,19 @@ public final class Values {
         };
     }
 
+    /**
+     * True when value {@code index} equals value {@code sourceIndex} of {@code source}, a column of this type, as
+     * {@link #sameAs(int, Vector, int)} decides it.
+     */
+    public boolean sameAs(final int index, final Values source, final int sourceIndex) {
+        return switch (type) {
+            case LONG, TIMESTAMP -> longs[index] == source.longs[sourceIndex];
+            case DOUBLE -> sameDouble(doubles[index], source.doubles[sourceIndex]);
+            case BOOLEAN -> booleans[index] == source.booleans[sourceIndex];
+            case SYMBOL, VARCHAR -> sameText(texts[index], source.texts[sourceIndex]);
+        };
+    }
+
     /** Sets value {@code index}, below the size last ensured, to value {@code row} of {@code source}, of this type. */
     public void set(final int index, final Vector source, final int row) {
         switch (type) {
@@ -131,6 +144,19 @@ public final class Values {
             case DOUBLE -> doubles[index] = source.doubles[row];
             case BOOLEAN -> booleans[index] = source.booleans[row];
             case SYMBOL, VARCHAR -> texts[index] = source.texts[row];
+        }
+    }
+
+    /**
+     * Sets value {@code index}, below the size last ensured, to value {@code sourceIndex} of {@code source}, a column
+     * of this type.
+     */
+    public void set(final int index, final Values source, final int sourceIndex) {
+        switch (type) {
+            case LONG, TIMESTAMP -> longs[index] = source.longs[sourceIndex];
+            case DOUBLE -> doubles[index] = source.doubles[sourceIndex];
+            case BOOLEAN -> booleans[index] = source.booleans[sourceIndex];
+            case SYMBOL, VARCHAR -> texts[index] = source.texts[sourceIndex];
         }
     }
 

@@ -88,6 +88,16 @@ final class AvgAccumulator implements Accumulator {
     }
 
     @Override
+    public void merge(final int group, final Accumulator from, final int fromGroup) {
+        final AvgAccumulator other = (AvgAccumulator) from;
+        // the frames' sums added in frame order, a different grouping of the additions than one per row: usually the
+        // last digits differ, but cancellation or overflow can change the whole value (1, 1e17, -1e17 split
+        // 1 | 1e17, -1e17)
+        sums[group] += other.sums[fromGroup];
+        counts[group] += other.counts[fromGroup];
+    }
+
+    @Override
     public void write(final int group, final Vector out, final int row) {
         Aggregates.writeDouble(counts[group] == 0 ? Double.NaN : sums[group] / counts[group], out, row);
     }

@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import dev.marregui.comando.cdb.CdbAppender;
 import dev.marregui.comando.cdb.CdbException;
@@ -18,7 +20,8 @@ import dev.marregui.comando.cdb.CdbType;
  * did not hand over refuses the appender's later rows of it at once, with the same reason, rather than waiting again.
  * {@link #flush} commits each touched table in turn, not atomically across tables: a failed commit leaves the tables
  * before it committed and the ones from it on rolled back. An {@link Error} in a flush closes the appender, its writers
- * released.
+ * released. {@link #awaitDurable} waits until every commit flushed since the last wait that held is durable, those of
+ * the flush in {@link #close} included, so it may be called after the close.
  */
 final class IlpAppender implements CdbAppender {
 
@@ -34,6 +37,9 @@ final class IlpAppender implements CdbAppender {
     // a table's writer the store refused, by table key: a group commit's later rows of it would each wait as long
     private final Map<String, CdbException> unavailable = new HashMap<>();
     private final List<TableWriter> touched = new ArrayList<>();
+    // by table key, the durability of the last commit not done at its answer of each table flushed since the last wait
+    // that held: a later commit's force covers the earlier ones of its log
+    private final Map<String, ForceTicket> unforced = new LinkedHashMap<>();
     private String table;
     private int fields;
     private String[] names = new String[INITIAL_FIELDS];
@@ -136,6 +142,12 @@ final class IlpAppender implements CdbAppender {
             for (final TableWriter writer : touched) {
                 writer.commit();
                 committed++;
+                final ForceTicket ticket = writer.ticket();
+                // a done ticket says nothing of the table's earlier commits: their ticket stays until a wait sees a
+                // force or a cut of the log cover it; a later ticket replaces it, its record after theirs in one log
+                if (ticket != ForceTicket.DONE) {
+                    unforced.put(TableState.key(writer.def().name()), ticket);
+                }
             }
         } catch (final RuntimeException e) {
             // the failed table's rows and those of the tables after it would otherwise ride on a later flush
@@ -147,6 +159,22 @@ final class IlpAppender implements CdbAppender {
         } finally {
             touched.clear();
         }
+    }
+
+    /** A ticket that held is dropped; on a timeout or a failure the rest are kept for the next wait. */
+    @Override
+    public boolean awaitDurable(final long timeoutMillis) throws InterruptedException {
+        long remainingNanos = TimeUnit.MILLISECONDS.toNanos(Math.max(0L, timeoutMillis));
+        final Iterator<ForceTicket> tickets = unforced.values().iterator();
+        while (tickets.hasNext()) {
+            final long startNanos = System.nanoTime();
+            if (!tickets.next().await(remainingNanos)) {
+                return false;
+            }
+            tickets.remove();
+            remainingNanos = Math.max(0L, remainingNanos - (System.nanoTime() - startNanos));
+        }
+        return true;
     }
 
     /** Rolls back every writer the appender holds and keeps them: a column only a refused row added goes too. */

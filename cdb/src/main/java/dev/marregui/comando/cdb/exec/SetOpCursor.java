@@ -37,6 +37,35 @@ final class SetOpCursor implements Cursor {
         seen = kind == Kind.UNION_ALL ? null : new RowsSet(left.fields());
     }
 
+    /**
+     * A set operation over {@code source}'s frames, the left input, and {@code right}, read once as the serial
+     * operator reads it. {@code union all} streams the frames' pages in frame order; the others take each frame's
+     * distinct rows ({@link #distinctRows}) in frame order, which this operator filters against the right's rows and
+     * deduplicates as it does the whole left input. The answer is the serial operator's, the same bits whatever the
+     * pool's size: a row's first occurrence is the first of its frame. Owns and closes the source and {@code right}.
+     */
+    static Cursor parallel(final String op, final FrameSource source, final Cursor right) {
+        // an unknown op is refused by the constructor, which closes both inputs
+        final Cursor left = "union all".equals(op)
+                ? new ExchangeCursor(source)
+                : DistinctCursor.FramePartials.of(source, SetOpCursor::distinctRows);
+        return new SetOpCursor(op, left, right);
+    }
+
+    /** A frame's partial: its distinct whole rows, NULL equal to NULL, in first-seen order. Closes {@code frame}. */
+    static List<Page> distinctRows(final Cursor frame) {
+        try (frame) {
+            final RowsSet distinct = new RowsSet(frame.fields());
+            Page in;
+            while ((in = frame.next()) != null) {
+                for (int row = 0; row < in.size; row++) {
+                    distinct.add(in, row);
+                }
+            }
+            return distinct.rows();
+        }
+    }
+
     @Override
     public List<Field> fields() {
         return left.fields();

@@ -1,5 +1,6 @@
 package dev.marregui.comando.cdb.exec;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -55,6 +56,18 @@ final class RowsSet {
             slot = (slot + 1) & mask;
         }
         return false;
+    }
+
+    /**
+     * The rows in, in the order they were added, as packed pages: every page full but the last. The pages become the
+     * caller's, so the set must not be added to afterwards.
+     */
+    List<Page> rows() {
+        final List<Page> out = new ArrayList<>(rows.pageCount());
+        for (int i = 0; i < rows.pageCount(); i++) {
+            out.add(rows.page(i));
+        }
+        return out;
     }
 
     private boolean matches(final int index, final int hash, final Page page, final int row) {

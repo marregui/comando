@@ -44,9 +44,13 @@ class ThreadRulesTest {
     private static final String CDB_ADMISSION = "dev.marregui.comando.cdb.serve.CdbServer$Admission";
     /** cdb's applier: one platform thread per store, whose batches write and force files (record 162). */
     private static final String CDB_APPLIER = "dev.marregui.comando.cdb.store.Applier";
+    /** cdb's query workers: one pool per process, CPU-bound frames (record 165). */
+    private static final String CDB_QUERY_POOL = "dev.marregui.comando.cdb.exec.QueryPool";
+    /** cdb's timed log force: one platform thread per store, whose forces would pin a virtual thread (record 166). */
+    private static final String CDB_LOG_FORCER = "dev.marregui.comando.cdb.store.LogForcer";
 
-    /// No class but [StateLoop], [Watchdog], `ClaudeProcess`, [Main], cdb's launcher (its shutdown hook) and cdb's
-    /// applier calls `Thread.ofPlatform` or constructs a `Thread`.
+    /// No class but [StateLoop], [Watchdog], `ClaudeProcess`, [Main], cdb's launcher (its shutdown hook), cdb's
+    /// applier, query pool and log forcer calls `Thread.ofPlatform` or constructs a `Thread`.
     @Test
     void platformThreadsComeOnlyFromTheKindsThatNeedThem() {
         noClasses().that().doNotHaveFullyQualifiedName(StateLoop.class.getName())
@@ -55,6 +59,8 @@ class ThreadRulesTest {
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .and().doNotHaveFullyQualifiedName(CDB_SERVE)
                 .and().doNotHaveFullyQualifiedName(CDB_APPLIER)
+                .and().haveNameNotMatching(Pattern.quote(CDB_QUERY_POOL) + "(\\$.*)?")
+                .and().haveNameNotMatching(Pattern.quote(CDB_LOG_FORCER) + "(\\$.*)?")
                 .should().callMethod(Thread.class, "ofPlatform")
                 .orShould().callConstructorWhere(target(owner(assignableTo(Thread.class))))
                 .check(ComandoClasses.MAIN);
