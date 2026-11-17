@@ -114,4 +114,23 @@ class LatestOnEarlyStopTest {
             assertThatThrownBy(() -> cdb.run(LATEST, 100, 0L, cancel)).isInstanceOf(CdbException.class);
         }
     }
+
+    /// A key held only by the oldest rows, past the serial frames, is answered by the pool's partials of the other
+    /// frames; so is each key's latest row when a filter excludes a key held by every frame.
+    @Test
+    void aKeyOnlyTheOldestFramesHoldIsAnsweredPastTheSerialFrames() {
+        try (final Cdb cdb = Cdb.open(root)) {
+            cdb.run(CREATE);
+            cdb.run("insert into t select case when x <= 1000 then 'OLD' when x % 2 = 0 then 'A' else 'B' end,"
+                    + " x * 1.0, timestamp_sequence('2026-01-01', 10000000L) from long_sequence(400000)");
+            assertThat(rows(cdb.run(LATEST))).containsExactly(
+                    "OLD|1000.0|2026-01-01T02:46:30Z",
+                    "B|399999.0|2026-02-16T07:06:20Z",
+                    "A|400000.0|2026-02-16T07:06:30Z");
+            assertThat(rows(cdb.run("select sym, price, ts from t where sym != 'A' latest on ts partition by sym")))
+                    .containsExactly(
+                            "OLD|1000.0|2026-01-01T02:46:30Z",
+                            "B|399999.0|2026-02-16T07:06:20Z");
+        }
+    }
 }

@@ -19,15 +19,19 @@ import dev.marregui.comando.cdb.plan.Plan;
  * key in a page is tracked by its offset and copied once, when the page is done (2 M timestamp-ordered rows, 2 keys:
  * 131 ms before, 97 ms after, the client time of a whole query, best of 3; the newest-first path not measured).
  *
- * <p>Newest first over one SYMBOL key ({@link #newestFirst}), the frames are read in order on the calling thread and
- * the read stops once the keys found are as many as the values the column can hold: the dictionary's keys, plus NULL
- * when a partition read may hold one. Every later row then belongs to a key already answered. A key of the dictionary
- * that no row read holds leaves the read to the end, the answer unchanged.
+ * <p>Newest first over one SYMBOL key ({@link #newestFirst}), the first {@link #SERIAL_FRAMES} frames are read in order
+ * on the calling thread and the read stops once the keys found are as many as the values the column can hold: the
+ * dictionary's keys, plus NULL when a partition read may hold one. Every later row then belongs to a key already
+ * answered. When the serial frames end without that (a dictionary key no row read holds, a filter no row of a key
+ * passes), the other frames' partials run on the pool as {@link #parallel} runs them, the answer unchanged.
  */
 final class LatestOnCursor implements Cursor {
 
     /** The most values of a single text key found by a scan before the hash lookup takes over; a few cache lines. */
     private static final int FEW_KEYS = 16;
+    // frames read serially before the rest go to the pool, set by the design: 4 frames of 65,536 rows hold every key of
+    // a few-key table; measured 1e8 rows, 3 keys, one key no row passes: 1.4 s serial to the end, 270 ms on the pool
+    private static final int SERIAL_FRAMES = 4;
 
     private final Cursor child;
     private final List<Field> fields;
@@ -95,9 +99,9 @@ final class LatestOnCursor implements Cursor {
     }
 
     /**
-     * LATEST ON over {@code source}'s frames read newest first, one after the other on the calling thread, stopping
-     * early as the class comment says when the plan reads newest first by one SYMBOL key; otherwise
-     * {@link #parallel}. Owns and closes the source.
+     * LATEST ON over {@code source}'s frames when the plan reads newest first by one SYMBOL key: the first
+     * {@link #SERIAL_FRAMES} frames on the calling thread with the early stop of the class comment, the rest on the
+     * pool; otherwise {@link #parallel}. Owns and closes the source.
      */
     static Cursor newestFirst(final FrameSource source, final Plan.LatestOn spec) {
         final int[] partition = spec.partitionColumns();
@@ -112,7 +116,7 @@ final class LatestOnCursor implements Cursor {
             source.close();
             throw e;
         }
-        return new LatestOnCursor(new InOrder(source), spec, false, nullGroups);
+        return new LatestOnCursor(new InOrder(source, spec), spec, false, nullGroups);
     }
 
     /**
@@ -274,15 +278,28 @@ final class LatestOnCursor implements Cursor {
         }
     }
 
-    /** The frames of a source in order, each opened when the one before is done; owns and closes the source. */
+    /**
+     * The first {@link #SERIAL_FRAMES} frames of a source in order, each opened when the one before is done, then the
+     * partials of the others in frame order, submitted to the pool only when the serial frames are read; owns and
+     * closes the source.
+     */
     private static final class InOrder implements Cursor {
         private final FrameSource source;
+        private final int serial;
+        private final DistinctCursor.FramePartials rest;
         private Cursor frame;
         private int next;
         private boolean closed;
 
-        InOrder(final FrameSource source) {
+        InOrder(final FrameSource source, final Plan.LatestOn spec) {
             this.source = source;
+            serial = Math.min(SERIAL_FRAMES, source.frames());
+            final int remaining = source.frames() - serial;
+            final int first = serial;
+            rest = new DistinctCursor.FramePartials(source.fields(),
+                    () -> source.context().pool().submit(remaining, i -> partial(source.open(first + i), spec),
+                            source.context()),
+                    source::close);
         }
 
         @Override
@@ -294,8 +311,8 @@ final class LatestOnCursor implements Cursor {
         public Page next() {
             while (!closed) {
                 if (frame == null) {
-                    if (next == source.frames()) {
-                        return null;
+                    if (next == serial) {
+                        return rest.next();
                     }
                     source.context().check();
                     frame = source.open(next++);
@@ -320,7 +337,7 @@ final class LatestOnCursor implements Cursor {
                         frame.close();
                     }
                 } finally {
-                    source.close();
+                    rest.close();
                 }
             }
         }
