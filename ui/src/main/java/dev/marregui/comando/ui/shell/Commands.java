@@ -265,8 +265,10 @@ final class Commands {
         cmd("connection.remove", "Remove the connection…", null, () -> focusedConnection().ifPresent(parts.sidebar()::removeConnection),
                 () -> focusedConnection().isPresent());
         if (deps.server() != null) {
-            cmd("server.start", "Start the machine's QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning() && !deps.server().busy());
-            cmd("server.stop", "Stop the machine's QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning() && !deps.server().busy());
+            cmd("server.start", "Start the machine's cdb", null, () -> deps.server().toggle(),
+                    () -> !deps.server().isRunning() && !deps.server().busy());
+            cmd("server.stop", "Stop the machine's cdb", null, () -> deps.server().toggle(),
+                    () -> deps.server().isRunning() && !deps.server().busy());
         }
         if (deps.edge() != null) {
             // disabled while a start or stop is under way: the button greys out and its tooltip says which
@@ -364,7 +366,7 @@ final class Commands {
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
         cmd("help.edgeLog", "Show the Edge's log", null, () -> help.showLog(deps.edge()), () -> deps.edge() != null);
-        cmd("help.questDbLog", "Show QuestDB's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
+        cmd("help.questDbLog", "Show cdb's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch
         // (Menus), the one chosen ticked (record 103)

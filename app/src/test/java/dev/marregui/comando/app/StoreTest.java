@@ -49,8 +49,8 @@ class StoreTest {
             loaded = store.load();
             assertThat(store.load(loaded.panels().getFirst().id())).contains("Welcome to comando");
         }
-        assertThat(loaded.connections()).extracting(ConnectionSpec::name).containsExactly("local QuestDB");
-        assertThat(loaded.panels()).singleElement().extracting(PanelState::connection).isEqualTo("local QuestDB");
+        assertThat(loaded.connections()).extracting(ConnectionSpec::name).containsExactly("local cdb");
+        assertThat(loaded.panels()).singleElement().extracting(PanelState::connection).isEqualTo("local cdb");
         assertThat(home.resolve("connections.json")).exists();
         assertThat(home.resolve("panels.json")).exists();
     }

@@ -229,7 +229,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * Reads the files; a fresh data root gets the defaults: a local QuestDB and a scratch panel with the welcome text.
+     * Reads the files; a fresh data root gets the defaults: a local cdb and a scratch panel with the welcome text.
      */
     Loaded load() {
         final boolean fresh = !connections.exists() && !sessions.exists() && !panels.exists();
@@ -448,7 +448,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     static Loaded defaults() {
-        final ConnectionSpec local = ConnectionSpec.questDbDefaults("local QuestDB");
+        final ConnectionSpec local = ConnectionSpec.questDbDefaults("local cdb");
         final PanelState scratch = new PanelState(PanelId.random(), "scratch", local.name(), "");
         return new Loaded(List.of(scratch), List.of(local), List.of());
     }

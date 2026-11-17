@@ -16,7 +16,6 @@ dependencies {
     implementation(project(":mcp"))
     implementation(project(":tools"))
     implementation(project(":ui"))
-    implementation(libs.questdb)
     testImplementation(project(":testkit"))
     // the keyboard tests reach into the editor and the terminal of a real window
     testImplementation(libs.rsyntaxtextarea)

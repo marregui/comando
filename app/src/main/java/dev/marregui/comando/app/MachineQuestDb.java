@@ -2,7 +2,6 @@ package dev.marregui.comando.app;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -13,19 +12,18 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -35,9 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Stream;
 
-import io.questdb.ServerMain;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.claude.QuestDbEndpoint;
@@ -57,58 +53,40 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.shell.ServerToggle;
 
 /**
- * The machine's one QuestDB (record 146): a process of its own, started from {@code bin/start.sh} in the machine folder
- * ({@code ~/.comando-questdb}) by whichever writer finds none up, a comando instance or the kit, and outliving it. The
- * registry {@code server.json} names its process, its owner (the data root of the comando that started it, or
- * {@code kit:<kit root>}), its ports and a random token the server keeps in its {@code qdb_server} table: the server is
- * live when its process lives and it answers that token, so a pid another process reused never passes for it. Only its
- * owner stops it; quitting comando leaves it running. Every listener binds {@code 127.0.0.1}: QuestDB binds every
- * interface by default, and its default login is public.
+ * The machine's one database server (record 146), cdb since record 180, QuestDB before: a process of its own, started
+ * from {@code bin/start.sh} in the machine folder ({@code ~/.comando-questdb}) by whichever writer finds none up, a
+ * comando instance or the kit, and outliving it. The registry {@code server.json} names its process, its owner (the
+ * data root of the comando that started it, or {@code kit:<kit root>}), its ports and a random token the server keeps
+ * in its {@code qdb_server} table: the server is live when its process lives and it answers that token, so a pid
+ * another process reused never passes for it. Only its owner stops it; quitting comando leaves it running. Its HTTP and
+ * PG wire listeners bind {@code 127.0.0.1}, cdb's default; its data is the machine folder's {@code cdb/}.
  * <p>
  * Starts are serialised across processes by a POSIX lock on {@code start.lock}, which the kit takes too: two writers
  * that find none up start one server.
  */
 final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoint, AutoCloseable {
 
+    /** cdb's server class, started by {@code start.sh} from the copied jar. */
+    static final String CDB_SERVE = "dev.marregui.comando.cdb.CdbServe";
     /**
-     * comando's QuestDB log: one file a day in the root's {@code log/}, ending in {@code .log} so that a panel follows
-     * it, kept a week, with errors and advisories only; {@code stdout.log} gets errors and, as QuestDB writes them to
-     * every writer, the advisories of each start (21 lines). At INFO the file took 40 MB a day, mostly a line per
-     * query, and {@code stdout.log}, never rotated, reached 196 MB (2026-11-14).
+     * The registry's schema version this comando reads and writes; a later one's server is used, never managed. 2 since
+     * the server is cdb (record 180): a comando of version 1 then never starts or stops it, so none starts QuestDB on
+     * the old {@code root/} while cdb is down.
      */
-    static final String LOG_CONFIG = """
-            # Written by comando at each start of its QuestDB: one file a day in log/, kept a week, for
-            # Help > Show QuestDB's log, with errors and advisories (the settings at start) but no line per
-            # query; stdout.log gets errors (and the advisories, which QuestDB writes to every writer).
-            # start.sh names this file (-Dout), so conf/log.conf is not read.
-            writers=file,stdout
-            w.file.class=io.questdb.log.LogRollingFileWriter
-            w.file.location=${log.dir}/questdb-${date:yyyyMMdd}.log
-            w.file.level=ERROR,CRITICAL,ADVISORY
-            w.file.rollEvery=day
-            w.file.lifeDuration=7d
-            w.stdout.class=io.questdb.log.LogConsoleWriter
-            w.stdout.level=ERROR,CRITICAL
-            """;
-    /** comando's log configuration, written in the root's {@code conf/} at each start; {@code start.sh} names it. */
-    static final String LOG_CONFIG_NAME = "comando-log.conf";
-    /** The registry's schema version this comando reads and writes; a later one's server is used, never managed. */
-    static final int REGISTRY_VERSION = 1;
+    static final int REGISTRY_VERSION = 2;
     /**
-     * The launcher, written whole at each start this comando makes: the machine folder, the four ports, the Java home
-     * and QuestDB's version filled in. Its server runs in a process group of its own ({@code set -m}), immune to the
-     * launcher's hang-up ({@code nohup}), so it outlives the launcher and whoever ran it.
+     * The launcher, written whole at each start this comando makes: the machine folder, the HTTP and PG wire ports, the
+     * Java home and the copied cdb jar's name filled in. Its server runs in a process group of its own
+     * ({@code set -m}), immune to the launcher's hang-up ({@code nohup}), so it outlives the launcher and whoever ran
+     * it.
      * <p>
-     * The server is sized for what uses it, tens of small tables written a few rows a second over ILP on HTTP and read
-     * over HTTP and PG wire: only the HTTP and PG wire listeners, no web console, no {@code sys.metrics}, one query and
-     * one write worker, two network workers so that a long query does not hold the token check, and column files grown
-     * in 64 KiB steps. On a scratch server after 100 rows (2026-11-14), the table took 1.2 MB instead of 163 MB and the
-     * database 7.7 MB instead of 431 MB; idle for 60 s it used 0.9 to 1.2 % of one core instead of 3.2 %, about 350 MiB
-     * resident instead of 401 MiB. {@code stdout.log}, appended to at every start, is rotated past 10 MiB.
+     * The JVM options are the kit's {@code cdb-serve}'s (measured 2026-11-15 on Cosa's load: 116-138 MiB resident under
+     * a 256 MiB heap with two GC threads and a periodic GC). {@code stdout.log}, cdb's only log, appended to at every
+     * start, is rotated past 10 MiB.
      */
     static final String SCRIPT = """
             #!/bin/bash
-            # Written by comando at each start of the machine's QuestDB (record 146). Prints the server's pid.
+            # Written by comando at each start of the machine's database, cdb (record 146). Prints the server's pid.
             set -m
             cd "%1$s" || exit 1
             # stdout.log gains every start's output: past 10 MiB it becomes stdout.log.1, the one copy kept
@@ -116,53 +94,11 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
               mv -f "%1$s/stdout.log" "%1$s/stdout.log.1"
             fi
             (umask 077 && : >> "%1$s/stdout.log")
-            export QDB_HTTP_NET_BIND_TO=127.0.0.1:%2$d
-            export QDB_HTTP_MIN_NET_BIND_TO=127.0.0.1:%3$d
-            export QDB_PG_NET_BIND_TO=127.0.0.1:%4$d
-            export QDB_LINE_TCP_NET_BIND_TO=127.0.0.1:%5$d
-            export QDB_LINE_UDP_ENABLED=false
-            export QDB_TELEMETRY_ENABLED=false
-            # ILP over TCP: every writer sends ILP over HTTP; the bind above holds should it come back
-            export QDB_LINE_TCP_ENABLED=false
-            # the health server: comando checks its token over HTTP, nothing asks this port
-            export QDB_HTTP_MIN_ENABLED=false
-            # no web console: its files are served from a folder that does not exist, so its page answers 404
-            export QDB_HTTP_STATIC_PUBLIC_DIRECTORY=no-console
-            # sys.metrics, a row a second that nobody reads (93 MB on 2026-11-14)
-            export QDB_METRICS_PERSIST_ENABLED=false
-            # no table is a materialized or live view
-            export QDB_CAIRO_MAT_VIEW_ENABLED=false
-            export QDB_MAT_VIEW_REFRESH_WORKER_COUNT=0
-            export QDB_CAIRO_LIVE_VIEW_ENABLED=false
-            export QDB_LIVE_VIEW_REFRESH_WORKER_COUNT=0
-            export QDB_VIEW_COMPILER_WORKER_COUNT=1
-            # one query, one write and one WAL apply worker: tens of small tables, a few rows a second
-            export QDB_SHARED_WORKER_COUNT=1
-            export QDB_WAL_APPLY_WORKER_COUNT=1
-            # two network workers, as HTTP and PG wire run queries on them: with one, a query of 11.5 s held a
-            # SELECT 1 for 10.5 s, past the 2 s token check, so every instance read the server as down
-            export QDB_SHARED_NETWORK_WORKER_COUNT=2
-            # idle workers nap after 20 empty loops and sleep 50 ms after 50 (QuestDB: 7,000, 10,000 and 10 ms)
-            export QDB_SHARED_WORKER_NAP_THRESHOLD=20
-            export QDB_SHARED_WORKER_SLEEP_THRESHOLD=50
-            export QDB_SHARED_WORKER_SLEEP_TIMEOUT=50
-            export QDB_WAL_APPLY_WORKER_NAP_THRESHOLD=20
-            export QDB_WAL_APPLY_WORKER_SLEEP_THRESHOLD=50
-            export QDB_WAL_APPLY_WORKER_SLEEP_TIMEOUT=50
-            # an open table's column file takes a whole page: 16 MiB made 1.8 GB of tables of 61 to 11,425 rows
-            export QDB_CAIRO_WRITER_DATA_APPEND_PAGE_SIZE=64k
-            export QDB_CAIRO_WRITER_DATA_INDEX_VALUE_APPEND_PAGE_SIZE=64k
-            # WAL segment columns and events, 1 MiB and 128 KiB by default
-            export QDB_CAIRO_WAL_WRITER_DATA_APPEND_PAGE_SIZE=64k
-            export QDB_CAIRO_WAL_WRITER_EVENT_APPEND_PAGE_SIZE=64k
-            # out-of-order merge memory per column, 8 MiB by default; 256 KiB is QuestDB's for its system tables
-            export QDB_CAIRO_O3_COLUMN_MEMORY_SIZE=256k
-            export QDB_LINE_AUTO_CREATE_NEW_TABLES=false
-            export QDB_LINE_AUTO_CREATE_NEW_COLUMNS=false
-            nohup "%6$s/bin/java" --add-exports=java.base/jdk.internal.vm=ALL-UNNAMED -Xmx1g \\
-              -Dout="%1$s/root/conf/comando-log.conf" \\
-              -cp "%1$s/lib/questdb-%7$s.jar" io.questdb.ServerMain -d "%1$s/root" \\
-              >> "%1$s/stdout.log" 2>&1 < /dev/null &
+            nohup "%4$s/bin/java" -XX:+UseG1GC -XX:ParallelGCThreads=2 -XX:ConcGCThreads=1 \\
+              -XX:G1PeriodicGCInterval=10000 -XX:+UseCompactObjectHeaders -Xms16m -Xmx256m \\
+              -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 \\
+              -cp "%1$s/lib/%5$s" dev.marregui.comando.cdb.CdbServe "%1$s/cdb" %2$d --pg-port %3$d \\
+              --bind 127.0.0.1 >> "%1$s/stdout.log" 2>&1 < /dev/null &
             echo $!
             """;
 
@@ -198,7 +134,6 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
     private final AtomicBoolean busy = new AtomicBoolean();
     private final AtomicBoolean checking = new AtomicBoolean();
-    private final Path dataRoot;
     /**
      * The starts, stops and live checks under way, each on a virtual thread; closed with comando, the server left up.
      */
@@ -238,13 +173,12 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             final Ports ports
     ) {
         this.folder = machineFolder.toAbsolutePath().normalize();
-        this.dataRoot = dataRoot.toAbsolutePath().normalize();
-        this.owner = this.dataRoot.toString();
+        this.owner = dataRoot.toAbsolutePath().normalize().toString();
         this.name = InstanceName.display(instanceName);
         this.intents = intents;
         this.ports = ports;
         this.registry = folder.resolve("server.json");
-        this.root = folder.resolve("root");
+        this.root = folder.resolve("cdb");
     }
 
     @Override
@@ -269,7 +203,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     public Optional<URI> ensureUp() {
         final Outcome o = up();
         if (o.entry() == null) {
-            LOG.log(System.Logger.Level.WARNING, "cannot have the machine's QuestDB [folder=" + folder + ", why="
+            LOG.log(System.Logger.Level.WARNING, "cannot have the machine's cdb [folder=" + folder + ", why="
                     + o.refusal() + ']');
             return Optional.empty();
         }
@@ -305,33 +239,22 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         return e == null ? Optional.empty() : Optional.of(uri(e));
     }
 
-    /** The newest daily log in the root's {@code log/}, else today's, which the next start writes. */
+    /** {@code stdout.log} in the machine folder: cdb writes its log there. */
     @Override
     public Path log() {
-        final Path dir = root.resolve("log");
-        try (final Stream<Path> files = Files.list(dir)) {
-            final Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("questdb-\\d{8}\\.log"))
-                    .max(Comparator.comparing(f -> f.getFileName().toString()));
-            if (newest.isPresent()) {
-                return newest.get();
-            }
-        } catch (final IOException | UncheckedIOException _) {
-            // no log folder yet: today's file, which says there is no log yet
-        }
-        return dir.resolve("questdb-" + DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.now(ZoneOffset.UTC))
-                + ".log");
+        return stdout();
     }
 
     @Override
     public String name() {
-        return "QuestDB";
+        return "cdb";
     }
 
     /** The start or stop under way, else who started the server when this instance did not; as last checked. */
     @Override
     public String status() {
         if (busy.get()) {
-            return "QuestDB is " + (doing.isEmpty() ? "busy" : doing);
+            return "cdb is " + (doing.isEmpty() ? "busy" : doing);
         }
         final Entry e = seen;
         return e != null && !mine(e) ? refusal(e) : "";
@@ -345,7 +268,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     public void toggle() {
         if (!busy.compareAndSet(false, true)) {
             intents.dispatch(new Intent.Notify(Notice.Level.INFO,
-                    "QuestDB is " + (doing.isEmpty() ? "busy" : doing) + "; wait for it", false));
+                    "cdb is " + (doing.isEmpty() ? "busy" : doing) + "; wait for it", false));
             return;
         }
         final Thread t = errands.start("questdb-toggle", () -> {
@@ -370,16 +293,16 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         final Entry e = readQuietly();
         final boolean alive = e != null && ProcessHandle.of(e.pid()).map(ProcessHandle::isAlive).orElse(false);
         if (up && alive && running) {
-            return "QuestDB is up already: " + where(e) + (mine(e) ? "" : ", " + startedBy(e));
+            return "cdb is up already: " + where(e) + (mine(e) ? "" : ", " + startedBy(e));
         }
         if (!up && !alive) {
-            return "QuestDB is not running";
+            return "cdb is not running";
         }
         if (!up && !mine(e)) {
             return "refused: " + refusal(e);
         }
         if (!busy.compareAndSet(false, true)) {
-            return "QuestDB is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
+            return "cdb is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
         }
         final Thread t = errands.start(up ? "questdb-start" : "questdb-stop", () -> {
             try {
@@ -393,7 +316,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             return "refused: comando is closing";
         }
         return (up ? "starting" : "stopping")
-                + " QuestDB; the outcome comes as a notice, and ui_get_state's servers show it";
+                + " cdb; the outcome comes as a notice, and ui_get_state's servers show it";
     }
 
     /**
@@ -405,44 +328,6 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         return launchedPid;
     }
 
-    /** Writes {@link #LOG_CONFIG} as {@code root/conf/comando-log.conf}, which {@code start.sh} names; returns it. */
-    static Path logConfig(final Path root) throws IOException {
-        final Path ours = OwnerOnly.folder(root.resolve("conf")).resolve(LOG_CONFIG_NAME);
-        AtomicFiles.writeString(ours, LOG_CONFIG);
-        OwnerOnly.narrow(ours);
-        return ours;
-    }
-
-    /**
-     * The first start on a machine: {@code old/db}, the database of the QuestDB comando ran in its data root, copied to
-     * {@code root/db} when that does not exist yet; the old folder is left as it is. Copied beside it first, then moved
-     * into place, so a copy cut short is redone at the next start. True when it copied.
-     */
-    static boolean migrate(final Path old, final Path root) throws IOException {
-        final Path from = old.resolve("db");
-        final Path to = root.resolve("db");
-        if (Files.exists(to) || !Files.isDirectory(from)) {
-            return false;
-        }
-        final Path copying = root.resolve("db.migrating");
-        deleteTree(copying);
-        try (final Stream<Path> all = Files.walk(from)) {
-            for (final Path p : all.toList()) {
-                final Path target = copying.resolve(from.relativize(p).toString());
-                if (Files.isDirectory(p)) {
-                    OwnerOnly.folder(target);
-                } else {
-                    Files.copy(p, target);
-                    OwnerOnly.narrow(target);
-                }
-            }
-        }
-        Files.move(copying, to);
-        LOG.log(System.Logger.Level.INFO, "QuestDB database copied to the machine's [from=" + from + ", to=" + to
-                + ']');
-        return true;
-    }
-
     /**
      * {@link #SCRIPT} for {@code folder}; refused when a path holds a character the double-quoted shell words would
      * read ({@code "}, {@code $}, {@code `}, {@code \}).
@@ -451,14 +336,14 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             final Path folder,
             final Ports ports,
             final Path javaHome,
-            final String version
+            final String jar
     ) throws IOException {
-        for (final String s : List.of(folder.toString(), javaHome.toString(), version)) {
+        for (final String s : List.of(folder.toString(), javaHome.toString(), jar)) {
             if (s.chars().anyMatch(c -> c == '"' || c == '$' || c == '`' || c == '\\')) {
                 throw new IOException("a path start.sh cannot quote [path=" + s + ']');
             }
         }
-        return SCRIPT.formatted(folder, ports.http(), ports.httpMin(), ports.pg(), ports.ilp(), javaHome, version);
+        return SCRIPT.formatted(folder, ports.http(), ports.pg(), javaHome, jar);
     }
 
     /** A process answers a TCP connect on {@code port} on loopback within {@link #PORT_PROBE}. */
@@ -468,17 +353,6 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             return true;
         } catch (final IOException _) {
             return false;
-        }
-    }
-
-    private static void deleteTree(final Path dir) throws IOException {
-        if (!Files.exists(dir)) {
-            return;
-        }
-        try (final Stream<Path> all = Files.walk(dir)) {
-            for (final Path p : all.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(p);
-            }
         }
     }
 
@@ -543,7 +417,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             h.onExit().get(STOP_WAIT.toMillis(), TimeUnit.MILLISECONDS);
             return true;
         } catch (final TimeoutException _) {
-            LOG.log(System.Logger.Level.WARNING, "QuestDB did not stop within " + STOP_WAIT.toSeconds()
+            LOG.log(System.Logger.Level.WARNING, "cdb did not stop within " + STOP_WAIT.toSeconds()
                     + " s; killing it [pid=" + h.pid() + ']');
             h.destroyForcibly();
             try {
@@ -595,25 +469,46 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                 return "";
             }
             if (!ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)) {
-                return "QuestDB [pid=" + pid + "] exited before it was up; see " + stdout();
+                return "cdb [pid=" + pid + "] exited before it was up; see " + stdout();
             }
             Thread.sleep(POLL_EVERY);
         }
-        return "QuestDB [pid=" + pid + "] was not up within " + UP_WITHIN.toSeconds() + " s and is left running; see "
+        return "cdb [pid=" + pid + "] was not up within " + UP_WITHIN.toSeconds() + " s and is left running; see "
                 + stdout();
     }
 
-    /** The jar {@code ServerMain} was loaded from, copied to {@code jar}: beside it first, then moved into place. */
-    private void copyJar(final Path jar) throws IOException {
+    /**
+     * The jar cdb's server class is loaded from: a runtime dependency of comando, found by name, as {@code app} does
+     * not compile against {@code cdb}.
+     */
+    static Path cdbJar() throws IOException {
         final Path source;
         try {
-            source = Path.of(ServerMain.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-        } catch (final URISyntaxException | RuntimeException e) {
-            throw new IOException("cannot locate QuestDB's jar", e);
+            source = Path.of(Class.forName(CDB_SERVE).getProtectionDomain().getCodeSource().getLocation().toURI());
+        } catch (final ClassNotFoundException | URISyntaxException | RuntimeException e) {
+            throw new IOException("cannot locate cdb's jar [class=" + CDB_SERVE + ']', e);
         }
         if (!Files.isRegularFile(source)) {
-            throw new IOException("QuestDB is not loaded from a jar [source=" + source + ']');
+            throw new IOException("cdb is not loaded from a jar [source=" + source + ']');
         }
+        return source;
+    }
+
+    /**
+     * The copy's name, {@code cdb-<12 hex>.jar} after the first bytes of the jar's SHA-256: a new build gets a new
+     * copy, while a build or {@code :app:run} that deletes the jar comando runs from leaves the server its copy.
+     */
+    static String jarName(final Path source) throws IOException {
+        try {
+            final byte[] digest = MessageDigest.getInstance("SHA-256").digest(Mapped.bytes(source));
+            return "cdb-" + HexFormat.of().formatHex(digest, 0, 6) + ".jar";
+        } catch (final NoSuchAlgorithmException e) {
+            throw new IOException("no SHA-256 in this runtime", e);
+        }
+    }
+
+    /** {@code source}, cdb's jar, copied to {@code jar}: beside it first, then moved into place. */
+    private void copyJar(final Path source, final Path jar) throws IOException {
         final Path tmp = Files.createTempFile(jar.getParent(), "." + jar.getFileName() + ".", ".tmp");
         try {
             Files.copy(source, tmp, StandardCopyOption.REPLACE_EXISTING);
@@ -623,7 +518,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             throw e;
         }
         OwnerOnly.narrow(jar);
-        LOG.log(System.Logger.Level.INFO, "QuestDB jar copied to the machine folder [from=" + source + ", to=" + jar
+        LOG.log(System.Logger.Level.INFO, "cdb jar copied to the machine folder [from=" + source + ", to=" + jar
                 + ']');
     }
 
@@ -641,18 +536,18 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             if (h.isEmpty()) {
                 doing = "starting";
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting QuestDB…", false));
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting cdb…", false));
                 final Outcome o = up();
                 if (o.entry() != null) {
-                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: " + where(o.entry()), false));
+                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "cdb is up: " + where(o.entry()), false));
                 } else {
                     intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
-                            "Cannot start QuestDB: " + o.refusal(), null));
+                            "Cannot start cdb: " + o.refusal(), null));
                 }
             } else if (!mine(e)) {
                 // the user asked for a stop this comando may not do: say why, where the eye is, and in the log
                 intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
-                        "Cannot stop QuestDB: " + refusal(e), null));
+                        "Cannot stop cdb: " + refusal(e), null));
             } else {
                 doing = "stopping";
                 stopLocked(e, h.get());
@@ -728,32 +623,65 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     }
 
     /**
-     * What a start needs in the machine folder: QuestDB's jar copied to {@code lib/} when absent (a build or
-     * {@code :app:run} deletes the copy comando runs from), the first start's database, comando's log configuration,
-     * the stdout log made owner-only, and {@code start.sh} written whole; returns the script.
+     * What a start needs in the machine folder: cdb's jar copied to {@code lib/} when absent (a build or
+     * {@code :app:run} deletes the copy comando runs from), the data folder, the stdout log made owner-only, and
+     * {@code start.sh} written whole; returns the script and the jar's name.
      */
-    private Path prepare() throws IOException {
-        final String version = ServerMain.class.getPackage().getImplementationVersion();
-        if (version == null) {
-            throw new IOException("QuestDB's jar names no version in its manifest");
+    private Prepared prepare() throws IOException {
+        final Path lib = OwnerOnly.folder(folder.resolve("lib"));
+        final Path source;
+        try {
+            source = cdbJar();
+        } catch (final IOException e) {
+            return fromCopy(lib, e);
         }
+        final String name = jarName(source);
         final Path javaHome = Path.of(System.getProperty("java.home"));
         if (!Files.isExecutable(javaHome.resolve("bin").resolve("java"))) {
             throw new IOException("no java launcher in comando's runtime [java.home=" + javaHome + ']');
         }
-        final String text = script(folder, ports, javaHome, version);
-        final Path jar = OwnerOnly.folder(folder.resolve("lib")).resolve("questdb-" + version + ".jar");
+        final String text = script(folder, ports, javaHome, name);
+        final Path jar = lib.resolve(name);
         if (!Files.isRegularFile(jar)) {
-            copyJar(jar);
+            copyJar(source, jar);
         }
         OwnerOnly.folder(root);
-        migrate(dataRoot.resolve("questdb"), root);
-        logConfig(root);
         ownerOnlyFile(stdout());
         final Path script = OwnerOnly.folder(folder.resolve("bin")).resolve("start.sh");
         AtomicFiles.writeString(script, text);
         OwnerOnly.executable(script);
-        return script;
+        return new Prepared(script, name);
+    }
+
+    /**
+     * {@link #prepare} when comando's own jar is gone (an install a {@code clean} removed): the newest copy in
+     * {@code lib}, else {@code why}.
+     */
+    private Prepared fromCopy(final Path lib, final IOException why) throws IOException {
+        final Path newest;
+        try (final DirectoryStream<Path> copies = Files.newDirectoryStream(lib, "cdb-*.jar")) {
+            Path best = null;
+            for (final Path p : copies) {
+                if (best == null || Files.getLastModifiedTime(p).compareTo(Files.getLastModifiedTime(best)) > 0) {
+                    best = p;
+                }
+            }
+            newest = best;
+        }
+        if (newest == null) {
+            throw why;
+        }
+        final Path javaHome = Path.of(System.getProperty("java.home"));
+        final String name = newest.getFileName().toString();
+        final String text = script(folder, ports, javaHome, name);
+        OwnerOnly.folder(root);
+        ownerOnlyFile(stdout());
+        final Path script = OwnerOnly.folder(folder.resolve("bin")).resolve("start.sh");
+        AtomicFiles.writeString(script, text);
+        OwnerOnly.executable(script);
+        LOG.log(System.Logger.Level.WARNING, "cdb's jar is gone; the server starts from its copy [copy=" + newest
+                + ']', why);
+        return new Prepared(script, name);
     }
 
     /**
@@ -769,7 +697,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             tree = Mapped.read(registry, m -> Json.readFirst(m.stream()));
         } catch (final JsonException e) {
-            LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry is not JSON; no server is known [file="
+            LOG.log(System.Logger.Level.WARNING, "the machine's cdb registry is not JSON; no server is known [file="
                     + registry + ']', e);
             return null;
         }
@@ -782,7 +710,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                 throw new IOException("the registry is of version " + version
                         + ", written by a later comando or kit [file=" + registry + ']', ex);
             }
-            LOG.log(System.Logger.Level.WARNING, "the machine's QuestDB registry does not read; no server is known"
+            LOG.log(System.Logger.Level.WARNING, "the machine's cdb registry does not read; no server is known"
                     + " [file=" + registry + ']', ex);
             return null;
         }
@@ -794,7 +722,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             return read();
         } catch (final IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read the machine's QuestDB registry [file=" + registry + ']',
+            LOG.log(System.Logger.Level.WARNING, "cannot read the machine's cdb registry [file=" + registry + ']',
                     e);
             return null;
         }
@@ -811,12 +739,12 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         }
         if (answers(ports.http())) {
             return Outcome.refused("port " + ports.http()
-                    + " is held by a process that is not this machine's comando QuestDB");
+                    + " is held by a process that is not this machine's comando cdb");
         }
-        final Path script = prepare();
-        final long pid = launch(script);
+        final Prepared prepared = prepare();
+        final long pid = launch(prepared.script());
         launchedPid = pid;
-        LOG.log(System.Logger.Level.INFO, "QuestDB starting [pid=" + pid + ", folder=" + folder + ']');
+        LOG.log(System.Logger.Level.INFO, "cdb starting [pid=" + pid + ", folder=" + folder + ']');
         final String failure = awaitUp(pid);
         if (!failure.isEmpty()) {
             return Outcome.refused(failure);
@@ -828,15 +756,14 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                 UP_WITHIN) == null
                 || exec(ports.http(), "INSERT INTO qdb_server VALUES (now(), '" + token + "', " + pid + ", '"
                         + owner.replace("'", "''") + "')", UP_WITHIN) == null) {
-            return Outcome.refused("QuestDB [pid=" + pid
+            return Outcome.refused("cdb [pid=" + pid
                     + "] did not record its token in qdb_server and is left running; see " + stdout());
         }
         final Entry entry = new Entry(REGISTRY_VERSION, pid, owner, name,
-                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), ports, token,
-                ServerMain.class.getPackage().getImplementationVersion());
+                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), ports, token, prepared.jar());
         AtomicFiles.write(registry, JsonFile.pretty(JsonFile.BINDER.toTree(entry)));
         OwnerOnly.narrow(registry);
-        LOG.log(System.Logger.Level.INFO, "QuestDB up [pid=" + pid + ", ports=" + ports + ", owner=" + owner + ']');
+        LOG.log(System.Logger.Level.INFO, "cdb up [pid=" + pid + ", ports=" + ports + ", owner=" + owner + ']');
         return Outcome.of(entry);
     }
 
@@ -853,13 +780,13 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             final Outcome o = underLock(() -> stop(e, h));
             if (o.entry() == null) {
                 intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
-                        "Cannot stop QuestDB: " + o.refusal(), null));
+                        "Cannot stop cdb: " + o.refusal(), null));
             } else {
-                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is down", false));
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "cdb is down", false));
             }
         } catch (final IOException ex) {
             intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN,
-                    "Cannot stop QuestDB [pid=" + e.pid() + "]: " + ex.getMessage(), ex));
+                    "Cannot stop cdb [pid=" + e.pid() + "]: " + ex.getMessage(), ex));
         } catch (final InterruptedException _) {
             Thread.currentThread().interrupt();
         }
@@ -879,10 +806,10 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                 Files.deleteIfExists(registry);
             }
         } catch (final IOException ex) {
-            LOG.log(System.Logger.Level.WARNING, "cannot remove the machine's QuestDB registry [file=" + registry
+            LOG.log(System.Logger.Level.WARNING, "cannot remove the machine's cdb registry [file=" + registry
                     + ']', ex);
         }
-        LOG.log(System.Logger.Level.INFO, "QuestDB stopped [pid=" + e.pid() + ']');
+        LOG.log(System.Logger.Level.INFO, "cdb stopped [pid=" + e.pid() + ']');
         return Outcome.of(e);
     }
 
@@ -935,7 +862,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         try {
             o = underLock(this::startLocked);
         } catch (final IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot start the machine's QuestDB [folder=" + folder + ']', e);
+            LOG.log(System.Logger.Level.WARNING, "cannot start the machine's cdb [folder=" + folder + ']', e);
             return Outcome.refused("cannot start it: " + e.getMessage());
         } catch (final InterruptedException _) {
             Thread.currentThread().interrupt();
@@ -949,7 +876,10 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         return o;
     }
 
-    /** The ports of the machine's QuestDB, QuestDB's own defaults; {@code server.json} names them. */
+    /**
+     * The machine server's ports, QuestDB's defaults kept for every client that names them; {@code server.json} names
+     * them. cdb listens on HTTP and PG wire only: {@code httpMin} and {@code ilp} stay in the registry for its readers.
+     */
     record Ports(int http, int httpMin, int pg, int ilp) {
 
         static final Ports DEFAULT = new Ports(9000, 9003, 8812, 9009);
@@ -957,7 +887,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
 
     /**
      * {@code server.json}, version 1 (record 146): the server's process, its owner and instance name, when it started,
-     * its ports, the token it answers and QuestDB's version.
+     * its ports, the token it answers and, in {@code questdb} (the key kept for its readers), the server's jar.
      */
     record Entry(
             int version,
@@ -971,8 +901,13 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     ) {
 
         Entry {
-            version = version <= 0 ? REGISTRY_VERSION : version;
+            // a registry without a version is one of the first schema, which every comando before record 180 wrote
+            version = version <= 0 ? 1 : version;
         }
+    }
+
+    /** What a start prepared: {@code start.sh} and the name of the cdb jar it runs. */
+    private record Prepared(Path script, String jar) {
     }
 
     /** A start's outcome: the live entry, or why there is none. */

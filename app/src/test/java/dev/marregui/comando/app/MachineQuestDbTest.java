@@ -27,8 +27,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import io.questdb.PropertyKey;
-import io.questdb.ServerMain;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,97 +39,63 @@ import dev.marregui.comando.testkit.RecordingSink;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/// [MachineQuestDb]: the machine's one QuestDB, a process of its own that outlives the comando that started it.
-/// - `start.sh` binds every listener to `127.0.0.1`, turns line-protocol UDP off, and refuses a path it cannot quote
-/// - `start.sh` runs only what comando uses (HTTP and PG wire, small column pages, one query and one write worker, two
-///   network workers), names only properties QuestDB knows, and sets `stdout.log` aside past 10 MiB
-/// - comando's log configuration, errors and advisories only, is written at each start; the first start copies the old
-///   database and leaves it
+/// [MachineQuestDb]: the machine's one database server, cdb, a process of its own that outlives the comando that
+/// started it.
+/// - `start.sh` runs cdb's server from the copied jar on the machine folder's `cdb/`, its HTTP and PG wire listeners
+///   on `127.0.0.1`, with the kit's heap and GC options, refuses a path it cannot quote, and sets `stdout.log` aside
+///   past 10 MiB
 /// - a port another process holds, and a `server.json` of a later version, start nothing
 /// - a start makes `start.sh`, `lib/` and `server.json` v1 with its owner and a token the server answers; another
 ///   instance uses it, starts no second one, and may not stop it; the owner's close leaves it up, its stop ends it
 /// - two concurrent starts start one server
 ///
-/// Every server runs in a `@TempDir` machine folder on free loopback ports, never QuestDB's defaults, and is stopped in
+/// Every server runs in a `@TempDir` machine folder on free loopback ports, never the defaults, and is stopped in
 /// a `finally` through its owner's stop; one a start left without a `server.json` is ended by the pid `start.sh`
 /// printed to the instance that launched it, while that process still names the test's machine folder.
 class MachineQuestDbTest {
 
-    /// QuestDB's default ports, which no test binds: a developer's machine QuestDB may hold them.
+    /// The machine server's default ports, which no test binds: a developer's machine server may hold them.
     private static final List<Integer> DEFAULT_PORTS = List.of(8812, 9000, 9003, 9009);
     /// A start copies the jar and waits up to 60 s for the server; a stop waits up to 25 s.
     private static final Duration START_WITHIN = Duration.ofSeconds(90);
     private static final Duration STOP_WITHIN = Duration.ofSeconds(40);
 
-    /// `start.sh` sets four `*_BIND_TO` variables, each to `127.0.0.1:` and the port asked for, turns line-protocol UDP
-    /// and telemetry off, and names the jar of the version given; a folder holding `$` is refused.
+    /// `start.sh` runs `CdbServe` from the copied jar on the machine folder's `cdb/`, on the HTTP and PG wire ports
+    /// asked for, bound to `127.0.0.1`, prints the pid, and names the Java given; a folder holding `$` is refused.
     @Test
-    void everyListenerStaysOnTheLoopbackInterface(@TempDir final Path dir) throws IOException {
+    void theServerIsCdbOnTheLoopbackInterface(@TempDir final Path dir) throws IOException {
         final MachineQuestDb.Ports ports = new MachineQuestDb.Ports(19000, 19003, 18812, 19009);
-        final String script = MachineQuestDb.script(dir, ports, Path.of("/opt/jdk"), "10.1.0");
+        final String script = MachineQuestDb.script(dir, ports, Path.of("/opt/jdk"), "cdb-0123456789ab.jar");
 
-        final List<String> binds = script.lines().filter(l -> l.contains("_BIND_TO=")).toList();
-        assertThat(binds).containsExactly(
-                "export QDB_HTTP_NET_BIND_TO=127.0.0.1:19000",
-                "export QDB_HTTP_MIN_NET_BIND_TO=127.0.0.1:19003",
-                "export QDB_PG_NET_BIND_TO=127.0.0.1:18812",
-                "export QDB_LINE_TCP_NET_BIND_TO=127.0.0.1:19009");
-        assertThat(script.lines()).contains("export QDB_LINE_UDP_ENABLED=false", "export QDB_TELEMETRY_ENABLED=false",
-                "echo $!");
         assertThat(script).contains("nohup \"/opt/jdk/bin/java\" ",
-                "-cp \"" + dir + "/lib/questdb-10.1.0.jar\" io.questdb.ServerMain -d \"" + dir + "/root\"",
-                "-Dout=\"" + dir + "/root/conf/comando-log.conf\"");
-        assertThatThrownBy(() -> MachineQuestDb.script(dir.resolve("a$b"), ports, Path.of("/opt/jdk"), "10.1.0"))
+                "-cp \"" + dir + "/lib/cdb-0123456789ab.jar\" " + MachineQuestDb.CDB_SERVE + " \"" + dir
+                        + "/cdb\" 19000 --pg-port 18812",
+                "--bind 127.0.0.1 >> \"" + dir + "/stdout.log\"");
+        assertThat(script.lines()).contains("echo $!");
+        assertThat(script).doesNotContain("19003", "19009", "QDB_");
+        assertThatThrownBy(() -> MachineQuestDb.script(dir.resolve("a$b"), ports, Path.of("/opt/jdk"), "cdb.jar"))
                 .isInstanceOf(IOException.class);
     }
 
-    /// `start.sh` turns off what nothing uses: ILP over TCP, the health server, the web console, `sys.metrics` and
-    /// views; it runs one query and one write worker, two network workers so that a long query leaves one free for the
-    /// token check, parks idle workers early, and grows column, index and WAL files in 64 KiB pages, not 16 MiB.
+    /// The server runs with the kit's `cdb-serve` options: G1 with two parallel and one concurrent GC thread, a
+    /// periodic GC every 10 s, compact headers, and a heap of 16 MiB growing to 256 MiB.
     @Test
-    void theServerRunsOnlyWhatComandoUses(@TempDir final Path dir) throws IOException {
-        final String script = MachineQuestDb.script(dir, MachineQuestDb.Ports.DEFAULT, Path.of("/opt/jdk"), "10.1.0");
+    void theServerRunsWithTheKitsHeapAndGc(@TempDir final Path dir) throws IOException {
+        final String script = MachineQuestDb.script(dir, MachineQuestDb.Ports.DEFAULT, Path.of("/opt/jdk"), "cdb.jar");
 
-        assertThat(script.lines()).contains(
-                "export QDB_LINE_TCP_ENABLED=false",
-                "export QDB_HTTP_MIN_ENABLED=false",
-                "export QDB_HTTP_STATIC_PUBLIC_DIRECTORY=no-console",
-                "export QDB_METRICS_PERSIST_ENABLED=false",
-                "export QDB_CAIRO_MAT_VIEW_ENABLED=false",
-                "export QDB_MAT_VIEW_REFRESH_WORKER_COUNT=0",
-                "export QDB_CAIRO_LIVE_VIEW_ENABLED=false",
-                "export QDB_LIVE_VIEW_REFRESH_WORKER_COUNT=0",
-                "export QDB_VIEW_COMPILER_WORKER_COUNT=1",
-                "export QDB_SHARED_WORKER_COUNT=1",
-                "export QDB_WAL_APPLY_WORKER_COUNT=1",
-                "export QDB_SHARED_NETWORK_WORKER_COUNT=2",
-                "export QDB_SHARED_WORKER_NAP_THRESHOLD=20",
-                "export QDB_SHARED_WORKER_SLEEP_THRESHOLD=50",
-                "export QDB_SHARED_WORKER_SLEEP_TIMEOUT=50",
-                "export QDB_WAL_APPLY_WORKER_NAP_THRESHOLD=20",
-                "export QDB_WAL_APPLY_WORKER_SLEEP_THRESHOLD=50",
-                "export QDB_WAL_APPLY_WORKER_SLEEP_TIMEOUT=50",
-                "export QDB_CAIRO_WRITER_DATA_APPEND_PAGE_SIZE=64k",
-                "export QDB_CAIRO_WRITER_DATA_INDEX_VALUE_APPEND_PAGE_SIZE=64k",
-                "export QDB_CAIRO_WAL_WRITER_DATA_APPEND_PAGE_SIZE=64k",
-                "export QDB_CAIRO_WAL_WRITER_EVENT_APPEND_PAGE_SIZE=64k",
-                "export QDB_CAIRO_O3_COLUMN_MEMORY_SIZE=256k");
+        assertThat(script).contains("-XX:+UseG1GC", "-XX:ParallelGCThreads=2", "-XX:ConcGCThreads=1",
+                "-XX:G1PeriodicGCInterval=10000", "-XX:+UseCompactObjectHeaders", "-Xms16m", "-Xmx256m");
     }
 
-    /// Every `QDB_*` name `start.sh` exports is a property of the QuestDB it starts, the jar on this classpath, which a
-    /// start copies into the machine folder: QuestDB ignores an environment variable it does not know, even under
-    /// strict validation, so a misspelt or renamed name would bring a default back unnoticed.
+    /// The copied jar's name follows its bytes: the same jar gives the same name, another gives another.
     @Test
-    void everyNameTheScriptExportsIsAPropertyOfQuestDb(@TempDir final Path dir) throws IOException {
-        final List<String> known = List.of(PropertyKey.values()).stream().map(PropertyKey::getEnvVarName).toList();
-        final List<String> exported = MachineQuestDb.script(dir, MachineQuestDb.Ports.DEFAULT, Path.of("/opt/jdk"),
-                        ServerMain.class.getPackage().getImplementationVersion()).lines()
-                .filter(l -> l.startsWith("export QDB_"))
-                .map(l -> l.substring("export ".length(), l.indexOf('=')))
-                .toList();
+    void theJarsNameFollowsItsBytes(@TempDir final Path dir) throws IOException {
+        final Path one = Files.writeString(dir.resolve("one.jar"), "one");
+        final Path two = Files.writeString(dir.resolve("two.jar"), "two");
 
-        assertThat(exported).isNotEmpty();
-        assertThat(exported).as("names QuestDB does not know").filteredOn(n -> !known.contains(n)).isEmpty();
+        assertThat(MachineQuestDb.jarName(one)).matches("cdb-[0-9a-f]{12}\\.jar")
+                .isEqualTo(MachineQuestDb.jarName(one)).isNotEqualTo(MachineQuestDb.jarName(two));
+        assertThat(MachineQuestDb.cdbJar()).isRegularFile();
     }
 
     /// `start.sh` moves a `stdout.log` over 10 MiB to `stdout.log.1`, over the one there, and starts an owner-only
@@ -142,7 +106,7 @@ class MachineQuestDbTest {
         final Path java = Files.writeString(jdk.resolve("bin").resolve("java"), "#!/bin/sh\nexit 0\n");
         Files.setPosixFilePermissions(java, PosixFilePermissions.fromString("rwx------"));
         final Path script = Files.writeString(dir.resolve("start.sh"),
-                MachineQuestDb.script(dir, MachineQuestDb.Ports.DEFAULT, jdk, "10.1.0"));
+                MachineQuestDb.script(dir, MachineQuestDb.Ports.DEFAULT, jdk, "cdb.jar"));
         final Path log = dir.resolve("stdout.log");
         final Path aside = dir.resolve("stdout.log.1");
         final int tenMebibytes = 10 * 1024 * 1024;
@@ -160,42 +124,6 @@ class MachineQuestDbTest {
         assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(log))).isEqualTo("rw-------");
     }
 
-    /// comando's log configuration, one file a day in the root's `log/` with errors and advisories, and errors on
-    /// stdout, never a line per query, is written owner-only at each start, over what the file held.
-    @Test
-    void theLogConfigurationIsComandosAtEachStart(@TempDir final Path dir) throws IOException {
-        final Path root = dir.resolve("root");
-        final Path ours = root.resolve("conf").resolve(MachineQuestDb.LOG_CONFIG_NAME);
-        assertThat(MachineQuestDb.logConfig(root)).isEqualTo(ours);
-        assertThat(ours).hasContent(MachineQuestDb.LOG_CONFIG);
-        assertThat(MachineQuestDb.LOG_CONFIG).contains("w.file.location=${log.dir}/questdb-${date:yyyyMMdd}.log");
-        assertThat(MachineQuestDb.LOG_CONFIG.lines().filter(l -> l.contains(".level="))).containsExactly(
-                "w.file.level=ERROR,CRITICAL,ADVISORY",
-                "w.stdout.level=ERROR,CRITICAL");
-        Files.writeString(ours, "writers=stdout\n");
-        MachineQuestDb.logConfig(root);
-        assertThat(ours).hasContent(MachineQuestDb.LOG_CONFIG);
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(ours))).isEqualTo("rw-------");
-    }
-
-    /// The first start copies `<dataRoot>/questdb/db` to the root's `db/` and leaves the old folder as it was; a root
-    /// that has a `db/` copies nothing.
-    @Test
-    void theFirstStartCopiesTheOldDatabaseAndLeavesIt(@TempDir final Path dir) throws IOException {
-        final Path old = dir.resolve("data").resolve("questdb");
-        Files.createDirectories(old.resolve("db").resolve("metrics~1"));
-        Files.writeString(old.resolve("db").resolve("metrics~1").resolve("_meta"), "meta");
-        final Path root = dir.resolve("machine").resolve("root");
-        Files.createDirectories(root);
-
-        assertThat(MachineQuestDb.migrate(old, root)).isTrue();
-        assertThat(root.resolve("db").resolve("metrics~1").resolve("_meta")).hasContent("meta");
-        assertThat(old.resolve("db").resolve("metrics~1").resolve("_meta")).as("the old folder, left")
-                .hasContent("meta");
-        assertThat(root.resolve("db.migrating")).doesNotExist();
-        assertThat(MachineQuestDb.migrate(old, root)).as("a root with a db").isFalse();
-    }
-
     /// A start whose HTTP port a plain `ServerSocket` holds is refused with the contract's text, and nothing is
     /// started: no `start.sh`, no `server.json`.
     @Test
@@ -209,27 +137,27 @@ class MachineQuestDbTest {
             try (final MachineQuestDb db = new MachineQuestDb(dir.resolve("machine"), dir.resolve("data"), "", sink,
                     ports)) {
                 assertThat(db.ensureUp()).isEmpty();
-                assertThat(db.want(true)).startsWith("starting QuestDB");
+                assertThat(db.want(true)).startsWith("starting cdb");
                 final Intent.Notify refused = sink.await(Intent.Notify.class, n -> n.text().startsWith("Cannot start"),
                         START_WITHIN);
 
                 assertThat(refused.level()).isEqualTo(Notice.Level.WARN);
-                assertThat(refused.text()).isEqualTo("Cannot start QuestDB: port " + held.getLocalPort()
-                        + " is held by a process that is not this machine's comando QuestDB");
+                assertThat(refused.text()).isEqualTo("Cannot start cdb: port " + held.getLocalPort()
+                        + " is held by a process that is not this machine's comando cdb");
                 assertThat(dir.resolve("machine").resolve("server.json")).doesNotExist();
                 assertThat(dir.resolve("machine").resolve("bin").resolve("start.sh")).doesNotExist();
             }
         }
     }
 
-    /// A `server.json` of version 2 whose server is not live is used if live, else left: no start, the file unchanged,
+    /// A `server.json` of version 3 whose server is not live is used if live, else left: no start, the file unchanged,
     /// and a stop is refused.
     @Test
     void aRegistryOfALaterVersionIsNeverStartedOrRewritten(@TempDir final Path dir) throws IOException {
         final Path machine = Files.createDirectories(dir.resolve("machine"));
         final MachineQuestDb.Ports ports = freePorts();
         final String later = """
-                {"version": 2, "pid": %d, "owner": "kit:/elsewhere", "name": "kit", "started": "2026-11-09T16:30:00Z",
+                {"version": 3, "pid": %d, "owner": "kit:/elsewhere", "name": "kit", "started": "2026-11-09T16:30:00Z",
                  "ports": {"http": %d, "httpMin": %d, "pg": %d, "ilp": %d}, "token": "00", "questdb": "11.0.0",
                  "more": true}
                 """.formatted(ProcessHandle.current().pid(), ports.http(), ports.httpMin(), ports.pg(), ports.ilp());
@@ -238,7 +166,7 @@ class MachineQuestDbTest {
                 ports)) {
             assertThat(db.ensureUp()).isEmpty();
             assertThat(db.want(false))
-                    .isEqualTo("refused: its server.json is of version 2, which this comando uses and does not manage");
+                    .isEqualTo("refused: its server.json is of version 3, which this comando uses and does not manage");
             assertThat(machine.resolve("server.json")).hasContent(later);
             assertThat(machine.resolve("bin").resolve("start.sh")).doesNotExist();
         }
@@ -252,16 +180,16 @@ class MachineQuestDbTest {
         Files.writeString(machine.resolve("server.json"), "");
         try (final MachineQuestDb db = new MachineQuestDb(machine, dir.resolve("data"), "", new RecordingSink(),
                 freePorts())) {
-            assertThat(db.want(false)).isEqualTo("QuestDB is not running");
+            assertThat(db.want(false)).isEqualTo("cdb is not running");
         }
     }
 
-    /// One server's life. Instance A starts it: `bin/start.sh` (0700), `lib/questdb-<version>.jar`, and `server.json`
+    /// One server's life. Instance A starts it: `bin/start.sh` (0700), `lib/cdb-<hash>.jar`, and `server.json`
     /// v1 (0600) naming A's data root as owner, its live pid, its ports and a 32-hex token that `/exec` answers; its PG
     /// port answers on loopback and not on this machine's LAN address, when it has one. Instance B, on another data
     /// root, sees it live, gets the same endpoint from `ensureUp` without a second start (the pid unchanged), says who
-    /// started it, and is refused a stop. It answers ILP's ping over HTTP, but not the web console's page, and nothing
-    /// listens on the ILP TCP and health ports. A's close leaves the process alive; the owner's stop ends it and
+    /// started it, and is refused a stop. It serves no web console page, and nothing listens on the ILP TCP and
+    /// health ports. A's close leaves the process alive; the owner's stop ends it and
     /// removes `server.json`.
     @Test
     void anOwnerStartsTheServerAnotherInstanceUsesItAndOnlyTheOwnerStopsIt(@TempDir final Path dir) throws Exception {
@@ -272,24 +200,24 @@ class MachineQuestDbTest {
         final MachineQuestDb a = new MachineQuestDb(machine, rootA, "a", sink, ports);
         final MachineQuestDb b = new MachineQuestDb(machine, dir.resolve("b"), "b", sink, ports);
         try {
-            assertThat(a.want(false)).isEqualTo("QuestDB is not running");
+            assertThat(a.want(false)).isEqualTo("cdb is not running");
             assertThat(a.want(true))
-                    .isEqualTo("starting QuestDB; the outcome comes as a notice, and ui_get_state's servers show it");
+                    .isEqualTo("starting cdb; the outcome comes as a notice, and ui_get_state's servers show it");
             final Intent.Notify up = sink.await(Intent.Notify.class,
-                    n -> n.text().startsWith("QuestDB is up") || n.text().startsWith("Cannot"), START_WITHIN);
+                    n -> n.text().startsWith("cdb is up") || n.text().startsWith("Cannot"), START_WITHIN);
             assertThat(up.level()).as(up.text()).isEqualTo(Notice.Level.INFO);
-            assertThat(up.text()).isEqualTo("QuestDB is up: PG wire on 127.0.0.1:" + ports.pg()
+            assertThat(up.text()).isEqualTo("cdb is up: PG wire on 127.0.0.1:" + ports.pg()
                     + ", HTTP on http://localhost:" + ports.http());
 
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(machine))).isEqualTo("rwx------");
             final Path script = machine.resolve("bin").resolve("start.sh");
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(script))).isEqualTo("rwx------");
-            final String version = ServerMain.class.getPackage().getImplementationVersion();
-            assertThat(machine.resolve("lib").resolve("questdb-" + version + ".jar")).isRegularFile();
+            final String version = MachineQuestDb.jarName(MachineQuestDb.cdbJar());
+            assertThat(machine.resolve("lib").resolve(version)).isRegularFile();
             final Path registry = machine.resolve("server.json");
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(registry))).isEqualTo("rw-------");
             final JsonNode entry = registry(machine);
-            assertThat(entry.path("version").asInt()).isEqualTo(1);
+            assertThat(entry.path("version").asInt()).isEqualTo(2);
             assertThat(entry.path("owner").asString()).isEqualTo(rootA.toAbsolutePath().normalize().toString());
             assertThat(entry.path("name").asString()).isEqualTo("comando · a");
             assertThat(entry.path("ports").path("http").asInt()).isEqualTo(ports.http());
@@ -303,9 +231,9 @@ class MachineQuestDbTest {
             assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).contains(true);
             assertThat(query(ports, "SELECT token FROM qdb_server ORDER BY ts DESC LIMIT 1").path("dataset").path(0)
                     .path(0).asString()).isEqualTo(token);
-            assertThat(a.want(true)).startsWith("QuestDB is up already: PG wire on 127.0.0.1:" + ports.pg() + ',');
-            assertThat(a.log()).as("the day's log, in the root's log folder").isRegularFile()
-                    .hasParent(machine.resolve("root").resolve("log"));
+            assertThat(a.want(true)).startsWith("cdb is up already: PG wire on 127.0.0.1:" + ports.pg() + ',');
+            assertThat(a.log()).as("cdb's stdout.log, in the machine folder").isRegularFile()
+                    .isEqualTo(machine.toAbsolutePath().normalize().resolve("stdout.log"));
             try (final Socket s = new Socket()) {
                 s.connect(new InetSocketAddress(loopback(), ports.pg()), 2_000);
             }
@@ -317,7 +245,6 @@ class MachineQuestDbTest {
                     }
                 }).isInstanceOf(IOException.class);
             }
-            assertThat(status(ports, "/ping")).as("ILP over HTTP").isEqualTo(204);
             assertThat(status(ports, "/index.html")).as("the web console").isEqualTo(404);
             for (final int off : List.of(ports.ilp(), ports.httpMin())) {
                 assertThatThrownBy(() -> {
@@ -401,7 +328,7 @@ class MachineQuestDbTest {
         return db.ensureUp();
     }
 
-    /// Four ports free on loopback now, none of QuestDB's defaults; released before the server binds them.
+    /// Four ports free on loopback now, none of the defaults; released before the server binds them.
     private static MachineQuestDb.Ports freePorts() throws IOException {
         final List<ServerSocket> held = new ArrayList<>();
         try {
@@ -440,7 +367,7 @@ class MachineQuestDbTest {
     /// [#stopThroughOwner] then finds nothing in. The pid is the one `start.sh` printed to that instance, never a
     /// process found by name; a pid the system gave to another process since names another folder and is left.
     private static void endLaunched(final Path machine, final MachineQuestDb... dbs) throws Exception {
-        final String root = machine.toAbsolutePath().normalize().resolve("root").toString();
+        final String root = machine.toAbsolutePath().normalize().resolve("cdb").toString();
         for (final MachineQuestDb db : dbs) {
             final long pid = db.launchedPid();
             final Optional<ProcessHandle> ours = pid <= 0 ? Optional.empty() : ProcessHandle.of(pid)
@@ -522,7 +449,7 @@ class MachineQuestDbTest {
         try (final MachineQuestDb owner = new MachineQuestDb(machine, ownerRoot, "", sink, ports)) {
             if (owner.want(false).startsWith("stopping")) {
                 sink.await(Intent.Notify.class,
-                        n -> n.text().equals("QuestDB is down") || n.text().contains("not stopped"), STOP_WITHIN);
+                        n -> n.text().equals("cdb is down") || n.text().contains("not stopped"), STOP_WITHIN);
             }
         }
     }
