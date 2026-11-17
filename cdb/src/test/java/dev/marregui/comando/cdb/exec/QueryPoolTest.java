@@ -216,13 +216,15 @@ class QueryPoolTest {
                 ended.incrementAndGet();
                 return f;
             }, context(pool, null));
-            final Thread closer = Thread.ofPlatform().name("query-pool-test-closer").start(() -> {
-                job.close();
-                endedAtClose.set(ended.get());
-                closed.countDown();
-            });
+            // the closer starts once every frame runs: a close stops claims, so a frame not yet claimed never starts
+            final Thread closer;
             try {
                 assertThat(started.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+                closer = Thread.ofPlatform().name("query-pool-test-closer").start(() -> {
+                    job.close();
+                    endedAtClose.set(ended.get());
+                    closed.countDown();
+                });
                 assertThat(closed.await(ABSENCE_MILLIS, TimeUnit.MILLISECONDS)).isFalse();
             } finally {
                 gate.countDown();
