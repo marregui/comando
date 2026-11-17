@@ -11,12 +11,19 @@ import dev.marregui.comando.cdb.exec.agg.Values;
  * The distinct key tuples seen, numbered from 0 in first-seen order: an open-addressing table of group numbers over
  * one {@link Values} column per key. NULL equals NULL, so NULL keys form one group. With no key column every row is
  * group 0. A SYMBOL key whose vector carries keys in the dictionary the table saw first is compared by key, without
- * decoding; any other by its text. The hash of a text is its {@link String#hashCode} either way.
+ * decoding; any other by its text. The hash of a text is its {@link String#hashCode} either way. With exactly one key
+ * column, of type SYMBOL, a row carrying a key of that dictionary finds its group by the key, dense from 0, without
+ * hashing; the first row of each key takes the hashed path, so a group is numbered, hashed and slotted alike on both.
  */
 final class AggKeys {
 
     private static final int INITIAL_GROUPS = 16;
     private static final int INITIAL_SLOTS = 64;
+    // the dense array's bound, set by the design: 16 KiB whatever the groups, else 8 slots (32 bytes) per group
+    private static final int DENSE_KEYS = 4096;
+    private static final int KEYS_PER_GROUP = 8;
+    // the largest array size every JVM allocates
+    private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
     private final Values[] columns;
     // per key column the dictionary of the first vector seen that carries keys, null until one is seen
@@ -24,6 +31,9 @@ final class AggKeys {
     // per SYMBOL key column, per group the key of its value in that column's dictionary or Vector.NO_KEY; null for
     // other columns
     private final int[][] symbolKeys;
+    // with one SYMBOL key column, group + 1 per key of that column's dictionary, 0 for a key no row has carried yet;
+    // null for any other key set
+    private int[] groupByKey;
     private int[] hashes = new int[INITIAL_GROUPS];
     private int size;
     // group + 1 per slot, 0 for an empty slot
@@ -39,29 +49,24 @@ final class AggKeys {
                 symbolKeys[k] = new int[INITIAL_GROUPS];
             }
         }
+        groupByKey = columns.length == 1 && symbolKeys[0] != null ? new int[INITIAL_GROUPS] : null;
     }
 
     /** The group of row {@code row} of {@code keys}, one vector per key column, added when new. */
     int groupOf(final Vector[] keys, final int row) {
-        final int hash = hash(keys, row);
-        final int mask = slots.length - 1;
-        int i = hash & mask;
-        while (slots[i] != 0) {
-            final int group = slots[i] - 1;
-            if (hashes[group] == hash && same(group, keys, row)) {
+        if (groupByKey != null) {
+            final int key = keyOf(0, keys[0], row);
+            if (key != Vector.NO_KEY) {
+                if (key < groupByKey.length && groupByKey[key] != 0) {
+                    return groupByKey[key] - 1;
+                }
+                // the key's value may already have a group, from a row that held it as text or from a merge
+                final int group = probed(keys, row);
+                setGroupByKey(key, group);
                 return group;
             }
-            i = (i + 1) & mask;
         }
-        final int group = size;
-        for (int k = 0; k < columns.length; k++) {
-            columns[k].ensure(group + 1);
-            columns[k].set(group, keys[k], row);
-            if (symbolKeys[k] != null) {
-                setSymbolKey(k, group, keyOf(k, keys[k], row));
-            }
-        }
-        return added(i, hash);
+        return probed(keys, row);
     }
 
     /**
@@ -171,6 +176,29 @@ final class AggKeys {
         return carried == dictionaries[k] ? vector.symbolKey(row) : Vector.NO_KEY;
     }
 
+    // the group of row row of keys found by its hash and probe, added when new
+    private int probed(final Vector[] keys, final int row) {
+        final int hash = hash(keys, row);
+        final int mask = slots.length - 1;
+        int i = hash & mask;
+        while (slots[i] != 0) {
+            final int group = slots[i] - 1;
+            if (hashes[group] == hash && same(group, keys, row)) {
+                return group;
+            }
+            i = (i + 1) & mask;
+        }
+        final int group = size;
+        for (int k = 0; k < columns.length; k++) {
+            columns[k].ensure(group + 1);
+            columns[k].set(group, keys[k], row);
+            if (symbolKeys[k] != null) {
+                setSymbolKey(k, group, keyOf(k, keys[k], row));
+            }
+        }
+        return added(i, hash);
+    }
+
     private void rehash() {
         final int capacity = slots.length * 2;
         if (capacity <= 0) {
@@ -223,6 +251,23 @@ final class AggKeys {
             }
         }
         return true;
+    }
+
+    // the table doubles, or grows to the key when that is further
+    // a key past the array's length is kept only while the array stays within DENSE_KEYS or KEYS_PER_GROUP slots per
+    // group, so a few high keys of a large dictionary take the hashed path instead of an array sized by the key
+    private void setGroupByKey(final int key, final int group) {
+        if (key >= groupByKey.length && key >= Math.max(DENSE_KEYS, (long) KEYS_PER_GROUP * size)) {
+            return;
+        }
+        if (key >= groupByKey.length) {
+            if (key >= MAX_ARRAY_SIZE) {
+                throw new CdbException("cannot grow the symbol key table [key=" + key + ']', -1);
+            }
+            final long capacity = Math.max((long) groupByKey.length << 1, key + 1L);
+            groupByKey = Arrays.copyOf(groupByKey, (int) Math.min(capacity, MAX_ARRAY_SIZE));
+        }
+        groupByKey[key] = group + 1;
     }
 
     private void setSymbolKey(final int k, final int group, final int key) {

@@ -75,7 +75,7 @@ public final class Executor {
                     src -> SampleByCursor.parallel(src, s, nowMicros),
                     c -> new SampleByCursor(c, s, nowMicros));
             case Plan.LatestOn l -> parallel(l.child(), true, store, nowMicros, reads, ctx,
-                    src -> LatestOnCursor.parallel(src, l),
+                    src -> LatestOnCursor.newestFirst(src, l),
                     c -> new LatestOnCursor(c, l));
             case Plan.Distinct d -> parallel(d.child(), true, store, nowMicros, reads, ctx,
                     DistinctCursor::parallel,

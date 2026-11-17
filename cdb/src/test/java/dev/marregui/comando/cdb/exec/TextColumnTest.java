@@ -444,6 +444,17 @@ class TextColumnTest {
             return values.get(key);
         }
 
+        @Override
+        public int size() {
+            return values.size();
+        }
+
+        @Override
+        public int keyOf(final String value) {
+            final Integer key = keys.get(value);
+            return key == null ? -1 : key;
+        }
+
         int key(final String value) {
             return keys.computeIfAbsent(value, v -> {
                 values.add(v);

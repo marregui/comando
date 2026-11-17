@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import org.jetbrains.annotations.TestOnly;
@@ -49,6 +50,9 @@ final class Version implements PartitionReader {
             ByteOrder.LITTLE_ENDIAN);
     /** {@link #pins} while a release closes the arena: no read may pin. */
     private static final int RELEASING = Integer.MIN_VALUE;
+    private static final int NULL_UNKNOWN = 0;
+    private static final int NULL_NONE = 1;
+    private static final int NULL_SOME = 2;
 
     final Path dir;
     final String folder;
@@ -72,6 +76,8 @@ final class Version implements PartitionReader {
     private final AtomicReferenceArray<ZoneMap> zones;
     private final AtomicReferenceArray<TextCache> textCaches;
     private final AtomicReferenceArray<Probe> probes;
+    // per column, NULL_UNKNOWN until mayHoldNull first reads it, then NULL_NONE or NULL_SOME; the rows never change
+    private final AtomicIntegerArray nulls;
     // reads in flight, RELEASING while a release closes the arena; reader threads raise and lower it, a release swaps
     // it between 0 and RELEASING under the lock
     private final AtomicInteger pins = new AtomicInteger();
@@ -119,6 +125,7 @@ final class Version implements PartitionReader {
         this.zones = new AtomicReferenceArray<>(types.length);
         this.textCaches = new AtomicReferenceArray<>(types.length);
         this.probes = new AtomicReferenceArray<>(types.length);
+        this.nulls = new AtomicIntegerArray(types.length);
         this.lastReadNanos = System.nanoTime();
     }
 
@@ -343,6 +350,36 @@ final class Version implements PartitionReader {
             for (int i = 0; i < n; i++) {
                 dst[i] = segment.get(ValueLayout.JAVA_BYTE, from + i) != 0;
             }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * A SYMBOL column is read once for a negative key, the answer kept for the life of the version (4 bytes a row,
+     * sequential); any other column answers true.
+     */
+    @Override
+    public boolean mayHoldNull(final int column) {
+        if (column >= types.length || types[column] != CdbType.SYMBOL || rowCount == 0L) {
+            return rowCount != 0L;
+        }
+        final int known = nulls.get(column);
+        if (known != NULL_UNKNOWN) {
+            return known == NULL_SOME;
+        }
+        final Mapped m = acquire(column, CdbType.SYMBOL, CdbType.VARCHAR);
+        try {
+            boolean some = m == null;
+            if (!some) {
+                final MemorySegment segment = m.data();
+                final long end = rowCount * Integer.BYTES;
+                for (long at = 0L; at < end && !some; at += Integer.BYTES) {
+                    some = segment.get(INT_LE, at) < 0;
+                }
+            }
+            nulls.set(column, some ? NULL_SOME : NULL_NONE);
+            return some;
         } finally {
             release();
         }

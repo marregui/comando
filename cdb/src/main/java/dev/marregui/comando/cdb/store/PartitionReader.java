@@ -20,6 +20,14 @@ public interface PartitionReader {
 
     long rowCount();
 
+    /**
+     * False only when no row of {@code column} is NULL; true when one may be. The default answers true, which never
+     * misleads a caller that skips work for a NULL-free column.
+     */
+    default boolean mayHoldNull(final int column) {
+        return true;
+    }
+
     /** LONG and TIMESTAMP columns. */
     void longs(int column, long from, int n, long[] dst);
 

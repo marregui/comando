@@ -8,6 +8,7 @@ import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.exec.expr.Functions;
 import dev.marregui.comando.cdb.plan.Plan;
+import dev.marregui.comando.cdb.store.PartitionReader;
 import dev.marregui.comando.cdb.store.Store;
 import dev.marregui.comando.cdb.store.TableReader;
 
@@ -129,6 +130,29 @@ public final class FrameSource implements AutoCloseable {
     /** True when the frames run newest first ({@link Plan.Scan#newestFirst()}). */
     public boolean newestFirst() {
         return scan.newestFirst();
+    }
+
+    /**
+     * False only when no row the frames read can be NULL in output column {@code field}: the segment has no projection,
+     * and no partition a frame reads holds a NULL in the field's table column ({@link PartitionReader#mayHoldNull}).
+     */
+    public boolean mayHoldNull(final int field) {
+        if (!(segment instanceof Plan.Scan) && !(segment instanceof Plan.Filter f && f.child() instanceof Plan.Scan)) {
+            return true;
+        }
+        final int column = scan.columns()[field];
+        final List<PartitionReader> partitions = reader.partitions();
+        int last = -1;
+        for (final Frames.Frame frame : frames) {
+            if (frame.partition() != last) {
+                ctx.check();
+                last = frame.partition();
+                if (partitions.get(last).mayHoldNull(column)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

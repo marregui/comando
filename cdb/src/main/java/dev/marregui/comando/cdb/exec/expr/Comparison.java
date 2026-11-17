@@ -4,6 +4,7 @@ import java.util.List;
 
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Page;
+import dev.marregui.comando.cdb.exec.SymbolDictionary;
 import dev.marregui.comando.cdb.exec.Vector;
 import dev.marregui.comando.cdb.plan.Bound;
 
@@ -13,7 +14,8 @@ import dev.marregui.comando.cdb.plan.Bound;
  * meet in {@link Cast#common}, a text meeting a TIMESTAMP is read as one and fails when it is none; doubles compare by
  * value, so -0.0 equals 0.0. {@code between} is false when any operand
  * is NULL and swaps reversed bounds. A text constant meeting a text column is matched against each row's value in
- * place, without decoding the row.
+ * place, without decoding the row; for {@code =}, {@code !=} and {@code in}, a SYMBOL row that carries a dictionary
+ * key is matched by that key against the constant's key in the same dictionary, resolved once per dictionary.
  */
 final class Comparison {
 
@@ -45,18 +47,34 @@ final class Comparison {
         final VectorFn b = Cast.operand(args.get(1), domain, nowMicros);
         final String right = textConstant(args.get(1), domain);
         final String left = right == null ? textConstant(args.get(0), domain) : null;
+        final boolean equality = op == EQ || op == NE;
+        final KeyedConstant keyed = equality ? new KeyedConstant(right != null ? right : left) : null;
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
             final int n = page.size;
             if (right != null) {
                 final Vector x = a.eval(page);
-                for (int i = 0; i < n; i++) {
-                    out.setBoolean(i, outcome(op, order(x, i, right)));
+                if (equality) {
+                    final int key = keyed.key(x);
+                    for (int i = 0; i < n; i++) {
+                        out.setBoolean(i, outcome(op, equalityOrder(x, i, key, right)));
+                    }
+                } else {
+                    for (int i = 0; i < n; i++) {
+                        out.setBoolean(i, outcome(op, order(x, i, right)));
+                    }
                 }
             } else if (left != null) {
                 final Vector y = b.eval(page);
-                for (int i = 0; i < n; i++) {
-                    out.setBoolean(i, outcome(op, reversed(order(y, i, left))));
+                if (equality) {
+                    final int key = keyed.key(y);
+                    for (int i = 0; i < n; i++) {
+                        out.setBoolean(i, outcome(op, equalityOrder(y, i, key, left)));
+                    }
+                } else {
+                    for (int i = 0; i < n; i++) {
+                        out.setBoolean(i, outcome(op, reversed(order(y, i, left))));
+                    }
                 }
             } else {
                 final Vector x = a.eval(page);
@@ -78,19 +96,25 @@ final class Comparison {
         for (int j = 0; j < constants.length; j++) {
             constants[j] = textConstant(args.get(1 + j), domain);
         }
+        final KeyedConstant[] keyed = new KeyedConstant[values.length];
+        for (int j = 0; j < keyed.length; j++) {
+            keyed[j] = constants[j] == null ? null : new KeyedConstant(constants[j]);
+        }
         final Vector[] evaluated = new Vector[values.length];
+        final int[] keys = new int[values.length];
         final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
         return Cast.exact(page -> {
             final Vector x = operand.eval(page);
             for (int j = 0; j < values.length; j++) {
                 evaluated[j] = constants[j] == null ? values[j].eval(page) : null;
+                keys[j] = constants[j] == null ? Vector.NO_KEY : keyed[j].key(x);
             }
             for (int i = 0, n = page.size; i < n; i++) {
                 boolean found = false;
                 for (int j = 0; j < evaluated.length && !found; j++) {
                     found = constants[j] == null
                             ? outcome(EQ, order(x, evaluated[j], i))
-                            : !x.isNull(i) && x.textEquals(i, constants[j]);
+                            : equalityOrder(x, i, keys[j], constants[j]) == 0;
                 }
                 out.setBoolean(i, found != negated);
             }
@@ -152,6 +176,22 @@ final class Comparison {
         return a.isNull(i) ? ONE_NULL : Integer.signum(a.textCompare(i, value));
     }
 
+    /**
+     * {@link #order} of text value {@code i} of {@code a} against the non-null {@code value} as far as equality goes:
+     * 0 when equal, 1 when not, a NULL code; a row carrying a dictionary key is compared by it with {@code key}, the
+     * value's key in that dictionary or -1.
+     */
+    private static int equalityOrder(final Vector a, final int i, final int key, final String value) {
+        if (a.isNull(i)) {
+            return ONE_NULL;
+        }
+        final int rowKey = a.symbolKey(i);
+        if (rowKey != Vector.NO_KEY) {
+            return rowKey == key ? 0 : 1;
+        }
+        return a.textEquals(i, value) ? 0 : 1;
+    }
+
     /** {@code order} with its two sides swapped; a NULL code is symmetric. */
     private static int reversed(final int order) {
         return order > 1 ? order : -order;
@@ -162,5 +202,35 @@ final class Comparison {
         return domain.isText() && arg instanceof Bound.Constant(Object value, CdbType _) && value instanceof String s
                 ? s
                 : null;
+    }
+
+    /**
+     * A text constant's key in the dictionary of the vectors it meets, resolved again only for another dictionary, or
+     * when it was absent and the dictionary has grown since: a key a page carries is below the size read after it.
+     * Used by one thread at a time, as the function that holds it.
+     */
+    private static final class KeyedConstant {
+        private final String value;
+        private SymbolDictionary dictionary;
+        private int key = -1;
+        private int size = -1;
+
+        KeyedConstant(final String value) {
+            this.value = value;
+        }
+
+        /** The value's key in {@code v}'s dictionary, -1 when it holds none or {@code v} carries none. */
+        int key(final Vector v) {
+            final SymbolDictionary carried = v.symbolDictionary();
+            if (carried == null) {
+                return -1;
+            }
+            if (carried != dictionary || key < 0 && carried.size() != size) {
+                dictionary = carried;
+                size = carried.size();
+                key = carried.keyOf(value);
+            }
+            return key;
+        }
     }
 }

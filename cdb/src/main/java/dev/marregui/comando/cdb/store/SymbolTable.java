@@ -170,7 +170,8 @@ final class SymbolTable implements SymbolDictionary, AutoCloseable {
      * it, or for null. A linear scan over the keys; a {@link Version} keeps the answer per column, so it runs once per
      * constant, not per row.
      */
-    int keyOf(final String value) {
+    @Override
+    public int keyOf(final String value) {
         if (value == null) {
             return -1;
         }
@@ -185,8 +186,8 @@ final class SymbolTable implements SymbolDictionary, AutoCloseable {
         return -1;
     }
 
-    /** The number of keys. */
-    int size() {
+    @Override
+    public int size() {
         return size;
     }
 

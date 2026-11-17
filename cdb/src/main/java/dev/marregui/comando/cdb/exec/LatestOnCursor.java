@@ -18,6 +18,11 @@ import dev.marregui.comando.cdb.plan.Plan;
  * hash lookup, and the keys, numbered in first-seen order, are emitted last to first. Otherwise the best row of each
  * key in a page is tracked by its offset and copied once, when the page is done (2 M timestamp-ordered rows, 2 keys:
  * 131 ms before, 97 ms after, the client time of a whole query, best of 3; the newest-first path not measured).
+ *
+ * <p>Newest first over one SYMBOL key ({@link #newestFirst}), the frames are read in order on the calling thread and
+ * the read stops once the keys found are as many as the values the column can hold: the dictionary's keys, plus NULL
+ * when a partition read may hold one. Every later row then belongs to a key already answered. A key of the dictionary
+ * that no row read holds leaves the read to the end, the answer unchanged.
  */
 final class LatestOnCursor implements Cursor {
 
@@ -29,6 +34,8 @@ final class LatestOnCursor implements Cursor {
     // newest first, emit the keys in first-seen order: a frame's partial, which the merge reads newest first again
     private final boolean firstSeenOrder;
     private final boolean newestFirst;
+    // newest first: 1 when a NULL key may be read, so the read stops at the dictionary's size plus this; -1 never stops
+    private final int nullGroups;
     private final AggKeys partitions;
     private final int[] partitionColumns;
     private final Values[] rows;
@@ -47,12 +54,14 @@ final class LatestOnCursor implements Cursor {
     private int[] touchedIn = new int[16];
 
     LatestOnCursor(final Cursor child, final Plan.LatestOn spec) {
-        this(child, spec, false);
+        this(child, spec, false, -1);
     }
 
-    private LatestOnCursor(final Cursor child, final Plan.LatestOn spec, final boolean firstSeenOrder) {
+    private LatestOnCursor(final Cursor child, final Plan.LatestOn spec, final boolean firstSeenOrder,
+            final int nullGroups) {
         this.child = child;
         this.firstSeenOrder = firstSeenOrder;
+        this.nullGroups = nullGroups;
         try {
             fields = child.fields();
             timestampColumn = spec.timestampColumn();
@@ -86,11 +95,32 @@ final class LatestOnCursor implements Cursor {
     }
 
     /**
+     * LATEST ON over {@code source}'s frames read newest first, one after the other on the calling thread, stopping
+     * early as the class comment says when the plan reads newest first by one SYMBOL key; otherwise
+     * {@link #parallel}. Owns and closes the source.
+     */
+    static Cursor newestFirst(final FrameSource source, final Plan.LatestOn spec) {
+        final int[] partition = spec.partitionColumns();
+        if (!spec.newestFirst() || partition.length != 1
+                || source.fields().get(partition[0]).type() != CdbType.SYMBOL) {
+            return parallel(source, spec);
+        }
+        final int nullGroups;
+        try {
+            nullGroups = source.mayHoldNull(partition[0]) ? 1 : 0;
+        } catch (final RuntimeException | Error e) {
+            source.close();
+            throw e;
+        }
+        return new LatestOnCursor(new InOrder(source), spec, false, nullGroups);
+    }
+
+    /**
      * A frame's partial: its latest row per key, in timestamp order (ties in input order) or, newest first, in the
      * keys' first-seen order, so the partial is itself newest first. Closes {@code frame}.
      */
     static List<Page> partial(final Cursor frame, final Plan.LatestOn spec) {
-        return DistinctCursor.FramePartials.drain(new LatestOnCursor(frame, spec, true));
+        return DistinctCursor.FramePartials.drain(new LatestOnCursor(frame, spec, true, -1));
     }
 
     @Override
@@ -184,10 +214,24 @@ final class LatestOnCursor implements Cursor {
         // key where both sides carry one of the same dictionary; past FEW_KEYS values, the hash lookup
         final boolean oneText = keys.length == 1 && fields.get(partitionColumns[0]).type().isText();
         final FewTexts few = new FewTexts(oneText ? fields.get(partitionColumns[0]).type() : CdbType.VARCHAR);
+        // the read stops at target keys; the dictionary's size is read after the snapshot, so it bounds every key read
+        SymbolDictionary dictionary = null;
+        int target = -1;
         Page page;
+        reading:
         while ((page = child.next()) != null) {
             for (int k = 0; k < keys.length; k++) {
                 keys[k] = page.columns[partitionColumns[k]];
+            }
+            if (nullGroups >= 0 && target != Integer.MAX_VALUE) {
+                final SymbolDictionary carried = keys[0].symbolDictionary();
+                if (carried == null || dictionary != null && carried != dictionary) {
+                    // values of another dictionary, or of none: their count is not bounded by the first's size
+                    target = Integer.MAX_VALUE;
+                } else if (dictionary == null) {
+                    dictionary = carried;
+                    target = carried.size() + nullGroups;
+                }
             }
             for (int i = 0; i < page.size; i++) {
                 if (oneText && few.count <= FEW_KEYS) {
@@ -201,6 +245,9 @@ final class LatestOnCursor implements Cursor {
                     for (int c = 0; c < rows.length; c++) {
                         rows[c].ensure(group + 1);
                         rows[c].set(group, page.columns[c], i);
+                    }
+                    if (group + 1 == target) {
+                        break reading;
                     }
                 }
             }
@@ -224,6 +271,58 @@ final class LatestOnCursor implements Cursor {
         }
         for (final Values column : rows) {
             column.ensure(groups);
+        }
+    }
+
+    /** The frames of a source in order, each opened when the one before is done; owns and closes the source. */
+    private static final class InOrder implements Cursor {
+        private final FrameSource source;
+        private Cursor frame;
+        private int next;
+        private boolean closed;
+
+        InOrder(final FrameSource source) {
+            this.source = source;
+        }
+
+        @Override
+        public List<Field> fields() {
+            return source.fields();
+        }
+
+        @Override
+        public Page next() {
+            while (!closed) {
+                if (frame == null) {
+                    if (next == source.frames()) {
+                        return null;
+                    }
+                    source.context().check();
+                    frame = source.open(next++);
+                }
+                source.context().check();
+                final Page page = frame.next();
+                if (page != null) {
+                    return page;
+                }
+                frame.close();
+                frame = null;
+            }
+            return null;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                closed = true;
+                try {
+                    if (frame != null) {
+                        frame.close();
+                    }
+                } finally {
+                    source.close();
+                }
+            }
         }
     }
 
