@@ -64,8 +64,9 @@ final class Applier {
     // written by wake (a reader waits, the queued commits press the budget) before its unpark, cleared by the thread
     // before it serves every table once
     private volatile boolean scanAll;
-    // written by a commit that waited for the budget and by whoever applies a batch (the applier, a direct commit, the
-    // close); read by the status listing
+    // set by a commit that waits for the budget; cleared by whatever lowers the queued bytes under half the budget (a
+    // batch applied by the applier, a direct commit or the close; a suspend; the waiting commit after its wait);
+    // read by the status listing
     private volatile boolean waitedForBudget;
     // written by the thread alone, read by tests: its loop's passes and the table turns it served
     private volatile long passes;
@@ -120,6 +121,9 @@ final class Applier {
                 wake();
                 LockSupport.parkNanos(Math.min(leftNanos, TimeUnit.MILLISECONDS.toNanos(1L)));
             }
+            // the batch that brought the bytes under half may have been applied between this commit's add and its
+            // flag, so no later batch clears it: the commit clears it itself once under half
+            clearPressureWhenUnderHalf();
         }
     }
 
@@ -138,6 +142,14 @@ final class Applier {
         }
         signalled = true;
         LockSupport.unpark(thread);
+    }
+
+    // the check and the clear are two volatile accesses, not one: a commit that sets the flag between them is cleared
+    // with the others and shows as 0 or 1 until its own wait ends, when it clears or keeps the flag by this same test
+    private void clearPressureWhenUnderHalf() {
+        if (queuedBytes.get() <= store.queuedBudgetBytes / 2L) {
+            waitedForBudget = false;
+        }
     }
 
     /** 0 below half the queued budget, 1 above it, 2 once a commit waited for the applier. */
@@ -226,6 +238,7 @@ final class Applier {
             // after repeated failures, and the thread goes on serving the others
             state.suspend(String.valueOf(t));
             queuedBytes.addAndGet(-state.queuedBytes());
+            clearPressureWhenUnderHalf();
             LOG.log(System.Logger.Level.ERROR, "suspend table, its apply failed, log kept [table=" + state.key + ']',
                     t);
             untilNanos = NOTHING_DUE;
@@ -316,6 +329,7 @@ final class Applier {
             state.suspend(error);
             // its commits stay queued until the reopen replays them: they no longer press the other tables
             queuedBytes.addAndGet(-state.queuedBytes());
+            clearPressureWhenUnderHalf();
             LOG.log(System.Logger.Level.ERROR, "suspend table, cannot apply its logged commits, log kept [table="
                     + state.key + ", failures=" + state.failures + ']', e);
         } else {
@@ -347,9 +361,7 @@ final class Applier {
             q.rows().close();
         }
         queuedBytes.addAndGet(-state.takeReleasedBytes());
-        if (queuedBytes.get() <= store.queuedBudgetBytes / 2L) {
-            waitedForBudget = false;
-        }
+        clearPressureWhenUnderHalf();
         final long micros = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - startNanos);
         state.countApply(batch.size(), rows, micros, demanded);
         LOG.log(System.Logger.Level.DEBUG, "applied logged commits [table=" + state.key + ", txns=" + batch.size()
