@@ -722,7 +722,8 @@ class UiKeysTest {
                         -> ((JMenuItem) c).getText()).toList();
             });
             assertThat(help).as("the palette and the help; the theme, the shell, the plots and the server are buttons")
-                    .containsExactly("Command palette", "Tutorial", "Keyboard shortcuts", "Markdown sheet", "Show the log", "Show the Edge's log", "Show QuestDB's log", "Reveal comando folder");
+                    .containsExactly("Command palette", "Tutorial", "Keyboard shortcuts", "Markdown sheet",
+                            "Show the log", "Show the Edge's log", "Show cdb's log", "Reveal comando folder");
             onEdt(() -> {
                 swatch.doClick();
                 return null;
