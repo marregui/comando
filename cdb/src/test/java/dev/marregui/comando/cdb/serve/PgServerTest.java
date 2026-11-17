@@ -1,7 +1,10 @@
 package dev.marregui.comando.cdb.serve;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.sql.BatchUpdateException;
@@ -25,10 +28,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +57,8 @@ class PgServerTest {
     private static final Instant T0 = Instant.parse("2026-11-14T10:00:00Z");
     private static final String CREATE = "CREATE TABLE probe (ts TIMESTAMP, host SYMBOL, n LONG, x DOUBLE,"
             + " ok BOOLEAN, note VARCHAR, at TIMESTAMP) TIMESTAMP(ts) PARTITION BY DAY";
+    // 2e11 rows: minutes of work at the ~1.4 G rows/s measured on an M-series Mac, so only a cancel ends it in time
+    private static final String LONG_QUERY = "select max(x) from long_sequence(200000000000)";
 
     @TempDir
     private Path root;
@@ -518,6 +525,95 @@ class PgServerTest {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getLong(1)).isEqualTo(4);
             }
+        }
+    }
+
+    /// `Statement.cancel()`, which comando's stop and pgjdbc's query timeout both send as a CancelRequest carrying the
+    /// session's process id and secret key, stops a statement that would run for minutes: it fails with
+    /// `query_canceled` (57014) within a second of the cancel that reached it, and the connection runs the next one.
+    @Test
+    void aCancelRequestStopsTheRunningStatement() throws Exception {
+        try (Connection connection = connect("");
+             Statement statement = connection.createStatement()) {
+            final ExecutorService runner = Executors.newSingleThreadExecutor();
+            try {
+                final Future<?> running = runner.submit(() -> {
+                    try (ResultSet rows = statement.executeQuery(LONG_QUERY)) {
+                        return rows.next();
+                    }
+                });
+                final long cancelledAt = cancelUntilDone(statement, running);
+                assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - cancelledAt)).isLessThan(1_000L);
+                assertThatThrownBy(running::get).hasCauseInstanceOf(SQLException.class)
+                        .cause().extracting(e -> ((SQLException) e).getSQLState()).isEqualTo("57014");
+            } finally {
+                runner.shutdownNow();
+                assertThat(runner.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+            }
+            try (ResultSet rows = statement.executeQuery("select 1 x from long_sequence(1)")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getLong(1)).isEqualTo(1);
+            }
+        }
+    }
+
+    /// A CancelRequest with the session's process id and a wrong secret key cancels nothing, as in PostgreSQL: the
+    /// statement keeps running until the right key stops it.
+    @Test
+    void aCancelRequestWithTheWrongKeyCancelsNothing() throws Exception {
+        try (Connection connection = connect("");
+             Statement statement = connection.createStatement()) {
+            final int processId = connection.unwrap(PGConnection.class).getBackendPID();
+            final ExecutorService runner = Executors.newSingleThreadExecutor();
+            try {
+                final Future<?> running = runner.submit(() -> {
+                    try (ResultSet rows = statement.executeQuery(LONG_QUERY)) {
+                        return rows.next();
+                    }
+                });
+                for (int key = -2; key <= 2; key++) {
+                    sendCancel(processId, key);
+                }
+                assertThatThrownBy(() -> running.get(500, TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+                cancelUntilDone(statement, running);
+                assertThatThrownBy(running::get).hasCauseInstanceOf(SQLException.class);
+            } finally {
+                runner.shutdownNow();
+                assertThat(runner.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+            }
+        }
+    }
+
+    // a cancel sent before the statement reached the server reaches nothing, so it is repeated until one stops it;
+    // returns when the effective cancel was sent
+    private static long cancelUntilDone(final Statement statement, final Future<?> running) throws Exception {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() - deadline < 0) {
+            final long sentAt = System.nanoTime();
+            statement.cancel();
+            try {
+                running.get(200, TimeUnit.MILLISECONDS);
+                return sentAt;
+            } catch (final ExecutionException _) {
+                return sentAt;
+            } catch (final TimeoutException _) {
+                // not stopped yet: the cancel went out before the statement started, or was ignored
+            }
+        }
+        throw new AssertionError("statement still running 10 s after the first cancel");
+    }
+
+    // a CancelRequest packet (length 16, code 80877102, process id, secret key) on a connection of its own
+    private void sendCancel(final int processId, final int secretKey) throws IOException {
+        try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), server.port());
+             DataOutputStream out = new DataOutputStream(socket.getOutputStream())) {
+            out.writeInt(16);
+            out.writeInt(80_877_102);
+            out.writeInt(processId);
+            out.writeInt(secretKey);
+            out.flush();
+            assertThat(socket.getInputStream().read()).isEqualTo(-1);
         }
     }
 

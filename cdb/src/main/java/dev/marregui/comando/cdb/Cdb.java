@@ -76,10 +76,18 @@ public final class Cdb implements AutoCloseable {
      * {@code maxLagMillis} milliseconds; negative is refused.
      */
     public CdbResult run(final String sql, final int maxRows, final long maxLagMillis) {
+        return run(sql, maxRows, maxLagMillis, null);
+    }
+
+    /**
+     * Runs {@code sql} as {@link #run(String, int, long)} does, giving up with a {@link CdbException} once
+     * {@code cancel} is cancelled ({@code cancel} may be null).
+     */
+    public CdbResult run(final String sql, final int maxRows, final long maxLagMillis, final CdbCancel cancel) {
         if (maxLagMillis < 0L) {
             throw new CdbException("refuse negative read lag [millis=" + maxLagMillis + ']', -1);
         }
-        return ScopedValue.where(Store.READ_MAX_LAG_MILLIS, maxLagMillis).call(() -> run(sql, maxRows));
+        return ScopedValue.where(Store.READ_MAX_LAG_MILLIS, maxLagMillis).call(() -> run(sql, 0L, maxRows, cancel));
     }
 
     /**

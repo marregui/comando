@@ -12,19 +12,20 @@ import java.util.List;
 import java.util.Map;
 
 import dev.marregui.comando.cdb.Cdb;
+import dev.marregui.comando.cdb.CdbCancel;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbResult;
 import dev.marregui.comando.cdb.exec.InsertRunner;
 
 /**
  * One PostgreSQL wire (protocol 3.0) connection to a cdb, as QuestDB's port 8812 serves one: any user and password
- * (AuthenticationOk at once, no password asked), the database name ignored, SSL and GSS encryption refused with
- * {@code N}, a cancel request answered by closing. Simple queries run each {@code ;}-separated statement; the
- * extended protocol keeps named and unnamed statements and portals, binds {@code $n} parameters as SQL literals
- * ({@link PgTypes#literal}), and after an error skips to the next Sync; any other message that fails, an unknown one
- * included, is answered with an error and ReadyForQuery. Every count and length read from the wire is checked against
- * what the message holds before anything is sized by it. Session statements are answered here
- * ({@link PgSql#local}); everything else is cdb's SQL. Transactions are the driver's view only: cdb applies each
+ * (AuthenticationOk at once, no password asked), the database name ignored, SSL and GSS encryption refused with {@code
+ * N}, a cancel request handed to the server's {@link Cancels} and then closed. Simple queries run each {@code
+ * ;}-separated statement; the extended protocol keeps named and unnamed statements and portals, binds {@code $n}
+ * parameters as SQL literals ({@link PgTypes#literal}), and after an error skips to the next Sync; any other message
+ * that fails, an unknown one included, is answered with an error and ReadyForQuery. Every count and length read from
+ * the wire is checked against what the message holds before anything is sized by it. Session statements are answered
+ * here ({@link PgSql#local}); everything else is cdb's SQL. Transactions are the driver's view only: cdb applies each
  * statement when it runs, and the ReadyForQuery status ({@code I}, {@code T}, {@code E}) follows BEGIN, COMMIT,
  * ROLLBACK and errors so a driver with autocommit off works. Runs on its connection's thread, which it owns alone.
  */
@@ -48,28 +49,46 @@ final class PgSession {
     /** A startup packet holds a few parameters; PostgreSQL refuses one over 10,000 bytes. */
     private static final int MAX_STARTUP_BYTES = 10_000;
     private static final String SYNTAX_ERROR = "42000";
+    /** PostgreSQL's {@code query_canceled}: a statement stopped by a cancel request. */
+    private static final String QUERY_CANCELED = "57014";
     private static final String PROTOCOL_VIOLATION = "08P01";
     private static final String INTERNAL_ERROR = "XX000";
     private static final short[] TEXT = {};
 
+    private final Cancels cancels;
     private final Cdb cdb;
     private final DataInputStream in;
     private final PgOutput out;
     private final Map<String, Portal> portals = new HashMap<>();
     private final int processId;
+    private final int secretKey;
     private final Map<String, Prepared> statements = new HashMap<>();
     // the session's read lag, set and read on the session's thread; null runs queries with the store's default
     private Long maxLagMillis;
     // whether the session's writes wait to be durable (SET cdb.durable), set and read on the session's thread
     private boolean durable;
+    // the cancel of the statement this session runs or ran last: written by the session's thread before each run,
+    // read by a cancel request's thread; a cancel that arrives after its statement ended reaches a spent cancel
+    private volatile CdbCancel running;
     private boolean skipping;
     private char transaction = 'I';
 
-    PgSession(final Cdb cdb, final DataInputStream in, final PgOutput out, final int processId) {
+    PgSession(final Cdb cdb, final DataInputStream in, final PgOutput out, final int processId, final int secretKey,
+            final Cancels cancels) {
         this.cdb = cdb;
         this.in = in;
         this.out = out;
         this.processId = processId;
+        this.secretKey = secretKey;
+        this.cancels = cancels;
+    }
+
+    /** Cancels the statement this session runs when {@code key} is its secret key; from any thread. */
+    void cancel(final int key) {
+        final CdbCancel statement = running;
+        if (key == secretKey && statement != null) {
+            statement.cancel();
+        }
     }
 
     /** Serves the started connection until the client terminates it or it closes; returns then. */
@@ -94,6 +113,8 @@ final class PgSession {
             }
             try {
                 message((char) type, body);
+            } catch (final Cancelled e) {
+                failed((char) type, QUERY_CANCELED, e.getMessage(), -1);
             } catch (final CdbException e) {
                 failed((char) type, SYNTAX_ERROR, e.getMessage(), e.position());
             } catch (final BufferUnderflowException _) {
@@ -124,6 +145,9 @@ final class PgSession {
                     out.int8('N').flush();
                 }
                 case CANCEL_REQUEST -> {
+                    if (body.remaining() >= 2 * Integer.BYTES) {
+                        cancels.cancel(body.getInt(), body.getInt());
+                    }
                     return false;
                 }
                 case PROTOCOL_3 -> {
@@ -150,7 +174,7 @@ final class PgSession {
         status("session_authorization", parameters.getOrDefault("user", ""));
         status("standard_conforming_strings", "on");
         status("TimeZone", "UTC");
-        out.begin('K').int32(processId).int32(0).end();
+        out.begin('K').int32(processId).int32(secretKey).end();
         ready();
         LOG.log(Level.DEBUG, () -> "opened pg session [process=" + processId + ", user=" + parameters.get("user")
                 + ", application=" + parameters.get("application_name") + ']');
@@ -184,6 +208,9 @@ final class PgSession {
         for (final String part : parts) {
             try {
                 simple(part);
+            } catch (final Cancelled e) {
+                error(QUERY_CANCELED, e.getMessage(), -1);
+                break;
             } catch (final CdbException e) {
                 error(SYNTAX_ERROR, e.getMessage(), e.position());
                 break;
@@ -221,7 +248,16 @@ final class PgSession {
     }
 
     private CdbResult run(final String sql) {
-        return maxLagMillis == null ? cdb.run(sql) : cdb.run(sql, 0, maxLagMillis);
+        final CdbCancel cancel = new CdbCancel();
+        running = cancel;
+        try {
+            return maxLagMillis == null ? cdb.run(sql, 0L, 0, cancel) : cdb.run(sql, 0, maxLagMillis, cancel);
+        } catch (final CdbException e) {
+            if (cancel.cancelled()) {
+                throw new Cancelled(e);
+            }
+            throw e;
+        }
     }
 
     private void parse(final ByteBuffer body) throws IOException {
@@ -561,8 +597,26 @@ final class PgSession {
         return new String(body.array(), start, end - start, StandardCharsets.UTF_8);
     }
 
+    /** Where a cancel request goes: the server, which knows every started session by its process id. */
+    @FunctionalInterface
+    interface Cancels {
+
+        /** Cancels the statement of the session {@code processId} when {@code secretKey} is its key. */
+        void cancel(int processId, int secretKey);
+    }
+
     /** A parsed statement: its SQL with {@code $n} placeholders, a type per parameter (0 unspecified). */
     private record Prepared(String sql, int[] oids, PgSql.Local local) {
+    }
+
+    /** A statement a cancel request stopped; answered with {@link #QUERY_CANCELED}, the cause's message kept. */
+    private static final class Cancelled extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        Cancelled(final CdbException cause) {
+            super(cause.getMessage(), cause, false, false);
+        }
     }
 
     /** A bound statement: the SQL cdb runs, the result formats asked, and, once run, its rows and the next to send. */

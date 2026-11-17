@@ -37,6 +37,25 @@ class LexerTest {
                 new Lexer.Token(Lexer.Kind.END, "", 17, 17));
     }
 
+    /// Digits may end in QuestDB's LONG suffix, either case, which the token's text leaves out.
+    @Test
+    void longSuffix() {
+        assertThat(Lexer.tokenize("60000000L 7l)")).containsExactly(
+                new Lexer.Token(Lexer.Kind.NUMBER, "60000000", 0, 9),
+                new Lexer.Token(Lexer.Kind.NUMBER, "7", 10, 12),
+                new Lexer.Token(Lexer.Kind.SYMBOL, ")", 12, 13),
+                new Lexer.Token(Lexer.Kind.END, "", 13, 13));
+    }
+
+    /// The suffix after a fraction or an exponent, or followed by a letter or digit, fails at the number's start.
+    @Test
+    void longSuffixErrors() {
+        assertThat(position("select 60000000Lx")).isEqualTo(7);
+        assertThat(position("select 1.5L")).isEqualTo(7);
+        assertThat(position("select 1e3L")).isEqualTo(7);
+        assertThat(position("select 1L2")).isEqualTo(7);
+    }
+
     /// Comments are dropped; a quoted identifier keeps its text, a doubled quote read as one.
     @Test
     void commentsAndQuotedIdentifiers() {

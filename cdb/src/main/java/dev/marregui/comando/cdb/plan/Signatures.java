@@ -70,6 +70,9 @@ public final class Signatures {
             case "replace" -> replace(function, args);
             case "lag", "lead", "first_value", "last_value" -> windowValue(function, args);
             case "row_number" -> arity(function, args, 0, CdbType.LONG);
+            case "rnd_symbol" -> rndSymbol(function, args);
+            case "rnd_double" -> arity(function, args, 0, CdbType.DOUBLE);
+            case "timestamp_sequence" -> timestampSequence(function, args);
             default -> throw new CdbException(
                     "cannot type unknown function [function=" + function + ", args=" + args + ']', -1);
         };
@@ -346,6 +349,29 @@ public final class Signatures {
             }
         }
         return CdbType.VARCHAR;
+    }
+
+    /** QuestDB's {@code rnd_symbol(s1, ...)}: one or more texts, a SYMBOL. */
+    private static CdbType rndSymbol(final String function, final List<CdbType> args) {
+        if (args.isEmpty()) {
+            throw mismatch(function, args);
+        }
+        for (final CdbType t : args) {
+            if (!t.isText()) {
+                throw mismatch(function, args);
+            }
+        }
+        return CdbType.SYMBOL;
+    }
+
+    /** {@code timestamp_sequence(start, step)}: a TIMESTAMP, a LONG or a text start and a LONG step, a TIMESTAMP. */
+    private static CdbType timestampSequence(final String function, final List<CdbType> args) {
+        expect(function, args, 2);
+        final CdbType start = args.getFirst();
+        if (start != CdbType.TIMESTAMP && start != CdbType.LONG && !start.isText() || args.getLast() != CdbType.LONG) {
+            throw mismatch(function, args);
+        }
+        return CdbType.TIMESTAMP;
     }
 
     /** {@code lag(x[, offset[, default]])} and the value functions: the type of {@code x}. */

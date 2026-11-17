@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.exec.expr;
 
 import java.util.List;
+import java.util.Set;
 
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
@@ -19,6 +20,9 @@ import dev.marregui.comando.cdb.plan.Bound;
  */
 public final class Functions {
 
+    /** The functions whose value at a row is not the row's own: random values and row counters. */
+    private static final Set<String> NOT_ROW_LOCAL = Set.of("rnd_symbol", "rnd_double", "timestamp_sequence");
+
     private Functions() {
     }
 
@@ -36,15 +40,41 @@ public final class Functions {
     /**
      * True when {@code expr}'s value at a row depends only on that row and the statement ({@code now()} is the
      * statement's), so the rows may be computed in any split and order with the same result. Every scalar function
-     * {@link #compile} knows is; an aggregate or a window call reads other rows. A function that reads other rows, or
-     * is not deterministic (a random value, a row number, state kept across pages), returns false here.
+     * {@link #compile} knows is, but {@code rnd_symbol}, {@code rnd_double} and {@code timestamp_sequence}; an
+     * aggregate or a window call reads other rows. A function that reads other rows, or is not deterministic (a random
+     * value, a row number, state kept across pages), returns false here.
      */
     public static boolean rowLocal(final Bound expr) {
         return switch (expr) {
             case Bound.Column _, Bound.Constant _ -> true;
-            case Bound.Call c -> rowLocal(c.args());
+            case Bound.Call c -> !NOT_ROW_LOCAL.contains(c.function()) && rowLocal(c.args());
             case Bound.Agg _, Bound.WindowCall _ -> false;
         };
+    }
+
+    /**
+     * True when an operator may evaluate {@code expr} once per frame, on several threads: no {@code rnd_symbol},
+     * {@code rnd_double} or {@code timestamp_sequence} anywhere in it, an aggregate's or window call's arguments and
+     * partition keys included. Unlike {@link #rowLocal(Bound)}, an aggregate or a window call itself is splittable,
+     * because its operator merges the frames' partial answers.
+     */
+    public static boolean splittable(final Bound expr) {
+        return switch (expr) {
+            case Bound.Column _, Bound.Constant _ -> true;
+            case Bound.Call c -> !NOT_ROW_LOCAL.contains(c.function()) && splittable(c.args());
+            case Bound.Agg a -> splittable(a.args());
+            case Bound.WindowCall w -> splittable(w.args()) && splittable(w.partitionBy());
+        };
+    }
+
+    /** True when every one of {@code exprs} is {@link #splittable(Bound)}. */
+    public static boolean splittable(final List<? extends Bound> exprs) {
+        for (final Bound e : exprs) {
+            if (!splittable(e)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** True when every one of {@code exprs} is {@link #rowLocal(Bound)}. */
@@ -110,6 +140,12 @@ public final class Functions {
             case "timestamp_floor" -> TimeFns.timestampFloor(arity(call, 2, 2), t, nowMicros);
             case "date_trunc" -> TimeFns.dateTrunc(arity(call, 2, 2), t, nowMicros);
             case "hour" -> TimeFns.hour(arity(call, 1, 1).getFirst(), t, nowMicros);
+            case "rnd_symbol" -> GeneratorFns.rndSymbol(arity(call, 1, Integer.MAX_VALUE), t);
+            case "rnd_double" -> {
+                arity(call, 0, 0);
+                yield GeneratorFns.rndDouble(t);
+            }
+            case "timestamp_sequence" -> GeneratorFns.timestampSequence(arity(call, 2, 2), t, nowMicros);
             default -> throw new CdbException("unknown function [function=" + f + "]", -1);
         };
     }

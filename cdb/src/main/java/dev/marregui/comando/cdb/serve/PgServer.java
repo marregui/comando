@@ -10,6 +10,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.security.SecureRandom;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -27,7 +28,9 @@ import dev.marregui.comando.cdb.CdbException;
  * data source query it unchanged: the protocol subset is {@link PgSession}'s. Each connection runs on a virtual thread
  * of its own; past {@link #MAX_CONNECTIONS} open at once, a new connection is closed unanswered. A connection that
  * sends no startup packet within {@link #STARTUP_TIMEOUT_MILLIS}, or nothing for {@link #IDLE_TIMEOUT_MILLIS} once
- * started, is closed and its place freed. Started and stopped by its owner, beside {@link CdbServer}; one per Cdb.
+ * started, is closed and its place freed. A cancel request naming a started session's process id and secret key
+ * cancels the statement that session runs, as PostgreSQL's does. Started and stopped by its owner, beside
+ * {@link CdbServer}; one per Cdb.
  */
 public final class PgServer implements AutoCloseable {
 
@@ -46,6 +49,10 @@ public final class PgServer implements AutoCloseable {
 
     private final Cdb cdb;
     private final int idleTimeoutMillis;
+    // the secret key of each session's BackendKeyData, which a cancel request must repeat
+    private final SecureRandom keys = new SecureRandom();
+    // the started sessions by process id: added and removed by each session's thread, read by a cancel request's
+    private final ConcurrentHashMap<Integer, PgSession> live = new ConcurrentHashMap<>();
     private final Set<Socket> open = ConcurrentHashMap.newKeySet();
     private final Semaphore permits = new Semaphore(MAX_CONNECTIONS);
     private final int port;
@@ -186,10 +193,16 @@ public final class PgServer implements AutoCloseable {
             connection.setTcpNoDelay(true);
             connection.setSoTimeout(startupTimeoutMillis);
             final DataInputStream in = new DataInputStream(new BufferedInputStream(connection.getInputStream()));
-            final PgSession session = new PgSession(cdb, in, new PgOutput(connection.getOutputStream()), id);
+            final PgSession session = new PgSession(cdb, in, new PgOutput(connection.getOutputStream()), id,
+                    keys.nextInt(), this::cancel);
             if (session.startup()) {
                 connection.setSoTimeout(idleTimeoutMillis);
-                session.run();
+                live.put(id, session);
+                try {
+                    session.run();
+                } finally {
+                    live.remove(id);
+                }
             }
         } catch (final SocketTimeoutException _) {
             LOG.log(Level.DEBUG, () -> "close silent pg connection [session=" + id + ", startupTimeoutMillis="
@@ -198,6 +211,15 @@ public final class PgServer implements AutoCloseable {
             LOG.log(Level.DEBUG, () -> "pg connection ended [session=" + id + ", reason=" + e.getMessage() + ']');
         } catch (final IOException e) {
             LOG.log(Level.DEBUG, () -> "pg connection failed [session=" + id + ']', e);
+        }
+    }
+
+    // a cancel request's connection names the session to cancel; an unknown process id or a wrong key does nothing,
+    // as in PostgreSQL, and the request's connection is closed either way
+    private void cancel(final int processId, final int secretKey) {
+        final PgSession session = live.get(processId);
+        if (session != null) {
+            session.cancel(secretKey);
         }
     }
 

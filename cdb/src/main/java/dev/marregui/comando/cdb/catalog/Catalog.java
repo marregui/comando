@@ -3,9 +3,12 @@ package dev.marregui.comando.cdb.catalog;
 import java.util.List;
 import java.util.Locale;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.exec.Cursor;
 import dev.marregui.comando.cdb.exec.Field;
+import dev.marregui.comando.cdb.exec.QueryContext;
 import dev.marregui.comando.cdb.plan.Plan;
 import dev.marregui.comando.cdb.store.Store;
 
@@ -61,8 +64,17 @@ public final class Catalog {
         };
     }
 
-    /** The rows of {@code source}. */
+    /** The rows of {@code source}, which no cancel stops. */
+    @TestOnly
     public static Cursor open(final Plan.Source source, final Store store) {
+        return open(source, store, QueryContext.uncancellable());
+    }
+
+    /**
+     * The rows of {@code source}; {@code long_sequence}, the one source whose length the query names, checks
+     * {@code ctx} at each page, so a cancel stops an operator that drains it on the calling thread.
+     */
+    public static Cursor open(final Plan.Source source, final Store store, final QueryContext ctx) {
         final String function = source.function();
         final List<String> args = source.args();
         fields(function, args);
@@ -73,7 +85,7 @@ public final class Catalog {
             case "table_columns", "show_columns" -> Listings.columns(store, args.get(0));
             case "show_tables" -> Listings.showTables(store);
             case "show_create_table" -> Listings.showCreateTable(store, args.get(0));
-            case "long_sequence" -> new SequenceCursor(sequenceLength(args));
+            case "long_sequence" -> new SequenceCursor(sequenceLength(args), ctx);
             default -> Listings.oneRow();
         };
     }

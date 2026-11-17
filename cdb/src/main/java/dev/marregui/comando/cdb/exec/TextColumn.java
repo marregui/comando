@@ -82,10 +82,12 @@ final class TextColumn {
 
     /** Copies {@code n} values of {@code source} from {@code from} to {@code to}; ranges in one column may overlap. */
     void copy(final TextColumn source, final int from, final int to, final int n) {
+        if (n <= 0) {
+            // System.arraycopy checks the positions even for no values, and the per-value arrays grow only on write
+            return;
+        }
         if (source == this) {
-            if (n > 0) {
-                ensure(Math.max(from, to) + n - 1);
-            }
+            ensure(Math.max(from, to) + n - 1);
             System.arraycopy(starts, from, starts, to, n);
             System.arraycopy(lengths, from, lengths, to, n);
             if (keys != null) {

@@ -206,6 +206,19 @@ class TextColumnTest {
         assertThat(column.textHash(2)).isZero();
     }
 
+    /// A copy of no values at a position past the per-value arrays' first size, which grow only on write, changes
+    /// nothing and does not fail, within one column and from another.
+    @Test
+    void copyingNoValuesPastTheGrownArraysDoesNothing() {
+        final int capacity = 32;
+        final TextColumn column = new TextColumn(capacity, true);
+        final TextColumn other = new TextColumn(capacity, true);
+        column.copy(column, capacity - 1, 0, 0);
+        column.copy(other, capacity - 1, capacity - 1, 0);
+        assertThat(column.isNull(0)).isTrue();
+        assertThat(column.isNull(capacity - 1)).isTrue();
+    }
+
     /// Overlapping copies within one column, copies from another, and rewrites that fill the byte array and make it
     /// reclaim, leave every slot what an array of Strings moved the same way holds.
     @Test

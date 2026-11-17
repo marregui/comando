@@ -65,38 +65,39 @@ public final class Executor {
             case Plan.Scan s -> exchange(s, store, nowMicros, reads, ctx);
             case Plan.Filter f when FrameSource.isSegment(f) -> exchange(f, store, nowMicros, reads, ctx);
             case Plan.Project p when FrameSource.isSegment(p) -> exchange(p, store, nowMicros, reads, ctx);
-            case Plan.Source s -> Catalog.open(s, store);
+            case Plan.Source s -> Catalog.open(s, store, ctx);
             case Plan.Filter f -> over(build(f.child(), store, nowMicros, reads, ctx), c -> filter(f, c, nowMicros));
             case Plan.Project p -> over(build(p.child(), store, nowMicros, reads, ctx), c -> project(p, c, nowMicros));
-            case Plan.Aggregate a -> parallel(a.child(), store, nowMicros, reads, ctx,
+            case Plan.Aggregate a -> parallel(a.child(), splittable(a.keys(), a.aggs()), store, nowMicros, reads, ctx,
                     src -> GroupByCursor.parallel(src, a, nowMicros),
                     c -> new GroupByCursor(c, a, nowMicros));
-            case Plan.SampleBy s -> parallel(s.child(), store, nowMicros, reads, ctx,
+            case Plan.SampleBy s -> parallel(s.child(), splittable(s.keys(), s.aggs()), store, nowMicros, reads, ctx,
                     src -> SampleByCursor.parallel(src, s, nowMicros),
                     c -> new SampleByCursor(c, s, nowMicros));
-            case Plan.LatestOn l -> parallel(l.child(), store, nowMicros, reads, ctx,
+            case Plan.LatestOn l -> parallel(l.child(), true, store, nowMicros, reads, ctx,
                     src -> LatestOnCursor.parallel(src, l),
                     c -> new LatestOnCursor(c, l));
-            case Plan.Distinct d -> parallel(d.child(), store, nowMicros, reads, ctx,
+            case Plan.Distinct d -> parallel(d.child(), true, store, nowMicros, reads, ctx,
                     DistinctCursor::parallel,
                     DistinctCursor::new);
             case Plan.Sort s when LateReadCursor.applies(s, reads) ->
                     LateReadCursor.open(s, store, nowMicros, reads, ctx);
-            case Plan.Sort s -> parallel(s.child(), store, nowMicros, reads, ctx,
+            case Plan.Sort s -> parallel(s.child(), true, store, nowMicros, reads, ctx,
                     src -> SortCursor.parallel(src, s.keys(), s.limit()),
                     c -> new SortCursor(c, s.keys(), s.limit()));
-            case Plan.Limit l -> parallel(l.child(), store, nowMicros, reads, ctx,
+            case Plan.Limit l -> parallel(l.child(), true, store, nowMicros, reads, ctx,
                     src -> LimitCursor.parallel(src, l.lo(), l.hi()),
                     c -> new LimitCursor(c, l.lo(), l.hi()));
             case Plan.SetOp s -> over(build(s.right(), store, nowMicros, reads, ctx),
-                    r -> parallel(s.left(), store, nowMicros, reads, ctx,
+                    r -> parallel(s.left(), true, store, nowMicros, reads, ctx,
                             src -> SetOpCursor.parallel(s.op(), src, r),
                             l -> new SetOpCursor(s.op(), l, r)));
             case Plan.Join j -> over(build(j.right(), store, nowMicros, reads, ctx),
-                    r -> parallel(j.left(), store, nowMicros, reads, ctx,
+                    r -> parallel(j.left(), j.on() == null || Functions.splittable(j.on()), store, nowMicros, reads,
+                            ctx,
                             src -> JoinCursor.parallel(src, r, j.kind(), j.on(), nowMicros, j.fields()),
                             l -> JoinCursor.open(l, r, j.kind(), j.on(), nowMicros, j.fields())));
-            case Plan.Window w -> parallel(w.child(), store, nowMicros, reads, ctx,
+            case Plan.Window w -> parallel(w.child(), Functions.splittable(w.calls()), store, nowMicros, reads, ctx,
                     src -> WindowCursor.parallel(src, w, nowMicros),
                     c -> new WindowCursor(c, w, nowMicros));
             case Plan.CreateTable c -> throw new CdbException("cannot query a CREATE TABLE", -1);
@@ -120,10 +121,14 @@ public final class Executor {
 
     /**
      * The operator over {@code child}: built by {@code perFrame} from a {@link FrameSource} when {@code child} is a
-     * segment, else by {@code serial} over the child's cursor. A failure to build closes what was opened below.
+     * segment and {@code splittable} says the operator's own expressions may run once per frame
+     * ({@link Functions#splittable}), else by {@code serial} over the child's cursor, so a generator in them keeps the
+     * operator on the calling thread over the child's rows in serial order. A failure to build closes what was opened
+     * below.
      */
     private static Cursor parallel(
             final Plan child,
+            final boolean splittable,
             final Store store,
             final long nowMicros,
             final Map<Plan.Scan, boolean[]> reads,
@@ -131,7 +136,7 @@ public final class Executor {
             final Function<FrameSource, Cursor> perFrame,
             final Function<Cursor, Cursor> serial
     ) {
-        if (FrameSource.isSegment(child)) {
+        if (splittable && FrameSource.isSegment(child)) {
             final FrameSource source = FrameSource.of(child, store, nowMicros, reads, ctx);
             try {
                 return perFrame.apply(source);
@@ -145,6 +150,10 @@ public final class Executor {
             }
         }
         return over(build(child, store, nowMicros, reads, ctx), serial);
+    }
+
+    private static boolean splittable(final List<Bound> keys, final List<Bound.Agg> aggs) {
+        return Functions.splittable(keys) && Functions.splittable(aggs);
     }
 
     /** Runs {@code plan}, a statement that changes the store; returns the rows it changed (0 for DDL). */

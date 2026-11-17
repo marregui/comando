@@ -120,10 +120,15 @@ final class Lexer {
         throw new CdbException("unterminated " + what + " [position=" + start + "]", start);
     }
 
-    /** Digits with an optional fraction and exponent; an exponent needs a digit after its {@code e} and sign. */
+    /**
+     * Digits with an optional fraction and exponent; an exponent needs a digit after its {@code e} and sign. Digits
+     * alone may end in QuestDB's LONG suffix {@code L} or {@code l}, which the token's text leaves out; the suffix
+     * after a fraction or an exponent, or followed by a letter or digit, is an error.
+     */
     private Token number() {
         final int start = offset;
         skipDigits();
+        final int digitsEnd = offset;
         if (offset < sql.length() && sql.charAt(offset) == '.') {
             offset++;
             skipDigits();
@@ -137,6 +142,18 @@ final class Lexer {
                 offset = exponent;
                 skipDigits();
             }
+        }
+        if (offset < sql.length() && (sql.charAt(offset) == 'L' || sql.charAt(offset) == 'l')) {
+            final int suffix = offset;
+            offset++;
+            if (suffix != digitsEnd || offset < sql.length() && isIdentifierPart(sql.charAt(offset))) {
+                while (offset < sql.length() && isIdentifierPart(sql.charAt(offset))) {
+                    offset++;
+                }
+                throw new CdbException("invalid number [number=" + sql.substring(start, offset) + ", position="
+                        + start + "]", start);
+            }
+            return new Token(Kind.NUMBER, sql.substring(start, suffix), start, offset);
         }
         return new Token(Kind.NUMBER, sql.substring(start, offset), start, offset);
     }

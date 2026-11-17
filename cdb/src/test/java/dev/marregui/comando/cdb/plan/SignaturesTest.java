@@ -102,6 +102,23 @@ class SignaturesTest {
         assertThatThrownBy(() -> Signatures.returnType("=", List.of(VARCHAR, DOUBLE))).isInstanceOf(CdbException.class);
     }
 
+    /// The tutorial's generators: `rnd_symbol` of texts is a SYMBOL, `rnd_double()` a DOUBLE, `timestamp_sequence`
+    /// of a TIMESTAMP, LONG or text start and a LONG step a TIMESTAMP; other argument types are refused.
+    @Test
+    void generators() {
+        assertThat(Signatures.returnType("rnd_symbol", List.of(VARCHAR, VARCHAR, VARCHAR))).isEqualTo(SYMBOL);
+        assertThat(Signatures.returnType("rnd_double", List.of())).isEqualTo(DOUBLE);
+        assertThat(Signatures.returnType("timestamp_sequence", List.of(VARCHAR, LONG))).isEqualTo(TIMESTAMP);
+        assertThat(Signatures.returnType("timestamp_sequence", List.of(TIMESTAMP, LONG))).isEqualTo(TIMESTAMP);
+        assertThat(Signatures.returnType("timestamp_sequence", List.of(LONG, LONG))).isEqualTo(TIMESTAMP);
+        assertThatThrownBy(() -> Signatures.returnType("rnd_symbol", List.of())).isInstanceOf(CdbException.class);
+        assertThatThrownBy(() -> Signatures.returnType("rnd_symbol", List.of(LONG))).isInstanceOf(CdbException.class);
+        assertThatThrownBy(() -> Signatures.returnType("rnd_double", List.of(DOUBLE)))
+                .isInstanceOf(CdbException.class);
+        assertThatThrownBy(() -> Signatures.returnType("timestamp_sequence", List.of(VARCHAR, DOUBLE)))
+                .isInstanceOf(CdbException.class);
+    }
+
     /// Arguments of the wrong type or number, and an unknown function, are refused.
     @Test
     void mismatchIsRefused() {
