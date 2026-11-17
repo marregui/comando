@@ -9,6 +9,7 @@ import java.util.stream.Stream;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.core.importer.Location;
@@ -20,12 +21,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// The cdb module is reached through its facade only, by comando's cdb adapter only.
 /// - No class outside the module but the `Cdb*` classes of `dev.marregui.comando.db` depends on cdb.
 /// - Those classes use only the types of the package `dev.marregui.comando.cdb` itself, none of its subpackages.
+/// - Only the operators that consume each page before they ask for the next call `Cursor.borrow()`, whose page is
+///   valid until that next call (ADR 0179).
 ///
 /// The classes are every module's compiled main classes in the checkout, read from their class folders: the other
 /// modules are not on this module's test classpath.
 class CdbArchitectureTest {
 
     private static final String ADAPTER = "dev.marregui.comando.db.CdbAdapter";
+    // the operators that may borrow: each reads a lent page whole, or copies what it keeps, before its next call
+    private static final List<String> BORROWERS = Stream.of("DistinctCursor", "FilterCursor", "GroupByCursor",
+            "LatestOnCursor", "ProjectCursor", "SampleByCursor", "SortCursor")
+            .map(name -> "dev.marregui.comando.cdb.exec." + name)
+            .toList();
+    private static final DescribedPredicate<JavaClass> BORROWER = DescribedPredicate.describe(
+            "are the operators allowed to borrow", c -> CdbArchitectureTest.BORROWERS.stream()
+                    .anyMatch(b -> c.getName().equals(b) || c.getName().startsWith(b + '$')));
+    private static final DescribedPredicate<JavaMethodCall> BORROW_CALL = DescribedPredicate.describe(
+            "a page borrow", call -> call.getTarget().getName().equals("borrow")
+                    && call.getTarget().getRawParameterTypes().isEmpty()
+                    && call.getTarget().getOwner().getPackageName().startsWith(CdbArchitectureTest.CDB));
     private static final DescribedPredicate<JavaClass> ADAPTER_CLASS = DescribedPredicate.describe(
             "are the Cdb* classes of dev.marregui.comando.db",
             c -> c.getName().startsWith(CdbArchitectureTest.ADAPTER_CLASSES));
@@ -62,6 +77,15 @@ class CdbArchitectureTest {
     void theAdaptersClassesUseOnlyTheFacadesPackage() {
         noClasses().that(ADAPTER_CLASS)
                 .should().dependOnClassesThat(BELOW_CDB)
+                .check(MAIN);
+    }
+
+    /// A lent page is rewritten on the next call: only the listed operators, which never keep one, borrow.
+    @Test
+    void onlyTheListedOperatorsBorrowPages() {
+        assertThat(MAIN.contain(BORROWERS.getFirst())).isTrue();
+        noClasses().that(IN_CDB).and(DescribedPredicate.not(BORROWER))
+                .should().callMethodWhere(BORROW_CALL)
                 .check(MAIN);
     }
 

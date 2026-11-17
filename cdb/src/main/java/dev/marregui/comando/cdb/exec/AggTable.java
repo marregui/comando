@@ -1,6 +1,5 @@
 package dev.marregui.comando.cdb.exec;
 
-import java.util.Arrays;
 import java.util.List;
 
 import dev.marregui.comando.cdb.CdbType;
@@ -25,6 +24,7 @@ final class AggTable {
     private final Accumulator[] accumulators;
     // the first argument of each aggregate, null for count()
     private final VectorFn[] args;
+    // the group of each row of the page last added, written only when its runs are short
     private final int[] groupOfRow = new int[Page.CAPACITY];
     private final AggKeys keys;
     // the group and the first row of each run of the page last added; runStarts ends with the page's size
@@ -46,16 +46,29 @@ final class AggTable {
      * Adds the rows of {@code page}, whose key columns are {@code keyVectors}. Consecutive rows of one key tuple form a
      * run whose group is looked up once; when the runs are long enough each goes to an accumulator as one range. A
      * single LONG or TIMESTAMP key (the bucket of a SAMPLE BY without keys) finds its runs on its values, one
-     * comparison per row. Either way every group receives its rows in input order, so the results do not depend on
-     * the runs.
+     * comparison per row; a single SYMBOL key whose keys have groups finds each row's group by its dictionary key, one
+     * array read per row ({@link AggKeys#groupsOf}). Either way every group receives its rows in input order, so the
+     * results do not depend on the runs.
      */
     void add(final Page page, final Vector[] keyVectors) {
         final int rows = page.size;
         final boolean longKey = keyVectors.length == 1
                 && (keyVectors[0].type == CdbType.LONG || keyVectors[0].type == CdbType.TIMESTAMP);
         final Vector single = longKey ? keyVectors[0] : null;
+        final boolean perRow = keys.groupsOf(keyVectors, rows, groupOfRow);
         int runs = 0;
         int start = 0;
+        while (perRow && start < rows) {
+            final int group = groupOfRow[start];
+            int end = start + 1;
+            while (end < rows && groupOfRow[end] == group) {
+                end++;
+            }
+            runStarts[runs] = start;
+            runGroups[runs] = group;
+            runs++;
+            start = end;
+        }
         while (start < rows) {
             final int group = keys.groupOf(keyVectors, start);
             int end = start + 1;
@@ -69,7 +82,6 @@ final class AggTable {
                     end++;
                 }
             }
-            Arrays.fill(groupOfRow, start, end, group);
             runStarts[runs] = start;
             runGroups[runs] = group;
             runs++;
@@ -78,6 +90,15 @@ final class AggTable {
         runStarts[runs] = rows;
         final int groups = keys.size();
         final boolean ranges = (long) runs * MIN_MEAN_RUN <= rows;
+        if (!ranges && !perRow) {
+            // short runs: each row's group, written in one loop rather than a fill per run of a row or two
+            for (int r = 0, row = 0; r < runs; r++) {
+                final int group = runGroups[r];
+                for (final int end = runStarts[r + 1]; row < end; row++) {
+                    groupOfRow[row] = group;
+                }
+            }
+        }
         for (int a = 0; a < accumulators.length; a++) {
             final Accumulator accumulator = accumulators[a];
             final Vector value = args[a] == null ? null : args[a].eval(page);
@@ -106,11 +127,6 @@ final class AggTable {
 
     int groups() {
         return keys.size();
-    }
-
-    /** The group of row {@code row} of the page last added. */
-    int groupOfRow(final int row) {
-        return groupOfRow[row];
     }
 
     void writeAggregate(final int group, final int aggregate, final Vector out, final int row) {

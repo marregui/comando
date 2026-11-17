@@ -18,7 +18,8 @@ import dev.marregui.comando.cdb.store.TableReader;
  * Only the positions {@code reads} marks are read from the store (all when it is null); the others' values in a page are
  * left unset, as nothing above reads them ({@code plan.ColumnUse}).
  * The whole-scan cursor owns the reader and closes it after the last page, or on {@link #close()}; a frame's cursor
- * reads only that frame's rows, in the same order, and leaves the reader to its owner.
+ * reads only that frame's rows, in the same order, and leaves the reader to its owner. {@link #borrow} refills one
+ * page of the cursor's own instead of allocating one per call.
  */
 final class ScanCursor implements Cursor {
 
@@ -47,6 +48,8 @@ final class ScanCursor implements Cursor {
     private final int[] partitionIndexes;
     private TableReader reader;
     private Page scratch;
+    // the page borrow lends, refilled on each call
+    private Page lent;
     private int partition;
     private long lo;
     private long hi;
@@ -128,10 +131,25 @@ final class ScanCursor implements Cursor {
 
     @Override
     public Page next() {
+        return fill(null);
+    }
+
+    /** {@link #next}'s rows in the cursor's own page, refilled on each call. */
+    @Override
+    public Page borrow() {
         if (reader == null) {
             return null;
         }
-        Page out = null;
+        lent = Page.relend(lent, fields);
+        return fill(lent);
+    }
+
+    // the next page's rows into out, empty, or into a new page when out is null
+    private Page fill(final Page given) {
+        if (reader == null) {
+            return null;
+        }
+        Page out = given;
         while (partition < starts.length) {
             if (lo >= hi) {
                 partition++;
@@ -143,6 +161,9 @@ final class ScanCursor implements Cursor {
             }
             final PartitionReader p = partitions.get(partition);
             final Page dst = out.size == 0 ? out : scratch();
+            if (dst != out) {
+                dst.clear();
+            }
             final int room = Page.CAPACITY - out.size;
             final int n = terms.length == 0 ? readAll(p, room, dst) : readSelected(p, room, dst);
             if (dst != out) {
@@ -169,6 +190,7 @@ final class ScanCursor implements Cursor {
         final TableReader r = reader;
         reader = null;
         scratch = null;
+        lent = null;
         if (r != null && ownsReader) {
             r.close();
         }

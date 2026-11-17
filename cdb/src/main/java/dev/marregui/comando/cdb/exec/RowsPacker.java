@@ -4,13 +4,15 @@ import java.util.List;
 
 /**
  * Copies rows from input pages into output pages of {@link Page#CAPACITY} rows, in the order they are added. A page
- * {@link #full()} or {@link #flush()} hands out is never written again. An operator copies until a page fills, hands it
- * out, and resumes where it stopped on its next call.
+ * {@link #full()} or {@link #flush()} hands out is never written again, unless it is given back ({@link #giveBack}).
+ * An operator copies until a page fills, hands it out, and resumes where it stopped on its next call.
  */
 final class RowsPacker {
 
     private final List<Field> fields;
     private Page current;
+    // a page handed out on loan, refilled as the next current page
+    private Page returned;
 
     RowsPacker(final List<Field> fields) {
         this.fields = fields;
@@ -85,9 +87,18 @@ final class RowsPacker {
         return page != null && page.size > 0 ? page : null;
     }
 
+    /**
+     * Takes back {@code page}, which {@link #full()} or {@link #flush()} handed out on loan and whose loan has ended:
+     * the next page is filled in it instead of a new one ({@link Page#relend}).
+     */
+    void giveBack(final Page page) {
+        returned = page;
+    }
+
     private Page current() {
         if (current == null) {
-            current = Page.allocate(fields);
+            current = returned == null ? Page.allocate(fields) : Page.relend(returned, fields);
+            returned = null;
         }
         return current;
     }

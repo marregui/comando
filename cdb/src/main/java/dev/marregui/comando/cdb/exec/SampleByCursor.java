@@ -190,7 +190,7 @@ final class SampleByCursor implements Cursor {
         final Accumulation partial = new Accumulation(new AggTable(tableTypes, spec.aggs(), nowMicros));
         try (Cursor rows = source.open(frame)) {
             Page page;
-            while ((page = rows.next()) != null) {
+            while ((page = rows.borrow()) != null) {
                 source.context().check();
                 partial.add(page);
             }
@@ -201,7 +201,7 @@ final class SampleByCursor implements Cursor {
     private void readAll() {
         if (source == null) {
             Page page;
-            while ((page = child.next()) != null) {
+            while ((page = child.borrow()) != null) {
                 serial.add(page);
             }
         } else {

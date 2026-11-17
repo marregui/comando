@@ -53,18 +53,22 @@ final class DistinctCursor implements Cursor {
     @Override
     public Page next() {
         Page page;
-        while ((page = child.next()) != null) {
-            final Page out = Page.allocate(fields);
+        while ((page = child.borrow()) != null) {
+            // most pages hold no new row: the output page is made at the first
+            Page out = null;
             for (int i = 0; i < page.size; i++) {
                 final int before = seen.size();
                 if (seen.groupOf(page.columns, i) == before) {
+                    if (out == null) {
+                        out = Page.allocate(fields);
+                    }
                     for (int c = 0; c < out.columns.length; c++) {
                         out.columns[c].copy(page.columns[c], i, out.size);
                     }
                     out.size++;
                 }
             }
-            if (out.size > 0) {
+            if (out != null) {
                 return out;
             }
         }

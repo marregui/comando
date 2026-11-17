@@ -169,7 +169,7 @@ final class LatestOnCursor implements Cursor {
         final Vector[] keys = new Vector[partitionColumns.length];
         long seen = 0;
         Page page;
-        while ((page = child.next()) != null) {
+        while ((page = child.borrow()) != null) {
             for (int k = 0; k < keys.length; k++) {
                 keys[k] = page.columns[partitionColumns[k]];
             }

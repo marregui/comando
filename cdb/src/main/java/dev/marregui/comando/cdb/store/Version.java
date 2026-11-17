@@ -419,7 +419,7 @@ final class Version implements PartitionReader {
 
     /**
      * Reads the mapped segments straight into {@code dst}: a VARCHAR as its UTF-8 bytes, a SYMBOL as its key of the
-     * table's dictionary; no String is made.
+     * table's dictionary; no String is made. LONG, TIMESTAMP, DOUBLE and SYMBOL values go in one bulk copy each.
      */
     @Override
     public void read(final int column, final long from, final int n, final Vector dst, final int at) {
@@ -433,27 +433,14 @@ final class Version implements PartitionReader {
             }
             final MemorySegment segment = m.data();
             switch (types[column]) {
-                case LONG, TIMESTAMP -> {
-                    for (int i = 0; i < n; i++) {
-                        dst.setLong(at + i, segment.get(LONG_LE, (from + i) * Long.BYTES));
-                    }
-                }
-                case DOUBLE -> {
-                    for (int i = 0; i < n; i++) {
-                        dst.setDouble(at + i, segment.get(DOUBLE_LE, (from + i) * Double.BYTES));
-                    }
-                }
+                case LONG, TIMESTAMP -> dst.readLongs(at, segment, from * Long.BYTES, n);
+                case DOUBLE -> dst.readDoubles(at, segment, from * Double.BYTES, n);
                 case BOOLEAN -> {
                     for (int i = 0; i < n; i++) {
                         dst.setBoolean(at + i, segment.get(ValueLayout.JAVA_BYTE, from + i) != 0);
                     }
                 }
-                case SYMBOL -> {
-                    final SymbolTable dictionary = symbols[column];
-                    for (int i = 0; i < n; i++) {
-                        setSymbol(dst, at + i, dictionary, segment.get(INT_LE, (from + i) * Integer.BYTES));
-                    }
-                }
+                case SYMBOL -> dst.readSymbols(at, segment, from * Integer.BYTES, n, symbols[column]);
                 case VARCHAR -> {
                     final MemorySegment ends = m.index();
                     long start = from == 0L ? 0L : decodeEnd(ends.get(LONG_LE, (from - 1L) * Long.BYTES));

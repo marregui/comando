@@ -176,6 +176,34 @@ final class AggKeys {
         return carried == dictionaries[k] ? vector.symbolKey(row) : Vector.NO_KEY;
     }
 
+    /**
+     * The group of each of rows {@code 0..rows-1} of a single SYMBOL key column of the table's dictionary, in
+     * {@code out}, by its dictionary key where it has a group, else as {@link #groupOf(Vector[], int)}: true; false,
+     * {@code out} untouched, for keys of another shape or dictionary.
+     */
+    boolean groupsOf(final Vector[] keys, final int rows, final int[] out) {
+        if (groupByKey == null || rows == 0) {
+            return false;
+        }
+        final Vector vector = keys[0];
+        final SymbolDictionary carried = vector.symbolDictionary();
+        if (carried == null) {
+            return false;
+        }
+        if (dictionaries[0] == null) {
+            dictionaries[0] = carried;
+        }
+        if (carried != dictionaries[0]) {
+            return false;
+        }
+        for (int row = 0; row < rows; row++) {
+            final int key = vector.symbolKey(row);
+            final int[] dense = groupByKey;
+            out[row] = key >= 0 && key < dense.length && dense[key] != 0 ? dense[key] - 1 : groupOf(keys, row);
+        }
+        return true;
+    }
+
     // the group of row row of keys found by its hash and probe, added when new
     private int probed(final Vector[] keys, final int row) {
         final int hash = hash(keys, row);

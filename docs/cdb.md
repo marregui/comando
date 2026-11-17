@@ -11,7 +11,7 @@ This document says how a query and a write run, what each step costs, and how th
 | parse | `sql` | text to a syntax tree |
 | plan | `plan` | names and types resolved; the time range of the designated timestamp narrowed from WHERE (`Pruning`); the WHERE's top-level AND comparisons of a column with a constant become the scan's terms (`ScanTerms`); `LATEST ON` over a scan reads it newest first; `ORDER BY … LIMIT` tells the sort how many rows are read |
 | prune | `plan.ColumnUse` | from the root down, each node asks its child for the columns it reads; a scan reads only those |
-| execute | `exec` | a tree of cursors over pages of 1,024 rows, a page belonging to its caller; a column (`Vector`) is read and written only through its accessors: a primitive array for fixed width, text as UTF-8 bytes (`TextColumn`), SYMBOL as its dictionary key ([record 167](adr/0167-cdb-heap-reduction.md)) |
+| execute | `exec` | a tree of cursors over pages of 1,024 rows, a page from `next()` belonging to its caller; the aggregating operators `borrow()` instead, a page the scan refills on each call ([record 179](adr/0179-cdb-page-borrow.md)); a column (`Vector`) is read and written only through its accessors: a primitive array for fixed width, text as UTF-8 bytes (`TextColumn`), SYMBOL as its dictionary key ([record 167](adr/0167-cdb-heap-reduction.md)) |
 | read | `store` | a snapshot of the table: per partition a `Version`, its column files mapped through FFM |
 
 ### 1.1 The scan

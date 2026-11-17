@@ -140,7 +140,7 @@ final class GroupByCursor implements Cursor {
         final AggTable partial = new AggTable(keyTypes, spec.aggs(), nowMicros);
         try (Cursor rows = source.open(frame)) {
             Page page;
-            while ((page = rows.next()) != null) {
+            while ((page = rows.borrow()) != null) {
                 source.context().check();
                 add(page, fns, vectors, partial);
             }
@@ -152,7 +152,7 @@ final class GroupByCursor implements Cursor {
         read = true;
         if (source == null) {
             Page page;
-            while ((page = child.next()) != null) {
+            while ((page = child.borrow()) != null) {
                 add(page, keyFns, keyVectors, table);
             }
             return;

@@ -22,6 +22,23 @@ tasks.named<Test>("test") {
     System.getenv("CDB_PARALLEL_QUERIES")?.let { systemProperty("cdb.parallel.queries", it) }
 }
 
+// Under -ea Page.relend poisons a lent page and lends a new one, so the refill itself runs only with assertions off for
+// Page: the borrowing operators' tests once more over refilled pages (record 179)
+val testPageReuse = tasks.register<Test>("testPageReuse") {
+    description = "Runs the page-borrowing operators' tests with Page's assertions off, so lent pages are refilled"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    jvmArgs("-da:dev.marregui.comando.cdb.exec.Page")
+    filter {
+        listOf("PageBorrowTest", "FilterCursorTest", "ProjectCursorTest", "GroupByCursorTest", "SampleByCursorTest",
+            "DistinctCursorTest", "SortCursorTest", "SortCursorTopKTest", "LatestOnCursorTest", "ParallelEquivalenceTest",
+            "ParallelGroupByTest", "AggSymbolKeyTest", "TutorialFunctionsTest", "ScanCursorTest")
+            .forEach { includeTestsMatching("dev.marregui.comando.cdb.exec.$it") }
+    }
+}
+tasks.named("check") { dependsOn(testPageReuse) }
+
 // ./gradlew :cdb:serve -Proot=<folder> -Pport=9100 [-PpgPort=8813] [-Pbind=0.0.0.0]: the shadow server beside QuestDB;
 // pgPort adds the PostgreSQL wire, bind is the address of both (127.0.0.1 unless set)
 tasks.register<JavaExec>("serve") {

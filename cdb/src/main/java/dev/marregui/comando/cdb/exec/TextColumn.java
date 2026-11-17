@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.exec;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -21,6 +22,7 @@ final class TextColumn {
     private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8; // the largest array size every JVM allocates
     private static final byte[] NO_BYTES = {};
     private static final int NULL_LENGTH = -1;
+    private static final ValueLayout.OfInt INT_LE = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     // a page is allocated for its full capacity and often holds a few rows: the per-value arrays start small and grow
     // to the capacity as values are written; an index past them reads NULL
@@ -165,6 +167,65 @@ final class TextColumn {
         MemorySegment.copy(data, ValueLayout.JAVA_BYTE, start, bytes, at, length);
         starts[i] = at;
         lengths[i] = length;
+    }
+
+    /** {@link Vector#readSymbols}. */
+    void readSymbols(
+            final int at,
+            final MemorySegment src,
+            final long offset,
+            final int n,
+            final SymbolDictionary symbols
+    ) {
+        if (n <= 0) {
+            return;
+        }
+        if (keys == null || dictionary != null && dictionary != symbols) {
+            for (int k = 0; k < n; k++) {
+                final int key = src.get(INT_LE, offset + (long) k * Integer.BYTES);
+                if (key < 0) {
+                    setNull(at + k);
+                } else {
+                    setSymbol(at + k, symbols, key);
+                }
+            }
+            return;
+        }
+        ensure(at + n - 1);
+        dictionary = symbols;
+        MemorySegment.copy(src, INT_LE, offset, keys, at, n);
+        for (int i = at, end = at + n; i < end; i++) {
+            final boolean isNull = keys[i] < 0;
+            if (isNull) {
+                keys[i] = Vector.NO_KEY;
+            }
+            starts[i] = 0;
+            lengths[i] = isNull ? NULL_LENGTH : 0;
+        }
+    }
+
+    /** Empties the column for a refill: the bytes let go, the dictionary unbound, every value NULL, the arrays kept. */
+    void clear() {
+        used = 0;
+        dictionary = null;
+        Arrays.fill(lengths, NULL_LENGTH);
+        if (keys != null) {
+            Arrays.fill(keys, Vector.NO_KEY);
+        }
+    }
+
+    /** Overwrites values {@code 0} to {@code n - 1} with a SYMBOL key past any dictionary, or a VARCHAR of no bytes. */
+    void poison(final int n) {
+        if (n > 0) {
+            ensure(n - 1);
+        }
+        for (int i = 0; i < n; i++) {
+            if (keys != null) {
+                keys[i] = Integer.MAX_VALUE;
+            }
+            starts[i] = 0;
+            lengths[i] = 0;
+        }
     }
 
     /** The dictionary of {@link #symbolKey}'s keys, null until the first keyed {@link #setSymbol}. */

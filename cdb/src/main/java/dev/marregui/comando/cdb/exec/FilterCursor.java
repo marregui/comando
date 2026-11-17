@@ -19,6 +19,11 @@ final class FilterCursor implements Cursor {
     private Page page;
     private int kept;
     private int pos;
+    // set by each call: borrow borrows the child's pages too, and the packer's page last lent is refilled next call
+    private boolean lending;
+    private Page lent;
+    // the child's page load returned last
+    private Page loaded;
 
     FilterCursor(final Cursor child, final VectorFn predicate) {
         this.child = child;
@@ -33,6 +38,28 @@ final class FilterCursor implements Cursor {
 
     @Override
     public Page next() {
+        // per call: a next after a borrow reads the child with next, so a page passed through is the caller's
+        lending = false;
+        return pack();
+    }
+
+    /** {@link #next}'s rows, the child's pages borrowed and the packer's page refilled on each call. */
+    @Override
+    public Page borrow() {
+        lending = true;
+        if (lent != null) {
+            packer.giveBack(lent);
+            lent = null;
+        }
+        final Page out = pack();
+        if (out != null && out != loaded) {
+            // a page of the packer's, not the child's passed through
+            lent = out;
+        }
+        return out;
+    }
+
+    private Page pack() {
         while (true) {
             if (page == null) {
                 final Page in = load();
@@ -80,7 +107,7 @@ final class FilterCursor implements Cursor {
      */
     private Page load() {
         while (true) {
-            final Page in = child.next();
+            final Page in = lending ? child.borrow() : child.next();
             if (in == null) {
                 return null;
             }
@@ -99,6 +126,7 @@ final class FilterCursor implements Cursor {
             }
             if (count > 0) {
                 kept = count;
+                loaded = in;
                 return in;
             }
         }

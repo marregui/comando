@@ -153,7 +153,7 @@ final class SortCursor implements Cursor {
 
     private void readAll(final RowsBuffer buffer) {
         Page page;
-        while ((page = child.next()) != null) {
+        while ((page = child.borrow()) != null) {
             buffer.addAll(page);
         }
     }
@@ -166,7 +166,7 @@ final class SortCursor implements Cursor {
         int[] heap = null;
         long base = 0;
         Page page;
-        while ((page = child.next()) != null) {
+        while ((page = child.borrow()) != null) {
             int r = 0;
             if (heap == null) {
                 final int room = limit - buffer.rowCount();
@@ -303,6 +303,12 @@ final class SortCursor implements Cursor {
         public Page next() {
             ctx.check();
             return input.next();
+        }
+
+        @Override
+        public Page borrow() {
+            ctx.check();
+            return input.borrow();
         }
 
         @Override

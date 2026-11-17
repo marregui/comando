@@ -15,6 +15,8 @@ final class ProjectCursor implements Cursor {
     private final Cursor child;
     private final VectorFn[] exprs;
     private final List<Field> fields;
+    // borrow's copy vectors, one per expression, made at its first copy
+    private Vector[] copies;
 
     ProjectCursor(final Cursor child, final List<VectorFn> exprs, final List<Field> fields) {
         this.child = child;
@@ -29,7 +31,20 @@ final class ProjectCursor implements Cursor {
 
     @Override
     public Page next() {
-        final Page in = child.next();
+        return project(child.next(), null);
+    }
+
+    /** {@link #next}'s page over the child's borrowed one, each copied value in a vector of this cursor's, refilled. */
+    @Override
+    public Page borrow() {
+        if (copies == null) {
+            copies = new Vector[exprs.length];
+        }
+        return project(child.borrow(), copies);
+    }
+
+    // reused null: every copy in a new vector
+    private Page project(final Page in, final Vector[] reused) {
         if (in == null) {
             return null;
         }
@@ -44,7 +59,7 @@ final class ProjectCursor implements Cursor {
                     throw new CdbException("cannot project a value of another type [column=" + field.name()
                             + ", type=" + field.type() + ", value=" + v.type + "]", -1);
                 }
-                final Vector copy = Vector.of(field.type(), Page.CAPACITY);
+                final Vector copy = reused == null ? Vector.of(field.type(), Page.CAPACITY) : reused(reused, i);
                 Rows.copyRange(v, 0, copy, 0, in.size);
                 out[i] = copy;
             }
@@ -55,6 +70,11 @@ final class ProjectCursor implements Cursor {
     @Override
     public void close() {
         child.close();
+    }
+
+    private Vector reused(final Vector[] reused, final int i) {
+        reused[i] = Page.relend(reused[i], fields.get(i).type());
+        return reused[i];
     }
 
     private static boolean owned(final Vector v, final Page page) {

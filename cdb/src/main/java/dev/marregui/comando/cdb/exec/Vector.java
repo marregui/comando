@@ -1,6 +1,9 @@
 package dev.marregui.comando.cdb.exec;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
+import java.util.Arrays;
 
 import dev.marregui.comando.cdb.CdbType;
 
@@ -18,6 +21,13 @@ public final class Vector {
     public static final long NULL_LONG = Long.MIN_VALUE;
     /** {@link #symbolKey} of a value whose dictionary key the vector does not carry. */
     public static final int NO_KEY = -1;
+    // what poison writes: a LONG no column holds by chance, a NaN whose payload no arithmetic produces
+    static final long POISON_LONG = Long.MIN_VALUE + 1L;
+    static final double POISON_DOUBLE = Double.longBitsToDouble(0x7FF4_DEAD_BEEF_0001L);
+    private static final ValueLayout.OfLong LONG_LE =
+            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfDouble DOUBLE_LE =
+            ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     public final CdbType type;
     private final boolean[] booleans;
@@ -46,6 +56,51 @@ public final class Vector {
             case BOOLEAN -> booleans.length;
             case SYMBOL, VARCHAR -> texts.capacity();
         };
+    }
+
+    /**
+     * Copies {@code n} little-endian LONG or TIMESTAMP values of {@code src} from byte {@code offset} to indexes
+     * {@code at} on, one bulk copy; the store's NULL is {@link #NULL_LONG}, as here.
+     */
+    public void readLongs(final int at, final MemorySegment src, final long offset, final int n) {
+        MemorySegment.copy(src, LONG_LE, offset, longs, at, n);
+    }
+
+    /** {@link #readLongs} for DOUBLE: NaN is NULL in both. */
+    public void readDoubles(final int at, final MemorySegment src, final long offset, final int n) {
+        MemorySegment.copy(src, DOUBLE_LE, offset, doubles, at, n);
+    }
+
+    /**
+     * Copies {@code n} little-endian int keys of {@code dictionary} from byte {@code offset} of {@code src} to indexes
+     * {@code at} on, a negative key as NULL: as {@link #setSymbol} per value, in one bulk copy when the vector's
+     * dictionary is {@code dictionary} or not yet bound.
+     */
+    public void readSymbols(
+            final int at,
+            final MemorySegment src,
+            final long offset,
+            final int n,
+            final SymbolDictionary dictionary
+    ) {
+        texts.readSymbols(at, src, offset, n, dictionary);
+    }
+
+    /** Empties the vector for a refill: text bytes let go, the dictionary unbound, the arrays kept. */
+    void clear() {
+        if (texts != null) {
+            texts.clear();
+        }
+    }
+
+    /** Overwrites values {@code 0} to {@code n - 1} with the poison of {@link Page#poison}. */
+    void poison(final int n) {
+        switch (type) {
+            case LONG, TIMESTAMP -> Arrays.fill(longs, 0, n, POISON_LONG);
+            case DOUBLE -> Arrays.fill(doubles, 0, n, POISON_DOUBLE);
+            case BOOLEAN -> Arrays.fill(booleans, 0, n, true);
+            case SYMBOL, VARCHAR -> texts.poison(n);
+        }
     }
 
     public long getLong(final int i) {
