@@ -166,10 +166,10 @@ row and its record differ, or when a record has no row.
 | [143](0143-a-session-lists-the-files-it-wrote.md) | A session lists the files it wrote | 2026-11-08 | Miguel and Claude | accepted; built |
 | [144](0144-the-transcript-sits-above-the-prompt.md) | The transcript sits above the prompt | 2026-11-08 | Miguel and Claude | accepted; built; trial ended 2026-11-09, off by default |
 | [145](0145-agents-read-held-results-a-page-at-a-time.md) | Agents read held results a page at a time | 2026-11-09 | Miguel and Claude | accepted; built |
-| [146](0146-every-metric-goes-to-the-machine-questdb.md) | Every metric goes to the machine's QuestDB | 2026-11-09 | Miguel and Claude | accepted; dual write built; amended by [record 149](0149-questdb-is-the-only-metrics-store.md) |
+| [146](0146-every-metric-goes-to-the-machine-questdb.md) | Every metric goes to the machine's QuestDB | 2026-11-09 | Miguel and Claude | accepted; dual write built; amended by [record 149](0149-questdb-is-the-only-metrics-store.md) and [record 180](0180-cdb-is-the-machine-server.md) |
 | [147](0147-a-theme-says-what-it-does-to-the-mind.md) | A theme says what it does to the mind | 2026-11-09 | Miguel and Claude | accepted; built |
 | [148](0148-agents-drive-a-panel-terminal.md) | Agents drive a panel's Terminal | 2026-11-09 | Miguel and Claude | accepted; built |
-| [149](0149-questdb-is-the-only-metrics-store.md) | QuestDB is the only metrics store | 2026-11-10 | Miguel and Claude | accepted; built |
+| [149](0149-questdb-is-the-only-metrics-store.md) | QuestDB is the only metrics store | 2026-11-10 | Miguel and Claude | accepted; built; its server amended by [record 180](0180-cdb-is-the-machine-server.md) |
 | [150](0150-a-card-only-when-a-session-cannot-go-on.md) | A card only when a session cannot go on; the Logbook tab lists what waits on the user | 2026-11-10 | Miguel and Claude | accepted; built |
 | [151](0151-a-theme-has-a-style-the-console.md) | A theme has a style: the console | 2026-11-11 | Miguel and Claude | accepted; built |
 | [152](0152-the-files-tab-splits-into-kit-brain-scratchpad.md) | The Files tab splits into the Kit, Brain and Scratchpad tabs | 2026-11-12 | Miguel and Claude | accepted; built |

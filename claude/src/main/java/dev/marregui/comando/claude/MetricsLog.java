@@ -189,7 +189,7 @@ public final class MetricsLog implements AutoCloseable, WaitLog {
             }
         } catch (final IOException | RuntimeException e) {
             // handled: the session bar shows no context until the first turn reports one
-            LOG.log(System.Logger.Level.DEBUG, "QuestDB did not answer, no context kept [conversation=" + id
+            LOG.log(System.Logger.Level.DEBUG, "cdb did not answer, no context kept [conversation=" + id
                     + ", cause=" + e + ']');
         } catch (final InterruptedException _) {
             Thread.currentThread().interrupt();

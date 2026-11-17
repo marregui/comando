@@ -16,14 +16,14 @@ import dev.marregui.comando.cdb.store.StoreOptions;
 
 /**
  * Runs a cdb behind QuestDB's HTTP formats ({@code /exec}, {@code /write}) on the loopback address until the process
- * is stopped: the shadow server the parity runs and the dual writes reach. Arguments: the root folder, then the port;
- * then, optionally, {@code --pg-port N} to serve the PostgreSQL wire too (none by default) and {@code --bind ADDR}, the
- * address both servers listen on ({@code 127.0.0.1} by default; {@code 0.0.0.0} in a container), and
- * {@code --read-max-lag-ms N}, the most a read may lag the answered commits when its caller names none (0 by default:
- * every read sees every answered commit), {@code --query-threads N}, the workers of the process's query pool (one fewer
- * than the cores by default; 0 runs every query on its caller's thread), and {@code --log-force-ms N}, the most a table
- * log's written records wait for their force (0 by default: each commit is forced before it is answered; see
- * {@link StoreOptions}).
+ * is stopped: the machine's server, which comando's {@code start.sh} runs (record 180). Arguments: the root folder,
+ * then the port; then, optionally, {@code --pg-port N} to serve the PostgreSQL wire too (none by default) and
+ * {@code --bind ADDR}, the address both servers listen on ({@code 127.0.0.1} by default; {@code 0.0.0.0} in a
+ * container), and {@code --read-max-lag-ms N}, the most a read may lag the answered commits when its caller names none
+ * (0 by default: every read sees every answered commit), {@code --query-threads N}, the workers of the process's query
+ * pool (one fewer than the cores by default; 0 runs every query on its caller's thread), and {@code --log-force-ms N},
+ * the most a table log's written records wait for their force (0 by default: each commit is forced before it is
+ * answered; see {@link StoreOptions}).
  */
 public final class CdbServe {
 

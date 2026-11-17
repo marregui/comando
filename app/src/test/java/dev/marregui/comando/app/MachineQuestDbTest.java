@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
@@ -30,6 +31,8 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.core.action.Action;
+import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
@@ -184,8 +187,22 @@ class MachineQuestDbTest {
         }
     }
 
+    /// An agent names this server as `server_start` and `server_stop` take it: its switch's name, lower-cased, is
+    /// among the `server` argument's choices, which `ActionTools` checks before it looks the switch up by name.
+    @Test
+    void anAgentNamesTheServerAsTheSwitchDoes(@TempDir final Path dir) throws IOException {
+        try (final MachineQuestDb db = new MachineQuestDb(dir.resolve("machine"), dir.resolve("data"), "",
+                new RecordingSink(), freePorts())) {
+            for (final String tool : List.of("server_start", "server_stop")) {
+                final Action action = Actions.byTool(tool).orElseThrow();
+                assertThat(action.args()).as(tool).anySatisfy(arg -> assertThat(arg.choices())
+                        .contains(db.name().toLowerCase(Locale.ROOT)));
+            }
+        }
+    }
+
     /// One server's life. Instance A starts it: `bin/start.sh` (0700), `lib/cdb-<hash>.jar`, and `server.json`
-    /// v1 (0600) naming A's data root as owner, its live pid, its ports and a 32-hex token that `/exec` answers; its PG
+    /// v2 (0600) naming A's data root as owner, its live pid, its ports and a 32-hex token that `/exec` answers; its PG
     /// port answers on loopback and not on this machine's LAN address, when it has one. Instance B, on another data
     /// root, sees it live, gets the same endpoint from `ensureUp` without a second start (the pid unchanged), says who
     /// started it, and is refused a stop. It serves no web console page, and nothing listens on the ILP TCP and

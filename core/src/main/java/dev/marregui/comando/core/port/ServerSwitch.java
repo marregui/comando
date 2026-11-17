@@ -1,12 +1,12 @@
 package dev.marregui.comando.core.port;
 
 /**
- * A local server an agent starts and stops as the user's toggle does (record 121): the comando Edge or the embedded
- * QuestDB. Unlike the toggle, the caller names the direction, so a stale "running" never turns a start into a stop.
+ * A local server an agent starts and stops as the user's toggle does (record 121): the comando Edge or the machine's
+ * cdb. Unlike the toggle, the caller names the direction, so a stale "running" never turns a start into a stop.
  */
 public interface ServerSwitch {
 
-    /** As the toggle's tooltip names it: {@code Edge}, {@code QuestDB}. */
+    /** As the toggle's tooltip names it: {@code Edge}, {@code cdb}. */
     String name();
 
     boolean isRunning();

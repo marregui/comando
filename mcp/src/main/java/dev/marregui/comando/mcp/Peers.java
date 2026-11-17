@@ -109,8 +109,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static final int QUESTION_CHARS = 4_000;
     /** How long a new consult session may take to appear in the state after it was asked for. */
     private static final Duration MAKE_WITHIN = Duration.ofSeconds(5);
-    static final String EDGE_DOWN = "this instance is not connected to the comando Edge, so it reaches no other instance: start the Edge with "
-            + "its toggle at the top of the workspace, right of QuestDB's, in any comando instance; presence resumes within seconds once it runs";
+    static final String EDGE_DOWN = "this instance is not connected to the comando Edge, so it reaches no other "
+            + "instance: start the Edge with its toggle at the top of the workspace, right of cdb's, in any comando "
+            + "instance; presence resumes within seconds once it runs";
 
     /** This instance: its name as the Dock shows it, its id in the topics, its version, what it is for. */
     public record Me(String name, String slug, String version, String role) {

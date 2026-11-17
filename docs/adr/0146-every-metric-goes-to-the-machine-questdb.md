@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-09 | accepted; dual write built; amended by [record 149](0149-questdb-is-the-only-metrics-store.md) | Miguel and Claude |
+| 2026-11-09 | accepted; dual write built; amended by [record 149](0149-questdb-is-the-only-metrics-store.md) and [record 180](0180-cdb-is-the-machine-server.md) | Miguel and Claude |
 
 ## 1. Context
 

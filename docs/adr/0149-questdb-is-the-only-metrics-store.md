@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-10 | accepted; built | Miguel and Claude |
+| 2026-11-10 | accepted; built; its server amended by [record 180](0180-cdb-is-the-machine-server.md) | Miguel and Claude |
 
 ## 1. Context
 

@@ -41,7 +41,7 @@ that matches the flow. That is what comando is becoming, one of three parts, com
 together are my flow.
 
 The reason is selfish. I want a tool that makes me more productive at my job, and building it pushes me to learn and
-think in areas my job does not take me to but benefits from. That comando can run QuestDB and HiveMQ Edge is its
+think in areas my job does not take me to but benefits from. That comando runs a database of its own and HiveMQ Edge is its
 history showing; I see the potential in it, and that is what I will keep researching. Maybe what I find is useful to
 others, maybe the tooling has merit beyond me. I think there is a lot of value here, or I would not be putting the time
 in. It is close to what my company does, too: moving industry from the old era into the AI one, through agentic
@@ -66,7 +66,7 @@ the brain well enough for Claude Code to create both; no kit is published, and m
 | **A painted transcript** | prompts, text, tool calls, nested subagents and turn ends painted with Java2D: 3.39 ms a frame at the 99th percentile on the gate's synthetic session ([Architecture](docs/architecture.md#145-the-transcript)) |
 | **Claude drives the window** | an MCP server inside the app: tables, plots, diffs, files, Markdown and trees on screen, text into the editor, SQL under a lexical policy, every action the user has ([Claude Code](docs/claude-code.md#3-mcp-tools)) |
 | **Approvals are cards** | allow once, for the session or always, with the rule shown before it is saved; a card waits up to 24 hours, as long as its session waits ([Claude Code](docs/claude-code.md#41-approval-cards)) |
-| **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, an embedded QuestDB one click away, results stored by column up to 5 000 000 rows, plots, live plots, `EXPLAIN` trees ([Workbench](docs/workbench.md#3-the-database)) |
+| **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, comando's own database, cdb, one click away as the machine's server, results stored by column up to 5 000 000 rows, plots, live plots, `EXPLAIN` trees ([Workbench](docs/workbench.md#3-the-database)) |
 | **Documents and changes** | the chosen folders of the kit, the brain and the scratchpad as trees in three tabs, Markdown rendered, uncommitted changes and a side-by-side comparison with `HEAD` that edits, rolls back and removes ([Workbench](docs/workbench.md#6-the-kit-brain-and-scratchpad-tabs)) |
 | **Several instances** | each with its own name, data root, kit and brain, talking through a local HiveMQ Edge comando runs on `127.0.0.1` ([Workbench](docs/workbench.md#4-instances-and-the-comando-edge)) |
 | **Development tools** | a terminal per panel; Gradle runs with test results as a tree and failures sent to Claude ([Workbench](docs/workbench.md#5-development-tools)) |
@@ -112,8 +112,8 @@ brain, the architecture, development, and the decision records.
 
 ## Built with
 
-Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea, JediTerm and pty4j, commonmark-java, the PostgreSQL JDBC driver
-and QuestDB; JSON, the MQTT client, diffs, SQL completion and SVG icons are comando's own code. Eight Gradle
+Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea, JediTerm and pty4j, commonmark-java, the PostgreSQL JDBC driver;
+the database, JSON, the MQTT client, diffs, SQL completion and SVG icons are comando's own code. Eight Gradle
 modules (core, testkit, db, claude, mcp, tools, ui, app): about 72 000 lines of Java and 48 000 of tests. CI builds,
 tests and replays the window on Linux and macOS for every push to `main` and every pull request, except changes to
 documentation alone; a version tag builds the packages for macOS, Linux and Windows and publishes them as a release.
@@ -124,5 +124,5 @@ In my daily use; version 2.0.0-SNAPSHOT. A release is made by pushing a version 
 unsigned.
 
 comando is under the [Apache License 2.0](LICENSE). Third-party components keep their licences: JediTerm (LGPL-3.0)
-and pty4j (EPL-1.0) for the terminal; Apache 2.0: FlatLaf, QuestDB, HiveMQ Edge; BSD: RSyntaxTextArea,
+and pty4j (EPL-1.0) for the terminal; Apache 2.0: FlatLaf, HiveMQ Edge; BSD: RSyntaxTextArea,
 commonmark-java, the PostgreSQL JDBC driver; MIT: jsvg, SLF4J.

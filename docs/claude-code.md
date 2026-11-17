@@ -300,7 +300,7 @@ sends for the same gesture:
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
 | views and the window | `view_pin`, `view_place`, `view_close`, `notice_dismiss` |
-| servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
+| servers | `server_start`, `server_stop` (`edge` or `cdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 | terminals | `terminal_list`, `terminal_start`, `terminal_send`, `terminal_read`, `terminal_interrupt`, `terminal_stop`* (any editor panel's Terminal, [record 148](adr/0148-agents-drive-a-panel-terminal.md): a send asks a TERMINAL card only the user answers, unless `agents.json` grants `"terminal"`; a read is plain text of numbered logical lines from `since`, at most 64 kB, and can wait up to 120 s for `until`, quiet output or the shell's end; an interrupt is Ctrl-C to the foreground job; a stop ends the shell and loses its scrollback) |
 
@@ -366,8 +366,8 @@ sends for the same gesture:
   folder (`docs/README.md`). A pinned view is never replaced.
 - **Audit.** Every tool call and approval decision is appended to `audit/audit-<UTC date>.jsonl` in the data root:
   time, session, event, tool, the arguments (clipped to 2 000 characters), the outcome. Never read back.
-- **Metrics.** What the sessions spend and how their work ends goes to the machine's QuestDB alone
-  ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md), [record 149](adr/0149-questdb-is-the-only-metrics-store.md));
+- **Metrics.** What the sessions spend and how their work ends goes to the machine's cdb alone
+  ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md), [record 149](adr/0149-questdb-is-the-only-metrics-store.md), [record 180](adr/0180-cdb-is-the-machine-server.md));
   no file keeps it. The events ([record 110](adr/0110-metrics-for-calibration.md)): `turn`
   at each `result` (model, base effort, duration and API time, model calls, the turn's `usage` and `modelUsage` as
   Claude Code sends them, context and window, how it ended); `agent` at each sub-agent's end, live only (the Agent
@@ -383,11 +383,11 @@ sends for the same gesture:
   `modelUsage`, running totals per conversation), `comando_agent`, `comando_usage`, `comando_queue` and `comando_wait`
   (a row per closed card), each row with
   the data root as `instance`. A bounded queue and one thread write them in batches over ILP, starting the server when
-  none runs; a batch QuestDB does not take is lost, and the first of an outage is a warning notice. A batch QuestDB
+  none runs; a batch the server does not take is lost, and the first of an outage is a warning notice. A batch the server
   refuses for some of its lines is sent again in halves, so only the lines it refuses alone are lost; those are logged
-  at most once a minute and are no outage. Each batch also goes to a shadow server, cdb in its trial beside QuestDB
-  ([record 158](adr/0158-cdb-comandos-own-database.md)), when one is set: `COMANDO_QDB_SHADOW`, empty meaning none,
-  else the first line of `shadow` in the machine's QuestDB folder (`~/.comando-questdb`, or `$KIT_QDB_HOME`), the
+  at most once a minute and are no outage. Each batch also goes to a shadow server when one is set (cdb's trial beside QuestDB set one,
+  [record 158](adr/0158-cdb-comandos-own-database.md); its switch file went when cdb became the machine's server, record 180): `COMANDO_QDB_SHADOW`, empty meaning none,
+  else the first line of `shadow` in the machine's server folder (`~/.comando-questdb`, or `$KIT_QDB_HOME`), the
   switch the kit's writers read too; it is read once, where the app builds the metrics log, and a shadow write that
   fails is ignored. comando run with `-Dcomando.questdb=false`, as the tests are, keeps no metrics and reads no shadow.
 

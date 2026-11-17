@@ -284,7 +284,7 @@ class MetricsTest {
             log.queues(List.of(new Queues.Reading("intents", 0, 12)));
             final Intent.Notify told = notices.await(Intent.Notify.class, n -> true, WITHIN);
             assertThat(told.level()).isEqualTo(Notice.Level.WARN);
-            assertThat(told.text()).isEqualTo("Cannot write metrics to QuestDB, the metrics rows are lost [lines=1,"
+            assertThat(told.text()).isEqualTo("Cannot write metrics to cdb, the metrics rows are lost [lines=1,"
                     + " failedLines=1]");
         }
         try (final Stream<Path> made = Files.list(dir)) {

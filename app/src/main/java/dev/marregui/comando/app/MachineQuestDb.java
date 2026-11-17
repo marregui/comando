@@ -886,8 +886,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     }
 
     /**
-     * {@code server.json}, version 1 (record 146): the server's process, its owner and instance name, when it started,
-     * its ports, the token it answers and, in {@code questdb} (the key kept for its readers), the server's jar.
+     * {@code server.json}, version 2 (records 146, 180): the server's process, its owner and instance name, when it
+     * started, its ports, the token it answers and, in {@code questdb} (the key kept for its readers), its jar.
      */
     record Entry(
             int version,

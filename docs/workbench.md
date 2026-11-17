@@ -271,7 +271,7 @@ Any number of document panels may be attached to a session
   side's panels; ⌘W closes the focused panel wherever it is, and ⌘⇧T reopens it where it was. Panels on the right stay
   there after a restart, and so do the Search and Changes views. The main tabs keep one panel at least; the lower
   panel's own tabs (Session, Approvals, Terminal, Results) follow the focused panel and stay below.
-- **The corner's buttons**, left of the swatch: stop refreshing plots, start or stop the machine's QuestDB ([§3.4](#34-the-machines-questdb)), and start or stop the comando Edge ([§4.1](#41-the-comando-edge)); each shows what
+- **The corner's buttons**, left of the swatch: stop refreshing plots, start or stop the machine's cdb ([§3.4](#34-the-machines-cdb)), and start or stop the comando Edge ([§4.1](#41-the-comando-edge)); each shows what
   it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)). The
   shell has no button: it starts when its tab is shown ([§5.1](#51-terminal)).
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own,
@@ -375,7 +375,7 @@ left edge ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-t
 | Tab | Its menu |
 |---|---|
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
-| Connections | New connection…; Start the machine's QuestDB, Stop the machine's QuestDB; Start the comando Edge, Stop the comando Edge |
+| Connections | New connection…; Start the machine's cdb, Stop the machine's cdb; Start the comando Edge, Stop the comando Edge |
 | Kit | the folders window ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([Kit and brain §3.5](kit-and-brain.md#35-scheduled-jobs)) |
 | Brain | the folders window |
 | Scratchpad | the folders window |
@@ -654,21 +654,20 @@ QuestDB of up to 50 tables; where it comes from is in [Architecture §10.1](arch
 the editor or from Claude reloads it. It feeds completion (keywords, then tables and columns of the bound connection)
 and the explorer (⌘⇧E): a tree in the side pane, whose table menu inserts `SELECT * FROM <table> LIMIT 100;`.
 
-### 3.4 The machine's QuestDB
+### 3.4 The machine's cdb
 
-**Start the machine's QuestDB**, the database button at the tab row's right end (also in the Connections tab's menu),
-starts the one QuestDB of this machine, shared by every comando instance and every kit ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md)): its own process, with
-its data in `~/.comando-questdb/`, on QuestDB's default ports: PG wire 8812 and HTTP 9000 (SQL at `/exec`, ILP at
-`/write`), the only two listeners; ILP over TCP (9009) and UDP, the health server (9003), the web console, telemetry,
-`sys.metrics` and views are off, though `server.json` still names all four ports. Every listener binds `127.0.0.1`, and
-tables are made only by DDL. It is sized for tens of small tables written a few rows a second: one query and one write
-worker, two network workers so that a long query leaves one for the 2 s liveness check, column files grown in
-64 KiB steps rather than 16 MiB, a log of errors and advisories only (`root/log/`, kept a week),
-and `stdout.log` moved to `stdout.log.1` at a start once past 10 MiB. When none runs, the first
-instance or kit that writes a metric starts it, so it is usually up without a click. It keeps running when the comando
-that started it quits; only that comando stops it, and in the others the button's tooltip says who started it. Every
-instance's metrics and the kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`). Its first
-start copies `questdb/db` of the data root, where the server comando embedded before record 146 kept its tables.
+**Start the machine's cdb**, the database button at the tab row's right end (also in the Connections tab's menu),
+starts the one database server of this machine, comando's own [cdb](cdb.md), shared by every comando instance and every
+kit ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md), [record 180](adr/0180-cdb-is-the-machine-server.md)): its own process, `CdbServe` run from
+a copy of comando's cdb jar in `lib/`, with its data in `~/.comando-questdb/cdb/`, on the ports QuestDB used before it:
+PG wire 8812 and HTTP 9000 (SQL at `/exec`, ILP at `/write`, in QuestDB's formats), its only two listeners, both bound
+to `127.0.0.1`; `server.json` still names 9003 and 9009 for the readers that expect them. It runs in a heap of at most
+256 MiB, with G1 on two GC threads and a collection every 10 s when idle. Its one log is `stdout.log` (Help ▸ Show
+cdb's log), moved to `stdout.log.1` at a start once past 10 MiB. When none runs, the first instance or kit that writes
+a metric starts it, so it is usually up without a click. It keeps running when the comando that started it quits; only
+that comando stops it, and in the others the button's tooltip says who started it. Every instance's metrics and the
+kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`). The QuestDB that served before
+[record 180](adr/0180-cdb-is-the-machine-server.md) kept its tables in `~/.comando-questdb/root/`, which nothing reads now.
 
 ## 4. Instances and the comando Edge
 
@@ -679,7 +678,7 @@ MQTT broker, the comando Edge, and through it a session of one instance can ask 
 
 ### 4.1 The comando Edge
 
-**Start the comando Edge**, the antenna button right of QuestDB's (also in the Connections tab's menu), starts the
+**Start the comando Edge**, the antenna button right of cdb's (also in the Connections tab's menu), starts the
 open-source HiveMQ Edge release as the local broker every comando instance on the machine talks through
 ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md) §2.4).
 
@@ -710,7 +709,7 @@ open-source HiveMQ Edge release as the local broker every comando instance on th
   default ports, start and stop beside it undisturbed.
 - **Up** when the admin API answers, within 60 s (else it is stopped and the notice says so); its output goes to
   `edge/stdout.log`. Stopping sends SIGTERM and waits up to 30 s before killing it. It stops at exit when this instance
-  started it, before QuestDB.
+  started it, before the machine's cdb's errands close.
 
 ### 4.2 What travels between instances
 
@@ -993,14 +992,15 @@ the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
 | `kit-folders` | the roots whose kit folders comando has added to `folders.json`, one per line, so a kit folder the user took out stays out; and, since version 2, where the kit put each folder last, so a kit folder still there follows the kit and the brain at every start while one the user pointed elsewhere stays ([Kit and brain §3.2](kit-and-brain.md#32-the-kit-brain-and-scratchpad-tabs)) |
 | `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
 | `instances-seen.json` | the other instances seen, so the Instances tab lists those that left until **Forget** ([§4.3](#43-the-instances-tab)) |
-| `questdb/` | the tables of the QuestDB comando embedded before record 146, copied into `~/.comando-questdb/` at the machine's QuestDB's first start; delete it once the copy is checked |
+| `questdb/` | where a comando before record 146 embedded QuestDB, if it is still there; nothing reads it since [record 180](adr/0180-cdb-is-the-machine-server.md) |
 | `edge/` | the comando Edge ([§4.1](#41-the-comando-edge)): `dist/` (the downloaded distribution), its home unzipped from it, `installed` (the zip and its time), `conf/` (owner-only), `data/` and `log/`, kept across reinstalls, `admin-password` (the admin account's, owner-only) and `stdout.log` |
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay in
 `connections.json`; [Claude Code §4.3](claude-code.md#43-secrets)); `~/.comando-edge.json`, the registry of the one comando Edge,
-shared by every instance ([§4.1](#41-the-comando-edge)); `~/.comando-questdb/`, the machine's QuestDB: `bin/start.sh` (its
-launcher, written at each start), `lib/` (the jar), `root/` (its data and logs), `server.json` (its registry: pid,
-owner, ports, token), `stdout.log` (with `stdout.log.1`, the copy a start set aside past 10 MiB) and `start.lock` ([§3.4](#34-the-machines-questdb)). The Java preferences that held the window's state before
+shared by every instance ([§4.1](#41-the-comando-edge)); `~/.comando-questdb/`, the machine's cdb: `bin/start.sh` (its
+launcher, written at each start), `lib/` (`cdb-<hash>.jar`, the copies of comando's cdb jar it runs), `cdb/` (its data),
+`root/` (the tables of the QuestDB that served before it, read by nothing), `server.json` (its registry: pid,
+owner, ports, token), `stdout.log` (with `stdout.log.1`, the copy a start set aside past 10 MiB) and `start.lock` ([§3.4](#34-the-machines-cdb)). The Java preferences that held the window's state before
 `settings.json` (node `dev/marregui/comando`; tests use `comando.prefsNode`) are read once, when the file does not exist
 yet, and left as they were.
 
@@ -1021,7 +1021,7 @@ stay. `Store` writes from immutable snapshots: sessions and panels on one thread
 keychain call may wait on an unlock prompt. Specs are written at once; panel text 800 ms after the first unsaved change.
 `Store.close()` writes what is pending.
 
-On a fresh data root comando writes a connection named local QuestDB and one panel, scratch, bound to it, with a
+On a fresh data root comando writes a connection named local cdb and one panel, scratch, bound to it, with a
 welcome text.
 
 ### 7.3 After a restart

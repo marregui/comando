@@ -44,12 +44,12 @@ comando is built with and runs on JDK 25.
 | `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the thread kit, JSON trees and their binding to records (`json`, `json.bind`), the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude, `CdbAdapter` (cdb in-process) | `core`, `cdb`, PostgreSQL JDBC driver |
-| `cdb` | comando's own columnar, time-partitioned database: SQL parser, planner, vectorised executor, store, catalog, `/exec` and `/write` in QuestDB's formats, and an optional PostgreSQL wire server ([record 158](adr/0158-cdb-comandos-own-database.md); how it runs and what it costs: [cdb](cdb.md)); one public facade, `Cdb`, reached only from `db.Cdb*` | JDK only |
+| `cdb` | comando's own columnar, time-partitioned database: SQL parser, planner, vectorised executor, store, catalog, `/exec` and `/write` in QuestDB's formats, and an optional PostgreSQL wire server, which `CdbServe` runs as the machine's server ([record 158](adr/0158-cdb-comandos-own-database.md), [record 180](adr/0180-cdb-is-the-machine-server.md); how it runs and what it costs: [cdb](cdb.md)); one public facade, `Cdb`, reached only from `db.Cdb*` | JDK only |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core` |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core` |
 | `tools` | Gradle runs, the folder tabs' folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and `ui.kit`, which they share | `core`, FlatLaf, jsvg, RSyntaxTextArea, CommonMark (with tables), JediTerm, pty4j |
-| `app` | wiring, the store files, the keychain, the intent log, the machine's QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`, on comando's MQTT client in `app.mqtt`), `main` | every module, QuestDB |
+| `app` | wiring, the store files, the keychain, the intent log, the machine's cdb, the comando Edge and the instances' link to it (`MqttPeerBroker`, on comando's MQTT client in `app.mqtt`), `main` | every module |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
@@ -324,7 +324,7 @@ Bounded waits:
 `App` creates every long-lived part in dependency order on a stack; `close()` first has the window save the comparison
 window's edits (`ComandoUi.saveEdits`), since on the shutdown hook's path no quit flow ran and the window closes last,
 then pops the stack, so parts close in reverse order, each once. Three are moved to the end: the comando Edge, which
-stops after this instance has cleared its presence there and left it, the machine's QuestDB's errands (the server
+stops after this instance has cleared its presence there and left it, the machine's cdb's errands (the server
 keeps running, record 146), and the window, titled with the instance's name and "— closing…" and greyed under a cover until everything behind
 it has closed. Every `close()` is idempotent, never throws (failures are logged with the part's name), and is safe on a
 half-built part; a failed constructor step closes what was built and rethrows its cause: a start that fails before the
@@ -382,7 +382,7 @@ registries for data too large to copy with every state in [§4.5](#45-stores-out
 | `reduce` | `Reducer`; the rules of each domain ([§4.3](#43-the-reducer)): `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules`, `ApprovalRules`, `FolderRules`, `ViewRules`, `Shared`; `Transition` (the next state and its effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog`, `ExecutorStop` (an owner's bounded stop of its executors), with `Threads.alive` listing the live threads by name for tests; `Queues`, the depth and peak of each unbounded queue (the intent queue, every strand, a timed strand's waiting and delayed tasks, each `claude` process's stdin), counted with two atomic operations a task, a timed strand's queue, which the JDK keeps, sampled at each submission, and read for the metrics log; `Processes`, the one way a short command is run |
-| `port` | the interfaces adapters implement ([§8.2](#82-interface-with-the-rest-of-the-app)); among them `SearchPort` (`search`, `cancel`, with its `Sink` and `Source`: record 139), `InstancesPort` (`ask`, `deny`, `forget`, `role`: what the user does from the Instances tab, implemented by `mcp`'s `Peers`, record 124) and `ServerSwitch` (`name`, `isRunning`, `want(up)`, `status`: a local server an agent starts or stops naming the direction, the comando Edge or the embedded QuestDB, record 121) |
+| `port` | the interfaces adapters implement ([§8.2](#82-interface-with-the-rest-of-the-app)); among them `SearchPort` (`search`, `cancel`, with its `Sink` and `Source`: record 139), `InstancesPort` (`ask`, `deny`, `forget`, `role`: what the user does from the Instances tab, implemented by `mcp`'s `Peers`, record 124) and `ServerSwitch` (`name`, `isRunning`, `want(up)`, `status`: a local server an agent starts or stops naming the direction, the comando Edge or the machine's cdb, record 121) |
 | `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `SearchHit`, `SearchQuery`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `VersionedLines` (a file of one entry a line whose first line names its format and version, record 133); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the folders), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
@@ -560,7 +560,7 @@ overtakes it: its remaining queries do not run and its tables are not kept.
 | `QueryPort` | `query(spec, sql, maxRows)`, `describe(spec, table)`: futures of text rows, run on the same lane as the user's statements, each with a 60 s statement timeout and a 65 s network timeout, so a server that stops answering breaks the connection and the lane takes the next run; `describe` caps `SHOW COLUMNS` at 10 000 rows | `mcp` (`db_run_sql`, `db_describe`) |
 
 **Needs.** `app` constructs it with the `IntentSink`, `ResultRegistry`, `SchemaRegistry` and `DbSettings.DEFAULTS`, and
-closes it after the MCP server and before the machine's QuestDB's errands.
+closes it after the MCP server and before the machine's cdb's errands.
 
 **Sends back.** `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested`,
 `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled`, `SqlWarning`, `ShowView` (the schema as a tree,
@@ -614,7 +614,7 @@ One package, `dev.marregui.comando.claude`.
 | `ClaudeProcess` | one child process and its threads: stdout lines to the strand, stdin from a queue, stderr to a file in the temp folder whose last 40 lines are read at the exit |
 | `StreamMapper` | stream-JSON events, or a stored conversation's lines, into `Block`s and intents; streaming blocks grow in place and the complete `assistant` event replaces them |
 | `RunSettings` | the model and effort a message ran at, from the assistant line of the conversation's transcript (`message.model`, `perTurnEffort`, else `effort`), read from the file's last 256 KiB on the session's strand; the stream names the model but not the effort |
-| `MetricsLog` | what the sessions spend and how their work ends, an event per turn, sub-agent, plan-usage read, closed approval card's wait ([`WaitLog`](#82-interface-with-the-rest-of-the-app), `comando_wait`) or changed queue reading (`queues`: the depth and peak of each unbounded queue whose reading differs from its last row, which holds until the next) ([record 110](adr/0110-metrics-for-calibration.md)), kept only in the machine's QuestDB reached through `QuestDbEndpoint` (records 146 and 149), through `MetricsSink` (a bounded queue, one thread, ILP over HTTP, rows mapped by `MetricsLines`; a batch not taken is lost, the first of an outage a warning notice), and read back once: the context the last turn of a stored conversation ended with, from `comando_turn` alone, when the conversation loads (record 120); `MetricsLog.NONE` keeps nothing |
+| `MetricsLog` | what the sessions spend and how their work ends, an event per turn, sub-agent, plan-usage read, closed approval card's wait ([`WaitLog`](#82-interface-with-the-rest-of-the-app), `comando_wait`) or changed queue reading (`queues`: the depth and peak of each unbounded queue whose reading differs from its last row, which holds until the next) ([record 110](adr/0110-metrics-for-calibration.md)), kept only in the machine's cdb reached through `QuestDbEndpoint` (records 146, 149 and 180), through `MetricsSink` (a bounded queue, one thread, ILP over HTTP, rows mapped by `MetricsLines`; a batch not taken is lost, the first of an outage a warning notice), and read back once: the context the last turn of a stored conversation ended with, from `comando_turn` alone, when the conversation loads (record 120); `MetricsLog.NONE` keeps nothing |
 | `BaseEffort` | the effort a model's turns start at, from the root's `settings.json` (`modelSettings.<model>.effortLevel`, else `effortLevel`); the stream does not report it |
 | `SubagentFiles` | finds and reads a subagent's stored conversation (`<session-id>/subagents/agent-<id>.jsonl`), reading only what the file gained since the last read |
 | `SessionCatalogue` | Claude Code's stored conversations for the import dialog and the session dialog's conversation picker, from a bounded read of each file's head (64 KiB) and tail (256 KiB) |
@@ -673,7 +673,7 @@ subagent's conversation as a lower view, followed while it grows), `Notify`.
 
 **Reads, never writes:** the root's `projects/`, its `settings.json` and its `comando-kit.json` (the kit's jobs are
 written by its `kit.py`, which `KitJobsCli` runs). **Writes in the data root:** `run/` (the MCP configurations); the
-metrics go to the machine's QuestDB (record 149). **Writes outside it:** only temporary files in the system temp
+metrics go to the machine's cdb (records 149 and 180). **Writes outside it:** only temporary files in the system temp
 folder, for each short command's output and each process's stderr, deleted after use.
 
 ### 11.3 Threads
@@ -700,7 +700,7 @@ revokes its token. `ClaudeVersion.check` runs on its caller's thread, bounded at
 | `ClaudeCommandTest` | the argument list for a new, resumed and forked session |
 | `StreamMapperTest` | `testkit`'s recorded streams (4 of its 16 tests) and stream lines written in the test |
 | `RunSettingsTest` | a message's model and effort from a transcript written in a temporary folder; a line not written yet; a file larger than the tail |
-| `MetricsTest` | the turn, sub-agent and queues rows a loopback QuestDB receives from `MetricsLog`, none from replayed history, nothing when metrics are off; an event QuestDB does not take lost, with a notice and no file; the last context from QuestDB alone |
+| `MetricsTest` | the turn, sub-agent and queues rows a loopback server receives from `MetricsLog`, none from replayed history, nothing when metrics are off; an event the server does not take lost, with a notice and no file; the last context from the server alone |
 | `SubagentFilesTest`, `SubagentFilesProbeTest` | the fixtures in `src/test/resources/subagents/`; generated inputs |
 | `PlanUsageReaderTest`, `CodexUsageReaderTest`, `ClaudeTopicsTest` | reads against fake scripts written in a temporary folder; `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close |
 | `ClaudeVersionTest` | the version parse, the half-open tested range, a missing executable |
@@ -732,7 +732,7 @@ One package, `dev.marregui.comando.mcp`.
 |---|---|
 | `McpServer` | HTTP and JSON-RPC: `POST /mcp`, protocol versions `2025-03-26`, `2025-06-18` (the default), `2025-11-25`; `initialize`, `tools/list`, `tools/call`, `ping`; one JSON response per request and no server-initiated stream; the token-to-session map; 401 for an unknown token, 403 for a foreign `Origin`; at most 256 requests at once and 16 per session token, one past either answered 503 with `Retry-After: 1`, not queued; at most 1 024 open connections (`jdk.httpserver.maxConnections`, set before the server is made); a request has 5 s to arrive, from its first byte to its body's last, headers included, else its connection is closed (a deadline on the timed strand `mcp-deadlines`, armed before the JDK reads the request line, disarmed once the body is in, so a long `session_read` or approval wait is never cut) |
 | `McpTools` | the tools: validates arguments, sends intents, answers; parks the calling thread for an approval and for every database call |
-| `ActionTools` | the registry's other actions (record 121): their schemas from `core`'s `Actions`, performing them for a caller, rule 1 (no session of the asker's creation family answers its card, `AppState.sameFamily`), rule 2 (a destructive action only with a grant in `agents.json`, or on a session the caller created, directly or through others), the start rule, a notice per act other than a read, or a refusal; `server_start` and `server_stop` through the `ServerSwitch`es `app` hands it (the comando Edge, the embedded QuestDB) |
+| `ActionTools` | the registry's other actions (record 121): their schemas from `core`'s `Actions`, performing them for a caller, rule 1 (no session of the asker's creation family answers its card, `AppState.sameFamily`), rule 2 (a destructive action only with a grant in `agents.json`, or on a session the caller created, directly or through others), the start rule, a notice per act other than a read, or a refusal; `server_start` and `server_stop` through the `ServerSwitch`es `app` hands it (the comando Edge, the machine's cdb) |
 | `ViewSpecs` | view arguments into `core`'s `ViewSpec` records (`table`, `plot`, `diff`, `markdown`, `text`, `tree`); an invalid spec is a tool error naming the problem and never reaches the reducer |
 | `SqlPolicy` | the lexical check of what Claude may run without asking; it errs towards "not read-only" (a second statement, dollar quoting, a backslash in a string) and does not detect a function with side effects |
 | `TranscriptText` | another session's transcript as numbered text blocks after a cursor, for `session_read`; the cursor stops at the first block still streaming; the text of the turn that answers a prompt, for a reply to another instance |
@@ -1094,7 +1094,7 @@ palette (⌘⇧P) come from the `ActionRegistry`.
 macOS expects in a menu: after the application menu macOS draws, Edit, Find (the view's finds and Find in files,
 record 139), then Help, which holds the palette, a separator
 and the help ([record 114](adr/0114-help-menu-and-corner-buttons.md), replacing
-[record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). The refreshing plots, the machine's QuestDB and the
+[record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). The refreshing plots, the machine's cdb and the
 comando Edge (each of the last two when comando has one) are buttons at the tab row's right end, left of the theme's
 swatch and New panel (`Menus.corner`, `CommandButton`: each shows the first of its commands that can run now); the
 shell has no button (record 114, amended 2026-11-01).
@@ -1367,13 +1367,13 @@ the synthetic session at a scroll offset to a PNG.
 | `transcripts`, `results`, `consoles`, `schemas` | `core`'s registries, read here |
 | `texts` | `PanelTexts`: each panel's file and text (`app`'s `Store`) |
 | `catalogue` | the stored conversations for the import dialog and the session dialog's conversation picker (record 125), as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
-| `server` | `ServerToggle`: the machine's QuestDB (`app`'s `MachineQuestDb`) |
-| `edge` | `ServerToggle`: the comando Edge (`app`'s `EmbeddedEdge`), its button right of QuestDB's; null, no button |
+| `server` | `ServerToggle`: the machine's cdb (`app`'s `MachineQuestDb`) |
+| `edge` | `ServerToggle`: the comando Edge (`app`'s `EmbeddedEdge`), its button right of cdb's; null, no button |
 | `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups, the kit's jobs (`app`'s `RootSetup`). `KitActions` shows the kit on the KIT row, repairs `comando-kit.json` on Kit ▸ Repair comando-kit.json… after a confirm, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; `JobActions` reads the kit's jobs at start, after each change comando makes, and, while the Kit tab shows, when `comando-kit.json` or a runner file in `.kit-jobs/` changed (looked at every 10 s; logs left out), puts them on the Jobs row, and opens the Kit jobs window ([record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
 | `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` (the data root) holds `settings.json` (the window's layout and settings, record 106), `themes/` (the user's theme files, record 126) and `opened-files`, the files opened once, which the folder tabs no longer mark new; a null `home` keeps the settings in memory, offers no user themes and turns Tutorial and Reveal off; what quitting runs once the window has asked |
 
 `PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a
-record declared here that `app` fills, so the window reaches the store, QuestDB, the Edge, the kit and the stored
+record declared here that `app` fills, so the window reaches the store, the machine's cdb, the Edge, the kit and the stored
 conversations without importing them.
 
 **Sends back.** The user's intents: panels, running text, connections, schema exploration, sessions (the checkpoint and
@@ -1449,8 +1449,8 @@ The real window is tested from `app` (`./gradlew :app:uiTest`).
 ## 15. The `app` module
 
 The composition root: `main`, the configuration, the wiring of every module, the files comando keeps, the keychain, the
-intent log, logging, the machine's QuestDB, the comando Edge and this instance's link to it. It depends on every other
-module and QuestDB; no module depends on it. It also holds the Gradle tasks that run, paint, replay and package the
+intent log, logging, the machine's cdb, the comando Edge and this instance's link to it. It depends on every other
+module; no module depends on it. It also holds the Gradle tasks that run, paint, replay and package the
 application.
 
 ### 15.1 Classes and design
@@ -1462,14 +1462,14 @@ Two packages: `dev.marregui.comando.app`, and `dev.marregui.comando.app.mqtt`, t
 |---|---|
 | `Main` | sets the dark appearance before AWT starts, reads `AppConfig`, names the instance (`InstanceName`) for the Dock, the menu bar, the window's title and its preferences node, configures logging, takes the data root's lock (`comando.lock`; a second instance on the same root says so and exits), builds and starts `App`, and adds a shutdown hook that closes it |
 | `App` | builds and closes every part ([§7](#7-ownership-and-exit)); `App.DeferredEffects` stands in for `EffectRouter` until the adapters it needs exist |
-| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `questdb`, `edge`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
+| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `edge`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
 | `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json` (with a kit's folders first, once per root, recorded in `kit-folders`), `panels.json`, and the panels' text: a Markdown file in `panels/` for a panel of comando's own, the file itself for a document; each file with its schema's version ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)); writes from immutable snapshots on its own threads |
 | `PanelFiles` | each panel's text as a file: a panel of comando's own is named after its title and follows renames; a document is bound to its path and never renamed or deleted; no file is overwritten after an edit made outside comando |
 | `JsonFile` | one store file, `{"version": n, <key>: [...]}` ([record 133](adr/0133-every-stored-file-has-a-schema-and-a-version.md)), written through `core`'s `AtomicFiles`, and not at all when the bytes are this run's last write and the file's modification time and size are those it left; a bare list or no `version` reads as version 1; a later version is refused, kept as it is and never written, and the user told; an unreadable file is renamed aside (`.corrupt-<time>`), not overwritten |
 | `Secrets` | connection passwords in the macOS login keychain through `/usr/bin/security`, under service `comando` and an account naming the connection and the target the password was given for (`Store.account`: `name user@host:port/database`, each part URL-encoded), so a connection pointed elsewhere never reads its old target's item; each call through `core`'s `Processes`, bounded at 10 s; with the keychain switch off (the default on any data root but `~/.comando`) and on other systems `Secrets.NONE`, and the store keeps the password in `connections.json` |
 | `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, every `password` field blanked |
 | `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
-| `MachineQuestDb` | `ui`'s `ServerToggle`, `core`'s `ServerSwitch` (an agent's `server_start` and `server_stop`, record 121) and `claude`'s `QuestDbEndpoint` (the metrics sink's): the machine's one QuestDB, its own process in `~/.comando-questdb/` (record 146). Writes `bin/start.sh` and copies the jar to `lib/` at each start, runs the launcher under `Processes`, waits for `/exec`, writes the token to `qdb_server` and the registry `server.json`, all under `start.lock`, which the kit's `qdb` takes too. Live = the registry's pid alive and its token answered. Every listener on `127.0.0.1` (PostgreSQL wire on 8812, the web console on 9000, its minimal HTTP on 9003, ILP on 9009; UDP and telemetry off; tables by DDL only). Only the instance that started it stops it; `close()` leaves it running |
+| `MachineQuestDb` | `ui`'s `ServerToggle`, `core`'s `ServerSwitch` (an agent's `server_start` and `server_stop`, record 121) and `claude`'s `QuestDbEndpoint` (the metrics sink's): the machine's one database server, cdb's `CdbServe`, its own process in `~/.comando-questdb/` (records 146 and 180). Writes `bin/start.sh` and copies the cdb jar on comando's runtime classpath, found by class name, to `lib/cdb-<12 hex of its SHA-256>.jar` at each start (when that jar is gone, the newest copy there runs), runs the launcher under `Processes`, waits for `/exec`, writes the token to `qdb_server` and the registry `server.json` (version 2), all under `start.lock`, which the kit's `qdb` takes too. Live = the registry's pid alive and its token answered. Two listeners, on `127.0.0.1`: PostgreSQL wire on 8812 and HTTP (`/exec`, `/write`) on 9000. Only the instance that started it stops it; `close()` leaves it running |
 | `EmbeddedEdge` | `ui`'s `ServerToggle` and `core`'s `ServerSwitch`: the one comando Edge on the machine, from the zip `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP` names, else the pinned release downloaded into `edge/dist`; a child process from a distribution zip installed in `edge/`, every listener on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010); `~/.comando-edge.json` names its pid and the instance that started it, which alone stops it; no other process is signalled ([Workbench §4.1](workbench.md#41-the-comando-edge)) |
 | `MqttPeerBroker` | `mcp`'s `PeerBroker` on `mqtt.MqttClient` (MQTT 5, a blocking socket): client `comando-<instance>` to `127.0.0.1:18883` while `~/.comando-edge.json` names a live Edge, read every 5 s; reconnects 1 s after a drop, then at most every 5 s, while the Edge runs, and stops trying once it does not; the subscriptions renewed after every connect; the last will set at connect; messages to their handlers on one strand ([record 123](adr/0123-instances-consult-each-other.md)) |
 | `mqtt.MqttClient` | an MQTT 5 client over a blocking socket to one broker: QoS 0 and 1 both ways, subscriptions, keep alive, a last will; it announces no Maximum Packet Size, so the broker hands it any packet the protocol allows, as the client before it took; it reconnects when its `Handler` returns a delay; the handler's calls and the futures' completions, but connect's and disconnect's, run on the executor it is given, in order. Within one connection at least once at QoS 1, a message in acknowledged after the handler has it; across connections at most once |
@@ -1485,7 +1485,7 @@ Two packages: `dev.marregui.comando.app`, and `dev.marregui.comando.app.mqtt`, t
 
 A test or tool that points the data root elsewhere never writes the user's keychain. Tests name a temporary root through
 `AppConfig`, never the user's `~/.claude`. The JVM options (`-Xms64m -Xmx4g`, `-XX:G1PeriodicGCInterval=60000`, the
-export QuestDB's workers need, the dark appearance) are in `app/build.gradle.kts`, for `run` and for the packages
+`jdk.internal.vm` export, the dark appearance) are in `app/build.gradle.kts`, for `run` and for the packages
 (`dmg`, `appImage`, `package`).
 
 ### 15.2 Interface with the rest of the app
@@ -1551,7 +1551,7 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 
 | Test | Covers | Runs in |
 |---|---|---|
-| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `MachineQuestDbTest`, `EmbeddedEdgeTest`, `JsonGoldenTest` | the store files and panel files (against goldens, byte for byte: record 157), the intent log, logging, the lock message, the data root's choice, the machine's QuestDB (a real process on free ports), the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
+| `StoreTest`, `StoreSaveNowTest`, `JsonFileTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `AppConfigTest`, `MachineQuestDbTest`, `EmbeddedEdgeTest`, `JsonGoldenTest` | the store files and panel files (against goldens, byte for byte: record 157), the intent log, logging, the lock message, the data root's choice, the machine's cdb (a real process on free ports), the comando Edge on a fake distribution and its download from a local server | `./gradlew :app:test` |
 | `AppCloseTest`, `DataRootFoldersTest` | `App.closeAll` closes every part, the last created first, whatever one of them throws (an `Error` included, the first rethrown with the later ones suppressed), and a failed start rolls back and reports its own cause; the start creates the data root's logs, run and audit folders owner-only, and no metrics folder, and narrows one that exists wider, and the logging setup makes its folder the user's | `./gradlew :app:test` |
 | `MqttPeerBrokerTest` | a message's payload, response topic and correlation data through `Packet.Publish`, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays; connect, will, resubscription and publish against a fake broker on a loopback port | `./gradlew :app:test` |
 | `CodecTest`, `WireTest`, `TopicsTest`, `MqttClientTest` | every packet written and read back, against the MQTT 5 specification's examples, and a malformed one refused with its reason code; topic names, filters and matching; the client against `FakeBroker` on a loopback socket: subscriptions, publishes both ways at QoS 0 and 1, Receive Maximum, keep alive and its timeout, a broker that drops, refuses or disconnects, a packet too large | `./gradlew :app:test` |

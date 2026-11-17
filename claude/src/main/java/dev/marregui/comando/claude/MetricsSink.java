@@ -214,7 +214,7 @@ final class MetricsSink implements AutoCloseable {
         final HttpResponse<String> answer = http.send(request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (answer.statusCode() != 200) {
-            throw new IOException("QuestDB refused a query [status=" + answer.statusCode() + ", answer="
+            throw new IOException("cdb refused a query [status=" + answer.statusCode() + ", answer="
                     + shortened(answer.body()) + ']');
         }
         return Json.readTree(answer.body());
@@ -380,9 +380,9 @@ final class MetricsSink implements AutoCloseable {
         } catch (final ConnectException _) {
             server = null;
             tablesOn = null;
-            failure(chunk, "cannot reach QuestDB", "server=refused", null);
+            failure(chunk, "cannot reach cdb", "server=refused", null);
         } catch (final IOException | RuntimeException e) {
-            failure(chunk, "cannot write metrics to QuestDB", "lines=" + chunk.size(), e);
+            failure(chunk, "cannot write metrics to cdb", "lines=" + chunk.size(), e);
         } catch (final InterruptedException _) {
             Thread.currentThread().interrupt();
             unsent.addAndGet(chunk.size());
@@ -407,7 +407,7 @@ final class MetricsSink implements AutoCloseable {
     private void refused(final List<String> line, final String answer) {
         final long total = failed.addAndGet(line.size());
         if (mayLogFailure(nanos.getAsLong())) {
-            LOG.log(System.Logger.Level.WARNING, "QuestDB refused a line, its metrics row is lost [answer="
+            LOG.log(System.Logger.Level.WARNING, "cdb refused a line, its metrics row is lost [answer="
                     + shortened(answer) + ", failedLines=" + total + ']');
         }
     }
@@ -430,7 +430,7 @@ final class MetricsSink implements AutoCloseable {
             answer = post(base, chunk, REQUEST_WITHIN);
         }
         if (answer.statusCode() != 204) {
-            LOG.log(System.Logger.Level.DEBUG, "QuestDB refused a write [status=" + answer.statusCode() + ", answer="
+            LOG.log(System.Logger.Level.DEBUG, "cdb refused a write [status=" + answer.statusCode() + ", answer="
                     + shortened(answer.body()) + ']');
         }
         return answer;
@@ -441,13 +441,13 @@ final class MetricsSink implements AutoCloseable {
             sent.addAndGet(chunk.size());
             if (outage) {
                 outage = false;
-                LOG.log(System.Logger.Level.INFO, "metrics reach QuestDB again [server=" + server + ", failedLines="
+                LOG.log(System.Logger.Level.INFO, "metrics reach cdb again [server=" + server + ", failedLines="
                         + failed.get() + ']');
             }
         } else if (status < 0) {
-            failure(chunk, "cannot reach QuestDB", "server=none", null);
+            failure(chunk, "cannot reach cdb", "server=none", null);
         } else {
-            failure(chunk, "QuestDB refused a write", "status=" + status, null);
+            failure(chunk, "cdb refused a write", "status=" + status, null);
         }
     }
 
@@ -470,7 +470,7 @@ final class MetricsSink implements AutoCloseable {
         if (!base.equals(tablesOn)) {
             createTables(base, REQUEST_WITHIN);
             tablesOn = base;
-            LOG.log(System.Logger.Level.INFO, "metrics go to QuestDB [server=" + base + ']');
+            LOG.log(System.Logger.Level.INFO, "metrics go to cdb [server=" + base + ']');
         }
         return base;
     }

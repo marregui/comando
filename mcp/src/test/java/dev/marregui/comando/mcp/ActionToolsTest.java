@@ -169,16 +169,16 @@ class ActionToolsTest {
     @Test
     void anAgentStartsAndStopsTheServersAndTheStateShowsThem() throws Exception {
         final FakeServer edge = new FakeServer("Edge", false);
-        final FakeServer questDb = new FakeServer("QuestDB", true);
-        tools.servers(List.of(edge, questDb));
+        final FakeServer cdb = new FakeServer("cdb", true);
+        tools.servers(List.of(edge, cdb));
         assertThat(call("foreman", "server_start", "{\"server\":\"edge\"}").text()).isEqualTo("Edge up");
-        final McpTools.Outcome refused = call("foreman", "server_stop", "{\"server\":\"questdb\"}");
+        final McpTools.Outcome refused = call("foreman", "server_stop", "{\"server\":\"cdb\"}");
         assertThat(refused.error()).as("a refusal is a tool error").isTrue();
         assertThat(edge.asked).containsExactly(true);
-        assertThat(questDb.asked).containsExactly(false);
-        assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("one of [edge, questdb]");
+        assertThat(cdb.asked).containsExactly(false);
+        assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("one of [edge, cdb]");
         final JsonNode servers = Json.readTree(tools.stateJson()).path("servers");
-        assertThat(servers.findValuesAsString("name")).containsExactly("edge", "questdb");
+        assertThat(servers.findValuesAsString("name")).containsExactly("edge", "cdb");
         assertThat(servers.get(0).path("running").asBoolean()).isTrue();
         assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: server start"));
     }

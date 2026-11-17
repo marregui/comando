@@ -2,6 +2,8 @@
 
 cdb is comando's own time-series database, in the module `cdb` (Java 25, JDK only). Why it exists and its surface are
 in [record 158](adr/0158-cdb-comandos-own-database.md); its classes and tests are in [Architecture](architecture.md).
+Since [record 180](adr/0180-cdb-is-the-machine-server.md) it is also the machine's server, `CdbServe` on HTTP 9000 and
+PG wire 8812 ([Workbench §3.4](workbench.md#34-the-machines-cdb)).
 This document says how a query and a write run, what each step costs, and how the numbers were measured.
 
 ## 1. The query path
@@ -233,7 +235,7 @@ milliseconds, so a read stops waiting for the applier that writes answered commi
 |---|---|
 | one HTTP query | `/exec?query=...&max_lag_ms=N` |
 | a PG connection | `SET cdb.max_lag_ms = N` (`TO` and a quoted value too); `RESET cdb.max_lag_ms` or `SET cdb.max_lag_ms = DEFAULT` goes back to the default; every later query of the connection runs with it |
-| the launcher | `cdb-serve ... --read-max-lag-ms N` sets the default of every read that names none |
+| the launcher | `CdbServe ... --read-max-lag-ms N` sets the default of every read that names none |
 | in process | `Cdb.run(sql, maxRows, maxLagMillis)`; `Cdb.readMaxLagMillis(n)` for the default |
 
 N is a whole number of milliseconds, 0 or more; anything else is refused (HTTP 400, a PG error, a launcher error). A lag
@@ -331,7 +333,7 @@ the text of its 500 rows only; D's newest-first scan reverses pages in place. Al
 | F | 3.1 / 3.0 | 3.4 / 3.2 |
 | load of the 2 M rows | 5.6 s | 5.8 s |
 
-The memory figure is with the JVM options the kit's `cdb-serve` and Cosa's cdb image use: G1 with two GC threads and
+The memory figure is with the JVM options the machine's server ([record 180](adr/0180-cdb-is-the-machine-server.md)) and Cosa's cdb image use: G1 with two GC threads and
 a collection every 10 s when idle, compact object headers, a heap of 16 to 256 MB kept 10–20 % free (before: `-Xmx1g`).
 cdb's data is in mapped files outside the heap and a query's garbage is short-lived, so the heap stays small; 256 MB
 holds the 2 M-row `INSERT … SELECT`. Query times are the same under both.

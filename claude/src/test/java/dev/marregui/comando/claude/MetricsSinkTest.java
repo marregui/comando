@@ -296,7 +296,7 @@ class MetricsSinkTest {
             await().atMost(WITHIN).until(() -> sink.failedLines() == 2);
             assertThat(notices.of(Intent.Notify.class)).singleElement().satisfies(n -> {
                 assertThat(n.level()).isEqualTo(Notice.Level.WARN);
-                assertThat(n.text()).isEqualTo("Cannot reach QuestDB, the metrics rows are lost [server=none,"
+                assertThat(n.text()).isEqualTo("Cannot reach cdb, the metrics rows are lost [server=none,"
                         + " failedLines=1]");
             });
 
