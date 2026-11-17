@@ -51,5 +51,7 @@ The answers of seven battery queries hash the same on both builds, three runs ea
 - The refill itself runs only with assertions off: `:cdb:testPageReuse` (part of `check`) runs the borrowing
   operators' tests again with `-da` for `Page`.
 - The scan's scratch page is cleared before each use, so its text bytes no longer grow across calls.
+- A page that is lent or a scan's scratch is filled, so its text vectors are sized for all 1,024 rows at once
+  (`Page.allocateFull`, task 181); other pages still start their per-value arrays at 16 values and grow.
 - Results, row order and every sum's rounding are unchanged: the same values reach the same accumulators in the same
   order.

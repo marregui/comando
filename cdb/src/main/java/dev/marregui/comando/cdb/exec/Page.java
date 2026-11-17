@@ -56,15 +56,16 @@ public final class Page {
     /**
      * The page a cursor lends next, after it lent {@code lent} (null before the first): {@code lent} {@link #clear}ed
      * for its refill; under {@code -ea}, {@code lent} {@link #poison}ed and a new page instead, so a page kept past its
-     * loan reads poison.
+     * loan reads poison. A new page's columns that {@code filled} marks (all when it is null) are sized full
+     * ({@link #allocateFull}).
      */
-    static Page relend(final Page lent, final List<Field> fields) {
+    static Page relend(final Page lent, final List<Field> fields, final boolean[] filled) {
         if (lent == null) {
-            return allocate(fields);
+            return allocateFull(fields, filled);
         }
         if (POISONS) {
             lent.poison();
-            return allocate(fields);
+            return allocateFull(fields, filled);
         }
         lent.clear();
         return lent;
@@ -73,11 +74,11 @@ public final class Page {
     /** {@link #relend} for a single vector of {@link #CAPACITY} values of {@code type}. */
     static Vector relend(final Vector lent, final CdbType type) {
         if (lent == null) {
-            return Vector.of(type, CAPACITY);
+            return Vector.ofFull(type, CAPACITY);
         }
         if (POISONS) {
             lent.poison(CAPACITY);
-            return Vector.of(type, CAPACITY);
+            return Vector.ofFull(type, CAPACITY);
         }
         lent.clear();
         return lent;
@@ -88,6 +89,17 @@ public final class Page {
         final Vector[] columns = new Vector[fields.size()];
         for (int i = 0; i < columns.length; i++) {
             columns[i] = Vector.of(fields.get(i).type(), CAPACITY);
+        }
+        return new Page(columns, 0);
+    }
+
+    // a page that is filled: the text vectors of the columns filled marks (all when null) sized for every row at once
+    // (Vector.ofFull); a column left unwritten, as a scan's unread one, keeps the small start
+    static Page allocateFull(final List<Field> fields, final boolean[] filled) {
+        final Vector[] columns = new Vector[fields.size()];
+        for (int i = 0; i < columns.length; i++) {
+            final CdbType type = fields.get(i).type();
+            columns[i] = filled == null || filled[i] ? Vector.ofFull(type, CAPACITY) : Vector.of(type, CAPACITY);
         }
         return new Page(columns, 0);
     }

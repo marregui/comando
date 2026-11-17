@@ -35,17 +35,25 @@ public final class Vector {
     private final long[] longs;
     private final TextColumn texts;
 
-    private Vector(final CdbType type, final int capacity) {
+    private Vector(final CdbType type, final int capacity, final boolean full) {
         this.type = type;
         longs = type == CdbType.LONG || type == CdbType.TIMESTAMP ? new long[capacity] : null;
         doubles = type == CdbType.DOUBLE ? new double[capacity] : null;
         booleans = type == CdbType.BOOLEAN ? new boolean[capacity] : null;
-        texts = type.isText() ? new TextColumn(capacity, type == CdbType.SYMBOL) : null;
+        texts = type.isText() ? new TextColumn(capacity, type == CdbType.SYMBOL, full) : null;
     }
 
     /** A vector of {@code type} for up to {@code capacity} values. */
     public static Vector of(final CdbType type, final int capacity) {
-        return new Vector(type, capacity);
+        return new Vector(type, capacity, false);
+    }
+
+    /**
+     * {@link #of}, its text arrays sized for all {@code capacity} values at once rather than grown from a few: for a
+     * vector that is filled, as a page a scan lends.
+     */
+    static Vector ofFull(final CdbType type, final int capacity) {
+        return new Vector(type, capacity, true);
     }
 
     /** The number of values the vector has room for. */

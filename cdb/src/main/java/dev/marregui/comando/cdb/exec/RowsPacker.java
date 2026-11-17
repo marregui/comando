@@ -97,7 +97,7 @@ final class RowsPacker {
 
     private Page current() {
         if (current == null) {
-            current = returned == null ? Page.allocate(fields) : Page.relend(returned, fields);
+            current = returned == null ? Page.allocate(fields) : Page.relend(returned, fields, null);
             returned = null;
         }
         return current;

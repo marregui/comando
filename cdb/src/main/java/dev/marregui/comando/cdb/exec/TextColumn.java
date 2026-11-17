@@ -37,8 +37,13 @@ final class TextColumn {
     private int used;
 
     TextColumn(final int capacity, final boolean symbol) {
+        this(capacity, symbol, false);
+    }
+
+    /** {@code full}: the per-value arrays sized for every value at once, for a column that is filled. */
+    TextColumn(final int capacity, final boolean symbol, final boolean full) {
         this.capacity = capacity;
-        final int first = Math.min(capacity, FIRST_VALUES);
+        final int first = full ? capacity : Math.min(capacity, FIRST_VALUES);
         lengths = new int[first];
         starts = new int[first];
         Arrays.fill(lengths, NULL_LENGTH);

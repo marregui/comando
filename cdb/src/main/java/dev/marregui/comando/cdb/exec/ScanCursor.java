@@ -34,6 +34,8 @@ final class ScanCursor implements Cursor {
     private final CdbType[] types;
     /** The positions read from the store, ascending. */
     private final int[] live;
+    // the positions read, as a mask for the pages this cursor fills; null for all
+    private final boolean[] reads;
     private final List<PartitionReader> partitions;
     private final long[] starts;
     private final long[] ends;
@@ -77,6 +79,7 @@ final class ScanCursor implements Cursor {
     ) {
         this.reader = reader;
         this.ownsReader = ownsReader;
+        this.reads = reads == null ? null : reads.clone();
         try {
             fields = scan.fields();
             columns = scan.columns().clone();
@@ -140,7 +143,7 @@ final class ScanCursor implements Cursor {
         if (reader == null) {
             return null;
         }
-        lent = Page.relend(lent, fields);
+        lent = Page.relend(lent, fields, reads);
         return fill(lent);
     }
 
@@ -206,7 +209,7 @@ final class ScanCursor implements Cursor {
 
     private Page scratch() {
         if (scratch == null) {
-            scratch = Page.allocate(fields);
+            scratch = Page.allocateFull(fields, reads);
         }
         return scratch;
     }
