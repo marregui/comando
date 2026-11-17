@@ -1,5 +1,6 @@
 package dev.marregui.comando.cdb.exec.expr;
 
+import java.util.Arrays;
 import java.util.List;
 
 import dev.marregui.comando.cdb.CdbType;
@@ -92,6 +93,9 @@ final class Comparison {
         final CdbType domain = Cast.common(args);
         final VectorFn operand = Cast.operand(args.get(0), domain, nowMicros);
         final VectorFn[] values = Cast.operands(args, 1, domain, nowMicros);
+        if ((domain == CdbType.LONG || domain == CdbType.TIMESTAMP) && allConstant(args)) {
+            return Cast.exact(new LongSet(operand, values, negated), CdbType.BOOLEAN, type);
+        }
         final String[] constants = new String[values.length];
         for (int j = 0; j < constants.length; j++) {
             constants[j] = textConstant(args.get(1 + j), domain);
@@ -192,6 +196,16 @@ final class Comparison {
         return a.textEquals(i, value) ? 0 : 1;
     }
 
+    /** Whether every value of {@code in}'s list, {@code args} from the second on, is a constant. */
+    private static boolean allConstant(final List<Bound> args) {
+        for (int j = 1; j < args.size(); j++) {
+            if (!(args.get(j) instanceof Bound.Constant)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** {@code order} with its two sides swapped; a NULL code is symmetric. */
     private static int reversed(final int order) {
         return order > 1 ? order : -order;
@@ -231,6 +245,60 @@ final class Comparison {
                 key = carried.keyOf(value);
             }
             return key;
+        }
+    }
+
+    /**
+     * {@code in} over a list of LONG or TIMESTAMP constants: one binary search per row in the sorted non-NULL values,
+     * instead of one comparison per value. The values are read once, from the first page with a row, as a constant
+     * reads the same on every row; a NULL row is in the list only when the list holds a NULL, as two NULLs compare
+     * equal. Used by one thread at a time, as the function that holds it.
+     */
+    private static final class LongSet implements VectorFn {
+        private final boolean negated;
+        private final VectorFn operand;
+        private final Vector out = Vector.of(CdbType.BOOLEAN, Page.CAPACITY);
+        private final VectorFn[] values;
+        private boolean nullListed;
+        private long[] sorted;
+
+        LongSet(final VectorFn operand, final VectorFn[] values, final boolean negated) {
+            this.operand = operand;
+            this.values = values;
+            this.negated = negated;
+        }
+
+        @Override
+        public Vector eval(final Page page) {
+            final int n = page.size;
+            if (n == 0) {
+                return out;
+            }
+            if (sorted == null) {
+                read(page);
+            }
+            final Vector x = operand.eval(page);
+            for (int i = 0; i < n; i++) {
+                final boolean found = x.isNull(i) ? nullListed : Arrays.binarySearch(sorted, x.getLong(i)) >= 0;
+                out.setBoolean(i, found != negated);
+            }
+            return out;
+        }
+
+        private void read(final Page page) {
+            final long[] read = new long[values.length];
+            int count = 0;
+            for (final VectorFn value : values) {
+                final Vector v = value.eval(page);
+                if (v.isNull(0)) {
+                    nullListed = true;
+                } else {
+                    read[count++] = v.getLong(0);
+                }
+            }
+            final long[] kept = Arrays.copyOf(read, count);
+            Arrays.sort(kept);
+            sorted = kept;
         }
     }
 }
