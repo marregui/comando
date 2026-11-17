@@ -49,6 +49,9 @@ class FileReadRulesTest {
     private static final String CDB_TEXT_CACHE = "dev.marregui.comando.cdb.store.TextCache";
     // a query vector's text, copied only from the slices Version hands it (record 167)
     private static final String CDB_TEXT_COLUMN = "dev.marregui.comando.cdb.exec.TextColumn";
+    // a query vector's fixed values and symbol keys, copied from the slices Version hands it (record 179); public, but
+    // app's tests do not depend on cdb, so named
+    private static final String CDB_VECTOR = "dev.marregui.comando.cdb.exec.Vector";
     // a commit's rows in native memory of its own arena, never a mapping (record 167)
     private static final String CDB_ROW_BLOCK = "dev.marregui.comando.cdb.store.RowBlock";
 
@@ -71,16 +74,16 @@ class FileReadRulesTest {
     }
 
     /// Bytes leave a mapping through `Mapped` only, byte by byte: a compiled bulk copy that meets a cut file ends the
-    /// JVM. cdb's `Version`, `TextCache` and `exec.TextColumn` (fed by `Version`) are the departure: they copy only the
-    /// store's own column files, through
-    /// slices of exactly the committed bytes, and a partition's committed bytes never shrink (a store that opens cuts
-    /// only the bytes past them, which a reader still holding a closed store's snapshot does not map), so no cut meets
-    /// a slice.
+    /// JVM. cdb's `Version`, `TextCache`, `exec.TextColumn` and `exec.Vector` (both fed by `Version`) are the
+    /// departure: they copy only the store's own column files, through slices of exactly the committed bytes, and a
+    /// partition's committed bytes never shrink (a store that opens cuts only the bytes past them, which a reader still
+    /// holding a closed store's snapshot does not map), so no cut meets a slice.
     @Test
     void noClassCopiesBytesOffASegmentInBulk() {
         noClasses().that().doNotHaveFullyQualifiedName(CDB_VERSION)
                 .and().doNotHaveFullyQualifiedName(CDB_TEXT_CACHE)
                 .and().doNotHaveFullyQualifiedName(CDB_TEXT_COLUMN)
+                .and().doNotHaveFullyQualifiedName(CDB_VECTOR)
                 .and().doNotHaveFullyQualifiedName(CDB_ROW_BLOCK)
                 .should().callMethodWhere(target(owner(assignableTo(MemorySegment.class)))
                 .and(target(name("toArray")).or(target(name("copy"))).or(target(name("asByteBuffer")))))
