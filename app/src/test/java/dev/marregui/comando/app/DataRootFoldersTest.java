@@ -18,7 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DataRootFoldersTest {
 
     /// The start creates the logs, run and audit folders `rwx------` and narrows one a wider umask made `rwxrwxrwx`, as
-    /// the audit folder of a live data root was found; metrics live in QuestDB alone, so no `metrics` folder is made.
+    /// the audit folder of a live data root was found; metrics live in the machine's cdb alone, so no `metrics` folder
+    /// is made.
     @Test
     void theDataRootsLogRunAndAuditFoldersAreTheUsersAlone(@TempDir final Path home) throws Exception {
         final AppConfig config = new AppConfig(home, "claude", home.resolve("projects"), false);

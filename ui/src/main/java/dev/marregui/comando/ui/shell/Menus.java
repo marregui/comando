@@ -54,7 +54,7 @@ final class Menus {
             Map.entry("help.markdown", "markdown"),
             Map.entry("help.log", "log"),
             Map.entry("help.edgeLog", "log"),
-            Map.entry("help.questDbLog", "log"),
+            Map.entry("help.cdbLog", "log"),
             Map.entry("help.dataRoot", "comando-folder"),
             // the corner's buttons
             Map.entry("run.plotStop", "chart-stop"),
@@ -120,7 +120,7 @@ final class Menus {
             Map.entry("help.markdown", "What a panel's Markdown may hold and how its preview shows it"),
             Map.entry("help.log", "comando's log, read-only, following its end"),
             Map.entry("help.edgeLog", "The comando Edge's hivemq.log in this instance's data root"),
-            Map.entry("help.questDbLog", "cdb's log, stdout.log in the machine folder"),
+            Map.entry("help.cdbLog", "cdb's log, stdout.log in the machine folder"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
     /**
@@ -160,7 +160,8 @@ final class Menus {
                 menu("Edit", null, "edit.undo", "edit.redo", SEPARATOR, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll"),
                 menu("Find", null, "view.find", "view.findNext", "view.findPrevious", SEPARATOR, "view.findInFiles",
                         "view.nextHit", "view.previousHit"),
-                menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog", "help.questDbLog", "help.dataRoot"));
+                menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown",
+                        "help.log", "help.edgeLog", "help.cdbLog", "help.dataRoot"));
     }
 
     /**

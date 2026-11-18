@@ -366,7 +366,7 @@ final class Commands {
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
         cmd("help.edgeLog", "Show the Edge's log", null, () -> help.showLog(deps.edge()), () -> deps.edge() != null);
-        cmd("help.questDbLog", "Show cdb's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
+        cmd("help.cdbLog", "Show cdb's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch
         // (Menus), the one chosen ticked (record 103)

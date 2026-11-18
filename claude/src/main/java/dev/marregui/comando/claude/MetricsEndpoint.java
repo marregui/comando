@@ -3,8 +3,8 @@ package dev.marregui.comando.claude;
 import java.net.URI;
 import java.util.Optional;
 
-/** The machine's QuestDB as the metrics sink reaches it (record 146). */
-public interface QuestDbEndpoint {
+/** The machine's cdb as the metrics sink reaches it (record 146). */
+public interface MetricsEndpoint {
 
     /**
      * The live server's HTTP base URI ({@code http://127.0.0.1:9000}), starting it when none runs; empty when it cannot

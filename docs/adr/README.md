@@ -190,4 +190,5 @@ row and its record differ, or when a record has no row.
 | [167](0167-cdb-heap-reduction.md) | cdb holds less on the heap: text as bytes, symbols as keys, a late read for ORDER BY LIMIT, mappings made lazily and released, commit blocks off-heap, one channel per log | 2026-11-16 | Miguel and Claude | accepted; built in task 167 |
 | [170](0170-cdb-row-block-epochs.md) | cdb's row blocks share an arena per 100 ms epoch instead of a shared arena each | 2026-11-16 | Miguel and Claude | accepted; built in task 170 |
 | [179](0179-cdb-page-borrow.md) | cdb's aggregating operators borrow the scan's page instead of taking a new one per call | 2026-11-17 | Miguel and Claude | accepted; built in task 179 |
-| [180](0180-cdb-is-the-machine-server.md) | The machine's database server is cdb; QuestDB is no longer started | 2026-11-17 | Miguel and Claude | accepted; built in task 187 |
+| [180](0180-cdb-is-the-machine-server.md) | The machine's database server is cdb; QuestDB is no longer started | 2026-11-17 | Miguel and Claude | accepted; built in task 187; its names amended by [record 181](0181-the-machine-server-is-named-cdb.md) |
+| [181](0181-the-machine-server-is-named-cdb.md) | The machine's server and its metrics are named for cdb, not QuestDB | 2026-11-18 | Miguel and Claude | accepted; built in task 194 |

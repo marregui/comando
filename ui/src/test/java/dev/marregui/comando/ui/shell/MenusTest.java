@@ -74,7 +74,8 @@ class MenusTest {
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
                 "view.find", "view.findNext", "view.findPrevious", "view.findInFiles",
                 "view.nextHit", "view.previousHit",
-                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog", "help.questDbLog", "help.dataRoot");
+                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog",
+                "help.cdbLog", "help.dataRoot");
         assertThat(submenus(bar)).as("flat: the themes are the swatch's").isEmpty();
         assertThat(bar.get(1).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
                 .as("one separator between the view's Find and the window's").isEqualTo(1);

@@ -107,7 +107,7 @@ class MetricsSinkShadowTest {
         assertThat(MetricsSink.shadowOf("http://bad host")).isNull();
     }
 
-    private MetricsSink sink(final QuestDbEndpoint qdb, final String shadow) {
-        return new MetricsSink(qdb, new MetricsLines("/data"), nanos::get, notices, shadow);
+    private MetricsSink sink(final MetricsEndpoint endpoint, final String shadow) {
+        return new MetricsSink(endpoint, new MetricsLines("/data"), nanos::get, notices, shadow);
     }
 }

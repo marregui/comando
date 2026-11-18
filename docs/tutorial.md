@@ -199,7 +199,7 @@ comando runs its own database, cdb, as a server for you, so you need nothing els
    the tab row's right end). *You should see* "cdb is up: PG wire on 127.0.0.1:8812, HTTP on http://localhost:9000" in the
    status bar after a few seconds; when another instance, or your own metrics, started it already, the button shows it
    running. **Stop the machine's cdb**, in the same places, stops it, when this comando started it. The server is
-   one per machine, keeps its data in `~/.comando-questdb/cdb` and listens on this machine only.
+   one per machine, keeps its data in `~/.comando-cdb/cdb` and listens on this machine only.
 2. A new comando already has a connection, **local cdb**, bound to the panel. Make your own to learn the dialog:
    right-click the sidebar's **Connections** tab and choose **New connection…**. The dialog opens on a new connection
    with QuestDB's defaults, which the machine's cdb takes too: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard

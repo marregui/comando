@@ -17,8 +17,8 @@ import dev.marregui.comando.claude.ClaudeAdapter;
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
+import dev.marregui.comando.claude.MetricsEndpoint;
 import dev.marregui.comando.claude.MetricsLog;
-import dev.marregui.comando.claude.QuestDbEndpoint;
 import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.SessionCatalogue;
 import dev.marregui.comando.claude.TranscriptSearch;
@@ -77,7 +77,7 @@ import dev.marregui.comando.ui.shell.Setup;
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: this instance's
  * presence among the other instances and its link to the comando Edge, the tool runs, Claude's processes, the MCP
  * server, the database lanes, the reducer, the intent log, the store (which writes the panels last), the Edge this
- * instance started, the embedded QuestDB, and last the window, which stays up, greyed, until the rest has closed;
+ * instance started, the machine cdb's errands, and last the window, which stays up, greyed, until the rest has closed;
  * quitting has already ended its shells and live plots.
  */
 public final class App implements AutoCloseable {
@@ -106,10 +106,10 @@ public final class App implements AutoCloseable {
     /** {@code -Dcomando.peers=false}, set by window tests and picture tools, keeps this instance off the Edge. */
     static final String PEERS_PROPERTY = "comando.peers";
     /**
-     * {@code -Dcomando.questdb=false}, set by every test and picture tool, keeps this instance off the machine's QuestDB:
+     * {@code -Dcomando.metrics=false}, set by every test and picture tool, keeps this instance off the machine's cdb:
      * no metrics are kept, and the toggle works on a folder in the data root, never on the machine's.
      */
-    static final String QUESTDB_PROPERTY = "comando.questdb";
+    static final String METRICS_PROPERTY = "comando.metrics";
     private final StateLoop loop;
     private final TranscriptRegistry transcripts;
     private final ClaudeAdapter claude;
@@ -212,13 +212,13 @@ public final class App implements AutoCloseable {
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
-            // the machine's one QuestDB, shared by every instance and the kit, outliving comando (record 146)
-            final boolean machineQuestDb = machineQuestDb();
-            final MachineQuestDb questDb = new MachineQuestDb(machineQuestDb ? Path.of(System.getProperty("user.home"), ".comando-questdb")
-                    : config.home().resolve("machine-questdb"), config.home(), InstanceName.current(), loop);
+            // the machine's one cdb, shared by every instance and the kit, outliving comando (record 146)
+            final boolean machineCdb = usesMachineCdb();
+            final MachineCdb cdb = new MachineCdb(machineCdb ? Path.of(System.getProperty("user.home"), ".comando-cdb")
+                    : config.home().resolve("machine-cdb"), config.home(), InstanceName.current(), loop);
             // the shadow switch is read here alone, so no log a test builds reads the user's machine folder
-            metrics = own(metricsLog(machineQuestDb, config.home(), questDb, loop,
-                    machineQuestDb ? MetricsLog.machineShadow() : null));
+            metrics = own(metricsLog(machineCdb, config.home(), cdb, loop,
+                    machineCdb ? MetricsLog.machineShadow() : null));
             claude.metrics(metrics);
             mcpTools.waits(metrics);
             claude.checkpointByComando();
@@ -226,13 +226,13 @@ public final class App implements AutoCloseable {
             tools = devTools;
             final EmbeddedEdge edge = new EmbeddedEdge(config.edgeRoot(), config.home(), InstanceName.current(), loop);
             // agents start and stop them as the toggles do (record 121)
-            mcpTools.servers(List.of(edge, questDb));
+            mcpTools.servers(List.of(edge, cdb));
             final SessionCatalogue catalogue = new SessionCatalogue(root.projects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    questDb, edge, setup, version, config.home(), config.logDir(), onQuit));
+                    cdb, edge, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
             ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
             // the search window's answers: its threads end with the application (record 139)
@@ -261,10 +261,10 @@ public final class App implements AutoCloseable {
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the kit check uses KitGit, Peers and the window: its strand stops before them
             own(() -> ExecutorStop.now("app", kitCheck));
-            // the Edge this instance started stops before QuestDB; one another instance started keeps running
+            // the Edge this instance started stops before the machine's cdb; one another instance started keeps running
             owned.addLast(edge);
-            // the machine's QuestDB is left running: its errands stop last, after the metrics log that writes to it
-            owned.addLast(questDb);
+            // the machine's cdb is left running: its errands stop last, after the metrics log that writes to it
+            owned.addLast(cdb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
             owned.addLast(ui);
             LOG.log(System.Logger.Level.INFO, "comando ready [version=" + version + ", home=" + config.home()
@@ -397,24 +397,24 @@ public final class App implements AutoCloseable {
         return ui;
     }
 
-    /** Whether this instance uses the machine's QuestDB: unless {@link #QUESTDB_PROPERTY} is false. */
-    static boolean machineQuestDb() {
-        return Boolean.parseBoolean(System.getProperty(QUESTDB_PROPERTY, "true"));
+    /** Whether this instance uses the machine's cdb: unless {@link #METRICS_PROPERTY} is false. */
+    static boolean usesMachineCdb() {
+        return Boolean.parseBoolean(System.getProperty(METRICS_PROPERTY, "true"));
     }
 
     /**
-     * The sessions' metrics log: with the machine's QuestDB, its only store, at {@code qdb}, each row naming
+     * The sessions' metrics log: with the machine's cdb, its only store, at {@code endpoint}, each row naming
      * {@code home}, an outage told to {@code notices}, each batch also sent to {@code shadow} when it is a base URL;
      * without it, as the tests run, {@link MetricsLog#NONE}, which keeps nothing (record 149).
      */
     static MetricsLog metricsLog(
-            final boolean machineQuestDb,
+            final boolean machineCdb,
             final Path home,
-            final QuestDbEndpoint qdb,
+            final MetricsEndpoint endpoint,
             final IntentSink notices,
             final String shadow
     ) {
-        return machineQuestDb ? new MetricsLog(home.toAbsolutePath().toString(), qdb, notices, shadow)
+        return machineCdb ? new MetricsLog(home.toAbsolutePath().toString(), endpoint, notices, shadow)
                 : MetricsLog.NONE;
     }
 

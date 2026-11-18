@@ -201,7 +201,7 @@ class SessionCardUiTest {
             loop.dispatch(new Intent.SaveConnection("", new ConnectionSpec("live", "localhost", 1, "qdb", "admin", "secret", true)));
             assertThat(front("Connections")).isTrue();
             final JList<?> list = onEdt(() -> first(JList.class, l -> "Connections".equals(l.getAccessibleContext().getAccessibleName()) && l.isShowing()));
-            // the first start also writes a local QuestDB connection: find the row of the one saved here
+            // the first start also writes a local cdb connection: find the row of the one saved here
             Awaitility.await("the row").atMost(Duration.ofSeconds(10)).until(() -> onEdt(() -> rowOf(list, "live")) >= 0);
             final int at = onEdt(() -> rowOf(list, "live"));
 

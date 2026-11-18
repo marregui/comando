@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-11-17 | accepted; built in task 187 | Miguel and Claude |
+| 2026-11-17 | accepted; built in task 187; its names amended by [record 181](0181-the-machine-server-is-named-cdb.md) | Miguel and Claude |
 
 Read against comando `20109841`. Amends [record 146](0146-every-metric-goes-to-the-machine-questdb.md): the registry,
 the token, the start lock, the owner rule and the ports stay; the process they describe is cdb's server, not

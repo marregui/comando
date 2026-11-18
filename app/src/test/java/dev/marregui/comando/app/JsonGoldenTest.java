@@ -66,7 +66,7 @@ class JsonGoldenTest {
     /// the files' mapping, and read back equal.
     @Test
     void theRegistriesAndTheMixedRecordWriteAsTheirGoldens() throws IOException {
-        pretty("questdb-server.json", JsonSamples.questDb(), MachineQuestDb.Entry.class);
+        pretty("machine-server.json", JsonSamples.machineServer(), MachineCdb.Entry.class);
         pretty("edge-registry.json", JsonSamples.edge(), EmbeddedEdge.Entry.class);
         pretty("mixed-file.json", JsonSamples.mixed(), JsonSamples.Mixed.class);
     }
@@ -182,7 +182,7 @@ class JsonGoldenTest {
         t.put("SessionSpec", SessionSpec.class);
         t.put("FolderRoot", FolderRoot.class);
         t.put("StoredPanel", Store.StoredPanel.class);
-        t.put("QuestDbEntry", MachineQuestDb.Entry.class);
+        t.put("MachineServerEntry", MachineCdb.Entry.class);
         t.put("EdgeEntry", EmbeddedEdge.Entry.class);
         t.put("ListFolderRoot", new TypeRef<List<FolderRoot>>() {
         }.type());

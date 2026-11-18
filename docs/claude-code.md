@@ -386,10 +386,10 @@ sends for the same gesture:
   none runs; a batch the server does not take is lost, and the first of an outage is a warning notice. A batch the server
   refuses for some of its lines is sent again in halves, so only the lines it refuses alone are lost; those are logged
   at most once a minute and are no outage. Each batch also goes to a shadow server when one is set (cdb's trial beside QuestDB set one,
-  [record 158](adr/0158-cdb-comandos-own-database.md); its switch file went when cdb became the machine's server, record 180): `COMANDO_QDB_SHADOW`, empty meaning none,
-  else the first line of `shadow` in the machine's server folder (`~/.comando-questdb`, or `$KIT_QDB_HOME`), the
+  [record 158](adr/0158-cdb-comandos-own-database.md); its switch file went when cdb became the machine's server, record 180): `COMANDO_METRICS_SHADOW`, empty meaning none,
+  else the first line of `shadow` in the machine's server folder (`~/.comando-cdb`, or `$KIT_METRICS_HOME`), the
   switch the kit's writers read too; it is read once, where the app builds the metrics log, and a shadow write that
-  fails is ignored. comando run with `-Dcomando.questdb=false`, as the tests are, keeps no metrics and reads no shadow.
+  fails is ignored. comando run with `-Dcomando.metrics=false`, as the tests are, keeps no metrics and reads no shadow.
 
 ## 4. Approvals and safety
 

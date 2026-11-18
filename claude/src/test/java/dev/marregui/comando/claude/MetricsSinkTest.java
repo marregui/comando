@@ -160,7 +160,7 @@ class MetricsSinkTest {
     void aFullQueueDropsAndCounts() throws Exception {
         final CountDownLatch entered = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
-        final QuestDbEndpoint held = new QuestDbEndpoint() {
+        final MetricsEndpoint held = new MetricsEndpoint() {
             @Override
             public Optional<URI> ensureUp() {
                 return Optional.empty();
@@ -194,7 +194,7 @@ class MetricsSinkTest {
     void aCloseCountsWhatItCutsOff() throws Exception {
         final CountDownLatch entered = new CountDownLatch(1);
         final CountDownLatch never = new CountDownLatch(1);
-        final QuestDbEndpoint held = new QuestDbEndpoint() {
+        final MetricsEndpoint held = new MetricsEndpoint() {
             @Override
             public Optional<URI> ensureUp() {
                 return Optional.empty();
@@ -335,12 +335,12 @@ class MetricsSinkTest {
         return "comando_usage,instance=/data,provider=claude,window_name=" + window + " pct=1.0 1793181600000000000";
     }
 
-    private MetricsSink sink(final QuestDbEndpoint qdb) {
-        return new MetricsSink(qdb, new MetricsLines("/data"), nanos::get, notices);
+    private MetricsSink sink(final MetricsEndpoint endpoint) {
+        return new MetricsSink(endpoint, new MetricsLines("/data"), nanos::get, notices);
     }
 
     /// An endpoint that names the server it is given and counts the starts asked of it.
-    static final class Endpoint implements QuestDbEndpoint {
+    static final class Endpoint implements MetricsEndpoint {
 
         final AtomicInteger ensured = new AtomicInteger();
         final AtomicReference<URI> live = new AtomicReference<>();

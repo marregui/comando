@@ -31,11 +31,11 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
 
 /**
- * The metrics events on their way to the machine's QuestDB, their only store (records 146, 149).
+ * The metrics events on their way to the machine's cdb, their only store (records 146, 149).
  * {@link #offer} never blocks: an event joins a queue of {@link #CAPACITY}, or, the queue full or the sink closed, is
  * dropped and counted. One errand drains the queue in batches of at most {@link #BATCH_LINES} lines, sent
- * {@link #BATCH_WAIT} after a batch's first event at the latest, to the server {@link QuestDbEndpoint#live} names; when
- * none answers, {@link QuestDbEndpoint#ensureUp} is asked at most once a minute. The tables are created the first time
+ * {@link #BATCH_WAIT} after a batch's first event at the latest, to the server {@link MetricsEndpoint#live} names; when
+ * none answers, {@link MetricsEndpoint#ensureUp} is asked at most once a minute. The tables are created the first time
  * a process writes to a server, and again after a write is refused for a missing table.
  * <p>
  * Delivery is at most once per event offered: a batch that fails is lost, counted, and logged at most once a minute;
@@ -59,16 +59,16 @@ final class MetricsSink implements AutoCloseable {
     /** How long {@link #close} lets the queue drain before it interrupts the errand: the contract's bound. */
     static final Duration CLOSE_WAIT = Duration.ofSeconds(2);
     /**
-     * How often, at most, {@link QuestDbEndpoint#ensureUp} is asked and a recurring failure logged: the contract's
+     * How often, at most, {@link MetricsEndpoint#ensureUp} is asked and a recurring failure logged: the contract's
      * bound (record 146).
      */
     static final long MINUTE_NANOS = TimeUnit.MINUTES.toNanos(1);
     /**
      * The setting naming a second server, by its base URL, that gets every batch as well: a server to compare with the
-     * machine's QuestDB. Unset, the first line of the machine's QuestDB folder's {@code shadow} file is the server,
+     * machine's cdb. Unset, the first line of the machine folder's {@code shadow} file is the server,
      * when there is one ({@link MetricsLog#shadowSetting}); with neither, nothing else is written.
      */
-    static final String SHADOW_ENV = "COMANDO_QDB_SHADOW";
+    static final String SHADOW_ENV = "COMANDO_METRICS_SHADOW";
     /** The contract's connect bound (record 146, §5): a server on this machine answers a connect at once. */
     private static final Duration CONNECT_WITHIN = Duration.ofSeconds(1);
     private static final System.Logger LOG = System.getLogger(MetricsSink.class.getName());
@@ -94,7 +94,7 @@ final class MetricsSink implements AutoCloseable {
     private final MetricsLines lines;
     private final LongSupplier nanos;
     private final IntentSink notices;
-    private final QuestDbEndpoint qdb;
+    private final MetricsEndpoint endpoint;
     private final ArrayBlockingQueue<ObjectNode> queue = new ArrayBlockingQueue<>(CAPACITY);
     private final AtomicLong sent = new AtomicLong();
     /** The server of {@link #SHADOW_ENV}; null when there is none. */
@@ -122,18 +122,18 @@ final class MetricsSink implements AutoCloseable {
     private URI tablesOn;
 
     /**
-     * Starts the errand that sends the events, as {@code lines} maps them, to {@code qdb}; {@code nanos} times the
+     * Starts the errand that sends the events, as {@code lines} maps them, to {@code endpoint}; {@code nanos} times the
      * once-a-minute bounds, and an outage is told to {@code notices}. No shadow: the environment's and the machine
      * folder's file are read by {@link MetricsLog#machineShadow} alone, where the app builds its log, so a test of the
      * sink never writes to the user's shadow.
      */
     MetricsSink(
-            final QuestDbEndpoint qdb,
+            final MetricsEndpoint endpoint,
             final MetricsLines lines,
             final LongSupplier nanos,
             final IntentSink notices
     ) {
-        this(qdb, lines, nanos, notices, null);
+        this(endpoint, lines, nanos, notices, null);
     }
 
     /**
@@ -142,13 +142,13 @@ final class MetricsSink implements AutoCloseable {
      * the server's writes never depends on it.
      */
     MetricsSink(
-            final QuestDbEndpoint qdb,
+            final MetricsEndpoint endpoint,
             final MetricsLines lines,
             final LongSupplier nanos,
             final IntentSink notices,
             final String shadow
     ) {
-        this.qdb = qdb;
+        this.endpoint = endpoint;
         this.lines = lines;
         this.nanos = nanos;
         this.notices = notices;
@@ -457,9 +457,9 @@ final class MetricsSink implements AutoCloseable {
      */
     private URI connect(final URI refused) throws IOException, InterruptedException {
         if (server == null) {
-            URI found = qdb.live().orElse(null);
+            URI found = endpoint.live().orElse(null);
             if ((found == null || found.equals(refused)) && mayEnsure()) {
-                found = qdb.ensureUp().orElse(null);
+                found = endpoint.ensureUp().orElse(null);
             }
             if (found == null) {
                 return null;

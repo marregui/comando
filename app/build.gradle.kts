@@ -32,11 +32,11 @@ configurations.runtimeClasspath {
     exclude(group = "org.checkerframework", module = "checker-qual")
 }
 
-// no test of this module joins the comando Edge or the machine's QuestDB: a developer's own comando may be running them
+// no test of this module joins the comando Edge or the machine's cdb: a developer's own comando may be running them
 // (records 123, 146)
 tasks.withType<Test>().configureEach {
     systemProperty("comando.peers", "false")
-    systemProperty("comando.questdb", "false")
+    systemProperty("comando.metrics", "false")
 }
 
 tasks.jar {
@@ -88,7 +88,7 @@ tasks.register<JavaExec>("snapshot") {
     mainClass = "dev.marregui.comando.app.Snapshot"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot",
-        "-Dcomando.peers=false", "-Dcomando.questdb=false",
+        "-Dcomando.peers=false", "-Dcomando.metrics=false",
         // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
         "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
     args(

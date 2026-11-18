@@ -230,27 +230,27 @@
   "outcome" : "ok StoredPanel[id=x, title=null, connection=null, session=null, file=null, content=null, closed=false, side=null]"
 }, {
   "mapper" : "file",
-  "type" : "QuestDbEntry",
+  "type" : "MachineServerEntry",
   "input" : "{\"version\":1,\"pid\":5,\"ports\":{\"http\":\"9000\"}}",
-  "outcome" : "ok Entry[version=1, pid=5, owner=null, name=null, started=null, ports=Ports[http=9000, httpMin=0, pg=0, ilp=0], token=null, questdb=null]"
+  "outcome" : "ok Entry[version=1, pid=5, owner=null, name=null, started=null, ports=Ports[http=9000, httpMin=0, pg=0, ilp=0], token=null, jar=null]"
 }, {
   "mapper" : "file",
-  "type" : "QuestDbEntry",
+  "type" : "MachineServerEntry",
   "input" : "{\"version\":1,\"ports\":null}",
-  "outcome" : "ok Entry[version=1, pid=0, owner=null, name=null, started=null, ports=null, token=null, questdb=null]"
+  "outcome" : "ok Entry[version=1, pid=0, owner=null, name=null, started=null, ports=null, token=null, jar=null]"
 }, {
   "mapper" : "file",
-  "type" : "QuestDbEntry",
+  "type" : "MachineServerEntry",
   "input" : "{\"version\":1,\"ports\":[]}",
-  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `dev.marregui.comando.app.MachineQuestDb$Ports` from Array value (token `JsonToken.START_ARRAY`)"
+  "outcome" : "error MismatchedInputException: Cannot deserialize value of type `dev.marregui.comando.app.MachineCdb$Ports` from Array value (token `JsonToken.START_ARRAY`)"
 }, {
   "mapper" : "file",
-  "type" : "QuestDbEntry",
+  "type" : "MachineServerEntry",
   "input" : "{}",
-  "outcome" : "ok Entry[version=1, pid=0, owner=null, name=null, started=null, ports=null, token=null, questdb=null]"
+  "outcome" : "ok Entry[version=1, pid=0, owner=null, name=null, started=null, ports=null, token=null, jar=null]"
 }, {
   "mapper" : "file",
-  "type" : "QuestDbEntry",
+  "type" : "MachineServerEntry",
   "input" : "{\"version\":\"x\"}",
   "outcome" : "error InvalidFormatException: Cannot deserialize value of type `int` from String \"x\": not a valid `int` value"
 }, {

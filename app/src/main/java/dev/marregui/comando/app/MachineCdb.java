@@ -36,7 +36,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.jetbrains.annotations.TestOnly;
 
-import dev.marregui.comando.claude.QuestDbEndpoint;
+import dev.marregui.comando.claude.MetricsEndpoint;
 import dev.marregui.comando.core.files.Mapped;
 import dev.marregui.comando.core.files.OwnerOnly;
 import dev.marregui.comando.core.intent.Intent;
@@ -54,26 +54,26 @@ import dev.marregui.comando.ui.shell.ServerToggle;
 
 /**
  * The machine's one database server (record 146), cdb since record 180, QuestDB before: a process of its own, started
- * from {@code bin/start.sh} in the machine folder ({@code ~/.comando-questdb}) by whichever writer finds none up, a
+ * from {@code bin/start.sh} in the machine folder ({@code ~/.comando-cdb}) by whichever writer finds none up, a
  * comando instance or the kit, and outliving it. The registry {@code server.json} names its process, its owner (the
  * data root of the comando that started it, or {@code kit:<kit root>}), its ports and a random token the server keeps
- * in its {@code qdb_server} table: the server is live when its process lives and it answers that token, so a pid
+ * in its {@code cdb_server} table: the server is live when its process lives and it answers that token, so a pid
  * another process reused never passes for it. Only its owner stops it; quitting comando leaves it running. Its HTTP and
  * PG wire listeners bind {@code 127.0.0.1}, cdb's default; its data is the machine folder's {@code cdb/}.
  * <p>
  * Starts are serialised across processes by a POSIX lock on {@code start.lock}, which the kit takes too: two writers
  * that find none up start one server.
  */
-final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoint, AutoCloseable {
+final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, AutoCloseable {
 
     /** cdb's server class, started by {@code start.sh} from the copied jar. */
     static final String CDB_SERVE = "dev.marregui.comando.cdb.CdbServe";
     /**
      * The registry's schema version this comando reads and writes; a later one's server is used, never managed. 2 since
-     * the server is cdb (record 180): a comando of version 1 then never starts or stops it, so none starts QuestDB on
-     * the old {@code root/} while cdb is down.
+     * the server is cdb (record 180), so a comando of version 1 never starts QuestDB on the old {@code root/}; 3 since
+     * the names are cdb's (record 181): its {@code jar} key, its folder and its token table {@code cdb_server}.
      */
-    static final int REGISTRY_VERSION = 2;
+    static final int REGISTRY_VERSION = 3;
     /**
      * The launcher, written whole at each start this comando makes: the machine folder, the HTTP and PG wire ports, the
      * Java home and the copied cdb jar's name filled in. Its server runs in a process group of its own
@@ -117,7 +117,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
      * closing any channel on the file drops it, also while another thread of this JVM still works under it.
      */
     private static final ConcurrentHashMap<Path, ReentrantLock> IN_PROCESS = new ConcurrentHashMap<>();
-    private static final System.Logger LOG = System.getLogger(MachineQuestDb.class.getName());
+    private static final System.Logger LOG = System.getLogger(MachineCdb.class.getName());
     /** How often a start asks the new server whether it is up, and retries a held lock (record 146). */
     private static final Duration POLL_EVERY = Duration.ofMillis(100);
     /** A connect to the HTTP port that succeeds within this means another process holds it (record 146). */
@@ -127,7 +127,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     private static final Duration SCRIPT_WITHIN = Duration.ofSeconds(10);
     /** How long a stop waits for the server after SIGTERM before it kills it (record 146). */
     private static final Duration STOP_WAIT = Duration.ofSeconds(20);
-    private static final String TOKEN_QUERY = "SELECT token FROM qdb_server ORDER BY ts DESC LIMIT 1";
+    private static final String TOKEN_QUERY = "SELECT token FROM cdb_server ORDER BY ts DESC LIMIT 1";
     /** How long a start waits for the new server's {@code /exec}, then refuses and leaves it (record 146). */
     private static final Duration UP_WITHIN = Duration.ofSeconds(60);
 
@@ -137,7 +137,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     /**
      * The starts, stops and live checks under way, each on a virtual thread; closed with comando, the server left up.
      */
-    private final Errands errands = new Errands("questdb");
+    private final Errands errands = new Errands("machine-cdb");
     private final Path folder;
     private final IntentSink intents;
     private final String name;
@@ -159,13 +159,13 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     /** The live entry at the last check, or null: whose server the button stands for; written and read as above. */
     private volatile Entry seen;
 
-    /** The machine's QuestDB in {@code machineFolder} on the standard ports, for the instance on {@code dataRoot}. */
-    MachineQuestDb(final Path machineFolder, final Path dataRoot, final String instanceName, final IntentSink intents) {
+    /** The machine's cdb in {@code machineFolder} on the standard ports, for the instance on {@code dataRoot}. */
+    MachineCdb(final Path machineFolder, final Path dataRoot, final String instanceName, final IntentSink intents) {
         this(machineFolder, dataRoot, instanceName, intents, Ports.DEFAULT);
     }
 
     /** As above, on {@code ports}; for tests, which never bind the standard ones. */
-    MachineQuestDb(
+    MachineCdb(
             final Path machineFolder,
             final Path dataRoot,
             final String instanceName,
@@ -218,7 +218,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     @Override
     public boolean isRunning() {
         if (System.nanoTime() - checkedAtNanos >= CHECK_EVERY.toNanos() && checking.compareAndSet(false, true)) {
-            final Thread t = errands.start("questdb-check", () -> {
+            final Thread t = errands.start("machine-cdb-check", () -> {
                 try {
                     liveEntry();
                 } finally {
@@ -271,7 +271,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
                     "cdb is " + (doing.isEmpty() ? "busy" : doing) + "; wait for it", false));
             return;
         }
-        final Thread t = errands.start("questdb-toggle", () -> {
+        final Thread t = errands.start("machine-cdb-toggle", () -> {
             try {
                 flip(null);
             } finally {
@@ -304,7 +304,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         if (!busy.compareAndSet(false, true)) {
             return "cdb is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
         }
-        final Thread t = errands.start(up ? "questdb-start" : "questdb-stop", () -> {
+        final Thread t = errands.start(up ? "machine-cdb-start" : "machine-cdb-stop", () -> {
             try {
                 flip(up);
             } finally {
@@ -751,13 +751,13 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
         }
         final String token = token();
         // the token is in this INSERT and in server.json only: neither the statement nor its failure is logged
-        if (exec(ports.http(), "CREATE TABLE IF NOT EXISTS qdb_server"
+        if (exec(ports.http(), "CREATE TABLE IF NOT EXISTS cdb_server"
                 + " (ts TIMESTAMP, token VARCHAR, pid LONG, owner VARCHAR) TIMESTAMP(ts) PARTITION BY NONE BYPASS WAL",
                 UP_WITHIN) == null
-                || exec(ports.http(), "INSERT INTO qdb_server VALUES (now(), '" + token + "', " + pid + ", '"
+                || exec(ports.http(), "INSERT INTO cdb_server VALUES (now(), '" + token + "', " + pid + ", '"
                         + owner.replace("'", "''") + "')", UP_WITHIN) == null) {
             return Outcome.refused("cdb [pid=" + pid
-                    + "] did not record its token in qdb_server and is left running; see " + stdout());
+                    + "] did not record its token in cdb_server and is left running; see " + stdout());
         }
         final Entry entry = new Entry(REGISTRY_VERSION, pid, owner, name,
                 Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(), ports, token, prepared.jar());
@@ -886,8 +886,8 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
     }
 
     /**
-     * {@code server.json}, version 2 (records 146, 180): the server's process, its owner and instance name, when it
-     * started, its ports, the token it answers and, in {@code questdb} (the key kept for its readers), its jar.
+     * {@code server.json}, version 3 (records 146, 180, 181): the server's process, its owner and instance name, when
+     * it started, its ports, the token it answers and, in {@code jar}, the copy of cdb's jar it runs.
      */
     record Entry(
             int version,
@@ -897,7 +897,7 @@ final class MachineQuestDb implements ServerToggle, ServerSwitch, QuestDbEndpoin
             String started,
             Ports ports,
             String token,
-            String questdb
+            String jar
     ) {
 
         Entry {

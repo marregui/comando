@@ -948,7 +948,7 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         }
     }
 
-    /** Stops the Edge when this instance started it, as QuestDB stops with comando; another's is left running. */
+    /** Stops the Edge when this instance started it, as the machine's cdb does; another's is left running. */
     private synchronized void closeEdge() {
         try {
             final Entry e = read();

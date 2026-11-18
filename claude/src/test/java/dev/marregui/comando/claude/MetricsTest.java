@@ -269,7 +269,7 @@ class MetricsTest {
     /// written to disk in its stead.
     @Test
     void anEventQuestDbDoesNotTakeIsLostAndTold() throws Exception {
-        final QuestDbEndpoint failing = new QuestDbEndpoint() {
+        final MetricsEndpoint failing = new MetricsEndpoint() {
             @Override
             public Optional<URI> ensureUp() {
                 throw new IllegalStateException("no server");
@@ -338,26 +338,26 @@ class MetricsTest {
         }
     }
 
-    /// With `COMANDO_QDB_SHADOW` set, that is the shadow, blank meaning none, and no file is read; unset, the first
-    /// line of `shadow` in the folder `KIT_QDB_HOME` names is, else in `.comando-questdb` under the user's home.
+    /// With `COMANDO_METRICS_SHADOW` set, that is the shadow, blank meaning none, and no file is read; unset, the first
+    /// line of `shadow` in the folder `KIT_METRICS_HOME` names is, else in `.comando-cdb` under the user's home.
     @Test
     void theShadowIsTheSettingElseTheMachineFoldersFile() throws Exception {
         final Path machine = Files.createDirectories(dir.resolve("machine"));
         Files.writeString(machine.resolve("shadow"), "http://127.0.0.1:9100 \r\nhttp://elsewhere:1\n");
         final Path userHome = dir.resolve("home");
-        Files.writeString(Files.createDirectories(userHome.resolve(".comando-questdb")).resolve("shadow"),
+        Files.writeString(Files.createDirectories(userHome.resolve(".comando-cdb")).resolve("shadow"),
                 "http://127.0.0.1:9200");
 
-        assertThat(MetricsLog.shadowSetting(Map.of("COMANDO_QDB_SHADOW", "http://127.0.0.1:9300")::get, userHome))
+        assertThat(MetricsLog.shadowSetting(Map.of("COMANDO_METRICS_SHADOW", "http://127.0.0.1:9300")::get, userHome))
                 .as("the setting wins over the file").isEqualTo("http://127.0.0.1:9300");
         assertThat(MetricsLog.shadowSetting(
-                Map.of("COMANDO_QDB_SHADOW", "", "KIT_QDB_HOME", machine.toString())::get, userHome))
+                Map.of("COMANDO_METRICS_SHADOW", "", "KIT_METRICS_HOME", machine.toString())::get, userHome))
                 .as("an empty setting is none, the file unread").isEmpty();
-        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", machine.toString())::get, userHome))
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_METRICS_HOME", machine.toString())::get, userHome))
                 .as("the first line of the named folder's file").isEqualTo("http://127.0.0.1:9100");
         assertThat(MetricsLog.shadowSetting(Map.<String, String>of()::get, userHome))
                 .as("the default folder, no end of line").isEqualTo("http://127.0.0.1:9200");
-        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", " ")::get, userHome))
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_METRICS_HOME", " ")::get, userHome))
                 .as("a blank folder is the default").isEqualTo("http://127.0.0.1:9200");
     }
 
@@ -367,9 +367,9 @@ class MetricsTest {
         Files.createDirectories(dir.resolve("machine").resolve("shadow"));
 
         assertThat(MetricsLog.shadowSetting(Map.<String, String>of()::get, dir.resolve("nowhere"))).isNull();
-        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", dir.resolve("machine").toString())::get, dir))
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_METRICS_HOME", dir.resolve("machine").toString())::get, dir))
                 .isNull();
-        assertThat(MetricsLog.shadowSetting(Map.of("KIT_QDB_HOME", "\0")::get, dir)).isNull();
+        assertThat(MetricsLog.shadowSetting(Map.of("KIT_METRICS_HOME", "\0")::get, dir)).isNull();
     }
 
     /// A log built for a test sends to its server alone, whatever `shadow` files exist: only
@@ -378,7 +378,7 @@ class MetricsTest {
     void aLogBuiltForATestReadsNoFile() throws Exception {
         try (final MetricsSinkTest.FakeQuestDb server = new MetricsSinkTest.FakeQuestDb();
                 final MetricsSinkTest.FakeQuestDb shadow = new MetricsSinkTest.FakeQuestDb()) {
-            Files.writeString(Files.createDirectories(dir.resolve(".comando-questdb")).resolve("shadow"),
+            Files.writeString(Files.createDirectories(dir.resolve(".comando-cdb")).resolve("shadow"),
                     shadow.uri().toString());
             assertThat(MetricsLog.shadowSetting(Map.<String, String>of()::get, dir)).isEqualTo(shadow.uri().toString());
             try (final MetricsLog log = log(server)) {

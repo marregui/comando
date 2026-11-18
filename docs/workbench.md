@@ -659,7 +659,7 @@ and the explorer (⌘⇧E): a tree in the side pane, whose table menu inserts `S
 **Start the machine's cdb**, the database button at the tab row's right end (also in the Connections tab's menu),
 starts the one database server of this machine, comando's own [cdb](cdb.md), shared by every comando instance and every
 kit ([record 146](adr/0146-every-metric-goes-to-the-machine-questdb.md), [record 180](adr/0180-cdb-is-the-machine-server.md)): its own process, `CdbServe` run from
-a copy of comando's cdb jar in `lib/`, with its data in `~/.comando-questdb/cdb/`, on the ports QuestDB used before it:
+a copy of comando's cdb jar in `lib/`, with its data in `~/.comando-cdb/cdb/`, on the ports QuestDB used before it:
 PG wire 8812 and HTTP 9000 (SQL at `/exec`, ILP at `/write`, in QuestDB's formats), its only two listeners, both bound
 to `127.0.0.1`; `server.json` still names 9003 and 9009 for the readers that expect them. It runs in a heap of at most
 256 MiB, with G1 on two GC threads and a collection every 10 s when idle. Its one log is `stdout.log` (Help ▸ Show
@@ -996,7 +996,7 @@ the kit's manifest names ([Kit and brain §3.1](kit-and-brain.md#31-the-root)).
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay in
 `connections.json`; [Claude Code §4.3](claude-code.md#43-secrets)); `~/.comando-edge.json`, the registry of the one comando Edge,
-shared by every instance ([§4.1](#41-the-comando-edge)); `~/.comando-questdb/`, the machine's cdb: `bin/start.sh` (its
+shared by every instance ([§4.1](#41-the-comando-edge)); `~/.comando-cdb/`, the machine's cdb: `bin/start.sh` (its
 launcher, written at each start), `lib/` (`cdb-<hash>.jar`, the copies of comando's cdb jar it runs), `cdb/` (its data),
 `server.json` (its registry: pid, owner, ports, token), `stdout.log` (with `stdout.log.1`, the copy a start set aside past 10 MiB) and `start.lock` ([§3.4](#34-the-machines-cdb)); a `root/` there is the QuestDB that served before
 [record 180](adr/0180-cdb-is-the-machine-server.md), which nothing reads, so it can be deleted. The Java preferences that held the window's state before

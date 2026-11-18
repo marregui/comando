@@ -56,7 +56,7 @@ class FileReadRulesTest {
     private static final String CDB_ROW_BLOCK = "dev.marregui.comando.cdb.store.RowBlock";
 
     /// No class hands a `File` to a JSON reader, or opens a channel on a file but the lock on the data root, the
-    /// machine's QuestDB's start lock (record 146), and cdb's store, which owns its column files and depends on the JDK
+    /// machine's cdb's start lock (record 146), and cdb's store, which owns its column files and depends on the JDK
     /// alone (record 158). comando's own `core.json.Json` takes no `File` (record 157).
     @Test
     void noClassReadsAFileByAnotherRoute() {
@@ -67,7 +67,7 @@ class FileReadRulesTest {
                 .check(ComandoClasses.MAIN);
         noClasses().that().doNotHaveFullyQualifiedName(Mapped.class.getName())
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
-                .and().doNotHaveFullyQualifiedName(MachineQuestDb.class.getName())
+                .and().doNotHaveFullyQualifiedName(MachineCdb.class.getName())
                 .and().doNotHaveFullyQualifiedName(CDB_STORE_FILES)
                 .should().callMethodWhere(target(name("open")).and(target(owner(assignableTo(FileChannel.class)))))
                 .check(ComandoClasses.MAIN);

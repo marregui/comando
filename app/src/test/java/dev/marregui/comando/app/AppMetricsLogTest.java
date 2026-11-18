@@ -10,21 +10,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.marregui.comando.claude.MetricsEndpoint;
 import dev.marregui.comando.claude.MetricsLog;
-import dev.marregui.comando.claude.QuestDbEndpoint;
 import dev.marregui.comando.testkit.RecordingSink;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// How the app picks its metrics log (record 149): the machine's QuestDB is the only store, so an instance that
-/// leaves it out (`-Dcomando.questdb=false`, as every test run does) keeps no metrics at all, and neither choice
+/// How the app picks its metrics log (record 149): the machine's cdb is the only store, so an instance that
+/// leaves it out (`-Dcomando.metrics=false`, as every test run does) keeps no metrics at all, and neither choice
 /// writes a metrics folder under the data root. The shadow server is the one the app's constructor passes in; no log
 /// built here reads the machine folder's `shadow` file. Each test runs with the user's home moved to a scratch folder
 /// whose machine folder names a shadow, so a log that read the file would show it and the user's own is never read.
 class AppMetricsLogTest {
 
-    /// A QuestDB that never runs: the log may not reach it, and nothing here waits for it.
-    private static final QuestDbEndpoint NO_SERVER = new QuestDbEndpoint() {
+    /// A machine server that never runs: the log may not reach it, and nothing here waits for it.
+    private static final MetricsEndpoint NO_SERVER = new MetricsEndpoint() {
         @Override
         public Optional<URI> ensureUp() {
             return Optional.empty();
@@ -47,7 +47,7 @@ class AppMetricsLogTest {
     /// Moves the user's home to `userHome`, its machine folder's `shadow` file naming [#FILE_SHADOW].
     @BeforeEach
     void moveTheUsersHome(@TempDir final Path userHome) throws Exception {
-        Files.writeString(Files.createDirectories(userHome.resolve(".comando-questdb")).resolve("shadow"), FILE_SHADOW);
+        Files.writeString(Files.createDirectories(userHome.resolve(".comando-cdb")).resolve("shadow"), FILE_SHADOW);
         realHome = System.getProperty("user.home");
         System.setProperty("user.home", userHome.toString());
     }
@@ -58,18 +58,18 @@ class AppMetricsLogTest {
         System.setProperty("user.home", realHome);
     }
 
-    /// With the machine's QuestDB left out by the property, the app takes the log that keeps nothing.
+    /// With the machine's cdb left out by the property, the app takes the log that keeps nothing.
     @Test
-    void withTheMachinesQuestDbLeftOutTheLogKeepsNothing(@TempDir final Path home) {
-        assertThat(App.machineQuestDb()).isFalse();
-        assertThat(App.metricsLog(App.machineQuestDb(), home, NO_SERVER, notices, null)).isSameAs(MetricsLog.NONE);
+    void withTheMachinesCdbLeftOutTheLogKeepsNothing(@TempDir final Path home) {
+        assertThat(App.usesMachineCdb()).isFalse();
+        assertThat(App.metricsLog(App.usesMachineCdb(), home, NO_SERVER, notices, null)).isSameAs(MetricsLog.NONE);
         assertThat(Files.exists(home.resolve("metrics"))).isFalse();
     }
 
-    /// With the machine's QuestDB, the app builds a log of its own, and still no metrics folder. With no shadow given
+    /// With the machine's cdb, the app builds a log of its own, and still no metrics folder. With no shadow given
     /// it has none, though the machine folder's `shadow` file names one: the file is not read on this path.
     @Test
-    void withTheMachinesQuestDbTheLogIsItsOwn(@TempDir final Path home) {
+    void withTheMachinesCdbTheLogIsItsOwn(@TempDir final Path home) {
         try (final MetricsLog log = App.metricsLog(true, home, NO_SERVER, notices, null)) {
             assertThat(log).isNotSameAs(MetricsLog.NONE);
             assertThat(log.shadow()).as("no shadow read from the machine folder").isNull();

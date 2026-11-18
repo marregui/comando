@@ -151,10 +151,10 @@ final class JsonSamples {
                 new Store.StoredPanel("p-3", null, null, null, null, null, null, null));
     }
 
-    /// The machine's QuestDB registry entry, every field set.
-    static MachineQuestDb.Entry questDb() {
-        return new MachineQuestDb.Entry(1, 4242L, "Comando", "Comando Expert", "2026-11-14T08:00:00Z",
-                new MachineQuestDb.Ports(9000, 9003, 8812, 9009), "tok-123", "9.3.2");
+    /// The machine's cdb registry entry, every field set.
+    static MachineCdb.Entry machineServer() {
+        return new MachineCdb.Entry(1, 4242L, "Comando", "Comando Expert", "2026-11-14T08:00:00Z",
+                new MachineCdb.Ports(9000, 9003, 8812, 9009), "tok-123", "9.3.2");
     }
 
     /// The comando Edge's registry entry, every field set.
