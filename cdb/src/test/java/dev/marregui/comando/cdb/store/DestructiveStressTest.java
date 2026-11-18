@@ -413,7 +413,7 @@ public class DestructiveStressTest {
         assertThat(reads.get()).as("reads checked").isPositive();
     }
 
-    /// Runs `tasks` on named virtual threads released by one barrier, waits for all with a bound, and returns what
+    /// Runs `tasks` on named platform threads released by one barrier, waits for all with a bound, and returns what
     /// went wrong: a task's exception, a timeout, a thread that would not stop.
     public static List<String> race(final String name, final List<Task> tasks) throws InterruptedException {
         final CyclicBarrier start = new CyclicBarrier(tasks.size());
@@ -424,7 +424,9 @@ public class DestructiveStressTest {
         try {
             for (int i = 0; i < tasks.size(); i++) {
                 final Task task = tasks.get(i);
-                threads.add(Thread.ofVirtual().name(name + "-test-" + i).start(() -> {
+                // platform threads: the readers spin, and on virtual threads they kept every carrier of a 3-core CI
+                // runner, so the writers never ran
+                threads.add(Thread.ofPlatform().name(name + "-test-" + i).start(() -> {
                     try {
                         start.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
                         task.run();
@@ -442,6 +444,17 @@ public class DestructiveStressTest {
         } finally {
             // an interrupt closes a FileChannel for every user, so only a run already timed out is interrupted
             if (!finished) {
+                // each live thread's stack before the interrupt moves it: the wait a hang is in, the one record a CI
+                // run leaves of it
+                for (final Thread thread : threads) {
+                    if (thread.isAlive()) {
+                        final StringBuilder stack = new StringBuilder();
+                        for (final StackTraceElement frame : thread.getStackTrace()) {
+                            stack.append("\n    at ").append(frame);
+                        }
+                        anomalies.add("thread at the timeout [thread=" + thread.getName() + ']' + stack);
+                    }
+                }
                 for (final Thread thread : threads) {
                     thread.interrupt();
                 }

@@ -126,7 +126,9 @@ class VersionLazyMapTest {
             final List<Thread> readers = new ArrayList<>(READERS);
             for (int t = 0; t < READERS; t++) {
                 final Random local = new Random(seed + t);
-                readers.add(Thread.ofVirtual().name("version-lazy-map-test-reader-" + t).start(() -> {
+                // platform threads: the readers spin, and as virtual threads they can hold every carrier of a small
+                // CI runner while the others wait
+                readers.add(Thread.ofPlatform().name("version-lazy-map-test-reader-" + t).start(() -> {
                     try {
                         start.await(10, TimeUnit.SECONDS);
                         for (int round = 0; round < 3_000; round++) {
