@@ -37,3 +37,7 @@ which still run an embedded QuestDB.
 - The live folder moved once, while its server was stopped; its data, launcher and registry are unchanged otherwise.
 - A comando or kit built before this record looks for `~/.comando-questdb` and finds no server there: it must not be
   run against this machine's data again.
+- A server started by such a build (on 2026-11-18, through a link left at the old path for the comando still running)
+  writes a version 2 registry and keeps its token in `qdb_server`. This comando asks `cdb_server`, finds no live
+  server and neither stops nor manages it. That server is ended by its pid, and this comando then starts its own. No
+  fallback to `qdb_server` is kept, because the state exists only while the switch-over runs.
