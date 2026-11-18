@@ -666,8 +666,7 @@ to `127.0.0.1`; `server.json` still names 9003 and 9009 for the readers that exp
 cdb's log), moved to `stdout.log.1` at a start once past 10 MiB. When none runs, the first instance or kit that writes
 a metric starts it, so it is usually up without a click. It keeps running when the comando that started it quits; only
 that comando stops it, and in the others the button's tooltip says who started it. Every instance's metrics and the
-kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`). The QuestDB that served before
-[record 180](adr/0180-cdb-is-the-machine-server.md) kept its tables in `~/.comando-questdb/root/`, which nothing reads now.
+kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`).
 
 ## 4. Instances and the comando Edge
 
@@ -999,8 +998,8 @@ Outside it: connection passwords in the macOS keychain for the default data root
 `connections.json`; [Claude Code §4.3](claude-code.md#43-secrets)); `~/.comando-edge.json`, the registry of the one comando Edge,
 shared by every instance ([§4.1](#41-the-comando-edge)); `~/.comando-questdb/`, the machine's cdb: `bin/start.sh` (its
 launcher, written at each start), `lib/` (`cdb-<hash>.jar`, the copies of comando's cdb jar it runs), `cdb/` (its data),
-`root/` (the tables of the QuestDB that served before it, read by nothing), `server.json` (its registry: pid,
-owner, ports, token), `stdout.log` (with `stdout.log.1`, the copy a start set aside past 10 MiB) and `start.lock` ([§3.4](#34-the-machines-cdb)). The Java preferences that held the window's state before
+`server.json` (its registry: pid, owner, ports, token), `stdout.log` (with `stdout.log.1`, the copy a start set aside past 10 MiB) and `start.lock` ([§3.4](#34-the-machines-cdb)); a `root/` there is the QuestDB that served before
+[record 180](adr/0180-cdb-is-the-machine-server.md), which nothing reads, so it can be deleted. The Java preferences that held the window's state before
 `settings.json` (node `dev/marregui/comando`; tests use `comando.prefsNode`) are read once, when the file does not exist
 yet, and left as they were.
 
