@@ -57,8 +57,10 @@ final class SerialPlans {
                             l -> JoinCursor.open(l, r, j.kind(), j.on(), nowMicros, j.fields())));
             case Plan.Window w -> over(build(w.child(), store, nowMicros, reads),
                     c -> new WindowCursor(c, w, nowMicros));
-            case Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _ ->
+            case Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _,
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ ->
                     throw new CdbException("cannot query a statement that changes the store", -1);
+            case Plan.Explain _ -> throw new CdbException("cannot query an EXPLAIN serially", -1);
         };
     }
 

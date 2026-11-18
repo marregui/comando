@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.exec;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -8,12 +9,14 @@ import java.util.function.Function;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.CdbException;
+import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.catalog.Catalog;
 import dev.marregui.comando.cdb.exec.expr.Functions;
 import dev.marregui.comando.cdb.exec.expr.VectorFn;
 import dev.marregui.comando.cdb.plan.Bound;
 import dev.marregui.comando.cdb.plan.ColumnUse;
 import dev.marregui.comando.cdb.plan.Plan;
+import dev.marregui.comando.cdb.plan.PlanText;
 import dev.marregui.comando.cdb.store.Store;
 
 /** Builds the cursor tree of a query plan, and runs the plans that change the store. */
@@ -105,6 +108,10 @@ public final class Executor {
             case Plan.Insert _ -> throw new CdbException("cannot query an INSERT", -1);
             case Plan.AddColumns _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
             case Plan.SetTtl _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
+            case Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ ->
+                    throw new CdbException("cannot query a DROP, TRUNCATE or DELETE", -1);
+            case Plan.Explain(final Plan inner, final List<Field> fields) ->
+                    new LinesCursor(fields, explain(inner, store, nowMicros).split("\n"));
         };
     }
 
@@ -136,7 +143,7 @@ public final class Executor {
             final Function<FrameSource, Cursor> perFrame,
             final Function<Cursor, Cursor> serial
     ) {
-        if (splittable && FrameSource.isSegment(child)) {
+        if (perFrame(splittable, child)) {
             final FrameSource source = FrameSource.of(child, store, nowMicros, reads, ctx);
             try {
                 return perFrame.apply(source);
@@ -150,6 +157,14 @@ public final class Executor {
             }
         }
         return over(build(child, store, nowMicros, reads, ctx), serial);
+    }
+
+    /**
+     * True when the operator over {@code child} runs per frame on the query's pool: {@code child} is a segment and the
+     * operator's own expressions are {@code splittable}; else it runs over the child's cursor on the calling thread.
+     */
+    private static boolean perFrame(final boolean splittable, final Plan child) {
+        return splittable && FrameSource.isSegment(child);
     }
 
     private static boolean splittable(final List<Bound> keys, final List<Bound.Agg> aggs) {
@@ -167,7 +182,128 @@ public final class Executor {
             case Plan.Insert i -> InsertRunner.run(i, store, nowMicros);
             case Plan.AddColumns a -> AlterRunner.addColumns(a, store);
             case Plan.SetTtl t -> AlterRunner.setTtl(t, store);
+            case Plan.DropTable d -> DropRunner.dropTable(d, store);
+            case Plan.Truncate t -> DropRunner.truncate(t, store);
+            case Plan.DropPartitions d -> DropRunner.dropPartitions(d, store);
+            case Plan.Delete d -> DeleteRunner.run(d, store, nowMicros);
         };
+    }
+
+    /**
+     * {@code plan}'s text ({@link PlanText}) with the executor's choices as {@code -- } notes on each node's line: the
+     * columns each scan reads ({@link ColumnUse}), whether each operator runs per frame on the query's pool or serially
+     * on the calling thread, a sort read late ({@link LateReadCursor#applies}) and a join's build side. Nothing is
+     * opened or run, a change included; every choice is made from the plan alone, so {@code store} and
+     * {@code nowMicros} are not read.
+     */
+    public static String explain(final Plan plan, final Store store, final long nowMicros) {
+        final Map<Plan, String> notes = new IdentityHashMap<>();
+        noteStatement(plan, notes);
+        return PlanText.of(plan, notes::get);
+    }
+
+    /** Notes a statement: a query, or the queries an {@code INSERT} reads, each with its own column use. */
+    private static void noteStatement(final Plan plan, final Map<Plan, String> notes) {
+        switch (plan) {
+            case Plan.Explain(final Plan inner, final List<Field> _) -> noteStatement(inner, notes);
+            case Plan.Insert(final String _, final int[] _, final List<Plan> sources) -> {
+                for (final Plan source : sources) {
+                    noteStatement(source, notes);
+                }
+            }
+            case Plan.Change _ -> {
+                // its runner reads the table itself
+            }
+            case Plan.Scan _, Plan.Source _, Plan.Filter _, Plan.Project _, Plan.Aggregate _, Plan.SampleBy _,
+                 Plan.LatestOn _, Plan.Distinct _, Plan.Sort _, Plan.Limit _, Plan.SetOp _, Plan.Join _,
+                 Plan.Window _ -> noteQuery(plan, ColumnUse.of(plan), notes);
+        }
+    }
+
+    /** Notes {@code plan}'s nodes with the choices {@link #build} makes for them. */
+    private static void noteQuery(
+            final Plan plan,
+            final Map<Plan.Scan, boolean[]> reads,
+            final Map<Plan, String> notes
+    ) {
+        switch (plan) {
+            case Plan.Scan s -> notes.put(s, "reads " + names(s.fields(), reads.get(s))
+                    + (s.terms().isEmpty() ? "" : ", selects on " + names(s.fields(), termColumns(s)))
+                    + ", frames on the pool");
+            case Plan.Filter f when FrameSource.isSegment(f) -> {
+                notes.put(f, "per frame on the pool");
+                noteQuery(f.child(), reads, notes);
+            }
+            case Plan.Project p when FrameSource.isSegment(p) -> {
+                notes.put(p, "per frame on the pool");
+                noteQuery(p.child(), reads, notes);
+            }
+            case Plan.Source s -> notes.put(s, "serial");
+            case Plan.Filter f -> {
+                notes.put(f, "serial");
+                noteQuery(f.child(), reads, notes);
+            }
+            case Plan.Project p -> {
+                notes.put(p, "serial");
+                noteQuery(p.child(), reads, notes);
+            }
+            case Plan.Aggregate a -> noteOperator(a, a.child(), splittable(a.keys(), a.aggs()), "", reads, notes);
+            case Plan.SampleBy s -> noteOperator(s, s.child(), splittable(s.keys(), s.aggs()), "", reads, notes);
+            case Plan.LatestOn l -> noteOperator(l, l.child(), true, "", reads, notes);
+            case Plan.Distinct d -> noteOperator(d, d.child(), true, "", reads, notes);
+            case Plan.Sort s when LateReadCursor.applies(s, reads) -> {
+                notes.put(s, "parallel over frames, read late: the columns the keys and the filter do not need are"
+                        + " read for the kept rows only");
+                noteQuery(s.child(), reads, notes);
+            }
+            case Plan.Sort s -> noteOperator(s, s.child(), true, "", reads, notes);
+            case Plan.Limit l -> noteOperator(l, l.child(), true, "", reads, notes);
+            case Plan.SetOp s -> {
+                noteOperator(s, s.left(), true, ", right read first", reads, notes);
+                noteQuery(s.right(), reads, notes);
+            }
+            case Plan.Join j -> {
+                noteOperator(j, j.left(), j.on() == null || Functions.splittable(j.on()),
+                        ", build side right: read whole first, the left streams", reads, notes);
+                noteQuery(j.right(), reads, notes);
+            }
+            case Plan.Window w -> noteOperator(w, w.child(), Functions.splittable(w.calls()), "", reads, notes);
+            case Plan.Explain _, Plan.Change _ -> {
+                // a statement, never below a query
+            }
+        }
+    }
+
+    private static void noteOperator(
+            final Plan operator,
+            final Plan child,
+            final boolean splittable,
+            final String more,
+            final Map<Plan.Scan, boolean[]> reads,
+            final Map<Plan, String> notes
+    ) {
+        notes.put(operator, (perFrame(splittable, child) ? "parallel over frames" : "serial") + more);
+        noteQuery(child, reads, notes);
+    }
+
+    /** The names of {@code fields} where {@code pick} is true, all of them when it is null: {@code [ts, v]}. */
+    private static String names(final List<Field> fields, final boolean[] pick) {
+        final StringBuilder sink = new StringBuilder().append('[');
+        for (int i = 0; i < fields.size(); i++) {
+            if (pick == null || pick[i]) {
+                sink.append(sink.length() > 1 ? ", " : "").append(fields.get(i).name());
+            }
+        }
+        return sink.append(']').toString();
+    }
+
+    /** The columns {@code scan}'s pre-filter terms select on, read from the partition for the selection only. */
+    private static boolean[] termColumns(final Plan.Scan scan) {
+        final boolean[] columns = new boolean[scan.fields().size()];
+        for (final Plan.ScanTerm term : scan.terms()) {
+            columns[term.column()] = true;
+        }
+        return columns;
     }
 
     /** True when {@code plan} changes the store rather than returning rows. */
@@ -208,5 +344,42 @@ public final class Executor {
             out.add(Functions.compile(e, nowMicros));
         }
         return out;
+    }
+
+    /** One VARCHAR row per line, in pages of at most {@link Page#CAPACITY} rows: the rows of an {@code EXPLAIN}. */
+    private static final class LinesCursor implements Cursor {
+
+        private final List<Field> fields;
+        private final String[] lines;
+        private int next;
+
+        LinesCursor(final List<Field> fields, final String[] lines) {
+            this.fields = fields;
+            this.lines = lines;
+        }
+
+        @Override
+        public List<Field> fields() {
+            return fields;
+        }
+
+        @Override
+        public Page next() {
+            if (next >= lines.length) {
+                return null;
+            }
+            final int size = Math.min(Page.CAPACITY, lines.length - next);
+            final Vector column = Vector.of(CdbType.VARCHAR, size);
+            for (int i = 0; i < size; i++) {
+                column.setText(i, lines[next + i]);
+            }
+            next += size;
+            return new Page(new Vector[] {column}, size);
+        }
+
+        @Override
+        public void close() {
+            next = lines.length;
+        }
     }
 }

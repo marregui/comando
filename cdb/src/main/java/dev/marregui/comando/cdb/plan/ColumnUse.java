@@ -94,7 +94,8 @@ public final class ColumnUse {
             case Plan.Window(final Plan child, final List<Bound.WindowCall> _, final List<Field> _) ->
                     visit(child, all(child.fields().size()), reads);
             case Plan.Source _, Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _,
-                 Plan.SetTtl _ -> {
+                 Plan.SetTtl _, Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.Explain _ -> {
                 // no scan below, or a change whose runner reads what it needs itself
             }
         }

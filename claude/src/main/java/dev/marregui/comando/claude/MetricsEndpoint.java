@@ -15,4 +15,11 @@ public interface MetricsEndpoint {
 
     /** The live server's HTTP base URI, read now without starting anything; empty when none runs. */
     Optional<URI> live();
+
+    /**
+     * The owner secret the server asks for, sent as {@code Authorization: Bearer} on every request to it; empty when
+     * there is none to send. Read now, as the server may have made a new one since the last call: a file read, never
+     * on the EDT.
+     */
+    Optional<String> secret();
 }

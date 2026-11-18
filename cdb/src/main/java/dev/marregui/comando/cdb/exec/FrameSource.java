@@ -108,7 +108,7 @@ public final class FrameSource implements AutoCloseable {
             case Plan.Filter f -> Functions.rowLocal(f.predicate()) && isSegment(f.child());
             case Plan.Project p -> Functions.rowLocal(p.exprs()) && isSegment(p.child());
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
-                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Change _ -> false;
+                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Explain _, Plan.Change _ -> false;
         };
     }
 
@@ -193,7 +193,7 @@ public final class FrameSource implements AutoCloseable {
             case Plan.Filter f -> scan(f.child());
             case Plan.Project p -> scan(p.child());
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
-                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Change _ ->
+                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Explain _, Plan.Change _ ->
                     throw new IllegalStateException("not a segment [plan=" + plan + ']');
         };
     }
@@ -205,7 +205,7 @@ public final class FrameSource implements AutoCloseable {
             case Plan.Filter f -> Executor.over(chain(f.child(), frame), c -> Executor.filter(f, c, nowMicros));
             case Plan.Project p -> Executor.over(chain(p.child(), frame), c -> Executor.project(p, c, nowMicros));
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
-                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Change _ ->
+                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Explain _, Plan.Change _ ->
                     throw new IllegalStateException("not a segment [plan=" + plan + ']');
         };
     }

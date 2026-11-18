@@ -13,6 +13,7 @@ import java.net.SocketTimeoutException;
 import java.security.SecureRandom;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.marregui.comando.cdb.Cdb;
+import dev.marregui.comando.cdb.CdbCancel;
 import dev.marregui.comando.cdb.CdbException;
 
 /**
@@ -29,16 +31,18 @@ import dev.marregui.comando.cdb.CdbException;
  * of its own; past {@link #MAX_CONNECTIONS} open at once, a new connection is closed unanswered. A connection that
  * sends no startup packet within {@link #STARTUP_TIMEOUT_MILLIS}, or nothing for {@link #IDLE_TIMEOUT_MILLIS} once
  * started, is closed and its place freed. A cancel request naming a started session's process id and secret key
- * cancels the statement that session runs, as PostgreSQL's does. Started and stopped by its owner, beside
- * {@link CdbServer}; one per Cdb.
+ * cancels the statement that session runs, as PostgreSQL's does. Served with {@link Secrets}, a client's password is
+ * the owner's or the read-only secret, else it is refused; served without, any client is the owner. A query is
+ * cancelled at {@link Limits#QUERY_DEADLINE_MILLIS} (a change takes no cancel and runs to its end) and a result
+ * refused past {@link Limits#MAX_ROWS} rows. Started and stopped by its owner, beside {@link CdbServer}; one per Cdb.
  */
 public final class PgServer implements AutoCloseable {
 
     /** Not measured: Cosa holds a few connections and Grafana a pool of a few more; the same bound as HTTP's. */
     static final int MAX_CONNECTIONS = CdbServer.MAX_REQUESTS;
     /**
-     * A client sends its startup packet as soon as it connects; ten seconds frees a place held by a connection that
-     * never does (PostgreSQL's {@code authentication_timeout} is 60 seconds, for a password exchange cdb never asks).
+     * A client sends its startup packet, and its password when asked, as soon as it connects; ten seconds frees a
+     * place held by a connection that never does (PostgreSQL's {@code authentication_timeout} is 60 seconds).
      */
     static final int STARTUP_TIMEOUT_MILLIS = 10_000;
     /** QuestDB's {@code pg.net.connection.timeout} default: a started connection silent this long is closed. */
@@ -55,6 +59,7 @@ public final class PgServer implements AutoCloseable {
     private final ConcurrentHashMap<Integer, PgSession> live = new ConcurrentHashMap<>();
     private final Set<Socket> open = ConcurrentHashMap.newKeySet();
     private final Semaphore permits = new Semaphore(MAX_CONNECTIONS);
+    private final PgSession.Policy policy;
     private final int port;
     private final AtomicInteger sessions = new AtomicInteger();
     private final ServerSocket socket;
@@ -63,23 +68,44 @@ public final class PgServer implements AutoCloseable {
     // written by the owner's close, read by the accepting thread to tell a close from a failure
     private volatile boolean closed;
 
-    private PgServer(final Cdb cdb, final ServerSocket socket, final int startupTimeoutMillis,
-            final int idleTimeoutMillis) {
+    private PgServer(
+            final Cdb cdb,
+            final ServerSocket socket,
+            final int startupTimeoutMillis,
+            final int idleTimeoutMillis,
+            final PgSession.Policy policy) {
         this.cdb = cdb;
         this.socket = socket;
         this.port = socket.getLocalPort();
         this.startupTimeoutMillis = startupTimeoutMillis;
         this.idleTimeoutMillis = idleTimeoutMillis;
+        this.policy = policy;
     }
 
-    /** Serves {@code cdb} on {@code address} until {@link #close()}. */
+    /** Serves {@code cdb} on {@code address} until {@link #close()}, to any client, as the owner. */
     public static PgServer start(final Cdb cdb, final InetSocketAddress address) {
-        return start(cdb, address, STARTUP_TIMEOUT_MILLIS, IDLE_TIMEOUT_MILLIS);
+        return start(cdb, address, null);
     }
 
-    // the timeouts are the tests' to shorten
-    static PgServer start(final Cdb cdb, final InetSocketAddress address, final int startupTimeoutMillis,
-            final int idleTimeoutMillis) {
+    /**
+     * Serves {@code cdb} on {@code address} until {@link #close()}, to a client whose password is one of
+     * {@code secrets}; {@code secrets} null serves any client, as the owner.
+     */
+    public static PgServer start(final Cdb cdb, final InetSocketAddress address, final Secrets secrets) {
+        return start(cdb, address, secrets, STARTUP_TIMEOUT_MILLIS, IDLE_TIMEOUT_MILLIS,
+                Limits.QUERY_DEADLINE_MILLIS, Limits.MAX_ROWS);
+    }
+
+    // the timeouts and the bounds are the tests' to shorten
+    static PgServer start(
+            final Cdb cdb,
+            final InetSocketAddress address,
+            final Secrets secrets,
+            final int startupTimeoutMillis,
+            final int idleTimeoutMillis,
+            final long deadlineMillis,
+            final int maxRows) {
+        final PgSession.Policy policy = new PgSession.Policy(secrets, deadlineMillis, maxRows);
         final ServerSocket socket;
         try {
             socket = new ServerSocket();
@@ -93,7 +119,7 @@ public final class PgServer implements AutoCloseable {
         } catch (final IOException e) {
             throw new CdbException("could not serve cdb over pg wire [address=" + address + ']', e);
         }
-        final PgServer server = new PgServer(cdb, socket, startupTimeoutMillis, idleTimeoutMillis);
+        final PgServer server = new PgServer(cdb, socket, startupTimeoutMillis, idleTimeoutMillis, policy);
         try {
             server.threads.execute(server::accept);
         } catch (final RuntimeException | Error e) {
@@ -194,7 +220,7 @@ public final class PgServer implements AutoCloseable {
             connection.setSoTimeout(startupTimeoutMillis);
             final DataInputStream in = new DataInputStream(new BufferedInputStream(connection.getInputStream()));
             final PgSession session = new PgSession(cdb, in, new PgOutput(connection.getOutputStream()), id,
-                    keys.nextInt(), this::cancel);
+                    keys.nextInt(), policy, this::cancel, cancel -> watch(id, cancel));
             if (session.startup()) {
                 connection.setSoTimeout(idleTimeoutMillis);
                 live.put(id, session);
@@ -221,6 +247,29 @@ public final class PgServer implements AutoCloseable {
         if (session != null) {
             session.cancel(secretKey);
         }
+    }
+
+    // a statement's deadline: a virtual thread waits for the statement to end and cancels it when the deadline comes
+    // first; a session runs one statement at a time, so the watches are bounded by the connections' permits. Once the
+    // server is closing, a new statement is cancelled at once rather than run past the close.
+    private Runnable watch(final int id, final CdbCancel cancel) {
+        final CountDownLatch ended = new CountDownLatch(1);
+        try {
+            threads.execute(() -> {
+                Thread.currentThread().setName("cdb-pg-deadline-" + id);
+                try {
+                    if (!ended.await(policy.deadlineMillis(), TimeUnit.MILLISECONDS)) {
+                        cancel.cancel();
+                    }
+                } catch (final InterruptedException _) {
+                    // the close stops the watch; the statement's session ends with the close
+                    Thread.currentThread().interrupt();
+                }
+            });
+        } catch (final RejectedExecutionException _) {
+            cancel.cancel();
+        }
+        return ended::countDown;
     }
 
     private static void quietly(final Socket connection) {

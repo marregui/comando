@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
@@ -46,6 +47,8 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     private final ResultRegistry results;
     private final SchemaRegistry schemas;
     private final DbSettings settings;
+    /** The spec each connect uses, from the one asked for; see the constructor that takes it. */
+    private final UnaryOperator<ConnectionSpec> credentials;
     private final int maxCatalogueTables;
     private final ConcurrentHashMap<String, Lane> lanes = new ConcurrentHashMap<>();
     /** Each connection's count of closes and forgets, so a schema load can tell it was overtaken. */
@@ -62,14 +65,41 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     public DbAdapter(final IntentSink sink, final ResultRegistry results, final SchemaRegistry schemas, final DbSettings settings) {
-        this(sink, results, schemas, settings, MAX_CATALOGUE_TABLES);
+        this(sink, results, schemas, settings, UnaryOperator.identity());
+    }
+
+    /**
+     * With {@code credentials}, which gives the spec each connect and connection test uses from the one asked for:
+     * a password filled in for a server whose secret comando holds. It runs on the connecting thread, never the
+     * EDT, and what it returns serves that connect only: the filled-in password is never kept or logged.
+     */
+    public DbAdapter(
+            final IntentSink sink,
+            final ResultRegistry results,
+            final SchemaRegistry schemas,
+            final DbSettings settings,
+            final UnaryOperator<ConnectionSpec> credentials
+    ) {
+        this(sink, results, schemas, settings, credentials, MAX_CATALOGUE_TABLES);
     }
 
     DbAdapter(final IntentSink sink, final ResultRegistry results, final SchemaRegistry schemas, final DbSettings settings, final int maxCatalogueTables) {
+        this(sink, results, schemas, settings, UnaryOperator.identity(), maxCatalogueTables);
+    }
+
+    private DbAdapter(
+            final IntentSink sink,
+            final ResultRegistry results,
+            final SchemaRegistry schemas,
+            final DbSettings settings,
+            final UnaryOperator<ConnectionSpec> credentials,
+            final int maxCatalogueTables
+    ) {
         this.sink = sink;
         this.results = results;
         this.schemas = schemas;
         this.settings = settings;
+        this.credentials = credentials;
         this.maxCatalogueTables = maxCatalogueTables;
         this.timer = Threads.timedStrand("db-timer");
         final long period = settings.healthPeriodSeconds();
@@ -99,7 +129,8 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     }
 
     private Lane newLane(final String name) {
-        return new Lane(name, sink, results, settings, timer, cancellers, stopped -> lanes.remove(name, stopped));
+        return new Lane(name, sink, results, settings, timer, cancellers, stopped -> lanes.remove(name, stopped),
+                credentials);
     }
 
     /** Lanes alive now; a closed connection's lane leaves once its last task ends. */
@@ -135,7 +166,8 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
             return;
         }
         testers.start("db-test-" + spec.name(), () -> {
-            try (final Connection c = DriverManager.getConnection(spec.jdbcUrl(), Lane.driverProperties(spec))) {
+            try (final Connection c = DriverManager.getConnection(spec.jdbcUrl(),
+                    Lane.driverProperties(credentials.apply(spec)))) {
                 final boolean ok = c.isValid(10);
                 sink.dispatch(new Intent.ConnectionTested(spec.name(), ok, ok ? "reachable" : "not valid"));
             } catch (final SQLException e) {

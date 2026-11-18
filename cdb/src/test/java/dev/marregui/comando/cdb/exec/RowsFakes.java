@@ -372,6 +372,11 @@ final class RowsFakes {
         }
 
         @Override
+        public void dropPartitions(final long fromMicros, final long toMicros) {
+            throw new UnsupportedOperationException("no partition is dropped by an update");
+        }
+
+        @Override
         public void commit() {
             commits++;
         }

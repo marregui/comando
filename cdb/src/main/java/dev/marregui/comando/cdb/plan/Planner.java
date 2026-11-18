@@ -26,6 +26,9 @@ import dev.marregui.comando.cdb.store.TableDef;
  */
 public final class Planner {
 
+    /** The one column of an EXPLAIN's result, as QuestDB names it. */
+    private static final String EXPLAIN_COLUMN = "QUERY PLAN";
+
     private final Function<String, TableDef> tables;
     private final long nowMicros;
     private final BiFunction<String, List<String>, List<Field>> sourceFields;
@@ -81,6 +84,13 @@ public final class Planner {
             case Ast.Show show -> planner.show(show);
             case Ast.Insert insert -> planner.insert(insert);
             case Ast.AlterTable alter -> Ddl.alterTable(alter, tables);
+            case Ast.DropTable drop -> Ddl.dropTable(drop, tables);
+            case Ast.Truncate truncate -> Ddl.truncate(truncate, tables);
+            case Ast.DropPartition drop -> Ddl.dropPartition(drop, tables, nowMicros);
+            case Ast.Delete delete -> planner.delete(delete);
+            case Ast.Explain(final Ast.Statement inner, final int _) -> new Plan.Explain(
+                    plan(inner, tables, nowMicros, sourceFields, scanShortcuts),
+                    List.of(new Field(EXPLAIN_COLUMN, CdbType.VARCHAR)));
         };
     }
 
@@ -351,6 +361,24 @@ public final class Planner {
         return new Plan.Update(def.name(), columns, List.copyOf(values), where);
     }
 
+    /** The condition over the table's columns, which must be BOOLEAN; a table without designated timestamp too. */
+    private Plan delete(final Ast.Delete delete) {
+        final TableDef def = tables.apply(delete.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + delete.table() + ']', delete.pos());
+        }
+        if (delete.where() == null) {
+            return new Plan.Delete(def.name(), null);
+        }
+        final Rel rel = Rel.of(scan(def), def.name(), def.timestampIndex());
+        final Bound where = new Binder(rel, null).bindValue(delete.where());
+        if (where.type() != CdbType.BOOLEAN) {
+            throw new CdbException("cannot delete by non-boolean condition [table=" + def.name() + ", type="
+                    + where.type() + ']', delete.pos());
+        }
+        return new Plan.Delete(def.name(), where);
+    }
+
     /**
      * Every row of the VALUES list or of the query, its values cast to the column types; the designated timestamp must
      * be among the columns, as QuestDB requires.
@@ -460,12 +488,19 @@ public final class Planner {
                 || from == CdbType.LONG && to == CdbType.TIMESTAMP;
     }
 
-    /** {@code SHOW TABLES}, {@code SHOW COLUMNS FROM t} and {@code SHOW CREATE TABLE t}; others are not supported. */
+    /**
+     * {@code SHOW TABLES}, {@code SHOW COLUMNS FROM t}, {@code SHOW CREATE TABLE t}, {@code SHOW PARTITIONS FROM t} and
+     * {@code SHOW WAL [FROM t]}; others are not supported.
+     */
     private Plan show(final Ast.Show show) {
         return switch (show.what().toLowerCase(Locale.ROOT)) {
             case "tables" -> new Plan.Source("show_tables", List.of(), sourceFields.apply("show_tables", List.of()));
             case "columns" -> tableListing(show, "show_columns");
             case "create table" -> tableListing(show, "show_create_table");
+            case "partitions" -> tableListing(show, "table_partitions");
+            case "wal" -> show.table() == null
+                    ? new Plan.Source("show_wal", List.of(), sourceFields.apply("show_wal", List.of()))
+                    : tableListing(show, "show_wal");
             default -> throw new CdbException("cannot show unsupported listing [what=" + show.what() + ']', show.pos());
         };
     }

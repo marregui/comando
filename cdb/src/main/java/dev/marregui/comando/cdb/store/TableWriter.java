@@ -43,6 +43,12 @@ public interface TableWriter extends AutoCloseable {
     /** Drops every row, committed and pending, at the next commit: with appends after it, a rewrite of the table. */
     void truncate();
 
+    /**
+     * Drops, at the next commit, every committed partition whose whole range lies in {@code [fromMicros, toMicros)},
+     * and the pending rows that fall in such a range: the rows appended after the call stay, in new partitions.
+     */
+    void dropPartitions(long fromMicros, long toMicros);
+
     /** Publishes every pending change as one transaction. */
     void commit();
 

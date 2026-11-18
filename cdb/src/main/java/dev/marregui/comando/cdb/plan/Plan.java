@@ -136,6 +136,13 @@ public sealed interface Plan {
     record Window(Plan child, List<Bound.WindowCall> calls, List<Field> fields) implements Plan {
     }
 
+    /**
+     * {@code EXPLAIN}: one VARCHAR row per line of {@code plan}'s text, the executor's choices included; {@code fields}
+     * is the one column {@code QUERY PLAN}.
+     */
+    record Explain(Plan plan, List<Field> fields) implements Plan {
+    }
+
     /** A statement that changes the store and returns no rows: DDL and DML. */
     sealed interface Change extends Plan {
         @Override
@@ -165,5 +172,24 @@ public sealed interface Plan {
 
     /** {@code ALTER TABLE SET TTL}: {@code ttlMicros} 0 for none. */
     record SetTtl(String table, long ttlMicros) implements Change {
+    }
+
+    /** {@code DROP TABLE}: {@code ifExists} makes an absent table no error. */
+    record DropTable(String table, boolean ifExists) implements Change {
+    }
+
+    /** {@code TRUNCATE TABLE}: every row dropped in one transaction; the definition stays. */
+    record Truncate(String table) implements Change {
+    }
+
+    /**
+     * {@code ALTER TABLE DROP PARTITION}: drops, in one transaction, every partition whose whole time range lies in one
+     * of the ranges {@code [fromMicros[i], toMicros[i])}.
+     */
+    record DropPartitions(String table, long[] fromMicros, long[] toMicros) implements Change {
+    }
+
+    /** {@code DELETE}: the rows where {@code where} holds (null: every row), removed in one transaction. */
+    record Delete(String table, Bound where) implements Change {
     }
 }

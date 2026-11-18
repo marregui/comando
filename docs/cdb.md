@@ -108,8 +108,8 @@ for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR a
 
 | Commit | Its commit point | Then |
 |---|---|---|
-| logged: fewer than 100,000 rows, no definition change, no truncate | one record appended to `_wal` and forced (or, under the timed force below, written and forced within the interval): the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
-| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
+| logged: fewer than 100,000 rows, no definition change, no truncate, no partition drop | one record appended to `_wal` and forced (or, under the timed force below, written and forced within the interval): the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
+| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate (`TRUNCATE`, `DELETE`), a partition drop (`DROP PARTITION`) | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
 
 **The applier.** One platform thread per store, `cdb-applier-<root>` (its batches write files, which would pin a
 virtual thread). Per table it takes the queued commits in log order, at most 100,000 rows, and writes them with the

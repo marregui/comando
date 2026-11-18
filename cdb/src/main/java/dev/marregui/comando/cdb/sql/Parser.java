@@ -28,7 +28,8 @@ import dev.marregui.comando.cdb.CdbException;
  *   <li>A from item's designated-timestamp clause, {@code (SELECT …) timestamp(ts)}, is read and dropped: the tree
  *   has no place for it.</li>
  * </ul>
- * {@code SHOW} gives {@link Ast.Show#what()} {@code tables}, {@code columns} or {@code create table}. {@code CREATE
+ * {@code SHOW} gives {@link Ast.Show#what()} {@code tables}, {@code columns}, {@code create table}, {@code partitions}
+ * or {@code wal}. {@code EXPLAIN} takes any statement after it. {@code CREATE
  * TABLE} gives column types and the partition unit upper case; {@code FILL} values are lower-case words or numbers
  * as written. A failure is a {@link CdbException} whose position is the offending token's offset, or the text's
  * length when the statement ends early.
@@ -130,6 +131,19 @@ public final class Parser {
         }
         if (isWord("alter")) {
             return alterTable();
+        }
+        if (isWord("drop")) {
+            return dropTable();
+        }
+        if (isWord("truncate")) {
+            return truncate();
+        }
+        if (isWord("delete")) {
+            return delete();
+        }
+        if (isWord("explain")) {
+            final int pos = next().start();
+            return new Ast.Explain(statement(), pos);
         }
         return new Ast.Query(query());
     }
@@ -510,14 +524,28 @@ public final class Parser {
         return new Ast.Insert(table, columns, List.copyOf(rows), null, pos);
     }
 
-    /** QuestDB's form: one optional {@code COLUMN} after {@code ADD}, an optional {@code IF NOT EXISTS} per column. */
-    private Ast.AlterTable alterTable() {
+    /**
+     * QuestDB's form: one optional {@code COLUMN} after {@code ADD}, an optional {@code IF NOT EXISTS} per column;
+     * {@code DROP PARTITION} takes {@code LIST} and the partition names as strings, or {@code WHERE} and a condition.
+     */
+    private Ast.Statement alterTable() {
         final int pos = expectWord("alter").start();
         expectWord("table");
         final String table = name();
         if (acceptWord("set")) {
             expectWord("ttl");
             return new Ast.AlterTable(table, List.of(), ttl(), pos);
+        }
+        if (acceptPair("drop", "partition")) {
+            if (acceptWord("where")) {
+                return new Ast.DropPartition(table, List.of(), expression(), pos);
+            }
+            expectWord("list");
+            final List<String> names = new ArrayList<>();
+            do {
+                names.add(expect(Lexer.Kind.STRING, "partition name").text());
+            } while (acceptSymbol(","));
+            return new Ast.DropPartition(table, List.copyOf(names), null, pos);
         }
         expectWord("add");
         acceptWord("column");
@@ -546,7 +574,37 @@ public final class Parser {
             expectWord("table");
             return new Ast.Show("create table", name(), pos);
         }
-        throw unexpected("TABLES, COLUMNS or CREATE");
+        if (acceptWord("partitions")) {
+            expectWord("from");
+            return new Ast.Show("partitions", name(), pos);
+        }
+        if (acceptWord("wal")) {
+            return new Ast.Show("wal", acceptWord("from") ? name() : null, pos);
+        }
+        throw unexpected("TABLES, COLUMNS, CREATE, PARTITIONS or WAL");
+    }
+
+    private Ast.DropTable dropTable() {
+        final int pos = expectWord("drop").start();
+        expectWord("table");
+        final boolean ifExists = acceptWord("if");
+        if (ifExists) {
+            expectWord("exists");
+        }
+        return new Ast.DropTable(name(), ifExists, pos);
+    }
+
+    private Ast.Truncate truncate() {
+        final int pos = expectWord("truncate").start();
+        expectWord("table");
+        return new Ast.Truncate(name(), pos);
+    }
+
+    private Ast.Delete delete() {
+        final int pos = expectWord("delete").start();
+        expectWord("from");
+        final String table = name();
+        return new Ast.Delete(table, acceptWord("where") ? expression() : null, pos);
     }
 
     private Ast.Expr expression() {

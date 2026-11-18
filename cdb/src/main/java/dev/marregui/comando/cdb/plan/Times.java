@@ -88,7 +88,9 @@ final class Times {
         }
         final ZonedDateTime from;
         try {
-            from = ZonedDateTime.of(f[0], Math.max(f[1], 1), Math.max(f[2], 1), f[3], f[4], f[5], 0, ZoneOffset.UTC);
+            // a field the text leaves out is the first month or day; one it gives as 00 is refused, never raised to 1
+            from = ZonedDateTime.of(f[0], fields >= 2 ? f[1] : 1, fields >= 3 ? f[2] : 1, f[3], f[4], f[5], 0,
+                    ZoneOffset.UTC);
         } catch (final DateTimeException _) {
             throw unparsable(text, pos);
         }

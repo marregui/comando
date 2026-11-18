@@ -41,6 +41,7 @@ public final class Signatures {
             case "+", "-" -> additive(function, args);
             case "*", "/", "%" -> numeric(function, args, 2);
             case "neg" -> negation(function, args);
+            case "abs" -> numeric(function, args, 1);
             case "||", "concat" -> concat(function, args);
             case "=", "!=", "<", "<=", ">", ">=" -> comparison(function, args);
             case "and", "or" -> logical(function, args, 2);
@@ -68,7 +69,10 @@ public final class Signatures {
             case "round" -> round(function, args);
             case "substring" -> substring(function, args);
             case "replace" -> replace(function, args);
-            case "lag", "lead", "first_value", "last_value" -> windowValue(function, args);
+            case "length" -> text(function, args, CdbType.LONG);
+            case "upper", "lower" -> text(function, args, CdbType.VARCHAR);
+            case "lag", "lead" -> windowValue(function, args);
+            case "first_value", "last_value" -> unary(function, args, null);
             case "row_number" -> arity(function, args, 0, CdbType.LONG);
             case "rnd_symbol" -> rndSymbol(function, args);
             case "rnd_double" -> arity(function, args, 0, CdbType.DOUBLE);
@@ -90,14 +94,16 @@ public final class Signatures {
 
     /**
      * The type of {@code function} called with {@code OVER}: {@code sum} and {@code avg} DOUBLE, {@code count} and
-     * {@code row_number} LONG, {@code min}, {@code max}, {@code lag} and the value functions their argument's type.
+     * {@code row_number} LONG, {@code min}, {@code max}, {@code lag}, {@code lead}, {@code first_value} and
+     * {@code last_value} their argument's type.
      */
     static CdbType windowType(final String function, final List<CdbType> args) {
         return switch (function) {
             case "sum", "avg" -> numericTo(function, args, CdbType.DOUBLE);
             case "count", "row_number" -> CdbType.LONG;
             case "min", "max", "first", "last" -> unary(function, args, null);
-            case "lag", "lead", "first_value", "last_value" -> windowValue(function, args);
+            case "lag", "lead" -> windowValue(function, args);
+            case "first_value", "last_value" -> unary(function, args, null);
             default -> throw new CdbException("cannot type unknown window function [function=" + function + ']', -1);
         };
     }
@@ -351,6 +357,15 @@ public final class Signatures {
         return CdbType.VARCHAR;
     }
 
+    /** QuestDB's {@code length} (INT, LONG here), {@code upper} and {@code lower}: one text of any kind. */
+    private static CdbType text(final String function, final List<CdbType> args, final CdbType out) {
+        expect(function, args, 1);
+        if (!args.getFirst().isText()) {
+            throw mismatch(function, args);
+        }
+        return out;
+    }
+
     /** QuestDB's {@code rnd_symbol(s1, ...)}: one or more texts, a SYMBOL. */
     private static CdbType rndSymbol(final String function, final List<CdbType> args) {
         if (args.isEmpty()) {
@@ -374,7 +389,7 @@ public final class Signatures {
         return CdbType.TIMESTAMP;
     }
 
-    /** {@code lag(x[, offset[, default]])} and the value functions: the type of {@code x}. */
+    /** {@code lag(x[, offset[, default]])} and {@code lead}: the type of {@code x}. */
     private static CdbType windowValue(final String function, final List<CdbType> args) {
         if (args.isEmpty() || args.size() > 3 || args.size() >= 2 && args.get(1) != CdbType.LONG) {
             throw mismatch(function, args);

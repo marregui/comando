@@ -16,10 +16,13 @@ import dev.marregui.comando.cdb.plan.Bound;
 import dev.marregui.comando.cdb.plan.Plan;
 
 /**
- * Window functions: the input's columns, then one per call, rows in input order. {@code lag(x[, n[, default]])} and
- * {@code row_number()} walk each partition in {@code ORDER BY} order (input order when there is none); an aggregate
- * with {@code ORDER BY} is running over the rows so far (a ROWS frame: rows that tie are still taken one at a time),
- * without it the value of its whole partition. Reads the whole input on the first {@link #next}.
+ * Window functions: the input's columns, then one per call, rows in input order. {@code lag(x[, n[, default]])},
+ * {@code lead(x[, n[, default]])} and {@code row_number()} walk each partition in {@code ORDER BY} order (input order
+ * when there is none); an aggregate with {@code ORDER BY} is running over the rows so far (a ROWS frame: rows that tie
+ * are still taken one at a time), without it the value of its whole partition. {@code first_value(x)} and
+ * {@code last_value(x)} are the aggregates {@code first} and {@code last} over that frame, NULL included: with
+ * {@code ORDER BY} the partition's first row and the current row, without it the partition's first and last row.
+ * Reads the whole input on the first {@link #next}.
  */
 final class WindowCursor implements Cursor {
 
@@ -179,7 +182,7 @@ final class WindowCursor implements Cursor {
                     out.setLong(row, number);
                 }
             }
-            case "lag" -> lag(call, partition, order(partition, sortColumns, orderBy, n), out, n);
+            case "lag", "lead" -> shift(call, partition, order(partition, sortColumns, orderBy, n), out, n);
             default -> aggregate(call, partition, partitions, orderBy.isEmpty() ? null
                     : order(partition, sortColumns, orderBy, n), out, n);
         }
@@ -219,16 +222,16 @@ final class WindowCursor implements Cursor {
                 }
                 return Boolean.TRUE;
             };
-            case "lag" -> {
-                final Lag lag = lag(call, n);
+            case "lag", "lead" -> {
+                final Shift shift = shift(call, n);
                 yield p -> {
                     final int[] order = partitionOrder(members, starts[p], starts[p + 1], sortColumns, orderBy);
-                    lag.write(order, 0, order.length, out);
+                    shift.write(order, 0, order.length, out);
                     return Boolean.TRUE;
                 };
             }
             default -> {
-                final Bound.Agg agg = new Bound.Agg(call.function(), call.args(), false, call.type());
+                final Bound.Agg agg = aggregateOf(call);
                 // created here once so an unknown function fails on this thread before any task, as the serial one
                 Aggregates.create(agg);
                 final Vector value = call.args().isEmpty() ? null : gather(call.args().getFirst(), n);
@@ -317,8 +320,7 @@ final class WindowCursor implements Cursor {
             final Vector out,
             final int n
     ) {
-        final Accumulator accumulator = Aggregates.create(new Bound.Agg(call.function(), call.args(), false,
-                call.type()));
+        final Accumulator accumulator = Aggregates.create(aggregateOf(call));
         accumulator.ensure(Math.max(partitions, 1));
         final Vector value = call.args().isEmpty() ? null : gather(call.args().getFirst(), n);
         if (order != null) {
@@ -350,36 +352,50 @@ final class WindowCursor implements Cursor {
         return all;
     }
 
-    private void lag(
+    /** {@code lag} or {@code lead}, every partition walked in {@code order}. */
+    private void shift(
             final Bound.WindowCall call,
             final int[] partition,
             final int[] order,
             final Vector out,
             final int n
     ) {
-        final Lag lag = lag(call, n);
+        final Shift shift = shift(call, n);
         int runStart = 0;
         for (int pos = 1; pos <= n; pos++) {
             if (pos == n || partition[order[pos - 1]] != partition[order[pos]]) {
-                lag.write(order, runStart, pos, out);
+                shift.write(order, runStart, pos, out);
                 runStart = pos;
             }
         }
     }
 
-    /** {@code lag}'s argument read, its offset and default checked, on this thread. */
-    private Lag lag(final Bound.WindowCall call, final int n) {
+    /** {@code lag}'s or {@code lead}'s argument read, its offset and default checked, on this thread. */
+    private Shift shift(final Bound.WindowCall call, final int n) {
+        final String function = call.function();
         final List<Bound> args = call.args();
         if (args.isEmpty()) {
-            throw new CdbException("cannot run lag without its argument [function=lag]", -1);
+            throw new CdbException("cannot run a window function without its argument [function=" + function + ']',
+                    -1);
         }
         final Vector value = gather(args.getFirst(), n);
         final long offset = args.size() > 1 ? constant(args.get(1), CdbType.LONG).getLong(0) : 1;
         if (offset < 0) {
-            throw new CdbException("cannot lag by a negative offset [offset=" + offset + ']', -1);
+            throw new CdbException("cannot shift by a negative offset [function=" + function + ", offset=" + offset
+                    + ']', -1);
         }
         final Vector fallback = args.size() > 2 ? constant(args.get(2), call.type()) : nullOf(call.type());
-        return new Lag(value, offset, fallback);
+        return new Shift(value, offset, "lead".equals(function), fallback);
+    }
+
+    /** The aggregate a window call runs: {@code first_value} runs {@code first}, {@code last_value} {@code last}. */
+    private static Bound.Agg aggregateOf(final Bound.WindowCall call) {
+        final String function = switch (call.function()) {
+            case "first_value" -> "first";
+            case "last_value" -> "last";
+            default -> call.function();
+        };
+        return new Bound.Agg(function, call.args(), false, call.type());
     }
 
     private int[] order(final int[] partition, final Vector[] columns, final List<Plan.SortKey> keys, final int n) {
@@ -414,15 +430,20 @@ final class WindowCursor implements Cursor {
         return keys.size();
     }
 
-    /** {@code lag}'s argument over every row, its offset and its default; only read once built. */
-    private record Lag(Vector value, long offset, Vector fallback) {
+    /**
+     * {@code lag}'s or {@code lead}'s argument over every row, its offset, its direction ({@code ahead} for
+     * {@code lead}) and its default; only read once built.
+     */
+    private record Shift(Vector value, long offset, boolean ahead, Vector fallback) {
 
         /** Writes the rows {@code order[from .. to)}, one partition walked in its order. */
         void write(final int[] order, final int from, final int to, final Vector out) {
             for (int pos = from; pos < to; pos++) {
                 final int row = order[pos];
-                if (pos - from >= offset) {
-                    convert(value, order[(int) (pos - offset)], out, row);
+                // compared as distances, so an offset near Long.MAX_VALUE does not overflow
+                final boolean inside = ahead ? offset < to - pos : offset <= pos - from;
+                if (inside) {
+                    convert(value, order[(int) (ahead ? pos + offset : pos - offset)], out, row);
                 } else {
                     out.copy(fallback, 0, row);
                 }

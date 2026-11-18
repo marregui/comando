@@ -261,6 +261,30 @@ class DbAdapterTest {
         }
     }
 
+    /// A connection with no password is refused by the server; given credentials that fill one in at connect, the same
+    /// connection tests reachable and runs SQL, both on a lane and in the connection test.
+    @Test
+    void theCredentialsFillThePasswordAtConnect() {
+        final ConnectionSpec blank =
+                new ConnectionSpec("blank", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "", false);
+        db.test(blank);
+        assertThat(sink.await(Intent.ConnectionTested.class, t -> t.name().equals("blank"), WAIT).ok())
+                .as("the server refuses an empty password").isFalse();
+
+        final ConnectionSpec filled =
+                new ConnectionSpec("filled", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "", false);
+        final DbAdapter withCredentials = new DbAdapter(sink, results, new SchemaRegistry(),
+                new DbSettings(0, 1_000, 500, 60, 1_000L), s -> s.password().isEmpty() ? s.withPassword("quest") : s);
+        try {
+            withCredentials.test(filled);
+            assertThat(sink.await(Intent.ConnectionTested.class, t -> t.name().equals("filled"), WAIT).ok()).isTrue();
+            withCredentials.execute(11L, filled, "SELECT 1");
+            assertThat(sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 11L, WAIT).rows()).isEqualTo(1);
+        } finally {
+            withCredentials.close();
+        }
+    }
+
     /// A run on an unreachable connection reports the connection failed and the run failed.
     @Test
     void connectFailureIsReported() {

@@ -279,6 +279,11 @@ class MetricsTest {
             public Optional<URI> live() {
                 throw new IllegalStateException("no server");
             }
+
+            @Override
+            public Optional<String> secret() {
+                throw new IllegalStateException("no server");
+            }
         };
         try (final MetricsLog log = new MetricsLog(now::get, dir.toString(), failing, notices)) {
             log.queues(List.of(new Queues.Reading("intents", 0, 12)));

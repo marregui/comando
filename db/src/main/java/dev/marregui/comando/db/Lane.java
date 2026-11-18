@@ -18,6 +18,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Threads;
@@ -83,6 +84,8 @@ final class Lane implements AutoCloseable {
     private final ExecutorService cancellers;
     private final ExecutorService thread;
     private final Consumer<Lane> onRetired;
+    /** The spec the connect uses, from the one a task carries; its result is not kept. */
+    private final UnaryOperator<ConnectionSpec> credentials;
     private final int querySeconds;
     private final int describeSeconds;
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
@@ -97,8 +100,10 @@ final class Lane implements AutoCloseable {
     private Connection connection; // lane thread only
 
     Lane(final String name, final IntentSink sink, final ResultRegistry results, final DbSettings settings, final ScheduledExecutorService timer,
-         final ExecutorService cancellers, final Consumer<Lane> onRetired) {
-        this(name, sink, results, settings, timer, cancellers, onRetired, QUERY_SECONDS, DESCRIBE_SECONDS);
+         final ExecutorService cancellers, final Consumer<Lane> onRetired,
+         final UnaryOperator<ConnectionSpec> credentials) {
+        this(name, sink, results, settings, timer, cancellers, onRetired, credentials, QUERY_SECONDS,
+                DESCRIBE_SECONDS);
     }
 
     /** With other statement timeouts for {@link #query} and {@link #describe}; for tests. */
@@ -109,6 +114,7 @@ final class Lane implements AutoCloseable {
          final ScheduledExecutorService timer,
          final ExecutorService cancellers,
          final Consumer<Lane> onRetired,
+         final UnaryOperator<ConnectionSpec> credentials,
          final int querySeconds,
          final int describeSeconds) {
         this.name = name;
@@ -118,6 +124,7 @@ final class Lane implements AutoCloseable {
         this.timer = timer;
         this.cancellers = cancellers;
         this.onRetired = onRetired;
+        this.credentials = credentials;
         this.querySeconds = querySeconds;
         this.describeSeconds = describeSeconds;
         this.thread = Threads.strand("db-" + name);
@@ -395,7 +402,7 @@ final class Lane implements AutoCloseable {
         }
         LOG.log(System.Logger.Level.INFO, "connecting [connection=" + name + ", url=" + spec.jdbcUrl() + ']');
         try {
-            connection = DriverManager.getConnection(spec.jdbcUrl(), driverProperties(spec));
+            connection = DriverManager.getConnection(spec.jdbcUrl(), driverProperties(credentials.apply(spec)));
         } catch (final SQLException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot connect [connection=" + name + ", sqlState=" + e.getSQLState() + ']', e);
             throw e;

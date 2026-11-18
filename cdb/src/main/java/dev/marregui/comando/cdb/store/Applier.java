@@ -127,6 +127,17 @@ final class Applier {
         }
     }
 
+    /**
+     * Takes the commits queued in {@code state}, a dropped table, off the queued budget unless its suspend already
+     * did, the caller holding its {@link TableState#applyLock}: they are freed with the table, never applied, as a
+     * turn that takes the lock after the caller lets it go applies nothing.
+     */
+    void forget(final TableState state) {
+        state.forget();
+        queuedBytes.addAndGet(-state.takeBudgetBytes());
+        clearPressureWhenUnderHalf();
+    }
+
     /** Wakes the thread to serve every table once: a reader waits, the queued commits press the budget. */
     void wake() {
         scanAll = true;
@@ -158,6 +169,12 @@ final class Applier {
             return 2;
         }
         return queuedBytes.get() > store.queuedBudgetBytes / 2L ? 1 : 0;
+    }
+
+    /** The heap estimate of every table's queued commits, as the budget counts it. */
+    @TestOnly
+    long queuedBytes() {
+        return queuedBytes.get();
     }
 
     /** The passes of the thread's loop so far. */
@@ -237,7 +254,7 @@ final class Applier {
             // an Error (out of memory, a mapping limit) leaves the table's files half-written: it is suspended, as
             // after repeated failures, and the thread goes on serving the others
             state.suspend(String.valueOf(t));
-            queuedBytes.addAndGet(-state.queuedBytes());
+            queuedBytes.addAndGet(-state.takeBudgetBytes());
             clearPressureWhenUnderHalf();
             LOG.log(System.Logger.Level.ERROR, "suspend table, its apply failed, log kept [table=" + state.key + ']',
                     t);
@@ -276,6 +293,10 @@ final class Applier {
             }
             state.applyLock.lock();
             try {
+                // dropped while this turn waited for the lock: its folder takes no more writes
+                if (state.forgotten()) {
+                    return NOTHING_DUE;
+                }
                 final boolean demanded = state.takeDemand();
                 final long startNanos = System.nanoTime();
                 applyAllHeld(state, demanded);
@@ -290,6 +311,9 @@ final class Applier {
         } else if (dueForCheckpoint(state)) {
             state.applyLock.lock();
             try {
+                if (state.forgotten()) {
+                    return NOTHING_DUE;
+                }
                 checkpointIfDue(state);
             } catch (final RuntimeException e) {
                 failed(state, e);
@@ -328,7 +352,7 @@ final class Applier {
         if (state.failures >= MAX_FAILURES) {
             state.suspend(error);
             // its commits stay queued until the reopen replays them: they no longer press the other tables
-            queuedBytes.addAndGet(-state.queuedBytes());
+            queuedBytes.addAndGet(-state.takeBudgetBytes());
             clearPressureWhenUnderHalf();
             LOG.log(System.Logger.Level.ERROR, "suspend table, cannot apply its logged commits, log kept [table="
                     + state.key + ", failures=" + state.failures + ']', e);
@@ -380,8 +404,13 @@ final class Applier {
         if (!checkpointPending(state)) {
             return false;
         }
+        // a drop between the two reads, outside the apply lock, leaves the table without a snapshot
+        final TableState.Snapshot current = state.current();
+        if (current == null) {
+            return false;
+        }
         // commits since the last checkpoint, not the log's records: a cut kept for a queued commit leaves older ones
-        return state.current().txn() - state.checkpointed().txn() >= store.checkpointRecords
+        return current.txn() - state.checkpointed().txn() >= store.checkpointRecords
                 || state.wal.bytes() >= store.checkpointBytes
                 || System.nanoTime() - state.checkpointNanos() >= store.checkpointIdleNanos;
     }

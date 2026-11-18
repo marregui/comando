@@ -1,8 +1,8 @@
 package dev.marregui.comando.cdb;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import dev.marregui.comando.cdb.exec.QueryPool;
 import dev.marregui.comando.cdb.serve.CdbServer;
 import dev.marregui.comando.cdb.serve.PgServer;
+import dev.marregui.comando.cdb.serve.Secrets;
 import dev.marregui.comando.cdb.store.StoreOptions;
 
 /**
@@ -23,23 +24,40 @@ import dev.marregui.comando.cdb.store.StoreOptions;
  * (0 by default: every read sees every answered commit), {@code --query-threads N}, the workers of the process's query
  * pool (one fewer than the cores by default; 0 runs every query on its caller's thread), and {@code --log-force-ms N},
  * the most a table log's written records wait for their force (0 by default: each commit is forced before it is
- * answered; see {@link StoreOptions}).
+ * answered; see {@link StoreOptions}), and {@code --auth-dir DIR}, the folder of the secrets both servers ask their
+ * clients for ({@link Secrets}; none by default: every client is served). An address other than a loopback one is
+ * refused without {@code --auth-dir}: the process exits with status 2 before it opens anything.
  */
 public final class CdbServe {
 
     /** How long the shutdown hook waits for the server and the store to close; a stop signal should not hang. */
     private static final long CLOSE_WAIT_SECONDS = 10;
     private static final String USAGE = "<root> <port> [--pg-port <port>] [--bind <address>]"
-            + " [--read-max-lag-ms <millis>] [--query-threads <threads>] [--log-force-ms <millis>]";
+            + " [--read-max-lag-ms <millis>] [--query-threads <threads>] [--log-force-ms <millis>]"
+            + " [--auth-dir <folder>]";
+    /** The exit status of a command line refused before anything is opened. */
+    private static final int EXIT_REFUSED = 2;
 
     private CdbServe() {
     }
 
-    /** Opens the cdb at {@code args[0]} and serves it on {@code args[1]} (and {@code --pg-port}) until the JVM ends. */
-    public static void main(final String[] args) throws InterruptedException, UnknownHostException {
+    /**
+     * Opens the cdb at {@code args[0]} and serves it on {@code args[1]} (and {@code --pg-port}) until the JVM ends. A
+     * secret file whose content is not a secret fails the start, naming the file.
+     */
+    public static void main(final String[] args) throws InterruptedException, IOException {
         final Options options = parse(args);
         final InetAddress address = options.bind() == null
                 ? InetAddress.getLoopbackAddress() : InetAddress.getByName(options.bind());
+        if (!address.isLoopbackAddress() && options.authDir() == null) {
+            // a server other machines reach without a secret serves every change to anyone on the network
+            System.err.println("refuse to bind a non-loopback address without --auth-dir [bind=" + options.bind()
+                    + ']');
+            System.exit(EXIT_REFUSED);
+            return;
+        }
+        CdbServer.applyJdkLimits();
+        final Secrets secrets = options.authDir() == null ? null : Secrets.load(options.authDir());
         final CountDownLatch stopped = new CountDownLatch(1);
         final CountDownLatch closed = new CountDownLatch(1);
         // the JVM owns shutdown-hook threads; this one releases main, then holds the exit until main has closed
@@ -52,11 +70,12 @@ public final class CdbServe {
             }
         }, "cdb-serve-shutdown"));
         try (final Cdb cdb = open(options);
-             final CdbServer server = CdbServer.start(cdb, new InetSocketAddress(address, options.port()));
+             final CdbServer server = CdbServer.start(cdb, new InetSocketAddress(address, options.port()), secrets);
              final PgServer pg = options.pgPort() < 0
-                     ? null : PgServer.start(cdb, new InetSocketAddress(address, options.pgPort()))) {
+                     ? null : PgServer.start(cdb, new InetSocketAddress(address, options.pgPort()), secrets)) {
             System.out.println("cdb serving [root=" + options.root() + ", address=" + address.getHostAddress()
-                    + ", port=" + server.port() + (pg == null ? "" : ", pgPort=" + pg.port()) + ']');
+                    + ", port=" + server.port() + (pg == null ? "" : ", pgPort=" + pg.port()) + ", auth="
+                    + (secrets != null) + ']');
             stopped.await();
         } finally {
             closed.countDown();
@@ -73,6 +92,7 @@ public final class CdbServe {
         long readMaxLagMillis = 0L;
         int queryThreads = -1;
         long logForceMillis = 0L;
+        Path authDir = null;
         final List<String> positional = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -83,6 +103,7 @@ public final class CdbServe {
                         Integer.parseInt(value(args, i++)));
                 case "--log-force-ms" -> logForceMillis = notNegative("--log-force-ms",
                         Long.parseLong(value(args, i++)));
+                case "--auth-dir" -> authDir = Path.of(value(args, i++));
                 default -> positional.add(args[i]);
             }
         }
@@ -93,7 +114,7 @@ public final class CdbServe {
             throw new IllegalArgumentException("refuse negative read lag [millis=" + readMaxLagMillis + ']');
         }
         return new Options(Path.of(positional.get(0)), Integer.parseInt(positional.get(1)), pgPort, bind,
-                readMaxLagMillis, queryThreads, logForceMillis);
+                readMaxLagMillis, queryThreads, logForceMillis, authDir);
     }
 
     /**
@@ -142,10 +163,10 @@ public final class CdbServe {
     }
 
     /**
-     * What the command line asked for; {@code pgPort} and {@code queryThreads} are -1 and {@code bind} null when not
-     * given, {@code logForceMillis} 0.
+     * What the command line asked for; {@code pgPort} and {@code queryThreads} are -1 and {@code bind} and
+     * {@code authDir} null when not given, {@code logForceMillis} 0.
      */
     public record Options(Path root, int port, int pgPort, String bind, long readMaxLagMillis, int queryThreads,
-            long logForceMillis) {
+            long logForceMillis, Path authDir) {
     }
 }

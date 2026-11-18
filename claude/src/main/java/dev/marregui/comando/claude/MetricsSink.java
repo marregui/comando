@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +37,8 @@ import dev.marregui.comando.core.state.Notice;
  * dropped and counted. One errand drains the queue in batches of at most {@link #BATCH_LINES} lines, sent
  * {@link #BATCH_WAIT} after a batch's first event at the latest, to the server {@link MetricsEndpoint#live} names; when
  * none answers, {@link MetricsEndpoint#ensureUp} is asked at most once a minute. The tables are created the first time
- * a process writes to a server, and again after a write is refused for a missing table.
+ * a process writes to a server, and again after a write is refused for a missing table. Every request to the server
+ * carries {@link MetricsEndpoint#secret} as its bearer; a shadow server never gets it.
  * <p>
  * Delivery is at most once per event offered: a batch that fails is lost, counted, and logged at most once a minute;
  * nothing is kept on disk to send later. A write the server refuses for some of its lines is sent again in halves, so
@@ -208,9 +210,19 @@ final class MetricsSink implements AutoCloseable {
      * answer; its JSON. Any answer but 200 is an {@link IOException}.
      */
     JsonNode exec(final URI base, final String sql, final Duration timeout) throws IOException, InterruptedException {
+        return exec(base, sql, timeout, endpoint.secret());
+    }
+
+    /** {@link #exec} with {@code secret} as its bearer, none when it is empty: the server's, or none for the shadow. */
+    private JsonNode exec(
+            final URI base,
+            final String sql,
+            final Duration timeout,
+            final Optional<String> secret
+    ) throws IOException, InterruptedException {
         final String query = URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20");
-        final HttpRequest request = HttpRequest.newBuilder(base.resolve("/exec?query=" + query)).timeout(timeout)
-                .GET().build();
+        final HttpRequest request = authorized(HttpRequest.newBuilder(base.resolve("/exec?query=" + query)), secret)
+                .timeout(timeout).GET().build();
         final HttpResponse<String> answer = http.send(request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (answer.statusCode() != 200) {
@@ -260,6 +272,12 @@ final class MetricsSink implements AutoCloseable {
         LOG.log(System.Logger.Level.WARNING, "ignoring the shadow server, not a base URL [" + SHADOW_ENV + '=' + value
                 + ']');
         return null;
+    }
+
+    /** {@code request} with {@code secret} as {@code Authorization: Bearer}; unchanged when it is empty. */
+    private static HttpRequest.Builder authorized(final HttpRequest.Builder request, final Optional<String> secret) {
+        secret.ifPresent(s -> request.header("Authorization", "Bearer " + s));
+        return request;
     }
 
     private static String shortened(final String text) {
@@ -424,10 +442,11 @@ final class MetricsSink implements AutoCloseable {
         if (base == null) {
             return null;
         }
-        HttpResponse<String> answer = post(base, chunk, REQUEST_WITHIN);
+        final Optional<String> secret = endpoint.secret();
+        HttpResponse<String> answer = post(base, chunk, REQUEST_WITHIN, secret);
         if (answer.statusCode() == 400 && missingTable(answer.body())) {
-            createTables(base, REQUEST_WITHIN);
-            answer = post(base, chunk, REQUEST_WITHIN);
+            createTables(base, REQUEST_WITHIN, secret);
+            answer = post(base, chunk, REQUEST_WITHIN, secret);
         }
         if (answer.statusCode() != 204) {
             LOG.log(System.Logger.Level.DEBUG, "cdb refused a write [status=" + answer.statusCode() + ", answer="
@@ -468,7 +487,7 @@ final class MetricsSink implements AutoCloseable {
         }
         final URI base = server;
         if (!base.equals(tablesOn)) {
-            createTables(base, REQUEST_WITHIN);
+            createTables(base, REQUEST_WITHIN, endpoint.secret());
             tablesOn = base;
             LOG.log(System.Logger.Level.INFO, "metrics go to cdb [server=" + base + ']');
         }
@@ -485,23 +504,28 @@ final class MetricsSink implements AutoCloseable {
         return true;
     }
 
-    private void createTables(final URI base, final Duration within) throws IOException, InterruptedException {
+    private void createTables(
+            final URI base,
+            final Duration within,
+            final Optional<String> secret
+    ) throws IOException, InterruptedException {
         for (final String ddl : MetricsLines.DDL) {
-            exec(base, ddl, within);
+            exec(base, ddl, within, secret);
         }
     }
 
     private HttpResponse<String> post(
             final URI base,
             final List<String> chunk,
-            final Duration within
+            final Duration within,
+            final Optional<String> secret
     ) throws IOException, InterruptedException {
         final StringBuilder body = new StringBuilder();
         for (final String line : chunk) {
             body.append(line).append('\n');
         }
-        final HttpRequest request = HttpRequest.newBuilder(base.resolve("/write?precision=n")).timeout(within)
-                .header("Content-Type", "text/plain; charset=utf-8")
+        final HttpRequest request = authorized(HttpRequest.newBuilder(base.resolve("/write?precision=n")), secret)
+                .timeout(within).header("Content-Type", "text/plain; charset=utf-8")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
         return http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     }
@@ -515,11 +539,12 @@ final class MetricsSink implements AutoCloseable {
             return;
         }
         try {
+            // the shadow is another server: the machine's secret never goes to it
             if (!shadowReady) {
-                createTables(shadow, SHADOW_WITHIN);
+                createTables(shadow, SHADOW_WITHIN, Optional.empty());
                 shadowReady = true;
             }
-            final int status = post(shadow, chunk, SHADOW_WITHIN).statusCode();
+            final int status = post(shadow, chunk, SHADOW_WITHIN, Optional.empty()).statusCode();
             if (status != 204) {
                 shadowReady = false;
                 shadowFailed("status=" + status, null);

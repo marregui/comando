@@ -132,7 +132,8 @@ final class SelectPlanner {
             }
             case Plan.Source _, Plan.Project _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _,
                  Plan.Sort _, Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _,
-                 Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _ -> null;
+                 Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _,
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ -> null;
         };
     }
 
@@ -440,7 +441,8 @@ final class SelectPlanner {
             case Plan.Project(final Plan child, final List<Bound> _, final List<Field> _) -> inTableOrder(child);
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
                  Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _, Plan.Insert _,
-                 Plan.AddColumns _, Plan.SetTtl _ -> false;
+                 Plan.AddColumns _, Plan.SetTtl _,
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ -> false;
         };
     }
 

@@ -79,13 +79,16 @@ class CdbServerTest {
     }
 
     /// `limit=0,n`, the form the kit's `qdb` sends on every query, bounds the rows as `limit=n` does; `lo,hi` keeps
-    /// QuestDB's rows lo to hi counted from 1; a negative bound is refused.
+    /// QuestDB's rows lo to hi counted from 1; a negative bound is refused. A bound over the row limit reads one row
+    /// past the limit, so a larger result is refused rather than cut.
     @Test
     void execTakesTheRangeLimitFromZero() throws IOException, InterruptedException {
         backend.answer = FakeRows.updated(0);
 
         assertThat(http.exec(server.port(), "select 1", "&limit=0,10000000").statusCode()).isEqualTo(200);
-        assertThat(backend.calls).containsExactly("select 1 | maxRows=10000000");
+        assertThat(http.exec(server.port(), "select 2", "&limit=0,1000").statusCode()).isEqualTo(200);
+        assertThat(backend.calls).containsExactly("select 1 | maxRows=" + (Limits.MAX_ROWS + 1),
+                "select 2 | maxRows=1000");
         assertThat(CdbServer.maxRows("0, 5")).isEqualTo(5);
         assertThat(CdbServer.maxRows("2,4")).isEqualTo(3);
         assertThat(CdbServer.maxRows("-3")).isEqualTo(-1);
@@ -126,16 +129,16 @@ class CdbServerTest {
                 .filter(c -> c.startsWith("at(")).count()).sum()).isEqualTo(8L * 2L * 20_000L);
     }
 
-    /// Without `limit` the query runs unbounded.
+    /// Without `limit` the query reads one row past the row limit, so a result over it can be refused.
     @Test
-    void execWithoutLimitRunsUnbounded() throws IOException, InterruptedException {
+    void execWithoutLimitReadsOnePastTheRowLimit() throws IOException, InterruptedException {
         backend.answer = FakeRows.updated(4);
 
         final HttpResponse<String> response = http.exec(server.port(), "update t set x = 1", "");
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("{\"dml\":\"OK\",\"updated\":4}");
-        assertThat(backend.calls).containsExactly("update t set x = 1 | maxRows=0");
+        assertThat(backend.calls).containsExactly("update t set x = 1 | maxRows=" + (Limits.MAX_ROWS + 1));
     }
 
     /// A refused query answers 400 with QuestDB's error JSON and the position the parser gave.
@@ -181,8 +184,9 @@ class CdbServerTest {
         assertThat(http.exec(server.port(), "select 2", "&max_lag_ms=0").statusCode()).isEqualTo(200);
         assertThat(http.exec(server.port(), "select 3", "").statusCode()).isEqualTo(200);
 
-        assertThat(backend.calls).containsExactly("select 1 | maxRows=0 | maxLagMillis=250",
-                "select 2 | maxRows=0 | maxLagMillis=0", "select 3 | maxRows=0");
+        final String maxRows = " | maxRows=" + (Limits.MAX_ROWS + 1);
+        assertThat(backend.calls).containsExactly("select 1" + maxRows + " | maxLagMillis=250",
+                "select 2" + maxRows + " | maxLagMillis=0", "select 3" + maxRows);
     }
 
     /// A negative, a fractional, a non-numeric and an empty `max_lag_ms` are refused as `limit` is, with QuestDB's

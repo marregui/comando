@@ -192,3 +192,4 @@ row and its record differ, or when a record has no row.
 | [179](0179-cdb-page-borrow.md) | cdb's aggregating operators borrow the scan's page instead of taking a new one per call | 2026-11-17 | Miguel and Claude | accepted; built in task 179 |
 | [180](0180-cdb-is-the-machine-server.md) | The machine's database server is cdb; QuestDB is no longer started | 2026-11-17 | Miguel and Claude | accepted; built in task 187; its names amended by [record 181](0181-the-machine-server-is-named-cdb.md) |
 | [181](0181-the-machine-server-is-named-cdb.md) | The machine's server and its metrics are named for cdb, not QuestDB | 2026-11-18 | Miguel and Claude | accepted; built in task 194 |
+| [182](0182-cdb-destructive-sql-explain-and-access.md) | cdb drops, deletes and explains, and its server lets in only holders of its secrets | 2026-11-18 | Miguel and Claude | accepted; built in task 197 |

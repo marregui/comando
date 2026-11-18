@@ -10,7 +10,8 @@ import java.util.List;
 public sealed interface Ast {
 
     /** A statement {@link Parser#parse} returns. */
-    sealed interface Statement extends Ast permits Query, CreateTable, Update, Show, Insert, AlterTable {
+    sealed interface Statement extends Ast permits Query, CreateTable, Update, Show, Insert,
+            AlterTable, DropTable, Truncate, DropPartition, Delete, Explain {
     }
 
     /** A query: a select, a set operation, or a {@code WITH}. */
@@ -143,7 +144,35 @@ public sealed interface Ast {
     record AlterTable(String table, List<AddColumn> addColumns, String ttl, int pos) implements Statement {
     }
 
-    /** {@code SHOW TABLES} has {@code table} null; {@code SHOW COLUMNS FROM t}. */
+    /** {@code DROP TABLE [IF EXISTS] t}. */
+    record DropTable(String table, boolean ifExists, int pos) implements Statement {
+    }
+
+    /** {@code TRUNCATE TABLE t}. */
+    record Truncate(String table, int pos) implements Statement {
+    }
+
+    /**
+     * {@code ALTER TABLE t DROP PARTITION LIST 'p'[, 'q']} ({@code names} the partition names as written, {@code where}
+     * null) or {@code ALTER TABLE t DROP PARTITION WHERE <predicate on the designated timestamp>} ({@code names}
+     * empty).
+     */
+    record DropPartition(String table, List<String> names, Expr where, int pos) implements Statement {
+    }
+
+    /** {@code DELETE FROM t [WHERE …]}: {@code where} null deletes every row. */
+    record Delete(String table, Expr where, int pos) implements Statement {
+    }
+
+    /** {@code EXPLAIN <statement>}. */
+    record Explain(Statement statement, int pos) implements Statement {
+    }
+
+    /**
+     * {@code SHOW TABLES} has {@code table} null; {@code SHOW COLUMNS FROM t}, {@code SHOW CREATE TABLE t},
+     * {@code SHOW PARTITIONS FROM t} ({@code what} {@code partitions}), {@code SHOW WAL [FROM t]} ({@code what}
+     * {@code wal}, {@code table} null for every table).
+     */
     record Show(String what, String table, int pos) implements Statement {
     }
 

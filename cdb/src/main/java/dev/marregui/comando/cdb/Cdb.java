@@ -7,6 +7,7 @@ import java.util.List;
 import org.jetbrains.annotations.TestOnly;
 
 import dev.marregui.comando.cdb.exec.Executor;
+import dev.marregui.comando.cdb.exec.Field;
 import dev.marregui.comando.cdb.exec.QueryContext;
 import dev.marregui.comando.cdb.exec.QueryPool;
 import dev.marregui.comando.cdb.plan.Plan;
@@ -107,9 +108,16 @@ public final class Cdb implements AutoCloseable {
         return CdbResult.described(Executor.changesStore(plan) ? List.of() : plan.fields());
     }
 
-    /** The plan of {@code sql}, as text, for tests and the explain command. */
+    /**
+     * The plan of {@code sql} as text, with the executor's choices ({@link Executor#explain}): the rows
+     * {@code EXPLAIN sql} answers, one per line. {@code sql} may itself be an {@code EXPLAIN}; a change is planned and
+     * not run.
+     */
     public String explain(final String sql) {
-        return Planner.plan(Parser.parse(sql), store::def, nowMicros()).toString();
+        final long now = nowMicros();
+        final Plan plan = Planner.plan(Parser.parse(sql), store::def, now);
+        return Executor.explain(plan instanceof Plan.Explain(final Plan inner, final List<Field> _) ? inner : plan,
+                store, now);
     }
 
     /** A line-protocol appender; the caller closes it. */

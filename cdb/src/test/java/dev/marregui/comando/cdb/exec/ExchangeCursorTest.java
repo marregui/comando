@@ -70,7 +70,7 @@ class ExchangeCursorTest {
             case Plan.Filter f -> Executor.filter(f, serial(f.child(), reader), 0);
             case Plan.Project p -> Executor.project(p, serial(p.child(), reader), 0);
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
-                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Change _ ->
+                 Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.Explain _, Plan.Change _ ->
                     throw new IllegalArgumentException("not a segment [plan=" + plan + ']');
         };
     }

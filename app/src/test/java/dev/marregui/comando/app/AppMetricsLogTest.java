@@ -34,6 +34,11 @@ class AppMetricsLogTest {
         public Optional<URI> live() {
             return Optional.empty();
         }
+
+        @Override
+        public Optional<String> secret() {
+            return Optional.empty();
+        }
     };
 
     /// The shadow the scratch home's machine folder names.

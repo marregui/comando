@@ -2,6 +2,7 @@
 dependencies {
     testImplementation(libs.archunit)
     testImplementation(libs.postgresql.cosa)
+    testImplementation(libs.lincheck)
 }
 
 tasks.named<Test>("test") {
@@ -20,6 +21,9 @@ tasks.named<Test>("test") {
     System.getenv("CDB_PARALLEL_SEED0")?.let { systemProperty("cdb.parallel.seed0", it) }
     System.getenv("CDB_PARALLEL_SEED1")?.let { systemProperty("cdb.parallel.seed1", it) }
     System.getenv("CDB_PARALLEL_QUERIES")?.let { systemProperty("cdb.parallel.queries", it) }
+    // DestructiveStressTest, DestructiveHttpTest: CDB_DESTRUCTIVE_SEED0/1 replay a printed seed pair
+    System.getenv("CDB_DESTRUCTIVE_SEED0")?.let { systemProperty("cdb.destructive.seed0", it) }
+    System.getenv("CDB_DESTRUCTIVE_SEED1")?.let { systemProperty("cdb.destructive.seed1", it) }
 }
 
 // Under -ea Page.relend poisons a lent page and lends a new one, so the refill itself runs only with assertions off for

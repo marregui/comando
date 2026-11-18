@@ -38,6 +38,7 @@ import static org.awaitility.Awaitility.await;
 /// does (record 146).
 ///
 /// - Creates the tables on the first write to a server, then sends the event's line.
+/// - Sends the endpoint's secret as the bearer of every request, and no header when it has none.
 /// - Creates the tables again, once, when a write is refused for a missing table.
 /// - Sends a write refused for one line again in halves, so only that line is counted failed.
 /// - Counts a line refused in batch after batch as lost each time, with no notice: a refused line is no outage.
@@ -66,6 +67,29 @@ class MetricsSinkTest {
             assertThat(server.lines).containsExactly(usageLine("five_hour"));
             assertThat(server.ddls()).isEqualTo(MetricsLines.DDL.size());
             assertThat(sink.failedLines()).isZero();
+        }
+    }
+
+    /// The endpoint's secret goes as `Authorization: Bearer` on every request, the tables' `/exec` and the line's
+    /// `/write`, to a server that refuses any other with 401; with none, no request carries the header.
+    @Test
+    void everyRequestCarriesTheEndpointsSecret() throws Exception {
+        final String secret = "0123456789abcdef".repeat(4);
+        try (final FakeQuestDb server = new FakeQuestDb();
+                final FakeQuestDb open = new FakeQuestDb()) {
+            server.secret.set(secret);
+            final Endpoint endpoint = Endpoint.at(server.uri());
+            endpoint.secret.set(secret);
+            try (final MetricsSink sink = sink(endpoint);
+                    final MetricsSink none = sink(Endpoint.at(open.uri()))) {
+                sink.offer(usage("five_hour"));
+                none.offer(usage("seven_day"));
+                await().atMost(WITHIN).until(() -> sink.sentLines() == 1 && none.sentLines() == 1);
+            }
+            assertThat(server.lines).containsExactly(usageLine("five_hour"));
+            assertThat(server.authorizations).hasSize(MetricsLines.DDL.size() + 1)
+                    .containsOnly("Bearer " + secret);
+            assertThat(open.authorizations).hasSize(MetricsLines.DDL.size() + 1).containsOnly("");
         }
     }
 
@@ -176,6 +200,11 @@ class MetricsSinkTest {
                 }
                 return Optional.empty();
             }
+
+            @Override
+            public Optional<String> secret() {
+                return Optional.empty();
+            }
         };
         try (final MetricsSink sink = sink(held)) {
             sink.offer(usage("first"));
@@ -208,6 +237,11 @@ class MetricsSinkTest {
                 } catch (final InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<String> secret() {
                 return Optional.empty();
             }
         };
@@ -339,11 +373,13 @@ class MetricsSinkTest {
         return new MetricsSink(endpoint, new MetricsLines("/data"), nanos::get, notices);
     }
 
-    /// An endpoint that names the server it is given and counts the starts asked of it.
+    /// An endpoint that names the server it is given, counts the starts asked of it and hands out the secret it is
+    /// given, none by default.
     static final class Endpoint implements MetricsEndpoint {
 
         final AtomicInteger ensured = new AtomicInteger();
         final AtomicReference<URI> live = new AtomicReference<>();
+        final AtomicReference<String> secret = new AtomicReference<>();
         final AtomicReference<URI> up = new AtomicReference<>();
 
         static Endpoint at(final URI uri) {
@@ -362,11 +398,17 @@ class MetricsSinkTest {
         public Optional<URI> live() {
             return Optional.ofNullable(live.get());
         }
+
+        @Override
+        public Optional<String> secret() {
+            return Optional.ofNullable(secret.get());
+        }
     }
 
     /// A loopback HTTP server that answers `/exec` and `/write` as QuestDB 10.1.0 does: DDL is `{"ddl":"OK"}`, a
     /// `SELECT` gets the answer set, a write gets 204, or 400 naming a missing table while `refuseAsMissing` counts,
-    /// or 400 for the whole write when a line holds `refuseLine`.
+    /// or 400 for the whole write when a line holds `refuseLine`. While `secret` is set, a request without it as
+    /// `Authorization: Bearer` gets 401, as cdb does; every request's header is kept in `authorizations`.
     static final class FakeQuestDb implements AutoCloseable {
 
         /** The body QuestDB 10.1.0 sends when a line names a table it does not have (probed). */
@@ -381,6 +423,8 @@ class MetricsSinkTest {
 
         /** A permit per write received, before it is held. */
         final Semaphore arrived = new Semaphore(0);
+        /** Each request's {@code Authorization} header, {@code ""} when it had none, in order. */
+        final List<String> authorizations = new CopyOnWriteArrayList<>();
         /** While set, each write waits for it before it is answered. */
         final AtomicReference<CountDownLatch> hold = new AtomicReference<>();
         final List<String> lines = new CopyOnWriteArrayList<>();
@@ -391,6 +435,8 @@ class MetricsSinkTest {
         final AtomicInteger refuseAsMissing = new AtomicInteger();
         /** While set, a write with a line holding it is refused whole. */
         final AtomicReference<String> refuseLine = new AtomicReference<>();
+        /** While set, the bearer every request must carry. */
+        final AtomicReference<String> secret = new AtomicReference<>();
         final AtomicReference<String> selectAnswer = new AtomicReference<>(
                 "{\"query\":\"\",\"columns\":[],\"dataset\":[],\"count\":0}");
         private final AtomicBoolean closed = new AtomicBoolean();
@@ -424,6 +470,9 @@ class MetricsSinkTest {
         }
 
         private void exec(final HttpExchange exchange) throws IOException {
+            if (!authorized(exchange)) {
+                return;
+            }
             final String raw = exchange.getRequestURI().getRawQuery();
             final String query = URLDecoder.decode(raw.substring(raw.indexOf('=') + 1), StandardCharsets.UTF_8);
             queries.add(query);
@@ -431,6 +480,9 @@ class MetricsSinkTest {
         }
 
         private void write(final HttpExchange exchange) throws IOException {
+            if (!authorized(exchange)) {
+                return;
+            }
             final String body;
             try (final InputStream in = exchange.getRequestBody()) {
                 body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
@@ -459,6 +511,19 @@ class MetricsSinkTest {
             lines.addAll(body.lines().toList());
             exchange.sendResponseHeaders(204, -1);
             exchange.close();
+        }
+
+        /// Keeps the request's `Authorization` header and answers 401 when `secret` is set and the header is not its
+        /// bearer: then false, and the exchange is closed.
+        private boolean authorized(final HttpExchange exchange) throws IOException {
+            final String header = exchange.getRequestHeaders().getFirst("Authorization");
+            authorizations.add(header == null ? "" : header);
+            final String wanted = secret.get();
+            if (wanted == null || ("Bearer " + wanted).equals(header)) {
+                return true;
+            }
+            answer(exchange, 401, "{\"error\":\"unauthorized\"}");
+            return false;
         }
 
         private static void answer(final HttpExchange exchange, final int status, final String text)

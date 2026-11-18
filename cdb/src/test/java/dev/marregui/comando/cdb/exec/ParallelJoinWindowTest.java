@@ -252,20 +252,11 @@ class ParallelJoinWindowTest {
                 + "FROM l WHERE x > 50");
     }
 
-    /// A window function cdb plans but does not run fails at the first page with the serial window's failure.
+    /// `lead`, `first_value` and `last_value` by partition match the serial window at every pool size.
     @Test
-    void windowFunctionsTheSerialWindowRefusesFailAlike() {
-        for (final String function : List.of("lead(x)", "first_value(x)", "last_value(x)")) {
-            final Plan.Window window = window("SELECT i, " + function + " OVER (PARTITION BY s ORDER BY ts) FROM l");
-            assertThatThrownBy(() -> drain(serialWindow(window), new ArrayList<>())).as(function)
-                    .isInstanceOf(CdbException.class);
-            for (final int threads : POOLS) {
-                try (QueryPool pool = QueryPool.of(threads)) {
-                    assertThatThrownBy(() -> drain(Executor.open(window, store, NOW, new QueryContext(null, pool)),
-                            new ArrayList<>())).as("%s pool=%d", function, threads).isInstanceOf(CdbException.class);
-                }
-            }
-        }
+    void leadFirstValueAndLastValueMatchTheSerialWindow() {
+        checkWindow("SELECT i, lead(x) OVER (PARTITION BY s ORDER BY ts), first_value(x) OVER (PARTITION BY s "
+                + "ORDER BY ts), last_value(x) OVER (PARTITION BY k ORDER BY ts) FROM l");
     }
 
     private static void ddl(final String sql) {

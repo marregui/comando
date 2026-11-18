@@ -51,9 +51,38 @@ final class UpdateRunner {
             final TableWriter writer,
             final long nowMicros
     ) {
+        return rewrite("UPDATE", update.table(), update.where(), reader, writer, nowMicros, (fields, timestamp) -> {
+            final VectorFn[] assigned = assignments(update, fields, timestamp, nowMicros);
+            final Vector[] values = new Vector[fields.size()];
+            return (page, hit) -> {
+                for (int c = 0; c < values.length; c++) {
+                    values[c] = assigned[c] == null ? null : assigned[c].eval(page);
+                }
+                for (int r = 0; r < page.size; r++) {
+                    append(writer, fields, timestamp, page, r, hit[r] ? values : null);
+                }
+            };
+        });
+    }
+
+    /**
+     * Truncates {@code writer} and re-appends {@code reader}'s snapshot through the page edit {@code edits} makes,
+     * {@code hit} marking the rows where {@code where} is TRUE (every row when it is null); then commits, or rolls back
+     * when no row was hit. Closes {@code reader}. Returns the rows hit. {@code statement} names the statement in its
+     * errors.
+     */
+    static long rewrite(
+            final String statement,
+            final String table,
+            final Bound where,
+            final TableReader reader,
+            final TableWriter writer,
+            final long nowMicros,
+            final PageEdits edits
+    ) {
         final Plan.Scan all;
         try {
-            all = scanOf(update.table(), reader.def());
+            all = scanOf(table, reader.def());
         } catch (final RuntimeException | Error e) {
             try {
                 reader.close();
@@ -63,54 +92,62 @@ final class UpdateRunner {
             throw e;
         }
         try (Cursor scan = new ScanCursor(all, reader)) {
-            final List<Field> fields = all.fields();
-            final int timestamp = reader.def().timestampIndex();
-            final VectorFn[] assigned = assignments(update, fields, timestamp, nowMicros);
-            final VectorFn where = update.where() == null ? null : Functions.compile(update.where(), nowMicros);
+            final PageEdit edit = edits.of(all.fields(), reader.def().timestampIndex());
+            final VectorFn condition = where == null ? null : Functions.compile(where, nowMicros);
             final boolean[] hit = new boolean[Page.CAPACITY];
-            final Vector[] values = new Vector[fields.size()];
             writer.truncate();
-            long changed = 0;
+            long hits = 0;
             Page page;
             while ((page = scan.next()) != null) {
                 final int size = page.size;
-                if (where == null) {
+                if (condition == null) {
                     Arrays.fill(hit, 0, size, true);
                 } else {
-                    final Vector mask = where.eval(page);
+                    final Vector mask = condition.eval(page);
                     if (mask.type != CdbType.BOOLEAN) {
-                        throw new CdbException("cannot UPDATE where a condition is not BOOLEAN [table="
-                                + update.table() + ", type=" + mask.type + "]", -1);
+                        throw new CdbException("cannot " + statement + " where a condition is not BOOLEAN [table="
+                                + table + ", type=" + mask.type + "]", -1);
                     }
                     for (int r = 0; r < size; r++) {
                         hit[r] = mask.getBoolean(r);
                     }
                 }
-                for (int c = 0; c < values.length; c++) {
-                    values[c] = assigned[c] == null ? null : assigned[c].eval(page);
-                }
                 for (int r = 0; r < size; r++) {
-                    final boolean change = hit[r];
-                    if (change) {
-                        changed++;
+                    if (hit[r]) {
+                        hits++;
                     }
-                    writer.newRow(timestamp < 0 ? Vector.NULL_LONG : page.columns[timestamp].getLong(r));
-                    for (int c = 0; c < values.length; c++) {
-                        if (c != timestamp) {
-                            put(writer, c, fields.get(c).type(), change && values[c] != null ? values[c]
-                                    : page.columns[c], r);
-                        }
-                    }
-                    writer.endRow();
                 }
+                edit.apply(page, hit);
             }
-            if (changed == 0) {
+            if (hits == 0) {
                 writer.rollback();
             } else {
                 writer.commit();
             }
-            return changed;
+            return hits;
         }
+    }
+
+    /**
+     * Appends row {@code r} of {@code page}, each column from {@code values} where it holds a vector, else as it is;
+     * {@code values} null keeps the whole row.
+     */
+    static void append(
+            final TableWriter writer,
+            final List<Field> fields,
+            final int timestamp,
+            final Page page,
+            final int r,
+            final Vector[] values
+    ) {
+        writer.newRow(timestamp < 0 ? Vector.NULL_LONG : page.columns[timestamp].getLong(r));
+        for (int c = 0; c < fields.size(); c++) {
+            if (c != timestamp) {
+                put(writer, c, fields.get(c).type(), values != null && values[c] != null ? values[c]
+                        : page.columns[c], r);
+            }
+        }
+        writer.endRow();
     }
 
     private static Plan.Scan scanOf(final String table, final TableDef def) {
@@ -186,5 +223,17 @@ final class UpdateRunner {
             case BOOLEAN -> writer.putBoolean(column, v.getBoolean(row));
             case SYMBOL, VARCHAR -> writer.putText(column, v.textAt(row));
         }
+    }
+
+    /** Makes a rewrite's page edit once the table's fields and designated timestamp index are known. */
+    @FunctionalInterface
+    interface PageEdits {
+        PageEdit of(List<Field> fields, int timestamp);
+    }
+
+    /** Appends the rows of {@code page} the statement keeps, {@code hit[r]} true for each row its condition hit. */
+    @FunctionalInterface
+    interface PageEdit {
+        void apply(Page page, boolean[] hit);
     }
 }

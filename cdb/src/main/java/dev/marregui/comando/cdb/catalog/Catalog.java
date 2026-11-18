@@ -17,7 +17,9 @@ import dev.marregui.comando.cdb.store.Store;
  * for a table written once), {@code wal_tables()} (QuestDB's 8 columns over the store's log) and
  * {@code wal_apply_stats()} (cdb's own: every figure of the log and its applier), {@code table_columns(t)} and
  * {@code SHOW COLUMNS FROM t} (QuestDB's 11 columns, {@code column} to {@code indexInclude}),
- * {@code SHOW CREATE TABLE t} (column {@code ddl}), {@code SHOW TABLES},
+ * {@code SHOW CREATE TABLE t} (column {@code ddl}), {@code SHOW TABLES}, {@code table_partitions(t)} and
+ * {@code SHOW PARTITIONS FROM t} (QuestDB's names, the eight cdb has), {@code show_wal([t])} and
+ * {@code SHOW WAL [FROM t]} (the columns of {@code wal_tables()} and the pending rows and transactions),
  * {@code long_sequence(n)} (column {@code x}, 1 to n) and {@code one_row}.
  */
 public final class Catalog {
@@ -52,6 +54,14 @@ public final class Catalog {
                 requireArgs(function, args, 1);
                 yield Listings.SHOW_CREATE_TABLE;
             }
+            case "table_partitions" -> {
+                requireArgs(function, args, 1);
+                yield Listings.TABLE_PARTITIONS;
+            }
+            case "show_wal" -> {
+                requireWalArgs(function, args);
+                yield Listings.SHOW_WAL;
+            }
             case "long_sequence" -> {
                 sequenceLength(args);
                 yield SequenceCursor.FIELDS;
@@ -85,6 +95,8 @@ public final class Catalog {
             case "table_columns", "show_columns" -> Listings.columns(store, args.get(0));
             case "show_tables" -> Listings.showTables(store);
             case "show_create_table" -> Listings.showCreateTable(store, args.get(0));
+            case "table_partitions" -> Listings.tablePartitions(store, args.get(0));
+            case "show_wal" -> Listings.showWal(store, args.isEmpty() ? null : args.get(0));
             case "long_sequence" -> new SequenceCursor(sequenceLength(args), ctx);
             default -> Listings.oneRow();
         };
@@ -94,6 +106,15 @@ public final class Catalog {
         if (args.size() != expected) {
             throw new CdbException(
                     "wrong argument count [function=" + function + ", expected=" + expected + ", got=" + args.size() + "]",
+                    -1
+            );
+        }
+    }
+
+    private static void requireWalArgs(final String function, final List<String> args) {
+        if (args.size() > 1) {
+            throw new CdbException(
+                    "wrong argument count [function=" + function + ", expected=0 or 1, got=" + args.size() + "]",
                     -1
             );
         }

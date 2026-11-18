@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.UnaryOperator;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +47,7 @@ class LaneTest {
             final DbSettings settings = new DbSettings(0, 1_000, 500, 60, 1_000L);
             final Lane lane = new Lane("stalled", new RecordingSink(), new ResultRegistry(), settings, timer,
                     cancellers, stopped -> {
-                    }, QUERY_SECONDS, DESCRIBE_SECONDS);
+                    }, UnaryOperator.identity(), QUERY_SECONDS, DESCRIBE_SECONDS);
             final ConnectionSpec spec =
                     new ConnectionSpec("stalled", "127.0.0.1", server.port(), "db", "u", "p", false, "disable");
             try {
@@ -81,7 +82,7 @@ class LaneTest {
             final DbSettings settings = new DbSettings(0, 1_000, 500, 60, 1_000L);
             final Lane lane = new Lane("stalled", new RecordingSink(), new ResultRegistry(), settings, timer,
                     cancellers, stopped -> {
-                    }, QUERY_SECONDS, DESCRIBE_SECONDS);
+                    }, UnaryOperator.identity(), QUERY_SECONDS, DESCRIBE_SECONDS);
             final ConnectionSpec spec =
                     new ConnectionSpec("stalled", "127.0.0.1", server.port(), "db", "u", "p", false, "disable");
             try {

@@ -19,6 +19,7 @@ import static org.awaitility.Awaitility.await;
 /// [MetricsSink]'s shadow server, named by [MetricsSink#SHADOW_ENV], gets every batch the server gets; with none, it
 /// gets nothing, and a shadow that fails changes nothing the server's writes count or tell.
 /// - With a shadow, the batch reaches both servers, each with its tables made first.
+/// - The machine's secret goes to the server, never to the shadow.
 /// - With no shadow, or a blank one, only the server is written.
 /// - With a shadow that refuses connections, the server's line is sent and nothing is counted failed or told.
 /// - The setting is a base URL; anything else is no shadow.
@@ -40,6 +41,25 @@ class MetricsSinkShadowTest {
             await().atMost(WITHIN).until(() -> sink.sentLines() == 1 && shadow.lines.size() == 1);
             assertThat(shadow.lines).containsExactlyElementsOf(server.lines);
             assertThat(shadow.ddls()).isEqualTo(MetricsLines.DDL.size());
+        }
+    }
+
+    /// The machine's secret goes to the server only: the shadow, another server, gets every request without an
+    /// `Authorization` header.
+    @Test
+    void theShadowNeverGetsTheSecret() throws Exception {
+        final String secret = "0123456789abcdef".repeat(4);
+        try (final FakeQuestDb server = new FakeQuestDb();
+                final FakeQuestDb shadow = new FakeQuestDb()) {
+            server.secret.set(secret);
+            final Endpoint endpoint = Endpoint.at(server.uri());
+            endpoint.secret.set(secret);
+            try (final MetricsSink sink = sink(endpoint, shadow.uri().toString())) {
+                sink.offer(usage("five_hour"));
+                await().atMost(WITHIN).until(() -> sink.sentLines() == 1 && shadow.lines.size() == 1);
+            }
+            assertThat(server.authorizations).containsOnly("Bearer " + secret);
+            assertThat(shadow.authorizations).hasSize(MetricsLines.DDL.size() + 1).containsOnly("");
         }
     }
 

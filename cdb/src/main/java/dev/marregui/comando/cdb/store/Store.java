@@ -136,12 +136,27 @@ public final class Store implements AutoCloseable {
      */
     public static final ScopedValue<Long> READ_MAX_LAG_MILLIS = ScopedValue.newInstance();
 
+    /**
+     * The most tables a store holds, created by SQL or by the line protocol: 1,000. Not measured; set with the server's
+     * limits so a client cannot fill the root with tables, each a log channel and its own folders.
+     */
+    public static final int MAX_TABLES = 1_000;
+
+    /** The most columns a table has: 1,024, as {@link #MAX_TABLES}, so a client cannot grow one row without end. */
+    public static final int MAX_COLUMNS = 1_024;
+
+    /** The longest table or column name, in characters: 127, as QuestDB's default limit on a name's length. */
+    public static final int MAX_NAME_LENGTH = 127;
+
     private final Path root;
     private final StoreOptions options;
     private final Map<String, TableState> tables = new ConcurrentHashMap<>();
     // written by the launcher before it serves, read by every reader
     private volatile long readMaxLagMillis;
     private final Object createLock = new Object();
+    // the folders of dropped tables not yet deleted: added under createLock at the drop, removed once the delete ends
+    // (a failed one leaves the drop marker, which freeFolder also skips); read by freeFolder under createLock
+    private final Set<Path> dying = ConcurrentHashMap.newKeySet();
     // serialises close: a close that kept the lock is finished by a later one
     private final Object closeLock = new Object();
     // the tables whose writer a close left open, guarded by closeLock: the root's lock is kept while any is
@@ -183,7 +198,11 @@ public final class Store implements AutoCloseable {
             }
             try (final DirectoryStream<Path> dirs = Files.newDirectoryStream(root, Files::isDirectory)) {
                 for (final Path dir : dirs) {
-                    if (Files.exists(dir.resolve(TableFiles.META))) {
+                    if (Files.exists(dir.resolve(TableFiles.DROPPED))) {
+                        // a drop answered before the stop, its folder not yet deleted: a reader held it, or a crash
+                        LOG.log(System.Logger.Level.INFO, "deleted dropped table [dir=" + dir + ']');
+                        StoreFiles.deleteTable(dir, TableFiles.DROPPED);
+                    } else if (Files.exists(dir.resolve(TableFiles.META))) {
                         final TableState state = load(store, dir);
                         store.tables.put(state.key, state);
                     }
@@ -244,7 +263,11 @@ public final class Store implements AutoCloseable {
                 }
                 throw new CdbException("refuse to create existing table [table=" + def.name() + ']', -1);
             }
-            final Path dir = root.resolve(def.name());
+            if (tables.size() >= MAX_TABLES) {
+                throw new CdbException("cannot create table: too many tables [table=" + def.name() + ", limit="
+                        + MAX_TABLES + ']', -1);
+            }
+            final Path dir = freeFolder(def.name());
             Wal wal = null;
             try {
                 StoreFiles.createFolder(dir);
@@ -269,6 +292,69 @@ public final class Store implements AutoCloseable {
     }
 
     /**
+     * Drops the table, waiting up to {@code waitMillis} for its writer as {@link #writer} does; false when there is no
+     * such table. Once it returns, {@link #def} and {@link #reader} no longer find the table and {@link #create} makes
+     * a new one, while a reader that already held a snapshot reads it until it closes. The table's commits are gone,
+     * the queued ones included; its folder is deleted when the last such reader closes, or at the next open. The drop
+     * holds once its marker is in the folder: a crash before leaves the table whole, one after leaves it gone.
+     */
+    public boolean dropTable(final String table, final long waitMillis) {
+        checkOpen();
+        final TableState state = tables.get(TableState.key(table));
+        if (state == null || !state.leaseUnlessClosed(waitMillis)) {
+            return false;
+        }
+        synchronized (createLock) {
+            state.applyLock.lock();
+            try {
+                if (!StoreFiles.replaceText(state.dir.resolve(TableFiles.DROPPED), "")) {
+                    // the drop is in doubt: a power cut may bring the table back, a later open deletes it otherwise
+                    LOG.log(System.Logger.Level.WARNING, "dropped table, a folder force left the drop in doubt [table="
+                            + table + ", dir=" + state.dir + ']');
+                }
+                tables.remove(state.key);
+                dying.add(state.dir);
+                applier.forget(state);
+                if (forcer != null) {
+                    forcer.forget(state);
+                }
+            } catch (final IOException | RuntimeException e) {
+                state.applyLock.unlock();
+                state.unlease();
+                throw new CdbException("cannot drop table [table=" + table + ", dir=" + state.dir + ']', e);
+            }
+            state.applyLock.unlock();
+        }
+        state.drop(() -> dying.remove(state.dir));
+        LOG.log(System.Logger.Level.INFO, "dropped table [table=" + table + ", dir=" + state.dir + ']');
+        return true;
+    }
+
+    /**
+     * The table's committed partitions, in time order, as of the commits answered before the call (as {@link #reader}
+     * waits for them): the last is the newest, the one that takes writes.
+     */
+    public List<PartitionInfo> partitions(final String table) {
+        checkOpen();
+        final TableState state = state(table);
+        awaitFresh(state);
+        final TableState.Snapshot snapshot = state.acquire();
+        try {
+            final PartitionBy partitionBy = snapshot.def().partitionBy();
+            final List<Version> versions = snapshot.partitions();
+            final List<PartitionInfo> out = new ArrayList<>(versions.size());
+            for (int i = 0; i < versions.size(); i++) {
+                final Version v = versions.get(i);
+                out.add(new PartitionInfo(TableFiles.partitionName(v.lowerBound(), partitionBy), v.minTimestamp(),
+                        v.maxTimestamp(), v.rowCount(), v.mappedBytes(), i == versions.size() - 1));
+            }
+            return out;
+        } finally {
+            state.release(snapshot);
+        }
+    }
+
+    /**
      * A snapshot of the table's committed state: waits for the applier to publish the commits answered before the call
      * when one of them is older than the read's lag ({@link #READ_MAX_LAG_MILLIS}), all of them when the lag is 0.
      */
@@ -279,11 +365,27 @@ public final class Store implements AutoCloseable {
         return new DefaultReader(state, state.acquire());
     }
 
-    /** The table's writer, waiting up to {@code waitMillis} for another to be closed. */
+    /**
+     * The table's writer, waiting up to {@code waitMillis} for another to be closed; a table that is absent, or that a
+     * drop removes before its writer is taken, is refused as one that cannot be found.
+     */
     public TableWriter writer(final String table, final long waitMillis) {
+        final TableWriter writer = writerUnlessDropped(table, waitMillis);
+        if (writer == null) {
+            // a drop or a close of the store let the lease go: a closed store says so first
+            checkOpen();
+            throw new CdbException("cannot find table [table=" + table + ']', -1);
+        }
+        return writer;
+    }
+
+    /** As {@link #writer}, null, without a writer, when the table is absent or a drop removes it first. */
+    TableWriter writerUnlessDropped(final String table, final long waitMillis) {
         checkOpen();
-        final TableState state = state(table);
-        state.lease(waitMillis);
+        final TableState state = tables.get(TableState.key(table));
+        if (state == null || !state.leaseUnlessClosed(waitMillis)) {
+            return null;
+        }
         try {
             return new DefaultWriter(this, state);
         } catch (final RuntimeException e) {
@@ -525,14 +627,39 @@ public final class Store implements AutoCloseable {
         return new CdbException("refuse use of closed store [root=" + root + ']', -1);
     }
 
+    // the folder of a new table: its name, unless a dropped table's folder is there, still being deleted (its last
+    // reader deletes the marker, then the folder, outside the create lock) or kept by a failed delete with its marker;
+    // then its name and the first free ~n, since an open takes the name from _meta. A stray folder a cut create left
+    // without _meta is taken as before
+    private Path freeFolder(final String name) {
+        Path dir = root.resolve(name);
+        for (int n = 1; dying.contains(dir) || Files.exists(dir.resolve(TableFiles.DROPPED)); n++) {
+            dir = root.resolve(name + '~' + n);
+        }
+        return dir;
+    }
+
     private static void check(final TableDef def) {
         TableFiles.checkName(def.name(), "table");
         if (def.columns().isEmpty()) {
             throw new CdbException("refuse table without columns [table=" + def.name() + ']', -1);
         }
+        if (def.name().length() > MAX_NAME_LENGTH) {
+            throw new CdbException("cannot create table: name too long [table=" + def.name() + ", length="
+                    + def.name().length() + ", limit=" + MAX_NAME_LENGTH + ']', -1);
+        }
+        if (def.columns().size() > MAX_COLUMNS) {
+            throw new CdbException("cannot create table: too many columns [table=" + def.name() + ", columns="
+                    + def.columns().size() + ", limit=" + MAX_COLUMNS + ']', -1);
+        }
         final Set<String> names = new HashSet<>();
         for (final ColumnDef column : def.columns()) {
             TableFiles.checkName(column.name(), "column");
+            if (column.name().length() > MAX_NAME_LENGTH) {
+                throw new CdbException("cannot create table: column name too long [table=" + def.name() + ", column="
+                        + column.name() + ", length=" + column.name().length() + ", limit=" + MAX_NAME_LENGTH + ']',
+                        -1);
+            }
             if (!names.add(TableState.key(column.name()))) {
                 throw new CdbException("refuse duplicate column [table=" + def.name() + ", column=" + column.name()
                         + ']', -1);

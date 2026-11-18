@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.CdbAppender;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
@@ -17,7 +19,8 @@ import dev.marregui.comando.cdb.CdbType;
 /**
  * The store's line-protocol appender. A row's fields are buffered until {@link #at}, so a row is either written whole
  * or refused whole; the appender keeps each touched table's writer until {@link #close}. A table whose writer the store
- * did not hand over refuses the appender's later rows of it at once, with the same reason, rather than waiting again.
+ * did not hand over refuses the appender's later rows of it at once, with the same reason, rather than waiting again;
+ * a table dropped before its writer is taken is not refused but created again, as for a line to a missing table.
  * {@link #flush} commits each touched table in turn, not atomically across tables: a failed commit leaves the tables
  * before it committed and the ones from it on rolled back. An {@link Error} in a flush closes the appender, its writers
  * released. {@link #awaitDurable} waits until every commit flushed since the last wait that held is durable, those of
@@ -29,10 +32,14 @@ final class IlpAppender implements CdbAppender {
     private static final String TIMESTAMP = "timestamp";
     // how long the appender waits for a table's writer held by another
     private static final long WRITER_WAIT_MILLIS = 30_000L;
+    // how many drops a line outlasts between creating its table and taking the writer: each must land in that short
+    // window, so a few cover racing drops, and more means a loop of drops the line gives way to
+    private static final int WRITER_ATTEMPTS = 8;
     private static final int INITIAL_FIELDS = 16;
 
     private final Store store;
     private final long writerWaitMillis;
+    private final int writerAttempts;
     private final Map<String, TableWriter> writers = new LinkedHashMap<>();
     // a table's writer the store refused, by table key: a group commit's later rows of it would each wait as long
     private final Map<String, CdbException> unavailable = new HashMap<>();
@@ -55,8 +62,15 @@ final class IlpAppender implements CdbAppender {
 
     /** As above, waiting at most {@code writerWaitMillis} for a table's writer held by another. */
     IlpAppender(final Store store, final long writerWaitMillis) {
+        this(store, writerWaitMillis, WRITER_ATTEMPTS);
+    }
+
+    /** As above, refusing a line once its table was dropped before each of {@code writerAttempts} writers. */
+    @TestOnly
+    IlpAppender(final Store store, final long writerWaitMillis, final int writerAttempts) {
         this.store = store;
         this.writerWaitMillis = writerWaitMillis;
+        this.writerAttempts = writerAttempts;
     }
 
     @Override
@@ -284,32 +298,46 @@ final class IlpAppender implements CdbAppender {
         if (refused != null) {
             throw new CdbException(refused.getMessage(), refused);
         }
-        if (store.def(name) == null) {
-            final List<ColumnDef> columns = new ArrayList<>(fields + 1);
-            for (int f = 0; f < fields; f++) {
-                if (indexOf(columns, names[f]) < 0) {
-                    columns.add(new ColumnDef(names[f], types[f]));
-                }
+        // a drop between the create and the writer leaves nothing to write to: the line creates the table again
+        for (int attempt = 1; ; attempt++) {
+            if (store.def(name) == null) {
+                create(name);
             }
-            if (indexOf(columns, TIMESTAMP) < 0) {
-                columns.add(new ColumnDef(TIMESTAMP, CdbType.TIMESTAMP));
+            final TableWriter writer;
+            try {
+                writer = store.writerUnlessDropped(name, writerWaitMillis);
+            } catch (final CdbException e) {
+                unavailable.put(key, e);
+                throw e;
             }
-            final int ts = indexOf(columns, TIMESTAMP);
-            if (columns.get(ts).type() != CdbType.TIMESTAMP) {
-                throw new CdbException("refuse field named as the designated timestamp [table=" + name + ", column="
-                        + TIMESTAMP + ", type=" + columns.get(ts).type() + ']', -1);
+            if (writer != null) {
+                writers.put(key, writer);
+                return writer;
             }
-            store.create(new TableDef(name, columns, ts, PartitionBy.DAY, List.of(), 0L), true);
+            if (attempt == writerAttempts) {
+                throw new CdbException("refuse table dropped before each writer [table=" + name + ", attempts="
+                        + attempt + ']', -1);
+            }
         }
-        final TableWriter writer;
-        try {
-            writer = store.writer(name, writerWaitMillis);
-        } catch (final CdbException e) {
-            unavailable.put(key, e);
-            throw e;
+    }
+
+    // the table as QuestDB's ILP creates one: the line's fields, then the designated timestamp
+    private void create(final String name) {
+        final List<ColumnDef> columns = new ArrayList<>(fields + 1);
+        for (int f = 0; f < fields; f++) {
+            if (indexOf(columns, names[f]) < 0) {
+                columns.add(new ColumnDef(names[f], types[f]));
+            }
         }
-        writers.put(key, writer);
-        return writer;
+        if (indexOf(columns, TIMESTAMP) < 0) {
+            columns.add(new ColumnDef(TIMESTAMP, CdbType.TIMESTAMP));
+        }
+        final int ts = indexOf(columns, TIMESTAMP);
+        if (columns.get(ts).type() != CdbType.TIMESTAMP) {
+            throw new CdbException("refuse field named as the designated timestamp [table=" + name + ", column="
+                    + TIMESTAMP + ", type=" + columns.get(ts).type() + ']', -1);
+        }
+        store.create(new TableDef(name, columns, ts, PartitionBy.DAY, List.of(), 0L), true);
     }
 
     /** The column of field {@code f}, added to the table when missing; a field of a type it cannot take fails. */

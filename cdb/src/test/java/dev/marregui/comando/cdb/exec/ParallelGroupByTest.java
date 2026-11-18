@@ -320,7 +320,8 @@ class ParallelGroupByTest {
             case Plan.Limit l -> node(l.child());
             case Plan.Filter f -> node(f.child());
             case Plan.Scan _, Plan.Source _, Plan.LatestOn _, Plan.Window _, Plan.Distinct _, Plan.SetOp _,
-                 Plan.Join _, Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _ ->
+                 Plan.Join _, Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _,
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ ->
                     throw new IllegalStateException("no aggregate in the plan [plan=" + plan + ']');
         };
     }

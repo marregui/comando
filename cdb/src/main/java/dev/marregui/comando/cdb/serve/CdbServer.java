@@ -1,5 +1,6 @@
 package dev.marregui.comando.cdb.serve;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -9,6 +10,8 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -45,6 +48,17 @@ import dev.marregui.comando.cdb.store.Store;
  * a bounded time for the store's log force: 503 when the wait runs out and 500 ("commit in doubt") when the force
  * failed, the rows written either way; {@code durable=false} or none answers once they are committed. Each request
  * runs on a virtual thread of its own; past {@link #MAX_REQUESTS} in flight, a new connection is closed unanswered.
+ *
+ * <p>Started with {@link Secrets}, a request carries {@code Authorization: Bearer <secret>}: none or a wrong one is
+ * answered 401, the read-only secret on a statement that is not a query, {@code SHOW} or {@code EXPLAIN}, or on
+ * {@code /write}, 403. Bound to a loopback address, a request whose {@code Host} is not {@code 127.0.0.1},
+ * {@code localhost} or {@code [::1]} with the server's port is answered 403, so a page that renamed its host to the
+ * loopback address reaches nothing; a request with an {@code Origin}, which only a browser sends, is answered 403
+ * wherever the server is bound. Each refusal keeps the endpoint's JSON error shape. A query runs at most
+ * {@link Limits#QUERY_DEADLINE_MILLIS}, then is cancelled and answered 408; a query result over {@link Limits#MAX_ROWS}
+ * rows, however many {@code limit} asked for, is answered 400 rather than cut short; the {@code /write} bodies being
+ * read and written at once hold at most {@link Limits#BODY_BUDGET_BYTES}, and a body that cannot get its share within
+ * {@link Limits#BODY_WAIT_MILLIS} is answered 503. A log line names a request by its path, never by its query.
  */
 public final class CdbServer implements AutoCloseable {
 
@@ -52,6 +66,7 @@ public final class CdbServer implements AutoCloseable {
     static final int MAX_REQUESTS = 64;
     /** The kit's {@code qdb} sends at most 1,000 lines a request, a few hundred bytes each; not measured beyond it. */
     static final int MAX_BODY_BYTES = 16 << 20;
+    private static final String BEARER = "Bearer ";
     private static final String JSON = "application/json; charset=utf-8";
     private static final System.Logger LOG = System.getLogger(CdbServer.class.getName());
     /** Not measured: a query of the corpus runs in milliseconds; one second lets the ones in flight answer. */
@@ -70,9 +85,25 @@ public final class CdbServer implements AutoCloseable {
         this.port = server.getAddress().getPort();
     }
 
-    /** Serves {@code cdb} on {@code address} until {@link #close()}. */
+    /** Serves {@code cdb} on {@code address} until {@link #close()}, to every client. */
     public static CdbServer start(final Cdb cdb, final InetSocketAddress address) {
         return start(new CdbBackend(cdb), address);
+    }
+
+    /** Serves {@code cdb} on {@code address} until {@link #close()}, to a client with one of {@code secrets}. */
+    public static CdbServer start(final Cdb cdb, final InetSocketAddress address, final Secrets secrets) {
+        return start(new CdbBackend(cdb), address, secrets, Bounds.DEFAULT);
+    }
+
+    /**
+     * Sets the JDK HTTP server's bounds from {@link Limits}, each unless already set: the time to read a request, the
+     * time to write a response, the open connections. The JDK reads them once, when its first server is made, so a
+     * launcher calls this before it starts one.
+     */
+    public static void applyJdkLimits() {
+        limit("sun.net.httpserver.maxReqTime", Limits.HTTP_MAX_REQUEST_SECONDS);
+        limit("sun.net.httpserver.maxRspTime", Limits.HTTP_MAX_RESPONSE_SECONDS);
+        limit("jdk.httpserver.maxConnections", Limits.HTTP_MAX_CONNECTIONS);
     }
 
     /** The port served, the real one when started on port 0. */
@@ -106,14 +137,26 @@ public final class CdbServer implements AutoCloseable {
     }
 
     static CdbServer start(final Backend backend, final InetSocketAddress address) {
+        return start(backend, address, null, Bounds.DEFAULT);
+    }
+
+    /** Serves {@code backend} to a client with one of {@code secrets} (any client when null) within {@code bounds}. */
+    static CdbServer start(final Backend backend, final InetSocketAddress address, final Secrets secrets,
+            final Bounds bounds) {
         final Admission admission = new Admission();
         final CommitQueue commits = new CommitQueue(backend::appender);
+        // fair, so a large body waiting for its share is not passed over by smaller ones until its wait runs out
+        final Semaphore budget = new Semaphore(Math.toIntExact(bounds.bodyBudgetBytes()), true);
         HttpServer server = null;
         try {
             server = HttpServer.create(address, 0);
+            final InetSocketAddress bound = server.getAddress();
+            final Gate gate = new Gate(secrets, bound.getAddress().isLoopbackAddress(), bound.getPort());
             server.setExecutor(admission);
-            server.createContext("/exec", exchange -> handle(exchange, () -> exec(backend, exchange)));
-            server.createContext("/write", exchange -> handle(exchange, () -> write(commits, exchange)));
+            server.createContext("/exec",
+                    exchange -> handle(exchange, gate, role -> exec(backend, admission, bounds, role, exchange)));
+            server.createContext("/write",
+                    exchange -> handle(exchange, gate, role -> write(commits, budget, bounds, role, exchange)));
             server.start();
             LOG.log(Level.INFO, "serving cdb [address=" + server.getAddress() + ']');
             return new CdbServer(server, admission, commits);
@@ -136,19 +179,72 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    // every exchange is answered and closed: a handler that throws would leave the client without a status
-    private static void handle(final HttpExchange exchange, final Handler handler) throws IOException {
+    private static void limit(final String property, final int value) {
+        if (System.getProperty(property) == null) {
+            System.setProperty(property, Integer.toString(value));
+        }
+    }
+
+    // every exchange is answered and closed: a handler that throws would leave the client without a status. The log
+    // names the path alone: the query string holds the statement, which may carry what its client keeps to itself
+    private static void handle(final HttpExchange exchange, final Gate gate, final Handler handler)
+            throws IOException {
         try {
-            handler.run();
+            final Role role = admit(exchange, gate);
+            if (role != Role.NONE) {
+                handler.run(role);
+            }
         } catch (final RuntimeException e) {
-            LOG.log(Level.WARNING, "could not answer request [uri=" + exchange.getRequestURI() + ']', e);
+            LOG.log(Level.WARNING, "could not answer request [path=" + exchange.getRequestURI().getPath() + ']', e);
             send(exchange, 500, JsonWriter.error("", "could not answer request [error=" + e + ']', -1));
         } finally {
             exchange.close();
         }
     }
 
-    private static void exec(final Backend backend, final HttpExchange exchange) throws IOException {
+    // the client's role, or NONE once the request is answered: a browser's request (it alone sends Origin) and one for
+    // a host name other than loopback's are refused before the secret is read
+    private static Role admit(final HttpExchange exchange, final Gate gate) throws IOException {
+        final Headers headers = exchange.getRequestHeaders();
+        final String origin = headers.getFirst("Origin");
+        if (origin != null) {
+            return refuse(exchange, 403, "refuse request from a browser page [origin=" + origin + ']');
+        }
+        if (gate.loopback() && !gate.isLoopbackHost(headers.get("Host"))) {
+            return refuse(exchange, 403, "refuse request for a host other than loopback [host="
+                    + headers.getFirst("Host") + ']');
+        }
+        if (gate.secrets() == null) {
+            return Role.OWNER;
+        }
+        final Role role = gate.secrets().roleOf(bearer(headers.getFirst("Authorization")));
+        if (role == Role.NONE) {
+            exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer realm=\"cdb\"");
+            return refuse(exchange, 401, "refuse request without a valid secret");
+        }
+        return role;
+    }
+
+    // the secret of an Authorization header of the Bearer scheme, whose name any case matches; null otherwise
+    private static String bearer(final String authorization) {
+        if (authorization == null || !authorization.regionMatches(true, 0, BEARER, 0, BEARER.length())) {
+            return null;
+        }
+        return authorization.substring(BEARER.length());
+    }
+
+    // answers the refusal in the endpoint's error shape; always NONE
+    private static Role refuse(final HttpExchange exchange, final int status, final String message)
+            throws IOException {
+        final String path = exchange.getRequestURI().getPath();
+        LOG.log(Level.DEBUG, () -> "refuse request [path=" + path + ", status=" + status + ']');
+        send(exchange, status, exchange.getHttpContext().getPath().equals("/write")
+                ? JsonWriter.writeError(message, 0) : JsonWriter.error("", message, -1));
+        return Role.NONE;
+    }
+
+    private static void exec(final Backend backend, final Admission admission, final Bounds bounds, final Role role,
+            final HttpExchange exchange) throws IOException {
         if (refused(exchange, "/exec", "GET")) {
             return;
         }
@@ -160,19 +256,54 @@ public final class CdbServer implements AutoCloseable {
             send(exchange, 200, JsonWriter.emptyQuery(query == null ? "" : query));
             return;
         }
-        final int maxRows = maxRows(limit);
-        if (maxRows < 0) {
+        if (role == Role.READ_ONLY && !Access.readOnly(query)) {
+            send(exchange, 403, JsonWriter.error(query, "refuse a statement that changes the store with the read-only"
+                    + " secret", -1));
+            return;
+        }
+        final int requested = maxRows(limit);
+        if (requested < 0) {
             send(exchange, 400, JsonWriter.error(query, "invalid limit [limit=" + limit + ']', -1));
             return;
         }
+        // a query that asks for every row, or more than the bound, reads one row past it: a result over the bound is
+        // refused rather than cut short, so a client never takes part of an answer for the whole
+        final int maxRows = requested == 0 || requested > bounds.maxRows() ? bounds.maxRows() + 1 : requested;
+        final CdbCancel cancel = new CdbCancel();
+        final long startNanos = System.nanoTime();
+        final Runnable ended = admission.watch(cancel, bounds.queryDeadlineMillis());
         final Rows rows;
         try {
-            rows = backend.run(query, offset(limit), maxRows, ReadLag.parse("max_lag_ms", lag), null);
+            rows = backend.run(query, offset(limit), maxRows, ReadLag.parse("max_lag_ms", lag), cancel);
         } catch (final CdbException e) {
-            send(exchange, 400, JsonWriter.error(query, e.getMessage(), e.position()));
+            if (cancel.cancelled()) {
+                cancelled(exchange, query, bounds, startNanos);
+            } else {
+                send(exchange, 400, JsonWriter.error(query, e.getMessage(), e.position()));
+            }
+            return;
+        } finally {
+            ended.run();
+        }
+        if (rows.updateCount() < 0L && rows.rowCount() > bounds.maxRows()) {
+            send(exchange, 400, JsonWriter.error(query, "refuse result over the row limit [limit=" + bounds.maxRows()
+                    + ']', -1));
             return;
         }
         send(exchange, 200, JsonWriter.result(query, rows, offset(limit)));
+    }
+
+    // a query its deadline cancelled is answered 408; one cancelled sooner, as the server stops, 503
+    private static void cancelled(final HttpExchange exchange, final String query, final Bounds bounds,
+            final long startNanos) throws IOException {
+        final long ranMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+        if (ranMillis >= bounds.queryDeadlineMillis()) {
+            send(exchange, 408, JsonWriter.error(query, "cancel query past its deadline [deadlineMillis="
+                    + bounds.queryDeadlineMillis() + ", ranMillis=" + ranMillis + ']', -1));
+        } else {
+            send(exchange, 503, JsonWriter.error(query, "cancel query as the server stops [ranMillis=" + ranMillis
+                    + ']', -1));
+        }
     }
 
     /**
@@ -224,8 +355,13 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    private static void write(final CommitQueue commits, final HttpExchange exchange) throws IOException {
+    private static void write(final CommitQueue commits, final Semaphore budget, final Bounds bounds,
+            final Role role, final HttpExchange exchange) throws IOException {
         if (refused(exchange, "/write", "POST")) {
+            return;
+        }
+        if (role == Role.READ_ONLY) {
+            send(exchange, 403, JsonWriter.writeError("refuse line-protocol writes with the read-only secret", 0));
             return;
         }
         final Precision precision;
@@ -241,6 +377,46 @@ public final class CdbServer implements AutoCloseable {
             return;
         }
         final boolean durable = "true".equals(durableValue);
+        final int share = share(exchange, bounds);
+        if (!acquire(budget, share, bounds)) {
+            send(exchange, 503, JsonWriter.writeError("refuse body while the body budget is in use [budgetBytes="
+                    + bounds.bodyBudgetBytes() + ", waitedMillis=" + bounds.bodyWaitMillis() + ']', 0));
+            return;
+        }
+        try {
+            write(commits, exchange, precision, durable);
+        } finally {
+            budget.release(share);
+        }
+    }
+
+    // the bytes a body holds of the budget while it is read and written: its declared length, at most what the server
+    // reads before it refuses the body and at most the whole budget; a body of unknown length takes the most
+    private static int share(final HttpExchange exchange, final Bounds bounds) {
+        long declared = MAX_BODY_BYTES + 1L;
+        final String length = exchange.getRequestHeaders().getFirst("Content-Length");
+        if (length != null) {
+            try {
+                declared = Math.min(declared, Math.max(0L, Long.parseLong(length.strip())));
+            } catch (final NumberFormatException _) {
+                // the JDK's server refuses a malformed length before a handler runs; the most is the safe share
+            }
+        }
+        return (int) Math.min(declared, bounds.bodyBudgetBytes());
+    }
+
+    private static boolean acquire(final Semaphore budget, final int share, final Bounds bounds) {
+        try {
+            return budget.tryAcquire(share, bounds.bodyWaitMillis(), TimeUnit.MILLISECONDS);
+        } catch (final InterruptedException _) {
+            // the server stops: the body is refused as when its wait runs out
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private static void write(final CommitQueue commits, final HttpExchange exchange, final Precision precision,
+            final boolean durable) throws IOException {
         final byte[] bytes = exchange.getRequestBody().readNBytes(MAX_BODY_BYTES + 1);
         if (bytes.length > MAX_BODY_BYTES) {
             send(exchange, 413, JsonWriter.writeError("refuse body over the limit [limit=" + MAX_BODY_BYTES + ']', 0));
@@ -353,7 +529,30 @@ public final class CdbServer implements AutoCloseable {
 
     @FunctionalInterface
     private interface Handler {
-        void run() throws IOException;
+        void run(Role role) throws IOException;
+    }
+
+    /**
+     * The bounds a server holds its clients' work to: {@link Limits}' in production, shorter ones in tests. A query of
+     * every row reads {@code maxRows + 1}, so {@code maxRows} is below {@link Integer#MAX_VALUE}.
+     */
+    record Bounds(long queryDeadlineMillis, int maxRows, long bodyBudgetBytes, long bodyWaitMillis) {
+
+        static final Bounds DEFAULT = new Bounds(Limits.QUERY_DEADLINE_MILLIS, Limits.MAX_ROWS,
+                Limits.BODY_BUDGET_BYTES, Limits.BODY_WAIT_MILLIS);
+    }
+
+    // what a request must show before a handler runs: a loopback Host when bound to loopback, a secret when given any
+    private record Gate(Secrets secrets, boolean loopback, int port) {
+
+        boolean isLoopbackHost(final List<String> hosts) {
+            if (hosts == null || hosts.size() != 1) {
+                return false;
+            }
+            final String host = hosts.getFirst();
+            return host.equalsIgnoreCase("127.0.0.1:" + port) || host.equalsIgnoreCase("localhost:" + port)
+                    || host.equalsIgnoreCase("[::1]:" + port);
+        }
     }
 
     private record CdbBackend(Cdb cdb) implements Backend {
@@ -464,6 +663,31 @@ public final class CdbServer implements AutoCloseable {
                 permits.release();
                 throw e;
             }
+        }
+
+        /**
+         * Cancels {@code cancel} once {@code deadlineMillis} pass, unless the returned action, the query's end, runs
+         * first. A virtual thread waits for either; a request runs one query, so the watches are bounded by the
+         * requests' permits. Once the server is closing, the query is cancelled at once rather than run past the close.
+         */
+        Runnable watch(final CdbCancel cancel, final long deadlineMillis) {
+            final CountDownLatch ended = new CountDownLatch(1);
+            try {
+                threads.execute(() -> {
+                    Thread.currentThread().setName("cdb-http-deadline");
+                    try {
+                        if (!ended.await(deadlineMillis, TimeUnit.MILLISECONDS)) {
+                            cancel.cancel();
+                        }
+                    } catch (final InterruptedException _) {
+                        // the close stops the watch; its request ends with the close
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            } catch (final RejectedExecutionException _) {
+                cancel.cancel();
+            }
+            return ended::countDown;
         }
 
         void close() {

@@ -1,11 +1,17 @@
 package dev.marregui.comando.cdb.plan;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
@@ -14,8 +20,18 @@ import dev.marregui.comando.cdb.store.ColumnDef;
 import dev.marregui.comando.cdb.store.PartitionBy;
 import dev.marregui.comando.cdb.store.TableDef;
 
-/** {@code CREATE TABLE} to a {@link TableDef}, and QuestDB's DDL type names to the six cdb types. */
+/**
+ * {@code CREATE TABLE} to a {@link TableDef}, QuestDB's DDL type names to the six cdb types, and the plans of
+ * {@code ALTER}, {@code DROP} and {@code TRUNCATE TABLE}.
+ */
 final class Ddl {
+
+    // partition names as QuestDB writes them, one shape per unit: 2026-11-14T10, 2026-11-14, 2026-W46, 2026-11, 2026
+    private static final Pattern HOUR_NAME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}");
+    private static final Pattern DAY_NAME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    private static final Pattern WEEK_NAME = Pattern.compile("(\\d{4})-W(\\d{2})");
+    private static final Pattern MONTH_NAME = Pattern.compile("\\d{4}-\\d{2}");
+    private static final Pattern YEAR_NAME = Pattern.compile("\\d{4}");
 
     /** QuestDB's {@code MIN_SYMBOL_CAPACITY}. */
     private static final long MIN_SYMBOL_CAPACITY = 2;
@@ -132,6 +148,177 @@ final class Ddl {
             added.add(column(spec, type, pos));
         }
         return new Plan.AddColumns(def.name(), List.copyOf(added));
+    }
+
+    /** {@code DROP TABLE}: a missing table is refused, except under {@code IF EXISTS}, which keeps the name given. */
+    static Plan dropTable(final Ast.DropTable drop, final Function<String, TableDef> tables) {
+        final TableDef def = tables.apply(drop.table());
+        if (def != null) {
+            return new Plan.DropTable(def.name(), drop.ifExists());
+        }
+        if (!drop.ifExists()) {
+            throw new CdbException("cannot find table [table=" + drop.table() + ']', drop.pos());
+        }
+        return new Plan.DropTable(drop.table(), true);
+    }
+
+    static Plan truncate(final Ast.Truncate truncate, final Function<String, TableDef> tables) {
+        final TableDef def = tables.apply(truncate.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + truncate.table() + ']', truncate.pos());
+        }
+        return new Plan.Truncate(def.name());
+    }
+
+    /**
+     * {@code ALTER TABLE DROP PARTITION}, of a table partitioned by its designated timestamp. A LIST name is read at
+     * the table's unit ({@code 2026-11-14T10}, {@code 2026-11-14}, {@code 2026-W46}, {@code 2026-11}, {@code 2026}) to
+     * its partition's range. A WHERE must be a time range: top-level AND terms, each comparing the designated timestamp
+     * (other than by {@code !=}) with a value known at plan time, or a BETWEEN of two such values; anything else
+     * (OR, NOT, IN a list, {@code !=}) would read as a wider range than it says and is refused.
+     */
+    static Plan dropPartition(
+            final Ast.DropPartition drop,
+            final Function<String, TableDef> tables,
+            final long nowMicros
+    ) {
+        final int pos = drop.pos();
+        final TableDef def = tables.apply(drop.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + drop.table() + ']', pos);
+        }
+        final int ts = def.timestampIndex();
+        if (ts < 0) {
+            throw new CdbException("cannot drop partitions of a table without designated timestamp [table="
+                    + def.name() + ']', pos);
+        }
+        if (def.partitionBy() == PartitionBy.NONE) {
+            throw new CdbException("cannot drop partitions of a table not partitioned [table=" + def.name() + ']', pos);
+        }
+        if (drop.where() == null) {
+            final long[] from = new long[drop.names().size()];
+            final long[] to = new long[from.length];
+            for (int i = 0; i < from.length; i++) {
+                final long[] range = partitionRange(drop.names().get(i), def, pos);
+                from[i] = range[0];
+                to[i] = range[1];
+            }
+            return new Plan.DropPartitions(def.name(), from, to);
+        }
+        final Bound where = new Binder(Rel.of(Planner.scan(def), def.name(), ts), null).bindValue(drop.where());
+        if (where.type() != CdbType.BOOLEAN) {
+            throw new CdbException("cannot drop partitions by non-boolean condition [table=" + def.name() + ", type="
+                    + where.type() + ']', pos);
+        }
+        if (readsOtherColumn(where, ts)) {
+            throw new CdbException("cannot drop partitions by a condition on other columns [table=" + def.name() + ']',
+                    pos);
+        }
+        final long[] range = {Long.MIN_VALUE, Long.MAX_VALUE};
+        if (!timeRange(where, ts, nowMicros, range)) {
+            throw new CdbException("cannot drop partitions by a condition other than a time range [table="
+                    + def.name() + ']', pos);
+        }
+        return new Plan.DropPartitions(def.name(), new long[] {range[0]}, new long[] {range[1]});
+    }
+
+    /** {@code [start, nextStart)} of the partition {@code name} names under the table's unit. */
+    private static long[] partitionRange(final String name, final TableDef def, final int pos) {
+        final PartitionBy unit = def.partitionBy();
+        final Matcher m = partitionName(unit).matcher(name);
+        if (m.matches()) {
+            if (unit != PartitionBy.WEEK) {
+                try {
+                    return Times.interval(name, pos);
+                } catch (final CdbException _) {
+                    // a field out of range, as 2026-13: the name of no partition
+                }
+            } else {
+                final LocalDate fourthOfJanuary = LocalDate.of(Integer.parseInt(m.group(1)), 1, 4);
+                final int week = Integer.parseInt(m.group(2));
+                if (IsoFields.WEEK_OF_WEEK_BASED_YEAR.rangeRefinedBy(fourthOfJanuary).isValidValue(week)) {
+                    final LocalDate monday = fourthOfJanuary.with(IsoFields.WEEK_OF_WEEK_BASED_YEAR, week)
+                            .with(DayOfWeek.MONDAY);
+                    final long start = TimeUnit.DAYS.toMicros(monday.toEpochDay());
+                    return new long[] {start, start + TimeUnit.DAYS.toMicros(7)};
+                }
+            }
+        }
+        throw new CdbException("cannot parse partition name [table=" + def.name() + ", name=" + name
+                + ", partitionBy=" + unit + ']', pos);
+    }
+
+    /** The shape of a partition's name under {@code unit}, as QuestDB names partition folders. */
+    private static Pattern partitionName(final PartitionBy unit) {
+        return switch (unit) {
+            case HOUR -> HOUR_NAME;
+            case DAY -> DAY_NAME;
+            case WEEK -> WEEK_NAME;
+            case MONTH -> MONTH_NAME;
+            case YEAR -> YEAR_NAME;
+            case NONE -> throw new IllegalArgumentException("cannot name partitions of a table not partitioned");
+        };
+    }
+
+    /** True when {@code b} reads a column other than {@code ts}. */
+    private static boolean readsOtherColumn(final Bound b, final int ts) {
+        return switch (b) {
+            case Bound.Column(final int index, final CdbType _) -> index != ts;
+            case Bound.Call(final String _, final List<Bound> args, final CdbType _) -> anyReadsOther(args, ts);
+            case Bound.Agg agg -> anyReadsOther(agg.args(), ts);
+            case Bound.WindowCall _ -> true;
+            case Bound.Constant _ -> false;
+        };
+    }
+
+    private static boolean anyReadsOther(final List<Bound> args, final int ts) {
+        for (final Bound a : args) {
+            if (readsOtherColumn(a, ts)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * {@code range} narrowed by {@code where} through {@link Pruning#narrow}, true when every top-level AND term is one
+     * it narrows by exactly: a bound on column {@code ts} by a value known at plan time.
+     */
+    private static boolean timeRange(final Bound where, final int ts, final long nowMicros, final long[] range) {
+        if (!(where instanceof Bound.Call(final String function, final List<Bound> args, final CdbType _))) {
+            return false;
+        }
+        if ("and".equals(function)) {
+            for (final Bound a : args) {
+                if (!timeRange(a, ts, nowMicros, range)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if ("between".equals(function)) {
+            if (!Pruning.isColumn(args.getFirst(), ts) || Pruning.fold(args.get(1), nowMicros) == null
+                    || Pruning.fold(args.get(2), nowMicros) == null) {
+                return false;
+            }
+        } else if (Signatures.isComparison(function) && !"!=".equals(function)) {
+            final Long right = Pruning.fold(args.getLast(), nowMicros);
+            final Long left = Pruning.fold(args.getFirst(), nowMicros);
+            final boolean columnLeft = Pruning.isColumn(args.getFirst(), ts) && right != null;
+            if (!columnLeft && !(Pruning.isColumn(args.getLast(), ts) && left != null)) {
+                return false;
+            }
+            final String op = columnLeft ? function : Pruning.flip(function);
+            if (">".equals(op) && (columnLeft ? right : left) == Long.MAX_VALUE) {
+                // nothing is later than the last instant; narrow's value + 1 would wrap to the open start
+                range[0] = Long.MAX_VALUE;
+                return true;
+            }
+        } else {
+            return false;
+        }
+        Pruning.narrow(range, where, ts, nowMicros);
+        return true;
     }
 
     /**

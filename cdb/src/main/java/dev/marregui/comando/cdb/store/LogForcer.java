@@ -40,7 +40,7 @@ final class LogForcer implements AutoCloseable {
     private final long intervalMillis;
     private final long intervalNanos;
     private final Thread thread;
-    // one per table that had a dirty record; entries are never removed, as tables are never dropped while open
+    // one per table that had a dirty record; a table's entry is removed when the table is dropped (forget)
     private final Map<TableState, Log> logs = new ConcurrentHashMap<>();
     // written by close, read by the thread and by dirty and urgent under a log's monitor; written before the unpark
     // that wakes the thread, and read under each log's monitor by the last round, so a dirty either arms a log the
@@ -104,6 +104,21 @@ final class LogForcer implements AutoCloseable {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+
+    /**
+     * Stops forcing the log of {@code state}, a dropped table: a force in flight may still fail on the closed log,
+     * and is not reported.
+     */
+    void forget(final TableState state) {
+        final Log log = logs.remove(state);
+        if (log == null) {
+            return;
+        }
+        synchronized (log) {
+            log.failed = true;
+            log.armed = false;
         }
     }
 

@@ -6,6 +6,7 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
@@ -45,6 +46,9 @@ final class DefaultWriter implements TableWriter {
     private RowBlock pending;
     private int capacity;
     private boolean truncated;
+    // the ranges of the partition drops since the last commit, as from and to pairs: drops[0..dropCount)
+    private long[] drops = new long[4];
+    private int dropCount;
     private boolean inRow;
     private boolean closed;
     // the durability of the last answered commit: a logged commit's under the timed force, else done
@@ -73,6 +77,15 @@ final class DefaultWriter implements TableWriter {
     public int addColumn(final ColumnDef column) {
         checkOpen();
         TableFiles.checkName(column.name(), "column");
+        if (column.name().length() > Store.MAX_NAME_LENGTH) {
+            throw new CdbException("cannot add column: name too long [table=" + def.name() + ", column="
+                    + column.name() + ", length=" + column.name().length() + ", limit=" + Store.MAX_NAME_LENGTH + ']',
+                    -1);
+        }
+        if (def.columns().size() >= Store.MAX_COLUMNS) {
+            throw new CdbException("cannot add column: too many columns [table=" + def.name() + ", column="
+                    + column.name() + ", limit=" + Store.MAX_COLUMNS + ']', -1);
+        }
         if (def.columnIndex(column.name()) >= 0) {
             throw new CdbException("refuse duplicate column [table=" + def.name() + ", column=" + column.name() + ']',
                     -1);
@@ -167,13 +180,71 @@ final class DefaultWriter implements TableWriter {
     }
 
     @Override
+    public void dropPartitions(final long fromMicros, final long toMicros) {
+        checkOpen();
+        if (inRow) {
+            throw new CdbException("refuse partition drop inside a row [table=" + def.name() + ']', -1);
+        }
+        if (def.partitionBy() == PartitionBy.NONE || def.timestampIndex() < 0) {
+            throw new CdbException("refuse partition drop of a table not partitioned [table=" + def.name() + ']', -1);
+        }
+        if (dropCount + 2 > drops.length) {
+            drops = Arrays.copyOf(drops, drops.length * 2);
+        }
+        drops[dropCount++] = fromMicros;
+        drops[dropCount++] = toMicros;
+        // the pending rows against this call's range alone: a row appended after an earlier call stays
+        final int ts = def.timestampIndex();
+        int kept = 0;
+        for (int r = 0; r < pending.size; r++) {
+            if (!covered(Retention.floor(pending.getLong(ts, r), def.partitionBy()), fromMicros, toMicros)) {
+                kept++;
+            }
+        }
+        if (kept == pending.size) {
+            return;
+        }
+        final RowBlock rows = new RowBlock(def.name(), def.columns(), capacity);
+        try {
+            int w = 0;
+            for (int r = 0; r < pending.size; r++) {
+                if (!covered(Retention.floor(pending.getLong(ts, r), def.partitionBy()), fromMicros, toMicros)) {
+                    rows.copyRow(pending, r, w++);
+                }
+            }
+        } catch (final RuntimeException | Error e) {
+            rows.close();
+            throw e;
+        }
+        rows.size = kept;
+        final RowBlock old = pending;
+        pending = rows;
+        old.close();
+    }
+
+    // true when the partition starting at lowerBound lies wholly in one of the ranges dropped since the last commit
+    private boolean dropped(final long lowerBound) {
+        for (int i = 0; i < dropCount; i += 2) {
+            if (covered(lowerBound, drops[i], drops[i + 1])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // true when the partition starting at lowerBound lies wholly in [fromMicros, toMicros)
+    private boolean covered(final long lowerBound, final long fromMicros, final long toMicros) {
+        return lowerBound >= fromMicros && Retention.next(lowerBound, def.partitionBy()) <= toMicros;
+    }
+
+    @Override
     public void commit() {
         checkOpen();
         if (inRow) {
             throw new CdbException("refuse commit inside a row [table=" + def.name() + ']', -1);
         }
         final boolean defChanged = def != committedDef;
-        if (!truncated && pending.size == 0 && !defChanged) {
+        if (!truncated && dropCount == 0 && pending.size == 0 && !defChanged) {
             return;
         }
         if (replay) {
@@ -184,8 +255,10 @@ final class DefaultWriter implements TableWriter {
         if (state.poisoned() || state.suspended()) {
             throw new CdbException("refuse commit to failed table [table=" + def.name() + ']', -1);
         }
-        // definition changes stay off the log: rare, and a checkpoint writes _meta before the _txn that needs it
-        if (pending.size < store.directRows && !defChanged && !truncated && !logBytesAtLeast(store.checkpointBytes)) {
+        // definition changes stay off the log: rare, and a checkpoint writes _meta before the _txn that needs it; a
+        // truncate and a partition drop are checkpoints too, so no record left in the log can bring a dropped row back
+        if (pending.size < store.directRows && !defChanged && !truncated && dropCount == 0
+                && !logBytesAtLeast(store.checkpointBytes)) {
             logged();
             return;
         }
@@ -195,7 +268,7 @@ final class DefaultWriter implements TableWriter {
         try {
             // a store closed under the writer refuses the commit before its queue is applied
             committed();
-            // the queued commits come first, so a batch never spans a definition change or a truncate
+            // the queued commits come first, so a batch never spans a definition change, a truncate or a drop
             store.applier().applyAllHeld(state, false);
             final long txn = committed().txn() + 1L;
             // a checkpoint that held made it durable; one whose folder force failed left it in doubt
@@ -257,8 +330,9 @@ final class DefaultWriter implements TableWriter {
         final long bytes = heapBytes();
         // the queue owns the copy once enqueued: the applier closes it once its batch is published
         final RowBlock queued = resize(pending, def.columns(), capacity, n);
+        final boolean onBudget;
         try {
-            state.enqueue(new TableState.Queued(txn, queued, System.nanoTime(), bytes));
+            onBudget = state.enqueue(new TableState.Queued(txn, queued, System.nanoTime(), bytes));
         } catch (final CdbException refused) {
             queued.close();
             retract(txn, refused);
@@ -269,7 +343,8 @@ final class DefaultWriter implements TableWriter {
         }
         pending.size = 0;
         ticket = answered;
-        store.applier().committed(state, bytes);
+        // a suspend that came between the writer's check and the queue already took the table off the budget
+        store.applier().committed(state, onBudget ? bytes : 0L);
         // the commit is logged and queued from here: a failure of this hook leaves it to the applier
         store.afterWalForce.run();
         if (store.applyOnCommit) {
@@ -328,6 +403,10 @@ final class DefaultWriter implements TableWriter {
         final List<Version> written = new ArrayList<>();
         final List<Version> appended = new ArrayList<>();
         final List<Version> next = new ArrayList<>(truncated ? List.of() : current.partitions());
+        if (dropCount > 0) {
+            // before the pending rows are written: a row appended after the drop starts its partition again
+            next.removeIf(v -> dropped(v.lowerBound()));
+        }
         final TableState.Snapshot snapshot;
         final boolean held;
         try {
@@ -362,6 +441,7 @@ final class DefaultWriter implements TableWriter {
         committedDef = def;
         pending.size = 0;
         truncated = false;
+        dropCount = 0;
         return held;
     }
 
@@ -865,6 +945,7 @@ final class DefaultWriter implements TableWriter {
         pending.size = 0;
         inRow = false;
         truncated = false;
+        dropCount = 0;
         if (def != committedDef) {
             def = committedDef;
             final RowBlock old = pending;

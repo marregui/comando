@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import dev.marregui.comando.cdb.Cdb;
 import dev.marregui.comando.cdb.CdbCancel;
@@ -18,9 +19,14 @@ import dev.marregui.comando.cdb.CdbResult;
 import dev.marregui.comando.cdb.exec.InsertRunner;
 
 /**
- * One PostgreSQL wire (protocol 3.0) connection to a cdb, as QuestDB's port 8812 serves one: any user and password
- * (AuthenticationOk at once, no password asked), the database name ignored, SSL and GSS encryption refused with {@code
- * N}, a cancel request handed to the server's {@link Cancels} and then closed. Simple queries run each {@code
+ * One PostgreSQL wire (protocol 3.0) connection to a cdb, as QuestDB's port 8812 serves one: any user name, the
+ * database name ignored, SSL and GSS encryption refused with {@code N}, a cancel request handed to the server's
+ * {@link Cancels} and then closed. Without {@link Secrets} any client is the owner (AuthenticationOk at once); with
+ * them the password is asked in clear text and must be one of them: a wrong one is refused with {@code 28P01} and
+ * the connection closed, and a session opened with the read-only secret refuses every
+ * statement but a query, SHOW or EXPLAIN with {@code 42501}. A query past the {@link Policy}'s deadline is
+ * cancelled ({@code 57014}; a change takes no cancel and runs to its end) and a result past its rows refused
+ * ({@code 54000}); statement text never reaches the log. Simple queries run each {@code
  * ;}-separated statement; the extended protocol keeps named and unnamed statements and portals, binds {@code $n}
  * parameters as SQL literals ({@link PgTypes#literal}), and after an error skips to the next Sync; any other message
  * that fails, an unknown one included, is answered with an error and ReadyForQuery. Every count and length read from
@@ -48,21 +54,33 @@ final class PgSession {
     private static final int CANCEL_REQUEST = 80_877_102;
     /** A startup packet holds a few parameters; PostgreSQL refuses one over 10,000 bytes. */
     private static final int MAX_STARTUP_BYTES = 10_000;
+    /** PostgreSQL's {@code AuthenticationCleartextPassword} request code. */
+    private static final int AUTH_CLEARTEXT = 3;
     private static final String SYNTAX_ERROR = "42000";
-    /** PostgreSQL's {@code query_canceled}: a statement stopped by a cancel request. */
+    /** PostgreSQL's {@code query_canceled}: a statement stopped by a cancel request or its deadline. */
     private static final String QUERY_CANCELED = "57014";
+    /** PostgreSQL's {@code invalid_password}. */
+    private static final String INVALID_PASSWORD = "28P01";
+    /** PostgreSQL's {@code insufficient_privilege}: a change asked with the read-only secret. */
+    private static final String INSUFFICIENT_PRIVILEGE = "42501";
+    /** PostgreSQL's {@code program_limit_exceeded}: a result over the row limit. */
+    private static final String PROGRAM_LIMIT_EXCEEDED = "54000";
     private static final String PROTOCOL_VIOLATION = "08P01";
     private static final String INTERNAL_ERROR = "XX000";
     private static final short[] TEXT = {};
 
     private final Cancels cancels;
     private final Cdb cdb;
+    private final Deadlines deadlines;
     private final DataInputStream in;
     private final PgOutput out;
+    private final Policy policy;
     private final Map<String, Portal> portals = new HashMap<>();
     private final int processId;
     private final int secretKey;
     private final Map<String, Prepared> statements = new HashMap<>();
+    // what the client's password lets it do, set by the startup and read by every statement, on the session's thread
+    private Role role = Role.NONE;
     // the session's read lag, set and read on the session's thread; null runs queries with the store's default
     private Long maxLagMillis;
     // whether the session's writes wait to be durable (SET cdb.durable), set and read on the session's thread
@@ -73,14 +91,23 @@ final class PgSession {
     private boolean skipping;
     private char transaction = 'I';
 
-    PgSession(final Cdb cdb, final DataInputStream in, final PgOutput out, final int processId, final int secretKey,
-            final Cancels cancels) {
+    PgSession(
+            final Cdb cdb,
+            final DataInputStream in,
+            final PgOutput out,
+            final int processId,
+            final int secretKey,
+            final Policy policy,
+            final Cancels cancels,
+            final Deadlines deadlines) {
         this.cdb = cdb;
         this.in = in;
         this.out = out;
         this.processId = processId;
         this.secretKey = secretKey;
+        this.policy = policy;
         this.cancels = cancels;
+        this.deadlines = deadlines;
     }
 
     /** Cancels the statement this session runs when {@code key} is its secret key; from any thread. */
@@ -100,8 +127,8 @@ final class PgSession {
             }
             final int length = in.readInt();
             if (length < 4 || length - 4 > MAX_MESSAGE_BYTES) {
-                fatal("refuse message length [type=" + (char) type + ", length=" + length + ", limit="
-                        + MAX_MESSAGE_BYTES + ']');
+                fatal(PROTOCOL_VIOLATION, "refuse message length [type=" + (char) type + ", length=" + length
+                        + ", limit=" + MAX_MESSAGE_BYTES + ']');
                 return;
             }
             final ByteBuffer body = ByteBuffer.wrap(read(length - 4));
@@ -113,8 +140,8 @@ final class PgSession {
             }
             try {
                 message((char) type, body);
-            } catch (final Cancelled e) {
-                failed((char) type, QUERY_CANCELED, e.getMessage(), -1);
+            } catch (final Refused e) {
+                failed((char) type, e.code, e.getMessage(), -1);
             } catch (final CdbException e) {
                 failed((char) type, SYNTAX_ERROR, e.getMessage(), e.position());
             } catch (final BufferUnderflowException _) {
@@ -135,7 +162,8 @@ final class PgSession {
         while (true) {
             final int length = in.readInt();
             if (length < 8 || length > MAX_STARTUP_BYTES) {
-                fatal("refuse startup packet [length=" + length + ", limit=" + MAX_STARTUP_BYTES + ']');
+                fatal(PROTOCOL_VIOLATION, "refuse startup packet [length=" + length + ", limit=" + MAX_STARTUP_BYTES
+                        + ']');
                 return false;
             }
             final int code = in.readInt();
@@ -151,15 +179,55 @@ final class PgSession {
                     return false;
                 }
                 case PROTOCOL_3 -> {
-                    greet(parameters(body));
+                    final Map<String, String> parameters = parameters(body);
+                    if (!authenticate(parameters.get("user"))) {
+                        return false;
+                    }
+                    greet(parameters);
                     return true;
                 }
                 default -> {
-                    fatal("unsupported protocol [version=" + (code >>> 16) + '.' + (code & 0xFFFF) + ']');
+                    fatal(PROTOCOL_VIOLATION, "unsupported protocol [version=" + (code >>> 16) + '.'
+                            + (code & 0xFFFF) + ']');
                     return false;
                 }
             }
         }
+    }
+
+    // without secrets every client is the owner; with them the client's password names its role, and a password that
+    // is neither secret ends the session before it starts. The password itself is never logged nor answered back.
+    private boolean authenticate(final String user) throws IOException {
+        final Secrets secrets = policy.secrets();
+        if (secrets == null) {
+            role = Role.OWNER;
+            return true;
+        }
+        out.begin('R').int32(AUTH_CLEARTEXT).end();
+        out.flush();
+        final int type = in.read();
+        if (type < 0) {
+            throw new EOFException("connection closed before its password");
+        }
+        final int length = in.readInt();
+        if (type != 'p' || length < 5 || length > MAX_STARTUP_BYTES) {
+            fatal(PROTOCOL_VIOLATION, "refuse password message [type=" + (char) type + ", length=" + length
+                    + ", limit=" + MAX_STARTUP_BYTES + ']');
+            return false;
+        }
+        final String password;
+        try {
+            password = cstring(ByteBuffer.wrap(read(length - 4)));
+        } catch (final CdbException e) {
+            fatal(PROTOCOL_VIOLATION, e.getMessage());
+            return false;
+        }
+        role = secrets.roleOf(password);
+        if (role == Role.NONE) {
+            fatal(INVALID_PASSWORD, "password authentication failed [user=" + user + ']');
+            return false;
+        }
+        return true;
     }
 
     private void greet(final Map<String, String> parameters) throws IOException {
@@ -194,7 +262,7 @@ final class PgSession {
             }
             case 'H' -> out.flush();
             case 'p' -> {
-                // a password nobody asked for: every user is let in
+                // a password after the startup asked for none, or a second one: the role stays the startup's
             }
             default -> throw new CdbException("unsupported message [type=" + type + ']', -1);
         }
@@ -208,14 +276,16 @@ final class PgSession {
         for (final String part : parts) {
             try {
                 simple(part);
-            } catch (final Cancelled e) {
-                error(QUERY_CANCELED, e.getMessage(), -1);
+            } catch (final Refused e) {
+                error(e.code, e.getMessage(), -1);
                 break;
             } catch (final CdbException e) {
                 error(SYNTAX_ERROR, e.getMessage(), e.position());
                 break;
             } catch (final RuntimeException e) {
-                LOG.log(Level.WARNING, "could not run statement [sql=" + part + ']', e);
+                // the statement's text stays out of the log: it may carry data or a secret
+                LOG.log(Level.WARNING, "could not run statement [process=" + processId + ", statement="
+                        + PgSql.keyword(part) + ']', e);
                 error(INTERNAL_ERROR, "could not run statement [error=" + e + ']', -1);
                 break;
             }
@@ -232,6 +302,7 @@ final class PgSession {
             answer(local);
             return;
         }
+        allow(sql);
         final CdbResult result = runQuery(sql);
         if (isQuery(result)) {
             description(result, TEXT);
@@ -247,17 +318,42 @@ final class PgSession {
         return durable ? ScopedValue.where(InsertRunner.DURABLE, Boolean.TRUE).call(() -> run(sql)) : run(sql);
     }
 
+    // a session opened with the read-only secret runs queries, SHOW and EXPLAIN only
+    private void allow(final String sql) {
+        if (role != Role.OWNER && !Access.readOnly(sql)) {
+            throw new Refused(INSUFFICIENT_PRIVILEGE, "refuse a change with the read-only secret [statement="
+                    + PgSql.keyword(sql) + ']', null);
+        }
+    }
+
+    // the statement runs under its deadline, which cancels it as a cancel request would; a result with more rows than
+    // the limit is refused rather than cut short, so a client never takes a partial answer for the whole one
     private CdbResult run(final String sql) {
         final CdbCancel cancel = new CdbCancel();
         running = cancel;
+        final long startNanos = System.nanoTime();
+        final Runnable ended = deadlines.start(cancel);
+        final CdbResult result;
         try {
-            return maxLagMillis == null ? cdb.run(sql, 0L, 0, cancel) : cdb.run(sql, 0, maxLagMillis, cancel);
+            result = maxLagMillis == null ? cdb.run(sql, 0L, policy.maxRows(), cancel)
+                    : cdb.run(sql, policy.maxRows(), maxLagMillis, cancel);
         } catch (final CdbException e) {
             if (cancel.cancelled()) {
-                throw new Cancelled(e);
+                final long ranMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+                throw ranMillis >= policy.deadlineMillis()
+                        ? new Refused(QUERY_CANCELED, "cancel statement past its deadline [deadlineMillis="
+                                + policy.deadlineMillis() + ", ranMillis=" + ranMillis + ']', e)
+                        : new Refused(QUERY_CANCELED, e.getMessage(), e);
             }
             throw e;
+        } finally {
+            ended.run();
         }
+        if (result.truncated()) {
+            throw new Refused(PROGRAM_LIMIT_EXCEEDED, "refuse result over the row limit [limit=" + policy.maxRows()
+                    + ']', null);
+        }
+        return result;
     }
 
     private void parse(final ByteBuffer body) throws IOException {
@@ -379,6 +475,7 @@ final class PgSession {
             return;
         }
         if (portal.result == null) {
+            allow(portal.sql);
             portal.result = runQuery(portal.sql);
         }
         final CdbResult result = portal.result;
@@ -510,8 +607,8 @@ final class PgSession {
         out.int8(0).end();
     }
 
-    private void fatal(final String message) throws IOException {
-        out.begin('E').int8('S').cstring("FATAL").int8('V').cstring("FATAL").int8('C').cstring(PROTOCOL_VIOLATION)
+    private void fatal(final String code, final String message) throws IOException {
+        out.begin('E').int8('S').cstring("FATAL").int8('V').cstring("FATAL").int8('C').cstring(code)
                 .int8('M').cstring(message).int8(0).end();
         out.flush();
         LOG.log(Level.DEBUG, () -> "closed pg session [process=" + processId + ", reason=" + message + ']');
@@ -605,17 +702,38 @@ final class PgSession {
         void cancel(int processId, int secretKey);
     }
 
+    /** Where a statement's deadline is kept: the server, which owns the threads that time it. */
+    @FunctionalInterface
+    interface Deadlines {
+
+        /** Cancels {@code cancel} once the deadline passes, unless the returned action, the statement's end, ran. */
+        Runnable start(CdbCancel cancel);
+    }
+
+    /**
+     * What the server sets for each of its sessions: the secrets a password must match ({@code null}: no password
+     * asked, every client the owner), how long a statement may run, and how many rows a result may hold.
+     */
+    record Policy(Secrets secrets, long deadlineMillis, int maxRows) {
+    }
+
     /** A parsed statement: its SQL with {@code $n} placeholders, a type per parameter (0 unspecified). */
     private record Prepared(String sql, int[] oids, PgSql.Local local) {
     }
 
-    /** A statement a cancel request stopped; answered with {@link #QUERY_CANCELED}, the cause's message kept. */
-    private static final class Cancelled extends RuntimeException {
+    /**
+     * A statement refused or stopped with a SQLSTATE of its own: a cancel request or the deadline, the read-only
+     * secret, the row limit.
+     */
+    private static final class Refused extends RuntimeException {
 
         private static final long serialVersionUID = 1L;
 
-        Cancelled(final CdbException cause) {
-            super(cause.getMessage(), cause, false, false);
+        private final String code;
+
+        Refused(final String code, final String message, final CdbException cause) {
+            super(message, cause, false, false);
+            this.code = code;
         }
     }
 

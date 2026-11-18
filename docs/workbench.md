@@ -666,7 +666,11 @@ to `127.0.0.1`; `server.json` still names 9003 and 9009 for the readers that exp
 cdb's log), moved to `stdout.log.1` at a start once past 10 MiB. When none runs, the first instance or kit that writes
 a metric starts it, so it is usually up without a click. It keeps running when the comando that started it quits; only
 that comando stops it, and in the others the button's tooltip says who started it. Every instance's metrics and the
-kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`).
+kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`). It lets in only holders of its secrets, made at
+its first start in `~/.comando-cdb/`: `secret` for everything, `secret.readonly` for queries, SHOW and EXPLAIN (sent
+as `Authorization: Bearer` on HTTP, as the password on PG wire; comando fills the owner secret into a connection to it
+with an empty password); deleting a file and restarting the server rotates it ([cdb SQL](cdb-sql.md) §5,
+[record 182](adr/0182-cdb-destructive-sql-explain-and-access.md)).
 
 ## 4. Instances and the comando Edge
 

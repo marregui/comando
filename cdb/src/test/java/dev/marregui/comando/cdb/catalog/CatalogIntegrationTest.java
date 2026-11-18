@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,6 +41,12 @@ class CatalogIntegrationTest {
     @BeforeEach
     void openStore() {
         store = Store.open(root);
+    }
+
+    /// Closes the store, so its queued commits' row blocks and its threads do not outlive the test.
+    @AfterEach
+    void closeStore() {
+        store.close();
     }
 
     private static long micros(final String instant) {
@@ -243,16 +250,17 @@ class CatalogIntegrationTest {
         assertThat(read("show_tables")).containsExactly(List.of("a"), List.of("b"));
     }
 
-    /// More tables than a page holds continue on the next page.
+    /// The most tables the store allows, [Store#MAX_TABLES], are listed whole in one page; the cut of a longer listing
+    /// into pages is `PageBuilderTest`'s, as a store holds no more tables than that.
     @Test
-    void showTablesPagesBeyondTheCapacity() {
-        for (int i = 0; i < 1030; i++) {
+    void showTablesListsTheMostTheStoreAllows() {
+        for (int i = 0; i < Store.MAX_TABLES; i++) {
             store.create(timeOnly(String.format("t%04d", i), PartitionBy.DAY, 0), false);
         }
         final Cursor cursor = Catalog.open(
                 new Plan.Source("show_tables", List.of(), Catalog.fields("show_tables", List.of())), store
         );
-        assertThat(Rows.pageSizes(cursor)).containsExactly(1024, 6);
+        assertThat(Rows.pageSizes(cursor)).containsExactly(Store.MAX_TABLES);
     }
 
     /// The NULL of a timestamp cell is the LONG sentinel, so the empty table's statistics read as NULL to operators.

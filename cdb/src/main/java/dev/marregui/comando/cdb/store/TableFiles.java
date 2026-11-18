@@ -27,6 +27,8 @@ final class TableFiles {
 
     static final String META = "_meta";
     static final String TXN = "_txn";
+    // a dropped table's marker: the drop's commit point, so an open deletes the folder holding it
+    static final String DROPPED = "_dropped";
     // the lines a checkpoint adds to _txn, after the partitions
     private static final String COLUMNS = "@columns=";
     private static final String TTL = "@ttl=";
@@ -261,11 +263,16 @@ final class TableFiles {
 
     /** The folder of the partition starting at {@code lowerBound}, version {@code txn}, named as QuestDB names it. */
     static String folder(final long lowerBound, final PartitionBy partitionBy, final long txn) {
+        return partitionName(lowerBound, partitionBy) + '.' + txn;
+    }
+
+    /** The name of the partition starting at {@code lowerBound}, as QuestDB names it: its folder without the txn. */
+    static String partitionName(final long lowerBound, final PartitionBy partitionBy) {
         if (partitionBy == PartitionBy.NONE) {
-            return "default." + txn;
+            return "default";
         }
         final ZonedDateTime t = Instant.ofEpochSecond(Math.floorDiv(lowerBound, 1_000_000L)).atZone(ZoneOffset.UTC);
-        final String name = switch (partitionBy) {
+        return switch (partitionBy) {
             case HOUR -> String.format(Locale.ROOT, "%04d-%02d-%02dT%02d", t.getYear(), t.getMonthValue(),
                     t.getDayOfMonth(), t.getHour());
             case DAY -> String.format(Locale.ROOT, "%04d-%02d-%02d", t.getYear(), t.getMonthValue(), t.getDayOfMonth());
@@ -275,7 +282,6 @@ final class TableFiles {
             case YEAR -> String.format(Locale.ROOT, "%04d", t.getYear());
             case NONE -> "default";
         };
-        return name + '.' + txn;
     }
 
     /**

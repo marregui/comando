@@ -1,5 +1,6 @@
 package dev.marregui.comando.cdb.catalog;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -12,6 +13,7 @@ import dev.marregui.comando.cdb.exec.Page;
 import dev.marregui.comando.cdb.exec.Vector;
 import dev.marregui.comando.cdb.store.ColumnDef;
 import dev.marregui.comando.cdb.store.PartitionBy;
+import dev.marregui.comando.cdb.store.PartitionInfo;
 import dev.marregui.comando.cdb.store.PartitionReader;
 import dev.marregui.comando.cdb.store.Store;
 import dev.marregui.comando.cdb.store.TableDef;
@@ -122,6 +124,28 @@ final class Listings {
             new Field("indexInclude", CdbType.VARCHAR)
     );
 
+    /** QuestDB's {@code SHOW PARTITIONS} columns, the subset cdb has, its INT as LONG. */
+    static final List<Field> TABLE_PARTITIONS = List.of(
+            new Field("index", CdbType.LONG),
+            new Field("partitionBy", CdbType.SYMBOL),
+            new Field("name", CdbType.VARCHAR),
+            new Field("minTimestamp", CdbType.TIMESTAMP),
+            new Field("maxTimestamp", CdbType.TIMESTAMP),
+            new Field("numRows", CdbType.LONG),
+            new Field("diskSize", CdbType.LONG),
+            new Field("active", CdbType.BOOLEAN)
+    );
+
+    /** {@code SHOW WAL}: the columns of {@code wal_tables()}, then the commits and rows its table has queued. */
+    static final List<Field> SHOW_WAL;
+
+    static {
+        final List<Field> fields = new ArrayList<>(WAL_TABLES);
+        fields.add(new Field("pendingRows", CdbType.LONG));
+        fields.add(new Field("pendingTxns", CdbType.LONG));
+        SHOW_WAL = List.copyOf(fields);
+    }
+
     static final List<Field> SHOW_TABLES = List.of(new Field("table_name", CdbType.VARCHAR));
 
     static final List<Field> SHOW_CREATE_TABLE = List.of(new Field("ddl", CdbType.VARCHAR));
@@ -218,14 +242,7 @@ final class Listings {
     static Cursor walTables(final Store store) {
         final PageBuilder rows = new PageBuilder(WAL_TABLES);
         for (final WalStatus status : store.walStatus()) {
-            rows.text(0, status.table());
-            rows.bool(1, status.suspended());
-            rows.integer(2, status.appliedTxn());
-            rows.integer(3, status.pendingTxns());
-            rows.integer(4, status.loggedTxn());
-            rows.text(5, status.lastError() == null ? "" : ERROR_TAG);
-            rows.text(6, status.lastError() == null ? "" : status.lastError());
-            rows.integer(7, status.memoryPressure());
+            putWalTablesColumns(rows, status);
             rows.endRow();
         }
         return new PagesCursor(WAL_TABLES, rows.finish());
@@ -261,6 +278,48 @@ final class Listings {
             rows.endRow();
         }
         return new PagesCursor(WAL_APPLY_STATS, rows.finish());
+    }
+
+    /**
+     * {@code SHOW PARTITIONS FROM table}: one row per partition, oldest first, {@code index} its position from 0;
+     * {@code active} marks the newest, which takes writes.
+     */
+    static Cursor tablePartitions(final Store store, final String table) {
+        final TableDef def = existing(store, table);
+        final PageBuilder rows = new PageBuilder(TABLE_PARTITIONS);
+        long index = 0;
+        for (final PartitionInfo partition : store.partitions(def.name())) {
+            rows.integer(0, index++);
+            rows.text(1, def.partitionBy().name());
+            rows.text(2, partition.name());
+            rows.integer(3, partition.minTimestampMicros());
+            rows.integer(4, partition.maxTimestampMicros());
+            rows.integer(5, partition.rows());
+            rows.integer(6, partition.diskBytes());
+            rows.bool(7, partition.active());
+            rows.endRow();
+        }
+        return new PagesCursor(TABLE_PARTITIONS, rows.finish());
+    }
+
+    /**
+     * {@code SHOW WAL [FROM table]}: the rows of {@code wal_tables()} in name order, then {@code pendingRows} and
+     * {@code pendingTxns}; {@code table} null lists every table, else only that one (names match without regard to
+     * case). No reader of the table is opened.
+     */
+    static Cursor showWal(final Store store, final String table) {
+        final String name = table == null ? null : existing(store, table).name();
+        final PageBuilder rows = new PageBuilder(SHOW_WAL);
+        for (final WalStatus status : store.walStatus()) {
+            if (name != null && !name.equals(status.table())) {
+                continue;
+            }
+            putWalTablesColumns(rows, status);
+            rows.integer(8, status.pendingRows());
+            rows.integer(9, status.pendingTxns());
+            rows.endRow();
+        }
+        return new PagesCursor(SHOW_WAL, rows.finish());
     }
 
     /**
@@ -378,6 +437,18 @@ final class Listings {
             return "WEEK";
         }
         return unitMicros == DAY_MICROS ? "DAY" : "HOUR";
+    }
+
+    /** The eight columns {@code wal_tables()} and {@code SHOW WAL} share, written into the row being built. */
+    private static void putWalTablesColumns(final PageBuilder rows, final WalStatus status) {
+        rows.text(0, status.table());
+        rows.bool(1, status.suspended());
+        rows.integer(2, status.appliedTxn());
+        rows.integer(3, status.pendingTxns());
+        rows.integer(4, status.loggedTxn());
+        rows.text(5, status.lastError() == null ? "" : ERROR_TAG);
+        rows.text(6, status.lastError() == null ? "" : status.lastError());
+        rows.integer(7, status.memoryPressure());
     }
 
     private static TableDef existing(final Store store, final String table) {

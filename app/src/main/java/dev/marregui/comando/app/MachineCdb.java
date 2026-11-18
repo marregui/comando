@@ -46,6 +46,7 @@ import dev.marregui.comando.core.json.JsonNode;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ServerSwitch;
@@ -60,6 +61,10 @@ import dev.marregui.comando.ui.shell.ServerToggle;
  * in its {@code cdb_server} table: the server is live when its process lives and it answers that token, so a pid
  * another process reused never passes for it. Only its owner stops it; quitting comando leaves it running. Its HTTP and
  * PG wire listeners bind {@code 127.0.0.1}, cdb's default; its data is the machine folder's {@code cdb/}.
+ * <p>
+ * The server asks for a secret (record 182): it makes {@code secret} and {@code secret.readonly} in the machine
+ * folder at its first start, and every request this class makes, the live check's included, carries the owner
+ * {@code secret} as {@code Authorization: Bearer}; never logged.
  * <p>
  * Starts are serialised across processes by a POSIX lock on {@code start.lock}, which the kit takes too: two writers
  * that find none up start one server.
@@ -76,9 +81,9 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
     static final int REGISTRY_VERSION = 3;
     /**
      * The launcher, written whole at each start this comando makes: the machine folder, the HTTP and PG wire ports, the
-     * Java home and the copied cdb jar's name filled in. Its server runs in a process group of its own
-     * ({@code set -m}), immune to the launcher's hang-up ({@code nohup}), so it outlives the launcher and whoever ran
-     * it.
+     * Java home and the copied cdb jar's name filled in; the machine folder is the server's auth folder too. Its server
+     * runs in a process group of its own ({@code set -m}), immune to the launcher's hang-up ({@code nohup}), so it
+     * outlives the launcher and whoever ran it.
      * <p>
      * The JVM options are the kit's {@code cdb-serve}'s (measured 2026-11-15 on Cosa's load: 116-138 MiB resident under
      * a 256 MiB heap with two GC threads and a periodic GC). {@code stdout.log}, cdb's only log, appended to at every
@@ -98,7 +103,7 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
               -XX:G1PeriodicGCInterval=10000 -XX:+UseCompactObjectHeaders -Xms16m -Xmx256m \\
               -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 \\
               -cp "%1$s/lib/%5$s" dev.marregui.comando.cdb.CdbServe "%1$s/cdb" %2$d --pg-port %3$d \\
-              --bind 127.0.0.1 >> "%1$s/stdout.log" 2>&1 < /dev/null &
+              --bind 127.0.0.1 --auth-dir "%1$s" >> "%1$s/stdout.log" 2>&1 < /dev/null &
             echo $!
             """;
 
@@ -122,7 +127,11 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
     private static final Duration POLL_EVERY = Duration.ofMillis(100);
     /** A connect to the HTTP port that succeeds within this means another process holds it (record 146). */
     private static final Duration PORT_PROBE = Duration.ofMillis(500);
+    /** QuestDB's default password, which {@code ConnectionSpec.questDbDefaults} gives a new connection. */
+    private static final String QUESTDB_PASSWORD = "quest";
     private static final SecureRandom RANDOM = new SecureRandom();
+    /** The owner secret's length in characters: 32 random bytes in lowercase hex (record 182). */
+    private static final int SECRET_LENGTH = 64;
     /** {@code start.sh} prints the pid and exits; the kit gives it the same 10 s (record 146). */
     private static final Duration SCRIPT_WITHIN = Duration.ofSeconds(10);
     /** How long a stop waits for the server after SIGTERM before it kills it (record 146). */
@@ -250,6 +259,12 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
         return "cdb";
     }
 
+    /** The owner secret in the machine folder, read now; empty when the server has made none yet. */
+    @Override
+    public Optional<String> secret() {
+        return secretIn(folder);
+    }
+
     /** The start or stop under way, else who started the server when this instance did not; as last checked. */
     @Override
     public String status() {
@@ -320,6 +335,21 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
     }
 
     /**
+     * {@code spec} with the owner secret as its password when it names this server's PG wire, {@code localhost} or
+     * {@code 127.0.0.1} on its port, with an empty password or QuestDB's default {@code quest} (what a new connection
+     * and the first {@code local cdb} carry); else {@code spec}, also when there is no secret. Reads the secret file,
+     * so it runs where a connect runs, never on the EDT; what it returns serves one connect and is not kept, so the
+     * secret never reaches the saved connections.
+     */
+    ConnectionSpec withSecret(final ConnectionSpec spec) {
+        if (!(spec.password().isEmpty() || QUESTDB_PASSWORD.equals(spec.password())) || spec.port() != ports.pg()
+                || !("localhost".equalsIgnoreCase(spec.host()) || "127.0.0.1".equals(spec.host()))) {
+            return spec;
+        }
+        return secret().map(spec::withPassword).orElse(spec);
+    }
+
+    /**
      * The pid {@code start.sh} printed at this instance's last launch, 0 before one: the process a test that started it
      * ends.
      */
@@ -346,6 +376,29 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
         return SCRIPT.formatted(folder, ports.http(), ports.pg(), javaHome, jar);
     }
 
+    /**
+     * The owner secret in {@code folder}'s {@code secret}: one line of {@value #SECRET_LENGTH} lowercase hex
+     * characters. Empty when the file is missing, unreadable or holds anything else: the server, which refuses to start
+     * on such a file, then answers 401 and the request counts as unanswered. Never logged.
+     */
+    static Optional<String> secretIn(final Path folder) {
+        final Path file = folder.resolve("secret");
+        try {
+            // the secret and its line end; one byte more says a larger file, which is not one
+            final byte[] head = Mapped.head(file, SECRET_LENGTH + 2L);
+            if (head.length > SECRET_LENGTH + 1) {
+                return Optional.empty();
+            }
+            final String text = new String(head, StandardCharsets.US_ASCII);
+            final String secret = text.endsWith("\n") ? text.substring(0, text.length() - 1) : text;
+            return secret.length() == SECRET_LENGTH
+                    && secret.chars().allMatch(c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
+                    ? Optional.of(secret) : Optional.empty();
+        } catch (final IOException _) {
+            return Optional.empty();
+        }
+    }
+
     /** A process answers a TCP connect on {@code port} on loopback within {@link #PORT_PROBE}. */
     private static boolean answers(final int port) {
         try (final Socket s = new Socket()) {
@@ -357,14 +410,21 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
     }
 
     /**
-     * {@code sql} through {@code /exec} on {@code port}: its JSON answer when the status is 200, else null, and null
-     * when the server does not answer within {@code within} (connect and read, half each).
+     * {@code sql} through {@code /exec} on {@code port}, with {@code secret} as its bearer when there is one: its JSON
+     * answer when the status is 200, else null, and null when the server does not answer within {@code within}
+     * (connect and read, half each).
      */
-    private static JsonNode exec(final int port, final String sql, final Duration within) {
+    private static JsonNode exec(
+            final int port,
+            final String sql,
+            final Duration within,
+            final Optional<String> secret
+    ) {
         final String query = URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20");
         try {
             final HttpURLConnection c = (HttpURLConnection) URI.create("http://127.0.0.1:" + port + "/exec?query="
                     + query).toURL().openConnection();
+            secret.ifPresent(s -> c.setRequestProperty("Authorization", "Bearer " + s));
             final int halfMillis = (int) Math.max(1, within.toMillis() / 2);
             c.setConnectTimeout(halfMillis);
             c.setReadTimeout(halfMillis);
@@ -465,7 +525,7 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
     private String awaitUp(final long pid) throws InterruptedException {
         final long deadline = System.nanoTime() + UP_WITHIN.toNanos();
         while (deadline - System.nanoTime() > 0) {
-            if (exec(ports.http(), "SELECT 1", LIVE_WITHIN) != null) {
+            if (exec(ports.http(), "SELECT 1", LIVE_WITHIN, secret()) != null) {
                 return "";
             }
             if (!ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)) {
@@ -579,7 +639,7 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
         if (h.isEmpty()) {
             return h;
         }
-        final JsonNode answer = exec(e.ports().http(), TOKEN_QUERY, LIVE_WITHIN);
+        final JsonNode answer = exec(e.ports().http(), TOKEN_QUERY, LIVE_WITHIN, secret());
         final JsonNode token = answer == null ? null : answer.path("dataset").path(0).path(0);
         return token != null && token.isString() && e.token().equals(token.asString()) ? h : Optional.empty();
     }
@@ -753,9 +813,9 @@ final class MachineCdb implements ServerToggle, ServerSwitch, MetricsEndpoint, A
         // the token is in this INSERT and in server.json only: neither the statement nor its failure is logged
         if (exec(ports.http(), "CREATE TABLE IF NOT EXISTS cdb_server"
                 + " (ts TIMESTAMP, token VARCHAR, pid LONG, owner VARCHAR) TIMESTAMP(ts) PARTITION BY NONE BYPASS WAL",
-                UP_WITHIN) == null
+                UP_WITHIN, secret()) == null
                 || exec(ports.http(), "INSERT INTO cdb_server VALUES (now(), '" + token + "', " + pid + ", '"
-                        + owner.replace("'", "''") + "')", UP_WITHIN) == null) {
+                        + owner.replace("'", "''") + "')", UP_WITHIN, secret()) == null) {
             return Outcome.refused("cdb [pid=" + pid
                     + "] did not record its token in cdb_server and is left running; see " + stdout());
         }

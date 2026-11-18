@@ -1,6 +1,8 @@
 package dev.marregui.comando.app;
 
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -36,6 +38,7 @@ import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.json.Json;
 import dev.marregui.comando.core.json.JsonNode;
+import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.testkit.RecordingSink;
 
@@ -46,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// started it.
 /// - `start.sh` runs cdb's server from the copied jar on the machine folder's `cdb/`, its HTTP and PG wire listeners
 ///   on `127.0.0.1`, with the kit's heap and GC options, refuses a path it cannot quote, and sets `stdout.log` aside
-///   past 10 MiB
+///   past 10 MiB; the machine folder is its auth folder, and every request it makes carries the owner secret
 /// - a port another process holds, and a `server.json` of a later version, start nothing
 /// - a start makes `start.sh`, `lib/` and `server.json` v1 with its owner and a token the server answers; another
 ///   instance uses it, starts no second one, and may not stop it; the owner's close leaves it up, its stop ends it
@@ -64,7 +67,8 @@ class MachineCdbTest {
     private static final Duration STOP_WITHIN = Duration.ofSeconds(40);
 
     /// `start.sh` runs `CdbServe` from the copied jar on the machine folder's `cdb/`, on the HTTP and PG wire ports
-    /// asked for, bound to `127.0.0.1`, prints the pid, and names the Java given; a folder holding `$` is refused.
+    /// asked for, bound to `127.0.0.1`, with the machine folder as its auth folder, prints the pid, and names the Java
+    /// given; a folder holding `$` is refused.
     @Test
     void theServerIsCdbOnTheLoopbackInterface(@TempDir final Path dir) throws IOException {
         final MachineCdb.Ports ports = new MachineCdb.Ports(19000, 19003, 18812, 19009);
@@ -73,7 +77,7 @@ class MachineCdbTest {
         assertThat(script).contains("nohup \"/opt/jdk/bin/java\" ",
                 "-cp \"" + dir + "/lib/cdb-0123456789ab.jar\" " + MachineCdb.CDB_SERVE + " \"" + dir
                         + "/cdb\" 19000 --pg-port 18812",
-                "--bind 127.0.0.1 >> \"" + dir + "/stdout.log\"");
+                "--bind 127.0.0.1 --auth-dir \"" + dir + "\" >> \"" + dir + "/stdout.log\"");
         assertThat(script.lines()).contains("echo $!");
         assertThat(script).doesNotContain("19003", "19009", "QDB_");
         assertThatThrownBy(() -> MachineCdb.script(dir.resolve("a$b"), ports, Path.of("/opt/jdk"), "cdb.jar"))
@@ -187,6 +191,92 @@ class MachineCdbTest {
         }
     }
 
+    /// The owner secret is read from the machine folder's `secret`: 64 lowercase hex characters with or without the
+    /// line end; a missing file, a short, long, upper-case or two-line one gives none.
+    @Test
+    void theSecretIsSixtyFourLowercaseHexCharacters(@TempDir final Path dir) throws IOException {
+        final String secret = "0123456789abcdef".repeat(4);
+        final Path file = dir.resolve("secret");
+
+        assertThat(MachineCdb.secretIn(dir)).isEmpty();
+        Files.writeString(file, secret + "\n");
+        assertThat(MachineCdb.secretIn(dir)).contains(secret);
+        Files.writeString(file, secret);
+        assertThat(MachineCdb.secretIn(dir)).contains(secret);
+        for (final String bad : List.of(secret.substring(1) + "\n", secret + "0\n", secret.toUpperCase(Locale.ROOT),
+                secret + "\n\n", "")) {
+            Files.writeString(file, bad);
+            assertThat(MachineCdb.secretIn(dir)).as(bad).isEmpty();
+        }
+    }
+
+    /// A connection to the machine's PG port on `localhost` or `127.0.0.1` with no password, or QuestDB's `quest`,
+    /// gets the owner secret as its password; another host, another port or a password of its own is left as it is,
+    /// and so is every connection while the folder holds no secret.
+    @Test
+    void aBlankPasswordToTheMachinePortGetsTheSecret(@TempDir final Path dir) throws IOException {
+        final Path machine = Files.createDirectories(dir.resolve("machine"));
+        final MachineCdb.Ports ports = new MachineCdb.Ports(19000, 19003, 18812, 19009);
+        final String secret = "0123456789abcdef".repeat(4);
+        final ConnectionSpec local = new ConnectionSpec("m", "localhost", 18812, "qdb", "admin", "", false);
+        final ConnectionSpec loopback = new ConnectionSpec("m", "127.0.0.1", 18812, "qdb", "admin", "", false);
+        final List<ConnectionSpec> untouched = List.of(
+                new ConnectionSpec("m", "db.example", 18812, "qdb", "admin", "", false),
+                new ConnectionSpec("m", "localhost", 8812, "qdb", "admin", "", false),
+                new ConnectionSpec("m", "localhost", 18812, "qdb", "admin", "own", false));
+        try (final MachineCdb db = new MachineCdb(machine, dir.resolve("data"), "", new RecordingSink(), ports)) {
+            assertThat(db.withSecret(local)).isEqualTo(local);
+            Files.writeString(machine.resolve("secret"), secret + "\n");
+            assertThat(db.withSecret(local).password()).isEqualTo(secret);
+            assertThat(db.withSecret(loopback).password()).isEqualTo(secret);
+            final ConnectionSpec template = new ConnectionSpec("m", "localhost", 18812, "qdb", "admin", "quest", false);
+            assertThat(db.withSecret(template).password()).as("QuestDB's default password").isEqualTo(secret);
+            for (final ConnectionSpec spec : untouched) {
+                assertThat(db.withSecret(spec)).as(spec.host() + ":" + spec.port()).isEqualTo(spec);
+            }
+        }
+    }
+
+    /// The live check sends the machine folder's owner secret as `Authorization: Bearer`: a fake server that answers
+    /// the registry's token only to that bearer, under this JVM's pid, is live while `secret` is there, and not once
+    /// it is gone, when the check sends no header.
+    @Test
+    void theLiveCheckSendsTheSecret(@TempDir final Path dir) throws IOException {
+        final Path machine = Files.createDirectories(dir.resolve("machine"));
+        final String secret = "fedcba9876543210".repeat(4);
+        Files.writeString(machine.resolve("secret"), secret + "\n");
+        final List<String> seen = Collections.synchronizedList(new ArrayList<>());
+        final HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.createContext("/exec", exchange -> {
+            final String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+            seen.add(String.valueOf(authorization));
+            final byte[] body = "{\"dataset\":[[\"tok\"]]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(("Bearer " + secret).equals(authorization) ? 200 : 401, body.length);
+            try (final OutputStream out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+        try {
+            final int port = server.getAddress().getPort();
+            final MachineCdb.Ports ports = new MachineCdb.Ports(port, port, port, port);
+            Files.writeString(machine.resolve("server.json"), """
+                    {"version": 3, "pid": %d, "owner": "%s", "name": "comando", "started": "2026-11-18T00:00:00Z",
+                     "ports": {"http": %d, "httpMin": %d, "pg": %d, "ilp": %d}, "token": "tok", "jar": "cdb.jar"}
+                    """.formatted(ProcessHandle.current().pid(), dir.resolve("data"), port, port, port, port));
+            try (final MachineCdb db = new MachineCdb(machine, dir.resolve("data"), "", new RecordingSink(), ports)) {
+                assertThat(db.secret()).contains(secret);
+                assertThat(db.live()).contains(URI.create("http://127.0.0.1:" + port));
+                Files.delete(machine.resolve("secret"));
+                assertThat(db.secret()).isEmpty();
+                assertThat(db.live()).isEmpty();
+            }
+            assertThat(seen).containsExactly("Bearer " + secret, "null");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /// An agent names this server as `server_start` and `server_stop` take it: its switch's name, lower-cased, is
     /// among the `server` argument's choices, which `ActionTools` checks before it looks the switch up by name.
     @Test
@@ -246,8 +336,11 @@ class MachineCdbTest {
             assertThat(token).matches("[0-9a-f]{32}");
             final long pid = entry.path("pid").asLong();
             assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).contains(true);
-            assertThat(query(ports, "SELECT token FROM cdb_server ORDER BY ts DESC LIMIT 1").path("dataset").path(0)
-                    .path(0).asString()).isEqualTo(token);
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(machine.resolve("secret"))))
+                    .as("the owner secret the server made").isEqualTo("rw-------");
+            assertThat(status(machine, ports, "/exec?query=SELECT%201", false)).as("no bearer").isEqualTo(401);
+            assertThat(query(machine, ports, "SELECT token FROM cdb_server ORDER BY ts DESC LIMIT 1").path("dataset")
+                    .path(0).path(0).asString()).isEqualTo(token);
             assertThat(a.want(true)).startsWith("cdb is up already: PG wire on 127.0.0.1:" + ports.pg() + ',');
             assertThat(a.log()).as("cdb's stdout.log, in the machine folder").isRegularFile()
                     .isEqualTo(machine.toAbsolutePath().normalize().resolve("stdout.log"));
@@ -262,7 +355,7 @@ class MachineCdbTest {
                     }
                 }).isInstanceOf(IOException.class);
             }
-            assertThat(status(ports, "/index.html")).as("the web console").isEqualTo(404);
+            assertThat(status(machine, ports, "/index.html", true)).as("the web console").isEqualTo(404);
             for (final int off : List.of(ports.ilp(), ports.httpMin())) {
                 assertThatThrownBy(() -> {
                     try (final Socket s = new Socket()) {
@@ -275,7 +368,7 @@ class MachineCdbTest {
             assertThat(b.live()).contains(URI.create("http://127.0.0.1:" + ports.http()));
             assertThat(b.ensureUp()).contains(URI.create("http://127.0.0.1:" + ports.http()));
             assertThat(registry).as("no second start rewrote it").hasContent(written);
-            assertThat(query(ports, "SELECT count() FROM cdb_server").path("dataset").path(0).path(0).asLong())
+            assertThat(query(machine, ports, "SELECT count() FROM cdb_server").path("dataset").path(0).path(0).asLong())
                     .as("one start").isEqualTo(1);
             final String startedBy = "started by comando · a (" + rootA.toAbsolutePath().normalize()
                     + "); only it stops it";
@@ -323,7 +416,7 @@ class MachineCdbTest {
 
             assertThat(one).contains(URI.create("http://127.0.0.1:" + ports.http()));
             assertThat(other).isEqualTo(one);
-            assertThat(query(ports, "SELECT count() FROM cdb_server").path("dataset").path(0).path(0).asLong())
+            assertThat(query(machine, ports, "SELECT count() FROM cdb_server").path("dataset").path(0).path(0).asLong())
                     .as("one start").isEqualTo(1);
         } finally {
             a.close();
@@ -343,6 +436,11 @@ class MachineCdbTest {
             throw new IllegalStateException("the other start did not come", e);
         }
         return db.ensureUp();
+    }
+
+    /// `request` with the owner secret in `machine` as its bearer; the server made the file at its start.
+    private static HttpRequest.Builder bearer(final Path machine, final HttpRequest.Builder request) {
+        return request.header("Authorization", "Bearer " + MachineCdb.secretIn(machine).orElseThrow());
     }
 
     /// Four ports free on loopback now, none of the defaults; released before the server binds them.
@@ -403,16 +501,17 @@ class MachineCdbTest {
         }
     }
 
-    /// `sql`'s answer from the server's `/exec`, which must be 200.
+    /// `sql`'s answer from the server's `/exec`, sent with the owner secret in `machine`, which must be 200.
     private static JsonNode query(
+            final Path machine,
             final MachineCdb.Ports ports,
             final String sql
     ) throws IOException, InterruptedException {
         try (final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
             final URI uri = URI.create("http://127.0.0.1:" + ports.http() + "/exec?query="
                     + URLEncoder.encode(sql, StandardCharsets.UTF_8).replace("+", "%20"));
-            final HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).build(),
-                    HttpResponse.BodyHandlers.ofString());
+            final HttpResponse<String> r = http.send(bearer(machine, HttpRequest.newBuilder(uri))
+                    .timeout(Duration.ofSeconds(5)).build(), HttpResponse.BodyHandlers.ofString());
             assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
             return Json.readTree(r.body());
         }
@@ -443,14 +542,17 @@ class MachineCdbTest {
         return Json.readTree(Files.readString(machine.resolve("server.json")));
     }
 
-    /// The status of a GET of `path` on the server's HTTP port.
+    /// The status of a GET of `path` on the server's HTTP port, with the owner secret in `machine` when `withSecret`.
     private static int status(
+            final Path machine,
             final MachineCdb.Ports ports,
-            final String path
+            final String path,
+            final boolean withSecret
     ) throws IOException, InterruptedException {
         try (final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
             final URI uri = URI.create("http://127.0.0.1:" + ports.http() + path);
-            return http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).build(),
+            final HttpRequest.Builder request = HttpRequest.newBuilder(uri);
+            return http.send((withSecret ? bearer(machine, request) : request).timeout(Duration.ofSeconds(5)).build(),
                     HttpResponse.BodyHandlers.discarding()).statusCode();
         }
     }

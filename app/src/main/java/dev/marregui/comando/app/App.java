@@ -190,7 +190,13 @@ public final class App implements AutoCloseable {
                 }
             });
 
-            final DbRouter db = own(new DbRouter(new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS),
+            // the machine's one cdb, shared by every instance and the kit, outliving comando (record 146)
+            final boolean machineCdb = usesMachineCdb();
+            final MachineCdb cdb = new MachineCdb(machineCdb ? Path.of(System.getProperty("user.home"), ".comando-cdb")
+                    : config.home().resolve("machine-cdb"), config.home(), InstanceName.current(), loop);
+            // a connection to it with no password gets its owner secret at connect, never kept (record 182)
+            final DbRouter db = own(new DbRouter(
+                    new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS, cdb::withSecret),
                     new CdbAdapter(loop, results, schemas, DbSettings.DEFAULTS, config.home().resolve("cdb"))));
             // the previews draw Mermaid diagrams with mmdc into a cache, once per diagram text
             MermaidDiagrams.install(config.home().resolve("cache").resolve("mermaid"));
@@ -212,10 +218,6 @@ public final class App implements AutoCloseable {
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
-            // the machine's one cdb, shared by every instance and the kit, outliving comando (record 146)
-            final boolean machineCdb = usesMachineCdb();
-            final MachineCdb cdb = new MachineCdb(machineCdb ? Path.of(System.getProperty("user.home"), ".comando-cdb")
-                    : config.home().resolve("machine-cdb"), config.home(), InstanceName.current(), loop);
             // the shadow switch is read here alone, so no log a test builds reads the user's machine folder
             metrics = own(metricsLog(machineCdb, config.home(), cdb, loop,
                     machineCdb ? MetricsLog.machineShadow() : null));

@@ -186,8 +186,8 @@ class PgProtocolTest {
     }
 
     private PgServer start(final int startupTimeoutMillis, final int idleTimeoutMillis) {
-        return PgServer.start(cdb, new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), startupTimeoutMillis,
-                idleTimeoutMillis);
+        return PgServer.start(cdb, new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), null,
+                startupTimeoutMillis, idleTimeoutMillis, Limits.QUERY_DEADLINE_MILLIS, Limits.MAX_ROWS);
     }
 
     // a connection served end to end; the server closes a connection before it releases its place, so a client

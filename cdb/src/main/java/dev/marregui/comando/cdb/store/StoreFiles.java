@@ -355,6 +355,31 @@ final class StoreFiles {
         return FileChannel.open(path, options);
     }
 
+    /**
+     * Deletes a dropped table's folder {@code dir}: every entry but {@code marker}, the folder forced, then
+     * {@code marker} and the folder; a power cut part way leaves the marker while any other entry is left.
+     */
+    static void deleteTable(final Path dir, final String marker) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (final DirectoryStream<Path> entries = Files.newDirectoryStream(dir)) {
+            for (final Path entry : entries) {
+                if (entry.getFileName().toString().equals(marker)) {
+                    continue;
+                }
+                if (Files.isDirectory(entry)) {
+                    deleteFolder(entry);
+                } else {
+                    delete(entry);
+                }
+            }
+        }
+        forceFolder(dir);
+        delete(dir.resolve(marker));
+        delete(dir);
+    }
+
     /** Deletes {@code folder} and the files in it (a partition version holds no folders). */
     static void deleteFolder(final Path folder) throws IOException {
         if (!Files.isDirectory(folder)) {

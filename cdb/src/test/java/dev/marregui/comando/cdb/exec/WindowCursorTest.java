@@ -90,7 +90,7 @@ class WindowCursorTest {
     @Test
     void anUnknownFunctionFails() {
         final AggRows.Source source = AggRows.source(inputFields(), 4, sequence(3));
-        final List<Bound.WindowCall> calls = List.of(call("lead", CdbType.LONG, List.of(X), List.of(), BY_X));
+        final List<Bound.WindowCall> calls = List.of(call("nth_value", CdbType.LONG, List.of(X), List.of(), BY_X));
         final WindowCursor cursor = new WindowCursor(source, new Plan.Window(null, calls, outputFields(calls)), 0);
         assertThatThrownBy(cursor::next).isInstanceOf(CdbException.class);
         cursor.close();

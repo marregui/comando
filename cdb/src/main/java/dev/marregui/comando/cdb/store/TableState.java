@@ -53,6 +53,9 @@ final class TableState {
     private long queuedBytes;
     // guarded by lock: the bytes of queued commits published and not yet taken by the applier's accounting
     private long releasedBytes;
+    // guarded by lock: set once a suspend or a drop took the table's bytes off the store's queued budget, so neither
+    // that path nor a later apply takes them off again
+    private boolean offBudget;
     // guarded by lock: readers waiting for the applier since it last applied the table
     private int demands;
     // written by the lease holder once a commit is answered, under lock; read by readers and the applier
@@ -61,6 +64,9 @@ final class TableState {
     private volatile long appliedTxn;
     // written by the applier when it gives up on the table; read by commits and readers
     private volatile boolean suspended;
+    // applyLock's: set by the drop before it lets the lock go, so a turn of the applier that takes the lock after it
+    // writes nothing into the dropped folder
+    private boolean forgotten;
     // the last apply failure, written by the applier under applyLock and cleared by its next apply; read by the status
     // listing
     private volatile String lastError;
@@ -92,6 +98,11 @@ final class TableState {
     private final Map<String, Integer> holders = new HashMap<>();
     // guarded by lock
     private boolean writerOpen;
+    // guarded by lock: set once the table is dropped, and once its folder's delete is claimed, by the last to let go
+    private boolean dropped;
+    private boolean folderDeleted;
+    // written by drop before it takes lock and sets dropped, read by the one thread whose claim under lock follows it
+    private Runnable onDeleted;
     // applyLock's, and the opening thread's before it: one dictionary per column index, null for non-SYMBOL
     private final List<SymbolTable> symbols = new ArrayList<>();
     // applyLock's: folders a failed apply left bytes in past their committed ends, cut only at the next open
@@ -200,6 +211,16 @@ final class TableState {
         lastError = error;
     }
 
+    /** Marks the table dropped, the caller holding {@link #applyLock}: the applier's later turns apply nothing. */
+    void forget() {
+        forgotten = true;
+    }
+
+    /** True once {@link #forget} marked the table, the caller holding {@link #applyLock}. */
+    boolean forgotten() {
+        return forgotten;
+    }
+
     /** The last transaction answered: logged, or written by a direct commit. */
     long loggedTxn() {
         return loggedTxn;
@@ -223,9 +244,10 @@ final class TableState {
     /**
      * Queues {@code commit}, answered once this returns; its transaction becomes the logged one. Refused once the table
      * closed: a writer left open past the store's close must not answer a commit no applier will publish; the writer
-     * then cuts the commit's record out of the log.
+     * then cuts the commit's record out of the log. True when its bytes count on the store's queued budget; false once
+     * {@link #takeBudgetBytes} took the table off it, so the caller adds nothing that no later path takes off.
      */
-    void enqueue(final Queued commit) {
+    boolean enqueue(final Queued commit) {
         lock.lock();
         try {
             if (current == null) {
@@ -236,6 +258,7 @@ final class TableState {
             queuedRows += commit.rows().size;
             queuedBytes += commit.bytes();
             loggedTxn = commit.txn();
+            return !offBudget;
         } finally {
             lock.unlock();
         }
@@ -260,13 +283,35 @@ final class TableState {
         }
     }
 
-    /** The bytes of the queued commits published since the last call, which {@link #publish} dropped. */
+    /**
+     * The bytes of the queued commits published since the last call, which {@link #publish} dropped; 0 once
+     * {@link #takeBudgetBytes} took the table off the budget.
+     */
     long takeReleasedBytes() {
         lock.lock();
         try {
-            final long released = releasedBytes;
+            final long released = offBudget ? 0L : releasedBytes;
             releasedBytes = 0L;
             return released;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * The bytes the table holds on the store's queued budget, its queued commits and those published since the last
+     * {@link #takeReleasedBytes}, taken off once, by a suspend or a drop: every later call answers 0.
+     */
+    long takeBudgetBytes() {
+        lock.lock();
+        try {
+            if (offBudget) {
+                return 0L;
+            }
+            offBudget = true;
+            final long bytes = queuedBytes + releasedBytes;
+            releasedBytes = 0L;
+            return bytes;
         } finally {
             lock.unlock();
         }
@@ -566,15 +611,64 @@ final class TableState {
     void release(final Snapshot snapshot) {
         final List<Version> unmap = new ArrayList<>();
         final List<Path> delete = new ArrayList<>();
+        final boolean deleteFolder;
         lock.lock();
         try {
             for (final Version v : snapshot.partitions()) {
                 letGo(v, unmap, delete);
             }
+            deleteFolder = claimFolderDelete();
         } finally {
             lock.unlock();
         }
         free(unmap, delete);
+        if (deleteFolder) {
+            deleteFolder();
+        }
+    }
+
+    /**
+     * Drops the table, the caller holding its lease and the table out of the store's catalog: closes it as
+     * {@link #close} does, lease included, and its log; the folder is deleted now when no reader holds a version,
+     * else when the last one lets go, and {@code deleted} runs once that delete has ended, done or failed.
+     */
+    void drop(final Runnable deleted) {
+        onDeleted = deleted;
+        close(true);
+        wal.close();
+        final boolean deleteFolder;
+        lock.lock();
+        try {
+            dropped = true;
+            deleteFolder = claimFolderDelete();
+        } finally {
+            lock.unlock();
+        }
+        if (deleteFolder) {
+            deleteFolder();
+        }
+    }
+
+    // called with lock held: true, once, when the table is dropped and no reader holds a version of it
+    private boolean claimFolderDelete() {
+        if (!dropped || folderDeleted || !holders.isEmpty()) {
+            return false;
+        }
+        folderDeleted = true;
+        return true;
+    }
+
+    // a failure leaves the folder with its drop marker, so the next open deletes it
+    private void deleteFolder() {
+        try {
+            StoreFiles.deleteTable(dir, TableFiles.DROPPED);
+            LOG.log(System.Logger.Level.DEBUG, "deleted dropped table [table=" + key + ", dir=" + dir + ']');
+        } catch (final IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot delete dropped table, the next open deletes it [table=" + key
+                    + ", dir=" + dir + ']', e);
+        } finally {
+            onDeleted.run();
+        }
     }
 
     /**
@@ -626,6 +720,16 @@ final class TableState {
 
     /** Takes the writer lease, waiting up to {@code waitMillis} for the holder to let it go. */
     void lease(final long waitMillis) {
+        if (!leaseUnlessClosed(waitMillis)) {
+            throw new CdbException("refuse writer of closed table [table=" + key + ']', -1);
+        }
+    }
+
+    /**
+     * Takes the writer lease as {@link #lease} does; false, without the lease, when the table is closed, or dropped,
+     * once the holder let it go.
+     */
+    boolean leaseUnlessClosed(final long waitMillis) {
         lock.lock();
         try {
             long remainingNanos = TimeUnit.MILLISECONDS.toNanos(Math.max(0L, waitMillis));
@@ -637,9 +741,10 @@ final class TableState {
                 remainingNanos = writerFree.awaitNanos(remainingNanos);
             }
             if (current == null) {
-                throw new CdbException("refuse writer of closed table [table=" + key + ']', -1);
+                return false;
             }
             writerOpen = true;
+            return true;
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new CdbException("cannot open writer, interrupted [table=" + key + ']', e);
