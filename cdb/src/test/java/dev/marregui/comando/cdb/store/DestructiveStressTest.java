@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.LongPredicate;
 
 import org.junit.jupiter.api.Test;
@@ -70,6 +71,9 @@ public class DestructiveStressTest {
     /// The dropping schedule's destroys: 40 against 200 appends, one let go per 5 answered appends, so the destroys
     /// spread over the whole run and land between commits of both writers; unpaced, all 40 ran before the first commit.
     private static final int DROPPING_DESTROYS = 40;
+    /// A reader holds at most this many unsettled reads, then waits for the change to end: a slow change (a DELETE
+    /// rewrite on a CI runner) otherwise piled up reads past the 1 GiB test heap.
+    private static final int MAX_PENDING_READS = 64;
     private static final int DROPPING_PACE = APPENDERS * APPENDS_EACH / DROPPING_DESTROYS;
     /// Anomalies kept per schedule: a broken store would otherwise add one per read until the heap is gone.
     private static final int MAX_ANOMALIES = 50;
@@ -169,8 +173,12 @@ public class DestructiveStressTest {
             pending.add(waiting);
             tasks.add(() -> {
                 while (!stop.get()) {
-                    final long lo = published.get();
-                    waiting.add(read(target, lo, started));
+                    if (waiting.size() >= MAX_PENDING_READS) {
+                        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1L));
+                    } else {
+                        final long lo = published.get();
+                        waiting.add(read(target, lo, started));
+                    }
                     settle(waiting, published.get(), states, transients, anomalies, reads, whileAbsent);
                 }
             });

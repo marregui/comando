@@ -60,10 +60,8 @@ class ExecutorExplainTest {
     void aLongPlanSpansPages() {
         try (Store store = Store.open(root)) {
             run(store, "CREATE TABLE t (ts TIMESTAMP, v LONG) TIMESTAMP(ts) PARTITION BY DAY");
-            Plan inner = plan(store, "SELECT v FROM t");
-            for (int i = 0; i < Page.CAPACITY + 10; i++) {
-                inner = new Plan.Limit(inner, 0, i + 1);
-            }
+            // a balanced tree of UNION ALLs, so the text is long and the plan shallow, as a plan from SQL is
+            final Plan inner = unions(plan(store, "SELECT v FROM t"), Page.CAPACITY);
             final Plan explain = new Plan.Explain(inner, QUERY_PLAN);
             final List<Integer> sizes = new ArrayList<>();
             final List<String> lines = new ArrayList<>();
@@ -76,9 +74,15 @@ class ExecutorExplainTest {
                     }
                 }
             }
-            assertThat(sizes).containsExactly(Page.CAPACITY, 12);
+            assertThat(sizes).hasSizeGreaterThan(1).allMatch(size -> size > 0).first().isEqualTo(Page.CAPACITY);
             assertThat(lines).containsExactly(Executor.explain(inner, store, NOW).split("\n"));
         }
+    }
+
+    // a balanced UNION ALL of `leaves` copies of leaf, about two lines a leaf
+    private static Plan unions(final Plan leaf, final int leaves) {
+        return leaves == 1 ? leaf
+                : new Plan.SetOp("UNION ALL", unions(leaf, leaves / 2), unions(leaf, leaves - leaves / 2));
     }
 
     /// EXPLAIN of an UPDATE shows the change and leaves the table as it was.
