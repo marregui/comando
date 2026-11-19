@@ -1576,7 +1576,6 @@ keychain call runs on `store-secrets` through `Processes`, which starts no threa
 take the desktop's focus.
 
 The Gradle tasks of this module (`run`, `snapshot`, `dmg`, `appImage`, `package`) are in
-[Development §2](development.md#2-gradle-tasks). `ProbeNewSession`, a `main` in the test sources run from the IDE,
-probes the new-session dialog: adds a session, types into its name field and reports the text, caret and focus.
+[Development §2](development.md#2-gradle-tasks).
 
 Further reading: [Development](development.md), [Workbench §7](workbench.md#7-persistence).
