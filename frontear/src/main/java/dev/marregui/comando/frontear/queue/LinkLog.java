@@ -90,7 +90,6 @@ public final class LinkLog implements AutoCloseable {
     // magic, version, cursor, CRC
     private static final int CURSOR_BYTES = 20;
     private static final String CURSOR = "cursor";
-    private static final String CURSOR_TMP = "cursor.tmp";
     private static final String SUFFIX = ".log";
     // a segment's name is its base offset, zero-padded so the names sort as the offsets do
     private static final int NAME_DIGITS = 20;
@@ -353,7 +352,7 @@ public final class LinkLog implements AutoCloseable {
     static LinkLog open(final LogFiles files, final Path dir, final LogOptions options) throws IOException {
         Objects.requireNonNull(options, "options");
         files.createDirectories(dir);
-        files.delete(dir.resolve(CURSOR_TMP));
+        files.delete(WholeFile.tmp(dir.resolve(CURSOR)));
         final List<Path> entries = files.list(dir);
         long savedCursor = NO_CURSOR;
         for (final Path entry : entries) {
@@ -835,7 +834,6 @@ public final class LinkLog implements AutoCloseable {
     // the forcer's: replaces the cursor file, then deletes the segments wholly below the saved cursor. A failure keeps
     // the previous cursor (its records are delivered again after a restart) and the next flush tries again
     private void saveCursor(final long value) {
-        final Path tmp = dir.resolve(CURSOR_TMP);
         final ByteBuffer content = ByteBuffer.allocate(CURSOR_BYTES).order(ByteOrder.LITTLE_ENDIAN)
                 .putInt(CURSOR_MAGIC).putInt(VERSION).putLong(value);
         final CRC32C crc = new CRC32C();
@@ -843,12 +841,7 @@ public final class LinkLog implements AutoCloseable {
         content.putInt((int) crc.getValue()).flip();
         final boolean interrupted = Thread.interrupted();
         try {
-            try (LogFiles.Writer writer = files.create(tmp)) {
-                writer.write(content, 0L);
-                writer.force();
-            }
-            files.move(tmp, dir.resolve(CURSOR));
-            files.forceFolder(dir);
+            WholeFile.replace(files, dir.resolve(CURSOR), content);
         } catch (final IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot save link log cursor, records after the saved one are"
                     + " delivered again after a restart [dir=" + dir + ", cursor=" + value + ", saved=" + saved + ']',

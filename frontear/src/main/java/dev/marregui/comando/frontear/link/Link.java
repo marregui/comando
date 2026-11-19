@@ -281,6 +281,11 @@ final class Link implements AutoCloseable {
         return id;
     }
 
+    /** The spec the link runs by now, its filters as last replaced. */
+    LinkSpec spec() {
+        return spec;
+    }
+
     /** The link's state; from any thread. */
     LinkState state() {
         // the cursor is read before the tail, and neither moves back, so the tail read is at least the cursor

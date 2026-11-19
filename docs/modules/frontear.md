@@ -33,8 +33,8 @@ command line.
 | `frontear` | One node, started and stopped as a unit | `Frontear` |
 | `broker` | Connections, sessions, retained messages, routing | `Broker`, `BrokerOptions`, `Connection`, `Session`, `InternalSubscriber`, `Gate` |
 | `tree` | Which subscriber matches which topic | `TopicTree`, `Entry`, `Match` |
-| `link` | Forwarding to and from a peer broker | `Links`, `Link`, `LinkSpec`, `LinkOptions`, `LinkState`, `Forwarding` |
-| `queue` | A link's log on disk | `LinkLog`, `LogForcer`, `LogOptions`, `LogFiles`, `Record` |
+| `link` | Forwarding to and from a peer broker | `Links`, `Link`, `LinkSpec`, `LinkFile`, `LinkOptions`, `LinkState`, `Forwarding` |
+| `queue` | A link's log on disk | `LinkLog`, `LogForcer`, `LogOptions`, `LogFiles`, `WholeFile`, `Record` |
 | `control` | Signed requests that change the links | `ControlPlane`, `ControlGate`, `Seal`, `Signer`, `Request`, `Refusal`, `StateTopic` |
 | `mqtt` | The wire format and a client | `Codec`, `Wire`, `Packet`, `MqttClient`, `Topics`, `PublishRecord` |
 
@@ -93,7 +93,9 @@ published on the local broker; the peer's PUBACK waits for that local publish.
 | The peer answers 0x97 or 0x89 | Resends that one message alone after a backoff, 1 s growing to 30 s. |
 | The connection drops | Resends everything past the cursor, in order. The peer may see a message twice. |
 | A message has reached its `hopLimit` | Does not forward it, so a ring of nodes cannot loop forever. |
-| The link is removed | Keeps its log on disk. |
+| A put or a filter change | Writes the spec to `link.json` beside the log (`LinkFile`, version 1), forced, before it takes effect. |
+| The link is removed | Deletes `link.json` first; keeps its log on disk. |
+| The node starts | `Links` starts every link whose `link.json` it reads, in id order; one it cannot read is logged and skipped. |
 
 The guarantee is **at least once**: no message acknowledged to its publisher is lost, and a duplicate is possible.
 `LinkState` reports `connected`, `queued`, `cursor`, `tail`, `sent`, `dropped` and `reordered`.

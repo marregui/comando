@@ -25,7 +25,7 @@ A frontear node has three parts. You reach each one over MQTT.
 Know these limits before you start:
 
 - A node listens on `127.0.0.1` only. It has no TLS and no client authentication: any local process can connect.
-- Only link logs are on disk. Sessions, retained messages and the link configuration live in memory (§7.3).
+- Only links are on disk: their configuration and their logs. Sessions and retained messages live in memory (§7.3).
 - QoS 2 is not supported (§10).
 
 ## 2. Quick start: one node, one client
@@ -189,7 +189,7 @@ Its state shows them waiting, for example:
 {"links":[{"id":"b","connected":false,"queued":3,"cursor":2,"tail":5,"sent":2,"dropped":0,"reordered":0}]}
 ```
 
-Start `b` again and repeat the `PutLink` of step 6, because a restarted node has no links (§7.3). Node `a`
+Start `b` again. It brings back its links from its data folder (§7.3), so you send nothing. Node `a`
 reconnects by itself and its state returns to `"connected":true,"queued":0`. The three jobs are on `b`.
 
 ## 4. Configuring links with signed control messages
@@ -378,6 +378,8 @@ The node logs to standard error. These lines matter most:
 |---|---|
 | `link connected [link=b, window=…, cursor=…, tail=…]` | The peer accepted the link. `window` is how many messages may be in flight. |
 | `link disconnected […]` | The connection to the peer ended. The link retries. |
+| `link restored [link=…, host=…, port=…, file=…]` | At start, the node brought back a link from its `link.json`. |
+| `link not restored, it stays down until a put replaces its spec […]` | At start, a `link.json` could not be read or held a value out of range. |
 | `applied control request [node=…, method=…, key=…, nonce=…, origin=…]` | A signed request changed the node. `origin` is the client id. |
 | `refused control message [reason=…, detail=…, topic=…, origin=…]` | The node refused a request. Logged at most once a minute. |
 | `cut torn tail off log segment […]` | Recovery removed a half-written record after a crash. |
@@ -391,6 +393,7 @@ data-a/
   b/                           one folder per link, named by the link's id
     00000000000000000000.log   a segment, named by the offset of its first record
     cursor                     how far the peer has acknowledged
+    link.json                  the link's configuration, as its last PutLink and SetFilters left it
 ```
 
 Links share nothing: each has its own folder, its own log and its own bounds. A new segment starts at 64 MiB. As
@@ -413,23 +416,29 @@ Publishes that arrive together share one force to disk.
 Stop a node with a termination signal, Ctrl-C included. It stops taking control messages, closes the broker, then
 closes the links, whose logs force their last records. The close has 10 s.
 
-A restarted node starts empty except for its link logs:
+A restarted node brings back its links and starts empty of everything else:
 
 | Lives in memory, gone after a restart | Lives on disk, kept |
 |---|---|
-| The links themselves: ids, peers, filters | Each link's log and cursor |
-| Client sessions and subscriptions | |
-| Retained messages | |
+| Client sessions and subscriptions | Each link's configuration: id, peer, filters, hop limit (`link.json`) |
+| Retained messages | Each link's log and cursor |
 | Remembered nonces and all counters | |
+
+A `PutLink` or `SetFilters` is written to the link's `link.json`, and forced to disk, before it takes effect and
+before its reply goes out. A `RemoveLink` deletes the file first, and keeps the log. So the reply `{"ok":true}`
+means the change survives a restart.
+
+At start the node reads every `link.json` in its data folder and starts that link. A link with a backlog resumes at
+its cursor and drains it once its peer answers. A file it cannot read is logged as `link not restored […]` and left
+in place. That link stays down until a `PutLink` with its id replaces the file. The other links start as usual.
 
 After every start:
 
-1. Send `PutLink` for each link, at once. A link with a kept log resumes at its cursor.
-2. Let clients reconnect and subscribe again.
-3. Sign requests after the node is up. A request signed earlier is refused as `stale`.
+1. Let clients reconnect and subscribe again.
+2. Sign requests after the node is up. A request signed earlier is refused as `stale`.
 
-A message that reaches a node before its links exist goes to that node's own subscribers only. It is not forwarded
-later.
+The links start before the node takes control requests, but the broker already listens: a message that reaches it in
+the moment before a link starts goes to the node's own subscribers only, and is not forwarded later.
 
 ### 7.4 Bounds, and what to do at each
 
@@ -545,7 +554,7 @@ Read the `reason` in the reply, or the reason code in the PUBACK.
 | A client is disconnected with `0x8B` | The node is shutting down. | Reconnect when it serves again. |
 | A link stays at `connected:false` | The peer is not reachable at `host` and `port`. | Start the peer, or send `PutLink` with the right address. |
 | A link is connected and nothing arrives | No `out` filter matches, or the hop limit stops the message. | Publish a test message and read the state. `tail` rises when a filter matches, `dropped` when the hop limit stops it. |
-| The links are gone after a restart | Link configuration lives in memory. | Send `PutLink` for each link (§7.3). |
+| A link is missing after a restart | Its `link.json` could not be read (`link not restored […]` in the log). | Send `PutLink` for it (§7.3). |
 | Every request is `stale` right after a restart | The signer's clock runs behind the node's. | Wait that long, or synchronize the clocks. |
 
 ## 10. MQTT 5 support
@@ -594,7 +603,8 @@ repeat.
 cases counted in `dropped` (§6.1), and a node whose links are not yet restored (§7.3). A QoS 0 message has no
 acknowledgement and can be lost.
 
-**Does a link survive a restart?** Its log does. Its configuration does not: send `PutLink` again (§7.3).
+**Does a link survive a restart?** Yes. Its configuration and its log are both on disk, and it drains its
+backlog once its peer answers (§7.3).
 
 **Does a subscriber get what a link delivered during its absence?** Only through a session that is still alive on the
 node. A node restart ends every session.

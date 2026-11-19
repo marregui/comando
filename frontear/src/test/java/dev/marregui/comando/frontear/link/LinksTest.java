@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -48,7 +49,8 @@ import static org.awaitility.Awaitility.await;
 /// link's restart with a backlog, filter changes that miss nothing covered and lose nothing queued, the hop limit on a
 /// loop of three, the PUBACK classes, a refused message sent again alone and counted when a later one overtook
 /// it, the bound on what waits for a link's strand, a close that answers what waits and interrupts nothing,
-/// expiry while queued, the IN side's PUBACK after the local publish, and the checks on what a link is given.
+/// expiry while queued, the IN side's PUBACK after the local publish, the checks on what a link is given, and a
+/// link's spec kept across a restart.
 class LinksTest {
 
     private static final Duration WAIT = Duration.ofSeconds(20);
@@ -651,6 +653,70 @@ class LinksTest {
             assertThat(links.state()).extracting(LinkState::id).containsExactly("ab");
             assertThat(a.publish(message("t/x", 1), "test").get(WAIT.toMillis(), TimeUnit.MILLISECONDS))
                     .isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
+        }
+    }
+
+    /// A link comes back when links are made again on its folder, with no put: its spec and its last filter change
+    /// were kept, so the backlog queued while the peer was down reaches the peer once it is up, and a message for the
+    /// changed filter is carried after the restart while one for the replaced filter is not.
+    @Test
+    void aLinkComesBackAfterARestartWithItsFiltersAndDrainsItsBacklog() throws Exception {
+        final int port;
+        try (Broker b = broker(0)) {
+            port = b.port();
+        }
+        try (Broker a = broker(0); MqttClient publisher = client(a, "publisher")) {
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                links.put(new LinkSpec("ab", HOST, port, Set.of("t/#"), Set.of(), 4));
+                links.filters("ab", Direction.OUT, Set.of("u/#"));
+                links.filters("ab", Direction.IN, Set.of("r/#"));
+                assertThat(publishAll(publisher, "u/x", 0, 50)).containsOnly(Packet.SUCCESS);
+                assertThat(state(links, "ab").queued()).isEqualTo(50);
+            }
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                assertThat(links.state()).extracting(LinkState::id).containsExactly("ab");
+                assertThat(state(links, "ab").queued()).isEqualTo(50);
+                assertThat(LinkFile.read(Files.readAllBytes(dir.resolve("ab").resolve(LinkFile.NAME))))
+                        .isEqualTo(new LinkSpec("ab", HOST, port, Set.of("u/#"), Set.of("r/#"), 4));
+                try (Broker b = broker(port)) {
+                    final Probe onB = Probe.on(b, "#");
+                    await().atMost(WAIT).until(() -> onB.messages.size() == 50);
+                    assertThat(publish(publisher, "t/x", 50)).isEqualTo(Packet.NO_MATCHING_SUBSCRIBERS);
+                    assertThat(publish(publisher, "u/x", 51)).isEqualTo(Packet.SUCCESS);
+                    await().atMost(WAIT).until(() -> onB.messages.size() == 51);
+                    await().during(QUIET).atMost(WAIT).until(() -> onB.messages.size() == 51);
+                    final List<Integer> expected = new ArrayList<>(range(0, 50));
+                    expected.add(51);
+                    assertThat(onB.payloads()).containsExactlyElementsOf(expected);
+                }
+            }
+        }
+    }
+
+    /// A removed link does not come back, and a spec that cannot be read, or that names another link than its
+    /// folder, keeps its link down without stopping the others; a put of that id replaces the spec and starts the
+    /// link; a remove refuses an id that is not a folder name.
+    @Test
+    void aRemovedLinkAndAnUnreadableSpecDoNotComeBack() throws Exception {
+        try (Broker a = broker(0)) {
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                links.put(new LinkSpec("ab", HOST, 1, Set.of("t/#"), Set.of(), 2));
+                links.put(new LinkSpec("ac", HOST, 1, Set.of("t/#"), Set.of(), 2));
+                links.put(new LinkSpec("ad", HOST, 1, Set.of("t/#"), Set.of(), 2));
+                links.remove("ab");
+            }
+            Files.writeString(dir.resolve("ac").resolve(LinkFile.NAME), "{\"version\":2}");
+            Files.createDirectories(dir.resolve("ae"));
+            Files.write(dir.resolve("ae").resolve(LinkFile.NAME),
+                    LinkFile.write(new LinkSpec("zz", HOST, 1, Set.of("t/#"), Set.of(), 2)));
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                assertThat(links.state()).extracting(LinkState::id).containsExactly("ad");
+                assertThatThrownBy(() -> links.remove("../ad")).isInstanceOf(IllegalArgumentException.class);
+                links.put(new LinkSpec("ac", HOST, 1, Set.of("t/#"), Set.of(), 2));
+            }
+            try (Links links = new Links(a, "A", dir, LOG)) {
+                assertThat(links.state()).extracting(LinkState::id).containsExactly("ac", "ad");
+            }
         }
     }
 

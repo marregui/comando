@@ -9,7 +9,7 @@ public interface Mesh {
     /** Adds the link {@code spec} names, or replaces the one with its id; refuses a value out of range. */
     void put(LinkSpec spec);
 
-    /** Stops and forgets the link {@code id}; nothing when there is none. */
+    /** Stops and forgets the link {@code id}; nothing when there is none; refuses an id out of range. */
     void remove(String id);
 
     /** Replaces the whole set of filters of link {@code id} in {@code direction}; refuses an unknown link. */

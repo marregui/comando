@@ -42,7 +42,9 @@ of them is queued once. Each queued message is appended to the link's own log (s
 cursor) before the publisher's PUBACK; one sender per link drains the log in order within the peer's receive maximum,
 and advances the cursor on the peer's PUBACK. Order on a link is kept across losses, reconnects and restarts; it breaks
 only when the peer refuses a message for a while (0x97, 0x89) and accepts the ones after it: the link then resends
-the refused message alone, at a window of 1, and counts it in `reordered`. Nothing is shared between links. Loops are stopped by No Local, by the
+the refused message alone, at a window of 1, and counts it in `reordered`. A link's spec is kept beside its log
+(`link.json`, versioned), written and forced before a `PutLink` or `SetFilters` takes effect and deleted before a
+`RemoveLink` does, so a restarted node starts its links and drains their logs. Nothing is shared between links. Loops are stopped by No Local, by the
 link never sending back what came in through it, and by a hop count in a user property. Each link connects as
 `<node>~<link>`.
 
@@ -75,7 +77,9 @@ strand is one virtual thread running its tasks in order; what only a strand touc
 
 The rules: shared state sits behind one short lock per object, never held across another component's callback nor
 taken twice; every wait is bounded; only the log's forcer touches its files, since a force blocks in the operating
-system, so no strand waits on a disk; a strand's own queue has no count bound, so what feeds it is bounded instead,
+system, so no strand waits on a disk, save the control strand, which writes and forces a link's spec
+(`queue.WholeFile`) so that a control request's reply means its change survives a restart, at the rate control
+requests come; a strand's own queue has no count bound, so what feeds it is bounded instead,
 in bytes or by a window, as each strand's field comment states.
 
 ## 3. Consequences
