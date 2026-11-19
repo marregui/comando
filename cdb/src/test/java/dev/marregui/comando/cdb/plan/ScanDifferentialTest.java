@@ -86,7 +86,8 @@ class ScanDifferentialTest {
                     new Plan.Window(plain(child), calls, plan.fields());
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.Distinct _, Plan.SetOp _, Plan.Join _,
                  Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _, Plan.Explain _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ -> plan;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ -> plan;
         };
     }
 
@@ -102,7 +103,8 @@ class ScanDifferentialTest {
             case Plan.Window(final Plan child, final List<Bound.WindowCall> _, final List<?> _) -> termCount(child);
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.Distinct _, Plan.SetOp _, Plan.Join _,
                  Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _, Plan.Explain _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ -> 0;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ -> 0;
         };
     }
 
@@ -168,7 +170,7 @@ class ScanDifferentialTest {
         }
         final int tail = random.nextInt(unique ? 4 : 3);
         if (tail == 1) {
-            sql.append(" ORDER BY ").append(pick(random, "x", "x DESC", "d, x", "s DESC"));
+            sql.append(" ORDER BY ").append(pick(random, "x", "x DESC", "d, x", "s DESC", "ts DESC"));
             sql.append(random.nextBoolean() ? " LIMIT " + random.nextInt(50)
                     : " LIMIT " + random.nextInt(10) + ", " + random.nextInt(60));
         } else if (tail == 2) {

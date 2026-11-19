@@ -5,16 +5,16 @@ package dev.marregui.comando.cdb.exec.expr;
  * knows for it, so {@code SSSS} is {@code SSS} then {@code S}; any other character is copied. Tokens: {@code y} year,
  * {@code yy} two digits, {@code yyy} three, {@code yyyy} four; {@code M}, {@code MM}, {@code MMM} ({@code Mar}),
  * {@code MMMM} ({@code March}); {@code d}, {@code dd}; {@code E} ({@code Wed}), {@code EE} ({@code Wednesday});
- * {@code H}, {@code HH}; {@code h}, {@code hh} (12-hour, 0 shown as 12); {@code K} (0 to 11); {@code a} (AM, PM);
- * {@code m}, {@code mm}; {@code s}, {@code ss}; {@code S}, {@code SSS} milliseconds; {@code U}, {@code UUU} the
- * microseconds past the millisecond.
+ * {@code H}, {@code HH}; {@code h}, {@code hh} (12-hour, 0 shown as 12); {@code K}, {@code KK} (0 to 11);
+ * {@code a} (AM, PM); {@code m}, {@code mm}; {@code s}, {@code ss}; {@code S}, {@code SSS} milliseconds; {@code U},
+ * {@code UUU} the microseconds past the millisecond.
  */
 final class DateFormat {
 
     private static final String LETTERS = "yMdEHhKamsSU";
     // per letter of LETTERS, the token lengths QuestDB's date format knows, longest first
     private static final int[][] WIDTHS = {
-            {4, 3, 2, 1}, {4, 3, 2, 1}, {2, 1}, {2, 1}, {2, 1}, {2, 1}, {1}, {1}, {2, 1}, {2, 1}, {3, 1}, {3, 1},
+            {4, 3, 2, 1}, {4, 3, 2, 1}, {2, 1}, {2, 1}, {2, 1}, {2, 1}, {2, 1}, {1}, {2, 1}, {2, 1}, {3, 1}, {3, 1},
     };
     private static final String[] MONTHS = {
             "January", "February", "March", "April", "May", "June",
@@ -96,7 +96,7 @@ final class DateFormat {
                 }
                 case 'H' -> Civil.pad(sink, hour, width);
                 case 'h' -> Civil.pad(sink, hour % 12 == 0 ? 12 : hour % 12, width);
-                case 'K' -> sink.append(hour % 12);
+                case 'K' -> Civil.pad(sink, hour % 12, width);
                 case 'a' -> sink.append(hour < 12 ? "AM" : "PM");
                 case 'm' -> Civil.pad(sink, timeOfDay / Civil.MINUTE_MICROS % 60, width);
                 case 's' -> Civil.pad(sink, timeOfDay / Civil.SECOND_MICROS % 60, width);

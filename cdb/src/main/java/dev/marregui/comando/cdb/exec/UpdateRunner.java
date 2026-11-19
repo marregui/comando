@@ -37,7 +37,7 @@ final class UpdateRunner {
     static long run(final Plan.Update update, final Store store, final long nowMicros) {
         // the writer first: no commit can land between the snapshot read and the rewrite
         try (TableWriter writer = store.writer(update.table(), WAIT_MILLIS)) {
-            return rewrite(update, store.reader(update.table()), writer, nowMicros);
+            return rewrite(update, store.freshReader(update.table()), writer, nowMicros);
         }
     }
 
@@ -80,6 +80,35 @@ final class UpdateRunner {
             final long nowMicros,
             final PageEdits edits
     ) {
+        return rewrite(statement, table, where, reader, writer, nowMicros, edits, false);
+    }
+
+    /**
+     * Truncates {@code writer} and re-appends every row of {@code reader}'s snapshot through the page edit
+     * {@code edits} makes, then commits, an empty table included: a column change commits its definition with no row
+     * to write. Closes {@code reader}. Returns the rows read. {@code statement} names the statement in its errors.
+     */
+    static long rewriteAll(
+            final String statement,
+            final String table,
+            final TableReader reader,
+            final TableWriter writer,
+            final PageEdits edits
+    ) {
+        return rewrite(statement, table, null, reader, writer, 0L, edits, true);
+    }
+
+    // rewrite's body; commitEmpty commits when no row was hit, rather than roll back
+    private static long rewrite(
+            final String statement,
+            final String table,
+            final Bound where,
+            final TableReader reader,
+            final TableWriter writer,
+            final long nowMicros,
+            final PageEdits edits,
+            final boolean commitEmpty
+    ) {
         final Plan.Scan all;
         try {
             all = scanOf(table, reader.def());
@@ -119,7 +148,7 @@ final class UpdateRunner {
                 }
                 edit.apply(page, hit);
             }
-            if (hits == 0) {
+            if (hits == 0 && !commitEmpty) {
                 writer.rollback();
             } else {
                 writer.commit();

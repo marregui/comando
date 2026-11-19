@@ -36,6 +36,9 @@ final class IlpAppender implements CdbAppender {
     // window, so a few cover racing drops, and more means a loop of drops the line gives way to
     private static final int WRITER_ATTEMPTS = 8;
     private static final int INITIAL_FIELDS = 16;
+    // 10000-01-01T00:00:00Z in microseconds since the epoch: QuestDB's ILP refuses a designated timestamp from it on,
+    // and one before the epoch (LineUtils.fromDesignatedTimestamp, MicrosTimestampDriver.validateBounds)
+    private static final long YEAR_10000_MICROS = 253_402_300_800_000_000L;
 
     private final Store store;
     private final long writerWaitMillis;
@@ -132,6 +135,11 @@ final class IlpAppender implements CdbAppender {
         }
         final String name = table;
         table = null;
+        if (micros < 0L || micros >= YEAR_10000_MICROS) {
+            fields = 0;
+            throw new CdbException("refuse designated timestamp out of range [table=" + name + ", micros=" + micros
+                    + ", min=0, max=" + (YEAR_10000_MICROS - 1L) + ']', -1);
+        }
         final TableWriter writer = writer(name);
         final int[] columns = new int[fields];
         for (int f = 0; f < fields; f++) {
@@ -142,7 +150,7 @@ final class IlpAppender implements CdbAppender {
             final int c = columns[f];
             switch (writer.def().columns().get(c).type()) {
                 case LONG, TIMESTAMP -> writer.putLong(c, longs[f]);
-                case DOUBLE -> writer.putDouble(c, types[f] == CdbType.LONG ? (double) longs[f] : doubles[f]);
+                case DOUBLE -> writer.putDouble(c, types[f] == CdbType.DOUBLE ? doubles[f] : (double) longs[f]);
                 case BOOLEAN -> writer.putBoolean(c, longs[f] != 0L);
                 case SYMBOL, VARCHAR -> writer.putText(c, texts[f]);
             }
@@ -348,8 +356,12 @@ final class IlpAppender implements CdbAppender {
         }
         final CdbType column = writer.def().columns().get(c).type();
         final CdbType field = types[f];
+        // QuestDB's LineWalAppender casts an integer into TIMESTAMP as its microseconds and a boolean into LONG or
+        // DOUBLE as 1 or 0, the designated timestamp aside; a boolean field holds 1 or 0 in longs already
         final boolean fits = column == field
-                || column == CdbType.DOUBLE && field == CdbType.LONG
+                || column == CdbType.DOUBLE && (field == CdbType.LONG || field == CdbType.BOOLEAN)
+                || column == CdbType.LONG && field == CdbType.BOOLEAN
+                || column == CdbType.TIMESTAMP && field == CdbType.LONG && c != writer.def().timestampIndex()
                 || column == CdbType.VARCHAR && field == CdbType.SYMBOL
                 || column == CdbType.SYMBOL && field == CdbType.VARCHAR;
         if (!fits) {

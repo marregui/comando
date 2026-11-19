@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.store;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +37,10 @@ final class LogForcer implements AutoCloseable {
     // written by a test before its commits, read by the thread and by a force after close
     @TestOnly
     volatile LogForce forceLog = Wal::force;
+    /** How long {@link #stop} waits for the thread: {@link #JOIN_MILLIS}, shortened by a test whose force hangs. */
+    // written by a test before the store's close, read by the closing thread
+    @TestOnly
+    long joinMillis = JOIN_MILLIS;
 
     private final long intervalMillis;
     private final long intervalNanos;
@@ -153,30 +158,57 @@ final class LogForcer implements AutoCloseable {
         return new Status(log.forcedTxn, log.forces, TimeUnit.NANOSECONDS.toMillis(log.lateMaxNanos));
     }
 
-    /** Forces every dirty log once more and ends the thread; idempotent. */
+    /** Forces every dirty log once more and ends the thread, as {@link #stop}; idempotent. */
     @Override
     public void close() {
-        if (stopped) {
-            return;
+        stop();
+    }
+
+    /**
+     * Forces every dirty log once more and waits up to {@link #joinMillis} for the thread to end; true once it ended,
+     * false while a force is still in flight past the wait, which may still use any table's log: the store's close then
+     * keeps every table open, and a later call waits for the thread again.
+     */
+    boolean stop() {
+        if (!stopped) {
+            stopped = true;
+            LockSupport.unpark(thread);
+            if (!started) {
+                // never started: no thread to make the last round
+                forceAll();
+            }
         }
-        stopped = true;
-        LockSupport.unpark(thread);
-        if (!started) {
-            // never started: no thread to make the last round
-            forceAll();
-            return;
+        if (!started || !thread.isAlive() || Thread.currentThread() == thread) {
+            return true;
         }
-        if (thread.isAlive() && Thread.currentThread() != thread) {
-            try {
-                thread.join(JOIN_MILLIS);
-            } catch (final InterruptedException _) {
+        final long waitMillis = joinMillis;
+        // an interrupt does not end the wait, and is kept for the caller: a close it cut short would fail while the
+        // last round is about to end
+        boolean interrupted = Thread.interrupted();
+        try {
+            final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMillis);
+            while (thread.isAlive()) {
+                final long leftNanos = deadlineNanos - System.nanoTime();
+                if (leftNanos <= 0L) {
+                    break;
+                }
+                try {
+                    thread.join(Duration.ofNanos(leftNanos));
+                } catch (final InterruptedException _) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) {
                 Thread.currentThread().interrupt();
             }
-            if (thread.isAlive()) {
-                LOG.log(System.Logger.Level.WARNING, "cannot end log forcer within its wait, a force is in flight"
-                        + " [thread=" + thread.getName() + ", waitMillis=" + JOIN_MILLIS + ']');
-            }
         }
+        if (thread.isAlive()) {
+            LOG.log(System.Logger.Level.WARNING, "cannot end log forcer within its wait, a force is in flight [thread="
+                    + thread.getName() + ", waitMillis=" + waitMillis + ']');
+            return false;
+        }
+        return true;
     }
 
     // called holding the log's monitor: the thread reads the logs again

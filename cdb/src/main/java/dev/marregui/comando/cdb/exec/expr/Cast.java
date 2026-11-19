@@ -10,9 +10,12 @@ import dev.marregui.comando.cdb.plan.Bound;
 
 /**
  * Conversions between the six types, with QuestDB's results: DOUBLE to LONG truncates and is NULL when NaN or out of
- * range; text to LONG is strict (an optional {@code -} and digits); text to TIMESTAMP reads the ISO subset of
- * {@link Civil#parse}; text to BOOLEAN is true for {@code true} in any case; numbers to BOOLEAN are true when nonzero
- * and not NULL. Unlike QuestDB, which prints a NULL LONG or a NaN as {@code null} or {@code NaN}, NULL stays NULL.
+ * range; text to LONG reads an optional {@code -}, digits, {@code _} between groups of digits and an optional
+ * trailing {@code L} or {@code l}, and anything else, a space included, is NULL; text to DOUBLE ignores characters up
+ * to the space at both ends, and a number past the DOUBLE range, which would read as an infinity or as 0, is NaN;
+ * text to TIMESTAMP reads the ISO subset of {@link Civil#parse}; text to BOOLEAN is true for {@code true} in any
+ * case; numbers to BOOLEAN are true when nonzero and not NULL. Unlike QuestDB, which prints a NULL LONG or a NaN
+ * as {@code null} or {@code NaN}, NULL stays NULL.
  */
 final class Cast {
 
@@ -241,24 +244,74 @@ final class Cast {
             return Vector.NULL_LONG;
         }
         long value = 0;
+        int groupDigits = 0;
         for (; i < n; i++) {
-            final int digit = text.charAt(i) - '0';
+            final char c = text.charAt(i);
+            if (c == '_') {
+                if (groupDigits == 0) {
+                    return Vector.NULL_LONG;
+                }
+                groupDigits = 0;
+                continue;
+            }
+            if ((c == 'L' || c == 'l') && i == n - 1) {
+                break;
+            }
+            final int digit = c - '0';
             if (digit < 0 || digit > 9 || value > (Long.MAX_VALUE - digit) / 10) {
                 return Vector.NULL_LONG;
             }
             value = value * 10 + digit;
+            groupDigits++;
+        }
+        if (groupDigits == 0) {
+            return Vector.NULL_LONG;
         }
         return negative ? -value : value;
     }
 
     private static double parseDouble(final String text) {
-        if (text == null || text.isEmpty() || text.charAt(0) <= ' ' || text.charAt(text.length() - 1) <= ' ') {
+        if (text == null) {
             return Double.NaN;
         }
+        final double value;
         try {
-            return Double.parseDouble(text);
+            // trims characters up to the space at both ends, as QuestDB's FastDoubleParser skips them
+            value = Double.parseDouble(text);
         } catch (final NumberFormatException _) {
             return Double.NaN;
         }
+        return (Double.isInfinite(value) || value == 0.0) && pastTheRange(text, value) ? Double.NaN : value;
+    }
+
+    // a numeric literal read as an infinity, or as 0 although its significand has a non-zero digit, overflowed the
+    // DOUBLE range, which QuestDB rejects; the words Infinity and NaN are not literals and keep their value
+    private static boolean pastTheRange(final String text, final double value) {
+        int i = 0;
+        while (text.charAt(i) <= ' ') {
+            i++;
+        }
+        if (text.charAt(i) == '-' || text.charAt(i) == '+') {
+            i++;
+        }
+        final char first = text.charAt(i);
+        if (first == 'I' || first == 'N') {
+            return false;
+        }
+        if (Double.isInfinite(value)) {
+            return true;
+        }
+        final boolean hex = first == '0' && i + 1 < text.length() && (text.charAt(i + 1) | 32) == 'x';
+        for (int j = hex ? i + 2 : i; j < text.length(); j++) {
+            final char c = text.charAt(j);
+            final int lower = c | 32;
+            if (lower == (hex ? 'p' : 'e')) {
+                return false;
+            }
+            if ((c >= '1' && c <= '9') || (hex && lower >= 'a' && lower <= 'f')) {
+                return true;
+            }
+        }
+        return false;
     }
 }

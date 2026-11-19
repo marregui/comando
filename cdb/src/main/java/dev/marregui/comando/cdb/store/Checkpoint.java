@@ -53,8 +53,9 @@ final class Checkpoint {
             if (symbols == null) {
                 symbolBytes[c] = -1L;
             } else {
-                // a dictionary's first sync creates its file, an entry of the table folder like a new partition's
-                entries |= symbols.size() > 0 && !Files.exists(symbols.file());
+                // a dictionary's first sync creates its file, an entry of the table folder like a new partition's; a
+                // first sync that failed leaves the file there, its entry not yet durable
+                entries |= symbols.size() > 0 && !symbols.nameDurable();
                 symbols.sync();
                 symbolBytes[c] = symbols.syncedBytes();
             }
@@ -73,13 +74,19 @@ final class Checkpoint {
             // lost would not open
             StoreFiles.forceFolder(state.dir);
         }
+        // every synced dictionary's name is durable now: forced above or with _meta, else durable already
+        for (final SymbolTable symbols : state.symbols()) {
+            if (symbols != null) {
+                symbols.folderForced();
+            }
+        }
         final List<TableFiles.Entry> partitions = new ArrayList<>(snapshot.partitions().size());
         for (final Version v : snapshot.partitions()) {
             partitions.add(new TableFiles.Entry(v.folder, v.rowCount(), v.fileColumns));
         }
         store.beforeTxnReplace.run();
         if (!StoreFiles.replaceText(state.dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(new TableFiles.Txn(
-                snapshot.txn(), partitions, columns.size(), def.ttlMicros(), symbolBytes)))) {
+                snapshot.txn(), partitions, columns.size(), def.ttlMicrosOrMonths(), symbolBytes)))) {
             state.recordInDoubt(snapshot);
             return false;
         }

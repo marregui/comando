@@ -17,6 +17,12 @@ import dev.marregui.comando.cdb.exec.agg.Values;
  */
 final class AggKeys {
 
+    /**
+     * The most groups a table holds, and the most distinct rows a set operation holds: the most rows a result holds
+     * (the server's row limit, as the IN subquery's set takes it; a test ties the two), as every group stays in memory
+     * until the last input row is read. Past it the query fails rather than run the heap out.
+     */
+    static final int MAX_GROUPS = 1_000_000;
     private static final int INITIAL_GROUPS = 16;
     private static final int INITIAL_SLOTS = 64;
     // the dense array's bound, set by the design: 16 KiB whatever the groups, else 8 slots (32 bytes) per group
@@ -142,6 +148,9 @@ final class AggKeys {
     // numbers the next group, whose key columns are set: its hash kept, its slot taken, the table grown when due
     private int added(final int slot, final int hash) {
         final int group = size;
+        if (group == MAX_GROUPS) {
+            throw new CdbException("cannot hold more groups in memory [limit=" + MAX_GROUPS + ']', -1);
+        }
         if (group == hashes.length) {
             hashes = Arrays.copyOf(hashes, Math.max(hashes.length * 2, group + 1));
         }

@@ -144,20 +144,17 @@ class PlannerTest {
                 """);
     }
 
-    /// ORDER BY the designated timestamp descending over the filtered table, the timestamp not selected: rows with
-    /// equal timestamps are ordered by their table position descending, as QuestDB's backward scan gives them; the
-    /// sort column and the position are dropped after the LIMIT.
+    /// ORDER BY the designated timestamp descending over the filtered table, the timestamp not selected: the scan
+    /// reads the table newest first, so rows with equal timestamps come last-written first, as QuestDB's backward scan
+    /// gives them, with no sort and no hidden sort column.
     @Test
-    void orderByTimestampDescendingBreaksTiesByPositionDescending() {
+    void orderByTimestampDescendingReadsTheTableNewestFirst() {
         final Ast.Select s = where(select(table("comando_usage"), item(id("provider")), item(id("window_name"))),
                 bin("=", id("provider"), lit("Codex")));
         assertPlan(query(limit(orderBy(s, desc(id("ts"))), lit(4L), null)), """
-                Project [provider:SYMBOL=$0, window_name:SYMBOL=$1]
-                  Limit 0, 4
-                    Sort [$2 desc, $3 desc]
-                      Window [$position:LONG=row_number() over(partition=[] order=[])]
-                        Project [provider:SYMBOL=$1, window_name:SYMBOL=$2, $order0:TIMESTAMP=$0]
-                          Scan comando_usage [0, 1, 2, 3] [-inf, +inf) terms [$1 = 'Codex']
+                Limit 0, 4
+                  Project [provider:SYMBOL=$1, window_name:SYMBOL=$2]
+                    Scan comando_usage [0, 1, 2, 3] [-inf, +inf) terms [$1 = 'Codex'] newest first
                 """);
     }
 
@@ -202,7 +199,7 @@ class PlannerTest {
     void latestOnPartitions() {
         assertPlan(query(latestOn(select(table("comando_usage"), star()), "ts", "provider", "window_name")), """
                 LatestOn ts=$0 partition=[1, 2]
-                  Scan comando_usage [0, 1, 2, 3] [-inf, +inf)
+                  Scan comando_usage [0, 1, 2, 3] [-inf, +inf) newest first
                 """);
     }
 

@@ -1,5 +1,7 @@
 package dev.marregui.comando.cdb.store;
 
+import java.time.Instant;
+
 /** Which partitions a table's TTL drops. */
 final class Retention {
 
@@ -18,15 +20,33 @@ final class Retention {
     }
 
     /**
-     * True when the partition starting at {@code lowerBound} lies wholly before {@code newestMicros - ttlMicros}, as
-     * QuestDB's TTL drops it; never for a TTL of 0.
+     * True when the partition starting at {@code lowerBound} ends at least the TTL before {@code referenceMicros}, as
+     * QuestDB's {@code isOlderThanTtl} drops it: a positive {@code ttlMicrosOrMonths} is a span in microseconds, a
+     * negative one a count of whole calendar months, counted as {@code datediff('M')} counts them; never for 0, nor for
+     * a partition that ends after the reference.
      */
-    static boolean expired(final long lowerBound, final PartitionBy partitionBy, final long ttlMicros,
-            final long newestMicros) {
-        if (ttlMicros <= 0L || partitionBy == PartitionBy.NONE) {
+    static boolean expired(final long lowerBound, final PartitionBy partitionBy, final long ttlMicrosOrMonths,
+            final long referenceMicros) {
+        if (ttlMicrosOrMonths == 0L || partitionBy == PartitionBy.NONE) {
             return false;
         }
-        return next(lowerBound, partitionBy) <= newestMicros - ttlMicros;
+        final long ceilingMicros = next(lowerBound, partitionBy);
+        if (ttlMicrosOrMonths > 0L) {
+            return ceilingMicros <= referenceMicros - ttlMicrosOrMonths;
+        }
+        // QuestDB's month count is symmetric and its loop stops at the first partition kept; cdb tests every
+        // partition, so one ending after the reference must not count its distance the other way
+        return ceilingMicros <= referenceMicros && monthsBetween(ceilingMicros, referenceMicros) >= -ttlMicrosOrMonths;
+    }
+
+    /**
+     * The instant a TTL counts back from when the newest row is at {@code newestMicros}: that row, or now when it lies
+     * in the future, as QuestDB 9.2.3 and later count ({@code cairo.ttl.use.wall.clock}), so one row stamped ahead
+     * does not expire the history before it.
+     */
+    static long referenceMicros(final long newestMicros) {
+        final Instant now = Instant.now();
+        return Math.min(newestMicros, now.getEpochSecond() * 1_000_000L + now.getNano() / 1_000);
     }
 
     /** The start of the partition holding {@code micros} under {@code partitionBy}, UTC; Long.MIN_VALUE for NONE. */
@@ -62,6 +82,17 @@ final class Retention {
             }
             case YEAR -> epochDay(civil(Math.floorDiv(lowerBound, DAY_MICROS)) / 100L + 1L, 1) * DAY_MICROS;
         };
+    }
+
+    // whole months from loMicros to hiMicros, loMicros <= hiMicros: the difference of their months, less one when
+    // loMicros lies further into its month than hiMicros does into its own
+    private static long monthsBetween(final long loMicros, final long hiMicros) {
+        final long loMonth = civil(Math.floorDiv(loMicros, DAY_MICROS));
+        final long hiMonth = civil(Math.floorDiv(hiMicros, DAY_MICROS));
+        final long months = (hiMonth / 100L - loMonth / 100L) * 12L + hiMonth % 100L - loMonth % 100L;
+        final long loIntoMicros = loMicros - floor(loMicros, PartitionBy.MONTH);
+        final long hiIntoMicros = hiMicros - floor(hiMicros, PartitionBy.MONTH);
+        return loIntoMicros > hiIntoMicros ? months - 1L : months;
     }
 
     /** The year and month of {@code epochDay}, as {@code year * 100 + month}. */

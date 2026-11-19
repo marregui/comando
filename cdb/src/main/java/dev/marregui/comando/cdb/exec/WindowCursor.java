@@ -9,7 +9,6 @@ import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.agg.Accumulator;
 import dev.marregui.comando.cdb.exec.agg.Aggregates;
-import dev.marregui.comando.cdb.exec.agg.Values;
 import dev.marregui.comando.cdb.exec.expr.Functions;
 import dev.marregui.comando.cdb.exec.expr.VectorFn;
 import dev.marregui.comando.cdb.plan.Bound;
@@ -295,7 +294,7 @@ final class WindowCursor implements Cursor {
 
     private static int compareKeys(final Vector[] columns, final List<Plan.SortKey> keys, final int a, final int b) {
         for (int k = 0; k < columns.length; k++) {
-            final int c = Values.compare(columns[k], a, b);
+            final int c = Rows.sortCompare(columns[k], a, columns[k], b);
             if (c != 0) {
                 return keys.get(k).descending() ? -c : c;
             }

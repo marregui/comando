@@ -1,19 +1,31 @@
 package dev.marregui.comando.cdb.serve;
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.UncheckedIOException;
+import java.io.Writer;
+
+import org.jetbrains.annotations.TestOnly;
+
 /**
- * QuestDB's HTTP JSON, written by hand into one buffer: no value becomes a {@code String} of its own. Doubles print as
+ * QuestDB's HTTP JSON, written by hand into a buffer: no value becomes a {@code String} of its own, and a result goes
+ * to its {@link Writer} a chunk at a time, so no answer is held whole. Doubles print as
  * {@link Double#toString(double)} prints them, which QuestDB's answers match, and a non-finite one as {@code null};
  * timestamps as {@code yyyy-MM-ddTHH:mm:ss.ffffffZ}, always six fraction digits; text as JSON strings, non-ASCII kept
  * as it is.
  */
 final class JsonWriter {
 
+    /** A sizing hint: the characters buffered before a result's next chunk goes out, and its longest write. */
+    static final int CHUNK_CHARS = 8_192;
     private static final char[] HEX = "0123456789abcdef".toCharArray();
-    private static final long INITIAL_CAPACITY_LIMIT = 1 << 20;
     private static final long MICROS_PER_DAY = 86_400_000_000L;
     private static final long MICROS_PER_HOUR = 3_600_000_000L;
     private static final long MICROS_PER_MINUTE = 60_000_000L;
     private static final long MICROS_PER_SECOND = 1_000_000L;
+    // 0000-01-01T00:00:00Z and 10000-01-01T00:00:00Z, in micros since the epoch
+    private static final long MICROS_OF_YEAR_0 = -62_167_219_200_000_000L;
+    private static final long MICROS_OF_YEAR_10000 = 253_402_300_800_000_000L;
 
     private JsonWriter() {
     }
@@ -22,6 +34,7 @@ final class JsonWriter {
      * The answer to {@code query}: {@code {"ddl":"OK"}} for DDL, {@code {"dml":"OK","updated":n}} for a statement that
      * changed rows, else the query's columns and rows.
      */
+    @TestOnly
     static String result(final String query, final Rows rows) {
         return result(query, rows, 0L);
     }
@@ -30,16 +43,36 @@ final class JsonWriter {
      * {@link #result(String, Rows)} for rows served after {@code skipped} rows a {@code limit=lo,hi} passed over:
      * {@code count} is the skipped rows plus the served ones, as QuestDB counts them.
      */
+    @TestOnly
     static String result(final String query, final Rows rows, final long skipped) {
+        final StringWriter json = new StringWriter();
+        try {
+            result(query, rows, skipped, json);
+        } catch (final IOException e) {
+            throw new UncheckedIOException("could not write result to a string", e);
+        }
+        return json.toString();
+    }
+
+    /**
+     * {@link #result(String, Rows, long)} written to {@code out} in writes of at most {@link #CHUNK_CHARS}
+     * characters, buffering about one chunk and the row that crosses it; {@code out} is neither flushed nor closed. A
+     * failure of {@code out} leaves part of the answer written.
+     */
+    static void result(final String query, final Rows rows, final long skipped, final Writer out)
+            throws IOException {
         if (rows.isDdl()) {
-            return "{\"ddl\":\"OK\"}";
+            out.write("{\"ddl\":\"OK\"}");
+            return;
         }
         if (rows.updateCount() >= 0) {
-            return "{\"dml\":\"OK\",\"updated\":" + rows.updateCount() + '}';
+            out.write("{\"dml\":\"OK\",\"updated\":" + rows.updateCount() + '}');
+            return;
         }
+        // a chunk's worth plus the row that crosses it, before the buffer grows
+        final StringBuilder json = new StringBuilder(2 * CHUNK_CHARS);
+        final char[] chunk = new char[CHUNK_CHARS];
         final int columns = rows.columnCount();
-        final long estimate = 128L + query.length() + (long) rows.rowCount() * columns * 8L;
-        final StringBuilder json = new StringBuilder((int) Math.min(estimate, INITIAL_CAPACITY_LIMIT));
         json.append("{\"query\":");
         string(json, query);
         json.append(",\"columns\":[");
@@ -62,8 +95,12 @@ final class JsonWriter {
                 value(json, rows, row, column);
             }
             json.append(']');
+            if (json.length() >= CHUNK_CHARS) {
+                drain(json, out, chunk);
+            }
         }
-        return json.append("],\"count\":").append(skipped + count).append('}').toString();
+        json.append("],\"count\":").append(skipped + count).append('}');
+        drain(json, out, chunk);
     }
 
     /** A refused or failed query, as QuestDB answers it with status 400; {@code position} is -1 without one. */
@@ -92,6 +129,18 @@ final class JsonWriter {
         return json.append(",\"line\":").append(line).append('}').toString();
     }
 
+    // hands the buffered characters to out through chunk, which a caller reuses, and empties the buffer; a surrogate
+    // pair split between two writes is joined by out's encoder
+    private static void drain(final StringBuilder json, final Writer out, final char[] chunk) throws IOException {
+        final int length = json.length();
+        for (int from = 0; from < length; from += chunk.length) {
+            final int to = Math.min(length, from + chunk.length);
+            json.getChars(from, to, chunk, 0);
+            out.write(chunk, 0, to - from);
+        }
+        json.setLength(0);
+    }
+
     private static void value(final StringBuilder json, final Rows rows, final int row, final int column) {
         if (rows.isNull(row, column)) {
             json.append("null");
@@ -107,14 +156,19 @@ final class JsonWriter {
                     json.append("null");
                 }
             }
-            case TIMESTAMP -> timestamp(json, rows.getLong(row, column));
+            case TIMESTAMP -> dateTime(json.append('"'), rows.getLong(row, column), 'T').append("Z\"");
             case BOOLEAN -> json.append(rows.getBoolean(row, column));
             case SYMBOL, VARCHAR -> string(json, rows.getText(row, column));
         }
     }
 
-    // the civil date of a day count is H. Hinnant's civil_from_days, exact for every day a long of micros reaches
-    private static void timestamp(final StringBuilder json, final long micros) {
+    /**
+     * Appends {@code micros} since the epoch, in UTC, as {@code yyyy-MM-dd}, {@code separator},
+     * {@code HH:mm:ss.ffffff}: the year in four digits from 0 to 9999 ({@link #fourDigitYear(long)}), else as
+     * {@link StringBuilder#append(long)} writes it, sign and all.
+     */
+    static StringBuilder dateTime(final StringBuilder sink, final long micros, final char separator) {
+        // the civil date of a day count is H. Hinnant's civil_from_days, exact for every day a long of micros reaches
         final long days = Math.floorDiv(micros, MICROS_PER_DAY);
         final long ofDay = Math.floorMod(micros, MICROS_PER_DAY);
         final long shifted = days + 719_468L;
@@ -126,36 +180,36 @@ final class JsonWriter {
         final long day = dayOfYear - (153L * monthIndex + 2L) / 5L + 1L;
         final long month = monthIndex < 10L ? monthIndex + 3L : monthIndex - 9L;
         final long year = yearOfEra + era * 400L + (month <= 2L ? 1L : 0L);
-        json.append('"');
-        if (year >= 0L && year <= 9_999L) {
-            digits(json, year, 4);
+        if (fourDigitYear(micros)) {
+            digits(sink, year, 4);
         } else {
-            json.append(year);
+            sink.append(year);
         }
-        json.append('-');
-        digits(json, month, 2);
-        json.append('-');
-        digits(json, day, 2);
-        json.append('T');
-        digits(json, ofDay / MICROS_PER_HOUR, 2);
-        json.append(':');
-        digits(json, ofDay % MICROS_PER_HOUR / MICROS_PER_MINUTE, 2);
-        json.append(':');
-        digits(json, ofDay % MICROS_PER_MINUTE / MICROS_PER_SECOND, 2);
-        json.append('.');
-        digits(json, ofDay % MICROS_PER_SECOND, 6);
-        json.append("Z\"");
+        sink.append('-');
+        digits(sink, month, 2).append('-');
+        digits(sink, day, 2).append(separator);
+        digits(sink, ofDay / MICROS_PER_HOUR, 2).append(':');
+        digits(sink, ofDay % MICROS_PER_HOUR / MICROS_PER_MINUTE, 2).append(':');
+        digits(sink, ofDay % MICROS_PER_MINUTE / MICROS_PER_SECOND, 2).append('.');
+        return digits(sink, ofDay % MICROS_PER_SECOND, 6);
     }
 
-    private static void digits(final StringBuilder json, final long value, final int width) {
+    /** Whether {@code micros} since the epoch falls in the years 0 to 9999, in UTC. */
+    static boolean fourDigitYear(final long micros) {
+        return micros >= MICROS_OF_YEAR_0 && micros < MICROS_OF_YEAR_10000;
+    }
+
+    /** Appends {@code value}, {@code 0 <= value < 10^width}, in {@code width} digits with leading zeros. */
+    static StringBuilder digits(final StringBuilder sink, final long value, final int width) {
         long scale = 1L;
         for (int i = 1; i < width; i++) {
             scale *= 10L;
         }
         for (long rest = value; scale > 0L; scale /= 10L) {
-            json.append((char) ('0' + rest / scale));
+            sink.append((char) ('0' + rest / scale));
             rest %= scale;
         }
+        return sink;
     }
 
     private static void string(final StringBuilder json, final String value) {

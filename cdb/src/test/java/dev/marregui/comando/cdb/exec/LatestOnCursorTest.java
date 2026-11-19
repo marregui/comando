@@ -43,6 +43,39 @@ class LatestOnCursorTest {
         assertThat(run(List.of(), new int[0])).isEmpty();
     }
 
+    /// Over input newest first, a key's first row is its latest, kept by copy: the read borrows its input's pages
+    /// rather than take pages of its own, from a child that only lends.
+    @Test
+    void theNewestFirstReadBorrowsItsInput() {
+        final List<List<Object>> rows = List.of(row(40L, "a", 1.0), row(30L, "b", 2.0), row(20L, "a", 3.0),
+                row(10L, "c", 4.0));
+        final Plan.LatestOn spec = new Plan.LatestOn(new Plan.Distinct(null), 0, new int[] {1}, true);
+        final AggRows.Source source = AggRows.source(FIELDS, 2, rows);
+        final Cursor lender = new Cursor() {
+            @Override
+            public List<Field> fields() {
+                return source.fields();
+            }
+
+            @Override
+            public Page next() {
+                throw new AssertionError("only lends");
+            }
+
+            @Override
+            public Page borrow() {
+                return source.next();
+            }
+
+            @Override
+            public void close() {
+                source.close();
+            }
+        };
+        assertThat(AggRows.drain(new LatestOnCursor(lender, spec))).containsExactly(row(10L, "c", 4.0),
+                row(30L, "b", 2.0), row(40L, "a", 1.0));
+    }
+
     private static List<List<Object>> run(final List<List<Object>> rows, final int[] partitionColumns) {
         final Plan.LatestOn spec = new Plan.LatestOn(new Plan.Distinct(null), 0, partitionColumns, false);
         return AggRows.drain(new LatestOnCursor(AggRows.source(FIELDS, 2, rows), spec));

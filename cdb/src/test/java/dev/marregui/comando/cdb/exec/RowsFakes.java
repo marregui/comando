@@ -330,6 +330,16 @@ final class RowsFakes {
         }
 
         @Override
+        public void dropColumn(final String name) {
+            throw new UnsupportedOperationException("no column is dropped by an update");
+        }
+
+        @Override
+        public void renameColumn(final String from, final String to) {
+            throw new UnsupportedOperationException("no column is renamed by an update");
+        }
+
+        @Override
         public void newRow(final long micros) {
             assertThat(row).as("a row is ended before the next starts").isNull();
             row = new Object[def.columns().size()];

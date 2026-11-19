@@ -18,11 +18,8 @@ class MaxTimestampRowTest {
     void aRowAtTheLargestTimestampIsKept() {
         try (Cdb cdb = Cdb.open(root)) {
             cdb.run("CREATE TABLE t (ts TIMESTAMP, n LONG) TIMESTAMP(ts) PARTITION BY NONE");
-            try (CdbAppender appender = cdb.appender()) {
-                appender.table("t").longColumn("n", 1).at(1_700_000_000_000_000L);
-                appender.table("t").longColumn("n", 2).at(Long.MAX_VALUE);
-                appender.flush();
-            }
+            // the appender refuses a designated timestamp from year 10000 on, as QuestDB's ILP does; INSERT does not
+            cdb.run("INSERT INTO t VALUES (1700000000000000, 1), (" + Long.MAX_VALUE + ", 2)");
             final CdbResult before = cdb.run("SELECT count() FROM t");
             final CdbResult rows = cdb.run("SELECT n FROM t");
             final long updated = cdb.run("UPDATE t SET n = n + 10").updateCount();

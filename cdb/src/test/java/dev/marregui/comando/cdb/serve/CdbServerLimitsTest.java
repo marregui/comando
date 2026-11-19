@@ -25,6 +25,7 @@ import dev.marregui.comando.cdb.CdbAppender;
 import dev.marregui.comando.cdb.CdbCancel;
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
+import dev.marregui.comando.cdb.exec.Executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,6 +59,12 @@ class CdbServerLimitsTest {
     @AfterEach
     void stopServer() {
         server.close();
+    }
+
+    /// An IN subquery's set is bounded as a result is: the executor's copy of the row limit is the server's.
+    @Test
+    void anInSubqueryIsBoundedAsAResultIs() {
+        assertThat(Executor.IN_SUBQUERY_MAX_ROWS).isEqualTo(Limits.MAX_ROWS);
     }
 
     /// A query still running at its deadline is cancelled through its `CdbCancel` and answered 408 in QuestDB's error

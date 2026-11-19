@@ -177,7 +177,11 @@ final class Listings {
         final PageBuilder rows = new PageBuilder(TABLES);
         long id = 0;
         for (final String name : store.tables()) {
-            try (TableReader reader = store.reader(name)) {
+            final TableReader reader = readerOrNull(store, name);
+            if (reader == null) {
+                continue;
+            }
+            try (reader) {
                 final TableDef def = reader.def();
                 long minTimestamp = Vector.NULL_LONG;
                 long maxTimestamp = Vector.NULL_LONG;
@@ -199,9 +203,8 @@ final class Listings {
                 rows.text(3, def.partitionBy().name());
                 rows.bool(4, wal);
                 rows.bool(5, !def.dedupKeys().isEmpty());
-                final long ttlUnitMicros = ttlUnitMicros(def.ttlMicros());
-                rows.integer(6, (def.ttlMicros() + ttlUnitMicros - 1) / ttlUnitMicros);
-                rows.text(7, ttlUnitName(ttlUnitMicros));
+                rows.integer(6, ttlValue(def.ttlMicrosOrMonths()));
+                rows.text(7, ttlUnit(def.ttlMicrosOrMonths()));
                 rows.bool(8, false);
                 rows.text(9, wal ? def.name() + '~' + id : def.name());
                 rows.integer(10, MAX_UNCOMMITTED_ROWS);
@@ -327,10 +330,11 @@ final class Listings {
      * {@code symbolTableSize} counts the distinct values its rows hold, NULL counted once as QuestDB counts it.
      */
     static Cursor columns(final Store store, final String table) {
-        final TableDef def = existing(store, table);
         final PageBuilder rows = new PageBuilder(COLUMNS);
-        final List<ColumnDef> columns = def.columns();
-        try (final TableReader reader = store.reader(def.name())) {
+        try (final TableReader reader = store.reader(existing(store, table).name())) {
+            // the snapshot's own definition: a column change since the lookup moves the columns' indexes
+            final TableDef def = reader.def();
+            final List<ColumnDef> columns = def.columns();
             for (int i = 0; i < columns.size(); i++) {
                 final ColumnDef column = columns.get(i);
                 rows.text(0, column.name());
@@ -376,10 +380,9 @@ final class Listings {
         if (def.timestampIndex() >= 0) {
             sb.append(" timestamp(").append(columns.get(def.timestampIndex()).name()).append(')');
             sb.append(" PARTITION BY ").append(def.partitionBy().name());
-            if (def.ttlMicros() > 0) {
-                final long unitMicros = ttlUnitMicros(def.ttlMicros());
-                final long count = (def.ttlMicros() + unitMicros - 1) / unitMicros;
-                sb.append(" TTL ").append(count).append(' ').append(ttlUnitName(unitMicros));
+            if (def.ttlMicrosOrMonths() != 0) {
+                final long count = ttlValue(def.ttlMicrosOrMonths());
+                sb.append(" TTL ").append(count).append(' ').append(ttlUnit(def.ttlMicrosOrMonths()));
                 if (count > 1) {
                     sb.append('S');
                 }
@@ -421,22 +424,42 @@ final class Listings {
         return new PagesCursor(List.of(), List.of(new Page(new Vector[0], 1)));
     }
 
-    /** The largest of week, day and hour that divides the TTL; hour for none (QuestDB reports 0 HOUR then). */
-    private static long ttlUnitMicros(final long ttlMicros) {
-        if (ttlMicros > 0 && ttlMicros % WEEK_MICROS == 0) {
-            return WEEK_MICROS;
+    // a table dropped between store.tables() and its read is left out, as QuestDB's tables() never fails on one
+    private static TableReader readerOrNull(final Store store, final String table) {
+        try {
+            return store.reader(table);
+        } catch (final CdbException e) {
+            if (store.def(table) == null) {
+                return null;
+            }
+            throw e;
         }
-        if (ttlMicros > 0 && ttlMicros % DAY_MICROS == 0) {
-            return DAY_MICROS;
-        }
-        return HOUR_MICROS;
     }
 
-    private static String ttlUnitName(final long unitMicros) {
-        if (unitMicros == WEEK_MICROS) {
+    /**
+     * The unit QuestDB's {@code tables()} names for a TTL kept as {@link TableDef#ttlMicrosOrMonths}: months as YEAR
+     * when they make whole years, else MONTH; a span as the largest of WEEK, DAY and HOUR that divides it; HOUR for
+     * none (QuestDB reports 0 HOUR then).
+     */
+    private static String ttlUnit(final long ttlMicrosOrMonths) {
+        if (ttlMicrosOrMonths < 0) {
+            return ttlMicrosOrMonths % 12 == 0 ? "YEAR" : "MONTH";
+        }
+        if (ttlMicrosOrMonths > 0 && ttlMicrosOrMonths % WEEK_MICROS == 0) {
             return "WEEK";
         }
-        return unitMicros == DAY_MICROS ? "DAY" : "HOUR";
+        return ttlMicrosOrMonths > 0 && ttlMicrosOrMonths % DAY_MICROS == 0 ? "DAY" : "HOUR";
+    }
+
+    /** The TTL counted in the unit {@link #ttlUnit} names. */
+    private static long ttlValue(final long ttlMicrosOrMonths) {
+        return switch (ttlUnit(ttlMicrosOrMonths)) {
+            case "YEAR" -> -ttlMicrosOrMonths / 12;
+            case "MONTH" -> -ttlMicrosOrMonths;
+            case "WEEK" -> ttlMicrosOrMonths / WEEK_MICROS;
+            case "DAY" -> ttlMicrosOrMonths / DAY_MICROS;
+            default -> (ttlMicrosOrMonths + HOUR_MICROS - 1) / HOUR_MICROS;
+        };
     }
 
     /** The eight columns {@code wal_tables()} and {@code SHOW WAL} share, written into the row being built. */

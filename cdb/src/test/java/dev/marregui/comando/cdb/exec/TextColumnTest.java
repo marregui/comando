@@ -138,6 +138,27 @@ class TextColumnTest {
         assertThat(Integer.signum(column.textCompare(1, whole))).isEqualTo(Integer.signum(low.compareTo(whole)));
     }
 
+    /// An unpaired high surrogate against the pair it starts compares as Strings do, by the unit after it against the
+    /// pair's low unit: U+FF71 sorts after the low surrogate U+DC00, `a` before it, and the end of the value before
+    /// both. Column against column and column against String, either way round.
+    @Test
+    void anUnpairedHighSurrogateAgainstItsPairComparesByTheNextUnit() {
+        final String pair = Character.toString(0x10000);
+        final String high = String.valueOf((char) 0xD800);
+        final List<String> unpaired = List.of(high + (char) 0xFF71, high + "a", high);
+        final TextColumn column = new TextColumn(2, false);
+        column.setText(0, pair);
+        for (final String value : unpaired) {
+            column.setText(1, value);
+            final int sign = Integer.signum(value.compareTo(pair));
+            assertThat(Integer.signum(column.textCompare(1, column, 0))).as(value).isEqualTo(sign);
+            assertThat(Integer.signum(column.textCompare(0, column, 1))).as(value).isEqualTo(-sign);
+            assertThat(Integer.signum(column.textCompare(1, pair))).as(value).isEqualTo(sign);
+            assertThat(Integer.signum(column.textCompare(0, value))).as(value).isEqualTo(-sign);
+        }
+        assertThat(unpaired.getFirst().compareTo(pair)).isPositive();
+    }
+
     /// A SYMBOL value copied into a VARCHAR column keeps its value as bytes, and a VARCHAR value copied into a SYMBOL
     /// column keeps its value with no key, one at a time and in bulk.
     @Test

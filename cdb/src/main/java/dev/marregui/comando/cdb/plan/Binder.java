@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.plan;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import dev.marregui.comando.cdb.CdbException;
@@ -12,16 +13,37 @@ import dev.marregui.comando.cdb.sql.Ast;
  * Binds an expression over a {@link Rel}: names to column indexes, types through {@link Signatures}, string literals
  * compared with a TIMESTAMP to TIMESTAMP constants and with a LONG or DOUBLE to numbers as QuestDB reads them, NULL
  * to the type of what it meets. A {@code hook} binds first, for
- * the expressions an aggregate or a window below already computed; it returns null for the rest.
+ * the expressions an aggregate or a window below already computed; it returns null for the rest. A binder given a
+ * {@code planner} plans {@code x IN (SELECT …)} into an {@code in_query} call; one given none refuses it.
  */
 final class Binder {
 
+    /**
+     * The inputs of the binders whose IN subqueries are being planned, the innermost last: a name inside a subquery
+     * that its own input lacks and one of these has makes the subquery correlated.
+     */
+    private static final ScopedValue<List<Rel>> OUTER = ScopedValue.newInstance();
+
     private final Rel rel;
     private final Function<Ast.Expr, Bound> hook;
+    private final Planner planner;
+    private final Map<String, Planner.Cte> ctes;
 
     Binder(final Rel rel, final Function<Ast.Expr, Bound> hook) {
+        this(rel, hook, null, Map.of());
+    }
+
+    /** A binder that plans IN subqueries with {@code planner}, the common table expressions {@code ctes} in scope. */
+    Binder(
+            final Rel rel,
+            final Function<Ast.Expr, Bound> hook,
+            final Planner planner,
+            final Map<String, Planner.Cte> ctes
+    ) {
         this.rel = rel;
         this.hook = hook;
+        this.planner = planner;
+        this.ctes = ctes;
     }
 
     /** {@code expr} bound; a NULL alone is VARCHAR. */
@@ -40,6 +62,10 @@ final class Binder {
         return switch (expr) {
             case Ast.Literal(final Object value, final int _) -> literal(value);
             case Ast.Ident(final List<String> parts, final int pos) -> {
+                if (rel.find(parts, pos) < 0 && outer(parts, pos)) {
+                    throw new CdbException("cannot plan a correlated IN subquery [column=" + String.join(".", parts)
+                            + ']', pos);
+                }
                 final int i = rel.resolve(parts, pos);
                 yield new Bound.Column(i, rel.cols().get(i).type());
             }
@@ -322,7 +348,7 @@ final class Binder {
     /** A timestamp IN interval texts is one range per text, OR-ed; any other IN is a membership test. */
     private Bound in(final Ast.In in) {
         if (in.query() != null) {
-            throw new CdbException("cannot plan unsupported IN subquery", in.pos());
+            return inQuery(in);
         }
         final Bound subject = bind(in.operand());
         final List<Bound> values = new ArrayList<>();
@@ -351,6 +377,61 @@ final class Binder {
         args.add(subject);
         args.addAll(values);
         return call(in.not() ? "not_in" : "in", args, in.pos());
+    }
+
+    /**
+     * {@code x [NOT] IN (SELECT c …)}: the subquery planned in the binder's scope of common table expressions, refused
+     * when it reads a column of the input around it or returns other than one column; typed as {@code x} IN a list
+     * holding one value of {@code c}'s type that is not a constant, so its types widen and are refused as that list's
+     * are.
+     */
+    private Bound inQuery(final Ast.In in) {
+        if (planner == null) {
+            throw new CdbException("cannot plan unsupported IN subquery", in.pos());
+        }
+        final Bound subject = bind(in.operand());
+        final List<Rel> scopes = new ArrayList<>(OUTER.orElse(List.of()));
+        scopes.add(rel);
+        final Rel query = ScopedValue.where(OUTER, List.copyOf(scopes)).call(() -> planner.query(in.query(), ctes));
+        if (query.width() != 1) {
+            throw new CdbException("cannot plan an IN subquery of several columns [columns=" + query.width() + ']',
+                    in.pos());
+        }
+        final CdbType valueType = query.cols().getFirst().type();
+        if (subject.type() == CdbType.TIMESTAMP && valueType.isText()) {
+            // a written-out text reads as an interval at plan time ('2026-11-15' is that day); a subquery's texts are
+            // known only when it runs, so the shape is refused rather than given another meaning
+            throw new CdbException("cannot compare a timestamp with an IN subquery of text; cast its column to"
+                    + " TIMESTAMP", in.pos());
+        }
+        if (subject.type() == CdbType.TIMESTAMP && valueType == CdbType.LONG
+                || subject.type() == CdbType.LONG && valueType == CdbType.TIMESTAMP) {
+            // a written-out LONG compares with a TIMESTAMP as microseconds; a subquery's column keeps the refusal it
+            // had, which QuestDB's IN over a cursor has not been checked against
+            throw new CdbException("cannot compare an IN subquery across TIMESTAMP and LONG; cast its column [operand="
+                    + subject.type() + ", column=" + valueType + ']', in.pos());
+        }
+        final Bound checked = call("in", List.of(subject, new Bound.Column(0, valueType)), in.pos());
+        final Bound operand = checked instanceof Bound.Call(final String _, final List<Bound> args, final CdbType _)
+                ? args.getFirst()
+                : subject;
+        final Bound rows = new Bound.Constant(new Bound.Subquery(query.plan(), in.pos()), valueType);
+        return negate(new Bound.Call("in_query", List.of(operand, rows), CdbType.BOOLEAN), in.not());
+    }
+
+    /** True when a binder around the one planning this subquery has a column {@code parts} names. */
+    private static boolean outer(final List<String> parts, final int pos) {
+        for (final Rel scope : OUTER.orElse(List.of())) {
+            try {
+                if (scope.find(parts, pos) >= 0) {
+                    return true;
+                }
+            } catch (final CdbException _) {
+                // the name is ambiguous there, so that input has it
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Bound negate(final Bound b, final boolean not) {

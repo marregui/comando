@@ -6,7 +6,6 @@ import java.util.function.IntFunction;
 
 import org.jetbrains.annotations.TestOnly;
 
-import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.plan.Plan;
 
 /**
@@ -31,8 +30,6 @@ final class SortCursor implements Cursor {
     private final boolean[] descending;
     // the rows to keep, -1 for all
     private final int limit;
-    // true for a DOUBLE key, whose NULL sorts above every number
-    private final boolean[] nullLargest;
     private RowsBuffer rows;
     // the input order of each held row once the heap replaced one, else null and a row's index is its input order
     private long[] sequence;
@@ -48,12 +45,9 @@ final class SortCursor implements Cursor {
         this.child = child;
         keyColumns = new int[keys.size()];
         descending = new boolean[keys.size()];
-        nullLargest = new boolean[keys.size()];
-        final List<Field> fields = child.fields();
         for (int k = 0; k < keyColumns.length; k++) {
             keyColumns[k] = keys.get(k).column();
             descending[k] = keys.get(k).descending();
-            nullLargest[k] = fields.get(keyColumns[k]).type() == CdbType.DOUBLE;
         }
         // a buffer holds fewer than 2^31 rows, so a larger limit keeps them all
         this.limit = limit < 0 || limit > Integer.MAX_VALUE ? -1 : (int) limit;
@@ -270,12 +264,7 @@ final class SortCursor implements Cursor {
     private int compare(final Page px, final int rx, final Page py, final int ry) {
         for (int k = 0; k < keyColumns.length; k++) {
             final int c = keyColumns[k];
-            final Vector vx = px.columns[c];
-            final Vector vy = py.columns[c];
-            int r = Rows.compare(vx, rx, vy, ry);
-            if (r != 0 && nullLargest[k] && (vx.isNull(rx) || vy.isNull(ry))) {
-                r = -r;
-            }
+            final int r = Rows.sortCompare(px.columns[c], rx, py.columns[c], ry);
             if (r != 0) {
                 return descending[k] ? -r : r;
             }

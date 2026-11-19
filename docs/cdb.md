@@ -11,7 +11,7 @@ This document says how a query and a write run, what each step costs, and how th
 | Step | Package | What it does |
 |---|---|---|
 | parse | `sql` | text to a syntax tree |
-| plan | `plan` | names and types resolved; the time range of the designated timestamp narrowed from WHERE (`Pruning`); the WHERE's top-level AND comparisons of a column with a constant become the scan's terms (`ScanTerms`); `LATEST ON` over a scan reads it newest first; `ORDER BY … LIMIT` tells the sort how many rows are read |
+| plan | `plan` | names and types resolved; the time range of the designated timestamp narrowed from WHERE (`Pruning`); the WHERE's top-level AND comparisons of a column with a constant become the scan's terms (`ScanTerms`); `LATEST ON` over a scan, and `ORDER BY` the designated timestamp `DESC` over a scan, filtered or projected, read it newest first, with no sort (`EXPLAIN` prints `newest first` on the scan); `ORDER BY … LIMIT` tells the sort how many rows are read |
 | prune | `plan.ColumnUse` | from the root down, each node asks its child for the columns it reads; a scan reads only those |
 | execute | `exec` | a tree of cursors over pages of 1,024 rows, a page from `next()` belonging to its caller; the aggregating operators `borrow()` instead, a page the scan refills on each call ([record 179](adr/0179-cdb-page-borrow.md)); a column (`Vector`) is read and written only through its accessors: a primitive array for fixed width, text as UTF-8 bytes (`TextColumn`), SYMBOL as its dictionary key ([record 167](adr/0167-cdb-heap-reduction.md)) |
 | read | `store` | a snapshot of the table: per partition a `Version`, its column files mapped through FFM |
@@ -32,8 +32,11 @@ time-order scan reversed, rows with equal timestamps included.
 Left out of the terms: NULL and NaN constants, DOUBLE zero (`-0.0` and `0.0` compare equal in the filter), OR, NOT,
 functions of a column, and a constant that does not survive UTF-8 (a lone surrogate encodes as `?`).
 
-Each column of a version has, built on first use, a zone map: min, max and a has-NULL flag per block of 4,096 rows. A
-numeric select skips a block whose range cannot hold the constant; a block holding a NULL or NaN is never skipped.
+Each 8-byte column of a version (LONG, TIMESTAMP, DOUBLE) has a zone map: min, max and a has-NULL flag per block of
+4,096 rows, each block's read the first time a scan meets it and shared by every reader thread. A version that a
+commit appends to in place takes over the old version's whole blocks and what it learned of whether a SYMBOL column
+holds a NULL, so only the changed blocks are read again. A numeric select skips a block whose range cannot hold the
+constant; a block holding a NULL or NaN is never skipped.
 
 ### 1.2 Text
 
@@ -52,7 +55,8 @@ the result (`CdbResult`, JSON, PG) and the functions that build text (`concat`, 
 supplementary chars, which the compare handles), so answers and the output order of hash-based operators are the
 same as with Strings. Two SYMBOL values of one dictionary compare by key. An unpaired surrogate (half a pair, from
 `substring`) is held as the 3 bytes of its code unit, so it reads back as itself; the column files still store it as
-`?`, as before.
+`?`, as before. An unpaired high surrogate against the pair it starts compares as `String.compareTo` does: the unit
+after it against the pair's low unit, the end of the value first.
 
 ### 1.3 Operators
 
@@ -64,6 +68,11 @@ same as with Strings. Two SYMBOL values of one dictionary compare by key. An unp
 | LATEST ON, newest first | the first row of each key is its answer: copied once; a later row of a seen key costs one hash lookup, or, for one text key with at most 16 values, a scan of those values |
 | LATEST ON, time order | the best row per key tracked by offset, copied once per page |
 | ORDER BY … LIMIT | a bounded heap that keeps the full sort's order, ties by input sequence; over a scan with n at most 10,000 (`LateReadCursor`), the scan reads only the filter's and the sort's columns plus each row's position, and the other columns are read for the n rows kept |
+
+GROUP BY, DISTINCT, SAMPLE BY, LATEST ON and the set operators hold at most 1,000,000 groups or distinct rows, the
+server's row limit, as the IN subquery's set. Past that the query fails with `cannot hold more groups in memory
+[limit=1000000]` (`cannot hold more distinct rows in memory` for a set operator), even when HAVING or LIMIT would
+leave fewer rows.
 
 **Parallel operators** ([record 165](adr/0165-cdb-parallel-queries.md)). A segment, a scan under only filters and
 projections whose expressions read the current row, is cut into frames: per partition in the scan's range, its rows at
@@ -96,7 +105,8 @@ the two below:
 
 A table is a folder: `_meta` (the definition), `_txn` (the checkpointed transaction: per partition its folder, row
 count and how many leading columns have files in it, the column count, the TTL, and per SYMBOL column the bytes of its symbol file), `_wal` (the commits since that
-checkpoint), symbol files, and partition folders `<partition>.<txn>/` with one file per column (fixed width: 8 bytes
+checkpoint), `_meta.prev` while a column change is in doubt (the definition before it and the change's transaction:
+an open that finds `_txn` short of it puts it back), symbol files, and partition folders `<partition>.<txn>/` with one file per column (fixed width: 8 bytes
 for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR as in 1.2), little-endian
 ([record 161](adr/0161-cdb-write-ahead-log.md)).
 
@@ -109,14 +119,15 @@ for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR a
 | Commit | Its commit point | Then |
 |---|---|---|
 | logged: fewer than 100,000 rows, no definition change, no truncate, no partition drop | one record appended to `_wal` and forced (or, under the timed force below, written and forced within the interval): the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
-| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate (`TRUNCATE`, `DELETE`), a partition drop (`DROP PARTITION`) | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
+| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, `DROP COLUMN`, `RENAME COLUMN`, a truncate (`TRUNCATE`, `DELETE`, `UPDATE`), a partition drop (`DROP PARTITION`) | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
 
 **The applier.** One platform thread per store, `cdb-applier-<root>` (its batches write files, which would pin a
 virtual thread). Per table it takes the queued commits in log order, at most 100,000 rows, and writes them with the
 commit's file code as one commit: one sort, per partition one dedup, one append in place or one rewrite, one mapping,
 one publish, named by the batch's last transaction. That gives the same rows as one commit at a time: dedup keeps the
-last row written and the sort is stable, so the last write of an upsert key wins as before; the TTL's newest timestamp
-only grows, so one expiry at the end drops the same partitions; a truncate or a definition change is never inside a
+last row written and the sort is stable, so the last write of an upsert key wins as before; the TTL counts back from
+the newest timestamp or now, whichever is earlier, and that only grows, so one expiry at the end drops the same
+partitions; a truncate or a definition change is never inside a
 batch. A commit puts its table on the applier's queue, once until it is served; a deadline list, kept by the applier
 thread alone, holds each table's next due time (its interval, a retry back-off, an idle checkpoint), and the thread
 parks until the earliest of them or the next commit, so an idle store costs no work. A table is due once its oldest
@@ -141,14 +152,15 @@ statements take a writer each. It cuts the log back to its header only when no r
 names; a commit logged meanwhile keeps the log until the next checkpoint (a scan skips the records at or before
 `_txn`), and a log past 64 MiB is drained and cut under the writer lease. Its order: the column
 files and folders written since the last checkpoint forced, the symbol files appended and forced, `_meta` when the
-definition changed, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
+definition changed, the table folder forced when it gained an entry since the last checkpoint (a new partition folder,
+or a symbol file created, one whose first force failed included) and `_meta` did not force it, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
 forced. Only when that folder force holds are the folders the new `_txn` no longer names deleted (those no reader
-holds) and the log cut back to its header, a new salt written in it and forced. `Store.create` forces the root after the table folder. `_txn` and
+holds) and the log cut back to its header, a new salt written in it and forced. `Store.create` forces the root after the table folder; when the table folder's force after `_txn` or `_meta` fails, the create is refused and the folder removed (best effort: a folder left with `_meta` opens as an empty table). `_txn` and
 the log's records together say what is committed: a reader maps only the published rows, and a file may run past them.
 
 | Failure | After it |
 |---|---|
-| a crash or power cut before a commit's record is forced | the previous commit. When the store opens: the folders `_txn` does not name and every `.tmp` file are deleted, each named partition's files cut to their checkpointed sizes and each symbol file to its checkpointed bytes, the log's records replayed in batches as the applier writes them (a truncate or a definition change a commit of its own), then one checkpoint |
+| a crash or power cut before a commit's record is forced | the previous commit. When the store opens: the folders `_txn` does not name and every `.tmp` file are deleted, each named partition's files cut to their checkpointed sizes and each symbol file to its checkpointed bytes, the log's records read through a 1 MiB heap window (grown only to the largest record, so a log larger than the heap replays) and replayed in batches as the applier writes them (a truncate or a definition change a commit of its own), then one checkpoint |
 | a crash or power cut after the record is forced | the commit, replayed when the store opens, answered or not |
 | a crash during a checkpoint, before `_txn` is replaced | the old `_txn` and the log reach the same state: the log is replayed when the store opens |
 | the log's last record torn (a short frame, a bad length, a bad CRC) | cut there and forced: only a commit that was never answered can be torn |
@@ -162,7 +174,8 @@ the log's records together say what is committed: a reader maps only the publish
 | a partition folder or a column file `_txn` and `_meta` name is missing | the read fails, naming the table, the partition and the file, the last column's file included (`_txn` records how many leading columns each partition has files for); a column added after a partition was written has no file there and reads NULL. A partition line written before that count (two fields) keeps the tail rule: a missing last column reads NULL |
 | a symbol write fails | the dictionary is cut back to its committed length before the next write, and a dictionary shorter than its checkpoint fails the open: a committed symbol never reads NULL |
 | a `/write` body with a malformed or refused line | none of the body's rows is written (`CdbAppender.discard`); the other bodies of its group commit are written |
-| the store closes while a writer is still open after the close's 10 s wait | the close fails naming the tables and keeps the root's `_lock`, so no other store opens the folder under that writer; a later close releases it once the writer is closed |
+| the log forcer is still in a force after its 10 s join | the close fails before closing any table (the force may use any table's log) and keeps the root's `_lock`; a later close tries again |
+| the store closes while a writer is still open after the close's 10 s wait, a table's apply lock is still held after that wait (a write or force stalled in the file system), or a table's close throws | the close fails naming the tables and the cause and keeps the root's `_lock`, so no other store opens the folder under them; every other table is still closed, and a later close finishes the ones left (one whose close threw is closed without its checkpoint, so its log replays at the next open) and releases the lock once every table is closed |
 | an `Error` while a commit writes its files | the files it wrote unmapped and deleted, its writers released, and the table refusing commits until the store reopens |
 | the previous engine opening a store after a failed or crashed append | it refuses the longer files and opens nothing; opening once with this engine cuts them first |
 | an engine from before the log opening a checkpointed store | it refuses `_txn`'s new lines and opens nothing: the format is one-way |
@@ -171,7 +184,9 @@ the log's records together say what is committed: a reader maps only the publish
 version 2, a u64 salt drawn anew at the log's creation and at every cut), then per record its length and a CRC32C of
 the salt's 8 bytes then the body, so a frame of an earlier generation that a power cut left past the header fails its
 CRC and is cut. A format 1 log (an 8-byte header, unsalted CRCs) still reads and becomes format 2 at its first cut;
-the format is one-way: a cdb before record 166 cannot open a format 2 log.
+the format is one-way: a cdb before record 166 cannot open a format 2 log. A log no longer than its header holds no
+record: one shorter than its header, or with only part of a format 2 header landed and the rest zeros (a power cut
+during its creation), is created again on open; any other unknown magic or version is refused.
 
 **The timed force** (record 166). A store opened with `StoreOptions(logForceMillis > 0)` (`CdbServe --log-force-ms N`)
 answers a logged commit once its record is written, without its force; its thread `cdb-log-force-<root>` forces each
@@ -206,7 +221,8 @@ taken from the current epoch of `store.BlockArenas`: one shared arena serves the
 their segments cut from 1 MiB chunks and closes when its last block left, so 10 arena closes a second, each a handshake
 of every thread, plus one per 16 MiB of commits ([record 170](adr/0170-cdb-row-block-epochs.md)): the block that queued
 them is freed once the applier published them, a replay's blocks once the replay ends, the blocks never applied when
-their table closes. Each table log keeps one file channel for its forces, closed with the store.
+their table closes. A freed block's segments are reused within their epoch (at most 64 per size class, not zeroed: a block reads only rows below its size, each of which its writer set whole,
+and fills its text lengths with -1 itself), which takes most native allocations off the commit path. Each table log keeps one file channel for its forces, closed with the store.
 
 ## 3. Concurrency
 

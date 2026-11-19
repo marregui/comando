@@ -536,6 +536,18 @@ final class TableState {
         }
     }
 
+    /**
+     * Replaces the dictionaries with {@code next}, one per column of a definition whose columns were dropped or
+     * renamed, the caller holding {@link #applyLock}; returns those it replaced. A version already open keeps the
+     * dictionaries it was opened with.
+     */
+    List<SymbolTable> replaceSymbols(final List<SymbolTable> next) {
+        final List<SymbolTable> before = new ArrayList<>(symbols);
+        symbols.clear();
+        symbols.addAll(next);
+        return before;
+    }
+
     /** Publishes the first snapshot, read from the folder at open. */
     void init(final Snapshot snapshot) {
         lock.lock();
@@ -800,11 +812,61 @@ final class TableState {
      * are freed now, the others when their reader closes; a writer waiting for the lease is refused.
      */
     void close(final boolean leased) {
-        final Snapshot last;
-        final List<Queued> unapplied;
         // the apply lock first (the lock order): an apply in progress, the applier's or a direct commit's, still
         // copies queued blocks, so they are freed only once it ends
         applyLock.lock();
+        closeHeld(leased);
+    }
+
+    /**
+     * As {@link #close(boolean)}, waiting up to {@code waitMillis} for an apply in progress to let the apply lock go;
+     * false, the table left open, when it did not.
+     */
+    boolean close(final boolean leased, final long waitMillis) {
+        if (!tryApplyLock(waitMillis)) {
+            return false;
+        }
+        closeHeld(leased);
+        return true;
+    }
+
+    /** True once {@link #close} let go of the committed snapshot. */
+    boolean closed() {
+        lock.lock();
+        try {
+            return current == null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Takes {@link #applyLock}, waiting up to {@code waitMillis}; false when an apply held it past the wait. An
+     * interrupt does not end the wait, and is kept for the caller: a close the interrupt cut short would leave the
+     * table open, answering the commits of a writer it was closing under.
+     */
+    boolean tryApplyLock(final long waitMillis) {
+        boolean interrupted = Thread.interrupted();
+        try {
+            final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMillis);
+            while (true) {
+                try {
+                    return applyLock.tryLock(Math.max(0L, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
+                } catch (final InterruptedException _) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    // called holding applyLock, which it lets go before it releases the last snapshot
+    private void closeHeld(final boolean leased) {
+        final Snapshot last;
+        final List<Queued> unapplied;
         try {
             lock.lock();
             try {

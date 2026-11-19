@@ -13,8 +13,23 @@ public interface TableWriter extends AutoCloseable {
     /** Adds {@code column} at the end of the table; existing rows read it as NULL. Returns its index. */
     int addColumn(ColumnDef column);
 
-    /** Sets the table's TTL to {@code ttlMicros}, 0 for none; the commit stores it and drops what it expires. */
-    void setTtl(long ttlMicros);
+    /**
+     * Sets the table's TTL to {@code ttlMicrosOrMonths}, as {@link TableDef#ttlMicrosOrMonths} holds it; the commit
+     * stores it and drops what it expires.
+     */
+    void setTtl(long ttlMicrosOrMonths);
+
+    /**
+     * Drops the column {@code name} as the table names it (any case), not the designated timestamp: from the next
+     * commit, one direct transaction, the table has no such column; a reader holding an older snapshot reads it on.
+     */
+    void dropColumn(String name);
+
+    /**
+     * Renames the column {@code from} (any case) to {@code to}, a name no other column has: from the next commit, one
+     * direct transaction; a reader holding an older snapshot reads the old name.
+     */
+    void renameColumn(String from, String to);
 
     /** Starts a row whose designated timestamp is {@code micros}; every column not set reads as NULL. */
     void newRow(long micros);

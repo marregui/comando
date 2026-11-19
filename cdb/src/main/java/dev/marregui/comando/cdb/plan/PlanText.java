@@ -14,7 +14,8 @@ import dev.marregui.comando.cdb.store.TableDef;
  * A plan as an indented tree, one node per line, children two spaces in: what {@code EXPLAIN} shows and the tests
  * assert. Columns print as {@code $i}, TIMESTAMP constants as ISO instants, scan bounds {@code -inf} and {@code +inf}
  * when open; a scan's and a join's fields are left out, a projection's and an aggregate's shown beside each
- * expression.
+ * expression. An IN subquery prints as {@code subquery} in its expression, its plan under a {@code Subquery} line
+ * below the node that holds it, before the node's child.
  */
 public final class PlanText {
 
@@ -79,11 +80,14 @@ public final class PlanText {
         sink.repeat(' ', depth * 2);
         switch (plan) {
             case Plan.Scan(final String table, final int[] columns, final long from, final long to,
-                           final List<Plan.ScanTerm> terms, final boolean _, final List<Field> _) -> {
+                           final List<Plan.ScanTerm> terms, final boolean newestFirst, final List<Field> _) -> {
                 sink.append("Scan ").append(table).append(' ').append(Arrays.toString(columns));
                 sink.append(' ');
                 range(sink, from, to);
                 terms(sink, terms);
+                if (newestFirst) {
+                    sink.append(" newest first");
+                }
                 end(sink, plan, notes);
             }
             case Plan.Source(final String function, final List<String> args, final List<Field> _) -> {
@@ -93,7 +97,9 @@ public final class PlanText {
             case Plan.Filter(final Plan child, final Bound predicate) -> {
                 sink.append("Filter ");
                 put(sink, predicate);
-                child(sink, plan, child, depth, notes);
+                end(sink, plan, notes);
+                subqueries(sink, predicate, depth + 1, notes);
+                put(sink, child, depth + 1, notes);
             }
             case Plan.Project(final Plan child, final List<Bound> exprs, final List<Field> fields) -> {
                 sink.append("Project ");
@@ -167,7 +173,8 @@ public final class PlanText {
                 }
                 sink.append(") timestamp=").append(def.timestampIndex()).append(" partition=")
                         .append(def.partitionBy()).append(" dedup=").append(def.dedupKeys())
-                        .append(" ttlMicros=").append(def.ttlMicros());
+                        .append(def.ttlMicrosOrMonths() < 0 ? " ttlMonths=" : " ttlMicros=")
+                        .append(Math.abs(def.ttlMicrosOrMonths()));
                 end(sink, plan, notes);
             }
             case Plan.Update(final String table, final int[] columns, final List<Bound> values, final Bound where) -> {
@@ -181,6 +188,12 @@ public final class PlanText {
                     put(sink, where);
                 }
                 end(sink, plan, notes);
+                for (final Bound v : values) {
+                    subqueries(sink, v, depth + 1, notes);
+                }
+                if (where != null) {
+                    subqueries(sink, where, depth + 1, notes);
+                }
             }
             case Plan.Insert(final String table, final int[] columns, final List<Plan> sources) -> {
                 sink.append("Insert ").append(table).append(' ').append(Arrays.toString(columns));
@@ -198,8 +211,9 @@ public final class PlanText {
                 sink.append(')');
                 end(sink, plan, notes);
             }
-            case Plan.SetTtl(final String table, final long ttlMicros) -> {
-                sink.append("SetTtl ").append(table).append(" ttlMicros=").append(ttlMicros);
+            case Plan.SetTtl(final String table, final long ttlMicrosOrMonths) -> {
+                sink.append("SetTtl ").append(table).append(ttlMicrosOrMonths < 0 ? " ttlMonths=" : " ttlMicros=")
+                        .append(Math.abs(ttlMicrosOrMonths));
                 end(sink, plan, notes);
             }
             case Plan.DropTable(final String table, final boolean ifExists) -> {
@@ -208,6 +222,18 @@ public final class PlanText {
             }
             case Plan.Truncate(final String table) -> {
                 sink.append("Truncate ").append(table);
+                end(sink, plan, notes);
+            }
+            case Plan.DropColumn(final String table, final String column) -> {
+                sink.append("DropColumn ").append(table).append(' ').append(column);
+                end(sink, plan, notes);
+            }
+            case Plan.RenameColumn(final String table, final String from, final String to) -> {
+                sink.append("RenameColumn ").append(table).append(' ').append(from).append(" to ").append(to);
+                end(sink, plan, notes);
+            }
+            case Plan.Backup(final String folder) -> {
+                sink.append("Backup to ").append(folder);
                 end(sink, plan, notes);
             }
             case Plan.DropPartitions(final String table, final long[] fromMicros, final long[] toMicros) -> {
@@ -225,6 +251,9 @@ public final class PlanText {
                     put(sink, where);
                 }
                 end(sink, plan, notes);
+                if (where != null) {
+                    subqueries(sink, where, depth + 1, notes);
+                }
             }
             case Plan.Explain(final Plan inner, final List<Field> _) -> {
                 sink.append("Explain");
@@ -241,6 +270,19 @@ public final class PlanText {
             sink.append(" -- ").append(note);
         }
         sink.append('\n');
+    }
+
+    /** Each IN subquery of {@code b}: a {@code Subquery} line at {@code depth}, its plan one level in. */
+    private static void subqueries(
+            final StringBuilder sink,
+            final Bound b,
+            final int depth,
+            final Function<Plan, String> notes
+    ) {
+        for (final Bound.Subquery s : Bound.Subquery.of(b)) {
+            sink.repeat(' ', depth * 2).append("Subquery\n");
+            put(sink, s.plan(), depth + 1, notes);
+        }
     }
 
     /** {@code [from, to)} as instants, the open bounds {@code -inf} and {@code +inf}. */
@@ -318,6 +360,8 @@ public final class PlanText {
     private static void constant(final StringBuilder sink, final Object value, final CdbType type) {
         if (value == null) {
             sink.append("NULL:").append(type);
+        } else if (value instanceof Bound.Subquery) {
+            sink.append("subquery");
         } else if (type == CdbType.TIMESTAMP && value instanceof final Long micros) {
             sink.append(instant(micros));
         } else if (value instanceof final String s) {

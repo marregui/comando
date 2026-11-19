@@ -15,18 +15,24 @@ import dev.marregui.comando.cdb.CdbType;
 /**
  * The text files of a table folder. {@code _meta}: one {@code key=value} per line, {@code format} first (the version
  * of every file layout in the folder), then {@code name}, {@code partitionBy}, {@code timestamp} (the designated
- * column's index, -1 for none), {@code ttl} (microseconds), {@code dedup} (key names, comma-separated) and one
- * {@code col=<name>:<TYPE>} per column; from format 2 a SYMBOL column adds {@code :capacity=<n>}, then
- * {@code :nocache} when its dictionary is not cached and {@code :index=<block capacity>} when it is indexed. Format 1
- * is still read, its SYMBOL columns taking QuestDB's defaults. {@code _txn}: the transaction number, then one
+ * column's index, -1 for none), {@code ttl} (microseconds, or calendar months when negative), {@code dedup} (key
+ * names, comma-separated) and one {@code col=<name>:<TYPE>} per column; from format 2 a SYMBOL column adds
+ * {@code :capacity=<n>}, then {@code :nocache} when its dictionary is not cached and
+ * {@code :index=<block capacity>} when it is indexed. Format 1 is still read, its SYMBOL columns taking QuestDB's
+ * defaults. {@code _txn}: the transaction number, then one
  * {@code <folder>\t<rows>\t<columns>} line per partition in time order, {@code <columns>} the leading columns with
- * files in it (a line without it, written before, is read with -1: unknown). Unknown keys, options and other
- * formats are refused, not skipped.
+ * files in it (a line without it, written before, is read with -1: unknown). {@code _meta.prev}, written by a commit
+ * that drops or renames a column before it replaces {@code _meta}: {@code txn=<n>}, the commit's transaction, then
+ * {@code _meta} as it was; a {@code _txn} older than {@code n} pairs with that definition. Unknown keys, options and
+ * other formats are refused, not skipped.
  */
 final class TableFiles {
 
     static final String META = "_meta";
     static final String TXN = "_txn";
+    // the definition before a column drop or rename, kept until the change's _txn holds
+    static final String META_PREV = "_meta.prev";
+    private static final String PREV_TXN = "txn=";
     // a dropped table's marker: the drop's commit point, so an open deletes the folder holding it
     static final String DROPPED = "_dropped";
     // the lines a checkpoint adds to _txn, after the partitions
@@ -48,13 +54,17 @@ final class TableFiles {
     record Entry(String folder, long rows, int columns) {
     }
 
+    /** The content of {@code _meta.prev}: the transaction of the column change and the {@code _meta} text before it. */
+    record Prev(long txn, String meta) {
+    }
+
     /**
      * The committed transaction recorded in {@code _txn}, as of the last checkpoint: its partitions, the number of
      * columns and the TTL of the definition it was taken at, and per column the byte length of its symbol file then
      * (-1 for a column that is not a SYMBOL). A file written before the log names no definition: {@code columns} is -1
      * and {@code symbolBytes} empty, and the table's {@code _meta} and symbol files are taken as they are.
      */
-    record Txn(long number, List<Entry> partitions, int columns, long ttlMicros, long[] symbolBytes) {
+    record Txn(long number, List<Entry> partitions, int columns, long ttlMicrosOrMonths, long[] symbolBytes) {
 
         Txn {
             partitions = List.copyOf(partitions);
@@ -83,7 +93,7 @@ final class TableFiles {
         sb.append("name=").append(def.name()).append('\n');
         sb.append("partitionBy=").append(def.partitionBy().name()).append('\n');
         sb.append("timestamp=").append(def.timestampIndex()).append('\n');
-        sb.append("ttl=").append(def.ttlMicros()).append('\n');
+        sb.append("ttl=").append(def.ttlMicrosOrMonths()).append('\n');
         sb.append("dedup=").append(String.join(",", def.dedupKeys())).append('\n');
         for (final ColumnDef column : def.columns()) {
             sb.append("col=").append(column.name()).append(':').append(column.type().name());
@@ -105,7 +115,7 @@ final class TableFiles {
         String name = null;
         PartitionBy partitionBy = null;
         int timestamp = -1;
-        long ttl = 0L;
+        long ttlMicrosOrMonths = 0L;
         List<String> dedup = List.of();
         final List<ColumnDef> columns = new ArrayList<>();
         int format = 0;
@@ -131,7 +141,7 @@ final class TableFiles {
                     case "name" -> name = value;
                     case "partitionBy" -> partitionBy = PartitionBy.valueOf(value);
                     case "timestamp" -> timestamp = Integer.parseInt(value);
-                    case "ttl" -> ttl = Long.parseLong(value);
+                    case "ttl" -> ttlMicrosOrMonths = Long.parseLong(value);
                     case "dedup" -> dedup = value.isEmpty() ? List.of() : List.of(value.split(","));
                     case "col" -> columns.add(column(value, format, source, line));
                     default -> throw corrupt(source, line);
@@ -144,7 +154,7 @@ final class TableFiles {
             throw new CdbException("cannot read table definition [file=" + source
                     + ", missing=format|name|partitionBy]", -1);
         }
-        return new TableDef(name, columns, timestamp, partitionBy, dedup, ttl);
+        return new TableDef(name, columns, timestamp, partitionBy, dedup, ttlMicrosOrMonths);
     }
 
     static String encodeTxn(final long number, final List<Entry> partitions) {
@@ -168,7 +178,7 @@ final class TableFiles {
     static String encodeTxn(final Txn txn) {
         final StringBuilder sb = new StringBuilder(encodeTxn(txn.number(), txn.partitions()));
         sb.append(COLUMNS).append(txn.columns()).append('\n');
-        sb.append(TTL).append(txn.ttlMicros()).append('\n');
+        sb.append(TTL).append(txn.ttlMicrosOrMonths()).append('\n');
         final long[] symbolBytes = txn.symbolBytes();
         for (int c = 0; c < symbolBytes.length; c++) {
             if (symbolBytes[c] >= 0L) {
@@ -184,7 +194,7 @@ final class TableFiles {
             final long number = Long.parseLong(lines[0]);
             final List<Entry> partitions = new ArrayList<>(lines.length);
             int columns = -1;
-            long ttl = 0L;
+            long ttlMicrosOrMonths = 0L;
             final List<long[]> symbols = new ArrayList<>();
             for (int i = 1; i < lines.length; i++) {
                 if (lines[i].isEmpty()) {
@@ -198,7 +208,7 @@ final class TableFiles {
                     continue;
                 }
                 if (lines[i].startsWith(TTL)) {
-                    ttl = Long.parseLong(lines[i].substring(TTL.length()));
+                    ttlMicrosOrMonths = Long.parseLong(lines[i].substring(TTL.length()));
                     continue;
                 }
                 if (lines[i].startsWith(SYM)) {
@@ -245,9 +255,29 @@ final class TableFiles {
                 }
                 symbolBytes[(int) symbol[0]] = symbol[1];
             }
-            return new Txn(number, partitions, columns, ttl, symbolBytes);
+            return new Txn(number, partitions, columns, ttlMicrosOrMonths, symbolBytes);
         } catch (final NumberFormatException e) {
             throw new CdbException("cannot read transaction [file=" + source + ']', e);
+        }
+    }
+
+    static String encodePrev(final Prev prev) {
+        return PREV_TXN + prev.txn() + '\n' + prev.meta();
+    }
+
+    static Prev decodePrev(final String text, final String source) {
+        final int nl = text.indexOf('\n');
+        if (!text.startsWith(PREV_TXN) || nl < 0) {
+            throw corrupt(source, nl < 0 ? text : text.substring(0, nl));
+        }
+        try {
+            final long txn = Long.parseLong(text.substring(PREV_TXN.length(), nl));
+            if (txn <= 0L) {
+                throw corrupt(source, text.substring(0, nl));
+            }
+            return new Prev(txn, text.substring(nl + 1));
+        } catch (final NumberFormatException e) {
+            throw new CdbException("cannot read previous table definition [file=" + source + ']', e);
         }
     }
 

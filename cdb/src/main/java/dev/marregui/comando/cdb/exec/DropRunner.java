@@ -51,14 +51,15 @@ final class DropRunner {
         return 0;
     }
 
+    // read fresh, as a lagged reader misses the commits the held writer answered and the applier has not published
     private static long rowCount(final Store store, final String table) {
-        try (TableReader reader = store.reader(table)) {
+        try (TableReader reader = store.freshReader(table)) {
             return reader.rowCount();
         }
     }
 
     private static long partitionCount(final Store store, final String table) {
-        try (TableReader reader = store.reader(table)) {
+        try (TableReader reader = store.freshReader(table)) {
             return reader.partitions().size();
         }
     }

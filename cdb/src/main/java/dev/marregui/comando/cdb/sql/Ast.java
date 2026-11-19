@@ -11,7 +11,7 @@ public sealed interface Ast {
 
     /** A statement {@link Parser#parse} returns. */
     sealed interface Statement extends Ast permits Query, CreateTable, Update, Show, Insert,
-            AlterTable, DropTable, Truncate, DropPartition, Delete, Explain {
+            AlterTable, DropTable, Truncate, DropPartition, Delete, Explain, DropColumn, RenameColumn, Backup {
     }
 
     /** A query: a select, a set operation, or a {@code WITH}. */
@@ -166,6 +166,18 @@ public sealed interface Ast {
 
     /** {@code EXPLAIN <statement>}. */
     record Explain(Statement statement, int pos) implements Statement {
+    }
+
+    /** {@code ALTER TABLE t DROP COLUMN [IF EXISTS] c}. */
+    record DropColumn(String table, String column, boolean ifExists, int pos) implements Statement {
+    }
+
+    /** {@code ALTER TABLE t RENAME COLUMN c TO d}. */
+    record RenameColumn(String table, String from, String to, int pos) implements Statement {
+    }
+
+    /** {@code BACKUP TO 'folder'}: every table, into a folder that does not exist yet. */
+    record Backup(String folder, int pos) implements Statement {
     }
 
     /**

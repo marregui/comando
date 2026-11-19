@@ -95,7 +95,8 @@ final class LongPercentileAccumulator implements Accumulator {
         }
         final double percent = Math.min(Math.max(Math.nextAfter(fraction * 100.0, Double.NEGATIVE_INFINITY), 0.0),
                 100.0);
-        final int k = (int) Math.max(1, Math.ceil(percent / 100.0 * n));
+        // multiplied before dividing, as HdrHistogram's getValueAtPercentile does: 1.7 / 100 * 3000 rounds past 51
+        final int k = (int) Math.max(1, Math.ceil((percent * n) / 100.0));
         final long kth = Select.kthLong(list, n, k - 1);
         Aggregates.writeLong(fraction == 0.0 ? lowestEquivalent(kth, precision) : highestEquivalent(kth, precision),
                 out, row);

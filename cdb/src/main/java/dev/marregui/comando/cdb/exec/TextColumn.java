@@ -370,7 +370,16 @@ final class TextColumn {
         while (p > 0 && (a[aStart + p] & 0xC0) == 0x80) {
             p--;
         }
-        return utf16Compare(decode(a, aStart + p), decode(b, bStart + p));
+        final int cx = decode(a, aStart + p);
+        final int cy = decode(b, bStart + p);
+        final int order = utf16Compare(cx, cy);
+        if (order != 0) {
+            return order;
+        }
+        // an unpaired high surrogate, three bytes, against the pair it starts
+        return Character.isBmpCodePoint(cx)
+            ? -pairAgainstUnpaired(cy, firstUnit(a, aStart + p + 3, aStart + aLength))
+            : pairAgainstUnpaired(cx, firstUnit(b, bStart + p + 3, bStart + bLength));
     }
 
     /** The sign of {@link String#compareTo} of a UTF-8 byte range and {@code s}, with an ASCII fast path. */
@@ -393,7 +402,13 @@ final class TextColumn {
             final int x = decode(a, p);
             final int y = s.codePointAt(q);
             if (x != y) {
-                return utf16Compare(x, y);
+                final int order = utf16Compare(x, y);
+                if (order != 0) {
+                    return order;
+                }
+                return Character.isBmpCodePoint(x)
+                    ? -pairAgainstUnpaired(y, firstUnit(a, p + 3, end))
+                    : pairAgainstUnpaired(x, q + 1 < chars ? s.charAt(q + 1) : -1);
             }
             p += width(lead);
             q += Character.charCount(y);
@@ -470,8 +485,9 @@ final class TextColumn {
     }
 
     /**
-     * Compares code points {@code x != y} in UTF-16 order: a supplementary char's first unit is a high surrogate,
-     * which sorts before U+E000 to U+FFFF.
+     * Compares code points {@code x != y} in UTF-16 order by their first units: a supplementary char's is a high
+     * surrogate, which sorts before U+E000 to U+FFFF. 0 when they are equal, an unpaired high surrogate against a pair
+     * it starts, which the unit after the unpaired one decides ({@link #pairAgainstUnpaired}).
      */
     private static int utf16Compare(final int x, final int y) {
         final boolean xSupplementary = !Character.isBmpCodePoint(x);
@@ -480,11 +496,25 @@ final class TextColumn {
         }
         final int ux = xSupplementary ? Character.highSurrogate(x) : x;
         final int uy = xSupplementary ? y : Character.highSurrogate(y);
-        if (ux != uy) {
-            return ux < uy ? -1 : 1;
+        return Integer.compare(ux, uy);
+    }
+
+    /**
+     * The sign of supplementary code point {@code pair} against an unpaired high surrogate equal to its first unit and
+     * followed by unit {@code next}, -1 at the end of its value: the pair's low unit against {@code next}. Never equal,
+     * as a low surrogate written right after a high one is a pair.
+     */
+    private static int pairAgainstUnpaired(final int pair, final int next) {
+        return next < Character.lowSurrogate(pair) ? 1 : -1;
+    }
+
+    /** The first UTF-16 unit of the code point at byte {@code p}, -1 at {@code end}. */
+    private static int firstUnit(final byte[] a, final int p, final int end) {
+        if (p >= end) {
+            return -1;
         }
-        // an unpaired high surrogate against a pair it starts: the pair goes on
-        return xSupplementary ? 1 : -1;
+        final int cp = decode(a, p);
+        return Character.isBmpCodePoint(cp) ? cp : Character.highSurrogate(cp);
     }
 
     /** True when chars {@code q} and {@code q + 1} of {@code value} are a surrogate pair. */

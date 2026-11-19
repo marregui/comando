@@ -26,9 +26,9 @@ final class SelectPlanner {
 
     private final Planner planner;
     private final Ast.Select select;
-    private final Map<String, Ast.QueryBody> ctes;
+    private final Map<String, Planner.Cte> ctes;
 
-    SelectPlanner(final Planner planner, final Ast.Select select, final Map<String, Ast.QueryBody> ctes) {
+    SelectPlanner(final Planner planner, final Ast.Select select, final Map<String, Planner.Cte> ctes) {
         this.planner = planner;
         this.select = select;
         this.ctes = ctes;
@@ -71,10 +71,10 @@ final class SelectPlanner {
 
     /**
      * The predicate as a filter; on a table scan, its bounds on the designated timestamp also bound the scan, and its
-     * comparisons of a column with a constant become the scan's terms.
+     * comparisons of a column with a constant become the scan's terms. Its IN subqueries are planned with it.
      */
     private Rel where(final Rel in) {
-        final Bound predicate = new Binder(in, null).bindValue(select.where());
+        final Bound predicate = new Binder(in, null, planner, ctes).bindValue(select.where());
         if (predicate.type() != CdbType.BOOLEAN) {
             throw new CdbException("cannot filter by non-boolean condition [type=" + predicate.type() + ']',
                     select.pos());
@@ -133,7 +133,8 @@ final class SelectPlanner {
             case Plan.Source _, Plan.Project _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _,
                  Plan.Sort _, Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _,
                  Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ -> null;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _, Plan.Explain _ -> null;
         };
     }
 
@@ -383,18 +384,23 @@ final class SelectPlanner {
         for (int i = 0; i < exprs.size(); i++) {
             fields.add(new Field(i < names.size() ? names.get(i) : hidden.get(i - names.size()), exprs.get(i).type()));
         }
-        Plan plan = projection(stage.rel().plan(), exprs, fields);
+        final boolean backward = scansBackward(stage.rel(), exprs, sort);
+        // the table read newest first gives the order the sort and the position below give, with no row held
+        final Plan newest = backward && planner.scanShortcuts() ? backward(stage.rel().plan()) : null;
+        Plan plan = newest != null
+                ? projection(newest, exprs.subList(0, names.size()), fields.subList(0, names.size()))
+                : projection(stage.rel().plan(), exprs, fields);
         if (select.distinct()) {
             plan = new Plan.Distinct(plan);
         }
-        if (scansBackward(stage.rel(), exprs, sort)) {
+        if (backward && newest == null) {
             final List<Field> numbered = new ArrayList<>(fields);
             numbered.add(new Field("$position", CdbType.LONG));
             plan = new Plan.Window(plan, List.of(new Bound.WindowCall("row_number", List.of(), List.of(), List.of(),
                     CdbType.LONG)), List.copyOf(numbered));
             sort.add(new Plan.SortKey(fields.size(), true));
         }
-        if (!sort.isEmpty()) {
+        if (newest == null && !sort.isEmpty()) {
             plan = new Plan.Sort(plan, List.copyOf(sort), -1);
         }
         plan = Planner.limit(plan, select.limit());
@@ -425,24 +431,37 @@ final class SelectPlanner {
     /**
      * True when QuestDB answers this ORDER BY with a backward scan of the table: its one key is the designated
      * timestamp, descending, over rows still in table order. Rows with equal timestamps then come last-written first,
-     * where a stable sort keeps them first-written first; the caller breaks those ties by table position, descending.
+     * where a stable sort keeps them first-written first: the caller reads the table newest first, or, with scan
+     * shortcuts off, breaks those ties by table position, descending.
      */
     private boolean scansBackward(final Rel in, final List<Bound> exprs, final List<Plan.SortKey> sort) {
         return !select.distinct() && sort.size() == 1 && sort.getFirst().descending() && in.timestamp() >= 0
                 && exprs.get(sort.getFirst().column()) instanceof Bound.Column(final int index, final CdbType _)
-                && index == in.timestamp() && inTableOrder(in.plan());
+                && index == in.timestamp() && backward(in.plan()) != null;
     }
 
-    /** True when the rows of {@code plan} come in the order of the table it scans: a scan, filtered or projected. */
-    private static boolean inTableOrder(final Plan plan) {
+    /**
+     * {@code plan} reading its table newest first, the exact reverse of table order, when its rows come in table
+     * order: a scan, filtered or projected; null for any other plan.
+     */
+    private static Plan backward(final Plan plan) {
         return switch (plan) {
-            case Plan.Scan _ -> true;
-            case Plan.Filter(final Plan child, final Bound _) -> inTableOrder(child);
-            case Plan.Project(final Plan child, final List<Bound> _, final List<Field> _) -> inTableOrder(child);
+            case Plan.Scan(final String table, final int[] columns, final long from, final long to,
+                           final List<Plan.ScanTerm> terms, final boolean newestFirst, final List<Field> fields) ->
+                    newestFirst ? null : new Plan.Scan(table, columns, from, to, terms, true, fields);
+            case Plan.Filter(final Plan child, final Bound predicate) -> {
+                final Plan reversed = backward(child);
+                yield reversed == null ? null : new Plan.Filter(reversed, predicate);
+            }
+            case Plan.Project(final Plan child, final List<Bound> exprs, final List<Field> fields) -> {
+                final Plan reversed = backward(child);
+                yield reversed == null ? null : new Plan.Project(reversed, exprs, fields);
+            }
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
                  Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _, Plan.Insert _,
                  Plan.AddColumns _, Plan.SetTtl _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ -> false;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _, Plan.Explain _ -> null;
         };
     }
 

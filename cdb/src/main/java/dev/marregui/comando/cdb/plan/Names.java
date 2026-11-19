@@ -78,12 +78,21 @@ final class Names {
             case Ast.Binary(final String op, final Ast.Expr left, final Ast.Expr right, final int _) ->
                     binary(sink, op, left, right, canonical);
             case Ast.Call(final String name, final List<Ast.Expr> args, final boolean distinct,
-                          final boolean star, final Ast.Over _, final int _) -> {
-                sink.append(distinct && "count".equals(name) ? "count_distinct" : name).append('(');
+                          final boolean star, final Ast.Over over, final int _) -> {
+                final boolean counted = distinct && "count".equals(name);
+                sink.append(counted ? "count_distinct" : name).append('(');
+                // the name QuestDB derives drops DISTINCT and OVER; the canonical text keeps them, so that calls
+                // which differ only there stay apart
+                if (canonical && distinct && !counted) {
+                    sink.append("distinct ");
+                }
                 if (!star) {
                     list(sink, args, canonical);
                 }
                 sink.append(')');
+                if (canonical && over != null) {
+                    over(sink, over);
+                }
             }
             case Ast.Cast(final Ast.Expr operand, final String type, final int _) -> {
                 operand(sink, operand, Integer.MAX_VALUE, canonical);
@@ -227,6 +236,21 @@ final class Names {
             }
             put(sink, exprs.get(i), canonical);
         }
+    }
+
+    // canonical only: a window's partition and order, each order item with its direction
+    private static void over(final StringBuilder sink, final Ast.Over over) {
+        sink.append(" over(partition by ");
+        list(sink, over.partitionBy(), true);
+        sink.append(" order by ");
+        for (int i = 0; i < over.orderBy().size(); i++) {
+            if (i > 0) {
+                sink.append(", ");
+            }
+            put(sink, over.orderBy().get(i).expr(), true);
+            sink.append(over.orderBy().get(i).descending() ? " desc" : " asc");
+        }
+        sink.append(')');
     }
 
     private static void negated(final StringBuilder sink, final boolean not) {

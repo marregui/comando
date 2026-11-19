@@ -16,7 +16,8 @@ import dev.marregui.comando.cdb.plan.Plan;
  * SAMPLE BY: the bucket's start, the keys, then the aggregates, in ascending bucket order, the keys of a bucket in
  * first-seen order. With a FILL, every bucket from the first to the last with data holds every key, in first-seen
  * order over the whole input, an empty one filled per aggregate: {@code NULL}, {@code PREV} (the key's last value),
- * {@code LINEAR} (between the key's neighbours, by bucket ordinal; truncated for a whole-number type) or a number.
+ * {@code LINEAR} (QuestDB's: along the key's neighbours by bucket start time, beyond its first or last along the
+ * nearest two; in double, then truncated for a whole-number type) or a number.
  * Rows with a NULL timestamp are dropped. Reads the whole input on the first {@link #next}.
  */
 final class SampleByCursor implements Cursor {
@@ -51,6 +52,8 @@ final class SampleByCursor implements Cursor {
     private boolean closed;
     private int emitted;
     private int keys;
+    // per LINEAR aggregate, the one row a neighbour's value is read into; null for any other fill
+    private Vector[] linearValue;
     private int[] nextCell;
     private int[] order;
     private int[] prevCell;
@@ -308,6 +311,12 @@ final class SampleByCursor implements Cursor {
                 }
             }
         }
+        linearValue = new Vector[fill.length];
+        for (int a = 0; a < fill.length; a++) {
+            if (fill[a] == Fill.LINEAR) {
+                linearValue[a] = Vector.of(fields.get(tableTypes.size() + a).type(), 1);
+            }
+        }
     }
 
     private void writeCell(final int cell, final Page out, final int row) {
@@ -353,27 +362,75 @@ final class SampleByCursor implements Cursor {
     }
 
     private void writeLinear(final int cell, final int aggregate, final Vector column, final int row) {
+        if (column.type.isText() || column.type == CdbType.BOOLEAN) {
+            column.setNull(row);
+            return;
+        }
+        final double value = linear(cell, aggregate, linearValue[aggregate]);
+        if (Double.isNaN(value)) {
+            column.setNull(row);
+        } else if (column.type == CdbType.DOUBLE) {
+            column.setDouble(row, value);
+        } else {
+            column.setLong(row, (long) value);
+        }
+    }
+
+    /**
+     * The value FILL(LINEAR) gives empty cell {@code cell}, NaN for NULL, as QuestDB fills it: between the key's
+     * neighbours with data; before its first, along its first two; past its last, along its last and the bucket before
+     * that, filled first when empty, so truncated there for a whole-number type, as QuestDB stores it. One cell with
+     * data, or a neighbour whose value is NULL, gives NULL.
+     */
+    private double linear(final int cell, final int aggregate, final Vector y) {
         final int before = prevCell[cell];
         final int after = nextCell[cell];
-        if (before < 0 || after < 0 || column.type.isText() || column.type == CdbType.BOOLEAN) {
-            column.setNull(row);
-            return;
+        if (before >= 0 && after >= 0) {
+            return line(cell, before, valueOf(before, aggregate, y), after, valueOf(after, aggregate, y));
         }
-        final Vector y = Vector.of(column.type, 2);
-        table.writeAggregate(cells[before], aggregate, y, 0);
-        table.writeAggregate(cells[after], aggregate, y, 1);
-        if (y.isNull(0) || y.isNull(1)) {
-            column.setNull(row);
-            return;
+        if (after >= 0) {
+            final int second = nextCell[after];
+            return second < 0
+                    ? Double.NaN
+                    : line(cell, after, valueOf(after, aggregate, y), second, valueOf(second, aggregate, y));
         }
-        final long x0 = before / keys;
-        final long dx = after / keys - x0;
-        final long x = cell / keys - x0;
-        if (column.type == CdbType.DOUBLE) {
-            column.setDouble(row, y.getDouble(0) + (y.getDouble(1) - y.getDouble(0)) * x / dx);
+        if (before < keys) {
+            return Double.NaN;
+        }
+        final int earlier = before - keys;
+        double y0;
+        if (cells[earlier] >= 0) {
+            y0 = valueOf(earlier, aggregate, y);
+        } else if (prevCell[earlier] < 0) {
+            y0 = Double.NaN;
         } else {
-            column.setLong(row, y.getLong(0) + (y.getLong(1) - y.getLong(0)) * x / dx);
+            y0 = linear(earlier, aggregate, y);
+            if (y.type != CdbType.DOUBLE && !Double.isNaN(y0)) {
+                y0 = (long) y0;
+            }
         }
+        return line(cell, earlier, y0, before, valueOf(before, aggregate, y));
+    }
+
+    // QuestDB's interpolation, in double over the buckets' start times: a whole-number gap neither wraps nor rounds
+    // toward its first value, and the cast of a value past a long's range saturates
+    private double line(final int cell, final int c0, final double y0, final int c1, final double y1) {
+        if (Double.isNaN(y0) || Double.isNaN(y1)) {
+            return Double.NaN;
+        }
+        final long x = bucketStarts[cell / keys];
+        final long x0 = bucketStarts[c0 / keys];
+        final long x1 = bucketStarts[c1 / keys];
+        return (y0 * (x1 - x) + y1 * (x - x0)) / (x1 - x0);
+    }
+
+    // the aggregate of cell c, which has data, as a double; NaN for NULL
+    private double valueOf(final int c, final int aggregate, final Vector y) {
+        table.writeAggregate(cells[c], aggregate, y, 0);
+        if (y.isNull(0)) {
+            return Double.NaN;
+        }
+        return y.type == CdbType.DOUBLE ? y.getDouble(0) : y.getLong(0);
     }
 
     /**

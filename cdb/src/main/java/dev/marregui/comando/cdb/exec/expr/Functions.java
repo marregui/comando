@@ -116,6 +116,7 @@ public final class Functions {
             case ">=" -> Comparison.compare(Comparison.GE, arity(call, 2, 2), t, nowMicros);
             case "in" -> Comparison.in(arity(call, 2, Integer.MAX_VALUE), false, t, nowMicros);
             case "not_in" -> Comparison.in(arity(call, 2, Integer.MAX_VALUE), true, t, nowMicros);
+            case "in_query" -> inQuery(arity(call, 2, 2), nowMicros);
             case "between" -> Comparison.between(arity(call, 3, 3), t, nowMicros);
             case "and" -> Logic.connective(true, arity(call, 2, 2), t, nowMicros);
             case "or" -> Logic.connective(false, arity(call, 2, 2), t, nowMicros);
@@ -148,6 +149,14 @@ public final class Functions {
             case "timestamp_sequence" -> GeneratorFns.timestampSequence(arity(call, 2, 2), t, nowMicros);
             default -> throw new CdbException("unknown function [function=" + f + "]", -1);
         };
+    }
+
+    /** {@code in_query} over the set its subquery gave; its executor runs the subquery before compiling the call. */
+    private static VectorFn inQuery(final List<Bound> args, final long nowMicros) {
+        if (args.getLast() instanceof Bound.Constant(final InSet set, final CdbType _)) {
+            return set.membership(args.getFirst(), nowMicros);
+        }
+        throw new CdbException("cannot evaluate an IN subquery that has not run", -1);
     }
 
     private static List<Bound> arity(final Bound.Call call, final int min, final int max) {

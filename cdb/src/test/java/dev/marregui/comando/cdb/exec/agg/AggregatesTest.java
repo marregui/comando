@@ -34,6 +34,17 @@ class AggregatesTest {
         assertThat(one(agg("percentile_disc", CdbType.LONG, X, dbl(1.0)), in).getLong(0)).isEqualTo(2500L);
     }
 
+    /// QuestDB: `SELECT approx_percentile(x, 0.017) FROM long_sequence(3000)`: rank 51, whose bucket tops at 51, where
+    /// dividing before multiplying would rank 52.
+    @Test
+    void anApproximateRankMultipliesBeforeDividing() {
+        final Vector in = Vector.of(CdbType.LONG, 3000);
+        for (int i = 0; i < 3000; i++) {
+            in.setLong(i, i + 1);
+        }
+        assertThat(one(agg("approx_percentile", CdbType.DOUBLE, X, dbl(0.017)), in).getDouble(0)).isEqualTo(51.0);
+    }
+
     /// QuestDB: `SELECT percentile_disc(x / 3.0, 0.5) FROM long_sequence(2500)`: a DOUBLE percentile is exact.
     @Test
     void aDoublePercentileMatchesQuestDb() {

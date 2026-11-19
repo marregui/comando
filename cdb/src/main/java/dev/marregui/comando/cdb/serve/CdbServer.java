@@ -4,13 +4,18 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.lang.System.Logger.Level;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jetbrains.annotations.TestOnly;
 
@@ -58,7 +64,11 @@ import dev.marregui.comando.cdb.store.Store;
  * {@link Limits#QUERY_DEADLINE_MILLIS}, then is cancelled and answered 408; a query result over {@link Limits#MAX_ROWS}
  * rows, however many {@code limit} asked for, is answered 400 rather than cut short; the {@code /write} bodies being
  * read and written at once hold at most {@link Limits#BODY_BUDGET_BYTES}, and a body that cannot get its share within
- * {@link Limits#BODY_WAIT_MILLIS} is answered 503. A log line names a request by its path, never by its query.
+ * {@link Limits#BODY_WAIT_MILLIS} is answered 503. A log line names a request by its path, never by its query. A
+ * result is answered chunked, written as it is formatted, and a failure once it is under way drops the connection
+ * rather than end the answer as if whole; a body of up to {@link Limits#POOLED_BODY_BYTES} is read into buffers of
+ * {@link Limits#BODY_CHUNK_BYTES} the server keeps for the next one, while enough of {@link #POOLED_BODIES} are free,
+ * and holds the buffers' size of the budget.
  */
 public final class CdbServer implements AutoCloseable {
 
@@ -66,6 +76,15 @@ public final class CdbServer implements AutoCloseable {
     static final int MAX_REQUESTS = 64;
     /** The kit's {@code qdb} sends at most 1,000 lines a request, a few hundred bytes each; not measured beyond it. */
     static final int MAX_BODY_BYTES = 16 << 20;
+    /**
+     * Body buffers the server makes and keeps, 16 MiB in all, a quarter of {@link Limits#BODY_BUDGET_BYTES}: one in use
+     * holds its size of the budget, an idle one none. Not measured: the kit's clients send one write at a time per
+     * process, so a few cover them; a write while too few are free reads its body into an array of its own, as a
+     * longer body does.
+     */
+    static final int POOLED_BODIES = 64;
+    /** The buffers a body of unknown length takes: those of the longest pooled body. */
+    private static final int UNKNOWN_LENGTH_CHUNKS = Limits.POOLED_BODY_BYTES / Limits.BODY_CHUNK_BYTES;
     private static final String BEARER = "Bearer ";
     private static final String JSON = "application/json; charset=utf-8";
     private static final System.Logger LOG = System.getLogger(CdbServer.class.getName());
@@ -73,15 +92,18 @@ public final class CdbServer implements AutoCloseable {
     private static final int STOP_DELAY_SECONDS = 1;
 
     private final Admission admission;
+    private final BodyBuffers bodies;
     private final CommitQueue commits;
     private final int port;
     private final HttpServer server;
     private boolean closed;
 
-    private CdbServer(final HttpServer server, final Admission admission, final CommitQueue commits) {
+    private CdbServer(final HttpServer server, final Admission admission, final CommitQueue commits,
+            final BodyBuffers bodies) {
         this.server = server;
         this.admission = admission;
         this.commits = commits;
+        this.bodies = bodies;
         this.port = server.getAddress().getPort();
     }
 
@@ -136,6 +158,24 @@ public final class CdbServer implements AutoCloseable {
         return commits.queued(table);
     }
 
+    /** The body buffers kept for the next {@code /write}, at most {@link #POOLED_BODIES}. */
+    @TestOnly
+    int pooledBodies() {
+        return bodies.pooled();
+    }
+
+    /** The body buffers made so far, at most {@link #POOLED_BODIES}. */
+    @TestOnly
+    int madeBodies() {
+        return bodies.made();
+    }
+
+    /** The length of the longest body buffer kept for the next {@code /write}, 0 when none is. */
+    @TestOnly
+    int longestPooledBody() {
+        return bodies.longest();
+    }
+
     static CdbServer start(final Backend backend, final InetSocketAddress address) {
         return start(backend, address, null, Bounds.DEFAULT);
     }
@@ -145,6 +185,7 @@ public final class CdbServer implements AutoCloseable {
             final Bounds bounds) {
         final Admission admission = new Admission();
         final CommitQueue commits = new CommitQueue(backend::appender);
+        final BodyBuffers bodies = new BodyBuffers();
         // fair, so a large body waiting for its share is not passed over by smaller ones until its wait runs out
         final Semaphore budget = new Semaphore(Math.toIntExact(bounds.bodyBudgetBytes()), true);
         HttpServer server = null;
@@ -156,10 +197,10 @@ public final class CdbServer implements AutoCloseable {
             server.createContext("/exec",
                     exchange -> handle(exchange, gate, role -> exec(backend, admission, bounds, role, exchange)));
             server.createContext("/write",
-                    exchange -> handle(exchange, gate, role -> write(commits, budget, bounds, role, exchange)));
+                    exchange -> handle(exchange, gate, role -> write(commits, bodies, budget, bounds, role, exchange)));
             server.start();
             LOG.log(Level.INFO, "serving cdb [address=" + server.getAddress() + ']');
-            return new CdbServer(server, admission, commits);
+            return new CdbServer(server, admission, commits, bodies);
         } catch (final IOException e) {
             abandon(server, admission);
             throw new CdbException("could not serve cdb [address=" + address + ']', e);
@@ -185,21 +226,43 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    // every exchange is answered and closed: a handler that throws would leave the client without a status. The log
-    // names the path alone: the query string holds the statement, which may carry what its client keeps to itself
+    // every exchange is answered and closed: a handler that throws would leave the client without a status. An answer
+    // whose status went out before its handler failed is left open instead, as closing it would end its chunked body
+    // as if whole: the IOException thrown, an Error wrapped too, makes the JDK's server drop the connection (it
+    // rethrows an Error and leaves the connection open), so its client sees the answer fail. The log names the path
+    // alone: the query string holds the statement, which may carry what its client keeps to itself
     private static void handle(final HttpExchange exchange, final Gate gate, final Handler handler)
             throws IOException {
+        boolean answered = false;
         try {
             final Role role = admit(exchange, gate);
             if (role != Role.NONE) {
                 handler.run(role);
             }
+            answered = true;
         } catch (final RuntimeException e) {
             LOG.log(Level.WARNING, "could not answer request [path=" + exchange.getRequestURI().getPath() + ']', e);
+            if (exchange.getResponseCode() >= 0) {
+                throw cutShort(exchange, e);
+            }
             send(exchange, 500, JsonWriter.error("", "could not answer request [error=" + e + ']', -1));
+            answered = true;
+        } catch (final Error e) {
+            if (exchange.getResponseCode() >= 0) {
+                LOG.log(Level.WARNING, "could not answer request [path=" + exchange.getRequestURI().getPath() + ']',
+                        e);
+                throw cutShort(exchange, e);
+            }
+            throw e;
         } finally {
-            exchange.close();
+            if (answered || exchange.getResponseCode() < 0) {
+                exchange.close();
+            }
         }
+    }
+
+    private static IOException cutShort(final HttpExchange exchange, final Throwable cause) {
+        return new IOException("cut answer short [path=" + exchange.getRequestURI().getPath() + ']', cause);
     }
 
     // the client's role, or NONE once the request is answered: a browser's request (it alone sends Origin) and one for
@@ -290,7 +353,13 @@ public final class CdbServer implements AutoCloseable {
                     + ']', -1));
             return;
         }
-        send(exchange, 200, JsonWriter.result(query, rows, offset(limit)));
+        // chunked, as the answer's length is known only once it is written: no copy of it is held whole. Closed only
+        // once written whole, as the close ends the body; a failure leaves it open for handle to drop
+        exchange.getResponseHeaders().set("Content-Type", JSON);
+        exchange.sendResponseHeaders(200, 0);
+        final Writer out = new OutputStreamWriter(exchange.getResponseBody(), StandardCharsets.UTF_8);
+        JsonWriter.result(query, rows, offset(limit), out);
+        out.close();
     }
 
     // a query its deadline cancelled is answered 408; one cancelled sooner, as the server stops, 503
@@ -355,8 +424,8 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    private static void write(final CommitQueue commits, final Semaphore budget, final Bounds bounds,
-            final Role role, final HttpExchange exchange) throws IOException {
+    private static void write(final CommitQueue commits, final BodyBuffers bodies, final Semaphore budget,
+            final Bounds bounds, final Role role, final HttpExchange exchange) throws IOException {
         if (refused(exchange, "/write", "POST")) {
             return;
         }
@@ -377,32 +446,53 @@ public final class CdbServer implements AutoCloseable {
             return;
         }
         final boolean durable = "true".equals(durableValue);
-        final int share = share(exchange, bounds);
-        if (!acquire(budget, share, bounds)) {
-            send(exchange, 503, JsonWriter.writeError("refuse body while the body budget is in use [budgetBytes="
-                    + bounds.bodyBudgetBytes() + ", waitedMillis=" + bounds.bodyWaitMillis() + ']', 0));
-            return;
-        }
+        final long declared = declaredLength(exchange);
+        // the buffers the body is read into, as many as its declared length needs, or those of the longest pooled body
+        // when it has none; null for a body declared longer, under a budget smaller than its buffers, or when too few
+        // are free; a body read into buffers holds their size of the budget, so the buffers in use count against it
+        final int chunks = declared < 0L ? UNKNOWN_LENGTH_CHUNKS
+                : (int) Math.max(1L, (declared + Limits.BODY_CHUNK_BYTES - 1L) / Limits.BODY_CHUNK_BYTES);
+        final long chunkBytes = (long) chunks * Limits.BODY_CHUNK_BYTES;
+        final byte[][] pooled = declared <= Limits.POOLED_BODY_BYTES && chunkBytes <= bounds.bodyBudgetBytes()
+                ? bodies.take(chunks) : null;
         try {
-            write(commits, exchange, precision, durable);
+            final int share = pooled == null ? share(declared, bounds)
+                    : (int) Math.max(share(declared, bounds), chunkBytes);
+            if (!acquire(budget, share, bounds)) {
+                send(exchange, 503, JsonWriter.writeError("refuse body while the body budget is in use [budgetBytes="
+                        + bounds.bodyBudgetBytes() + ", waitedMillis=" + bounds.bodyWaitMillis() + ']', 0));
+                return;
+            }
+            try {
+                write(commits, exchange, pooled, precision, durable);
+            } finally {
+                budget.release(share);
+            }
         } finally {
-            budget.release(share);
+            if (pooled != null) {
+                bodies.give(pooled);
+            }
         }
     }
 
     // the bytes a body holds of the budget while it is read and written: its declared length, at most what the server
     // reads before it refuses the body and at most the whole budget; a body of unknown length takes the most
-    private static int share(final HttpExchange exchange, final Bounds bounds) {
-        long declared = MAX_BODY_BYTES + 1L;
+    private static int share(final long declared, final Bounds bounds) {
+        final long held = declared < 0L ? MAX_BODY_BYTES + 1L : Math.min(declared, MAX_BODY_BYTES + 1L);
+        return (int) Math.min(held, bounds.bodyBudgetBytes());
+    }
+
+    // the body's declared length, -1 when unknown
+    private static long declaredLength(final HttpExchange exchange) {
         final String length = exchange.getRequestHeaders().getFirst("Content-Length");
         if (length != null) {
             try {
-                declared = Math.min(declared, Math.max(0L, Long.parseLong(length.strip())));
+                return Math.max(0L, Long.parseLong(length.strip()));
             } catch (final NumberFormatException _) {
-                // the JDK's server refuses a malformed length before a handler runs; the most is the safe share
+                // the JDK's server refuses a malformed length before a handler runs; unknown is the safe answer
             }
         }
-        return (int) Math.min(declared, bounds.bodyBudgetBytes());
+        return -1L;
     }
 
     private static boolean acquire(final Semaphore budget, final int share, final Bounds bounds) {
@@ -415,23 +505,51 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    private static void write(final CommitQueue commits, final HttpExchange exchange, final Precision precision,
-            final boolean durable) throws IOException {
-        final byte[] bytes = exchange.getRequestBody().readNBytes(MAX_BODY_BYTES + 1);
-        if (bytes.length > MAX_BODY_BYTES) {
+    // the body is parsed in place, across the pooled buffers when it fits them and in an array of its own when longer
+    // or pooled is null; the buffers hold the bytes of earlier bodies past this one's length, which the parser never
+    // reads
+    private static void write(final CommitQueue commits, final HttpExchange exchange, final byte[][] pooled,
+            final Precision precision, final boolean durable) throws IOException {
+        final InputStream input = exchange.getRequestBody();
+        final byte[][] bytes;
+        final int length;
+        if (pooled == null) {
+            bytes = new byte[][] {input.readNBytes(MAX_BODY_BYTES + 1)};
+            length = bytes[0].length;
+        } else {
+            int read = 0;
+            for (int c = 0; c < pooled.length && read == c * Limits.BODY_CHUNK_BYTES; c++) {
+                read += input.readNBytes(pooled[c], 0, Limits.BODY_CHUNK_BYTES);
+            }
+            // a body of unknown length may go on past full buffers: the rest is read as a longer body is
+            final byte[] rest = read < pooled.length * Limits.BODY_CHUNK_BYTES ? null
+                    : input.readNBytes(MAX_BODY_BYTES + 1 - read);
+            if (rest == null || rest.length == 0) {
+                bytes = pooled;
+                length = read;
+            } else {
+                final byte[] whole = new byte[read + rest.length];
+                for (int c = 0; c < pooled.length; c++) {
+                    System.arraycopy(pooled[c], 0, whole, c * Limits.BODY_CHUNK_BYTES, Limits.BODY_CHUNK_BYTES);
+                }
+                System.arraycopy(rest, 0, whole, read, rest.length);
+                bytes = new byte[][] {whole};
+                length = whole.length;
+            }
+        }
+        if (length > MAX_BODY_BYTES) {
             send(exchange, 413, JsonWriter.writeError("refuse body over the limit [limit=" + MAX_BODY_BYTES + ']', 0));
             return;
         }
-        final String body = new String(bytes, StandardCharsets.UTF_8);
         final long nowMicros = nowMicros();
         final int rows;
         try {
             final CommitQueue.Body batches = new CommitQueue.Body();
-            rows = IlpParser.parse(body, batches, precision, nowMicros);
+            rows = IlpParser.parse(bytes, length, batches, precision, nowMicros);
             final CommitQueue.Refusal refusal = commits.write(batches, durable);
             if (refusal != null) {
                 // the parser names the refused row's line, as when the store refused it during the parse
-                IlpParser.parse(body, new RefusingAppender(refusal), precision, nowMicros);
+                IlpParser.parse(bytes, length, new RefusingAppender(refusal), precision, nowMicros);
                 send(exchange, 400, JsonWriter.writeError(refusal.cause().getMessage(), 0));
                 return;
             }
@@ -446,7 +564,7 @@ public final class CdbServer implements AutoCloseable {
             send(exchange, e.isInDoubt() ? 500 : 503, JsonWriter.writeError(e.getMessage(), 0));
             return;
         }
-        LOG.log(Level.DEBUG, () -> "wrote rows [rows=" + rows + ", bytes=" + bytes.length + ", durable=" + durable
+        LOG.log(Level.DEBUG, () -> "wrote rows [rows=" + rows + ", bytes=" + length + ", durable=" + durable
                 + ']');
         exchange.sendResponseHeaders(204, -1);
     }
@@ -701,6 +819,72 @@ public final class CdbServer implements AutoCloseable {
                 threads.shutdownNow();
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+
+    /**
+     * The {@code /write} body buffers, each {@link Limits#BODY_CHUNK_BYTES}, at most {@link #POOLED_BODIES} made: a
+     * request takes the buffers its body needs, free ones or new ones while fewer were made, else none, and gives them
+     * back once answered. A buffer is not cleared, as a body is read only to its own length. A queue rather than a
+     * thread-local cache: each request runs on a virtual thread of its own.
+     */
+    private static final class BodyBuffers {
+
+        // never full, as it holds no more buffers than were made
+        private final ArrayBlockingQueue<byte[]> free = new ArrayBlockingQueue<>(POOLED_BODIES);
+        private final AtomicInteger made = new AtomicInteger();
+
+        // all count buffers, or null when fewer are free and the bound is reached: the ones taken go back
+        byte[][] take(final int count) {
+            final byte[][] buffers = new byte[count][];
+            for (int i = 0; i < count; i++) {
+                buffers[i] = take();
+                if (buffers[i] == null) {
+                    give(Arrays.copyOf(buffers, i));
+                    return null;
+                }
+            }
+            return buffers;
+        }
+
+        // null when every buffer is in use and the bound is reached
+        private byte[] take() {
+            final byte[] buffer = free.poll();
+            if (buffer != null) {
+                return buffer;
+            }
+            if (made.getAndUpdate(n -> n < POOLED_BODIES ? n + 1 : n) >= POOLED_BODIES) {
+                return null;
+            }
+            try {
+                return new byte[Limits.BODY_CHUNK_BYTES];
+            } catch (final OutOfMemoryError e) {
+                // the buffer was never made: its slot is free for a later request
+                made.decrementAndGet();
+                throw e;
+            }
+        }
+
+        void give(final byte[][] buffers) {
+            for (final byte[] buffer : buffers) {
+                free.offer(buffer);
+            }
+        }
+
+        int pooled() {
+            return free.size();
+        }
+
+        int made() {
+            return made.get();
+        }
+
+        int longest() {
+            int longest = 0;
+            for (final byte[] buffer : free) {
+                longest = Math.max(longest, buffer.length);
+            }
+            return longest;
         }
     }
 

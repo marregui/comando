@@ -63,7 +63,7 @@ class SampleByCursorTest {
 
     /// QuestDB: `SELECT ts, count(), sum(x) FROM (SELECT timestamp_sequence(1700000000000000, 10000000000) ts, x
     /// FROM long_sequence(6)) timestamp(ts) WHERE x != 3 AND x != 4 SAMPLE BY 1h FILL(PREV)`, then `FILL(LINEAR)`
-    /// (truncated by bucket ordinal), then `FILL(NULL)` (count NULL too).
+    /// (truncated toward zero), then `FILL(NULL)` (count NULL too).
     @Test
     void fillsMatchQuestDb() {
         final List<List<Object>> rows = gaps();
@@ -78,6 +78,52 @@ class SampleByCursorTest {
                 H22 + 4 * HOUR, H22 + 5 * HOUR, H22 + 6 * HOUR, H22 + 7 * HOUR, H22 + 8 * HOUR);
         assertThat(column(nulls, 1)).containsExactly(1L, null, null, 1L, null, 1L, null, null, 1L);
         assertThat(column(nulls, 2)).containsExactly(1L, null, null, 2L, null, 5L, null, null, 6L);
+    }
+
+    /// A falling whole-number gap is computed in double and truncated, as QuestDB's `interpolateLong` does: 6 to 5 over
+    /// three hours fills 5.67 and 5.33 as 5, not 6.
+    @Test
+    void aFallingLinearFillTruncatesTheLine() {
+        final List<List<Object>> rows = List.of(row(H22, 6L, 1L), row(H22 + 3 * HOUR, 5L, 1L));
+        assertThat(column(run(rows, 1, "h", List.of(), List.of("LINEAR")), 2)).containsExactly(6L, 5L, 5L, 5L);
+    }
+
+    /// A whole-number gap whose span times its rise passes a long's range fills the line, not a wrapped value: 0 to
+    /// 2^62 over four hours fills 2^60, 2^61 and 3 * 2^60, each exact in double.
+    @Test
+    void aWideLinearFillDoesNotWrap() {
+        final List<List<Object>> rows = List.of(row(H22, 0L, 1L), row(H22 + 4 * HOUR, 1L << 62, 1L));
+        assertThat(column(run(rows, 1, "h", List.of(), List.of("LINEAR")), 2))
+                .containsExactly(0L, 1L << 60, 1L << 61, 3L << 60, 1L << 62);
+    }
+
+    /// Keyed, QuestDB fills a key's buckets before its first data along its first two, and those past its last along
+    /// its last two: key 2 has 10 and 20 in hours 1 and 2, so 0 in hour 0 and 30 in hour 3.
+    @Test
+    void aKeyedLinearFillExtendsTheKeysEdges() {
+        final List<List<Object>> rows = List.of(row(H22, 1L, 1L), row(H22 + HOUR, 2L, 1L), row(H22 + HOUR, 10L, 2L),
+                row(H22 + 2 * HOUR, 3L, 1L), row(H22 + 2 * HOUR, 20L, 2L), row(H22 + 3 * HOUR, 4L, 1L));
+        assertThat(column(run(rows, 1, "h", List.of(K), List.of("LINEAR")), 2))
+                .containsExactly(1L, 0L, 2L, 10L, 3L, 20L, 4L, 30L);
+    }
+
+    /// Past a key's last data, the bucket before it may be filled itself: QuestDB extends along that filled value,
+    /// truncated as it stores it. Key 2 has 0 in hour 0 and 10 in hour 3, so 3 and 6 between (6.67 truncated), then
+    /// 14 and 18 along 6 and 10.
+    @Test
+    void aKeyedLinearFillPastTheLastDataUsesTheFilledBucketBefore() {
+        final List<List<Object>> rows = List.of(row(H22, 1L, 1L), row(H22, 0L, 2L), row(H22 + 3 * HOUR, 10L, 2L),
+                row(H22 + 5 * HOUR, 1L, 1L));
+        assertThat(column(run(rows, 1, "h", List.of(K), List.of("LINEAR")), 2))
+                .containsExactly(1L, 0L, 1L, 3L, 1L, 6L, 1L, 10L, 1L, 14L, 1L, 18L);
+    }
+
+    /// A key with data in one bucket only has no line: QuestDB fills its other buckets NULL.
+    @Test
+    void aKeyedLinearFillOfOnePointIsNull() {
+        final List<List<Object>> rows = List.of(row(H22, 1L, 1L), row(H22 + HOUR, 7L, 2L), row(H22 + 2 * HOUR, 3L, 1L));
+        assertThat(column(run(rows, 1, "h", List.of(K), List.of("LINEAR")), 2))
+                .containsExactly(1L, null, 2L, 7L, 3L, null);
     }
 
     /// QuestDB: `SELECT ts, k, sum(x) FROM (SELECT timestamp_sequence(1700000000000000, 10000000000) ts, x % 2 k, x
