@@ -13,7 +13,7 @@ import dev.marregui.comando.cdb.exec.Field;
  * columns it passes on that its parent reads, plus the ones its own expressions, keys and orderings read. A column no
  * ancestor reads is not read from the store; its values in the scan's pages are left unset. Nodes whose output
  * depends on every input column (DISTINCT, set operations, joins, windows, sources) ask for all of them, and so does
- * the root.
+ * the root. The scans of a filter's IN subqueries are in the answer too, read as the subquery's own query reads them.
  */
 public final class ColumnUse {
 
@@ -44,6 +44,7 @@ public final class ColumnUse {
                 final boolean[] need = used.clone();
                 mark(predicate, need);
                 visit(child, need, reads);
+                subqueries(predicate, reads);
             }
             case Plan.Project(final Plan child, final List<Bound> exprs, final List<Field> _) -> {
                 // every expression is evaluated, read or not, so every one of them reads its columns
@@ -95,9 +96,16 @@ public final class ColumnUse {
                     visit(child, all(child.fields().size()), reads);
             case Plan.Source _, Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _,
                  Plan.SetTtl _, Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
-                 Plan.Explain _ -> {
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _, Plan.Explain _ -> {
                 // no scan below, or a change whose runner reads what it needs itself
             }
+        }
+    }
+
+    /** Visits the plan of each IN subquery {@code b} holds, from its root, which reads its one column. */
+    private static void subqueries(final Bound b, final Map<Plan.Scan, boolean[]> reads) {
+        for (final Bound.Subquery s : Bound.Subquery.of(b)) {
+            visit(s.plan(), all(s.plan().fields().size()), reads);
         }
     }
 

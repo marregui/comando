@@ -536,6 +536,18 @@ final class TableState {
         }
     }
 
+    /**
+     * Replaces the dictionaries with {@code next}, one per column of a definition whose columns were dropped or
+     * renamed, the caller holding {@link #applyLock}; returns those it replaced. A version already open keeps the
+     * dictionaries it was opened with.
+     */
+    List<SymbolTable> replaceSymbols(final List<SymbolTable> next) {
+        final List<SymbolTable> before = new ArrayList<>(symbols);
+        symbols.clear();
+        symbols.addAll(next);
+        return before;
+    }
+
     /** Publishes the first snapshot, read from the folder at open. */
     void init(final Snapshot snapshot) {
         lock.lock();

@@ -3,7 +3,8 @@
 cdb speaks a subset of QuestDB's SQL: designated timestamps, `SAMPLE BY`, `LATEST ON`, `DEDUP UPSERT KEYS`, TTL, the
 line protocol on `/write`, QuestDB's `/exec` JSON and PostgreSQL wire. How a statement is planned and run is in
 [cdb](cdb.md) §1; why the destructive statements, `EXPLAIN` and the secrets exist is
-[record 182](adr/0182-cdb-destructive-sql-explain-and-access.md). One statement per request; a trailing `;` is allowed.
+[record 182](adr/0182-cdb-destructive-sql-explain-and-access.md); column changes, backups and IN subqueries,
+[record 183](adr/0183-cdb-column-changes-backup-and-in-subqueries.md). One statement per request; a trailing `;` is allowed.
 
 ## 1. Statements
 
@@ -13,6 +14,8 @@ line protocol on `/write`, QuestDB's `/exec` JSON and PostgreSQL wire. How a sta
 | `CREATE TABLE [IF NOT EXISTS] t (…) [TIMESTAMP(ts)] [PARTITION BY unit] [TTL n unit] [WAL \| BYPASS WAL] [DEDUP UPSERT KEYS(…)]` | nothing |
 | `ALTER TABLE t ADD [COLUMN] [IF NOT EXISTS] c type[, …]`, `ALTER TABLE t SET TTL n unit` | nothing |
 | `ALTER TABLE t DROP PARTITION LIST 'p'[, …]`, `ALTER TABLE t DROP PARTITION WHERE <condition on the designated timestamp>` | the partitions dropped |
+| `ALTER TABLE t DROP COLUMN [IF EXISTS] c`, `ALTER TABLE t RENAME COLUMN c TO d` | nothing |
+| `BACKUP [DATABASE] TO 'folder'` | the tables copied |
 | `DROP TABLE [IF EXISTS] t`, `TRUNCATE TABLE t` | nothing, the rows removed |
 | `INSERT INTO t [(c, …)] VALUES (…)[, (…)]`, `INSERT INTO t [(c, …)] SELECT …` | the rows written |
 | `UPDATE t SET c = e[, …] [WHERE …]`, `DELETE FROM t [WHERE …]` | the rows changed or removed |
@@ -20,9 +23,22 @@ line protocol on `/write`, QuestDB's `/exec` JSON and PostgreSQL wire. How a sta
 | `EXPLAIN <statement>` | one `QUERY PLAN` row per line; a change is planned, not run |
 
 A DROP PARTITION takes whole partitions only: one is dropped when its whole time range lies in the range the LIST name
-or the WHERE condition gives. DELETE removes the rows whose condition is TRUE; a condition is never NULL in cdb, as in QuestDB, so `x != 3` and
-`NOT (x > 3)` are TRUE where `x` is NULL and remove those rows too. Each destructive statement is one
+or the WHERE condition gives. DELETE removes the rows whose condition is TRUE; a condition is never NULL in cdb, as in
+QuestDB, so `x != 3` and `NOT (x > 3)` are TRUE where `x` is NULL and remove those rows too. Each destructive statement is one
 transaction: a reader that started before it reads the table as it was, one that starts after it reads the result.
+
+DROP COLUMN and RENAME COLUMN rewrite the table in one transaction, as DELETE does, so they take time in proportion to
+the table and hold its writer meanwhile; neither applies to the designated timestamp, the last column cannot be
+dropped, nor a DEDUP UPSERT KEYS column (a renamed key is renamed in the keys), and a rename takes a name no column has
+in any case, the column's own in another case included. A statement planned before a column change commits is planned
+again. `BACKUP TO 'folder'` copies every table, each at one committed transaction, into a new store at `folder`, an
+absolute path outside the data root that must not exist, while writes go on; tables are copied one after another, as
+cdb has no transaction across tables. A backup is restored offline: `CdbServe --restore <folder> <data root>` opens the
+backup as a store, then copies its tables through the store, as BACKUP does, into a data root that is absent or empty.
+`x [NOT] IN (SELECT c …)`, in a WHERE, runs its subquery once, before the outer query's first row, and then reads as an
+IN list of its values; the subquery returns one column of at most 1,000,000 rows, names no column of the outer query,
+and does not compare text with a timestamp (cast the column to TIMESTAMP: a written-out text reads as an interval, a
+subquery's cannot). In UPDATE and DELETE it runs before the change takes the table's writer.
 
 ## 2. Grammar
 
@@ -30,7 +46,7 @@ EBNF: `[ ]` optional, `{ }` repeated, quoted words are keywords in any case.
 
 ```
 statement      ::= ( query | create_table | alter_table | drop_table | truncate | insert | update | delete | show
-                   | "EXPLAIN" statement ) [ ";" ]
+                   | backup | "EXPLAIN" statement ) [ ";" ]
 query          ::= [ "WITH" cte { "," cte } ] set_expr [ "ORDER BY" order_item { "," order_item } ] [ "LIMIT" limit ]
 cte            ::= name "AS" "(" query ")"                       -- non-recursive, planned again at each use
 set_expr       ::= intersect_expr { ( "UNION" [ "ALL" ] | "EXCEPT" ) intersect_expr }
@@ -59,9 +75,12 @@ column_spec    ::= name type [ "CAPACITY" integer ] [ "CACHE" | "NOCACHE" ] [ "I
 alter_table    ::= "ALTER" "TABLE" name ( "SET" "TTL" number word
                                         | "ADD" [ "COLUMN" ] [ "IF" "NOT" "EXISTS" ] column_spec
                                                    { "," [ "IF" "NOT" "EXISTS" ] column_spec }
-                                        | "DROP" "PARTITION" ( "LIST" string { "," string } | "WHERE" expr ) )
+                                        | "DROP" "PARTITION" ( "LIST" string { "," string } | "WHERE" expr )
+                                        | "DROP" "COLUMN" [ "IF" "EXISTS" ] name
+                                        | "RENAME" "COLUMN" name "TO" name )
 drop_table     ::= "DROP" "TABLE" [ "IF" "EXISTS" ] name
 truncate       ::= "TRUNCATE" "TABLE" name
+backup         ::= "BACKUP" [ "DATABASE" ] "TO" string
 insert         ::= "INSERT" "INTO" name [ "(" name { "," name } ")" ]
                    ( "VALUES" "(" expr { "," expr } ")" { "," "(" expr { "," expr } ")" } | query )
 update         ::= "UPDATE" name "SET" name "=" expr { "," name "=" expr } [ "WHERE" expr ]
@@ -89,8 +108,8 @@ primary        ::= number | string | "NULL" | "TRUE" | "FALSE" | "*" | "(" query
                  | name { "." any_name } [ "." "*" ]
 ```
 
-A statement that parses can still be refused: by the binder (an unknown column or function), by the planner (`IN`
-with a subquery, a scalar subquery, `SAMPLE BY` without a designated timestamp, a non-constant `LIMIT`, a DROP
+A statement that parses can still be refused: by the binder (an unknown column or function), by the planner (an `IN`
+subquery of several columns or naming an outer column, a scalar subquery, `SAMPLE BY` without a designated timestamp, a non-constant `LIMIT`, a DROP
 PARTITION condition on other columns or on a table not partitioned), or by access (§5).
 
 ## 3. Lexical rules

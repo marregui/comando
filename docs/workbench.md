@@ -670,7 +670,9 @@ kit's measurements are written to it (tables `comando_*`, `kit_*`, `eval_*`). It
 its first start in `~/.comando-cdb/`: `secret` for everything, `secret.readonly` for queries, SHOW and EXPLAIN (sent
 as `Authorization: Bearer` on HTTP, as the password on PG wire; comando fills the owner secret into a connection to it
 with an empty password); deleting a file and restarting the server rotates it ([cdb SQL](cdb-sql.md) §5,
-[record 182](adr/0182-cdb-destructive-sql-explain-and-access.md)).
+[record 182](adr/0182-cdb-destructive-sql-explain-and-access.md)). A panel bound to local cdb backs the history up with
+`BACKUP TO '<folder>'`; restoring it replaces the machine's data root while the server is stopped, with
+`CdbServe --restore <folder> <data root>` ([record 183](adr/0183-cdb-column-changes-backup-and-in-subqueries.md)).
 
 ## 4. Instances and the comando Edge
 

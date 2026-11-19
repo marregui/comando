@@ -50,6 +50,8 @@ final class DefaultWriter implements TableWriter {
     private long[] drops = new long[4];
     private int dropCount;
     private boolean inRow;
+    // a column drop or rename since the last commit: for each column of def, its index in committedDef; else null
+    private int[] sources;
     private boolean closed;
     // the durability of the last answered commit: a logged commit's under the timed force, else done
     private ForceTicket ticket = ForceTicket.DONE;
@@ -76,6 +78,10 @@ final class DefaultWriter implements TableWriter {
     @Override
     public int addColumn(final ColumnDef column) {
         checkOpen();
+        if (sources != null) {
+            throw new CdbException("refuse second definition change in one transaction [table=" + def.name()
+                    + ", column=" + column.name() + ']', -1);
+        }
         TableFiles.checkName(column.name(), "column");
         if (column.name().length() > Store.MAX_NAME_LENGTH) {
             throw new CdbException("cannot add column: name too long [table=" + def.name() + ", column="
@@ -108,6 +114,86 @@ final class DefaultWriter implements TableWriter {
     public void setTtl(final long ttlMicros) {
         checkOpen();
         def = def.withTtlMicros(ttlMicros);
+    }
+
+    /**
+     * Refused with rows pending, after another column change in the transaction, for the designated timestamp, a dedup
+     * key or the last column. The commit rewrites no rows: the caller truncates and appends every row again.
+     */
+    @Override
+    public void dropColumn(final String name) {
+        final int c = changeable(name);
+        final String column = def.columns().get(c).name();
+        if (c == def.timestampIndex()) {
+            throw new CdbException("cannot drop the designated timestamp [table=" + def.name() + ", column=" + column
+                    + ']', -1);
+        }
+        for (final String key : def.dedupKeys()) {
+            if (key.equalsIgnoreCase(column)) {
+                throw new CdbException("cannot drop a dedup key [table=" + def.name() + ", column=" + column + ']',
+                        -1);
+            }
+        }
+        if (def.columns().size() == 1) {
+            throw new CdbException("cannot drop the last column [table=" + def.name() + ", column=" + column + ']',
+                    -1);
+        }
+        final int[] from = new int[def.columns().size() - 1];
+        for (int n = 0; n < from.length; n++) {
+            from[n] = n < c ? n : n + 1;
+        }
+        changeColumns(def.withoutColumn(c), from);
+    }
+
+    /**
+     * Refused with rows pending, after another column change in the transaction, or for a name {@code to} another
+     * column has in any case, the column's own included. The commit rewrites no rows: the caller truncates and appends
+     * every row again, a SYMBOL column's values interned anew in a dictionary under its new name.
+     */
+    @Override
+    public void renameColumn(final String from, final String to) {
+        final int c = changeable(from);
+        TableFiles.checkName(to, "column");
+        if (to.length() > Store.MAX_NAME_LENGTH) {
+            throw new CdbException("cannot rename column: name too long [table=" + def.name() + ", column=" + from
+                    + ", length=" + to.length() + ", limit=" + Store.MAX_NAME_LENGTH + ']', -1);
+        }
+        if (def.columnIndex(to) >= 0) {
+            throw new CdbException("cannot rename to an existing column [table=" + def.name() + ", column=" + from
+                    + ", to=" + to + ']', -1);
+        }
+        final int[] same = new int[def.columns().size()];
+        for (int n = 0; n < same.length; n++) {
+            same[n] = n;
+        }
+        changeColumns(def.withColumnRenamed(c, to), same);
+    }
+
+    // the index of column name for a drop or rename: refused with rows pending or after another column change
+    private int changeable(final String name) {
+        checkOpen();
+        if (pending.size > 0 || inRow) {
+            throw new CdbException("refuse column change with rows pending [table=" + def.name() + ']', -1);
+        }
+        if (sources != null || !def.columns().equals(committedDef.columns())) {
+            throw new CdbException("refuse second definition change in one transaction [table=" + def.name()
+                    + ", column=" + name + ']', -1);
+        }
+        final int c = def.columnIndex(name);
+        if (c < 0) {
+            throw new CdbException("cannot find column [table=" + def.name() + ", column=" + name + ']', -1);
+        }
+        return c;
+    }
+
+    // def becomes next, whose column n was column from[n] of the committed definition; pending rows are none
+    private void changeColumns(final TableDef next, final int[] from) {
+        final RowBlock rows = new RowBlock(next.name(), next.columns(), capacity);
+        final RowBlock old = pending;
+        pending = rows;
+        def = next;
+        sources = from;
+        old.close();
     }
 
     @Override
@@ -271,13 +357,113 @@ final class DefaultWriter implements TableWriter {
             // the queued commits come first, so a batch never spans a definition change, a truncate or a drop
             store.applier().applyAllHeld(state, false);
             final long txn = committed().txn() + 1L;
-            // a checkpoint that held made it durable; one whose folder force failed left it in doubt
-            ticket = write(txn, true) ? ForceTicket.DONE : inDoubt(def.name(), txn);
+            if (sources != null) {
+                ticket = writeColumnChange(txn);
+            } else {
+                // a checkpoint that held made it durable; one whose folder force failed left it in doubt
+                ticket = write(txn, true) ? ForceTicket.DONE : inDoubt(def.name(), txn);
+            }
         } finally {
             state.applyLock.unlock();
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+
+    /**
+     * Writes a column drop or rename as direct commit {@code txn}, the apply lock held and the queue applied. The
+     * checkpoint writes {@code _meta} before {@code _txn}, and the next open trims a {@code _meta} to the columns
+     * {@code _txn} counts, which a drop or rename breaks: {@code _meta.prev} keeps the definition before the change,
+     * forced first, so an open that finds {@code _txn} short of {@code txn} moves it back. The dictionaries follow the
+     * columns' names: a kept column keeps its own, a renamed one starts empty in a file of its new name; those the
+     * change leaves behind are deleted once its {@code _txn} holds. A failure moves the old definition back, in memory
+     * and on disk; a failure of that refuses further commits.
+     */
+    private ForceTicket writeColumnChange(final long txn) {
+        final Path metaFile = state.dir.resolve(TableFiles.META);
+        final Path prevFile = state.dir.resolve(TableFiles.META_PREV);
+        final String before;
+        final List<SymbolTable> next = new ArrayList<>(def.columns().size());
+        try {
+            before = StoreFiles.readText(metaFile);
+            if (!StoreFiles.replaceText(prevFile, TableFiles.encodePrev(new TableFiles.Prev(txn, before)))) {
+                throw new IOException("cannot force folder after keeping definition [file=" + prevFile + ']');
+            }
+            final List<SymbolTable> committedSymbols = state.symbols();
+            for (int n = 0; n < sources.length; n++) {
+                final ColumnDef column = def.columns().get(n);
+                if (column.type() != CdbType.SYMBOL) {
+                    next.add(null);
+                } else if (committedDef.columns().get(sources[n]).name().equals(column.name())) {
+                    next.add(committedSymbols.get(sources[n]));
+                } else {
+                    // a file of that name is an orphan: a failed change's, or a dropped column's of another case
+                    final Path file = state.dir.resolve(column.name() + ".sym");
+                    StoreFiles.delete(file);
+                    next.add(SymbolTable.open(file, -1L));
+                }
+            }
+        } catch (final IOException e) {
+            throw new CdbException("cannot commit [table=" + def.name() + ", txn=" + txn + ']', e);
+        }
+        final List<SymbolTable> replaced = state.replaceSymbols(next);
+        final boolean held;
+        try {
+            held = write(txn, true);
+        } catch (final RuntimeException e) {
+            state.replaceSymbols(replaced);
+            undoColumnChange(metaFile, before, prevFile, next, replaced, e);
+            throw e;
+        }
+        sources = null;
+        if (!held) {
+            // _txn may hold either transaction after a power cut: the next open decides with _meta.prev, and both
+            // definitions' dictionaries stay
+            return inDoubt(def.name(), txn);
+        }
+        for (final SymbolTable symbols : replaced) {
+            if (symbols != null && !next.contains(symbols)) {
+                deleteLeftover(symbols.file());
+            }
+        }
+        deleteLeftover(prevFile);
+        return ForceTicket.DONE;
+    }
+
+    // a failed column change: _meta back to before, _meta.prev and the new dictionaries' files deleted
+    private void undoColumnChange(final Path metaFile, final String before, final Path prevFile,
+            final List<SymbolTable> next, final List<SymbolTable> replaced, final RuntimeException failure) {
+        try {
+            if (!StoreFiles.replaceText(metaFile, before)) {
+                throw new IOException("cannot force folder after restoring definition [file=" + metaFile + ']');
+            }
+            StoreFiles.delete(prevFile);
+        } catch (final IOException | RuntimeException e) {
+            failure.addSuppressed(e);
+            // the next open still moves _meta.prev back; this process cannot checkpoint the old definition again
+            state.poison();
+            LOG.log(System.Logger.Level.ERROR, "refuse further commits, a failed column change left its definition"
+                    + " [table=" + def.name() + ']', e);
+        }
+        for (final SymbolTable symbols : next) {
+            if (symbols != null && !replaced.contains(symbols)) {
+                try {
+                    StoreFiles.delete(symbols.file());
+                } catch (final IOException e) {
+                    failure.addSuppressed(e);
+                }
+            }
+        }
+    }
+
+    // a file a held column change left: the next open deletes it when this cannot
+    private void deleteLeftover(final Path file) {
+        try {
+            StoreFiles.delete(file);
+        } catch (final IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot delete file a column change left [table=" + def.name()
+                    + ", file=" + file + ']', e);
         }
     }
 
@@ -942,6 +1128,7 @@ final class DefaultWriter implements TableWriter {
     }
 
     private void discard() {
+        sources = null;
         pending.size = 0;
         inRow = false;
         truncated = false;

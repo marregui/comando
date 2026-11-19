@@ -71,10 +71,10 @@ final class SelectPlanner {
 
     /**
      * The predicate as a filter; on a table scan, its bounds on the designated timestamp also bound the scan, and its
-     * comparisons of a column with a constant become the scan's terms.
+     * comparisons of a column with a constant become the scan's terms. Its IN subqueries are planned with it.
      */
     private Rel where(final Rel in) {
-        final Bound predicate = new Binder(in, null).bindValue(select.where());
+        final Bound predicate = new Binder(in, null, planner, ctes).bindValue(select.where());
         if (predicate.type() != CdbType.BOOLEAN) {
             throw new CdbException("cannot filter by non-boolean condition [type=" + predicate.type() + ']',
                     select.pos());
@@ -133,7 +133,8 @@ final class SelectPlanner {
             case Plan.Source _, Plan.Project _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _,
                  Plan.Sort _, Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _,
                  Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ -> null;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _, Plan.Explain _ -> null;
         };
     }
 
@@ -442,7 +443,8 @@ final class SelectPlanner {
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.LatestOn _, Plan.Distinct _, Plan.Sort _,
                  Plan.Limit _, Plan.SetOp _, Plan.Join _, Plan.Window _, Plan.CreateTable _, Plan.Update _, Plan.Insert _,
                  Plan.AddColumns _, Plan.SetTtl _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _, Plan.Explain _ -> false;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _, Plan.Explain _ -> false;
         };
     }
 

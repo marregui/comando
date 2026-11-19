@@ -86,7 +86,8 @@ class ScanDifferentialTest {
                     new Plan.Window(plain(child), calls, plan.fields());
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.Distinct _, Plan.SetOp _, Plan.Join _,
                  Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _, Plan.Explain _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ -> plan;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ -> plan;
         };
     }
 
@@ -102,7 +103,8 @@ class ScanDifferentialTest {
             case Plan.Window(final Plan child, final List<Bound.WindowCall> _, final List<?> _) -> termCount(child);
             case Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.Distinct _, Plan.SetOp _, Plan.Join _,
                  Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _, Plan.Explain _,
-                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ -> 0;
+                 Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _,
+                 Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ -> 0;
         };
     }
 

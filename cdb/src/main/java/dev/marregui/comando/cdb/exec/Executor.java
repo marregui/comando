@@ -12,6 +12,7 @@ import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.catalog.Catalog;
 import dev.marregui.comando.cdb.exec.expr.Functions;
+import dev.marregui.comando.cdb.exec.expr.InSet;
 import dev.marregui.comando.cdb.exec.expr.VectorFn;
 import dev.marregui.comando.cdb.plan.Bound;
 import dev.marregui.comando.cdb.plan.ColumnUse;
@@ -21,6 +22,12 @@ import dev.marregui.comando.cdb.store.Store;
 
 /** Builds the cursor tree of a query plan, and runs the plans that change the store. */
 public final class Executor {
+
+    /**
+     * The most rows an IN subquery's set holds: the most a result holds (the server's row limit, which a test in its
+     * package ties to this one), as the set is held whole in memory.
+     */
+    public static final int IN_SUBQUERY_MAX_ROWS = 1_000_000;
 
     private Executor() {
     }
@@ -36,10 +43,119 @@ public final class Executor {
     /**
      * As {@link #open(Plan, Store, long)}, the query's frames running in {@code ctx}: on its pool, given up once its
      * cancel is cancelled. An operator whose input is a segment ({@link FrameSource#isSegment}) works per frame; over
-     * any other input it runs as before, on the calling thread.
+     * any other input it runs as before, on the calling thread. The query's IN subqueries run here, each once, before
+     * the cursor is returned.
      */
     public static Cursor open(final Plan plan, final Store store, final long nowMicros, final QueryContext ctx) {
-        return build(plan, store, nowMicros, ColumnUse.of(plan), ctx);
+        final Plan ran = runSubqueries(plan, store, nowMicros, ctx);
+        return build(ran, store, nowMicros, ColumnUse.of(ran), ctx);
+    }
+
+    /**
+     * {@code plan} with the IN subquery of each of its filters run and replaced by the set of its values
+     * ({@link InSet}), which every frame's compiled filter shares; {@code plan} itself when it has none. A subquery
+     * runs in {@code ctx}, and runs its own subqueries first; past {@link #IN_SUBQUERY_MAX_ROWS} rows it fails.
+     */
+    private static Plan runSubqueries(
+            final Plan plan,
+            final Store store,
+            final long nowMicros,
+            final QueryContext ctx
+    ) {
+        return switch (plan) {
+            case Plan.Scan _, Plan.Source _, Plan.Explain _, Plan.Change _ -> plan;
+            case Plan.Filter(final Plan child, final Bound predicate) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                final Bound p = runSubqueries(predicate, store, nowMicros, ctx);
+                yield c == child && p == predicate ? plan : new Plan.Filter(c, p);
+            }
+            case Plan.Project(final Plan child, final List<Bound> exprs, final List<Field> fields) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.Project(c, exprs, fields);
+            }
+            case Plan.Aggregate(final Plan child, final List<Bound> keys, final List<Bound.Agg> aggs,
+                                final List<Field> fields) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.Aggregate(c, keys, aggs, fields);
+            }
+            case Plan.SampleBy(final Plan child, final int timestampColumn, final long count, final String unit,
+                               final List<Bound> keys, final List<Bound.Agg> aggs, final List<String> fill,
+                               final List<Field> fields) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.SampleBy(c, timestampColumn, count, unit, keys, aggs, fill, fields);
+            }
+            case Plan.LatestOn(final Plan child, final int timestampColumn, final int[] partitionColumns,
+                               final boolean newestFirst) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.LatestOn(c, timestampColumn, partitionColumns, newestFirst);
+            }
+            case Plan.Distinct(final Plan child) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.Distinct(c);
+            }
+            case Plan.Sort(final Plan child, final List<Plan.SortKey> keys, final long limit) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.Sort(c, keys, limit);
+            }
+            case Plan.Limit(final Plan child, final long lo, final long hi) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.Limit(c, lo, hi);
+            }
+            case Plan.SetOp(final String op, final Plan left, final Plan right) -> {
+                final Plan l = runSubqueries(left, store, nowMicros, ctx);
+                final Plan r = runSubqueries(right, store, nowMicros, ctx);
+                yield l == left && r == right ? plan : new Plan.SetOp(op, l, r);
+            }
+            case Plan.Join(final Plan left, final Plan right, final String kind, final Bound on,
+                           final List<Field> fields) -> {
+                final Plan l = runSubqueries(left, store, nowMicros, ctx);
+                final Plan r = runSubqueries(right, store, nowMicros, ctx);
+                yield l == left && r == right ? plan : new Plan.Join(l, r, kind, on, fields);
+            }
+            case Plan.Window(final Plan child, final List<Bound.WindowCall> calls, final List<Field> fields) -> {
+                final Plan c = runSubqueries(child, store, nowMicros, ctx);
+                yield c == child ? plan : new Plan.Window(c, calls, fields);
+            }
+        };
+    }
+
+    /** {@code b} with each {@code in_query} call's subquery run into its set; {@code b} itself when it has none. */
+    private static Bound runSubqueries(final Bound b, final Store store, final long nowMicros, final QueryContext ctx) {
+        if (!(b instanceof Bound.Call(final String function, final List<Bound> args, final CdbType type))) {
+            return b;
+        }
+        if ("in_query".equals(function)
+                && args.getLast() instanceof Bound.Constant(final Bound.Subquery query, final CdbType valueType)) {
+            // the operand may hold an IN subquery of its own
+            final Bound operand = runSubqueries(args.getFirst(), store, nowMicros, ctx);
+            final InSet set;
+            try (Cursor rows = open(query.plan(), store, nowMicros, ctx)) {
+                set = InSet.read(rows, operand.type(), nowMicros, IN_SUBQUERY_MAX_ROWS, query.pos());
+            }
+            return new Bound.Call(function, List.of(operand, new Bound.Constant(set, valueType)), type);
+        }
+        final List<Bound> ran = runSubqueries(args, store, nowMicros, ctx);
+        return ran == args ? b : new Bound.Call(function, ran, type);
+    }
+
+    /** {@code bs} with each one's subqueries run; {@code bs} itself when none had any. */
+    private static List<Bound> runSubqueries(
+            final List<Bound> bs,
+            final Store store,
+            final long nowMicros,
+            final QueryContext ctx
+    ) {
+        List<Bound> out = null;
+        for (int i = 0; i < bs.size(); i++) {
+            final Bound ran = runSubqueries(bs.get(i), store, nowMicros, ctx);
+            if (ran != bs.get(i) && out == null) {
+                out = new ArrayList<>(bs);
+            }
+            if (out != null) {
+                out.set(i, ran);
+            }
+        }
+        return out == null ? bs : List.copyOf(out);
     }
 
     /**
@@ -110,6 +226,8 @@ public final class Executor {
             case Plan.SetTtl _ -> throw new CdbException("cannot query an ALTER TABLE", -1);
             case Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _, Plan.Delete _ ->
                     throw new CdbException("cannot query a DROP, TRUNCATE or DELETE", -1);
+            case Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ ->
+                    throw new CdbException("cannot query an ALTER TABLE or a BACKUP", -1);
             case Plan.Explain(final Plan inner, final List<Field> fields) ->
                     new LinesCursor(fields, explain(inner, store, nowMicros).split("\n"));
         };
@@ -171,9 +289,14 @@ public final class Executor {
         return Functions.splittable(keys) && Functions.splittable(aggs);
     }
 
-    /** Runs {@code plan}, a statement that changes the store; returns the rows it changed (0 for DDL). */
+    /**
+     * Runs {@code plan}, a statement that changes the store; returns the rows it changed (0 for DDL). The IN
+     * subqueries of an {@code UPDATE} or {@code DELETE} run first, each once, on snapshots they take before the
+     * statement takes the table's writer: a commit between the two is not in the subquery's set.
+     */
     public static long execute(final Plan.Change plan, final Store store, final long nowMicros) {
-        return switch (plan) {
+        final Plan.Change ran = runSubqueries(plan, store, nowMicros);
+        return switch (ran) {
             case Plan.CreateTable c -> {
                 store.create(c.def(), c.ifNotExists());
                 yield 0;
@@ -186,6 +309,24 @@ public final class Executor {
             case Plan.Truncate t -> DropRunner.truncate(t, store);
             case Plan.DropPartitions d -> DropRunner.dropPartitions(d, store);
             case Plan.Delete d -> DeleteRunner.run(d, store, nowMicros);
+            case Plan.DropColumn d -> ColumnRunner.dropColumn(d, store);
+            case Plan.RenameColumn r -> ColumnRunner.renameColumn(r, store);
+            case Plan.Backup b -> BackupRunner.run(b, store);
+        };
+    }
+
+    /** {@code change} with the IN subqueries of an {@code UPDATE}'s or {@code DELETE}'s expressions run. */
+    private static Plan.Change runSubqueries(final Plan.Change change, final Store store, final long nowMicros) {
+        final QueryContext ctx = QueryContext.uncancellable();
+        return switch (change) {
+            case Plan.Update(final String table, final int[] columns, final List<Bound> values, final Bound where) ->
+                    new Plan.Update(table, columns, runSubqueries(values, store, nowMicros, ctx),
+                            where == null ? null : runSubqueries(where, store, nowMicros, ctx));
+            case Plan.Delete(final String table, final Bound where) ->
+                    where == null ? change : new Plan.Delete(table, runSubqueries(where, store, nowMicros, ctx));
+            case Plan.CreateTable _, Plan.Insert _, Plan.AddColumns _, Plan.SetTtl _, Plan.DropTable _,
+                 Plan.Truncate _, Plan.DropPartitions _, Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ ->
+                    change;
         };
     }
 
@@ -211,6 +352,19 @@ public final class Executor {
                     noteStatement(source, notes);
                 }
             }
+            case Plan.Update(final String _, final int[] _, final List<Bound> values, final Bound where) -> {
+                for (final Bound v : values) {
+                    noteSubqueries(v, notes);
+                }
+                if (where != null) {
+                    noteSubqueries(where, notes);
+                }
+            }
+            case Plan.Delete(final String _, final Bound where) -> {
+                if (where != null) {
+                    noteSubqueries(where, notes);
+                }
+            }
             case Plan.Change _ -> {
                 // its runner reads the table itself
             }
@@ -233,6 +387,7 @@ public final class Executor {
             case Plan.Filter f when FrameSource.isSegment(f) -> {
                 notes.put(f, "per frame on the pool");
                 noteQuery(f.child(), reads, notes);
+                noteSubqueries(f.predicate(), reads, notes);
             }
             case Plan.Project p when FrameSource.isSegment(p) -> {
                 notes.put(p, "per frame on the pool");
@@ -242,6 +397,7 @@ public final class Executor {
             case Plan.Filter f -> {
                 notes.put(f, "serial");
                 noteQuery(f.child(), reads, notes);
+                noteSubqueries(f.predicate(), reads, notes);
             }
             case Plan.Project p -> {
                 notes.put(p, "serial");
@@ -271,6 +427,24 @@ public final class Executor {
             case Plan.Explain _, Plan.Change _ -> {
                 // a statement, never below a query
             }
+        }
+    }
+
+    /** Notes the plans of a statement expression's IN subqueries, each a statement of its own. */
+    private static void noteSubqueries(final Bound b, final Map<Plan, String> notes) {
+        for (final Bound.Subquery s : Bound.Subquery.of(b)) {
+            noteStatement(s.plan(), notes);
+        }
+    }
+
+    /** Notes the plans of a filter's IN subqueries, whose scans are in {@code reads} ({@link ColumnUse}). */
+    private static void noteSubqueries(
+            final Bound predicate,
+            final Map<Plan.Scan, boolean[]> reads,
+            final Map<Plan, String> notes
+    ) {
+        for (final Bound.Subquery s : Bound.Subquery.of(predicate)) {
+            noteQuery(s.plan(), reads, notes);
         }
     }
 

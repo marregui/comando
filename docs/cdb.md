@@ -96,7 +96,8 @@ the two below:
 
 A table is a folder: `_meta` (the definition), `_txn` (the checkpointed transaction: per partition its folder, row
 count and how many leading columns have files in it, the column count, the TTL, and per SYMBOL column the bytes of its symbol file), `_wal` (the commits since that
-checkpoint), symbol files, and partition folders `<partition>.<txn>/` with one file per column (fixed width: 8 bytes
+checkpoint), `_meta.prev` while a column change is in doubt (the definition before it and the change's transaction:
+an open that finds `_txn` short of it puts it back), symbol files, and partition folders `<partition>.<txn>/` with one file per column (fixed width: 8 bytes
 for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR as in 1.2), little-endian
 ([record 161](adr/0161-cdb-write-ahead-log.md)).
 
@@ -109,7 +110,7 @@ for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR a
 | Commit | Its commit point | Then |
 |---|---|---|
 | logged: fewer than 100,000 rows, no definition change, no truncate, no partition drop | one record appended to `_wal` and forced (or, under the timed force below, written and forced within the interval): the pending rows in arrival order, framed with their length and a CRC32C, with the transaction number | the commit is answered and queued in memory; the store's applier writes it into the column files later, with the commits queued beside it |
-| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, a truncate (`TRUNCATE`, `DELETE`), a partition drop (`DROP PARTITION`) | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
+| direct: 100,000 rows or more, a log record of 16 MiB or more (text counted at 3 bytes a char), `ALTER TABLE ADD COLUMN`, `SET TTL`, `DROP COLUMN`, `RENAME COLUMN`, a truncate (`TRUNCATE`, `DELETE`, `UPDATE`), a partition drop (`DROP PARTITION`) | the queued commits applied first, then the commit written and named by a checkpoint, as every commit was before the log | answered and visible |
 
 **The applier.** One platform thread per store, `cdb-applier-<root>` (its batches write files, which would pin a
 virtual thread). Per table it takes the queued commits in log order, at most 100,000 rows, and writes them with the

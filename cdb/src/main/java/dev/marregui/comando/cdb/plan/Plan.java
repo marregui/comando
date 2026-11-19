@@ -192,4 +192,16 @@ public sealed interface Plan {
     /** {@code DELETE}: the rows where {@code where} holds (null: every row), removed in one transaction. */
     record Delete(String table, Bound where) implements Change {
     }
+
+    /** {@code ALTER TABLE DROP COLUMN}: {@code column} as the table names it, removed in one transaction. */
+    record DropColumn(String table, String column) implements Change {
+    }
+
+    /** {@code ALTER TABLE RENAME COLUMN}: {@code from} as the table names it becomes {@code to}, in one transaction. */
+    record RenameColumn(String table, String from, String to) implements Change {
+    }
+
+    /** {@code BACKUP TO}: every table's committed state copied into {@code folder}, which must not exist. */
+    record Backup(String folder) implements Change {
+    }
 }

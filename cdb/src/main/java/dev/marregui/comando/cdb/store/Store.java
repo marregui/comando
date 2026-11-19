@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.store;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.nio.channels.FileChannel;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 import org.jetbrains.annotations.TestOnly;
 
@@ -137,6 +139,15 @@ public final class Store implements AutoCloseable {
     public static final ScopedValue<Long> READ_MAX_LAG_MILLIS = ScopedValue.newInstance();
 
     /**
+     * The definitions a statement was planned under, bound for the statement's run: a snapshot or a writer of a table
+     * it planned whose columns no longer begin with the planned ones (a column dropped or renamed, the table made anew
+     * with other columns) is refused with {@link DefinitionChanged}, so a plan never reads or writes columns by the
+     * indexes of a definition it was not planned under; the statement is planned again. A column added at the end, as
+     * the line protocol adds one, keeps the planned indexes and is not refused.
+     */
+    public static final ScopedValue<PlannedDefs> PLANNED_UNDER = ScopedValue.newInstance();
+
+    /**
      * The most tables a store holds, created by SQL or by the line protocol: 1,000. Not measured; set with the server's
      * limits so a client cannot fill the root with tables, each a log channel and its own folders.
      */
@@ -223,6 +234,43 @@ public final class Store implements AutoCloseable {
             }
             throw new CdbException("cannot open store [root=" + root + ']', e);
         }
+    }
+
+    /** The folder this store keeps its tables in, as {@link #open(Path)} was given it. */
+    public Path root() {
+        return root;
+    }
+
+    /**
+     * Forces {@code folder}'s entries to the device, so a rename into it survives a power cut once this returns: how a
+     * backup or a restore makes its copy's rename into place durable.
+     */
+    public static void forceFolder(final Path folder) throws IOException {
+        StoreFiles.forceFolder(folder);
+    }
+
+    /** A table lookup to plan a statement through, recording each definition it answers for {@link #PLANNED_UNDER}. */
+    public PlannedDefs plannedDefs() {
+        return new PlannedDefs(this, new ConcurrentHashMap<>());
+    }
+
+    // true when a statement planned table under a definition whose columns current's do not begin with
+    private boolean planStale(final String table, final TableDef current) {
+        if (!PLANNED_UNDER.isBound()) {
+            return false;
+        }
+        final PlannedDefs planned = PLANNED_UNDER.get();
+        if (planned.store() != this) {
+            return false;
+        }
+        final TableDef def = planned.defs().get(TableState.key(table));
+        if (def == null) {
+            return false;
+        }
+        final List<ColumnDef> columns = def.columns();
+        return current.columns().size() < columns.size()
+                || !current.columns().subList(0, columns.size()).equals(columns)
+                || current.timestampIndex() != def.timestampIndex();
     }
 
     /** The tables' names, sorted. */
@@ -337,7 +385,7 @@ public final class Store implements AutoCloseable {
     public List<PartitionInfo> partitions(final String table) {
         checkOpen();
         final TableState state = state(table);
-        awaitFresh(state);
+        awaitFresh(state, readLagMillis());
         final TableState.Snapshot snapshot = state.acquire();
         try {
             final PartitionBy partitionBy = snapshot.def().partitionBy();
@@ -361,7 +409,34 @@ public final class Store implements AutoCloseable {
     public TableReader reader(final String table) {
         checkOpen();
         final TableState state = state(table);
-        awaitFresh(state);
+        awaitFresh(state, readLagMillis());
+        final DefaultReader reader = new DefaultReader(state, state.acquire());
+        if (planStale(table, reader.def())) {
+            reader.close();
+            throw new DefinitionChanged(table);
+        }
+        return reader;
+    }
+
+    /**
+     * As {@link #reader}, with every answered commit applied whatever read lag is bound, the queued ones by the calling
+     * thread, and not checked against {@link #PLANNED_UNDER}: the snapshot a rewrite reads under the table's writer, so
+     * that every commit its truncate removes is in it and no definition can change between its plan's writer and it;
+     * or a backup's, which reads each table's own definition.
+     */
+    public TableReader freshReader(final String table) {
+        checkOpen();
+        final TableState state = state(table);
+        state.applyLock.lock();
+        try {
+            // dropped since it was looked up: its folder takes no more writes
+            if (state.forgotten()) {
+                throw new CdbException("refuse unknown table [table=" + table + ']', -1);
+            }
+            applier.applyAllHeld(state, false);
+        } finally {
+            state.applyLock.unlock();
+        }
         return new DefaultReader(state, state.acquire());
     }
 
@@ -386,12 +461,18 @@ public final class Store implements AutoCloseable {
         if (state == null || !state.leaseUnlessClosed(waitMillis)) {
             return null;
         }
+        final DefaultWriter writer;
         try {
-            return new DefaultWriter(this, state);
+            writer = new DefaultWriter(this, state);
         } catch (final RuntimeException e) {
             state.unlease();
             throw e;
         }
+        if (planStale(table, writer.def())) {
+            writer.close();
+            throw new DefinitionChanged(table);
+        }
+        return writer;
     }
 
     /**
@@ -420,13 +501,17 @@ public final class Store implements AutoCloseable {
         return out;
     }
 
+    // the read lag in force: the bound one, else the store's
+    private long readLagMillis() {
+        return READ_MAX_LAG_MILLIS.isBound() ? READ_MAX_LAG_MILLIS.get() : readMaxLagMillis;
+    }
+
     // the read's wait for the queued commits its lag does not allow
-    private void awaitFresh(final TableState state) {
+    private void awaitFresh(final TableState state, final long lagMillis) {
         final long logged = state.loggedTxn();
         if (state.appliedTxn() >= logged) {
             return;
         }
-        final long lagMillis = READ_MAX_LAG_MILLIS.isBound() ? READ_MAX_LAG_MILLIS.get() : readMaxLagMillis;
         if (lagMillis > 0L) {
             final long nowNanos = System.nanoTime();
             final long oldestNanos = state.oldestQueuedNanos(nowNanos);
@@ -694,25 +779,29 @@ public final class Store implements AutoCloseable {
     /**
      * Reads a table folder: {@code _meta} (trimmed to the definition {@code _txn} names), {@code _txn} (none:
      * transaction 0), the versions it names mapped; deletes the folders and temporary files a crashed commit left that
-     * {@code _txn} does not name and the symbol files of columns it does not name, cuts the bytes appended past the
-     * committed ends of the folders it does, then replays the log and checkpoints what it replayed.
+     * {@code _txn} does not name and the symbol files of no SYMBOL column of the definition it names, cuts the bytes
+     * appended past the committed ends of the folders it does, then replays the log and checkpoints what it replayed.
+     * A {@code _meta.prev} whose column change {@code _txn} does not reach is moved back over {@code _meta} first.
      */
     private static TableState load(final Store store, final Path dir) throws IOException {
         final Path meta = dir.resolve(TableFiles.META);
-        final TableDef stored = TableFiles.decodeMeta(StoreFiles.readText(meta), meta.toString());
         final Path txnFile = dir.resolve(TableFiles.TXN);
         final TableFiles.Txn txn = Files.exists(txnFile)
                 ? TableFiles.decodeTxn(StoreFiles.readText(txnFile), txnFile.toString())
                 : new TableFiles.Txn(0L, List.of());
+        final TableDef stored = TableFiles.decodeMeta(storedMeta(dir, txn), meta.toString());
         final TableDef def = trim(stored, txn, txnFile);
         final Set<String> named = new HashSet<>();
         for (final TableFiles.Entry entry : txn.partitions()) {
             named.add(entry.folder());
         }
-        // a column a checkpoint did not reach: its _meta was written, its _txn not, and its log record is the replay's
-        final Set<String> unnamedSymbols = new HashSet<>();
-        for (int c = def.columns().size(); c < stored.columns().size(); c++) {
-            unnamedSymbols.add(stored.columns().get(c).name() + ".sym");
+        // the dictionaries of the definition's SYMBOL columns, in lower case: on a file system that ignores case a
+        // file keeps the name it was created with, which a column may have had in another case before
+        final Set<String> symbolFiles = new HashSet<>();
+        for (final ColumnDef column : def.columns()) {
+            if (column.type() == CdbType.SYMBOL) {
+                symbolFiles.add(TableState.key(column.name() + ".sym"));
+            }
         }
         try (final DirectoryStream<Path> entries = Files.newDirectoryStream(dir)) {
             for (final Path entry : entries) {
@@ -720,7 +809,10 @@ public final class Store implements AutoCloseable {
                 if (Files.isDirectory(entry) && !named.contains(name)) {
                     LOG.log(System.Logger.Level.INFO, "deleted partition of an unfinished commit [dir=" + entry + ']');
                     StoreFiles.deleteFolder(entry);
-                } else if (name.endsWith(".tmp") || unnamedSymbols.contains(name)) {
+                } else if (name.endsWith(".tmp")
+                        || name.endsWith(".sym") && !symbolFiles.contains(TableState.key(name))) {
+                    // a column a checkpoint did not reach (its _meta written, its _txn not, its log record the
+                    // replay's), or one a column change dropped or renamed away
                     StoreFiles.delete(entry);
                 }
             }
@@ -763,6 +855,31 @@ public final class Store implements AutoCloseable {
         }
         state.wal.close();
         return true;
+    }
+
+    /**
+     * The text of {@code dir}'s definition as {@code txn} names it. A column change writes {@code _meta.prev}, then
+     * {@code _meta}, then its {@code _txn}: a {@code _txn} older than the change pairs with the definition before it,
+     * which is moved back over {@code _meta} (forced) before {@code _meta.prev} is deleted, so commits replayed or
+     * made after this open, whose transactions reach the change's number, never pair with the dropped definition.
+     */
+    private static String storedMeta(final Path dir, final TableFiles.Txn txn) throws IOException {
+        final Path meta = dir.resolve(TableFiles.META);
+        final Path prevFile = dir.resolve(TableFiles.META_PREV);
+        if (!Files.exists(prevFile)) {
+            return StoreFiles.readText(meta);
+        }
+        final TableFiles.Prev prev = TableFiles.decodePrev(StoreFiles.readText(prevFile), prevFile.toString());
+        if (txn.number() < prev.txn()) {
+            if (!StoreFiles.replaceText(meta, prev.meta())) {
+                throw new IOException("cannot force folder after restoring definition [file=" + meta + ']');
+            }
+            LOG.log(System.Logger.Level.INFO, "restored definition of an unfinished column change [dir=" + dir
+                    + ", txn=" + txn.number() + ", changeTxn=" + prev.txn() + ']');
+        }
+        // forced with the folder after the cleanup that follows, before anything is replayed
+        StoreFiles.delete(prevFile);
+        return StoreFiles.readText(meta);
     }
 
     /** {@code stored} as of the checkpoint {@code txn} names: its first columns and its TTL. */
@@ -916,6 +1033,39 @@ public final class Store implements AutoCloseable {
             StoreFiles.truncate(file, committedBytes);
             LOG.log(System.Logger.Level.INFO, "cut partition file past its committed rows [file=" + file + ", bytes="
                     + bytes + ", committedBytes=" + committedBytes + ']');
+        }
+    }
+
+    /** The definitions of {@code store}'s tables a statement was planned under, by table key, as it looked them up. */
+    public record PlannedDefs(Store store, Map<String, TableDef> defs) implements Function<String, TableDef> {
+
+        /**
+         * The table's definition, as {@link Store#def} answers it, recorded when there is one; a table looked up again
+         * answers the definition first recorded, so every part of one plan holds one definition, which the run's
+         * check then compares the table's snapshots and writers with.
+         */
+        @Override
+        public TableDef apply(final String table) {
+            final TableDef def = store.def(table);
+            if (def == null) {
+                return null;
+            }
+            final TableDef first = defs.putIfAbsent(TableState.key(table), def);
+            return first == null ? def : first;
+        }
+    }
+
+    /**
+     * A snapshot or a writer refused because its table's columns changed after the statement was planned; the
+     * statement is planned again by its runner, which turns a refusal that keeps recurring into a {@link CdbException}.
+     */
+    public static final class DefinitionChanged extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        DefinitionChanged(final String table) {
+            super("refuse a plan made before a definition change [table=" + table + ']', null, false, false);
         }
     }
 }

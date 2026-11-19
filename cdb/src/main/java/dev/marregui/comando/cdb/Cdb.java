@@ -12,6 +12,7 @@ import dev.marregui.comando.cdb.exec.QueryContext;
 import dev.marregui.comando.cdb.exec.QueryPool;
 import dev.marregui.comando.cdb.plan.Plan;
 import dev.marregui.comando.cdb.plan.Planner;
+import dev.marregui.comando.cdb.sql.Ast;
 import dev.marregui.comando.cdb.sql.Parser;
 import dev.marregui.comando.cdb.store.Store;
 import dev.marregui.comando.cdb.store.StoreOptions;
@@ -22,6 +23,10 @@ import dev.marregui.comando.cdb.store.StoreOptions;
  * Thread-safe: any number of queries at once, one writer per table.
  */
 public final class Cdb implements AutoCloseable {
+
+    // the plans of one statement a column change overtakes each time before it fails: not measured, a column change
+    // holds its table's writer for a whole rewrite, so a second plan almost always runs
+    private static final int PLAN_ATTEMPTS = 8;
 
     private final Store store;
     // written by a test before it queries, read by the querying threads
@@ -63,7 +68,26 @@ public final class Cdb implements AutoCloseable {
     public CdbResult run(final String sql, final long offset, final int maxRows, final CdbCancel cancel) {
         beforeQuery.run();
         final long now = nowMicros();
-        final Planner.Planned planned = Planner.planned(Parser.parse(sql), store::def, now);
+        final Ast.Statement statement = Parser.parse(sql);
+        for (int attempt = 1; ; attempt++) {
+            // the definitions it planned under are checked as its readers and writers are taken: a column change
+            // committed in between refuses them, and the statement is planned again
+            final Store.PlannedDefs defs = store.plannedDefs();
+            final Planner.Planned planned = Planner.planned(statement, defs, now);
+            try {
+                return ScopedValue.where(Store.PLANNED_UNDER, defs)
+                        .call(() -> runPlanned(planned, now, offset, maxRows, cancel));
+            } catch (final Store.DefinitionChanged e) {
+                if (attempt == PLAN_ATTEMPTS) {
+                    throw new CdbException("cannot run a statement while table definitions keep changing [attempts="
+                            + attempt + ']', e);
+                }
+            }
+        }
+    }
+
+    private CdbResult runPlanned(final Planner.Planned planned, final long now, final long offset, final int maxRows,
+            final CdbCancel cancel) {
         if (planned.plan() instanceof Plan.Change change) {
             return CdbResult.updated(Executor.execute(change, store, now));
         }

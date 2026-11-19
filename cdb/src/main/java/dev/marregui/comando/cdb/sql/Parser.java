@@ -29,7 +29,8 @@ import dev.marregui.comando.cdb.CdbException;
  *   has no place for it.</li>
  * </ul>
  * {@code SHOW} gives {@link Ast.Show#what()} {@code tables}, {@code columns}, {@code create table}, {@code partitions}
- * or {@code wal}. {@code EXPLAIN} takes any statement after it. {@code CREATE
+ * or {@code wal}. {@code EXPLAIN} takes any statement after it. A statement starts with {@code BACKUP} only when
+ * {@code TO} or {@code DATABASE} follows it: {@code backup} alone is a table's name. {@code CREATE
  * TABLE} gives column types and the partition unit upper case; {@code FILL} values are lower-case words or numbers
  * as written. A failure is a {@link CdbException} whose position is the offending token's offset, or the text's
  * length when the statement ends early.
@@ -140,6 +141,9 @@ public final class Parser {
         }
         if (isWord("delete")) {
             return delete();
+        }
+        if (isWord("backup") && (isWordAt(1, "to") || isWordAt(1, "database"))) {
+            return backup();
         }
         if (isWord("explain")) {
             final int pos = next().start();
@@ -526,7 +530,8 @@ public final class Parser {
 
     /**
      * QuestDB's form: one optional {@code COLUMN} after {@code ADD}, an optional {@code IF NOT EXISTS} per column;
-     * {@code DROP PARTITION} takes {@code LIST} and the partition names as strings, or {@code WHERE} and a condition.
+     * {@code DROP PARTITION} takes {@code LIST} and the partition names as strings, or {@code WHERE} and a condition;
+     * {@code DROP COLUMN} and {@code RENAME COLUMN} take one column each, {@code COLUMN} required.
      */
     private Ast.Statement alterTable() {
         final int pos = expectWord("alter").start();
@@ -536,7 +541,23 @@ public final class Parser {
             expectWord("ttl");
             return new Ast.AlterTable(table, List.of(), ttl(), pos);
         }
-        if (acceptPair("drop", "partition")) {
+        if (acceptWord("rename")) {
+            expectWord("column");
+            final String from = name();
+            expectWord("to");
+            return new Ast.RenameColumn(table, from, name(), pos);
+        }
+        if (acceptWord("drop")) {
+            if (acceptWord("column")) {
+                final boolean ifExists = acceptWord("if");
+                if (ifExists) {
+                    expectWord("exists");
+                }
+                return new Ast.DropColumn(table, name(), ifExists, pos);
+            }
+            if (!acceptWord("partition")) {
+                throw unexpected("PARTITION or COLUMN");
+            }
             if (acceptWord("where")) {
                 return new Ast.DropPartition(table, List.of(), expression(), pos);
             }
@@ -592,6 +613,14 @@ public final class Parser {
             expectWord("exists");
         }
         return new Ast.DropTable(name(), ifExists, pos);
+    }
+
+    /** QuestDB spells it {@code BACKUP DATABASE}; the folder is a string, as written. */
+    private Ast.Backup backup() {
+        final int pos = expectWord("backup").start();
+        acceptWord("database");
+        expectWord("to");
+        return new Ast.Backup(expect(Lexer.Kind.STRING, "folder").text(), pos);
     }
 
     private Ast.Truncate truncate() {

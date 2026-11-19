@@ -19,8 +19,9 @@ import dev.marregui.comando.cdb.Cdb;
 import dev.marregui.comando.cdb.CdbAppender;
 import dev.marregui.comando.cdb.CdbException;
 
-/// Lincheck checks that a table's appends, `DELETE`, `TRUNCATE`, `DROP PARTITION`, `DROP TABLE` and `count()` are
-/// linearisable: every concurrent history of them answers as some serial order of the same calls answers on `Model`.
+/// Lincheck checks that a table's appends, `DELETE`, `TRUNCATE`, `DROP PARTITION`, `DROP TABLE`, `DROP COLUMN`,
+/// `RENAME COLUMN` and `count()` are linearisable: every concurrent history of them answers as some serial order of the
+/// same calls answers on `Model`.
 /// A `Cdb` runs in stress mode; the model checker cannot drive one (its memory snapshot walks the whole store and
 /// fails, and a query's frames run on the query pool's threads, which it does not schedule), so it checks
 /// `Published`, the acquire, publish and release protocol of `TableState` over versions in memory, instead.
@@ -89,12 +90,12 @@ class StoreLincheckTest {
         private final String table;
         private final AtomicLong offset = new AtomicLong();
 
-        /// A fresh table `l<n>`.
+        /// A fresh table `l<n>`, its column `w` never written: the column changes move it, the rows stay.
         public Subject() {
             final int n = TABLES.incrementAndGet();
             cdb.run("DROP TABLE IF EXISTS l" + (n - 1));
             table = "l" + n;
-            cdb.run("CREATE TABLE " + table + " (v LONG, ts TIMESTAMP) TIMESTAMP(ts) PARTITION BY DAY");
+            cdb.run("CREATE TABLE " + table + " (v LONG, w LONG, ts TIMESTAMP) TIMESTAMP(ts) PARTITION BY DAY");
         }
 
         /// Appends a 1 on day 0.
@@ -133,11 +134,39 @@ class StoreLincheckTest {
             return change("DROP TABLE IF EXISTS " + table);
         }
 
+        /// Drops column `w` if it is there; 0, -1 when the table is absent.
+        @Operation
+        public long dropW() {
+            return change("ALTER TABLE " + table + " DROP COLUMN IF EXISTS w");
+        }
+
+        /// Renames `w` to `x`; 0, -1 when the table or `w` is absent.
+        @Operation
+        public long renameWToX() {
+            return change("ALTER TABLE " + table + " RENAME COLUMN w TO x");
+        }
+
+        /// Renames `x` back to `w`; 0, -1 when the table or `x` is absent.
+        @Operation
+        public long renameXToW() {
+            return change("ALTER TABLE " + table + " RENAME COLUMN x TO w");
+        }
+
         /// The rows, -1 when the table is absent.
         @Operation
         public long count() {
+            return query("SELECT count() FROM " + table);
+        }
+
+        /// The rows, every one NULL in `w`, read through `w`: -1 when the table or `w` is absent.
+        @Operation
+        public long countW() {
+            return query("SELECT count() FROM " + table + " WHERE w IS NULL");
+        }
+
+        private long query(final String sql) {
             try {
-                return cdb.run("SELECT count() FROM " + table).getLong(0, 0);
+                return cdb.run(sql).getLong(0, 0);
             } catch (final CdbException _) {
                 return -1L;
             }
@@ -201,6 +230,23 @@ class StoreLincheckTest {
                 }
                 publish(next);
                 return removed;
+            } finally {
+                lease.unlock();
+            }
+        }
+
+        /// Rewrites the table under a new definition, every version new and every row kept, as a column change
+        /// re-appends the rows.
+        @Operation
+        public long dropW() {
+            lease.lock();
+            try {
+                final List<Version> next = new ArrayList<>();
+                for (final Version v : base()) {
+                    next.add(new Version(v.day, v.rows));
+                }
+                publish(next);
+                return 0L;
             } finally {
                 lease.unlock();
             }
@@ -340,23 +386,26 @@ class StoreLincheckTest {
         }
     }
 
-    /// The serial specification: day 0 holds only ones and day 1 only twos, so two counters and whether the table
-    /// exists are the table. A statement on an absent table answers -1; an append creates it.
+    /// The serial specification: day 0 holds only ones and day 1 only twos, so two counters, the name column `w` has
+    /// now and whether the table exists are the table. A statement on an absent table answers -1; an append creates it,
+    /// with no column `w`, as the line protocol creates a table with the columns its line names.
     public static final class Model {
 
         private boolean present = true;
         private long day0;
         private long day1;
+        // "w", "x", or null when the column is gone
+        private String column = "w";
 
         /// One more row on day 0.
         public void appendOneOnDay0() {
-            present = true;
+            create();
             day0++;
         }
 
         /// One more row on day 1.
         public void appendTwoOnDay1() {
-            present = true;
+            create();
             day1++;
         }
 
@@ -396,12 +445,56 @@ class StoreLincheckTest {
             present = false;
             day0 = 0L;
             day1 = 0L;
+            column = null;
             return 0L;
+        }
+
+        /// The column `w` goes; `IF EXISTS` answers 0 either way.
+        public long dropW() {
+            if (!present) {
+                return -1L;
+            }
+            if ("w".equals(column)) {
+                column = null;
+            }
+            return 0L;
+        }
+
+        /// `w` becomes `x`.
+        public long renameWToX() {
+            return rename("w", "x");
+        }
+
+        /// `x` becomes `w`.
+        public long renameXToW() {
+            return rename("x", "w");
         }
 
         /// The rows.
         public long count() {
             return present ? day0 + day1 : -1L;
+        }
+
+        /// The rows, while the column is `w`.
+        public long countW() {
+            return present && "w".equals(column) ? day0 + day1 : -1L;
+        }
+
+        // an append to an absent table creates it without w
+        private void create() {
+            if (!present) {
+                present = true;
+                column = null;
+            }
+        }
+
+        // a rename of an absent column is refused; x is never there beside w, so the new name is always free
+        private long rename(final String from, final String to) {
+            if (!present || !from.equals(column)) {
+                return -1L;
+            }
+            column = to;
+            return 0L;
         }
     }
 }

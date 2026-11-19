@@ -20,13 +20,18 @@ import dev.marregui.comando.cdb.CdbType;
  * {@code :nocache} when its dictionary is not cached and {@code :index=<block capacity>} when it is indexed. Format 1
  * is still read, its SYMBOL columns taking QuestDB's defaults. {@code _txn}: the transaction number, then one
  * {@code <folder>\t<rows>\t<columns>} line per partition in time order, {@code <columns>} the leading columns with
- * files in it (a line without it, written before, is read with -1: unknown). Unknown keys, options and other
- * formats are refused, not skipped.
+ * files in it (a line without it, written before, is read with -1: unknown). {@code _meta.prev}, written by a commit
+ * that drops or renames a column before it replaces {@code _meta}: {@code txn=<n>}, the commit's transaction, then
+ * {@code _meta} as it was; a {@code _txn} older than {@code n} pairs with that definition. Unknown keys, options and
+ * other formats are refused, not skipped.
  */
 final class TableFiles {
 
     static final String META = "_meta";
     static final String TXN = "_txn";
+    // the definition before a column drop or rename, kept until the change's _txn holds
+    static final String META_PREV = "_meta.prev";
+    private static final String PREV_TXN = "txn=";
     // a dropped table's marker: the drop's commit point, so an open deletes the folder holding it
     static final String DROPPED = "_dropped";
     // the lines a checkpoint adds to _txn, after the partitions
@@ -46,6 +51,10 @@ final class TableFiles {
      * with files in it, -1 when the line was written without them.
      */
     record Entry(String folder, long rows, int columns) {
+    }
+
+    /** The content of {@code _meta.prev}: the transaction of the column change and the {@code _meta} text before it. */
+    record Prev(long txn, String meta) {
     }
 
     /**
@@ -248,6 +257,26 @@ final class TableFiles {
             return new Txn(number, partitions, columns, ttl, symbolBytes);
         } catch (final NumberFormatException e) {
             throw new CdbException("cannot read transaction [file=" + source + ']', e);
+        }
+    }
+
+    static String encodePrev(final Prev prev) {
+        return PREV_TXN + prev.txn() + '\n' + prev.meta();
+    }
+
+    static Prev decodePrev(final String text, final String source) {
+        final int nl = text.indexOf('\n');
+        if (!text.startsWith(PREV_TXN) || nl < 0) {
+            throw corrupt(source, nl < 0 ? text : text.substring(0, nl));
+        }
+        try {
+            final long txn = Long.parseLong(text.substring(PREV_TXN.length(), nl));
+            if (txn <= 0L) {
+                throw corrupt(source, text.substring(0, nl));
+            }
+            return new Prev(txn, text.substring(nl + 1));
+        } catch (final NumberFormatException e) {
+            throw new CdbException("cannot read previous table definition [file=" + source + ']', e);
         }
     }
 

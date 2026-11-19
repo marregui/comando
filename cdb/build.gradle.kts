@@ -20,6 +20,9 @@ tasks.named<Test>("test") {
     // ParallelEquivalenceTest: CDB_PARALLEL_SEED0/1 replay a printed seed pair, CDB_PARALLEL_QUERIES runs more queries
     System.getenv("CDB_PARALLEL_SEED0")?.let { systemProperty("cdb.parallel.seed0", it) }
     System.getenv("CDB_PARALLEL_SEED1")?.let { systemProperty("cdb.parallel.seed1", it) }
+    // BackupRunnerTest: CDB_BACKUP_SEED0/1 replay a printed seed pair
+    System.getenv("CDB_BACKUP_SEED0")?.let { systemProperty("cdb.backup.seed0", it) }
+    System.getenv("CDB_BACKUP_SEED1")?.let { systemProperty("cdb.backup.seed1", it) }
     System.getenv("CDB_PARALLEL_QUERIES")?.let { systemProperty("cdb.parallel.queries", it) }
     // DestructiveStressTest, DestructiveHttpTest: CDB_DESTRUCTIVE_SEED0/1 replay a printed seed pair
     System.getenv("CDB_DESTRUCTIVE_SEED0")?.let { systemProperty("cdb.destructive.seed0", it) }

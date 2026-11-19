@@ -18,11 +18,12 @@ import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.sql.Ast;
 import dev.marregui.comando.cdb.store.ColumnDef;
 import dev.marregui.comando.cdb.store.PartitionBy;
+import dev.marregui.comando.cdb.store.Store;
 import dev.marregui.comando.cdb.store.TableDef;
 
 /**
  * {@code CREATE TABLE} to a {@link TableDef}, QuestDB's DDL type names to the six cdb types, and the plans of
- * {@code ALTER}, {@code DROP} and {@code TRUNCATE TABLE}.
+ * {@code ALTER}, {@code DROP} and {@code TRUNCATE TABLE}, and of {@code BACKUP}.
  */
 final class Ddl {
 
@@ -168,6 +169,85 @@ final class Ddl {
             throw new CdbException("cannot find table [table=" + truncate.table() + ']', truncate.pos());
         }
         return new Plan.Truncate(def.name());
+    }
+
+    /**
+     * {@code ALTER TABLE DROP COLUMN}: a missing column is refused, except under {@code IF EXISTS}, which keeps the
+     * name given for the runner to find absent. The designated timestamp, a dedup key and the last column stay.
+     */
+    static Plan dropColumn(final Ast.DropColumn drop, final Function<String, TableDef> tables) {
+        final int pos = drop.pos();
+        final TableDef def = tables.apply(drop.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + drop.table() + ']', pos);
+        }
+        final int c = def.columnIndex(drop.column());
+        if (c < 0) {
+            if (!drop.ifExists()) {
+                throw new CdbException("cannot find column [table=" + def.name() + ", column=" + drop.column() + ']',
+                        pos);
+            }
+            return new Plan.DropColumn(def.name(), drop.column());
+        }
+        final String column = def.columns().get(c).name();
+        if (c == def.timestampIndex()) {
+            throw new CdbException("cannot drop the designated timestamp [table=" + def.name() + ", column=" + column
+                    + ']', pos);
+        }
+        for (final String key : def.dedupKeys()) {
+            if (def.columnIndex(key) == c) {
+                throw new CdbException("cannot drop a dedup key [table=" + def.name() + ", column=" + column + ']',
+                        pos);
+            }
+        }
+        if (def.columns().size() == 1) {
+            throw new CdbException("cannot drop the last column [table=" + def.name() + ", column=" + column + ']',
+                    pos);
+        }
+        return new Plan.DropColumn(def.name(), column);
+    }
+
+    /**
+     * {@code ALTER TABLE RENAME COLUMN}: the column must exist and not be the designated timestamp; the new name must
+     * be one no column has, in any case (the column's own in another case included), and fit
+     * {@link Store#MAX_NAME_LENGTH}. A dedup key may be renamed: the store renames the key with it.
+     */
+    static Plan renameColumn(final Ast.RenameColumn rename, final Function<String, TableDef> tables) {
+        final int pos = rename.pos();
+        final TableDef def = tables.apply(rename.table());
+        if (def == null) {
+            throw new CdbException("cannot find table [table=" + rename.table() + ']', pos);
+        }
+        final int c = def.columnIndex(rename.from());
+        if (c < 0) {
+            throw new CdbException("cannot find column [table=" + def.name() + ", column=" + rename.from() + ']', pos);
+        }
+        final String from = def.columns().get(c).name();
+        final String to = rename.to();
+        if (c == def.timestampIndex()) {
+            throw new CdbException("cannot rename the designated timestamp [table=" + def.name() + ", column=" + from
+                    + ']', pos);
+        }
+        if (to.length() > Store.MAX_NAME_LENGTH) {
+            throw new CdbException("cannot rename column: name too long [table=" + def.name() + ", column=" + from
+                    + ", length=" + to.length() + ", limit=" + Store.MAX_NAME_LENGTH + ']', pos);
+        }
+        // the column's own name in another case too: names are matched in any case, and its files would collide on a
+        // file system that folds case
+        if (def.columnIndex(to) >= 0) {
+            throw new CdbException("cannot rename to an existing column [table=" + def.name() + ", column=" + from
+                    + ", to=" + to + ']', pos);
+        }
+        return new Plan.RenameColumn(def.name(), from, to);
+    }
+
+    /** {@code BACKUP TO}: the folder as written, which must name something; the runner refuses one that exists. */
+    static Plan backup(final Ast.Backup backup) {
+        if (backup.folder().isBlank()) {
+            throw new CdbException("cannot back up into a folder without a name [folder=" + backup.folder() + ']',
+                    backup.pos());
+        }
+        return new Plan.Backup(backup.folder());
     }
 
     /**

@@ -19,7 +19,7 @@ final class DeleteRunner {
     static long run(final Plan.Delete delete, final Store store, final long nowMicros) {
         // the writer first: no commit can land between the snapshot read and the rewrite
         try (TableWriter writer = store.writer(delete.table(), UpdateRunner.WAIT_MILLIS)) {
-            final TableReader reader = store.reader(delete.table());
+            final TableReader reader = store.freshReader(delete.table());
             if (delete.where() == null) {
                 final long rows;
                 try (reader) {

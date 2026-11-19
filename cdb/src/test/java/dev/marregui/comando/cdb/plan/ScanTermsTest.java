@@ -51,7 +51,8 @@ class ScanTermsTest {
                 case Plan.Scan _, Plan.Source _, Plan.Aggregate _, Plan.SampleBy _, Plan.Distinct _, Plan.SetOp _,
                      Plan.Join _, Plan.CreateTable _, Plan.Update _, Plan.Insert _, Plan.AddColumns _,
                      Plan.SetTtl _, Plan.Explain _, Plan.DropTable _, Plan.Truncate _, Plan.DropPartitions _,
-                     Plan.Delete _ -> throw new AssertionError("cannot find " + type.getSimpleName() + " in " + plan);
+                     Plan.Delete _, Plan.DropColumn _, Plan.RenameColumn _, Plan.Backup _ ->
+                        throw new AssertionError("cannot find " + type.getSimpleName() + " in " + plan);
             };
         }
         return type.cast(p);

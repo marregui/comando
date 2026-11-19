@@ -327,10 +327,11 @@ final class Listings {
      * {@code symbolTableSize} counts the distinct values its rows hold, NULL counted once as QuestDB counts it.
      */
     static Cursor columns(final Store store, final String table) {
-        final TableDef def = existing(store, table);
         final PageBuilder rows = new PageBuilder(COLUMNS);
-        final List<ColumnDef> columns = def.columns();
-        try (final TableReader reader = store.reader(def.name())) {
+        try (final TableReader reader = store.reader(existing(store, table).name())) {
+            // the snapshot's own definition: a column change since the lookup moves the columns' indexes
+            final TableDef def = reader.def();
+            final List<ColumnDef> columns = def.columns();
             for (int i = 0; i < columns.size(); i++) {
                 final ColumnDef column = columns.get(i);
                 rows.text(0, column.name());

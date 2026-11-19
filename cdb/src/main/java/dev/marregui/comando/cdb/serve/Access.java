@@ -25,7 +25,7 @@ final class Access {
         return switch (statement) {
             case Ast.Query _, Ast.Show _, Ast.Explain _ -> true;
             case Ast.CreateTable _, Ast.Update _, Ast.Insert _, Ast.AlterTable _, Ast.DropTable _, Ast.Truncate _,
-                    Ast.DropPartition _, Ast.Delete _ -> false;
+                    Ast.DropPartition _, Ast.Delete _, Ast.DropColumn _, Ast.RenameColumn _, Ast.Backup _ -> false;
         };
     }
 }

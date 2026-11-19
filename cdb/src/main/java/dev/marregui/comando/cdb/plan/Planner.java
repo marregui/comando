@@ -88,6 +88,9 @@ public final class Planner {
             case Ast.Truncate truncate -> Ddl.truncate(truncate, tables);
             case Ast.DropPartition drop -> Ddl.dropPartition(drop, tables, nowMicros);
             case Ast.Delete delete -> planner.delete(delete);
+            case Ast.DropColumn drop -> Ddl.dropColumn(drop, tables);
+            case Ast.RenameColumn rename -> Ddl.renameColumn(rename, tables);
+            case Ast.Backup backup -> Ddl.backup(backup);
             case Ast.Explain(final Ast.Statement inner, final int _) -> new Plan.Explain(
                     plan(inner, tables, nowMicros, sourceFields, scanShortcuts),
                     List.of(new Field(EXPLAIN_COLUMN, CdbType.VARCHAR)));
@@ -334,7 +337,7 @@ public final class Planner {
             throw new CdbException("cannot find table [table=" + update.table() + ']', update.pos());
         }
         final Rel rel = Rel.of(scan(def), def.name(), def.timestampIndex());
-        final Binder binder = new Binder(rel, null);
+        final Binder binder = new Binder(rel, null, this, Map.of());
         final int[] columns = new int[update.assignments().size()];
         final List<Bound> values = new ArrayList<>(columns.length);
         for (int i = 0; i < columns.length; i++) {
@@ -371,7 +374,7 @@ public final class Planner {
             return new Plan.Delete(def.name(), null);
         }
         final Rel rel = Rel.of(scan(def), def.name(), def.timestampIndex());
-        final Bound where = new Binder(rel, null).bindValue(delete.where());
+        final Bound where = new Binder(rel, null, this, Map.of()).bindValue(delete.where());
         if (where.type() != CdbType.BOOLEAN) {
             throw new CdbException("cannot delete by non-boolean condition [table=" + def.name() + ", type="
                     + where.type() + ']', delete.pos());
