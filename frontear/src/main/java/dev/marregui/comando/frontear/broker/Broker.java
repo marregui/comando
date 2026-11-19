@@ -106,7 +106,12 @@ public final class Broker implements AutoCloseable {
     // guards the sessions map's changes, a session's connection changes and the internal subscribers' registration
     private final Object sessionsLock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean();
+    // runs the accept loop, its one task for the broker's life: the operating system holds the clients waiting to be
+    // accepted, ACCEPT_BACKLOG of them
     private final ExecutorService acceptor;
+    // runs the sweep, one periodic task that holds one place in its queue, and the ends offLocks hands it: at most one
+    // per connection, from the first send past its maxBacklogBytes, so its depth is at most one more than the
+    // connections alive
     private final ScheduledExecutorService sweeper;
     // runs, in the order the session lock handed them over, the publishes a lock held back. Its queue has no count
     // bound; what joins it is one task per cause the session lock saw: an accepted CONNECT (its presence, and the

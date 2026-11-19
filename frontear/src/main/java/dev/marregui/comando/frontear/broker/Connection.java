@@ -54,7 +54,12 @@ final class Connection {
     private final Socket socket;
     private final InputStream in;
     private final OutputStream out;
+    // runs the read loop, its one task: what waits to be read waits in the socket's receive buffer, and a client past
+    // the broker's Receive Maximum is refused once its PUBLISH is read
     private final ExecutorService reader;
+    // runs the writes in the order sent; its queue is bounded in bytes, not in count: a send past maxBacklogBytes of
+    // what waits (pendingBytes, PACKET_OVERHEAD_BYTES a packet included) is dropped and ends the connection, and the
+    // end adds one last task, the DISCONNECT and the socket's close
     private final ExecutorService writer;
     // null while the connection lives; set once, by the first thread that ends it
     private final AtomicReference<End> endCause = new AtomicReference<>();

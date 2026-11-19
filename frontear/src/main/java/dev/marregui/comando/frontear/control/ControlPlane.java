@@ -88,6 +88,10 @@ public final class ControlPlane implements AutoCloseable {
     private final InstantSource clock;
     private final Seal seal;
     private final StateTopic state;
+    /**
+     * Handles the requests, bounded as admitted by {@link #PENDING_MAX} and {@link #PENDING_BYTES_MAX} before they
+     * join its queue, and runs the state tick, one periodic task that holds one place in it.
+     */
     private final ScheduledExecutorService strand;
     private final AtomicBoolean closed = new AtomicBoolean();
     /** Guards {@link #pending}, {@link #pendingBytes} and {@link #byOrigin}; held for no call out of the class. */

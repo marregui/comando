@@ -58,6 +58,26 @@ Methods: `PutLink`, `RemoveLink`, `SetFilters` (whole set per direction, last me
 `Frontear.main <node> <port> <dataDir> <key>...` runs one node on loopback; `Frontear.start` runs it inside a host.
 v1 binds loopback only: it has no TLS and no client authentication.
 
+### 2.6 Threads: one strand per resource, one platform thread per log
+
+Every strand comes from `core.loop.Threads`; the log's forcer is the one platform thread, made by `LogForcer`, and
+`Frontear.main` adds a shutdown hook. Each thread is named for its kind and owner and ends when its owner closes. A
+strand is one virtual thread running its tasks in order; what only a strand touches needs no lock.
+
+| Thread | Kind | Owner, one per |
+|---|---|---|
+| `frontear-broker-accept-<port>`, `frontear-broker-publish-<port>` | strand | broker |
+| `frontear-broker-sweep-<port>` (expiry), `frontear-control-<node>` | timed strand | broker, node |
+| `frontear-broker-reader-<client>`, `frontear-broker-writer-<client>` | strand | client connection |
+| `link-<id>` (sender, resend backoff) | timed strand | link |
+| `mqtt-<client>` (reader, keep alive, reconnect), `mqtt-writer-<client>` | timed strand, strand | link's client |
+| `frontear-log-force-<dir>` | platform thread | link log |
+
+The rules: shared state sits behind one short lock per object, never held across another component's callback nor
+taken twice; every wait is bounded; only the log's forcer touches its files, since a force blocks in the operating
+system, so no strand waits on a disk; a strand's own queue has no count bound, so what feeds it is bounded instead,
+in bytes or by a window, as each strand's field comment states.
+
 ## 3. Consequences
 
 - comando can run its instances' broker in process: `-Dcomando.fabric=frontear` puts a frontear node, hosted by the

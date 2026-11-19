@@ -90,7 +90,20 @@ public final class MqttClient implements AutoCloseable {
     private final Options options;
     private final Handler handler;
     private final Executor callbacks;
+    /**
+     * Runs one connection's task at a time, opening and reading it, and holds at most one more, the next connect the
+     * handler scheduled ({@link #retry}): {@link #connect} queues the first only once, and each ended connection
+     * schedules at most one next.
+     */
     private final ScheduledExecutorService reader;
+    /**
+     * Runs the writes in the order queued; its queue has no bound of its own, what joins it is bounded where it comes
+     * from: the QoS 1 publishes by the broker's Receive Maximum (the rest wait in {@link #queued}, at most
+     * {@link #QUEUE_MAX}), the SUBSCRIBEs and UNSUBSCRIBEs by the packet ids free, the PUBACKs by
+     * {@link Options#receiveMaximum}, one ping at a time, one DISCONNECT. A QoS 0 publish is queued as it comes, so
+     * its caller bounds how many it has unwritten, as a link does by its window; a write stuck past
+     * {@link #WRITE_WITHIN} closes the connection and fails what waits.
+     */
     private final ExecutorService writer;
     private final Object lock = new Object();
     /**
