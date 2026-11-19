@@ -117,9 +117,9 @@ final class Wal {
 
     /**
      * Opens the log of the table folder {@code dir}, creating it with its header and a new salt, forced with its
-     * folder, when it is missing or shorter than its header (its creation cut by a crash). Reads format 2 and format
-     * 1; refuses a header of an unknown magic or version. The log holds a channel on its file for its forces, opened
-     * last: its owner {@link #close closes} it.
+     * folder, when it is missing or holds only a header a crash cut (its creation's write landed in part). Reads
+     * format 2 and format 1; refuses a header of an unknown magic or version. The log holds a channel on its file for
+     * its forces, opened last: its owner {@link #close closes} it.
      */
     static Wal open(final Path dir) throws IOException {
         final Path file = dir.resolve(FILE);
@@ -146,15 +146,32 @@ final class Wal {
     }
 
     /**
-     * Whether {@code file} is shorter than its header: only when a crash cut its creation, or the rewrite of a format
-     * 1 header at a cut that had already emptied the log, so no commit is left in it to replay.
+     * Whether {@code file} holds a format 2 header a crash cut, so no commit is left in it to replay: shorter than a
+     * header, or at most a header long with its magic and version a part of format 2's followed by zeros. A crash
+     * leaves that in the creation, whose forced write landed only in part, or in the rewrite of a format 1 header at a
+     * cut that had already emptied the log; a file of a whole header, or one with other bytes, is left to the format
+     * check.
      */
     private static boolean isCutHeader(final Path file) throws IOException {
         final long size = Files.size(file);
         if (size < UNSALTED_HEADER) {
             return true;
         }
-        return size < HEADER && StoreFiles.readLong(file, 0L) == ((long) VERSION << Integer.SIZE | MAGIC);
+        if (size > HEADER) {
+            return false;
+        }
+        final long head = StoreFiles.readLong(file, 0L);
+        final long whole = (long) VERSION << Integer.SIZE | MAGIC;
+        if (head == whole) {
+            return size < HEADER;
+        }
+        // a landed prefix of the header's first 8 bytes, the rest zeros: its version is zero, its magic a prefix
+        for (int landed = 0; landed <= Integer.BYTES; landed++) {
+            if (head == (whole & ((1L << (landed * Byte.SIZE)) - 1L))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A format 2 header holding {@code salt}, ready to write. */

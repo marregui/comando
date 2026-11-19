@@ -275,6 +275,31 @@ class WalTest {
                 .hasMessage("refuse log of unknown format [file=" + file + ", magic=0x4c415743, version=3]");
     }
 
+    /// A header a power cut tore in the log's creation, its size reached and only a prefix of its bytes landed (the
+    /// rest reading zero), holds no commit: the log is created again. A whole header of a known format opens as it is.
+    @Test
+    void aTornHeaderIsCreatedAgain(@TempDir final Path dir) throws IOException {
+        final Path file = dir.resolve(Wal.FILE);
+        // a salt of no zero byte, so a whole header kept as it is tells from one written anew
+        final byte[] whole = ByteBuffer.wrap(header(0x4C415743, 2)).order(ByteOrder.LITTLE_ENDIAN)
+                .putLong(Long.BYTES, 0x0102030405060708L).array();
+        for (int landed = 0; landed <= Wal.HEADER; landed++) {
+            final byte[] torn = new byte[Wal.HEADER];
+            System.arraycopy(whole, 0, torn, 0, landed);
+            Files.write(file, torn);
+            final Wal wal = Wal.open(dir);
+            if (landed == Wal.HEADER) {
+                assertThat(Files.readAllBytes(file)).as("a whole header").isEqualTo(whole);
+            }
+            assertThat(wal.scan(0L, DEF)).as("landed %d", landed).isEmpty();
+            final long head = ByteBuffer.wrap(Files.readAllBytes(file)).order(ByteOrder.LITTLE_ENDIAN).getLong();
+            assertThat(head).as("landed %d", landed).isEqualTo(2L << Integer.SIZE | 0x4C415743L);
+            wal.append(1L, false, null, sample(DEF, 2));
+            assertThat(Wal.open(dir).scan(0L, DEF)).as("landed %d", landed).extracting(Wal.Entry::txn)
+                    .containsExactly(1L);
+        }
+    }
+
     private static byte[] header(final int magic, final int version) {
         return ByteBuffer.allocate(Wal.HEADER).order(ByteOrder.LITTLE_ENDIAN).putInt(magic).putInt(version).array();
     }

@@ -173,7 +173,9 @@ the log's records together say what is committed: a reader maps only the publish
 version 2, a u64 salt drawn anew at the log's creation and at every cut), then per record its length and a CRC32C of
 the salt's 8 bytes then the body, so a frame of an earlier generation that a power cut left past the header fails its
 CRC and is cut. A format 1 log (an 8-byte header, unsalted CRCs) still reads and becomes format 2 at its first cut;
-the format is one-way: a cdb before record 166 cannot open a format 2 log.
+the format is one-way: a cdb before record 166 cannot open a format 2 log. A log no longer than its header holds no
+record: one shorter than its header, or with only part of a format 2 header landed and the rest zeros (a power cut
+during its creation), is created again on open; any other unknown magic or version is refused.
 
 **The timed force** (record 166). A store opened with `StoreOptions(logForceMillis > 0)` (`CdbServe --log-force-ms N`)
 answers a logged commit once its record is written, without its force; its thread `cdb-log-force-<root>` forces each
