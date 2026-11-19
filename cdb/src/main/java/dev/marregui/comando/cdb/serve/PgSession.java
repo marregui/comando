@@ -559,13 +559,7 @@ final class PgSession {
         for (int row = from; row < to; row++) {
             out.begin('D').int16(columns);
             for (int column = 0; column < columns; column++) {
-                final byte[] value = format(formats, column) == 0 ? PgTypes.text(result, row, column)
-                        : PgTypes.binary(result, row, column);
-                if (value == null) {
-                    out.int32(-1);
-                } else {
-                    out.int32(value.length).bytes(value);
-                }
+                PgTypes.value(out, result, row, column, format(formats, column));
             }
             out.end();
         }

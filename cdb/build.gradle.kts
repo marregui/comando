@@ -27,6 +27,10 @@ tasks.named<Test>("test") {
     // DestructiveStressTest, DestructiveHttpTest: CDB_DESTRUCTIVE_SEED0/1 replay a printed seed pair
     System.getenv("CDB_DESTRUCTIVE_SEED0")?.let { systemProperty("cdb.destructive.seed0", it) }
     System.getenv("CDB_DESTRUCTIVE_SEED1")?.let { systemProperty("cdb.destructive.seed1", it) }
+    // the other tests' one printed seed: CDB_<NAME>_SEED replays it as cdb.<name>.seed
+    for (name in listOf("agg", "arena", "block", "exchange", "exec", "ingest", "parallel", "pg", "pool", "scan", "serve", "store", "symbolkey")) {
+        System.getenv("CDB_${name.uppercase()}_SEED")?.let { systemProperty("cdb.$name.seed", it) }
+    }
 }
 
 // Under -ea Page.relend poisons a lent page and lends a new one, so the refill itself runs only with assertions off for

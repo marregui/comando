@@ -18,7 +18,8 @@ import org.jetbrains.annotations.TestOnly;
  * handshake: an arena per block did that once per commit (2.46 M handshakes in a 17 min Cosa soak, 221 s of the VM
  * thread's time, the longest 5.3 s); an epoch does it once per {@link #ROTATE_NANOS} or per {@link #ROTATE_BYTES} held,
  * whichever ends it first. An epoch holds memory in {@link #CHUNK_BYTES} chunks, so one small block holds a whole
- * chunk.
+ * chunk. A segment a block gives back ({@link Epoch#free}, on its close or when its text outgrew it) is reused by a
+ * later block of the same epoch, up to {@link #FREE_DEPTH} per size class, so a steady load holds fewer chunks.
  * <p>
  * A block's bytes stay mapped until its epoch's arena closes, so a closed block is made unreadable by the block itself
  * ({@link RowBlock#close}), not by its arena. An epoch holds its chunks and lone segments until its last block leaves:
@@ -29,14 +30,20 @@ import org.jetbrains.annotations.TestOnly;
  */
 final class BlockArenas {
 
-    // the age that ends an epoch, so 10 shared-arena closes a second plus one per ROTATE_BYTES held: set from the
-    // soak above (2,377 a second with an arena per commit); an epoch then takes no more than 100 ms of commits
-    static final long ROTATE_NANOS = TimeUnit.MILLISECONDS.toNanos(100L);
-    // the bytes that end an epoch, so a burst of large commits does not keep one arena's memory past their close
-    static final long ROTATE_BYTES = 16L << 20;
     // the slab segments are cut from: one native allocation (zeroed once) instead of one per segment, which was 6.6 %
     // of cdb's Java CPU samples on the Cosa soak of record 170; a segment over a quarter of it is allocated alone
     static final long CHUNK_BYTES = 1L << 20;
+    // the segments of one size class an epoch keeps for reuse: it bounds a free list's length, so its memory and the
+    // scan allocate makes of it under chunkLock; a segment freed past it stays unused until its epoch closes. Not
+    // measured on a soak: on a single-thread model of 1,700 group commits a second, native allocations reach their
+    // floor of one chunk per epoch from 16 on, and 64 against 256 cuts 346k against 280k fresh segments per 100k
+    // blocks; the soak's Epoch.allocate samples at 16, 64 and 256 would settle it
+    static final int FREE_DEPTH = 64;
+    // the bytes that end an epoch, so a burst of large commits does not keep one arena's memory past their close
+    static final long ROTATE_BYTES = 16L << 20;
+    // the age that ends an epoch, so 10 shared-arena closes a second plus one per ROTATE_BYTES held: set from the
+    // soak above (2,377 a second with an arena per commit); an epoch then takes no more than 100 ms of commits
+    static final long ROTATE_NANOS = TimeUnit.MILLISECONDS.toNanos(100L);
     // the largest alignment a block asks for (a long), and so the alignment of every chunk
     private static final long MAX_ALIGNMENT = Long.BYTES;
     private static final BlockArenas SHARED =
@@ -167,7 +174,7 @@ final class BlockArenas {
     // outside the lock: a close waits for the handshake of every thread, and a join must not wait for it
     private void close(final Epoch epoch) {
         if (epoch != null) {
-            epoch.arena.close();
+            epoch.closeArena();
             lock.lock();
             try {
                 open.remove(epoch);
@@ -193,41 +200,58 @@ final class BlockArenas {
         // under chunkLock: the slab small segments are cut from, null before the first, and the bytes of it cut
         private MemorySegment chunk;
         private long chunkUsed;
+        // under chunkLock: per size class (the floor of the log2 of a byte size), the segments freed and not yet
+        // reused, a stack of freeCount[class] of them; null before the first free
+        private MemorySegment[][] free;
+        private int[] freeCount;
 
         private Epoch(final long openedNanos, final long chunkBytes) {
             this.openedNanos = openedNanos;
             this.chunkBytes = chunkBytes;
         }
 
+        @Override
+        public String toString() {
+            return "row blocks [bytes=" + bytes.get() + ']';
+        }
+
         /**
          * {@code byteSize} zeroed bytes aligned to {@code alignment} (a power of two, at most a long's); the caller
-         * holds a block of this epoch. A segment of up to a quarter of a chunk is cut from the epoch's current chunk, a
-         * fresh one taken when it does not fit (the rest of the old one unused until the epoch closes); a larger one is
-         * allocated alone. The epoch's bytes count whole chunks, the memory it holds.
+         * holds a block of this epoch. A segment freed into the epoch is reused first, zeroed again, so no byte of the
+         * block that freed it reaches the next; else a segment of up to a quarter of a chunk is cut from the epoch's
+         * current chunk, a fresh one taken when it does not fit (the rest of the old one unused until the epoch
+         * closes), and a larger one is allocated alone. The epoch's bytes count whole chunks, the memory it holds.
          */
         MemorySegment allocate(final long byteSize, final long alignment) {
             assert alignment > 0L && alignment <= MAX_ALIGNMENT && (alignment & (alignment - 1L)) == 0L
                     : "alignment not a power of two up to a long's";
-            if (byteSize > chunkBytes / 4L) {
-                final MemorySegment alone = arena.allocate(byteSize, alignment);
-                bytes.addAndGet(byteSize);
-                return alone;
-            }
+            final boolean alone = byteSize > chunkBytes / 4L;
+            final MemorySegment reused;
             // the lock is held while a fresh chunk is allocated and zeroed, once per CHUNK_BYTES; a lock-free bump was
             // not measured against it (the 127 ns per block of record 170 is one thread)
             chunkLock.lock();
             try {
-                long at = (chunkUsed + alignment - 1L) & -alignment;
-                if (chunk == null || at + byteSize > chunkBytes) {
-                    chunk = arena.allocate(chunkBytes, MAX_ALIGNMENT);
-                    bytes.addAndGet(chunkBytes);
-                    at = 0L;
+                reused = takeFree(byteSize, alignment);
+                if (reused == null && !alone) {
+                    long at = (chunkUsed + alignment - 1L) & -alignment;
+                    if (chunk == null || at + byteSize > chunkBytes) {
+                        chunk = arena.allocate(chunkBytes, MAX_ALIGNMENT);
+                        bytes.addAndGet(chunkBytes);
+                        at = 0L;
+                    }
+                    chunkUsed = at + byteSize;
+                    return chunk.asSlice(at, byteSize);
                 }
-                chunkUsed = at + byteSize;
-                return chunk.asSlice(at, byteSize);
             } finally {
                 chunkLock.unlock();
             }
+            if (reused != null) {
+                // outside the lock: the segment is the caller's alone once taken off the free list
+                return reused.fill((byte) 0);
+            }
+            final MemorySegment lone = arena.allocate(byteSize, alignment);
+            bytes.addAndGet(byteSize);
+            return lone;
         }
 
         /** The bytes this epoch holds: its chunks and the segments allocated alone. */
@@ -236,9 +260,84 @@ final class BlockArenas {
             return bytes.get();
         }
 
-        @Override
-        public String toString() {
-            return "row blocks [bytes=" + bytes.get() + ']';
+        /**
+         * Gives back {@code segment}, which {@link #allocate} cut for a block of this epoch that no longer reaches it,
+         * for a later allocate of this epoch to reuse; dropped, unused until the epoch closes, when its size class
+         * already keeps {@link #FREE_DEPTH}. The epoch's bytes do not change: it still holds the memory.
+         */
+        void free(final MemorySegment segment) {
+            final long byteSize = segment.byteSize();
+            if (byteSize == 0L) {
+                return;
+            }
+            assert segment.scope().equals(arena.scope()) : "a segment freed into an epoch it was not cut from";
+            final int sizeClass = sizeClass(byteSize);
+            chunkLock.lock();
+            try {
+                if (free == null) {
+                    free = new MemorySegment[Long.SIZE][];
+                    freeCount = new int[Long.SIZE];
+                }
+                if (free[sizeClass] == null) {
+                    free[sizeClass] = new MemorySegment[FREE_DEPTH];
+                }
+                final int n = freeCount[sizeClass];
+                if (n < FREE_DEPTH) {
+                    free[sizeClass][n] = segment;
+                    freeCount[sizeClass] = n + 1;
+                }
+            } finally {
+                chunkLock.unlock();
+            }
+        }
+
+        /** The segments of {@code byteSize}'s size class kept for reuse. */
+        @TestOnly
+        int freeSegments(final long byteSize) {
+            chunkLock.lock();
+            try {
+                return free == null ? 0 : freeCount[sizeClass(byteSize)];
+            } finally {
+                chunkLock.unlock();
+            }
+        }
+
+        private static int sizeClass(final long byteSize) {
+            return Long.SIZE - 1 - Long.numberOfLeadingZeros(byteSize);
+        }
+
+        // called with no block left in the epoch: drop every reference into the arena, then close it
+        private void closeArena() {
+            chunkLock.lock();
+            try {
+                chunk = null;
+                free = null;
+                freeCount = null;
+            } finally {
+                chunkLock.unlock();
+            }
+            arena.close();
+        }
+
+        // called with chunkLock held: the most recently freed segment of byteSize's class that holds byteSize bytes at
+        // alignment, taken off the free list and cut to byteSize; null when none
+        private MemorySegment takeFree(final long byteSize, final long alignment) {
+            if (free == null || byteSize == 0L) {
+                return null;
+            }
+            final int sizeClass = sizeClass(byteSize);
+            final MemorySegment[] stack = free[sizeClass];
+            final int n = freeCount[sizeClass];
+            for (int i = n - 1; i >= 0; i--) {
+                final MemorySegment candidate = stack[i];
+                if (candidate.byteSize() >= byteSize && (candidate.address() & (alignment - 1L)) == 0L) {
+                    stack[i] = stack[n - 1];
+                    stack[n - 1] = null;
+                    freeCount[sizeClass] = n - 1;
+                    return candidate.asSlice(0L, byteSize);
+                }
+            }
+            return null;
         }
     }
 }

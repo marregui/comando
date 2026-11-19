@@ -220,6 +220,14 @@ final class StoreFiles {
     }
 
     /**
+     * A read-only channel on the existing {@code file} for positional reads into the heap, never a mapping: its owner
+     * may cut the file once it has read it, and closes the channel.
+     */
+    static FileChannel openForRead(final Path file) throws IOException {
+        return open(file, StandardOpenOption.READ);
+    }
+
+    /**
      * Creates the folder {@code folder} when it is missing, its parent existing; its entry is durable once the parent
      * is forced.
      */
@@ -244,23 +252,6 @@ final class StoreFiles {
             if (r != null) {
                 r.deleted(path);
             }
-        }
-    }
-
-    /** The whole of {@code file}, read into the heap; refuses a file over 2 GB. */
-    static ByteBuffer readAll(final Path file) throws IOException {
-        try (final FileChannel channel = open(file, StandardOpenOption.READ)) {
-            final long size = channel.size();
-            if (size > Integer.MAX_VALUE) {
-                throw new IOException("refuse file over 2 GB [file=" + file + ", bytes=" + size + ']');
-            }
-            final ByteBuffer buffer = ByteBuffer.allocate((int) size);
-            while (buffer.hasRemaining()) {
-                if (channel.read(buffer) < 0) {
-                    break;
-                }
-            }
-            return buffer.flip();
         }
     }
 

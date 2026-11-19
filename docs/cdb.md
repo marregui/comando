@@ -144,12 +144,12 @@ names; a commit logged meanwhile keeps the log until the next checkpoint (a scan
 files and folders written since the last checkpoint forced, the symbol files appended and forced, `_meta` when the
 definition changed, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
 forced. Only when that folder force holds are the folders the new `_txn` no longer names deleted (those no reader
-holds) and the log cut back to its header, a new salt written in it and forced. `Store.create` forces the root after the table folder. `_txn` and
+holds) and the log cut back to its header, a new salt written in it and forced. `Store.create` forces the root after the table folder; when the table folder's force after `_txn` or `_meta` fails, the create is refused and the folder removed (best effort: a folder left with `_meta` opens as an empty table). `_txn` and
 the log's records together say what is committed: a reader maps only the published rows, and a file may run past them.
 
 | Failure | After it |
 |---|---|
-| a crash or power cut before a commit's record is forced | the previous commit. When the store opens: the folders `_txn` does not name and every `.tmp` file are deleted, each named partition's files cut to their checkpointed sizes and each symbol file to its checkpointed bytes, the log's records replayed in batches as the applier writes them (a truncate or a definition change a commit of its own), then one checkpoint |
+| a crash or power cut before a commit's record is forced | the previous commit. When the store opens: the folders `_txn` does not name and every `.tmp` file are deleted, each named partition's files cut to their checkpointed sizes and each symbol file to its checkpointed bytes, the log's records read through a 1 MiB heap window (grown only to the largest record, so a log larger than the heap replays) and replayed in batches as the applier writes them (a truncate or a definition change a commit of its own), then one checkpoint |
 | a crash or power cut after the record is forced | the commit, replayed when the store opens, answered or not |
 | a crash during a checkpoint, before `_txn` is replaced | the old `_txn` and the log reach the same state: the log is replayed when the store opens |
 | the log's last record torn (a short frame, a bad length, a bad CRC) | cut there and forced: only a commit that was never answered can be torn |
@@ -163,7 +163,8 @@ the log's records together say what is committed: a reader maps only the publish
 | a partition folder or a column file `_txn` and `_meta` name is missing | the read fails, naming the table, the partition and the file, the last column's file included (`_txn` records how many leading columns each partition has files for); a column added after a partition was written has no file there and reads NULL. A partition line written before that count (two fields) keeps the tail rule: a missing last column reads NULL |
 | a symbol write fails | the dictionary is cut back to its committed length before the next write, and a dictionary shorter than its checkpoint fails the open: a committed symbol never reads NULL |
 | a `/write` body with a malformed or refused line | none of the body's rows is written (`CdbAppender.discard`); the other bodies of its group commit are written |
-| the store closes while a writer is still open after the close's 10 s wait | the close fails naming the tables and keeps the root's `_lock`, so no other store opens the folder under that writer; a later close releases it once the writer is closed |
+| the log forcer is still in a force after its 10 s join | the close fails before closing any table (the force may use any table's log) and keeps the root's `_lock`; a later close tries again |
+| the store closes while a writer is still open after the close's 10 s wait, a table's apply lock is still held after that wait (a write or force stalled in the file system), or a table's close throws | the close fails naming the tables and the cause and keeps the root's `_lock`, so no other store opens the folder under them; every other table is still closed, and a later close finishes the ones left (one whose close threw is closed without its checkpoint, so its log replays at the next open) and releases the lock once every table is closed |
 | an `Error` while a commit writes its files | the files it wrote unmapped and deleted, its writers released, and the table refusing commits until the store reopens |
 | the previous engine opening a store after a failed or crashed append | it refuses the longer files and opens nothing; opening once with this engine cuts them first |
 | an engine from before the log opening a checkpointed store | it refuses `_txn`'s new lines and opens nothing: the format is one-way |
@@ -207,7 +208,7 @@ taken from the current epoch of `store.BlockArenas`: one shared arena serves the
 their segments cut from 1 MiB chunks and closes when its last block left, so 10 arena closes a second, each a handshake
 of every thread, plus one per 16 MiB of commits ([record 170](adr/0170-cdb-row-block-epochs.md)): the block that queued
 them is freed once the applier published them, a replay's blocks once the replay ends, the blocks never applied when
-their table closes. Each table log keeps one file channel for its forces, closed with the store.
+their table closes. A freed block's segments are reused within their epoch (at most 64 per size class, zeroed before reuse), which takes most native allocations off the commit path. Each table log keeps one file channel for its forces, closed with the store.
 
 ## 3. Concurrency
 

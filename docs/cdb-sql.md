@@ -153,5 +153,7 @@ Example: `psql "host=127.0.0.1 port=8812 user=admin password=$(cat ~/.comando-cd
 | Query time (a change runs to its end) | 60 s | HTTP 408; PG SQLSTATE 57014 |
 | Result rows | 1,000,000 | HTTP 400; PG SQLSTATE 54000 |
 | HTTP request read, response write, connections | 30 s, 120 s, 128 | the connection is closed |
-| Request bodies held at once | 64 MiB | HTTP 503 after 5 s |
+| Request bodies held at once | 64 MiB (a `/write` body read into one of the 16 pooled 1 MiB buffers counts at least 1 MiB) | HTTP 503 after 5 s |
 | Tables, columns a table, name length | 1,000, 1,024, 127 characters | the CREATE, ADD COLUMN or line-protocol write is refused |
+
+`/exec` streams its JSON answer in chunks as the rows are encoded, so a result is never held as one string. A failure after the 200 headers were sent (an `Error`, a write to a closed client) drops the connection instead of ending the body: the client sees a transport error, never a 200 whose JSON is cut short.

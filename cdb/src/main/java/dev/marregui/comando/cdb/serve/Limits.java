@@ -15,6 +15,11 @@ final class Limits {
     static final long BODY_BUDGET_BYTES = 64L << 20;
     /** How long a body waits for its share of {@link #BODY_BUDGET_BYTES}. */
     static final long BODY_WAIT_MILLIS = 5_000;
+    /**
+     * The size of a pooled {@code /write} body buffer: a metrics batch fits one; a larger body is read into an array
+     * of its own. A sizing hint only, as every body under the body limit is taken either way.
+     */
+    static final int POOLED_BODY_BYTES = 1 << 20;
     /** The JDK HTTP server's request read bound, in seconds ({@code sun.net.httpserver.maxReqTime}). */
     static final int HTTP_MAX_REQUEST_SECONDS = 30;
     /** The JDK HTTP server's response write bound, in seconds ({@code sun.net.httpserver.maxRspTime}). */

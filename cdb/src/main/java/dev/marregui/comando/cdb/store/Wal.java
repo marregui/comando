@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32C;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 
@@ -42,12 +44,16 @@ final class Wal {
 
     /** The log's file name in the table's folder. */
     static final String FILE = "_wal";
-    private static final System.Logger LOG = System.getLogger(Wal.class.getName());
     /** The header's bytes in format 2: magic, version and salt. */
     static final int HEADER = 16;
     /** The bytes before a frame's body: its length and CRC. */
     static final int FRAME = 8;
+    // the bytes a replay reads at a time, so a log larger than the heap replays: a frame up to it is checked in place,
+    // a larger one has its CRC computed through it, and the buffer grows past it only to decode a frame whose CRC
+    // held, a commit its writer once held whole in the heap. A sizing hint: it bounds memory, not what replays
+    static final int WINDOW = 1 << 20;
 
+    private static final System.Logger LOG = System.getLogger(Wal.class.getName());
     // "CWAL" read as a little-endian int
     private static final int MAGIC = 0x4C415743;
     private static final int VERSION = 2;
@@ -80,6 +86,8 @@ final class Wal {
     // as the header holds them (null in format 1)
     private int header;
     private byte[] salt;
+    // guarded by this: the largest the last scan's read buffer grew
+    private int scanBufferBytes;
     // the durable waiters' monitor, taken inside this one (a write, a cut) or alone (a force, a waiter), never the
     // other way round, so a waiter never queues behind a drain or a force-per-commit append holding the log's monitor
     private final Object forced = new Object();
@@ -182,12 +190,30 @@ final class Wal {
      * once, on open, before any append. Frames at or below {@code afterTxn}, left by a checkpoint that crashed before
      * its reset, are skipped undecoded: their rows are in the checkpointed files, in columns that may be fewer than
      * {@code def}'s. The entries' row blocks are the caller's, to close once their rows are applied; on a throw the
-     * scan closes those it decoded.
+     * scan closes those it decoded. The log is read through a window of {@link #WINDOW} bytes, never whole.
      */
     synchronized List<Entry> scan(final long afterTxn, final TableDef def) throws IOException {
+        return scanThrough(afterTxn, def, WINDOW);
+    }
+
+    /** {@link #scan} through a window of {@code windowBytes}, so a test reaches frames larger than its window. */
+    @TestOnly
+    synchronized List<Entry> scan(final long afterTxn, final TableDef def, final int windowBytes) throws IOException {
+        return scanThrough(afterTxn, def, windowBytes);
+    }
+
+    /** The largest the last scan's read buffer grew: its window, or the largest frame it decoded when larger. */
+    @TestOnly
+    synchronized int scanBufferBytes() {
+        return scanBufferBytes;
+    }
+
+    // called with the monitor held: scan's body around the entries it closes on a throw
+    private List<Entry> scanThrough(final long afterTxn, final TableDef def, final int windowBytes)
+            throws IOException {
         final List<Entry> entries = new ArrayList<>();
         try {
-            return scanInto(afterTxn, def, entries);
+            return scanInto(afterTxn, def, windowBytes, entries);
         } catch (final Throwable t) {
             for (final Entry entry : entries) {
                 entry.rows().close();
@@ -196,47 +222,56 @@ final class Wal {
         }
     }
 
-    // called with the monitor held: scan's body, each decoded entry added to entries as it is read
-    private List<Entry> scanInto(final long afterTxn, final TableDef def, final List<Entry> entries)
-            throws IOException {
+    // called with the monitor held: each decoded entry added to entries as it is read
+    private List<Entry> scanInto(final long afterTxn, final TableDef def, final int windowBytes,
+                                 final List<Entry> entries) throws IOException {
         TableDef current = def;
         long previous = 0L;
         int frames = 0;
         long end = header;
+        final long size;
         // read into the heap, not mapped: the scan cuts a torn tail, and a cut under a mapping ends the JVM
-        final ByteBuffer log = StoreFiles.readAll(file).order(ByteOrder.LITTLE_ENDIAN);
-        final long size = log.limit();
-        while (size - end >= FRAME) {
-            final long length = Integer.toUnsignedLong(log.getInt((int) end));
-            final int crc = log.getInt((int) end + Integer.BYTES);
-            if (length < MIN_BODY || length > size - end - FRAME) {
-                break;
-            }
-            final ByteBuffer body = log.slice((int) end + FRAME, (int) length).order(ByteOrder.LITTLE_ENDIAN);
-            if (checksum(body) != crc) {
-                break;
-            }
-            final long txn = body.getLong();
-            if (frames > 0 && txn != previous + 1L) {
-                throw new CdbException("refuse log record out of order [file=" + file + ", offset=" + end
-                        + ", txn=" + txn + ", previous=" + previous + ']', -1);
-            }
-            if (txn > afterTxn) {
-                // the first commit after the checkpoint is its txn + 1; a later one means commits were lost
-                if (entries.isEmpty() && txn != afterTxn + 1L) {
-                    throw new CdbException("refuse log that skips commits after the checkpoint [file=" + file
-                            + ", offset=" + end + ", txn=" + txn + ", checkpointTxn=" + afterTxn + ']', -1);
+        try (final Window log = new Window(file, windowBytes)) {
+            size = log.size;
+            try {
+                while (size - end >= FRAME) {
+                    final long length = Integer.toUnsignedLong(log.intAt(end));
+                    final int crc = log.intAt(end + Integer.BYTES);
+                    if (length < MIN_BODY || length > size - end - FRAME) {
+                        break;
+                    }
+                    if (checksum(log, end + FRAME, length) != crc) {
+                        break;
+                    }
+                    final long txn = log.longAt(end + FRAME);
+                    if (frames > 0 && txn != previous + 1L) {
+                        throw new CdbException("refuse log record out of order [file=" + file + ", offset=" + end
+                                + ", txn=" + txn + ", previous=" + previous + ']', -1);
+                    }
+                    if (txn > afterTxn) {
+                        // the first commit after the checkpoint is its txn + 1; a later one means commits were lost
+                        if (entries.isEmpty() && txn != afterTxn + 1L) {
+                            throw new CdbException("refuse log that skips commits after the checkpoint [file=" + file
+                                    + ", offset=" + end + ", txn=" + txn + ", checkpointTxn=" + afterTxn + ']', -1);
+                        }
+                        if (length > Integer.MAX_VALUE - FRAME) {
+                            throw undecodable("record over 2 GB", end, txn, length);
+                        }
+                        final ByteBuffer body = log.slice(end + FRAME, (int) length).position(Long.BYTES);
+                        final Entry entry = decode(body, txn, current, end);
+                        if (entry.def() != null) {
+                            current = entry.def();
+                        }
+                        entries.add(entry);
+                    }
+                    previous = txn;
+                    lastTxn = txn;
+                    frames++;
+                    end += FRAME + length;
                 }
-                final Entry entry = decode(body, txn, current, end);
-                if (entry.def() != null) {
-                    current = entry.def();
-                }
-                entries.add(entry);
+            } finally {
+                scanBufferBytes = log.capacity();
             }
-            previous = txn;
-            lastTxn = txn;
-            frames++;
-            end += FRAME + length;
         }
         if (end < size) {
             StoreFiles.truncate(file, end);
@@ -244,6 +279,23 @@ final class Wal {
         records = frames;
         bytes = end;
         return entries;
+    }
+
+    /**
+     * The CRC32C of the {@code length} bytes of {@code log} from {@code at}, as {@link #checksum(ByteBuffer)} gives
+     * it: checked in place when they fit the window, else streamed through it, so a length a torn tail made up never
+     * grows the buffer.
+     */
+    private int checksum(final Window log, final long at, final long length) throws IOException {
+        if (length <= log.capacity()) {
+            return checksum(log.slice(at, (int) length));
+        }
+        final CRC32C crc = new CRC32C();
+        if (salt != null) {
+            crc.update(salt);
+        }
+        log.update(crc, at, length);
+        return (int) crc.getValue();
     }
 
     /**
@@ -734,5 +786,106 @@ final class Wal {
      * the entry closes {@code rows} once they are applied.
      */
     record Entry(long txn, boolean truncate, TableDef def, RowBlock rows) {
+    }
+
+    /**
+     * One scan's view of the log: positional reads into a heap buffer of the window's bytes, which {@link #slice} alone
+     * grows, to the length of a frame it must hand over whole. A slice is valid until the next read through the window.
+     */
+    private static final class Window implements AutoCloseable {
+        private final FileChannel channel;
+        private final Path file;
+        private final long size;
+        // the file offset of the buffer's first byte
+        private long base;
+        private ByteBuffer buffer;
+        // how many bytes from base the buffer holds
+        private int filled;
+
+        Window(final Path file, final int windowBytes) throws IOException {
+            this.file = file;
+            channel = StoreFiles.openForRead(file);
+            try {
+                size = channel.size();
+                // a frame's header and txn fit any window, so only a body ever needs more
+                final long capacity = Math.max(FRAME + MIN_BODY, Math.min(windowBytes, size));
+                buffer = ByteBuffer.allocate((int) capacity).order(ByteOrder.LITTLE_ENDIAN);
+            } catch (final Throwable t) {
+                try {
+                    channel.close();
+                } catch (final IOException e) {
+                    t.addSuppressed(e);
+                }
+                throw t;
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            channel.close();
+        }
+
+        int capacity() {
+            return buffer.capacity();
+        }
+
+        int intAt(final long at) throws IOException {
+            cover(at, Integer.BYTES);
+            return buffer.getInt((int) (at - base));
+        }
+
+        long longAt(final long at) throws IOException {
+            cover(at, Long.BYTES);
+            return buffer.getLong((int) (at - base));
+        }
+
+        /** The {@code length} bytes from {@code at}, little-endian; grows the buffer to {@code length} if smaller. */
+        ByteBuffer slice(final long at, final int length) throws IOException {
+            if (length > buffer.capacity()) {
+                buffer = ByteBuffer.allocate(length).order(ByteOrder.LITTLE_ENDIAN);
+                filled = 0;
+            }
+            cover(at, length);
+            return buffer.slice((int) (at - base), length).order(ByteOrder.LITTLE_ENDIAN);
+        }
+
+        /** Feeds {@code crc} the {@code length} bytes from {@code at}, a buffer's worth at a time. */
+        void update(final CRC32C crc, final long at, final long length) throws IOException {
+            long done = 0L;
+            while (done < length) {
+                final int chunk = (int) Math.min(buffer.capacity(), length - done);
+                cover(at + done, chunk);
+                crc.update(buffer.array(), (int) (at + done - base), chunk);
+                done += chunk;
+            }
+        }
+
+        // makes the file's bytes [at, at + need) readable at buffer index at - base; the caller has checked that need
+        // fits the buffer
+        private void cover(final long at, final int need) throws IOException {
+            if (at >= base && at + need <= base + filled) {
+                return;
+            }
+            if (at + need > size) {
+                throw new IOException("cannot read log past its end [file=" + file + ", offset=" + at + ", bytes="
+                        + need + ", size=" + size + ']');
+            }
+            // a scan moves forward: keep what is already read past at, so each byte is read once
+            final int keep = at >= base && at < base + filled ? (int) (base + filled - at) : 0;
+            if (keep > 0) {
+                System.arraycopy(buffer.array(), (int) (at - base), buffer.array(), 0, keep);
+            }
+            base = at;
+            filled = keep;
+            buffer.clear().limit((int) Math.min(buffer.capacity(), size - at));
+            while (filled < need) {
+                final int read = channel.read(buffer.position(filled), base + filled);
+                if (read < 0) {
+                    throw new IOException("cannot read log past its end [file=" + file + ", offset=" + (base + filled)
+                            + ", size=" + size + ']');
+                }
+                filled += read;
+            }
+        }
     }
 }

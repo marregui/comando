@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,7 +32,8 @@ import dev.marregui.comando.cdb.CdbType;
 public final class Store implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Store.class.getName());
-    // how long close waits for each table's open writer; past it the close fails and keeps the root's lock
+    // how long close waits for each table's open writer, and for an apply holding its apply lock; past it the close
+    // fails and keeps the root's lock
     private static final long CLOSE_WAIT_MILLIS = 10_000L;
     // how long a checkpoint waits for the table's writer; as CLOSE_WAIT_MILLIS
     private static final long CHECKPOINT_WAIT_MILLIS = 10_000L;
@@ -127,7 +129,10 @@ public final class Store implements AutoCloseable {
     @TestOnly
     volatile long textLimitBytes = Integer.MAX_VALUE;
 
-    /** How long close waits for each table's open writer: {@code CLOSE_WAIT_MILLIS}, lowered by tests only. */
+    /**
+     * How long close waits for each table's open writer, and for an apply holding its apply lock:
+     * {@code CLOSE_WAIT_MILLIS}, lowered by tests only.
+     */
     @TestOnly
     long closeWaitMillis = CLOSE_WAIT_MILLIS;
 
@@ -170,8 +175,11 @@ public final class Store implements AutoCloseable {
     private final Set<Path> dying = ConcurrentHashMap.newKeySet();
     // serialises close: a close that kept the lock is finished by a later one
     private final Object closeLock = new Object();
-    // the tables whose writer a close left open, guarded by closeLock: the root's lock is kept while any is
-    private final List<TableState> writerOpenAtClose = new ArrayList<>();
+    // the tables a close left unclosed, guarded by closeLock: a writer open past the wait, or an apply holding the
+    // table's apply lock past it; the root's lock is kept while any is
+    private final List<Unclosed> unclosedAtClose = new ArrayList<>();
+    // guarded by closeLock: a close got past the log forcer's end and ran its pass over the tables
+    private boolean tablesClosed;
     // written by the closing thread, read by every caller and the applier's sweep: once set, no table opens a reader
     // or writer, and a sweep in progress stops
     private volatile boolean closed;
@@ -305,6 +313,7 @@ public final class Store implements AutoCloseable {
         checkOpen();
         check(def);
         synchronized (createLock) {
+            checkOpen();
             if (tables.containsKey(TableState.key(def.name()))) {
                 if (ifNotExists) {
                     return false;
@@ -319,9 +328,15 @@ public final class Store implements AutoCloseable {
             Wal wal = null;
             try {
                 StoreFiles.createFolder(dir);
-                StoreFiles.replaceText(dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(0L, List.of()));
+                // a folder force that fails after a rename leaves the create in doubt: a power cut may keep _meta
+                // without _txn, or lose both, so the create is refused rather than answered
+                if (!StoreFiles.replaceText(dir.resolve(TableFiles.TXN), TableFiles.encodeTxn(0L, List.of()))) {
+                    throw new IOException("cannot force table folder after writing _txn [dir=" + dir + ']');
+                }
                 // _meta last: open takes a folder with _meta for a table
-                StoreFiles.replaceText(dir.resolve(TableFiles.META), TableFiles.encodeMeta(def));
+                if (!StoreFiles.replaceText(dir.resolve(TableFiles.META), TableFiles.encodeMeta(def))) {
+                    throw new IOException("cannot force table folder after writing _meta [dir=" + dir + ']');
+                }
                 wal = Wal.open(dir);
                 // the table folder's entry: without it a power cut loses the table
                 StoreFiles.forceFolder(root);
@@ -329,7 +344,10 @@ public final class Store implements AutoCloseable {
                 if (wal != null) {
                     wal.close();
                 }
-                throw new CdbException("cannot create table [table=" + def.name() + ", dir=" + dir + ']', e);
+                final CdbException refused = new CdbException("cannot create table [table=" + def.name() + ", dir="
+                        + dir + ']', e);
+                removeFolder(dir, refused);
+                throw refused;
             }
             final TableState state = new TableState(dir, def, new long[0], wal, mappings);
             state.init(new TableState.Snapshot(0L, def, List.of()));
@@ -596,44 +614,53 @@ public final class Store implements AutoCloseable {
 
     /**
      * Waits for open writers to close, then releases every file; idempotent. A writer still open past the wait may
-     * still replace its table's {@code _txn}, so the close then fails naming its tables and keeps the root's lock: no
-     * store opens the root under that writer. A later close waits for those writers again and, once they are closed,
-     * releases the lock.
+     * still replace its table's {@code _txn}, an apply still holding a table's apply lock past it may still write its
+     * files, and a log force still running past it may still use a table's log: the close then fails naming what it
+     * waited for and keeps the root's lock, so no store opens the root under them. A later close waits for them again
+     * and, once they ended, closes what is left and releases the lock.
      */
     @Override
     public void close() {
         synchronized (closeLock) {
             if (!closed) {
-                closed = true;
+                // under the create lock: a create either published its table before this, so the loop below closes
+                // it, or sees the store closed and refuses, never adding an open log after the root lock is released
+                synchronized (createLock) {
+                    closed = true;
+                }
                 if (applier != null) {
                     applier.stop();
                 }
-                if (forcer != null) {
-                    // a last force of every dirty log; a commit of a writer still open is forced on its own thread
-                    forcer.close();
-                }
+            }
+            // a last force of every dirty log; a commit of a writer still open is forced on its own thread. A force
+            // still running past the wait may use any table's log, so no table is closed under it
+            if (forcer != null && !forcer.stop()) {
+                throw new CdbException("cannot close store, log force still running, root lock kept [root=" + root
+                        + ", waitMillis=" + forcer.joinMillis + ']', -1);
+            }
+            // every table is tried, a failing one recorded as unclosed: a later close then finds each table it must
+            // still close, and never releases the lock over an open log
+            final List<CloseFailure> failures = new ArrayList<>();
+            if (!tablesClosed) {
+                tablesClosed = true;
                 for (final TableState state : tables.values()) {
-                    final boolean drained = state.leaseForClose(closeWaitMillis);
-                    if (drained) {
-                        checkpointOnClose(state);
-                    }
-                    state.close(drained);
-                    if (drained) {
-                        state.wal.close();
-                    } else {
-                        writerOpenAtClose.add(state);
-                    }
+                    closeAtFirst(state, failures);
                 }
             } else {
-                writerOpenAtClose.removeIf(this::leaseAndCloseLog);
-            }
-            if (!writerOpenAtClose.isEmpty()) {
-                final List<String> open = new ArrayList<>(writerOpenAtClose.size());
-                for (final TableState state : writerOpenAtClose) {
-                    open.add(state.key);
+                for (final ListIterator<Unclosed> it = unclosedAtClose.listIterator(); it.hasNext(); ) {
+                    final Unclosed table = it.next();
+                    try {
+                        if (finishClose(table)) {
+                            it.remove();
+                        }
+                    } catch (final Throwable t) {
+                        it.set(new Unclosed(table.state(), table.leased(), true));
+                        failures.add(closeFailed(table.state(), t));
+                    }
                 }
-                throw new CdbException("cannot close store, writer still open, root lock kept [root=" + root
-                        + ", tables=" + open + ", waitMillis=" + closeWaitMillis + ']', -1);
+            }
+            if (!unclosedAtClose.isEmpty()) {
+                throw unclosedFailure(failures);
             }
             final FileChannel held = lock;
             lock = null;
@@ -672,13 +699,108 @@ public final class Store implements AutoCloseable {
         return mappings;
     }
 
-    // the closing thread holds the lease: a clean shutdown applies the queued commits and leaves every log empty, else
-    // the next open replays it
-    private void checkpointOnClose(final TableState state) {
-        if (state.poisoned() || state.suspended() || state.current() == null || state.wal.records() == 0) {
-            return;
+    // closes a table at the store's close, after its checkpoint when the close holds its lease and no earlier close
+    // of it threw (an Error may have left its files half-written: the next open replays its log instead); false when
+    // an apply held the table's apply lock past the wait: the table is left open, and a later close tries again
+    private boolean closeTable(final Unclosed table) {
+        final TableState state = table.state();
+        return (!table.leased() || table.threw() || checkpointOnClose(state))
+                && state.close(table.leased(), closeWaitMillis);
+    }
+
+    // a later close's pass over a table the first left: closed once its apply let the lock go, its log closed once
+    // its writer did
+    private boolean finishClose(final Unclosed table) {
+        final TableState state = table.state();
+        if (!state.closed() && !closeTable(table)) {
+            return false;
         }
-        state.applyLock.lock();
+        if (!table.leased() && !state.leaseForClose(closeWaitMillis)) {
+            return false;
+        }
+        state.wal.close();
+        return true;
+    }
+
+    // the first close's pass over a table: closed, or recorded as unclosed for a later close, also when it throws
+    private void closeAtFirst(final TableState state, final List<CloseFailure> failures) {
+        boolean leased = false;
+        try {
+            leased = state.leaseForClose(closeWaitMillis);
+            final Unclosed table = new Unclosed(state, leased, false);
+            if (closeTable(table) && leased) {
+                state.wal.close();
+            } else {
+                unclosedAtClose.add(table);
+            }
+        } catch (final Throwable t) {
+            unclosedAtClose.add(new Unclosed(state, leased, true));
+            failures.add(closeFailed(state, t));
+        }
+    }
+
+    private CloseFailure closeFailed(final TableState state, final Throwable error) {
+        LOG.log(System.Logger.Level.WARNING, "cannot close table, kept for the next close [root=" + root + ", table="
+                + state.key + ']', error);
+        return new CloseFailure(state.key, error);
+    }
+
+    // the close's refusal, naming each cause and its tables: a writer it holds no lease from, an apply it could not
+    // close the table under, a table whose close threw. The throws are suppressed in it; an Error among them is
+    // thrown as itself, the refusal suppressed in it, so the caller still sees an Error
+    private RuntimeException unclosedFailure(final List<CloseFailure> failures) {
+        final List<String> failed = new ArrayList<>(failures.size());
+        for (final CloseFailure failure : failures) {
+            failed.add(failure.table());
+        }
+        final List<String> tables = new ArrayList<>(unclosedAtClose.size());
+        final List<String> applying = new ArrayList<>();
+        boolean writerOpen = false;
+        for (final Unclosed table : unclosedAtClose) {
+            tables.add(table.state().key);
+            writerOpen |= !table.leased();
+            if (!table.state().closed() && !failed.contains(table.state().key)) {
+                applying.add(table.state().key);
+            }
+        }
+        final List<String> causes = new ArrayList<>(3);
+        if (writerOpen) {
+            causes.add("writer still open");
+        }
+        if (!applying.isEmpty()) {
+            causes.add("apply still running");
+        }
+        if (!failed.isEmpty()) {
+            causes.add("table close failed");
+        }
+        final CdbException refused = new CdbException("cannot close store, " + String.join(", ", causes)
+                + ", root lock kept [root=" + root + ", tables=" + tables
+                + (applying.isEmpty() ? "" : ", applying=" + applying) + (failed.isEmpty() ? "" : ", failed=" + failed)
+                + ", waitMillis=" + closeWaitMillis + ']', -1);
+        Error error = null;
+        for (final CloseFailure failure : failures) {
+            if (error == null && failure.error() instanceof final Error e) {
+                error = e;
+            } else {
+                refused.addSuppressed(failure.error());
+            }
+        }
+        if (error != null) {
+            error.addSuppressed(refused);
+            throw error;
+        }
+        return refused;
+    }
+
+    // the closing thread holds the lease: a clean shutdown applies the queued commits and leaves every log empty, else
+    // the next open replays it; false when an apply held the table's apply lock past the close's wait
+    private boolean checkpointOnClose(final TableState state) {
+        if (state.poisoned() || state.suspended() || state.current() == null || state.wal.records() == 0) {
+            return true;
+        }
+        if (!state.tryApplyLock(closeWaitMillis)) {
+            return false;
+        }
         try {
             applier.applyAllHeld(state, false);
             final TableState.Snapshot snapshot = state.current();
@@ -691,6 +813,18 @@ public final class Store implements AutoCloseable {
                     + ", txn=" + state.loggedTxn() + ']', e);
         } finally {
             state.applyLock.unlock();
+        }
+        return true;
+    }
+
+    // a refused create's folder, best effort: once gone, and its absence forced, no open takes it for a table; a
+    // failure is added to the refusal, and an open that finds the folder with _meta takes it as an empty table
+    private void removeFolder(final Path dir, final CdbException refused) {
+        try {
+            StoreFiles.deleteFolder(dir);
+            StoreFiles.forceFolder(root);
+        } catch (final IOException e) {
+            refused.addSuppressed(e);
         }
     }
 
@@ -846,15 +980,6 @@ public final class Store implements AutoCloseable {
             throw e;
         }
         return state;
-    }
-
-    /** Closes the log of a table whose writer was open at the store's close, once the writer is closed. */
-    private boolean leaseAndCloseLog(final TableState state) {
-        if (!state.leaseForClose(closeWaitMillis)) {
-            return false;
-        }
-        state.wal.close();
-        return true;
     }
 
     /**
@@ -1067,5 +1192,13 @@ public final class Store implements AutoCloseable {
         DefinitionChanged(final String table) {
             super("refuse a plan made before a definition change [table=" + table + ']', null, false, false);
         }
+    }
+
+    // a table the store's close left: leased when the close holds its writer's lease, threw when a close of it threw
+    private record Unclosed(TableState state, boolean leased, boolean threw) {
+    }
+
+    // a table's close that threw, for the store close's refusal
+    private record CloseFailure(String table, Throwable error) {
     }
 }

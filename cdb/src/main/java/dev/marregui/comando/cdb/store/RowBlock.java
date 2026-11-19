@@ -15,12 +15,12 @@ import dev.marregui.comando.cdb.CdbType;
  * Rows of one partition held in native memory by column while a commit merges them, NULL as in {@link CdbType}; {@link
  * #size} rows are valid. The block's memory comes from the epoch of {@link BlockArenas} it joined (filled on a request
  * thread, written by the applier), tagged with its table and counted in bytes, and is given back by {@link #close},
- * which also points every column at a one-byte segment of a closed arena, so a read or write after the close throws
+ * which first points every column at a one-byte segment of a closed arena, so a read or write after the close throws
  * ({@link IllegalStateException}, or {@link IndexOutOfBoundsException} for an offset past that byte) rather than reach
- * bytes given back, although the epoch's arena may still be open. Fixed-width columns are one segment each; a text
- * column (SYMBOL, VARCHAR) holds the UTF-8 bytes of its values in one segment that grows by doubling, and per row their
- * start, their byte length ({@code -1} for NULL) and their UTF-16 length. Not safe for concurrent writes: one thread
- * writes a block at a time.
+ * bytes given back, which the epoch hands to its next block. Fixed-width columns are one segment each; a text column
+ * (SYMBOL, VARCHAR) holds the UTF-8 bytes of its values in one segment that grows by doubling, the outgrown one given
+ * back, and per row their start, their byte length ({@code -1} for NULL) and their UTF-16 length. Not safe for
+ * concurrent use: one thread uses a block at a time, and none while another closes it.
  */
 final class RowBlock implements AutoCloseable {
 
@@ -232,11 +232,12 @@ final class RowBlock implements AutoCloseable {
         closed = true;
         final long freed = bytes;
         bytes = 0L;
-        // detach, then give back: no column reaches the epoch's bytes once the block left it
-        detach(values);
-        detach(starts);
-        detach(lengths);
-        detach(chars);
+        // detach, then give back: no column reaches the epoch's bytes once the block left it, nor a segment the epoch
+        // hands to its next block
+        free(values);
+        free(starts);
+        free(lengths);
+        free(chars);
         BlockArenas.shared().leave(epoch);
         LIVE_BYTES.addAndGet(-freed);
     }
@@ -269,8 +270,11 @@ final class RowBlock implements AutoCloseable {
             final long doubled = old.byteSize() > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : old.byteSize() * 2L;
             final MemorySegment grown = allocate(Math.max(need, doubled), 1L);
             MemorySegment.copy(old, 0L, grown, 0L, start);
-            // the old segment stays in the arena until the block closes: an arena frees only as a whole
             values[c] = grown;
+            // the column reaches only the grown segment now, so the old one goes back to the epoch for its next block
+            epoch.free(old);
+            bytes -= old.byteSize();
+            LIVE_BYTES.addAndGet(-old.byteSize());
         }
         used[c] = need;
         return start;
@@ -285,18 +289,21 @@ final class RowBlock implements AutoCloseable {
         return segment;
     }
 
-    private static void detach(final MemorySegment[] segments) {
-        for (int c = 0; c < segments.length; c++) {
-            if (segments[c] != null) {
-                segments[c] = CLOSED;
-            }
-        }
-    }
-
     private MemorySegment allocate(final long byteSize, final long alignment) {
         final MemorySegment segment = epoch.allocate(byteSize, alignment);
         bytes += byteSize;
         LIVE_BYTES.addAndGet(byteSize);
         return segment;
+    }
+
+    // points each column at CLOSED, then gives its segment back to the epoch
+    private void free(final MemorySegment[] segments) {
+        for (int c = 0; c < segments.length; c++) {
+            final MemorySegment segment = segments[c];
+            if (segment != null) {
+                segments[c] = CLOSED;
+                epoch.free(segment);
+            }
+        }
     }
 }

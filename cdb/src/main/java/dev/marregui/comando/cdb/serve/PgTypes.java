@@ -14,6 +14,8 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.jetbrains.annotations.TestOnly;
+
 import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbResult;
 import dev.marregui.comando.cdb.CdbType;
@@ -77,7 +79,41 @@ final class PgTypes {
         };
     }
 
+    /**
+     * Writes the value at {@code row, column} into {@code out} as a DataRow carries it: its byte length, then its
+     * {@code format} (0 text, 1 binary) form, the bytes {@link #text} or {@link #binary} make; the length -1 for NULL.
+     */
+    static PgOutput value(
+            final PgOutput out,
+            final CdbResult result,
+            final int row,
+            final int column,
+            final int format
+    ) {
+        if (result.isNull(row, column)) {
+            return out.int32(-1);
+        }
+        if (format == 0) {
+            return switch (result.type(column)) {
+                case BOOLEAN -> out.text(result.getBoolean(row, column) ? "t" : "f");
+                case LONG -> out.text(out.scratch().append(result.getLong(row, column)));
+                // StringBuilder.append(double) writes what Double.toString does
+                case DOUBLE -> out.text(out.scratch().append(result.getDouble(row, column)));
+                case TIMESTAMP -> out.text(timestampText(out.scratch(), result.getLong(row, column)));
+                case SYMBOL, VARCHAR -> out.text(result.getText(row, column));
+            };
+        }
+        return switch (result.type(column)) {
+            case BOOLEAN -> out.int32(1).int8(result.getBoolean(row, column) ? 1 : 0);
+            case LONG -> out.int32(Long.BYTES).int64(result.getLong(row, column));
+            case DOUBLE -> out.int32(Double.BYTES).float8(result.getDouble(row, column));
+            case TIMESTAMP -> out.int32(Long.BYTES).int64(result.getLong(row, column) - PG_EPOCH_MICROS);
+            case SYMBOL, VARCHAR -> out.text(result.getText(row, column));
+        };
+    }
+
     /** The value at {@code row, column} in PostgreSQL's text form, UTF-8; null for NULL. */
+    @TestOnly
     static byte[] text(final CdbResult result, final int row, final int column) {
         if (result.isNull(row, column)) {
             return null;
@@ -94,6 +130,7 @@ final class PgTypes {
     }
 
     /** The value at {@code row, column} in PostgreSQL's binary form; null for NULL. */
+    @TestOnly
     static byte[] binary(final CdbResult result, final int row, final int column) {
         if (result.isNull(row, column)) {
             return null;
@@ -109,8 +146,23 @@ final class PgTypes {
     }
 
     /** {@code micros} since the epoch as PostgreSQL writes a timestamp: {@code yyyy-MM-dd HH:mm:ss.ffffff}. */
+    @TestOnly
     static String timestampText(final long micros) {
         return dateTime(micros).format(TEXT_MICROS);
+    }
+
+    /**
+     * Appends {@code micros} to {@code sink} as {@link #timestampText(long)} writes it: the years 0 to 9999 through
+     * {@link JsonWriter#dateTime}, the others through the formatter, as their sign and width are its own.
+     */
+    static StringBuilder timestampText(final StringBuilder sink, final long micros) {
+        // JSON writes such a year as append(long) does, -1 and 10000; the formatter's uuuu pads and signs, -0001 and
+        // +10000
+        if (!JsonWriter.fourDigitYear(micros)) {
+            TEXT_MICROS.formatTo(dateTime(micros), sink);
+            return sink;
+        }
+        return JsonWriter.dateTime(sink, micros, ' ');
     }
 
     /**
