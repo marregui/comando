@@ -305,7 +305,7 @@ tool commit that added `final` and ordered the imports.
 | G-15.7 | defect | registry removal not fenced | Found 2026-10-30 | a change to `EmbeddedEdge`'s registry |
 | G-5.3, G-6.5 | rule | log messages not shaped `[key=value]`; `Pty` has no logger of its own | Predates the standard | a change to the file |
 | G-10.1, G-10.5 | rule | member order in `PlotGate`; `tl` prefix and `length()` names | Predates the standard | a change to the file |
-| G-11.5 | rule | 34 `Thread.sleep` calls in `*Test.java` files (16 inside a loop, 14 fixed waits, among them waits that check nothing happens, 4 in helpers) and 5 unbounded joins (3 `Thread.join()`, 2 `CompletableFuture.join()`), counted 2026-11-01 with `grep`; the hand-run mains `ProbeNewSession`, `Snapshot` and the three gates hold 24 more and are not tests | Predates the standard | a change to the test |
+| G-11.5 | rule | 34 `Thread.sleep` calls in `*Test.java` files (16 inside a loop, 14 fixed waits, among them waits that check nothing happens, 4 in helpers) and 5 unbounded joins (3 `Thread.join()`, 2 `CompletableFuture.join()`), counted 2026-11-01 with `grep`; the hand-run mains `Snapshot` and the three gates hold 18 more and are not tests | Predates the standard | a change to the test |
 | G-13.5 | rule | `StateLoop.failure()`: surface for tests only, not marked | Found 2026-10-31 | a change to the file |
 | G-13.8 | rule | `Watchdog`'s `finally` untested; `Transcript`'s growth limit untested (2^31 blocks cannot be built in a test) | The first needs a fault-injecting look | a change to `Watchdog` |
 | G-14.1, G-14.4 | rule | peer answers and kit backups log failures only; `context` and `window` metrics without unit | Found 2026-10-31 | a change to the file |
