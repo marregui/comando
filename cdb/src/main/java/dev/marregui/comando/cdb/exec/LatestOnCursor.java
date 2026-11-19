@@ -223,7 +223,7 @@ final class LatestOnCursor implements Cursor {
         int target = -1;
         Page page;
         reading:
-        while ((page = child.next()) != null) {
+        while ((page = child.borrow()) != null) {
             for (int k = 0; k < keys.length; k++) {
                 keys[k] = page.columns[partitionColumns[k]];
             }
@@ -309,16 +309,26 @@ final class LatestOnCursor implements Cursor {
 
         @Override
         public Page next() {
+            return read(false);
+        }
+
+        // a lent page is the frame's or the partials' own, refilled on their next call, as this one's is
+        @Override
+        public Page borrow() {
+            return read(true);
+        }
+
+        private Page read(final boolean lent) {
             while (!closed) {
                 if (frame == null) {
                     if (next == serial) {
-                        return rest.next();
+                        return lent ? rest.borrow() : rest.next();
                     }
                     source.context().check();
                     frame = source.open(next++);
                 }
                 source.context().check();
-                final Page page = frame.next();
+                final Page page = lent ? frame.borrow() : frame.next();
                 if (page != null) {
                     return page;
                 }

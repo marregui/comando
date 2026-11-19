@@ -16,10 +16,15 @@ final class Limits {
     /** How long a body waits for its share of {@link #BODY_BUDGET_BYTES}. */
     static final long BODY_WAIT_MILLIS = 5_000;
     /**
-     * The size of a pooled {@code /write} body buffer: a metrics batch fits one; a larger body is read into an array
-     * of its own. A sizing hint only, as every body under the body limit is taken either way.
+     * The longest {@code /write} body read into pooled buffers: a metrics batch fits; a longer body is read into an
+     * array of its own. A sizing hint only, as every body under the body limit is taken either way.
      */
     static final int POOLED_BODY_BYTES = 1 << 20;
+    /**
+     * The size of a pooled {@code /write} body buffer, a body spanning as many as it needs: half a G1 region at the
+     * server's 256 MiB heap, whose regions are 1 MiB, is an object G1 allocates as humongous, and this is below it.
+     */
+    static final int BODY_CHUNK_BYTES = 256 << 10;
     /** The JDK HTTP server's request read bound, in seconds ({@code sun.net.httpserver.maxReqTime}). */
     static final int HTTP_MAX_REQUEST_SECONDS = 30;
     /** The JDK HTTP server's response write bound, in seconds ({@code sun.net.httpserver.maxRspTime}). */

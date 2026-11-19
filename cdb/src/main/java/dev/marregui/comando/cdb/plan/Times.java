@@ -17,6 +17,8 @@ import dev.marregui.comando.cdb.CdbException;
 final class Times {
 
     private static final long MICROS_PER_SECOND = 1_000_000L;
+    // what a fraction of n digits covers, by n: QuestDB's parseInterval reads '.123' as its whole millisecond
+    private static final long[] FRACTION_MICROS = {MICROS_PER_SECOND, 100_000L, 10_000L, 1_000L, 100L, 10L, 1L};
     // the length of a zone offset suffix, ±HH:mm
     private static final int OFFSET_LENGTH = 6;
 
@@ -30,8 +32,9 @@ final class Times {
 
     /**
      * {@code [from, to)} the text covers at its precision: {@code '2026-11'} the month, {@code '2026-11-14T10'} the
-     * hour, a full timestamp its one microsecond. A time may end in {@code Z} or an offset {@code ±HH:mm}, as Python's
-     * {@code isoformat()} writes it; the bounds are then moved to UTC.
+     * hour, a timestamp the second, or the unit of its fraction's last digit ({@code .123} the millisecond). A time
+     * may end in {@code Z} or an offset {@code ±HH:mm}, as Python's {@code isoformat()} writes it; the bounds are then
+     * moved to UTC.
      */
     static long[] interval(final String text, final int pos) {
         final int zone = zoneAt(text);
@@ -102,9 +105,9 @@ final class Times {
             case 5 -> from.plusMinutes(1);
             default -> from;
         };
-        final long lo = micros(from) + micros;
-        final long hi = fields == 6 ? lo + (fractionDigits == 0 ? MICROS_PER_SECOND : 1) : micros(to);
-        return new long[] {lo - offsetMicros, hi - offsetMicros};
+        final long loMicros = micros(from) + micros;
+        final long hiMicros = fields == 6 ? loMicros + FRACTION_MICROS[fractionDigits] : micros(to);
+        return new long[] {loMicros - offsetMicros, hiMicros - offsetMicros};
     }
 
     // where a trailing ±HH:mm after a time of day (a 'T' or ' ' at 10) starts, else -1
@@ -127,12 +130,19 @@ final class Times {
 
     /**
      * {@code dateadd(unit, amount, micros)}: units {@code y M w d h m s T u}, years and months on the calendar, as
-     * QuestDB's {@code dateadd}.
+     * QuestDB's {@code dateadd}; a year or month past the calendar's range is refused.
      */
     static long dateadd(final String unit, final long amount, final long micros, final int pos) {
         return switch (unit) {
-            case "y" -> micros(zoned(micros).plusYears(amount)) + Math.floorMod(micros, MICROS_PER_SECOND);
-            case "M" -> micros(zoned(micros).plusMonths(amount)) + Math.floorMod(micros, MICROS_PER_SECOND);
+            case "y", "M" -> {
+                try {
+                    final ZonedDateTime at = "y".equals(unit) ? zoned(micros).plusYears(amount)
+                            : zoned(micros).plusMonths(amount);
+                    yield micros(at) + Math.floorMod(micros, MICROS_PER_SECOND);
+                } catch (final DateTimeException _) {
+                    throw new CdbException("cannot add out of range [unit=" + unit + ", amount=" + amount + ']', pos);
+                }
+            }
             case "w" -> micros + amount * TimeUnit.DAYS.toMicros(7);
             case "d" -> micros + amount * TimeUnit.DAYS.toMicros(1);
             case "h" -> micros + amount * TimeUnit.HOURS.toMicros(1);
@@ -145,10 +155,12 @@ final class Times {
     }
 
     /**
-     * A {@code CREATE TABLE}'s {@code TTL n UNIT} in microseconds: HOUR, DAY, WEEK, MONTH and YEAR, singular,
-     * plural or QuestDB's one-letter form; a month is 30 days and a year 365, as the store keeps a TTL as one number.
+     * A {@code CREATE TABLE}'s {@code TTL n UNIT}, HOUR, DAY, WEEK, MONTH or YEAR, singular, plural or QuestDB's
+     * one-letter form, as the store keeps it: HOUR, DAY and WEEK as microseconds, MONTH and YEAR as a negative count of
+     * calendar months, as QuestDB's {@code ttlHoursOrMonths} keeps them apart. A negative amount, or one past
+     * QuestDB's range ({@code Integer.MAX_VALUE} hours or months), is refused, as QuestDB refuses it.
      */
-    static long ttlMicros(final String ttl, final int pos) {
+    static long ttlMicrosOrMonths(final String ttl, final int pos) {
         final String[] parts = ttl.trim().split("\\s+");
         final String amount;
         final String unit;
@@ -167,16 +179,27 @@ final class Times {
         } catch (final NumberFormatException _) {
             throw new CdbException("cannot read TTL amount [ttl=" + ttl + ']', pos);
         }
-        final long day = TimeUnit.DAYS.toMicros(1);
-        final long per = switch (unit.toUpperCase(Locale.ROOT)) {
-            case "H", "HOUR", "HOURS" -> TimeUnit.HOURS.toMicros(1);
-            case "D", "DAY", "DAYS" -> day;
-            case "W", "WEEK", "WEEKS" -> 7 * day;
-            case "M", "MONTH", "MONTHS" -> 30 * day;
-            case "Y", "YEAR", "YEARS" -> 365 * day;
+        if (n < 0 || n > Integer.MAX_VALUE) {
+            throw outOfRange(ttl, pos);
+        }
+        // hours when positive, months when negative, as QuestDB's toHoursOrMonths counts them
+        final long hoursOrMonths = switch (unit.toUpperCase(Locale.ROOT)) {
+            case "H", "HOUR", "HOURS" -> n;
+            case "D", "DAY", "DAYS" -> n * TimeUnit.DAYS.toHours(1);
+            case "W", "WEEK", "WEEKS" -> n * TimeUnit.DAYS.toHours(7);
+            case "M", "MONTH", "MONTHS" -> -n;
+            case "Y", "YEAR", "YEARS" -> -n * 12;
             default -> throw new CdbException("cannot read TTL unit [ttl=" + ttl + ']', pos);
         };
-        return Math.multiplyExact(n, per);
+        if (Math.abs(hoursOrMonths) > Integer.MAX_VALUE) {
+            throw outOfRange(ttl, pos);
+        }
+        return hoursOrMonths < 0 ? hoursOrMonths : TimeUnit.HOURS.toMicros(hoursOrMonths);
+    }
+
+    private static CdbException outOfRange(final String ttl, final int pos) {
+        return new CdbException("cannot read TTL out of range [ttl=" + ttl + ", maxHoursOrMonths=" + Integer.MAX_VALUE
+                + ']', pos);
     }
 
     private static ZonedDateTime zoned(final long micros) {

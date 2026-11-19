@@ -45,10 +45,18 @@ public final class Parser {
             "like", "limit", "not", "null", "on", "or", "order", "outer", "over", "right", "sample", "select", "then",
             "true", "union", "when", "where", "with");
     private static final Set<String> SAMPLE_UNITS = Set.of("U", "T", "s", "m", "h", "d", "M", "y");
+    /**
+     * The deepest an expression or query may nest, counting each operator of a chain as one level: the parser and the
+     * planner recurse over the tree, and past some depth a thread's stack runs out. Measured 2026-11-19 on a 1 MiB
+     * stack, the JVM's default: nested subqueries, the heaviest shape, overflowed it in parse and plan between 450
+     * and 475 levels, every expression shape held 475; this is about half of that, left for the executor's recursion.
+     */
+    static final int MAX_DEPTH = 256;
 
     private final String sql;
     private final List<Lexer.Token> tokens;
     private int index;
+    private int depth;
 
     private Parser(final String sql) {
         this.sql = sql;
@@ -153,6 +161,13 @@ public final class Parser {
     }
 
     private Ast.QueryBody query() {
+        final int outer = deeper();
+        final Ast.QueryBody body = with();
+        depth = outer;
+        return body;
+    }
+
+    private Ast.QueryBody with() {
         if (!acceptWord("with")) {
             return ordered();
         }
@@ -206,21 +221,27 @@ public final class Parser {
 
     private Ast.QueryBody union() {
         final int pos = peek().start();
+        final int outer = depth;
         Ast.QueryBody left = intersect();
         while (isWord("union") || isWord("except")) {
+            deeper();
             final String op = lower(next().text());
             final String kind = op.equals("union") && acceptWord("all") ? "union all" : op;
             left = new Ast.SetOp(kind, left, intersect(), List.of(), null, pos);
         }
+        depth = outer;
         return left;
     }
 
     private Ast.QueryBody intersect() {
         final int pos = peek().start();
+        final int outer = depth;
         Ast.QueryBody left = operand();
         while (acceptWord("intersect")) {
+            deeper();
             left = new Ast.SetOp("intersect", left, operand(), List.of(), null, pos);
         }
+        depth = outer;
         return left;
     }
 
@@ -389,15 +410,17 @@ public final class Parser {
         throw unexpected("fill value");
     }
 
-    /** {@code TO CALENDAR} is true, {@code TO FIRST OBSERVATION} false. */
+    /** {@code TO CALENDAR} is true; {@code TO FIRST OBSERVATION}, which cdb does not run, is refused. */
     private boolean alignment() {
         expectWord("to");
         if (acceptWord("calendar")) {
             return true;
         }
+        final int pos = peek().start();
         expectWord("first");
         expectWord("observation");
-        return false;
+        throw new CdbException("cannot sample ALIGN TO FIRST OBSERVATION, only ALIGN TO CALENDAR [position=" + pos
+                + "]", pos);
     }
 
     private List<Ast.OrderItem> orderItems() {
@@ -637,48 +660,62 @@ public final class Parser {
     }
 
     private Ast.Expr expression() {
+        final int outer = deeper();
         Ast.Expr left = and();
         while (acceptWord("or")) {
+            deeper();
             left = new Ast.Binary("or", left, and(), start(left));
         }
+        depth = outer;
         return left;
     }
 
     private Ast.Expr and() {
+        final int outer = depth;
         Ast.Expr left = not();
         while (acceptWord("and")) {
+            deeper();
             left = new Ast.Binary("and", left, not(), start(left));
         }
+        depth = outer;
         return left;
     }
 
     private Ast.Expr not() {
         if (isWord("not")) {
+            final int outer = deeper();
             final int pos = next().start();
-            return new Ast.Unary("not", not(), pos);
+            final Ast.Expr negated = new Ast.Unary("not", not(), pos);
+            depth = outer;
+            return negated;
         }
         return predicate();
     }
 
     /** Comparisons, {@code IS [NOT] NULL}, {@code [NOT] IN}, {@code [NOT] BETWEEN}, {@code [NOT] LIKE/ILIKE}. */
     private Ast.Expr predicate() {
+        final int outer = depth;
         Ast.Expr left = concat();
         while (true) {
             final int pos = start(left);
             final Lexer.Token token = peek();
             if (token.kind() == Lexer.Kind.SYMBOL && COMPARISONS.contains(token.text())) {
+                deeper();
                 next();
                 final String op = token.text().equals("<>") ? "!=" : token.text();
                 left = new Ast.Binary(op, left, concat(), pos);
             } else if (acceptWord("is")) {
+                deeper();
                 final boolean not = acceptWord("not");
                 expectWord("null");
                 left = new Ast.IsNull(left, not, pos);
             } else {
                 final boolean not = isWord("not") && isNegatable(1);
                 if (!not && !isNegatable(0)) {
+                    depth = outer;
                     return left;
                 }
+                deeper();
                 if (not) {
                     next();
                 }
@@ -720,28 +757,37 @@ public final class Parser {
     }
 
     private Ast.Expr concat() {
+        final int outer = depth;
         Ast.Expr left = additive();
         while (acceptSymbol("||")) {
+            deeper();
             left = new Ast.Binary("||", left, additive(), start(left));
         }
+        depth = outer;
         return left;
     }
 
     private Ast.Expr additive() {
+        final int outer = depth;
         Ast.Expr left = multiplicative();
         while (isSymbol("+") || isSymbol("-")) {
+            deeper();
             final String op = next().text();
             left = new Ast.Binary(op, left, multiplicative(), start(left));
         }
+        depth = outer;
         return left;
     }
 
     private Ast.Expr multiplicative() {
+        final int outer = depth;
         Ast.Expr left = unary();
         while (isSymbol("*") || isSymbol("/") || isSymbol("%")) {
+            deeper();
             final String op = next().text();
             left = new Ast.Binary(op, left, unary(), start(left));
         }
+        depth = outer;
         return left;
     }
 
@@ -753,14 +799,20 @@ public final class Parser {
         if (peek().kind() == Lexer.Kind.NUMBER && !isSymbolAt(1, "::")) {
             return number(next(), true, pos);
         }
-        return new Ast.Unary("-", unary(), pos);
+        final int outer = deeper();
+        final Ast.Expr negated = new Ast.Unary("-", unary(), pos);
+        depth = outer;
+        return negated;
     }
 
     private Ast.Expr cast() {
+        final int outer = depth;
         Ast.Expr expr = primary();
         while (acceptSymbol("::")) {
+            deeper();
             expr = new Ast.Cast(expr, typeName(), start(expr));
         }
+        depth = outer;
         return expr;
     }
 
@@ -1014,6 +1066,22 @@ public final class Parser {
             throw unexpected(what);
         }
         return next();
+    }
+
+    /**
+     * One more level of nesting or one more operator of a chain; the depth before it, which the caller restores once
+     * its expression is built.
+     *
+     * @throws CdbException past {@link #MAX_DEPTH}
+     */
+    private int deeper() {
+        final int outer = depth;
+        if (++depth > MAX_DEPTH) {
+            final int pos = peek().start();
+            throw new CdbException("cannot parse an expression nested or chained past the depth limit [limit="
+                    + MAX_DEPTH + ", position=" + pos + "]", pos);
+        }
+        return outer;
     }
 
     private CdbException unexpected(final String expected) {

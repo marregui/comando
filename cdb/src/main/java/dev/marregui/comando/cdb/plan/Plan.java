@@ -170,8 +170,8 @@ public sealed interface Plan {
     record AddColumns(String table, List<ColumnDef> columns) implements Change {
     }
 
-    /** {@code ALTER TABLE SET TTL}: {@code ttlMicros} 0 for none. */
-    record SetTtl(String table, long ttlMicros) implements Change {
+    /** {@code ALTER TABLE SET TTL}: {@code ttlMicrosOrMonths} as {@link TableDef#ttlMicrosOrMonths} holds it. */
+    record SetTtl(String table, long ttlMicrosOrMonths) implements Change {
     }
 
     /** {@code DROP TABLE}: {@code ifExists} makes an absent table no error. */

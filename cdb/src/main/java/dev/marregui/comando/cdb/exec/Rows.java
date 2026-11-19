@@ -4,7 +4,8 @@ import dev.marregui.comando.cdb.CdbType;
 
 /**
  * Row-level helpers the row operators share: copies between vectors, the row identity of the set operators (NULL equals
- * NULL, as QuestDB compares rows), the sort order (NULL first) and the close of two children.
+ * NULL, as QuestDB compares rows), the value order (NULL first), ORDER BY's (a DOUBLE NULL last) and the close of two
+ * children.
  */
 final class Rows {
 
@@ -30,7 +31,8 @@ final class Rows {
     static int hash(final Page page, final int row) {
         int h = 1;
         for (final Vector v : page.columns) {
-            h = 31 * h + hash(v, row);
+            // Double.hashCode tells -0.0 from 0.0 and folds every NaN, the one NULL, into one
+            h = 31 * h + (v.type == CdbType.DOUBLE ? Double.hashCode(v.getDouble(row)) : hash(v, row));
         }
         return mix(h);
     }
@@ -49,19 +51,26 @@ final class Rows {
         };
     }
 
-    /** True when every column of row {@code ra} of {@code a} equals that of row {@code rb} of {@code b}. */
+    /**
+     * True when every column of row {@code ra} of {@code a} equals that of row {@code rb} of {@code b}: the set
+     * operators' row identity, which compares a DOUBLE by its bits, as QuestDB's keys and DISTINCT do, so -0.0 is not
+     * 0.0, where {@link #same(Vector, int, Vector, int)} is a join key's {@code =}.
+     */
     static boolean same(final Page a, final int ra, final Page b, final int rb) {
         final Vector[] ca = a.columns;
         final Vector[] cb = b.columns;
         for (int c = 0; c < ca.length; c++) {
-            if (!same(ca[c], ra, cb[c], rb)) {
+            final boolean same = ca[c].type == CdbType.DOUBLE
+                    ? Double.doubleToLongBits(ca[c].getDouble(ra)) == Double.doubleToLongBits(cb[c].getDouble(rb))
+                    : same(ca[c], ra, cb[c], rb);
+            if (!same) {
                 return false;
             }
         }
         return true;
     }
 
-    /** True when value {@code ia} of {@code a} equals value {@code ib} of {@code b}; NULL equals NULL. */
+    /** True when value {@code ia} of {@code a} equals value {@code ib} of {@code b}, as {@code =}; NULL equals NULL. */
     static boolean same(final Vector a, final int ia, final Vector b, final int ib) {
         return switch (a.type) {
             case LONG, TIMESTAMP -> a.getLong(ia) == b.getLong(ib);
@@ -101,6 +110,15 @@ final class Rows {
                 yield b.isNull(ib) ? 1 : a.textCompare(ia, b, ib);
             }
         };
+    }
+
+    /**
+     * The ORDER BY order of value {@code ia} of {@code a} and value {@code ib} of {@code b}: {@link #compare}'s, except
+     * that a DOUBLE NULL sorts above every number, as QuestDB ranks NaN. Every operator that orders rows uses it.
+     */
+    static int sortCompare(final Vector a, final int ia, final Vector b, final int ib) {
+        final int r = compare(a, ia, b, ib);
+        return r != 0 && a.type == CdbType.DOUBLE && (a.isNull(ia) || b.isNull(ib)) ? -r : r;
     }
 
     /** Closes both cursors; a failure of the first does not skip the second, and the second's is suppressed into it. */

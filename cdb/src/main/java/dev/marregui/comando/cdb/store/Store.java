@@ -904,10 +904,6 @@ public final class Store implements AutoCloseable {
         if (!def.dedupKeys().isEmpty() && !timestampKey) {
             throw new CdbException("refuse dedup keys without the designated timestamp [table=" + def.name() + ']', -1);
         }
-        if (def.ttlMicros() < 0L) {
-            throw new CdbException("refuse negative TTL [table=" + def.name() + ", ttlMicros=" + def.ttlMicros() + ']',
-                    -1);
-        }
     }
 
     /**
@@ -1017,7 +1013,7 @@ public final class Store implements AutoCloseable {
                     + ", columns=" + txn.columns() + ", defined=" + stored.columns().size() + ']', -1);
         }
         return new TableDef(stored.name(), stored.columns().subList(0, txn.columns()), stored.timestampIndex(),
-                stored.partitionBy(), stored.dedupKeys(), txn.ttlMicros());
+                stored.partitionBy(), stored.dedupKeys(), txn.ttlMicrosOrMonths());
     }
 
     /**
@@ -1105,8 +1101,8 @@ public final class Store implements AutoCloseable {
             for (int c = writer.def().columns().size(); c < logged.columns().size(); c++) {
                 writer.addColumn(logged.columns().get(c));
             }
-            if (logged.ttlMicros() != writer.def().ttlMicros()) {
-                writer.setTtl(logged.ttlMicros());
+            if (logged.ttlMicrosOrMonths() != writer.def().ttlMicrosOrMonths()) {
+                writer.setTtl(logged.ttlMicrosOrMonths());
             }
         }
         final RowBlock rows = entry.rows();

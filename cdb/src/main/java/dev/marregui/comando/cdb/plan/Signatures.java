@@ -408,10 +408,14 @@ public final class Signatures {
         return out;
     }
 
-    /** Equal types, two numbers, two texts, or a TIMESTAMP and a text, which is read as a TIMESTAMP. */
+    /**
+     * Equal types, two numbers, two texts, a TIMESTAMP and a text, which is read as a TIMESTAMP, or a TIMESTAMP and a
+     * LONG, read as microseconds: QuestDB's overload table casts either to the other implicitly.
+     */
     private static boolean comparable(final CdbType a, final CdbType b) {
         return a == b || isNumeric(a) && isNumeric(b) || a.isText() && b.isText()
-                || a == CdbType.TIMESTAMP && b.isText() || a.isText() && b == CdbType.TIMESTAMP;
+                || a == CdbType.TIMESTAMP && (b.isText() || b == CdbType.LONG)
+                || b == CdbType.TIMESTAMP && (a.isText() || a == CdbType.LONG);
     }
 
     private static boolean isNumeric(final CdbType t) {

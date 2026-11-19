@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.exec;
 
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -164,6 +165,51 @@ class BackupRunnerTest {
         assertThat(Files.readAttributes(file, "size")).containsEntry("size", 4L);
         assertSameStore(source, folder);
         assertThat(siblings()).containsExactlyInAnyOrder("backup", "dir", "file", "source");
+    }
+
+    /// The backup takes its folder's name before it copies: a folder made by hand once the copy has begun, which the
+    /// rename into place would replace while it is empty, is refused, and the backup answers whole.
+    @Test
+    void aFolderMadeDuringTheCopyIsRefused() throws Exception {
+        final Path source = root.resolve("source");
+        try (final Cdb cdb = Cdb.open(source)) {
+            cdb.run("CREATE TABLE w (ts TIMESTAMP, txn LONG, n LONG) TIMESTAMP(ts) PARTITION BY DAY");
+        }
+        final Path folder = root.resolve("backup");
+        try (final Store store = Store.open(source)) {
+            fill(store, "w", 0, PRE_ROWS);
+            final AtomicLong answer = new AtomicLong(-1L);
+            final AtomicBoolean done = new AtomicBoolean();
+            final Queue<String> byHand = new ConcurrentLinkedQueue<>();
+            final DestructiveStressTest.Task backup = () -> {
+                try {
+                    answer.set(BackupRunner.run(new Plan.Backup(folder.toString()), store));
+                } finally {
+                    done.set(true);
+                }
+            };
+            // spins until the copy's temporary folder shows, or the backup ends without it showing
+            final DestructiveStressTest.Task mkdir = () -> {
+                while (!done.get()) {
+                    if (siblings().stream().anyMatch(name -> name.contains(".tmp-"))) {
+                        try {
+                            Files.createDirectory(folder);
+                            byHand.add("made");
+                        } catch (final FileAlreadyExistsException _) {
+                            byHand.add("refused");
+                        }
+                        return;
+                    }
+                    Thread.onSpinWait();
+                }
+                byHand.add("copy not seen");
+            };
+            assertThat(DestructiveStressTest.race("backup-mkdir", List.of(backup, mkdir))).isEmpty();
+            assertThat(byHand).containsExactly("refused");
+            assertThat(answer.get()).isEqualTo(1L);
+        }
+        assertSameStore(source, folder);
+        assertThat(siblings()).containsExactlyInAnyOrder("backup", "source");
     }
 
     /// A relative folder, which would depend on the server's working folder, and a folder inside the store's root,

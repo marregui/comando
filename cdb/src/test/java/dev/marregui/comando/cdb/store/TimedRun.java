@@ -50,7 +50,7 @@ final class TimedRun {
                 for (final ColumnDef column : def.columns()) {
                     header.append(column.name()).append(':').append(column.type()).append(' ');
                 }
-                header.append("ts=").append(def.timestampIndex()).append(" ttl=").append(def.ttlMicros());
+                header.append("ts=").append(def.timestampIndex()).append(" ttl=").append(def.ttlMicrosOrMonths());
                 final List<String> sorted = new ArrayList<>(rows(reader));
                 sorted.sort(null);
                 final List<String> lines = new ArrayList<>(sorted.size() + 1);

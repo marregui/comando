@@ -37,9 +37,11 @@ import dev.marregui.comando.cdb.exec.Vector;
  * flight, and a read that meets a release waits for it on the version's lock.
  * <p>
  * Each version keeps, per column, what its reads derive once: a {@link ZoneMap} of an 8-byte column, a
- * {@link TextCache} of a VARCHAR column, the last constant a pre-filter compared a text column with. Each is built on
- * first use by whichever reader thread needs it and published through an {@link AtomicReferenceArray}; two threads
- * that race build equal ones, and one wins. They live on the heap and survive a release.
+ * {@link TextCache} of a VARCHAR column, the last constant a pre-filter compared a text column with, whether a SYMBOL
+ * column holds a NULL. Each is built on first use by whichever reader thread needs it and published through an
+ * atomic array; two threads that race build equal ones, and one wins. They live on the heap and survive a release. A
+ * version that appends in place to another, its rows below the other's row count the other's bytes, starts from the
+ * other's zone maps and NULL answers for those rows, so a scan reads again only the rows the other did not cover.
  */
 final class Version implements PartitionReader {
 
@@ -78,6 +80,8 @@ final class Version implements PartitionReader {
     private final AtomicReferenceArray<Probe> probes;
     // per column, NULL_UNKNOWN until mayHoldNull first reads it, then NULL_NONE or NULL_SOME; the rows never change
     private final AtomicIntegerArray nulls;
+    // per column, the rows below which a SYMBOL column is known to hold no NULL, from the version appended to
+    private final long[] nullFreeRows;
     // reads in flight, RELEASING while a release closes the arena; reader threads raise and lower it, a release swaps
     // it between 0 and RELEASING under the lock
     private final AtomicInteger pins = new AtomicInteger();
@@ -105,7 +109,8 @@ final class Version implements PartitionReader {
             final long minTimestamp,
             final long maxTimestamp,
             final long mappedBytes,
-            final int fileColumns
+            final int fileColumns,
+            final Version appendedTo
     ) {
         this.dir = dir;
         this.folder = dir.getFileName().toString();
@@ -126,7 +131,11 @@ final class Version implements PartitionReader {
         this.textCaches = new AtomicReferenceArray<>(types.length);
         this.probes = new AtomicReferenceArray<>(types.length);
         this.nulls = new AtomicIntegerArray(types.length);
+        this.nullFreeRows = new long[types.length];
         this.lastReadNanos = System.nanoTime();
+        if (appendedTo != null) {
+            carry(appendedTo);
+        }
     }
 
     /** {@link #open(Path, TableDef, long, List, Mappings)} counting its mappings in a count of its own. */
@@ -156,6 +165,22 @@ final class Version implements PartitionReader {
      */
     static Version open(final Path dir, final TableDef def, final long rowCount,
             final List<SymbolTable> symbolsByColumn, final int fileColumns, final Mappings mappings) {
+        return open(dir, def, rowCount, symbolsByColumn, fileColumns, mappings, null);
+    }
+
+    /**
+     * {@link #open(Path, TableDef, long, List, int, Mappings)} of {@code appendedTo}'s folder after rows were appended
+     * to it in place, its first {@code appendedTo.rowCount()} rows unchanged: the new version takes over what
+     * {@code appendedTo} derived from them, for each column whose file and type it shares.
+     */
+    static Version appended(final Version appendedTo, final TableDef def, final long rowCount,
+            final List<SymbolTable> symbolsByColumn, final Mappings mappings) {
+        return open(appendedTo.dir, def, rowCount, symbolsByColumn, appendedTo.fileColumns, mappings, appendedTo);
+    }
+
+    private static Version open(final Path dir, final TableDef def, final long rowCount,
+            final List<SymbolTable> symbolsByColumn, final int fileColumns, final Mappings mappings,
+            final Version appendedTo) {
         final List<ColumnDef> columnDefs = def.columns();
         final int n = columnDefs.size();
         final CdbType[] types = new CdbType[n];
@@ -233,7 +258,7 @@ final class Version implements PartitionReader {
             }
             final long lower = ts >= 0 ? Retention.floor(min, def.partitionBy()) : Long.MIN_VALUE;
             return new Version(dir, types, dataFiles, indexFiles, dataLength, symbols, mappings, rowCount, lower, min,
-                    max, mapped, present);
+                    max, mapped, present, appendedTo);
         } catch (final IOException e) {
             throw new CdbException("cannot map partition [dir=" + dir + ']', e);
         }
@@ -357,7 +382,7 @@ final class Version implements PartitionReader {
 
     /**
      * A SYMBOL column is read once for a negative key, the answer kept for the life of the version (4 bytes a row,
-     * sequential); any other column answers true.
+     * sequential), from the rows the version appended to did not cover; any other column answers true.
      */
     @Override
     public boolean mayHoldNull(final int column) {
@@ -374,7 +399,7 @@ final class Version implements PartitionReader {
             if (!some) {
                 final MemorySegment segment = m.data();
                 final long end = rowCount * Integer.BYTES;
-                for (long at = 0L; at < end && !some; at += Integer.BYTES) {
+                for (long at = nullFreeRows[column] * Integer.BYTES; at < end && !some; at += Integer.BYTES) {
                     some = segment.get(INT_LE, at) < 0;
                 }
             }
@@ -541,7 +566,7 @@ final class Version implements PartitionReader {
             if (m == null) {
                 return selectAll(n, sel);
             }
-            return select(m.data(), zoneMap(column, m.data(), false), false, from, n, op, constant, sel);
+            return select(m.data(), zoneMap(column, false), false, from, n, op, constant, sel);
         } finally {
             release();
         }
@@ -559,7 +584,7 @@ final class Version implements PartitionReader {
             final long key = Double.isNaN(constant)
                     ? Long.MAX_VALUE
                     : ZoneMap.doubleKey(Double.doubleToRawLongBits(constant));
-            return select(m.data(), zoneMap(column, m.data(), true), true, from, n, op, key, sel);
+            return select(m.data(), zoneMap(column, true), true, from, n, op, key, sel);
         } finally {
             release();
         }
@@ -740,7 +765,7 @@ final class Version implements PartitionReader {
         while (row < to) {
             final int block = (int) (row >>> ZoneMap.BLOCK_SHIFT);
             final long blockEnd = Math.min(to, (long) (block + 1) << ZoneMap.BLOCK_SHIFT);
-            switch (zones.verdict(block, lo, hi, outside)) {
+            switch (zones.verdict(segment, block, lo, hi, outside)) {
                 case NONE -> {
                 }
                 case ALL -> {
@@ -787,13 +812,50 @@ final class Version implements PartitionReader {
         return n;
     }
 
-    private ZoneMap zoneMap(final int column, final MemorySegment segment, final boolean doubles) {
+    /** The blocks of {@code column}'s zone map this version built itself, not counting those it carried. */
+    @TestOnly
+    int zoneBlocksBuilt(final int column) {
+        final ZoneMap zoneMap = zones.get(column);
+        return zoneMap == null ? 0 : zoneMap.built();
+    }
+
+    /** The rows below which {@code column} is known, from the version appended to, to hold no NULL. */
+    @TestOnly
+    long nullFreeRows(final int column) {
+        return nullFreeRows[column];
+    }
+
+    // one map per column for every reader thread: it is empty until a scan meets a block, so a race costs no read
+    private ZoneMap zoneMap(final int column, final boolean doubles) {
         final ZoneMap zoneMap = zones.get(column);
         if (zoneMap != null) {
             return zoneMap;
         }
-        final ZoneMap built = ZoneMap.of(segment, rowCount, doubles);
-        return zones.compareAndSet(column, null, built) ? built : zones.get(column);
+        final ZoneMap empty = ZoneMap.of(rowCount, doubles);
+        return zones.compareAndSet(column, null, empty) ? empty : zones.get(column);
+    }
+
+    // called by the constructor, before the version is published: the zone maps and NULL answers of old, the version
+    // appended to, for each column this version reads from the same file as the same type
+    private void carry(final Version old) {
+        if (!old.dir.equals(dir) || old.rowCount > rowCount) {
+            return;
+        }
+        for (int c = 0; c < Math.min(types.length, old.types.length); c++) {
+            if (old.types[c] != types[c] || dataFiles[c] == null || !dataFiles[c].equals(old.dataFiles[c])) {
+                continue;
+            }
+            final ZoneMap zoneMap = old.zones.get(c);
+            if (zoneMap != null) {
+                zones.set(c, ZoneMap.carrying(zoneMap, rowCount));
+            }
+            final int known = old.nulls.get(c);
+            if (known == NULL_SOME) {
+                nulls.set(c, NULL_SOME);
+            } else {
+                nullFreeRows[c] = known == NULL_NONE ? old.rowCount : old.nullFreeRows[c];
+            }
+        }
     }
 
     private TextCache textCache(final int column) {

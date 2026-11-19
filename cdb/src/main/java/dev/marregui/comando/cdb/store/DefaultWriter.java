@@ -111,9 +111,9 @@ final class DefaultWriter implements TableWriter {
     }
 
     @Override
-    public void setTtl(final long ttlMicros) {
+    public void setTtl(final long ttlMicrosOrMonths) {
         checkOpen();
-        def = def.withTtlMicros(ttlMicros);
+        def = def.withTtlMicrosOrMonths(ttlMicrosOrMonths);
     }
 
     /**
@@ -862,8 +862,7 @@ final class DefaultWriter implements TableWriter {
                 final int[] order = Dedup.order(rows, ts, keys);
                 if (old != null && store.appendInPlace && appendable(old, rows, order[0], ts, keys.length)) {
                     append(old, rows, order);
-                    v = Version.open(old.dir, def, old.rowCount() + order.length, state.symbols(), old.fileColumns,
-                            state.mappings);
+                    v = Version.appended(old, def, old.rowCount() + order.length, state.symbols(), state.mappings);
                     appended.add(v);
                 } else {
                     final Path dir = state.dir.resolve(TableFiles.folder(floor, partitionBy, txn));
@@ -897,16 +896,17 @@ final class DefaultWriter implements TableWriter {
      */
     private void expire(final List<Version> next, final List<Version> written, final List<Version> appended)
             throws IOException {
-        if (def.ttlMicros() <= 0L || next.isEmpty()) {
+        if (def.ttlMicrosOrMonths() == 0L || next.isEmpty()) {
             return;
         }
         long newest = Long.MIN_VALUE;
         for (final Version v : next) {
             newest = Math.max(newest, v.maxTimestamp());
         }
+        final long referenceMicros = Retention.referenceMicros(newest);
         final List<Version> kept = new ArrayList<>(next.size());
         for (final Version v : next) {
-            if (Retention.expired(v.lowerBound(), def.partitionBy(), def.ttlMicros(), newest)) {
+            if (Retention.expired(v.lowerBound(), def.partitionBy(), def.ttlMicrosOrMonths(), referenceMicros)) {
                 if (written.remove(v)) {
                     v.unmap();
                     StoreFiles.deleteFolder(v.dir);

@@ -94,6 +94,21 @@ class SetOpCursorTest {
                 RowsFakes.cursor(x, 2, 1, i -> r[i]))).rows()).isEqualTo(rows(l[0]));
     }
 
+    /// -0.0 and 0.0 are two rows, as QuestDB's keys compare them by bits and as DISTINCT keeps them: both survive a
+    /// union, and neither matches the other in except or intersect.
+    @Test
+    void keepsSignedZerosApart() {
+        final List<Field> x = List.of(field("x", CdbType.DOUBLE));
+        final Object[][] l = {{-0.0}, {1.0}};
+        final Object[][] r = {{0.0}};
+        assertThat(drain(new SetOpCursor("union", RowsFakes.cursor(x, 2, 1, i -> l[i]),
+                RowsFakes.cursor(x, 1, 1, i -> r[i]))).rows()).isEqualTo(rows(l[0], l[1], r[0]));
+        assertThat(drain(new SetOpCursor("except", RowsFakes.cursor(x, 2, 1, i -> l[i]),
+                RowsFakes.cursor(x, 1, 1, i -> r[i]))).rows()).isEqualTo(rows(l[0], l[1]));
+        assertThat(drain(new SetOpCursor("intersect", RowsFakes.cursor(x, 2, 1, i -> l[i]),
+                RowsFakes.cursor(x, 1, 1, i -> r[i]))).rows()).isEmpty();
+    }
+
     /// Inputs of different shapes, or an unknown operation, are refused and both inputs closed.
     @Test
     void refusesInputsThatDoNotLineUp() {

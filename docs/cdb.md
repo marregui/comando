@@ -11,7 +11,7 @@ This document says how a query and a write run, what each step costs, and how th
 | Step | Package | What it does |
 |---|---|---|
 | parse | `sql` | text to a syntax tree |
-| plan | `plan` | names and types resolved; the time range of the designated timestamp narrowed from WHERE (`Pruning`); the WHERE's top-level AND comparisons of a column with a constant become the scan's terms (`ScanTerms`); `LATEST ON` over a scan reads it newest first; `ORDER BY … LIMIT` tells the sort how many rows are read |
+| plan | `plan` | names and types resolved; the time range of the designated timestamp narrowed from WHERE (`Pruning`); the WHERE's top-level AND comparisons of a column with a constant become the scan's terms (`ScanTerms`); `LATEST ON` over a scan, and `ORDER BY` the designated timestamp `DESC` over a scan, filtered or projected, read it newest first, with no sort (`EXPLAIN` prints `newest first` on the scan); `ORDER BY … LIMIT` tells the sort how many rows are read |
 | prune | `plan.ColumnUse` | from the root down, each node asks its child for the columns it reads; a scan reads only those |
 | execute | `exec` | a tree of cursors over pages of 1,024 rows, a page from `next()` belonging to its caller; the aggregating operators `borrow()` instead, a page the scan refills on each call ([record 179](adr/0179-cdb-page-borrow.md)); a column (`Vector`) is read and written only through its accessors: a primitive array for fixed width, text as UTF-8 bytes (`TextColumn`), SYMBOL as its dictionary key ([record 167](adr/0167-cdb-heap-reduction.md)) |
 | read | `store` | a snapshot of the table: per partition a `Version`, its column files mapped through FFM |
@@ -32,8 +32,11 @@ time-order scan reversed, rows with equal timestamps included.
 Left out of the terms: NULL and NaN constants, DOUBLE zero (`-0.0` and `0.0` compare equal in the filter), OR, NOT,
 functions of a column, and a constant that does not survive UTF-8 (a lone surrogate encodes as `?`).
 
-Each column of a version has, built on first use, a zone map: min, max and a has-NULL flag per block of 4,096 rows. A
-numeric select skips a block whose range cannot hold the constant; a block holding a NULL or NaN is never skipped.
+Each 8-byte column of a version (LONG, TIMESTAMP, DOUBLE) has a zone map: min, max and a has-NULL flag per block of
+4,096 rows, each block's read the first time a scan meets it and shared by every reader thread. A version that a
+commit appends to in place takes over the old version's whole blocks and what it learned of whether a SYMBOL column
+holds a NULL, so only the changed blocks are read again. A numeric select skips a block whose range cannot hold the
+constant; a block holding a NULL or NaN is never skipped.
 
 ### 1.2 Text
 
@@ -52,7 +55,8 @@ the result (`CdbResult`, JSON, PG) and the functions that build text (`concat`, 
 supplementary chars, which the compare handles), so answers and the output order of hash-based operators are the
 same as with Strings. Two SYMBOL values of one dictionary compare by key. An unpaired surrogate (half a pair, from
 `substring`) is held as the 3 bytes of its code unit, so it reads back as itself; the column files still store it as
-`?`, as before.
+`?`, as before. An unpaired high surrogate against the pair it starts compares as `String.compareTo` does: the unit
+after it against the pair's low unit, the end of the value first.
 
 ### 1.3 Operators
 
@@ -64,6 +68,11 @@ same as with Strings. Two SYMBOL values of one dictionary compare by key. An unp
 | LATEST ON, newest first | the first row of each key is its answer: copied once; a later row of a seen key costs one hash lookup, or, for one text key with at most 16 values, a scan of those values |
 | LATEST ON, time order | the best row per key tracked by offset, copied once per page |
 | ORDER BY … LIMIT | a bounded heap that keeps the full sort's order, ties by input sequence; over a scan with n at most 10,000 (`LateReadCursor`), the scan reads only the filter's and the sort's columns plus each row's position, and the other columns are read for the n rows kept |
+
+GROUP BY, DISTINCT, SAMPLE BY, LATEST ON and the set operators hold at most 1,000,000 groups or distinct rows, the
+server's row limit, as the IN subquery's set. Past that the query fails with `cannot hold more groups in memory
+[limit=1000000]` (`cannot hold more distinct rows in memory` for a set operator), even when HAVING or LIMIT would
+leave fewer rows.
 
 **Parallel operators** ([record 165](adr/0165-cdb-parallel-queries.md)). A segment, a scan under only filters and
 projections whose expressions read the current row, is cut into frames: per partition in the scan's range, its rows at
@@ -116,8 +125,9 @@ for LONG, TIMESTAMP and DOUBLE, 1 for BOOLEAN, 4-byte keys for SYMBOL; VARCHAR a
 virtual thread). Per table it takes the queued commits in log order, at most 100,000 rows, and writes them with the
 commit's file code as one commit: one sort, per partition one dedup, one append in place or one rewrite, one mapping,
 one publish, named by the batch's last transaction. That gives the same rows as one commit at a time: dedup keeps the
-last row written and the sort is stable, so the last write of an upsert key wins as before; the TTL's newest timestamp
-only grows, so one expiry at the end drops the same partitions; a truncate or a definition change is never inside a
+last row written and the sort is stable, so the last write of an upsert key wins as before; the TTL counts back from
+the newest timestamp or now, whichever is earlier, and that only grows, so one expiry at the end drops the same
+partitions; a truncate or a definition change is never inside a
 batch. A commit puts its table on the applier's queue, once until it is served; a deadline list, kept by the applier
 thread alone, holds each table's next due time (its interval, a retry back-off, an idle checkpoint), and the thread
 parks until the earliest of them or the next commit, so an idle store costs no work. A table is due once its oldest
@@ -142,7 +152,8 @@ statements take a writer each. It cuts the log back to its header only when no r
 names; a commit logged meanwhile keeps the log until the next checkpoint (a scan skips the records at or before
 `_txn`), and a log past 64 MiB is drained and cut under the writer lease. Its order: the column
 files and folders written since the last checkpoint forced, the symbol files appended and forced, `_meta` when the
-definition changed, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
+definition changed, the table folder forced when it gained an entry since the last checkpoint (a new partition folder,
+or a symbol file created, one whose first force failed included) and `_meta` did not force it, then `_txn` written to `_txn.tmp`, forced, moved over `_txn` atomically, and the table folder
 forced. Only when that folder force holds are the folders the new `_txn` no longer names deleted (those no reader
 holds) and the log cut back to its header, a new salt written in it and forced. `Store.create` forces the root after the table folder; when the table folder's force after `_txn` or `_meta` fails, the create is refused and the folder removed (best effort: a folder left with `_meta` opens as an empty table). `_txn` and
 the log's records together say what is committed: a reader maps only the published rows, and a file may run past them.
@@ -210,7 +221,8 @@ taken from the current epoch of `store.BlockArenas`: one shared arena serves the
 their segments cut from 1 MiB chunks and closes when its last block left, so 10 arena closes a second, each a handshake
 of every thread, plus one per 16 MiB of commits ([record 170](adr/0170-cdb-row-block-epochs.md)): the block that queued
 them is freed once the applier published them, a replay's blocks once the replay ends, the blocks never applied when
-their table closes. A freed block's segments are reused within their epoch (at most 64 per size class, zeroed before reuse), which takes most native allocations off the commit path. Each table log keeps one file channel for its forces, closed with the store.
+their table closes. A freed block's segments are reused within their epoch (at most 64 per size class, not zeroed: a block reads only rows below its size, each of which its writer set whole,
+and fills its text lengths with -1 itself), which takes most native allocations off the commit path. Each table log keeps one file channel for its forces, closed with the store.
 
 ## 3. Concurrency
 

@@ -87,14 +87,14 @@ class TableFilesTest {
         assertThat(read.partitions()).isEqualTo(partitions);
         assertThat(read.checkpointed()).isTrue();
         assertThat(read.columns()).isEqualTo(4);
-        assertThat(read.ttlMicros()).isEqualTo(3_600_000_000L);
+        assertThat(read.ttlMicrosOrMonths()).isEqualTo(3_600_000_000L);
         assertThat(read.symbolBytes()).containsExactly(-1L, 0L, -1L, 12_345L);
 
         final TableFiles.Txn bare = TableFiles.decodeTxn(TableFiles.encodeTxn(new TableFiles.Txn(1L, List.of(), 2, 0L,
                 new long[] {-1L, -1L})), "_txn");
         assertThat(bare.partitions()).isEmpty();
         assertThat(bare.checkpointed()).isTrue();
-        assertThat(bare.ttlMicros()).isZero();
+        assertThat(bare.ttlMicrosOrMonths()).isZero();
         assertThat(bare.symbolBytes()).containsExactly(-1L, -1L);
     }
 
@@ -121,5 +121,20 @@ class TableFilesTest {
         assertThatThrownBy(() -> TableFiles.decodeMeta(text, "_meta"))
                 .isInstanceOf(CdbException.class)
                 .hasMessage("cannot read table file line [file=_meta, line=" + line + ']');
+    }
+
+    /// A `_meta` written before months were kept apart reads its positive `ttl=` as the same span in microseconds,
+    /// and a month TTL, negative, round-trips.
+    @Test
+    void aPositiveTtlStaysASpanAndMonthsRoundTrip() {
+        final TableDef span = TableFiles.decodeMeta(FORMAT_ONE.replace("ttl=0", "ttl=2592000000000"), "_meta");
+        assertThat(span.ttlMicrosOrMonths()).isEqualTo(30L * Retention.DAY_MICROS);
+        final long jan1 = StoreRows.micros("2026-01-01T00:00:00Z");
+        assertThat(Retention.expired(jan1, PartitionBy.DAY, span.ttlMicrosOrMonths(),
+                StoreRows.micros("2026-01-31T23:59:59Z"))).isFalse();
+        assertThat(Retention.expired(jan1, PartitionBy.DAY, span.ttlMicrosOrMonths(),
+                StoreRows.micros("2026-02-01T00:00:00Z"))).isTrue();
+        final TableDef months = span.withTtlMicrosOrMonths(-3L);
+        assertThat(TableFiles.decodeMeta(TableFiles.encodeMeta(months), "_meta")).isEqualTo(months);
     }
 }

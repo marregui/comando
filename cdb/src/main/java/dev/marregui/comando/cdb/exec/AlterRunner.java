@@ -28,7 +28,7 @@ final class AlterRunner {
     /** Sets the TTL and commits, which drops the partitions the new TTL expires. Returns 0, the rows changed. */
     static long setTtl(final Plan.SetTtl set, final Store store) {
         try (TableWriter writer = store.writer(set.table(), UpdateRunner.WAIT_MILLIS)) {
-            writer.setTtl(set.ttlMicros());
+            writer.setTtl(set.ttlMicrosOrMonths());
             writer.commit();
         }
         return 0;

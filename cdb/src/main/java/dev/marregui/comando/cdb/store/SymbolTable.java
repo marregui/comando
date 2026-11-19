@@ -42,13 +42,18 @@ final class SymbolTable implements SymbolDictionary, AutoCloseable {
     private int synced;
     // the writer's alone: the file's length after the last sync, what a checkpoint records in _txn
     private long syncedBytes;
+    // the writer's alone: whether the file's name in the table folder is durable; a sync that created the file and
+    // then failed leaves it present but not durable
+    private boolean nameDurable;
 
-    private SymbolTable(final Path file, final String[] values, final int size, final long syncedBytes) {
+    private SymbolTable(final Path file, final String[] values, final int size, final long syncedBytes,
+            final boolean nameDurable) {
         this.file = file;
         this.values = values;
         this.size = size;
         this.synced = size;
         this.syncedBytes = syncedBytes;
+        this.nameDurable = nameDurable;
         this.slots = new int[Integer.highestOneBit(Math.max(INITIAL_CAPACITY, size) * 2) * 2];
         for (int key = 0; key < size; key++) {
             insertSlot(values[key], key);
@@ -73,7 +78,7 @@ final class SymbolTable implements SymbolDictionary, AutoCloseable {
                 if (committedBytes > 0L) {
                     throw lost(file, committedBytes, 0L);
                 }
-                return new SymbolTable(file, new String[INITIAL_CAPACITY], 0, 0L);
+                return new SymbolTable(file, new String[INITIAL_CAPACITY], 0, 0L, false);
             }
             if (committedBytes >= 0L && Files.size(file) > committedBytes) {
                 StoreFiles.truncate(file, committedBytes);
@@ -107,7 +112,8 @@ final class SymbolTable implements SymbolDictionary, AutoCloseable {
             if (valid < bytes) {
                 StoreFiles.truncate(file, valid);
             }
-            return new SymbolTable(file, values, count, valid);
+            // a checkpoint records a dictionary's bytes only after forcing the folder that names it
+            return new SymbolTable(file, values, count, valid, committedBytes > 0L);
         } catch (final IOException e) {
             throw new CdbException("cannot open symbol table [file=" + file + ']', e);
         }
@@ -231,6 +237,21 @@ final class SymbolTable implements SymbolDictionary, AutoCloseable {
     /** The file's length after the last {@link #sync()}: every key below the synced ones, durable. */
     long syncedBytes() {
         return syncedBytes;
+    }
+
+    /**
+     * Whether the file's name in the table folder is durable: false until a checkpoint forces the folder after the
+     * file's first sync, even when the file exists, as a failed sync leaves it.
+     */
+    boolean nameDurable() {
+        return nameDurable;
+    }
+
+    /** Records that the table folder was forced since the file's last {@link #sync()}, so its name is durable. */
+    void folderForced() {
+        if (syncedBytes > 0L) {
+            nameDurable = true;
+        }
     }
 
     /** Holds no file open between syncs: nothing to release. */

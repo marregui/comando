@@ -66,9 +66,9 @@ import dev.marregui.comando.cdb.store.Store;
  * read and written at once hold at most {@link Limits#BODY_BUDGET_BYTES}, and a body that cannot get its share within
  * {@link Limits#BODY_WAIT_MILLIS} is answered 503. A log line names a request by its path, never by its query. A
  * result is answered chunked, written as it is formatted, and a failure once it is under way drops the connection
- * rather than end the answer as if whole; a body of up to {@link Limits#POOLED_BODY_BYTES} is read into a buffer the
- * server keeps for the next one, while one of {@link #POOLED_BODIES} is free, and holds the buffer's size of the
- * budget.
+ * rather than end the answer as if whole; a body of up to {@link Limits#POOLED_BODY_BYTES} is read into buffers of
+ * {@link Limits#BODY_CHUNK_BYTES} the server keeps for the next one, while enough of {@link #POOLED_BODIES} are free,
+ * and holds the buffers' size of the budget.
  */
 public final class CdbServer implements AutoCloseable {
 
@@ -79,10 +79,12 @@ public final class CdbServer implements AutoCloseable {
     /**
      * Body buffers the server makes and keeps, 16 MiB in all, a quarter of {@link Limits#BODY_BUDGET_BYTES}: one in use
      * holds its size of the budget, an idle one none. Not measured: the kit's clients send one write at a time per
-     * process, so a few cover them; a write while all are in use reads its body into an array of its own, as a longer
-     * body does.
+     * process, so a few cover them; a write while too few are free reads its body into an array of its own, as a
+     * longer body does.
      */
-    static final int POOLED_BODIES = 16;
+    static final int POOLED_BODIES = 64;
+    /** The buffers a body of unknown length takes: those of the longest pooled body. */
+    private static final int UNKNOWN_LENGTH_CHUNKS = Limits.POOLED_BODY_BYTES / Limits.BODY_CHUNK_BYTES;
     private static final String BEARER = "Bearer ";
     private static final String JSON = "application/json; charset=utf-8";
     private static final System.Logger LOG = System.getLogger(CdbServer.class.getName());
@@ -166,6 +168,12 @@ public final class CdbServer implements AutoCloseable {
     @TestOnly
     int madeBodies() {
         return bodies.made();
+    }
+
+    /** The length of the longest body buffer kept for the next {@code /write}, 0 when none is. */
+    @TestOnly
+    int longestPooledBody() {
+        return bodies.longest();
     }
 
     static CdbServer start(final Backend backend, final InetSocketAddress address) {
@@ -439,13 +447,17 @@ public final class CdbServer implements AutoCloseable {
         }
         final boolean durable = "true".equals(durableValue);
         final long declared = declaredLength(exchange);
-        // null for a body declared longer than a buffer, under a budget smaller than one, or when every buffer is in
-        // use; a body read into a buffer holds the buffer's size of the budget, so the buffers in use count against it
-        final byte[] pooled = declared <= Limits.POOLED_BODY_BYTES
-                && Limits.POOLED_BODY_BYTES <= bounds.bodyBudgetBytes() ? bodies.take() : null;
+        // the buffers the body is read into, as many as its declared length needs, or those of the longest pooled body
+        // when it has none; null for a body declared longer, under a budget smaller than its buffers, or when too few
+        // are free; a body read into buffers holds their size of the budget, so the buffers in use count against it
+        final int chunks = declared < 0L ? UNKNOWN_LENGTH_CHUNKS
+                : (int) Math.max(1L, (declared + Limits.BODY_CHUNK_BYTES - 1L) / Limits.BODY_CHUNK_BYTES);
+        final long chunkBytes = (long) chunks * Limits.BODY_CHUNK_BYTES;
+        final byte[][] pooled = declared <= Limits.POOLED_BODY_BYTES && chunkBytes <= bounds.bodyBudgetBytes()
+                ? bodies.take(chunks) : null;
         try {
             final int share = pooled == null ? share(declared, bounds)
-                    : Math.max(share(declared, bounds), Limits.POOLED_BODY_BYTES);
+                    : (int) Math.max(share(declared, bounds), chunkBytes);
             if (!acquire(budget, share, bounds)) {
                 send(exchange, 503, JsonWriter.writeError("refuse body while the body budget is in use [budgetBytes="
                         + bounds.bodyBudgetBytes() + ", waitedMillis=" + bounds.bodyWaitMillis() + ']', 0));
@@ -493,27 +505,36 @@ public final class CdbServer implements AutoCloseable {
         }
     }
 
-    // the body is parsed in place, in pooled when it fits and in an array of its own when longer or pooled is null;
-    // pooled holds the bytes of earlier bodies past this one's length, which the parser never reads
-    private static void write(final CommitQueue commits, final HttpExchange exchange, final byte[] pooled,
+    // the body is parsed in place, across the pooled buffers when it fits them and in an array of its own when longer
+    // or pooled is null; the buffers hold the bytes of earlier bodies past this one's length, which the parser never
+    // reads
+    private static void write(final CommitQueue commits, final HttpExchange exchange, final byte[][] pooled,
             final Precision precision, final boolean durable) throws IOException {
         final InputStream input = exchange.getRequestBody();
-        final byte[] bytes;
+        final byte[][] bytes;
         final int length;
         if (pooled == null) {
-            bytes = input.readNBytes(MAX_BODY_BYTES + 1);
-            length = bytes.length;
+            bytes = new byte[][] {input.readNBytes(MAX_BODY_BYTES + 1)};
+            length = bytes[0].length;
         } else {
-            final int read = input.readNBytes(pooled, 0, pooled.length);
-            // a body of unknown length may go on past a full buffer: the rest is read as a longer body is
-            final byte[] rest = read < pooled.length ? null : input.readNBytes(MAX_BODY_BYTES + 1 - read);
+            int read = 0;
+            for (int c = 0; c < pooled.length && read == c * Limits.BODY_CHUNK_BYTES; c++) {
+                read += input.readNBytes(pooled[c], 0, Limits.BODY_CHUNK_BYTES);
+            }
+            // a body of unknown length may go on past full buffers: the rest is read as a longer body is
+            final byte[] rest = read < pooled.length * Limits.BODY_CHUNK_BYTES ? null
+                    : input.readNBytes(MAX_BODY_BYTES + 1 - read);
             if (rest == null || rest.length == 0) {
                 bytes = pooled;
                 length = read;
             } else {
-                bytes = Arrays.copyOf(pooled, read + rest.length);
-                System.arraycopy(rest, 0, bytes, read, rest.length);
-                length = bytes.length;
+                final byte[] whole = new byte[read + rest.length];
+                for (int c = 0; c < pooled.length; c++) {
+                    System.arraycopy(pooled[c], 0, whole, c * Limits.BODY_CHUNK_BYTES, Limits.BODY_CHUNK_BYTES);
+                }
+                System.arraycopy(rest, 0, whole, read, rest.length);
+                bytes = new byte[][] {whole};
+                length = whole.length;
             }
         }
         if (length > MAX_BODY_BYTES) {
@@ -802,10 +823,10 @@ public final class CdbServer implements AutoCloseable {
     }
 
     /**
-     * The {@code /write} body buffers, each {@link Limits#POOLED_BODY_BYTES}, at most {@link #POOLED_BODIES} made: a
-     * request takes a free one, or a new one while fewer were made, else none, and gives it back once answered. A
-     * buffer is not cleared, as a body is read only to its own length. A queue rather than a thread-local cache: each
-     * request runs on a virtual thread of its own.
+     * The {@code /write} body buffers, each {@link Limits#BODY_CHUNK_BYTES}, at most {@link #POOLED_BODIES} made: a
+     * request takes the buffers its body needs, free ones or new ones while fewer were made, else none, and gives them
+     * back once answered. A buffer is not cleared, as a body is read only to its own length. A queue rather than a
+     * thread-local cache: each request runs on a virtual thread of its own.
      */
     private static final class BodyBuffers {
 
@@ -813,8 +834,21 @@ public final class CdbServer implements AutoCloseable {
         private final ArrayBlockingQueue<byte[]> free = new ArrayBlockingQueue<>(POOLED_BODIES);
         private final AtomicInteger made = new AtomicInteger();
 
+        // all count buffers, or null when fewer are free and the bound is reached: the ones taken go back
+        byte[][] take(final int count) {
+            final byte[][] buffers = new byte[count][];
+            for (int i = 0; i < count; i++) {
+                buffers[i] = take();
+                if (buffers[i] == null) {
+                    give(Arrays.copyOf(buffers, i));
+                    return null;
+                }
+            }
+            return buffers;
+        }
+
         // null when every buffer is in use and the bound is reached
-        byte[] take() {
+        private byte[] take() {
             final byte[] buffer = free.poll();
             if (buffer != null) {
                 return buffer;
@@ -823,7 +857,7 @@ public final class CdbServer implements AutoCloseable {
                 return null;
             }
             try {
-                return new byte[Limits.POOLED_BODY_BYTES];
+                return new byte[Limits.BODY_CHUNK_BYTES];
             } catch (final OutOfMemoryError e) {
                 // the buffer was never made: its slot is free for a later request
                 made.decrementAndGet();
@@ -831,8 +865,10 @@ public final class CdbServer implements AutoCloseable {
             }
         }
 
-        void give(final byte[] buffer) {
-            free.offer(buffer);
+        void give(final byte[][] buffers) {
+            for (final byte[] buffer : buffers) {
+                free.offer(buffer);
+            }
         }
 
         int pooled() {
@@ -841,6 +877,14 @@ public final class CdbServer implements AutoCloseable {
 
         int made() {
             return made.get();
+        }
+
+        int longest() {
+            int longest = 0;
+            for (final byte[] buffer : free) {
+                longest = Math.max(longest, buffer.length);
+            }
+            return longest;
         }
     }
 

@@ -59,7 +59,7 @@ class IlpAppenderTest {
         try (final Store store = Store.open(root)) {
             try (final CdbAppender appender = store.appender()) {
                 appender.table("cpu").longColumn("n", 1L).at(t);
-                assertThatThrownBy(() -> appender.table("cpu").booleanColumn("n", true).at(t + 1L))
+                assertThatThrownBy(() -> appender.table("cpu").stringColumn("n", "x").at(t + 1L))
                         .isInstanceOf(CdbException.class);
                 appender.table("cpu").stringColumn("s", "a").at(t + 2L);
                 appender.table("cpu").symbol("s", "b").at(t + 3L);

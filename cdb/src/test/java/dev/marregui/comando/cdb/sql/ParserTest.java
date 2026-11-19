@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import dev.marregui.comando.cdb.CdbException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// The exact tree the parser builds for each clause and expression form, and where its errors point. A node's
 /// position is the offset of the text it starts at, found here by searching the statement for that text.
@@ -257,15 +258,22 @@ class ParserTest {
                 List.of(), List.of(), null, 0));
     }
 
-    /// `SAMPLE BY` with a unit glued to its count, `FILL` values and both alignments; `M` and `m` differ.
+    /// `SAMPLE BY` with a unit glued to its count, `FILL` values and `ALIGN TO CALENDAR`; `M` and `m` differ.
     @Test
     void sampleBy() {
         assertThat(sampleBy("select avg(p) from t sample by 1h fill(prev, NULL, 0, -1) align to calendar"))
                 .isEqualTo(new Ast.SampleBy(1, "h", List.of("prev", "null", "0", "-1"), true));
-        assertThat(sampleBy("select avg(p) from t sample by 15m align to first observation"))
-                .isEqualTo(new Ast.SampleBy(15, "m", List.of(), false));
         assertThat(sampleBy("select avg(p) from t sample by 1M"))
                 .isEqualTo(new Ast.SampleBy(1, "M", List.of(), false));
+    }
+
+    /// `ALIGN TO FIRST OBSERVATION` is refused at the clause, not read as the calendar alignment it is not.
+    @Test
+    void alignToFirstObservationIsRefused() {
+        final String sql = "select avg(p) from t sample by 15m align to first observation";
+        assertThatThrownBy(() -> Parser.parse(sql)).isInstanceOf(CdbException.class)
+                .hasMessageContaining("ALIGN TO FIRST OBSERVATION");
+        assertThat(errorPosition(sql)).isEqualTo(at(sql, "first"));
     }
 
     /// `GROUP BY`, `ORDER BY` with a direction, and `LIMIT lo, hi`.

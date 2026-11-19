@@ -1,6 +1,7 @@
 package dev.marregui.comando.cdb.exec;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,8 @@ import dev.marregui.comando.cdb.plan.Plan;
 import dev.marregui.comando.cdb.plan.Planner;
 import dev.marregui.comando.cdb.sql.Parser;
 import dev.marregui.comando.cdb.store.Store;
+import dev.marregui.comando.cdb.store.StoreHooks;
+import dev.marregui.comando.cdb.store.TableWriter;
 
 import static dev.marregui.comando.cdb.exec.SqlRows.rows;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,6 +26,8 @@ class DropRunnerTest {
 
     // a fixed now(): no test here compares with it
     private static final long NOW_MICROS = 0;
+    // a read lag no test outlasts: a reader never waits for the commits the held applier queues
+    private static final long LAG_MILLIS = 3_600_000L;
 
     private static final String THREE_DAYS = "INSERT INTO t VALUES ('2026-11-14T10:00:00.000000Z', 1),"
             + " ('2026-11-14T20:00:00.000000Z', 2), ('2026-11-15T10:00:00.000000Z', 3),"
@@ -65,6 +70,25 @@ class DropRunnerTest {
         assertThat(select("SELECT count() FROM t")).containsExactly("0");
     }
 
+    /// TRUNCATE and DROP PARTITION count from every answered commit: with the applier held, and a read lag that lets
+    /// a reader miss the queued commits, a dropped partition that only a queued commit made is counted, and so are the
+    /// queued rows a truncate removes.
+    @Test
+    void theCountsTakeTheCommitsNotYetApplied() {
+        sql("CREATE TABLE t (ts TIMESTAMP, x LONG) TIMESTAMP(ts) PARTITION BY DAY", THREE_DAYS);
+        try (final Store store = Store.open(root)) {
+            store.readMaxLagMillis(LAG_MILLIS);
+            StoreHooks.pauseApplier(store, true);
+            insert(store, "2026-11-17T10:00:00Z", 5);
+            assertThat(DropRunner.dropPartitions((Plan.DropPartitions) plan(store,
+                    "ALTER TABLE t DROP PARTITION LIST '2026-11-17'"), store)).isEqualTo(1);
+            insert(store, "2026-11-17T10:00:00Z", 6);
+            assertThat(DropRunner.truncate((Plan.Truncate) plan(store, "TRUNCATE TABLE t"), store)).isEqualTo(5);
+            StoreHooks.pauseApplier(store, false);
+        }
+        assertThat(select("SELECT count() FROM t")).containsExactly("0");
+    }
+
     /// DROP TABLE removes the table and returns 0; a missing table is refused, unless the plan says IF EXISTS.
     @Test
     void dropTableRemovesTheTable() {
@@ -99,6 +123,15 @@ class DropRunnerTest {
     private long dropPartitions(final String statement) {
         try (final Store store = Store.open(root)) {
             return DropRunner.dropPartitions((Plan.DropPartitions) plan(store, statement), store);
+        }
+    }
+
+    private static void insert(final Store store, final String ts, final long x) {
+        try (final TableWriter writer = store.writer("t", UpdateRunner.WAIT_MILLIS)) {
+            writer.newRow(Instant.parse(ts).toEpochMilli() * 1_000L);
+            writer.putLong(1, x);
+            writer.endRow();
+            writer.commit();
         }
     }
 

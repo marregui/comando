@@ -28,8 +28,8 @@ import dev.marregui.comando.cdb.CdbAppender;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// `/write` bodies read into pooled buffers: sequential writes reuse one buffer, concurrent ones keep at most the
-/// pool's bound once answered, a body in a buffer holds the buffer's size of the body budget, and a body longer than
-/// a buffer, of known length or chunked, is still taken whole.
+/// pool's bound once answered, a body in a buffer holds the buffer's size of the body budget, a body spans buffers of
+/// at most 256 KiB, and a body longer than the pooled ones, of known length or chunked, is still taken whole.
 class WriteBodyPoolTest {
 
     /// Thirty seconds bounds a hung run; every request here answers in milliseconds when the server works.
@@ -82,8 +82,8 @@ class WriteBodyPoolTest {
     }
 
     /// Sixty-four writes in flight at once, the server's bound: the first one's commit waits until the other 63 are
-    /// queued behind it, each holding its body, so every buffer is in use and the rest read into arrays of their own;
-    /// once all are answered 204 the pool holds its bound, no more.
+    /// queued behind it, each holding its body in a buffer, so every buffer is in use; once all are answered 204 the
+    /// pool holds its bound, no more.
     @Test
     void concurrentWritesLeaveThePoolAtItsBound() throws Exception {
         final int writers = CdbServer.MAX_REQUESTS;
@@ -115,7 +115,7 @@ class WriteBodyPoolTest {
     void aBodyInABufferHoldsTheBuffersShareOfTheBudget() throws Exception {
         server.close();
         server = CdbServer.start(backend, new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), null,
-                new CdbServer.Bounds(Limits.QUERY_DEADLINE_MILLIS, Limits.MAX_ROWS, 3L * Limits.POOLED_BODY_BYTES,
+                new CdbServer.Bounds(Limits.QUERY_DEADLINE_MILLIS, Limits.MAX_ROWS, 3L * Limits.BODY_CHUNK_BYTES,
                         BODY_WAIT_MILLIS));
         backend.holdFirst = true;
         final int held = 3;
@@ -152,6 +152,29 @@ class WriteBodyPoolTest {
         assertThat(response.statusCode()).isEqualTo(204);
         assertThat(backend.rows.get()).isEqualTo(rows(body));
         assertThat(server.pooledBodies()).as("buffers made for it").isZero();
+    }
+
+    /// A 1 MiB body with its length, the longest one pooled, is read into buffers of at most 256 KiB, below half a G1
+    /// region at the server's 256 MiB heap, so no pooled buffer is a humongous object: four buffers made, none longer,
+    /// every row written, and the buffers back in the pool. One byte longer, the body is still taken whole.
+    @Test
+    void aPooledBodySpansBuffersUnderHalfARegion() throws IOException, InterruptedException {
+        final int maxBufferBytes = 256 << 10;
+        final int pooledBodyBytes = 1 << 20;
+        final byte[] body = body(pooledBodyBytes);
+
+        final HttpResponse<String> response = http.post(server.port(), "/write?precision=u", body);
+        final byte[] longer = body(pooledBodyBytes + 1);
+        final HttpResponse<String> longerResponse = http.post(server.port(), "/write?precision=u", longer);
+
+        assertThat(response.statusCode()).isEqualTo(204);
+        assertThat(longerResponse.statusCode()).isEqualTo(204);
+        assertThat(backend.rows.get()).isEqualTo(rows(body) + rows(longer));
+        assertThat(server.madeBodies()).as("buffers made for 1 MiB")
+                .isGreaterThanOrEqualTo(pooledBodyBytes / maxBufferBytes);
+        CommitQueueTest.awaitTrue(() -> server.pooledBodies() == server.madeBodies());
+        assertThat(server.longestPooledBody()).as("longest pooled buffer").isPositive()
+                .isLessThanOrEqualTo(maxBufferBytes);
     }
 
     /// Chunked bodies of no stated length, one exactly a buffer long and one longer: each taken whole.

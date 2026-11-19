@@ -37,8 +37,8 @@ class IlpNumberTest {
     }
 
     /// A million decimals of 0 to 20 integer digits and 0 to 20 fraction digits, either sign or none, with or without
-    /// an exponent of 0 to 3 digits: every value the same bits as the JDK's, and a third or more of them inside the
-    /// exact path's bounds.
+    /// an exponent of 0 to 3 digits: every value the same bits as the JDK's, and a third or more of them inside
+    /// Clinger's bounds of 15 digits and a power of 22.
     @Test
     void randomDecimalsMatchTheJdkBitForBit() {
         final SplittableRandom random = random("randomDecimalsMatchTheJdkBitForBit");
@@ -55,7 +55,55 @@ class IlpNumberTest {
                 assertThat(parsed).as("token %d: %s", i, token).isEqualTo(expected);
             }
         }
-        assertThat(exact).as("decimals inside the exact path's bounds").isGreaterThan(count / 3);
+        assertThat(exact).as("decimals inside Clinger's bounds").isGreaterThan(count / 3);
+    }
+
+    /// A million doubles of random bits, NaN and the infinities left out, printed by `Double.toString` and either
+    /// negated or not: each reads back as the JDK reads it, the shortest decimal of up to 17 digits that rounds to it,
+    /// so all but the subnormals go through the exact path of up to 19 digits.
+    @Test
+    void doublesPrintedByTheJdkReadBackBitForBit() {
+        final SplittableRandom random = random("doublesPrintedByTheJdkReadBackBitForBit");
+        int count = 0;
+        while (count < 1_000_000) {
+            final double value = Double.longBitsToDouble(random.nextLong());
+            if (!Double.isFinite(value)) {
+                continue;
+            }
+            count++;
+            final String token = Double.toString(value);
+            final String expected = expected(token);
+            final String parsed = parsed(token);
+            if (!parsed.equals(expected)) {
+                assertThat(parsed).as("double %d: %s", count, token).isEqualTo(expected);
+            }
+        }
+    }
+
+    /// Subnormals and the smallest normals, 2^53 and its neighbours, the halfway cases between two doubles that round
+    /// to even, the shortest decimals whose rounding carries into a new leading bit, 19 digits up to 2^64 and past
+    /// `Long.MAX_VALUE`, and 20 digits, which the JDK reads: each as the JDK reads it, of either sign.
+    @Test
+    void nineteenDigitEdgeCasesMatchTheJdk() {
+        final List<String> tokens = List.of(
+                "4.9E-324", "2.4703282292062327E-324", "2.4703282292062328E-324", "1.0E-323",
+                "2.225073858507201E-308", "2.2250738585072009E-308", "2.2250738585072014E-308",
+                "2.2250738585072011E-308", "4.9406564584124654E-324", "1.7976931348623157E308",
+                "1.7976931348623158E308", "1.7976931348623159E308", "9007199254740991", "9007199254740992",
+                "9007199254740993", "9007199254740994", "9007199254740995", "18014398509481983", "18014398509481985",
+                "9007199254740993.0", "900719925474099.3e1", "1e23", "8.41e21", "7.3177701707893310e15",
+                "7.2057594037927933e16", "1.00000000000000011102230246251565404",
+                "1.0000000000000001110223024625156540", "1.000000000000000111", "1.000000000000000222",
+                "9999999999999999999", "1844674407370955161", "18446744073709551615", "9223372036854775807",
+                "9223372036854775808", "9223372036854775807e-19", "1234567890123456789e-300",
+                "1234567890123456789e290", "1234567890123456789e-343", "9999999999999999999e-344",
+                "12345678901234567890", "0.1234567890123456789", "0.00000000000000000000001234567890123456789",
+                "123456789012345678e-325", "1e-325", "1e-326", "1e308", "1e309", "0.0000000000000000000",
+                "0000000000000000000000000000001");
+        for (final String token : tokens) {
+            assertThat(parsed(token)).as(token).isEqualTo(expected(token));
+            assertThat(parsed("-" + token)).as("-" + token).isEqualTo(expected("-" + token));
+        }
     }
 
     /// Short strings of `[0-9.+-eE]`, most of them malformed: the parser refuses exactly those today's rule refuses,
@@ -90,7 +138,8 @@ class IlpNumberTest {
         return new SplittableRandom(seed);
     }
 
-    // digit counts weighted to the exact path's bounds of 15 digits and a power of 22
+    // digit counts weighted to Clinger's bounds of 15 digits and a power of 22, and past the 19 digits of the exact
+    // path
     private static String decimal(final SplittableRandom random) {
         final StringBuilder token = new StringBuilder();
         switch (random.nextInt(3)) {
@@ -124,7 +173,8 @@ class IlpNumberTest {
         }
     }
 
-    // at most 15 significant digits and a power of ten of magnitude at most 22, the token well formed
+    // at most 15 significant digits and a power of ten of magnitude at most 22 (Clinger's bounds), the token well
+    // formed
     private static boolean withinExactBounds(final String token) {
         final int e = Math.max(token.indexOf('e'), token.indexOf('E'));
         final String mantissa = e < 0 ? token : token.substring(0, e);

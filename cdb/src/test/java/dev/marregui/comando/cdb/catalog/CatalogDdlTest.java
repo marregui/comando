@@ -53,14 +53,14 @@ class CatalogDdlTest {
     void showCreateTableGivesQuestDbsText() {
         try (final Cdb cdb = Cdb.open(root)) {
             cdb.run("CREATE TABLE kit_run (ts TIMESTAMP, kit SYMBOL CAPACITY 4096, run VARCHAR,"
-                    + " phase SYMBOL NOCACHE INDEX, n LONG) TIMESTAMP(ts) PARTITION BY MONTH TTL 2 WEEKS"
+                    + " phase SYMBOL NOCACHE INDEX, n LONG) TIMESTAMP(ts) PARTITION BY DAY TTL 2 WEEKS"
                     + " DEDUP UPSERT KEYS(ts, run)");
             cdb.run("CREATE TABLE plain (ts TIMESTAMP, v DOUBLE)");
             final CdbResult kitRun = cdb.run("SHOW CREATE TABLE kit_run");
             assertThat(kitRun.columnName(0)).isEqualTo("ddl");
             assertThat(rows(kitRun)).containsExactly("CREATE TABLE 'kit_run' ( \n\tts TIMESTAMP,\n\tkit SYMBOL,"
                     + "\n\trun VARCHAR,\n\tphase SYMBOL NOCACHE INDEX CAPACITY 256,\n\tn LONG\n) timestamp(ts)"
-                    + " PARTITION BY MONTH TTL 2 WEEKS\nDEDUP UPSERT KEYS(ts,run);");
+                    + " PARTITION BY DAY TTL 2 WEEKS\nDEDUP UPSERT KEYS(ts,run);");
             assertThat(rows(cdb.run("SHOW CREATE TABLE plain")))
                     .containsExactly("CREATE TABLE 'plain' ( \n\tts TIMESTAMP,\n\tv DOUBLE\n);");
         }

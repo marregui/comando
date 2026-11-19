@@ -80,11 +80,14 @@ public final class PlanText {
         sink.repeat(' ', depth * 2);
         switch (plan) {
             case Plan.Scan(final String table, final int[] columns, final long from, final long to,
-                           final List<Plan.ScanTerm> terms, final boolean _, final List<Field> _) -> {
+                           final List<Plan.ScanTerm> terms, final boolean newestFirst, final List<Field> _) -> {
                 sink.append("Scan ").append(table).append(' ').append(Arrays.toString(columns));
                 sink.append(' ');
                 range(sink, from, to);
                 terms(sink, terms);
+                if (newestFirst) {
+                    sink.append(" newest first");
+                }
                 end(sink, plan, notes);
             }
             case Plan.Source(final String function, final List<String> args, final List<Field> _) -> {
@@ -170,7 +173,8 @@ public final class PlanText {
                 }
                 sink.append(") timestamp=").append(def.timestampIndex()).append(" partition=")
                         .append(def.partitionBy()).append(" dedup=").append(def.dedupKeys())
-                        .append(" ttlMicros=").append(def.ttlMicros());
+                        .append(def.ttlMicrosOrMonths() < 0 ? " ttlMonths=" : " ttlMicros=")
+                        .append(Math.abs(def.ttlMicrosOrMonths()));
                 end(sink, plan, notes);
             }
             case Plan.Update(final String table, final int[] columns, final List<Bound> values, final Bound where) -> {
@@ -207,8 +211,9 @@ public final class PlanText {
                 sink.append(')');
                 end(sink, plan, notes);
             }
-            case Plan.SetTtl(final String table, final long ttlMicros) -> {
-                sink.append("SetTtl ").append(table).append(" ttlMicros=").append(ttlMicros);
+            case Plan.SetTtl(final String table, final long ttlMicrosOrMonths) -> {
+                sink.append("SetTtl ").append(table).append(ttlMicrosOrMonths < 0 ? " ttlMonths=" : " ttlMicros=")
+                        .append(Math.abs(ttlMicrosOrMonths));
                 end(sink, plan, notes);
             }
             case Plan.DropTable(final String table, final boolean ifExists) -> {

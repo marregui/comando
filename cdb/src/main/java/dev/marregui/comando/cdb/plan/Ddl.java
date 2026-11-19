@@ -102,13 +102,18 @@ final class Ddl {
             if (i < 0) {
                 throw new CdbException("cannot find dedup key [column=" + k + ']', pos);
             }
+            if (keys.contains(columns.get(i).name())) {
+                throw new CdbException("cannot repeat dedup key [column=" + k + ']', pos);
+            }
             keys.add(columns.get(i).name());
         }
         if (!keys.isEmpty() && (timestamp < 0 || !keys.contains(columns.get(timestamp).name()))) {
             throw new CdbException("cannot dedup without designated timestamp key [table=" + create.name() + ']', pos);
         }
-        final long ttl = create.ttl() == null ? 0 : Times.ttlMicros(create.ttl(), pos);
-        return new Plan.CreateTable(new TableDef(create.name(), columns, timestamp, partitionBy, keys, ttl),
+        final long ttlMicrosOrMonths = create.ttl() == null ? 0
+                : ttlMicrosOrMonths(create.ttl(), create.name(), partitionBy, pos);
+        return new Plan.CreateTable(
+                new TableDef(create.name(), columns, timestamp, partitionBy, keys, ttlMicrosOrMonths),
                 create.ifNotExists());
     }
 
@@ -123,7 +128,7 @@ final class Ddl {
             throw new CdbException("cannot find table [table=" + alter.table() + ']', pos);
         }
         if (alter.ttl() != null) {
-            return new Plan.SetTtl(def.name(), Times.ttlMicros(alter.ttl(), pos));
+            return new Plan.SetTtl(def.name(), ttlMicrosOrMonths(alter.ttl(), def.name(), def.partitionBy(), pos));
         }
         final List<ColumnDef> added = new ArrayList<>(alter.addColumns().size());
         final Set<String> names = new HashSet<>();
@@ -149,6 +154,33 @@ final class Ddl {
             added.add(column(spec, type, pos));
         }
         return new Plan.AddColumns(def.name(), List.copyOf(added));
+    }
+
+    /**
+     * A TTL clause as the store keeps it, refused where QuestDB's {@code validateTtlGranularity} refuses it: on a table
+     * with no partitions to drop, or when it is not a whole number of partitions (a month TTL on DAY or WEEK partitions
+     * is whole, an hour or day TTL on MONTH partitions is not).
+     */
+    private static long ttlMicrosOrMonths(
+            final String text,
+            final String table,
+            final PartitionBy partitionBy,
+            final int pos
+    ) {
+        final long ttlMicrosOrMonths = Times.ttlMicrosOrMonths(text, pos);
+        final boolean whole = switch (partitionBy) {
+            case NONE -> throw new CdbException("cannot set TTL on a non-partitioned table [table=" + table + ']', pos);
+            case HOUR -> true;
+            case DAY -> ttlMicrosOrMonths <= 0 || ttlMicrosOrMonths % TimeUnit.DAYS.toMicros(1) == 0;
+            case WEEK -> ttlMicrosOrMonths <= 0 || ttlMicrosOrMonths % TimeUnit.DAYS.toMicros(7) == 0;
+            case MONTH -> ttlMicrosOrMonths <= 0;
+            case YEAR -> ttlMicrosOrMonths <= 0 && ttlMicrosOrMonths % 12 == 0;
+        };
+        if (!whole) {
+            throw new CdbException("cannot set TTL that is not a multiple of the partition size [table=" + table
+                    + ", ttl=" + text + ", partitionBy=" + partitionBy + ']', pos);
+        }
+        return ttlMicrosOrMonths;
     }
 
     /** {@code DROP TABLE}: a missing table is refused, except under {@code IF EXISTS}, which keeps the name given. */

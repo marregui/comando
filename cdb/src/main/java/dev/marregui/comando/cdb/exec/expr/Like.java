@@ -2,6 +2,7 @@ package dev.marregui.comando.cdb.exec.expr;
 
 import java.util.List;
 
+import dev.marregui.comando.cdb.CdbException;
 import dev.marregui.comando.cdb.CdbType;
 import dev.marregui.comando.cdb.exec.Page;
 import dev.marregui.comando.cdb.exec.Vector;
@@ -10,7 +11,8 @@ import dev.marregui.comando.cdb.plan.Bound;
 /**
  * {@code like} and {@code ilike}: {@code %} matches any run of characters, {@code _} one character, {@code \} makes the
  * next character literal, and every other character, {@code .} and {@code [} included, is itself. The pattern matches
- * the whole text; {@code ilike} compares lower-cased characters. A NULL text or pattern does not match.
+ * the whole text; {@code ilike} compares lower-cased characters. A NULL text or pattern, and an empty pattern, match
+ * nothing, as in QuestDB. A constant pattern that ends with {@code \} is refused; a per-row one matches nothing.
  */
 final class Like {
 
@@ -31,7 +33,11 @@ final class Like {
         final VectorFn patterns;
         if (args.get(1) instanceof Bound.Constant(Object value, CdbType _)) {
             patterns = null;
-            pattern.of(value == null ? null : value.toString(), ignoreCase);
+            final String constant = value == null ? null : value.toString();
+            if (!pattern.of(constant, ignoreCase)) {
+                throw new CdbException("LIKE pattern must not end with escape character [pattern=" + constant + ']',
+                        -1);
+            }
         } else {
             patterns = Cast.arg(args.get(1), CdbType.VARCHAR, nowMicros);
         }
@@ -49,11 +55,14 @@ final class Like {
         }, CdbType.BOOLEAN, type);
     }
 
-    /** Re-points this matcher at {@code pattern}; a null pattern matches nothing. */
-    void of(final String pattern, final boolean ignoreCase) {
+    /**
+     * Re-points this matcher at {@code pattern}; a null or empty pattern matches nothing. False when the pattern ends
+     * with an escape character, which then matches nothing too.
+     */
+    boolean of(final String pattern, final boolean ignoreCase) {
         length = -1;
-        if (pattern == null) {
-            return;
+        if (pattern == null || pattern.isEmpty()) {
+            return true;
         }
         if (chars.length < pattern.length()) {
             chars = new char[pattern.length()];
@@ -62,8 +71,10 @@ final class Like {
         int n = 0;
         for (int i = 0; i < pattern.length(); i++) {
             final char c = pattern.charAt(i);
-            if (c == '\\' && i + 1 < pattern.length()) {
-                i++;
+            if (c == '\\') {
+                if (++i == pattern.length()) {
+                    return false;
+                }
                 kinds[n] = LITERAL;
                 chars[n++] = fold(pattern.charAt(i), ignoreCase);
             } else if (c == '%') {
@@ -76,6 +87,7 @@ final class Like {
             }
         }
         length = n;
+        return true;
     }
 
     /** True when the whole of {@code text} matches; a {@code %} backtracks to the last one seen. */

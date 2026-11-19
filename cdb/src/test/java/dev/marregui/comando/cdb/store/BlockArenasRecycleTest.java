@@ -19,10 +19,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [BlockArenas.Epoch] reuses the segments its blocks give back: a reused segment reads all zero, keeps the alignment
-/// asked for and adds no byte to the epoch; each size class keeps at most [BlockArenas#FREE_DEPTH]; a closed epoch
-/// keeps none; and threads that allocate and free at once never share a segment. A fake clock keeps one epoch; the
-/// concurrent case is seeded (`-Dcdb.arena.seed`).
+/// [BlockArenas.Epoch] reuses the segments its blocks give back: a reused segment holds the bytes its last holder
+/// left, unzeroed, keeps the alignment asked for and adds no byte to the epoch; each size class keeps at most
+/// [BlockArenas#FREE_DEPTH]; a closed epoch keeps none; and threads that allocate and free at once never share a
+/// segment. A fake clock keeps one epoch; the concurrent case is seeded (`-Dcdb.arena.seed`).
 class BlockArenasRecycleTest {
 
     private static final long SEED = Long.getLong("cdb.arena.seed", System.nanoTime());
@@ -46,9 +46,10 @@ class BlockArenasRecycleTest {
     }
 
     /// A segment cut from a chunk and freed comes back to the next request of its size class (64 to 127 bytes) it
-    /// holds, at its address, cut to the request and zeroed, and the epoch holds no more bytes than before.
+    /// holds, at its address, cut to the request and holding the bytes its last holder left, and the epoch holds no
+    /// more bytes than before.
     @Test
-    void aFreedSegmentIsReusedZeroed() {
+    void aFreedSegmentIsReusedAsItsLastHolderLeftIt() {
         final BlockArenas.Epoch epoch = arenas.join();
         final MemorySegment first = epoch.allocate(120L, Long.BYTES);
         first.fill(STALE);
@@ -59,7 +60,7 @@ class BlockArenasRecycleTest {
         final MemorySegment again = epoch.allocate(100L, Long.BYTES);
         assertThat(again.address()).isEqualTo(first.address());
         assertThat(again.byteSize()).isEqualTo(100L);
-        assertThat(zeroes(again)).as("no byte of the block that freed it").isEqualTo(100L);
+        assertThat(count(again, STALE)).as("not zeroed again").isEqualTo(100L);
         assertThat(epoch.bytes()).as("reused, not allocated").isEqualTo(held);
         assertThat(epoch.freeSegments(120L)).isZero();
         arenas.leave(epoch);
@@ -82,8 +83,7 @@ class BlockArenasRecycleTest {
     }
 
     /// A size class keeps at most FREE_DEPTH segments: of FREE_DEPTH + 10 freed lone segments, FREE_DEPTH come back,
-    /// each zeroed and one of those freed, and the 10 past them are allocated anew, the epoch's bytes growing by
-    /// theirs.
+    /// each as it was freed, and the 10 past them are allocated anew, zeroed, the epoch's bytes growing by theirs.
     @Test
     void aSizeClassKeepsAtMostFreeDepthSegments() {
         final BlockArenas.Epoch epoch = arenas.join();
@@ -105,10 +105,9 @@ class BlockArenasRecycleTest {
         int reused = 0;
         for (int i = 0; i < count; i++) {
             final MemorySegment segment = epoch.allocate(LONE, Long.BYTES);
-            assertThat(zeroes(segment)).as("segment %d", i).isEqualTo(LONE);
-            if (freed.contains(segment.address())) {
-                reused++;
-            }
+            final boolean again = freed.contains(segment.address());
+            assertThat(count(segment, again ? STALE : 0)).as("segment %d", i).isEqualTo(LONE);
+            reused += again ? 1 : 0;
         }
         assertThat(reused).isEqualTo(BlockArenas.FREE_DEPTH);
         assertThat(epoch.bytes()).as("only those past the bound allocated").isEqualTo(held + 10L * LONE);
@@ -133,8 +132,9 @@ class BlockArenasRecycleTest {
         arenas.leave(next);
     }
 
-    /// Threads of one epoch allocate, stamp, check and free segments of seeded sizes at once: every segment reads all
-    /// zero when handed out and keeps its thread's stamp until freed, so no two threads hold the same bytes.
+    /// Threads of one epoch allocate, stamp, check and free segments of seeded sizes at once: every segment reads one
+    /// byte throughout when handed out (zero, or the stamp of the thread that freed it) and keeps its thread's stamp
+    /// until freed, so no two threads hold the same bytes.
     @Test
     void threadsOfOneEpochNeverShareASegment() throws Exception {
         System.out.println("seed=" + SEED + " (-Dcdb.arena.seed)");
@@ -155,8 +155,9 @@ class BlockArenasRecycleTest {
                     for (int i = 0; i < rounds && failure.get() == null; i++) {
                         final long size = 1L + random.nextInt((int) (2L * LONE));
                         final MemorySegment segment = epoch.allocate(size, Long.BYTES);
-                        if (zeroes(segment) != size) {
-                            failure.compareAndSet(null, "not zeroed [thread=" + stamp + ", size=" + size + ']');
+                        if (count(segment, segment.get(ValueLayout.JAVA_BYTE, 0L)) != size) {
+                            failure.compareAndSet(null, "mixed bytes handed out [thread=" + stamp + ", size=" + size
+                                    + ']');
                         }
                         segment.fill(stamp);
                         held.addLast(segment);
@@ -193,13 +194,13 @@ class BlockArenasRecycleTest {
         epoch.free(segment);
     }
 
-    private static long zeroes(final MemorySegment segment) {
-        long zero = 0L;
+    private static long count(final MemorySegment segment, final int value) {
+        long found = 0L;
         for (long i = 0L; i < segment.byteSize(); i++) {
-            if (segment.get(ValueLayout.JAVA_BYTE, i) == 0) {
-                zero++;
+            if (segment.get(ValueLayout.JAVA_BYTE, i) == (byte) value) {
+                found++;
             }
         }
-        return zero;
+        return found;
     }
 }

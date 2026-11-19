@@ -32,6 +32,9 @@ final class RowsSet {
             }
             slot = (slot + 1) & mask;
         }
+        if (rows.rowCount() == AggKeys.MAX_GROUPS) {
+            throw new CdbException("cannot hold more distinct rows in memory [limit=" + AggKeys.MAX_GROUPS + ']', -1);
+        }
         final int index = rows.add(page, row);
         if (index == hashes.length) {
             hashes = Arrays.copyOf(hashes, hashes.length * 2);

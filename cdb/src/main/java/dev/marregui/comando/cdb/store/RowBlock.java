@@ -21,6 +21,11 @@ import dev.marregui.comando.cdb.CdbType;
  * (SYMBOL, VARCHAR) holds the UTF-8 bytes of its values in one segment that grows by doubling, the outgrown one given
  * back, and per row their start, their byte length ({@code -1} for NULL) and their UTF-16 length. Not safe for
  * concurrent use: one thread uses a block at a time, and none while another closes it.
+ * <p>
+ * A segment the epoch reuses is not zeroed: a row not yet set reads NULL in a text column, and in a fixed-width column
+ * whatever bytes the segment's last block left, so its writer sets every column of each row before a read of it. The
+ * readers read rows below {@link #size}, all set; a resize copies the row at the size too, the one being written, and
+ * a text row's start, UTF-16 length and bytes are read only once its length is set.
  */
 final class RowBlock implements AutoCloseable {
 
@@ -145,7 +150,7 @@ final class RowBlock implements AutoCloseable {
         return lengths[column].getAtIndex(ValueLayout.JAVA_INT, row);
     }
 
-    /** The UTF-16 length of text value {@code row} of {@code column}, as {@link String#length()}; 0 when NULL. */
+    /** The UTF-16 length of text value {@code row} of {@code column}, as {@link String#length()}; 0 when set NULL. */
     int textChars(final int column, final int row) {
         return chars[column].getAtIndex(ValueLayout.JAVA_INT, row);
     }

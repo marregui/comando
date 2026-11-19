@@ -29,12 +29,13 @@ import dev.marregui.comando.cdb.CdbException;
  * cdb over the PostgreSQL wire (protocol 3.0), as QuestDB serves its port 8812, so pgjdbc and Grafana's PostgreSQL
  * data source query it unchanged: the protocol subset is {@link PgSession}'s. Each connection runs on a virtual thread
  * of its own; past {@link #MAX_CONNECTIONS} open at once, a new connection is closed unanswered. A connection that
- * sends no startup packet within {@link #STARTUP_TIMEOUT_MILLIS}, or nothing for {@link #IDLE_TIMEOUT_MILLIS} once
- * started, is closed and its place freed. A cancel request naming a started session's process id and secret key
- * cancels the statement that session runs, as PostgreSQL's does. Served with {@link Secrets}, a client's password is
- * the owner's or the read-only secret, else it is refused; served without, any client is the owner. A query is
- * cancelled at {@link Limits#QUERY_DEADLINE_MILLIS} (a change takes no cancel and runs to its end) and a result
- * refused past {@link Limits#MAX_ROWS} rows. Started and stopped by its owner, beside {@link CdbServer}; one per Cdb.
+ * has not ended its startup, its startup packet and password, within {@link #STARTUP_TIMEOUT_MILLIS} of its start,
+ * however it spreads the bytes, or sends nothing for {@link #IDLE_TIMEOUT_MILLIS} once started, is closed and its
+ * place freed. A cancel request naming a started session's process id and secret key cancels the statement that
+ * session runs, as PostgreSQL's does. Served with {@link Secrets}, a client's password is the owner's or the
+ * read-only secret, else it is refused; served without, any client is the owner. A query is cancelled at
+ * {@link Limits#QUERY_DEADLINE_MILLIS} (a change takes no cancel and runs to its end) and a result refused past
+ * {@link Limits#MAX_ROWS} rows. Started and stopped by its owner, beside {@link CdbServer}; one per Cdb.
  */
 public final class PgServer implements AutoCloseable {
 
@@ -221,7 +222,14 @@ public final class PgServer implements AutoCloseable {
             final DataInputStream in = new DataInputStream(new BufferedInputStream(connection.getInputStream()));
             final PgSession session = new PgSession(cdb, in, new PgOutput(connection.getOutputStream()), id,
                     keys.nextInt(), policy, this::cancel, cancel -> watch(id, cancel));
-            if (session.startup()) {
+            final Runnable started = startupDeadline(connection, id);
+            final boolean isStarted;
+            try {
+                isStarted = session.startup();
+            } finally {
+                started.run();
+            }
+            if (isStarted) {
                 connection.setSoTimeout(idleTimeoutMillis);
                 live.put(id, session);
                 try {
@@ -268,6 +276,32 @@ public final class PgServer implements AutoCloseable {
             });
         } catch (final RejectedExecutionException _) {
             cancel.cancel();
+        }
+        return ended::countDown;
+    }
+
+    // the startup's deadline, from the connection's start: the socket's timeout bounds each read only, so a client
+    // trickling its startup packet and password a byte at a time would hold its place for as many reads as it has
+    // bytes; a virtual thread closes the connection when the startup has not ended by then, its read failing at
+    // once. Bounded by the connections' permits, as the statement watches are.
+    private Runnable startupDeadline(final Socket connection, final int id) {
+        final CountDownLatch ended = new CountDownLatch(1);
+        try {
+            threads.execute(() -> {
+                Thread.currentThread().setName("cdb-pg-startup-" + id);
+                try {
+                    if (!ended.await(startupTimeoutMillis, TimeUnit.MILLISECONDS)) {
+                        LOG.log(Level.DEBUG, () -> "close pg connection past its startup deadline [session=" + id
+                                + ", startupTimeoutMillis=" + startupTimeoutMillis + ']');
+                        quietly(connection);
+                    }
+                } catch (final InterruptedException _) {
+                    // the close stops the watch; the connection is closed with the server
+                    Thread.currentThread().interrupt();
+                }
+            });
+        } catch (final RejectedExecutionException _) {
+            // the server is closing: its close closes the connection
         }
         return ended::countDown;
     }

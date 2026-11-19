@@ -13,8 +13,11 @@ public interface TableWriter extends AutoCloseable {
     /** Adds {@code column} at the end of the table; existing rows read it as NULL. Returns its index. */
     int addColumn(ColumnDef column);
 
-    /** Sets the table's TTL to {@code ttlMicros}, 0 for none; the commit stores it and drops what it expires. */
-    void setTtl(long ttlMicros);
+    /**
+     * Sets the table's TTL to {@code ttlMicrosOrMonths}, as {@link TableDef#ttlMicrosOrMonths} holds it; the commit
+     * stores it and drops what it expires.
+     */
+    void setTtl(long ttlMicrosOrMonths);
 
     /**
      * Drops the column {@code name} as the table names it (any case), not the designated timestamp: from the next

@@ -170,7 +170,7 @@ class ScanDifferentialTest {
         }
         final int tail = random.nextInt(unique ? 4 : 3);
         if (tail == 1) {
-            sql.append(" ORDER BY ").append(pick(random, "x", "x DESC", "d, x", "s DESC"));
+            sql.append(" ORDER BY ").append(pick(random, "x", "x DESC", "d, x", "s DESC", "ts DESC"));
             sql.append(random.nextBoolean() ? " LIMIT " + random.nextInt(50)
                     : " LIMIT " + random.nextInt(10) + ", " + random.nextInt(60));
         } else if (tail == 2) {

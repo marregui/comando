@@ -3,9 +3,11 @@ package dev.marregui.comando.cdb.plan;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -118,14 +120,28 @@ public final class Planner {
         return new Planned(plan(statement, tables, nowMicros), -1);
     }
 
-    Rel query(final Ast.QueryBody body, final Map<String, Ast.QueryBody> ctes) {
+    /** A common table expression's body and the CTEs in scope where it is defined, the ones it may read. */
+    record Cte(Ast.QueryBody body, Map<String, Cte> scope) {
+    }
+
+    Rel query(final Ast.QueryBody body, final Map<String, Cte> ctes) {
         return switch (body) {
             case Ast.Select select -> new SelectPlanner(this, select, ctes).plan();
             case Ast.SetOp setOp -> setOp(setOp, ctes);
             case Ast.With(final List<Ast.Cte> list, final Ast.QueryBody inner) -> {
-                final Map<String, Ast.QueryBody> scope = new HashMap<>(ctes);
+                // each CTE sees the scope around the WITH and the CTEs before it, never itself or a later one, which
+                // a reference then reads as a table
+                // a name given twice in one list is refused, as QuestDB refuses it; one from an outer WITH is shadowed
+                Map<String, Cte> scope = ctes;
+                final Set<String> named = new HashSet<>();
                 for (final Ast.Cte cte : list) {
-                    scope.put(cte.name().toLowerCase(Locale.ROOT), cte.body());
+                    final String name = cte.name().toLowerCase(Locale.ROOT);
+                    if (!named.add(name)) {
+                        throw new CdbException("cannot name CTE twice [name=" + cte.name() + ']', -1);
+                    }
+                    final Map<String, Cte> next = new HashMap<>(scope);
+                    next.put(name, new Cte(cte.body(), scope));
+                    scope = next;
                 }
                 yield query(inner, scope);
             }
@@ -133,12 +149,12 @@ public final class Planner {
     }
 
     /** What a FROM clause reads, each column qualified by its table's name or alias. */
-    Rel from(final Ast.From from, final Map<String, Ast.QueryBody> ctes) {
+    Rel from(final Ast.From from, final Map<String, Cte> ctes) {
         return switch (from) {
             case Ast.TableName(final String name, final String alias, final int pos) -> {
-                final Ast.QueryBody cte = ctes.get(name.toLowerCase(Locale.ROOT));
+                final Cte cte = ctes.get(name.toLowerCase(Locale.ROOT));
                 if (cte != null) {
-                    yield query(cte, ctes).qualified(alias == null ? name : alias);
+                    yield query(cte.body(), cte.scope()).qualified(alias == null ? name : alias);
                 }
                 final TableDef def = tables.apply(name);
                 if (def == null) {
@@ -208,7 +224,7 @@ public final class Planner {
     }
 
     /** Both sides' columns widened to a common type, the right cast where it differs; then ORDER BY and LIMIT. */
-    private Rel setOp(final Ast.SetOp setOp, final Map<String, Ast.QueryBody> ctes) {
+    private Rel setOp(final Ast.SetOp setOp, final Map<String, Cte> ctes) {
         final Rel left = query(setOp.left(), ctes);
         final Rel right = query(setOp.right(), ctes);
         if (left.width() != right.width()) {
@@ -330,7 +346,10 @@ public final class Planner {
         throw new CdbException("cannot limit by non-constant value", -1);
     }
 
-    /** Each value cast to its column's type; the designated timestamp cannot be set. */
+    /**
+     * Each value cast to its column's type, a cast written in the statement taken as written; the designated
+     * timestamp, a deduplication key, a column set twice and a condition other than BOOLEAN are refused.
+     */
     private Plan update(final Ast.Update update) {
         final TableDef def = tables.apply(update.table());
         if (def == null) {
@@ -350,17 +369,33 @@ public final class Planner {
                 throw new CdbException("cannot update designated timestamp [column=" + a.column() + ']',
                         update.pos());
             }
+            // the rewrite commits through the log and the applier's deduplication, which would merge the rows the
+            // new key values make equal; QuestDB keeps them, so the column is refused rather than rows lost
+            if (def.dedupKeys().contains(def.columns().get(c).name())) {
+                throw new CdbException("cannot update deduplication key [table=" + def.name() + ", column="
+                        + a.column() + ']', update.pos());
+            }
+            for (int j = 0; j < i; j++) {
+                if (columns[j] == c) {
+                    throw new CdbException("cannot assign column twice [table=" + def.name() + ", column="
+                            + a.column() + ']', update.pos());
+                }
+            }
             final CdbType to = def.columns().get(c).type();
-            final Bound value = Binder.cast(binder.bind(a.value()), to, update.pos());
-            if (value instanceof Bound.Call(final String function, final List<Bound> args, final CdbType _)
-                    && "cast".equals(function) && !castable(args.getFirst().type(), to)) {
+            final Bound bound = binder.bind(a.value());
+            final Bound value = Binder.cast(bound, to, update.pos());
+            if (implicitCast(bound, value) && !castable(bound.type(), to)) {
                 throw new CdbException("cannot assign value of other type [column=" + a.column() + ", type="
-                        + args.getFirst().type() + ", target=" + to + ']', update.pos());
+                        + bound.type() + ", target=" + to + ']', update.pos());
             }
             columns[i] = c;
             values.add(value);
         }
         final Bound where = update.where() == null ? null : binder.bindValue(update.where());
+        if (where != null && where.type() != CdbType.BOOLEAN) {
+            throw new CdbException("cannot update by non-boolean condition [table=" + def.name() + ", type="
+                    + where.type() + ']', update.pos());
+        }
         return new Plan.Update(def.name(), columns, List.copyOf(values), where);
     }
 
@@ -466,10 +501,9 @@ public final class Planner {
             final ColumnDef column = def.columns().get(columns[i]);
             final CdbType to = column.type();
             final Bound value = Binder.cast(values.get(i), to, pos);
-            if (value instanceof Bound.Call(final String function, final List<Bound> args, final CdbType _)
-                    && "cast".equals(function) && !insertable(args.getFirst().type(), to)) {
+            if (implicitCast(values.get(i), value) && !insertable(values.get(i).type(), to)) {
                 throw new CdbException("cannot insert value of other type [column=" + column.name() + ", type="
-                        + args.getFirst().type() + ", target=" + to + ']', pos);
+                        + values.get(i).type() + ", target=" + to + ']', pos);
             }
             if (columns[i] == def.timestampIndex() && value instanceof Bound.Constant(final Object v, final CdbType _)
                     && v == null) {
@@ -479,6 +513,15 @@ public final class Planner {
             fields.add(new Field(column.name(), to));
         }
         return new Plan.Project(input, List.copyOf(cast), List.copyOf(fields));
+    }
+
+    /**
+     * Whether {@code cast} is a conversion the column's type added to {@code value}; a cast written in the statement,
+     * {@code x::LONG} or {@code cast(x AS LONG)}, already has the column's type and is taken as written.
+     */
+    private static boolean implicitCast(final Bound value, final Bound cast) {
+        return cast != value && cast instanceof Bound.Call(final String function, final List<Bound> _,
+                final CdbType _) && "cast".equals(function);
     }
 
     /** What UPDATE assigns, and text read as a timestamp, as QuestDB's INSERT parses a string into one. */

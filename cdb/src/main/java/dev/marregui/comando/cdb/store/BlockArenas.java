@@ -216,11 +216,13 @@ final class BlockArenas {
         }
 
         /**
-         * {@code byteSize} zeroed bytes aligned to {@code alignment} (a power of two, at most a long's); the caller
-         * holds a block of this epoch. A segment freed into the epoch is reused first, zeroed again, so no byte of the
-         * block that freed it reaches the next; else a segment of up to a quarter of a chunk is cut from the epoch's
-         * current chunk, a fresh one taken when it does not fit (the rest of the old one unused until the epoch
-         * closes), and a larger one is allocated alone. The epoch's bytes count whole chunks, the memory it holds.
+         * {@code byteSize} bytes aligned to {@code alignment} (a power of two, at most a long's); the caller holds a
+         * block of this epoch. A segment freed into the epoch is reused first, its bytes as the block that freed it
+         * left them: a {@link RowBlock} reads only rows it wrote, below its size, and sets each text row NULL itself,
+         * so zeroing them again would write every byte for no read. Else a segment of up to a quarter of a chunk is cut
+         * from the epoch's current chunk, a fresh one taken when it does not fit (the rest of the old one unused until
+         * the epoch closes), and a larger one is allocated alone; both read zero. The epoch's bytes count whole chunks,
+         * the memory it holds.
          */
         MemorySegment allocate(final long byteSize, final long alignment) {
             assert alignment > 0L && alignment <= MAX_ALIGNMENT && (alignment & (alignment - 1L)) == 0L
@@ -246,8 +248,7 @@ final class BlockArenas {
                 chunkLock.unlock();
             }
             if (reused != null) {
-                // outside the lock: the segment is the caller's alone once taken off the free list
-                return reused.fill((byte) 0);
+                return reused;
             }
             final MemorySegment lone = arena.allocate(byteSize, alignment);
             bytes.addAndGet(byteSize);

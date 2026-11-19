@@ -442,7 +442,7 @@ class AccumulatorDifferentialTest {
                 }
                 final double percent = Math.min(Math.max(Math.nextAfter(fraction * 100.0, Double.NEGATIVE_INFINITY),
                         0.0), 100.0);
-                final int k = (int) Math.max(1, Math.ceil(percent / 100.0 * n));
+                final int k = (int) Math.max(1, Math.ceil((percent * n) / 100.0));
                 final long kth = sorted[k - 1];
                 Aggregates.writeLong(fraction == 0.0
                         ? LongPercentileAccumulator.lowestEquivalent(kth, precision)

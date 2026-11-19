@@ -6,7 +6,9 @@ import java.util.List;
 /**
  * A table's definition: its columns in order, the index of its designated timestamp column, its partitioning, the
  * upsert keys of its dedup (empty when it has none; the designated timestamp is always one of them when present) and
- * its retention ({@code ttlMicros}, 0 for none: partitions wholly older than the newest row minus the TTL are dropped).
+ * its retention ({@code ttlMicrosOrMonths}: 0 for none, a positive span in microseconds, or a negative count of
+ * calendar months, as QuestDB's {@code ttlHoursOrMonths}; a partition goes once its end lies the TTL before the newest
+ * row or now, whichever is earlier).
  */
 public record TableDef(
         String name,
@@ -14,7 +16,7 @@ public record TableDef(
         int timestampIndex,
         PartitionBy partitionBy,
         List<String> dedupKeys,
-        long ttlMicros
+        long ttlMicrosOrMonths
 ) {
 
     /** A copy of the lists; a negative {@code timestampIndex} only for a table without a designated timestamp. */
@@ -37,7 +39,7 @@ public record TableDef(
     public TableDef withColumn(final ColumnDef column) {
         final List<ColumnDef> more = new ArrayList<>(columns);
         more.add(column);
-        return new TableDef(name, more, timestampIndex, partitionBy, dedupKeys, ttlMicros);
+        return new TableDef(name, more, timestampIndex, partitionBy, dedupKeys, ttlMicrosOrMonths);
     }
 
     /**
@@ -48,7 +50,7 @@ public record TableDef(
         final List<ColumnDef> fewer = new ArrayList<>(columns);
         fewer.remove(c);
         return new TableDef(name, fewer, timestampIndex > c ? timestampIndex - 1 : timestampIndex, partitionBy,
-                dedupKeys, ttlMicros);
+                dedupKeys, ttlMicrosOrMonths);
     }
 
     /** The same table with column {@code c} named {@code to}, a dedup key of its name renamed with it. */
@@ -61,11 +63,11 @@ public record TableDef(
         for (final String key : dedupKeys) {
             keys.add(key.equalsIgnoreCase(old.name()) ? to : key);
         }
-        return new TableDef(name, renamed, timestampIndex, partitionBy, keys, ttlMicros);
+        return new TableDef(name, renamed, timestampIndex, partitionBy, keys, ttlMicrosOrMonths);
     }
 
-    /** The same table with its TTL set to {@code ttl}, in microseconds, 0 for none. */
-    public TableDef withTtlMicros(final long ttl) {
-        return new TableDef(name, columns, timestampIndex, partitionBy, dedupKeys, ttl);
+    /** The same table with its TTL set to {@code ttlMicrosOrMonths}, as {@link #ttlMicrosOrMonths} holds it. */
+    public TableDef withTtlMicrosOrMonths(final long ttlMicrosOrMonths) {
+        return new TableDef(name, columns, timestampIndex, partitionBy, dedupKeys, ttlMicrosOrMonths);
     }
 }

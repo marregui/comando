@@ -27,7 +27,7 @@ final class Binder {
     private final Rel rel;
     private final Function<Ast.Expr, Bound> hook;
     private final Planner planner;
-    private final Map<String, Ast.QueryBody> ctes;
+    private final Map<String, Planner.Cte> ctes;
 
     Binder(final Rel rel, final Function<Ast.Expr, Bound> hook) {
         this(rel, hook, null, Map.of());
@@ -38,7 +38,7 @@ final class Binder {
             final Rel rel,
             final Function<Ast.Expr, Bound> hook,
             final Planner planner,
-            final Map<String, Ast.QueryBody> ctes
+            final Map<String, Planner.Cte> ctes
     ) {
         this.rel = rel;
         this.hook = hook;
@@ -403,6 +403,13 @@ final class Binder {
             // known only when it runs, so the shape is refused rather than given another meaning
             throw new CdbException("cannot compare a timestamp with an IN subquery of text; cast its column to"
                     + " TIMESTAMP", in.pos());
+        }
+        if (subject.type() == CdbType.TIMESTAMP && valueType == CdbType.LONG
+                || subject.type() == CdbType.LONG && valueType == CdbType.TIMESTAMP) {
+            // a written-out LONG compares with a TIMESTAMP as microseconds; a subquery's column keeps the refusal it
+            // had, which QuestDB's IN over a cursor has not been checked against
+            throw new CdbException("cannot compare an IN subquery across TIMESTAMP and LONG; cast its column [operand="
+                    + subject.type() + ", column=" + valueType + ']', in.pos());
         }
         final Bound checked = call("in", List.of(subject, new Bound.Column(0, valueType)), in.pos());
         final Bound operand = checked instanceof Bound.Call(final String _, final List<Bound> args, final CdbType _)
