@@ -162,6 +162,12 @@ public final class CdbServer implements AutoCloseable {
         return bodies.pooled();
     }
 
+    /** The body buffers made so far, at most {@link #POOLED_BODIES}. */
+    @TestOnly
+    int madeBodies() {
+        return bodies.made();
+    }
+
     static CdbServer start(final Backend backend, final InetSocketAddress address) {
         return start(backend, address, null, Bounds.DEFAULT);
     }
@@ -831,6 +837,10 @@ public final class CdbServer implements AutoCloseable {
 
         int pooled() {
             return free.size();
+        }
+
+        int made() {
+            return made.get();
         }
     }
 

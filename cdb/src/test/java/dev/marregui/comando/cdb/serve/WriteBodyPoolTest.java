@@ -66,15 +66,18 @@ class WriteBodyPoolTest {
         server.close();
     }
 
-    /// A thousand writes one after another: each answered 204 with its row written, and one buffer kept.
+    /// A thousand writes one after another: each answered 204 with its row written, every buffer made given back, and
+    /// far fewer made than the bound. Not exactly one: a handler gives its buffer back after the client has its answer,
+    /// so the next request may find the pool empty and make a second (seen on a CI runner).
     @Test
-    void sequentialWritesReuseOneBuffer() throws Exception {
+    void sequentialWritesReuseTheirBuffers() throws Exception {
         for (int w = 0; w < 1_000; w++) {
             assertThat(http.post(server.port(), "/write?precision=u", "m,w=" + w + " f=1.5 " + w + '\n')
                     .statusCode()).as("write %d", w).isEqualTo(204);
         }
 
-        CommitQueueTest.awaitTrue(() -> server.pooledBodies() == 1);
+        CommitQueueTest.awaitTrue(() -> server.pooledBodies() == server.madeBodies());
+        assertThat(server.madeBodies()).isBetween(1, CdbServer.POOLED_BODIES / 4);
         assertThat(backend.rows.get()).isEqualTo(1_000L);
     }
 
