@@ -18,10 +18,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import dev.marregui.comando.app.mqtt.FakeBroker;
-import dev.marregui.comando.app.mqtt.MqttClient;
-import dev.marregui.comando.app.mqtt.Packet;
-import dev.marregui.comando.app.mqtt.Relay;
+import dev.marregui.comando.frontear.mqtt.FakeBroker;
+import dev.marregui.comando.frontear.mqtt.MqttClient;
+import dev.marregui.comando.frontear.mqtt.Packet;
+import dev.marregui.comando.frontear.mqtt.Relay;
 import dev.marregui.comando.mcp.PeerBroker;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -44,6 +44,8 @@ class FileReadRulesTest {
 
     // cdb's one class that opens files; package-private, so named rather than referenced
     private static final String CDB_STORE_FILES = "dev.marregui.comando.cdb.store.StoreFiles";
+    // frontear's link log's one class that opens files, to write, force and force its folder; package-private, so named
+    private static final String FRONTEAR_DISK_FILES = "dev.marregui.comando.frontear.queue.DiskFiles";
     // cdb's readers of its own mapped column files, which copy them in bulk; package-private, so named
     private static final String CDB_VERSION = "dev.marregui.comando.cdb.store.Version";
     private static final String CDB_TEXT_CACHE = "dev.marregui.comando.cdb.store.TextCache";
@@ -69,6 +71,7 @@ class FileReadRulesTest {
                 .and().doNotHaveFullyQualifiedName(Main.class.getName())
                 .and().doNotHaveFullyQualifiedName(MachineCdb.class.getName())
                 .and().doNotHaveFullyQualifiedName(CDB_STORE_FILES)
+                .and().doNotHaveFullyQualifiedName(FRONTEAR_DISK_FILES)
                 .should().callMethodWhere(target(name("open")).and(target(owner(assignableTo(FileChannel.class)))))
                 .check(ComandoClasses.MAIN);
     }

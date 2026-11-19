@@ -45,11 +45,12 @@ comando is built with and runs on JDK 25.
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude, `CdbAdapter` (cdb in-process) | `core`, `cdb`, PostgreSQL JDBC driver |
 | `cdb` | comando's own columnar, time-partitioned database: SQL parser, planner, vectorised executor, store, catalog, `/exec` and `/write` in QuestDB's formats, and an optional PostgreSQL wire server, which `CdbServe` runs as the machine's server ([record 158](adr/0158-cdb-comandos-own-database.md), [record 180](adr/0180-cdb-is-the-machine-server.md); how it runs and what it costs: [cdb](cdb.md)); one public facade, `Cdb`, reached only from `db.Cdb*` | JDK only |
+| `frontear` | comando's own MQTT 5 client, codec and broker, the links between brokers (one internal subscriber and one append-only log per link) and the signed control plane that changes them ([record 184](adr/0184-frontear-comandos-own-mqtt-fabric.md)) | `core` |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core` |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core` |
 | `tools` | Gradle runs, the folder tabs' folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and `ui.kit`, which they share | `core`, FlatLaf, jsvg, RSyntaxTextArea, CommonMark (with tables), JediTerm, pty4j |
-| `app` | wiring, the store files, the keychain, the intent log, the machine's cdb, the comando Edge and the instances' link to it (`MqttPeerBroker`, on comando's MQTT client in `app.mqtt`), `main` | every module |
+| `app` | wiring, the store files, the keychain, the intent log, the machine's cdb, the comando Edge and the instances' link to it (`MqttPeerBroker`, on frontear's MQTT client), `main` | every module |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
@@ -1449,14 +1450,18 @@ The real window is tested from `app` (`./gradlew :app:uiTest`).
 ## 15. The `app` module
 
 The composition root: `main`, the configuration, the wiring of every module, the files comando keeps, the keychain, the
-intent log, logging, the machine's cdb, the comando Edge and this instance's link to it. It depends on every other
+intent log, logging, the machine's cdb, the comando Edge and this instance's link to it. With
+`-Dcomando.fabric=frontear`, `FrontearFabric` takes the comando Edge's place: a frontear node hosted in the first
+instance's process on the Edge's MQTT port, named in a registry of its own in the user's home, its links' logs and its
+control key pair in `fabric/` in that instance's data root. It depends on every other
 module; no module depends on it. It also holds the Gradle tasks that run, paint, replay and package the
 application.
 
 ### 15.1 Classes and design
 
-Two packages: `dev.marregui.comando.app`, and `dev.marregui.comando.app.mqtt`, the MQTT 5 client `MqttPeerBroker` uses
-(the `mqtt.` rows, [record 157](adr/0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md)).
+One package, `dev.marregui.comando.app`; the MQTT 5 client `MqttPeerBroker` uses is frontear's
+(`frontear.mqtt`, [record 157](adr/0157-comando-owns-its-json-mqtt-diff-completion-and-icons.md), moved by
+[record 184](adr/0184-frontear-comandos-own-mqtt-fabric.md)).
 
 | Class | Does |
 |---|---|

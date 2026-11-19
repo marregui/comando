@@ -14,9 +14,11 @@ dependencies {
     implementation(project(":db"))
     implementation(project(":claude"))
     implementation(project(":mcp"))
+    implementation(project(":frontear"))
     implementation(project(":tools"))
     implementation(project(":ui"))
     testImplementation(project(":testkit"))
+    testImplementation(testFixtures(project(":frontear")))
     // the keyboard tests reach into the editor and the terminal of a real window
     testImplementation(libs.rsyntaxtextarea)
     testImplementation(libs.jediterm.core)
@@ -35,6 +37,8 @@ configurations.runtimeClasspath {
 // no test of this module joins the comando Edge or the machine's cdb: a developer's own comando may be running them
 // (records 123, 146)
 tasks.withType<Test>().configureEach {
+    // FrontearParityTest runs frontear's BrokerInteropTest in a child JVM from frontear's compiled test classes
+    dependsOn(":frontear:testClasses")
     systemProperty("comando.peers", "false")
     systemProperty("comando.metrics", "false")
 }

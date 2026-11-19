@@ -193,3 +193,4 @@ row and its record differ, or when a record has no row.
 | [180](0180-cdb-is-the-machine-server.md) | The machine's database server is cdb; QuestDB is no longer started | 2026-11-17 | Miguel and Claude | accepted; built in task 187; its names amended by [record 181](0181-the-machine-server-is-named-cdb.md) |
 | [181](0181-the-machine-server-is-named-cdb.md) | The machine's server and its metrics are named for cdb, not QuestDB | 2026-11-18 | Miguel and Claude | accepted; built in task 194 |
 | [182](0182-cdb-destructive-sql-explain-and-access.md) | cdb drops, deletes and explains, and its server lets in only holders of its secrets | 2026-11-18 | Miguel and Claude | accepted; built in task 197 |
+| [184](0184-frontear-comandos-own-mqtt-fabric.md) | frontear: comando's own MQTT 5 broker, mesh link and signed control | 2026-11-19 | Miguel and Claude | proposed; v1 being built in task 200 |

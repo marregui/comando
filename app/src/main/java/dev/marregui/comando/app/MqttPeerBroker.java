@@ -14,11 +14,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-import dev.marregui.comando.app.mqtt.MqttClient;
-import dev.marregui.comando.app.mqtt.Packet;
-import dev.marregui.comando.app.mqtt.Topics;
 import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.frontear.mqtt.MqttClient;
+import dev.marregui.comando.frontear.mqtt.Packet;
+import dev.marregui.comando.frontear.mqtt.Topics;
 import dev.marregui.comando.mcp.PeerBroker;
 
 /**
